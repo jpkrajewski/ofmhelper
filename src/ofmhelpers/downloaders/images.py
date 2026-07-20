@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +35,7 @@ def build_gallery_dl_cmd(url: str, config: ImageDownloadConfig) -> list[str]:
         "-f",
         config.filename_template,
         "--no-mtime",
+        "--no-skip",  # overwrite existing files instead of silently skipping them
     ]
 
     cookiefile = get_cookiefile()
@@ -48,14 +50,13 @@ def build_gallery_dl_cmd(url: str, config: ImageDownloadConfig) -> list[str]:
 def download(
     url: str, config: ImageDownloadConfig | None = None
 ) -> ImageDownloadResult:
-    """Snapshot the output dir before running gallery-dl, diff after --
-    any new file is something this call downloaded. Handles multi-image
-    posts (carousels) automatically since every new file is captured,
-    and avoids depending on gallery-dl's stdout format at all."""
     config = config or ImageDownloadConfig()
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
-    before = {p for p in config.output_dir.rglob("*") if p.is_file()}
+    before_mtimes = {
+        p: p.stat().st_mtime for p in config.output_dir.rglob("*") if p.is_file()
+    }
+    start_time = time.time()
 
     cmd = build_gallery_dl_cmd(url, config)
 
@@ -72,18 +73,29 @@ def download(
             error="gallery-dl not installed. Run: pip install gallery-dl",
         )
 
-    after = {p for p in config.output_dir.rglob("*") if p.is_file()}
-    new_files = sorted(after - before, key=lambda p: p.stat().st_mtime)
+    changed_files = []
+    for p in config.output_dir.rglob("*"):
+        if not p.is_file():
+            continue
+        mtime = p.stat().st_mtime
+        # new file, or existing file that was just overwritten during this run
+        if p not in before_mtimes or mtime > before_mtimes[p]:
+            if (
+                mtime >= start_time - 1
+            ):  # small buffer for filesystem timestamp granularity
+                changed_files.append(p)
 
-    if not new_files:
+    changed_files.sort(key=lambda p: p.stat().st_mtime)
+
+    if not changed_files:
         return ImageDownloadResult(
             url=url,
             success=False,
             error=result.stderr.strip()
-            or "gallery-dl finished but no new files appeared",
+            or "gallery-dl finished but no files were written",
         )
 
-    return ImageDownloadResult(url=url, success=True, output_paths=new_files)
+    return ImageDownloadResult(url=url, success=True, output_paths=changed_files)
 
 
 def download_all(

@@ -1,7 +1,7 @@
 """
 ofmhelpers/web/routers/uploads_manager.py
 
-Browse, download, and delete files under the uploads/ root.
+Browse, download, and delete files under uploads/ and downloads/.
 """
 
 import shutil
@@ -14,14 +14,28 @@ from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/uploads-manager", tags=["uploads-manager"])
 
-UPLOADS_ROOT = Path("uploads").resolve()
+# Named roots the manager is allowed to browse. Add more here (e.g.
+# "kieai_out") if you want them browsable too -- everything else stays
+# off-limits since _safe_path only resolves within whichever root is picked.
+ROOTS = {
+    "uploads": Path("uploads").resolve(),
+    "downloads": Path("downloads").resolve(),
+}
+DEFAULT_ROOT = "uploads"
 
 
-def _safe_path(rel_path: str) -> Path:
-    """Resolves a user-supplied relative path against UPLOADS_ROOT and
+def _get_root(root_name: str) -> Path:
+    if root_name not in ROOTS:
+        raise HTTPException(status_code=400, detail="Unknown root")
+    return ROOTS[root_name]
+
+
+def _safe_path(root_name: str, rel_path: str) -> Path:
+    """Resolves a user-supplied relative path against the chosen root and
     refuses to leave it (blocks ../ traversal, absolute paths, symlink escape)."""
-    candidate = (UPLOADS_ROOT / rel_path).resolve()
-    if not candidate.is_relative_to(UPLOADS_ROOT):
+    root = _get_root(root_name)
+    candidate = (root / rel_path).resolve()
+    if not candidate.is_relative_to(root):
         raise HTTPException(status_code=400, detail="Invalid path")
     return candidate
 
@@ -35,15 +49,16 @@ def _human_size(num_bytes: int) -> str:
     return f"{size:.1f} TB"
 
 
-def _list_entries(rel_dir: str):
-    """Returns (dirs, files) for a given relative directory under uploads/."""
-    directory = _safe_path(rel_dir)
+def _list_entries(root_name: str, rel_dir: str):
+    """Returns (dirs, files) for a given relative directory under the chosen root."""
+    root = _get_root(root_name)
+    directory = _safe_path(root_name, rel_dir)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
     dirs, files = [], []
     for entry in sorted(directory.iterdir()):
-        rel = str(entry.relative_to(UPLOADS_ROOT)).replace("\\", "/")
+        rel = str(entry.relative_to(root)).replace("\\", "/")
         if entry.is_dir():
             dirs.append({"name": entry.name, "rel_path": rel})
         else:
@@ -59,9 +74,9 @@ def _list_entries(rel_dir: str):
 
 
 @router.get("")
-def browse(request: Request, path: str = ""):
-    UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
-    dirs, files = _list_entries(path)
+def browse(request: Request, root: str = DEFAULT_ROOT, path: str = ""):
+    _get_root(root).mkdir(parents=True, exist_ok=True)
+    dirs, files = _list_entries(root, path)
 
     parent = None
     if path:
@@ -71,13 +86,20 @@ def browse(request: Request, path: str = ""):
     return templates.TemplateResponse(
         request,
         "uploads_manager.html",
-        {"current_path": path, "parent": parent, "dirs": dirs, "files": files},
+        {
+            "roots": list(ROOTS.keys()),
+            "current_root": root,
+            "current_path": path,
+            "parent": parent,
+            "dirs": dirs,
+            "files": files,
+        },
     )
 
 
 @router.get("/download")
-def download(path: str):
-    file_path = _safe_path(path)
+def download(path: str, root: str = DEFAULT_ROOT):
+    file_path = _safe_path(root, path)
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(
@@ -86,8 +108,8 @@ def download(path: str):
 
 
 @router.post("/delete")
-def delete_one(path: str = Form(...)):
-    target = _safe_path(path)
+def delete_one(path: str = Form(...), root: str = Form(DEFAULT_ROOT)):
+    target = _safe_path(root, path)
     if target.is_file():
         target.unlink()
     elif target.is_dir():
@@ -100,12 +122,14 @@ def delete_one(path: str = Form(...)):
         if str(Path(path).parent) != "."
         else ""
     )
-    return RedirectResponse(url=f"/uploads-manager?path={parent}", status_code=303)
+    return RedirectResponse(
+        url=f"/uploads-manager?root={root}&path={parent}", status_code=303
+    )
 
 
 @router.post("/delete-all")
-def delete_all(path: str = Form("")):
-    directory = _safe_path(path)
+def delete_all(path: str = Form(""), root: str = Form(DEFAULT_ROOT)):
+    directory = _safe_path(root, path)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
@@ -115,4 +139,6 @@ def delete_all(path: str = Form("")):
         else:
             entry.unlink()
 
-    return RedirectResponse(url=f"/uploads-manager?path={path}", status_code=303)
+    return RedirectResponse(
+        url=f"/uploads-manager?root={root}&path={path}", status_code=303
+    )

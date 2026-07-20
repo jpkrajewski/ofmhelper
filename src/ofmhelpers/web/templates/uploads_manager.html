@@ -1,21 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Uploads</h1>
-<p>Path: /{{ current_path }}</p>
+<h1>File Manager</h1>
+
+<div class="root-switcher">
+    {% for r in roots %}
+    <a href="/uploads-manager?root={{ r }}"
+       class="root-btn {{ 'active' if r == current_root else '' }}">{{ r }}</a>
+    {% endfor %}
+</div>
+
+<p>Path: /{{ current_root }}/{{ current_path }}</p>
 
 {% if parent is not none %}
-<p><a href="/uploads-manager?path={{ parent }}">← up</a></p>
+<p><a href="/uploads-manager?root={{ current_root }}&path={{ parent }}">← up</a></p>
 {% endif %}
 
 <table>
     <tr><th>Name</th><th>Size</th><th></th></tr>
     {% for d in dirs %}
     <tr>
-        <td>📁 <a href="/uploads-manager?path={{ d.rel_path }}">{{ d.name }}/</a></td>
+        <td>📁 <a href="/uploads-manager?root={{ current_root }}&path={{ d.rel_path }}">{{ d.name }}/</a></td>
         <td>—</td>
         <td>
             <form method="post" action="/uploads-manager/delete" style="display:inline"
                   onsubmit="return confirm('Delete folder {{ d.name }} and everything in it?')">
+                <input type="hidden" name="root" value="{{ current_root }}">
                 <input type="hidden" name="path" value="{{ d.rel_path }}">
                 <button type="submit">delete</button>
             </form>
@@ -27,9 +36,10 @@
         <td>{{ f.name }}</td>
         <td>{{ f.size }}</td>
         <td>
-            <a href="/uploads-manager/download?path={{ f.rel_path }}" download>⬇ download</a>
+            <a href="/uploads-manager/download?root={{ current_root }}&path={{ f.rel_path }}" download>⬇ download</a>
             <form method="post" action="/uploads-manager/delete" style="display:inline"
                   onsubmit="return confirm('Delete {{ f.name }}?')">
+                <input type="hidden" name="root" value="{{ current_root }}">
                 <input type="hidden" name="path" value="{{ f.rel_path }}">
                 <button type="submit">delete</button>
             </form>
@@ -41,6 +51,7 @@
 {% if dirs or files %}
 <form method="post" action="/uploads-manager/delete-all" style="margin-top:20px"
       onsubmit="return confirm('Delete EVERYTHING in this folder? This cannot be undone.')">
+    <input type="hidden" name="root" value="{{ current_root }}">
     <input type="hidden" name="path" value="{{ current_path }}">
     <button type="submit" style="background:#c0392b;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer">
         Delete all in this folder
@@ -49,4 +60,14 @@
 {% else %}
 <p>Empty.</p>
 {% endif %}
+
+<style>
+    .root-switcher { margin-bottom: 16px; }
+    .root-btn {
+        display: inline-block; padding: 6px 14px; margin-right: 8px;
+        border: 1px solid #ccc; border-radius: 6px; text-decoration: none;
+        color: #444; font-weight: bold; font-size: 14px;
+    }
+    .root-btn.active { background: #1a5fb4; color: white; border-color: #1a5fb4; }
+</style>
 {% endblock %}
