@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Download images job <code>{{ job.id }}</code></h1>
+<p>Status: <strong>{{ job.status }}</strong></p>
+
+{% if job.status == "running" %}
+<meta http-equiv="refresh" content="3">
+<p class="pending">Downloading…</p>
+{% endif %}
+
+<table>
+    <tr><th>URL</th><th>Status</th><th>Output</th></tr>
+    {% for r in job.result or [] %}
+    <tr>
+        <td>{{ r.url }}</td>
+        <td class="{{ 'ok' if r.success else 'fail' }}">{{ 'done' if r.success else 'failed' }}</td>
+        <td>
+            {% if r.success %}
+            <div class="results">
+                {% for d in r.downloads %}
+                <div class="result-item">
+                    <img src="/download-images/files/{{ job.id }}/{{ d.index }}" alt="{{ d.name }}" class="result-image">
+                    <a href="/download-images/files/{{ job.id }}/{{ d.index }}?dl=1" download="{{ d.name }}" class="download-btn">⬇ Download</a>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            {{ r.error }}
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<style>
+    .results { display: flex; flex-wrap: wrap; gap: 12px; }
+    .result-item { width: 160px; }
+    .result-image { width: 100%; border-radius: 6px; border: 1px solid #ddd; display: block; margin-bottom: 6px; }
+    .download-btn {
+        display: block; text-align: center; background: #1a7f37; color: white;
+        font-weight: bold; font-size: 13px; padding: 6px 0; border-radius: 5px; text-decoration: none;
+    }
+    .download-btn:hover { background: #156a2e; }
+</style>
+
+<p><a href="/download-images">← new download</a></p>
+{% endblock %}

@@ -13,6 +13,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 # on this page is generic.
 TASK_STATUS_PREFIX = {
     "download_videos": "/download-videos",
+    "download_images": "/download-images",
     "clean_images": "/clean-images",
     "seedance": "/seedance",
     "elevenlabs": "/elevenlabs",

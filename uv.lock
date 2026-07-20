@@ -371,6 +371,18 @@ wheels = [
 ]
 
 [[package]]
+name = "gallery-dl"
+version = "1.32.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/22/dc/f44c424d3966cf040b7ef091c8e6818a94ddd7b88c844d62ba542b93b84f/gallery_dl-1.32.7.tar.gz", hash = "sha256:071635805a77ee2d3e70bd271ccd3e565ed64b200df3e03085cd899e8f893a02", size = 728700, upload-time = "2026-07-18T08:12:49.343Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/64/6a33144d2e1d3d34129cfb3c990efdba5e9bb883db725bd8995cc53d9cc8/gallery_dl-1.32.7-py3-none-any.whl", hash = "sha256:38fc64cbde62331806f06c23f20ad0f96961802d21a808c08027626f45ad947a", size = 906450, upload-time = "2026-07-18T08:12:45.464Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -662,6 +674,7 @@ dependencies = [
     { name = "black" },
     { name = "elevenlabs" },
     { name = "fastapi" },
+    { name = "gallery-dl" },
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "openpyxl" },
@@ -694,6 +707,7 @@ requires-dist = [
     { name = "black", specifier = ">=26.5.1" },
     { name = "elevenlabs", specifier = ">=2.58.0" },
     { name = "fastapi", specifier = ">=0.136.3" },
+    { name = "gallery-dl", specifier = ">=1.32.7" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "openpyxl", specifier = ">=3.1.5" },

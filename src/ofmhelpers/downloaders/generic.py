@@ -107,6 +107,7 @@ def build_ydl_opts(config: DownloadConfig) -> dict:
         "quiet": True,
         "no_warnings": False,
         "noplaylist": not config.download_playlist,
+        "remote_components": {"ejs:github"},
     }
 
     cookiefile = get_cookiefile()

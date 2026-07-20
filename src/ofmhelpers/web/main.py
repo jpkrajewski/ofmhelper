@@ -21,6 +21,8 @@ from ofmhelpers.web.routers.kling import router as kling_router
 from ofmhelpers.web.routers.prompt_history import router as ph_router
 from ofmhelpers.web.routers.refs import router as ref_router
 from ofmhelpers.web.routers.auth import router as auth_router
+from ofmhelpers.web.routers.battle_tested import router as battle_tested_router
+from ofmhelpers.web.routers.download_images import router as download_images_router
 
 
 app = FastAPI(title="OFM VA Toolkit")
@@ -55,6 +57,8 @@ app.include_router(kling_router)
 app.include_router(ph_router)
 app.include_router(ref_router)
 app.include_router(auth_router)
+app.include_router(battle_tested_router)
+app.include_router(download_images_router)
 
 
 @app.get("/")
