@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>All jobs</h1>
+
+{% if any_running %}
+<meta http-equiv="refresh" content="3">
+{% endif %}
+
+{% if not jobs %}
+<p class="pending">No jobs yet.</p>
+{% else %}
+<table>
+    <tr>
+        <th>Time</th>
+        <th>Task</th>
+        <th>Status</th>
+        <th>Summary</th>
+        <th></th>
+    </tr>
+    {% for job in jobs %}
+    <tr>
+        <td>{{ job.created_at_display }}</td>
+        <td>{{ job.task }}</td>
+        <td class="{{ 'ok' if job.status == 'done' else 'fail' if job.status == 'failed' else 'pending' }}">
+            {{ job.status }}
+        </td>
+        <td>
+            {% if job.params.prompt %}{{ job.params.prompt[:60] }}
+            {% elif job.params.urls %}{{ job.params.urls | length }} url(s)
+            {% elif job.params.files %}{{ job.params.files | length }} file(s)
+            {% else %}—{% endif %}
+        </td>
+        <td>
+            {% if job.status_url %}<a href="{{ job.status_url }}">view →</a>{% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

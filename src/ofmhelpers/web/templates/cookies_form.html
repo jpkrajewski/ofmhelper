@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Upload Cookies</h1>
+
+<p>Export a single <code>cookies.txt</code> file covering all logged-in platforms
+(TikTok, YouTube, Instagram, etc.) using the
+<strong>"Get cookies.txt LOCALLY"</strong> browser extension, then upload it here.</p>
+
+{% if uploaded %}
+  <p style="color: green;"><strong>Cookies updated successfully.</strong></p>
+{% endif %}
+
+{% if error %}
+  <p style="color: red;"><strong>Error:</strong> {{ error }}</p>
+{% endif %}
+
+<form action="/cookies" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".txt" required>
+    <button type="submit">Upload</button>
+</form>
+{% endblock %}

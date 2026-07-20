@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>OFM VA Toolkit</title>
+    <style>
+        body { font-family: sans-serif; max-width: 1000px; margin: 40px auto; color: #222; padding: 0 20px; }
+        textarea { width: 100%; height: 140px; padding: 8px; box-sizing: border-box; font-family: monospace; }
+        input[type="file"] { padding: 8px; border: 1px dashed #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; }
+        button { padding: 8px 20px; margin-top: 10px; cursor: pointer; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+        .ok { color: #1a7a1a; }
+        .fail { color: #b3261e; }
+        .pending { color: #888; }
+        code { background: #f2f2f2; padding: 2px 5px; border-radius: 4px; }
+        a { color: #1a5fb4; }
+
+        nav {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 30px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #ddd;
+        }
+        nav a {
+            text-decoration: none;
+            font-weight: bold;
+            color: #444;
+            text-align: center;
+            padding: 8px 6px;
+            border-radius: 6px;
+            background: #f7f7f7;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        nav a:hover { background: #eaf1fb; color: #1a5fb4; }
+        nav a.active { background: #1a5fb4; color: white; }
+
+        @media (max-width: 700px) {
+            nav { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/download-videos">Download videos</a>
+        <a href="/clean-images">Clean images</a>
+        <a href="/seedance">Seedance video</a>
+        <a href="/nanobanana">Nanobanana</a>
+        <a href="/kling3">Kling 3.0</a>
+        <a href="/elevenlabs">ElevenLabs</a>
+        <a href="/scraper">Scrapers</a>
+        <a href="/helpers">Helpers</a>
+        <a href="/uploads-manager">Manager</a>
+        <a href="/jobs">All jobs</a>
+    </nav>
+    {% block content %}{% endblock %}
+</body>
+</html>

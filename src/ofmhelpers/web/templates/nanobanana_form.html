@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Nano Banana Pro — image generation</h1>
+
+{% include "kieinfo.html" %}
+
+<form id="nbp-form" method="post" action="/nanobanana/run" enctype="multipart/form-data">
+    <div class="field">
+        <label>API key</label>
+        <input type="password" name="api_key" required autocomplete="off">
+    </div>
+
+    <div class="field">
+        <label>Prompt</label>
+        <textarea name="prompt" required></textarea>
+    </div>
+
+    <div class="field">
+        <label>Aspect ratio</label>
+        <select name="aspect_ratio">
+            <option value="1:1" selected>1:1</option>
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+            <option value="4:3">4:3</option>
+            <option value="3:4">3:4</option>
+            <option value="21:9">21:9</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Resolution</label>
+        <select name="resolution">
+            <option value="1K" selected>1K</option>
+            <option value="2K">2K</option>
+            <option value="4K">4K</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Output format</label>
+        <select name="output_format">
+            <option value="png" selected>png</option>
+            <option value="jpg">jpg</option>
+        </select>
+    </div>
+
+    <div class="field file-picker" data-field="image_input">
+        <label>Reference images (optional)</label>
+        <p style="color:#888; font-size:13px; margin-top:-4px">
+            Browsers sort multi-file pickers alphabetically, not by click order — so files
+            are added one at a time and you control the order with ↑ / ↓.
+        </p>
+        <input type="file" accept="image/*" class="file-add-input">
+        <!-- NEW: dropdown of previously uploaded images -->
+        <select class="ref-select" data-kind="image" data-field="image_input" style="margin-top:6px;">
+            <option value="">— or pick a previously uploaded image —</option>
+        </select>
+        <ul class="file-order-list"></ul>
+    </div>
+
+    <button type="submit">Generate image</button>
+</form>
+
+<style>
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
+    select, input[type="password"] { padding: 6px; width: 100%; box-sizing: border-box; }
+
+    .file-order-list { list-style: none; padding: 0; margin: 10px 0 0; }
+    .file-order-list li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 6px;
+        font-size: 14px;
+    }
+    .file-order-list li span { flex: 1; }
+    .file-order-list button {
+        border: 1px solid #ccc; background: #fafafa; border-radius: 4px;
+        cursor: pointer; padding: 2px 8px; margin: 0;
+    }
+    .file-order-list li img.thumb-small {
+        width: 100px; height: 100px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;
+    }
+</style>
+
+<script>
+const orderedFiles = { image_input: [] };
+
+function renderList(field) {
+    const picker = document.querySelector(`.file-picker[data-field="${field}"]`);
+    const listEl = picker.querySelector('.file-order-list');
+    listEl.innerHTML = '';
+    orderedFiles[field].forEach((file, idx) => {
+        const li = document.createElement('li');
+
+        if (file.type.startsWith('image/')) {
+            const thumb = document.createElement('img');
+            thumb.className = 'thumb-small';
+            thumb.src = URL.createObjectURL(file);
+            li.appendChild(thumb);
+        }
+
+        const span = document.createElement('span');
+        span.textContent = `${idx + 1}. ${file.name}`;
+        const up = document.createElement('button');
+        up.type = 'button'; up.textContent = '↑';
+        up.onclick = () => { moveFile(field, idx, -1); };
+        const down = document.createElement('button');
+        down.type = 'button'; down.textContent = '↓';
+        down.onclick = () => { moveFile(field, idx, 1); };
+        const remove = document.createElement('button');
+        remove.type = 'button'; remove.textContent = '✕';
+        remove.onclick = () => { orderedFiles[field].splice(idx, 1); renderList(field); };
+
+        li.append(span, up, down, remove);
+        listEl.appendChild(li);
+    });
+}
+
+function moveFile(field, idx, dir) {
+    const arr = orderedFiles[field];
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    renderList(field);
+}
+
+document.querySelectorAll('.file-picker').forEach((picker) => {
+    const field = picker.dataset.field;
+    const input = picker.querySelector('.file-add-input');
+    input.addEventListener('change', () => {
+        for (const file of input.files) {
+            orderedFiles[field].push(file);
+        }
+        input.value = '';
+        renderList(field);
+    });
+});
+
+// NEW: populate + wire up "previously uploaded" dropdowns
+document.querySelectorAll('.ref-select').forEach(async (select) => {
+    const kind = select.dataset.kind;
+    const resp = await fetch(`/refs?kind=${kind}`);
+    const files = await resp.json();
+    files.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = f.path;
+        opt.textContent = f.name;
+        select.appendChild(opt);
+    });
+
+    select.addEventListener('change', async () => {
+        if (!select.value) return;
+        const resp = await fetch(`/refs/file?path=${encodeURIComponent(select.value)}`);
+        const blob = await resp.blob();
+        const file = new File([blob], select.value.split('/').pop(), { type: blob.type });
+
+        const field = select.dataset.field;
+        orderedFiles[field].push(file);
+        renderList(field);
+
+        select.value = ""; // reset dropdown so it can be used again
+    });
+});
+
+document.getElementById('nbp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    for (const [field, files] of Object.entries(orderedFiles)) {
+        for (const file of files) {
+            formData.append(field, file, file.name);
+        }
+    }
+
+    const resp = await fetch(form.action, { method: 'POST', body: formData });
+    window.location = resp.url;
+});
+</script>
+{% endblock %}

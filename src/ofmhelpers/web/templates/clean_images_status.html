@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Clean images job <code>{{ job.id }}</code></h1>
+<p>Status: <strong>{{ job.status }}</strong></p>
+
+{% if job.status == "running" %}
+<meta http-equiv="refresh" content="2">
+<p class="pending">Cleaning {{ job.params.files | length }} image(s)…</p>
+
+{% elif job.status == "failed" %}
+<p class="fail">{{ job.error }}</p>
+
+{% elif job.status == "done" %}
+<table>
+    <tr><th>File</th><th>Download</th></tr>
+    {% for f in job.result %}
+    <tr>
+        <td>{{ f.name }}</td>
+        <td><a href="/clean-images/files/{{ job.id }}/{{ f.index }}" download>⬇ download cleaned</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+<p><a href="/clean-images">← clean more images</a></p>
+{% endblock %}

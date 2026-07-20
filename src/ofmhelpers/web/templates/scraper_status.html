@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Scraper job <code>{{ job.id }}</code></h1>
+<p>Status: <strong>{{ job.status }}</strong></p>
+
+{% if job.status == "running" %}
+<meta http-equiv="refresh" content="2">
+<p class="pending">Scraping profiles…</p>
+
+{% elif job.status == "failed" %}
+<p class="fail">{{ job.error }}</p>
+
+{% elif job.status == "done" %}
+<table>
+    <tr><th>File</th><th>Download</th></tr>
+    {% for f in job.result %}
+    <tr>
+        <td>{{ f.name }}</td>
+        <td><a href="/scraper/files/{{ job.id }}/{{ f.index }}" download>⬇ download</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+<p><a href="/scraper">← run another scrape</a></p>
+{% endblock %}

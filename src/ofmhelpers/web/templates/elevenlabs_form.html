@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>ElevenLabs — text to speech</h1>
+
+<form method="post" action="/elevenlabs/run">
+    <div class="field">
+        <label>API key</label>
+        <input type="password" name="api_key" required autocomplete="off">
+    </div>
+
+    <div class="field">
+        <label>Text</label>
+        <textarea name="text" required></textarea>
+    </div>
+
+    <div class="field">
+        <label>Voice</label>
+        <select name="voice">
+            {% for v in voices|default([]) %}
+            <option value="{{ v }}">{{ v }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Model</label>
+        <input type="text" name="model_id" value="eleven_v3">
+    </div>
+
+    <div class="field">
+        <label>Output format</label>
+        <input type="text" name="output_format" value="mp3_44100_128">
+    </div>
+
+    <button type="submit">Generate audio</button>
+</form>
+
+<style>
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
+    select, input[type="text"], input[type="password"], textarea {
+        padding: 6px; width: 100%; box-sizing: border-box;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+</style>
+{% endblock %}

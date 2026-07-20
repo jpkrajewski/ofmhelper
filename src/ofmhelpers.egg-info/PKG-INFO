@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: ofmhelpers
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: apify-client>=3.0.2
+Requires-Dist: google-api-python-client>=2.197.0
+Requires-Dist: google-auth>=2.53.0
+Requires-Dist: google-auth-oauthlib>=1.4.0
+Requires-Dist: openpyxl>=3.1.5
+Requires-Dist: pillow>=12.2.0
+Requires-Dist: python-dotenv>=1.2.2
+Requires-Dist: requests>=2.34.2
+Requires-Dist: selenium>=4.44.0

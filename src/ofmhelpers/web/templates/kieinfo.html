@@ -1,0 +1,16 @@
+<div style="background:#f5f5f5; border:1px solid #ddd; padding:1rem; margin-bottom:1.5rem; border-radius:4px;">
+    <strong>Before you generate:</strong> this tool uses your kie.ai API key to run the job.
+    If you don't have one yet, follow these steps once:
+    <ol style="margin:0.5rem 0 0 1.2rem; padding:0;">
+        <li>Go to <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> and create an account (or log in if you already have one).</li>
+        <li>Top up credits on your account — generations are billed per job, so you'll need balance before running anything.</li>
+        <li>Open your <a href="https://kie.ai/api-key" target="_blank" rel="noopener">API key dashboard</a> and copy your key.</li>
+        <li>Paste that key into the <strong>API key</strong> field below.</li>
+    </ol>
+    <p style="margin:0.75rem 0 0;">
+        Your key is only used for this job — it isn't saved or shared. If a job fails with
+        an authorization or credit error, check your kie.ai balance and key first.
+    </p>
+</div>
+
+{% include "_prompt_history.html" %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Helpers</h1>
+<p>Small standalone audio/media tools.</p>
+
+<ul class="helper-list">
+    {% for h in helpers %}
+    <li>
+        <a href="/helpers/{{ h.slug }}"><strong>{{ h.name }}</strong></a>
+        <p>{{ h.description }}</p>
+    </li>
+    {% endfor %}
+</ul>
+
+<style>
+    .helper-list { list-style: none; padding: 0; }
+    .helper-list li { padding: 12px 0; border-bottom: 1px solid #eee; }
+    .helper-list p { margin: 4px 0 0; color: #888; font-size: 14px; }
+</style>
+{% endblock %}

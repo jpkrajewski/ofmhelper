@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Seedance 2.0 — video generation</h1>
+
+{% include "kieinfo.html" %}
+
+<form id="seedance-form" method="post" action="/seedance/run" enctype="multipart/form-data">
+    <div class="field">
+        <label>API key</label>
+        <input type="password" name="api_key" required autocomplete="off">
+    </div>
+
+    <div class="field">
+        <label>Prompt</label>
+        <textarea name="prompt" required></textarea>
+    </div>
+
+    <div class="field">
+        <label>Model</label>
+        <select name="model">
+            {% for m in models|default([]) %}
+            <option value="{{ m }}" {% if m == "bytedance/seedance-2" %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Resolution</label>
+        <select name="resolution">
+            <option value="480p">480p</option>
+            <option value="720p" selected>720p</option>
+            <option value="1080p">1080p</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Aspect ratio</label>
+        <select name="aspect_ratio">
+            <option value="adaptive">Adaptive</option>
+            <option value="1:1">1:1</option>
+            <option value="16:9" selected>16:9</option>
+            <option value="21:9">21:9</option>
+            <option value="3:4">3:4</option>
+            <option value="4:3">4:3</option>
+            <option value="9:16">9:16</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Duration (seconds)</label>
+        <input type="number" name="duration" value="10" min="1" max="60">
+    </div>
+
+    <label style="display:block; margin-bottom:16px">
+        <input type="checkbox" name="generate_audio" value="true" checked style="width:auto">
+        Generate audio
+    </label>
+
+    <div class="field">
+        <label>Input mode</label>
+        <select name="mode" id="mode" onchange="toggleMode()">
+            <option value="frames">First / last frame</option>
+            <option value="reference">Reference media</option>
+        </select>
+        <p style="color:#888; font-size:13px; margin-top:4px">
+            These two modes are mutually exclusive on kie.ai's end — pick one.
+        </p>
+    </div>
+
+    <div id="frames-fields">
+        <div class="field">
+            <label>First frame image (required for this mode)</label>
+            <input type="file" name="first_frame" accept="image/*" class="preview-input" data-preview="first-frame-preview">
+            <img id="first-frame-preview" class="thumb-preview" style="display:none">
+        </div>
+        <div class="field">
+            <label>Last frame image (optional)</label>
+            <input type="file" name="last_frame" accept="image/*" class="preview-input" data-preview="last-frame-preview">
+            <img id="last-frame-preview" class="thumb-preview" style="display:none">
+        </div>
+    </div>
+
+    <div id="reference-fields" style="display:none">
+        <p style="color:#888; font-size:13px; margin-top:-8px; margin-bottom:16px">
+            Browsers sort multi-file pickers alphabetically, not by click order — so files here
+            are added one at a time and you control the order with ↑ / ↓.
+        </p>
+
+        <div class="field file-picker" data-field="reference_images">
+            <label>Reference images (optional)</label>
+            <input type="file" accept="image/*" class="file-add-input">
+            <ul class="file-order-list"></ul>
+        </div>
+
+        <div class="field file-picker" data-field="reference_videos">
+            <label>Reference videos (optional)</label>
+            <input type="file" accept="video/*" class="file-add-input">
+            <ul class="file-order-list"></ul>
+        </div>
+
+        <div class="field file-picker" data-field="reference_audio">
+            <label>Reference audio (optional)</label>
+            <input type="file" accept="audio/*" class="file-add-input">
+            <ul class="file-order-list"></ul>
+        </div>
+    </div>
+
+    <button type="submit">Generate video</button>
+</form>
+
+<style>
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
+    select, input[type="number"], input[type="password"] { padding: 6px; width: 100%; box-sizing: border-box; }
+
+    .file-order-list { list-style: none; padding: 0; margin: 10px 0 0; }
+    .file-order-list li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 6px;
+        font-size: 14px;
+    }
+    .file-order-list li span { flex: 1; }
+    .file-order-list button {
+        border: 1px solid #ccc; background: #fafafa; border-radius: 4px;
+        cursor: pointer; padding: 2px 8px; margin: 0;
+    }
+
+    .thumb-preview {
+        display: block; margin-top: 8px; max-width: 160px; max-height: 160px;
+        border-radius: 6px; border: 1px solid #ddd; object-fit: cover;
+    }
+    .file-order-list li img.thumb-small {
+        width: 100px; height: 100px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;
+    }
+</style>
+
+<script>
+function toggleMode() {
+    const mode = document.getElementById('mode').value;
+    document.getElementById('frames-fields').style.display = mode === 'frames' ? 'block' : 'none';
+    document.getElementById('reference-fields').style.display = mode === 'reference' ? 'block' : 'none';
+}
+
+// First/last frame previews -- single file, straightforward object URL swap
+document.querySelectorAll('.preview-input').forEach((input) => {
+    const img = document.getElementById(input.dataset.preview);
+    let currentUrl = null;
+    input.addEventListener('change', () => {
+        if (currentUrl) URL.revokeObjectURL(currentUrl);
+        const file = input.files[0];
+        if (!file) { img.style.display = 'none'; return; }
+        currentUrl = URL.createObjectURL(file);
+        img.src = currentUrl;
+        img.style.display = 'block';
+    });
+});
+
+// Ordered file lists: the browser sorts native multi-select FileLists
+// alphabetically, so we add one file at a time into a JS array we fully
+// control, with explicit up/down/remove -- then build the upload ourselves.
+const orderedFiles = {
+    reference_images: [],
+    reference_videos: [],
+    reference_audio: [],
+};
+
+function renderList(field) {
+    const picker = document.querySelector(`.file-picker[data-field="${field}"]`);
+    const listEl = picker.querySelector('.file-order-list');
+    listEl.innerHTML = '';
+    orderedFiles[field].forEach((file, idx) => {
+        const li = document.createElement('li');
+
+        if (field === 'reference_images' && file.type.startsWith('image/')) {
+            const thumb = document.createElement('img');
+            thumb.className = 'thumb-small';
+            thumb.src = URL.createObjectURL(file);
+            li.appendChild(thumb);
+        }
+
+        const span = document.createElement('span');
+        span.textContent = `${idx + 1}. ${file.name}`;
+        const up = document.createElement('button');
+        up.type = 'button'; up.textContent = '↑';
+        up.onclick = () => { moveFile(field, idx, -1); };
+        const down = document.createElement('button');
+        down.type = 'button'; down.textContent = '↓';
+        down.onclick = () => { moveFile(field, idx, 1); };
+        const remove = document.createElement('button');
+        remove.type = 'button'; remove.textContent = '✕';
+        remove.onclick = () => { orderedFiles[field].splice(idx, 1); renderList(field); };
+
+        li.append(span, up, down, remove);
+        listEl.appendChild(li);
+    });
+}
+
+function moveFile(field, idx, dir) {
+    const arr = orderedFiles[field];
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    renderList(field);
+}
+
+document.querySelectorAll('.file-picker').forEach((picker) => {
+    const field = picker.dataset.field;
+    const input = picker.querySelector('.file-add-input');
+    input.addEventListener('change', () => {
+        for (const file of input.files) {
+            orderedFiles[field].push(file);
+        }
+        input.value = '';
+        renderList(field);
+    });
+});
+
+document.getElementById('seedance-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);  // prompt, model, resolution, mode, first_frame, last_frame, etc.
+
+    for (const [field, files] of Object.entries(orderedFiles)) {
+        for (const file of files) {
+            formData.append(field, file, file.name);
+        }
+    }
+
+    const resp = await fetch(form.action, { method: 'POST', body: formData });
+    window.location = resp.url;
+});
+</script>
+{% endblock %}

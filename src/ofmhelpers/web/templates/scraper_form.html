@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Profile Scraper</h1>
+<p>Upload a sheet with <code>INSTAGRAM_PROFILES</code> and <code>TIKTOK_PROFILES</code> columns.</p>
+
+<form method="post" action="/scraper/run" enctype="multipart/form-data">
+    <div class="field">
+        <label>API keys (one per line — the client with the most credits is used)</label>
+        <textarea name="api_keys" required placeholder="apify_api_xxx&#10;apify_api_yyy"></textarea>
+    </div>
+
+    <div class="field">
+        <label>Profiles sheet (.xlsx)</label>
+        <input type="file" name="sheet" accept=".xlsx" required>
+    </div>
+
+    <div class="field">
+        <label>Results per profile</label>
+        <input type="number" name="results_per_profile" value="20" min="1">
+    </div>
+
+    <div class="field">
+        <label>Days back</label>
+        <input type="number" name="results_days_back" value="7" min="1">
+    </div>
+
+    <button type="submit">Run scrape</button>
+</form>
+
+<style>
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
+    select, input[type="number"], input[type="file"], textarea { padding: 6px; width: 100%; box-sizing: border-box; }
+    textarea { min-height: 100px; resize: vertical; }
+</style>
+{% endblock %}

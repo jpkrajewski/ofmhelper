@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Radio Comms Modulator</h1>
+<p>Turns clean voice lines into crunchy radio comms.</p>
+
+<form method="post" action="/helpers/radio-comms/run" enctype="multipart/form-data">
+    <div class="field">
+        <label>Input file(s) (.wav)</label>
+        <input type="file" name="files" accept="audio/*" multiple required>
+    </div>
+
+    <div class="field">
+        <label>Preset</label>
+        <select name="preset">
+            {% for p in presets|default([]) %}
+            <option value="{{ p }}" {% if p == "cod_clean" %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Mode</label>
+        <select name="mode" id="mode" onchange="toggleMode()">
+            <option value="single">Single output per file</option>
+            <option value="variations">Generate N randomized variations</option>
+        </select>
+    </div>
+
+    <div id="variations-fields" style="display:none">
+        <div class="field">
+            <label>Variation count</label>
+            <input type="number" name="count" value="10" min="1" max="50">
+        </div>
+        <div class="field">
+            <label>Jitter amount (0.0 - 1.0)</label>
+            <input type="number" name="jitter_amount" value="0.18" min="0" max="1" step="0.01">
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Seed (optional, for reproducibility)</label>
+        <input type="number" name="seed">
+    </div>
+
+    <button type="submit">Process</button>
+</form>
+
+<style>
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
+    select, input[type="number"], input[type="file"] { padding: 6px; width: 100%; box-sizing: border-box; }
+</style>
+
+<script>
+function toggleMode() {
+    const mode = document.getElementById('mode').value;
+    document.getElementById('variations-fields').style.display = mode === 'variations' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

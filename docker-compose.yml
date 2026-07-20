@@ -1,0 +1,48 @@
+services:
+  ofmhelpers:
+    build: .
+    container_name: ofmhelpers
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - BGUTIL_POT_PROVIDER_URL=http://pot-provider:4416
+      - OFM_COOKIES_FILE=/app/cookies/cookies.txt
+      - OFM_KIEAI_OUT_DIR=/app/kieai_out
+      - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
+      - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./secrets/cookies:/app/cookies
+      - ./uploads:/app/uploads
+      - ./downloads:/app/downloads
+      - ./kieai_out:/app/kieai_out
+    depends_on:
+      pot-provider:
+        condition: service_started
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    read_only: false   # set true if your app doesn't write outside ./uploads
+    cap_drop:
+      - ALL
+
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: bgutil-pot-provider
+    restart: unless-stopped
+    expose:
+      - "4416"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  internal:
+    driver: bridge
