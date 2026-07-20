@@ -1,5 +1,3 @@
-import shutil
-import uuid
 from pathlib import Path
 
 from fastapi import (
@@ -11,22 +9,22 @@ from fastapi import (
     BackgroundTasks,
     HTTPException,
 )
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.routers.task_helpers import (
+    make_job_dir,
+    build_ordered_paths,
+    attach_download_indexes,
+    serve_job_file,
+)
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 
 router = APIRouter(prefix="/nanobanana", tags=["nanobanana"])
 
 UPLOAD_ROOT = Path("uploads") / "nanobanana-refs"
-
-
-def _save(job_dir: Path, upload: UploadFile) -> str:
-    dest = job_dir / upload.filename
-    with dest.open("wb") as out:
-        shutil.copyfileobj(upload.file, out)
-    return str(dest)
+ALLOWED_REF_ROOT = Path("uploads")
 
 
 def _run_nanobanana(
@@ -38,9 +36,7 @@ def _run_nanobanana(
     image_input_paths: list[str],
 ) -> list[dict]:
     client = KieAIClient.from_env(api_key=api_key)
-
     image_input_urls = [client.upload_local_file(p) for p in image_input_paths]
-
     out_path = client.generate_image_nbp(
         prompt=prompt,
         image_input=image_input_urls,
@@ -65,17 +61,16 @@ async def run(
     resolution: str = Form("1K"),
     output_format: str = Form("png"),
     image_input: list[UploadFile] = File(default=[]),
+    image_input_manifest: str = Form("[]"),
 ):
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    job_dir = UPLOAD_ROOT / uuid.uuid4().hex[:8]
-    job_dir.mkdir(parents=True, exist_ok=True)
+    job_dir = make_job_dir(UPLOAD_ROOT)
+    image_input_paths = build_ordered_paths(
+        job_dir, image_input_manifest, image_input, ALLOWED_REF_ROOT
+    )
 
-    image_input_paths = [_save(job_dir, f) for f in image_input if f.filename]
-
-    # api_key is intentionally excluded from the job's stored params -- same
-    # pattern as seedance, it's only ever passed to the background task.
     params = {
         "prompt": prompt,
         "aspect_ratio": aspect_ratio,
@@ -87,11 +82,7 @@ async def run(
         run_job,
         job_id,
         _run_nanobanana,
-        {
-            "api_key": api_key,
-            **params,
-            "image_input_paths": image_input_paths,
-        },
+        {"api_key": api_key, **params, "image_input_paths": image_input_paths},
     )
 
     return RedirectResponse(url=f"/nanobanana/jobs/{job_id}", status_code=303)
@@ -104,26 +95,11 @@ def job_status(request: Request, job_id: str):
         return templates.TemplateResponse(
             request, "nanobanana_form.html", {}, status_code=404
         )
-
-    if job.get("status") == "done":
-        for idx, f in enumerate(job["result"]):
-            f["index"] = idx
-
+    attach_download_indexes(job)
     return templates.TemplateResponse(request, "nanobanana_status.html", {"job": job})
 
 
 @router.get("/files/{job_id}/{index}")
 def download_file(job_id: str, index: int):
     job = get_job(job_id)
-    if job is None or job.get("status") != "done":
-        raise HTTPException(status_code=404, detail="Job not found or not finished")
-
-    files = job["result"]
-    if index < 0 or index >= len(files):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    path = Path(files[index]["path"])
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="File no longer exists on server")
-
-    return FileResponse(path, filename=path.name, media_type="application/octet-stream")
+    return serve_job_file(job, index)

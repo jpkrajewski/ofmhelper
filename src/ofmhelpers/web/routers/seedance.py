@@ -1,5 +1,3 @@
-import shutil
-import uuid
 from enum import Enum
 from pathlib import Path
 
@@ -11,29 +9,31 @@ from fastapi import (
     File,
     BackgroundTasks,
     HTTPException,
+    Query,
 )
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.routers.task_helpers import (
+    make_job_dir,
+    save_upload,
+    build_ordered_paths,
+    attach_download_indexes,
+    serve_job_file,
+)
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 
 router = APIRouter(prefix="/seedance", tags=["seedance"])
 
 UPLOAD_ROOT = Path("uploads") / "seedance-refs"
+ALLOWED_REF_ROOT = Path("uploads")
 
 
 class SeedanceModel(str, Enum):
     standard = "bytedance/seedance-2"
     fast = "bytedance/seedance-2-fast"
     mini = "bytedance/seedance-2-mini"
-
-
-def _save(job_dir: Path, upload: UploadFile) -> str:
-    dest = job_dir / upload.filename
-    with dest.open("wb") as out:
-        shutil.copyfileobj(upload.file, out)
-    return str(dest)
 
 
 def _run_seedance(
@@ -107,24 +107,40 @@ async def run(
     first_frame: UploadFile | None = File(None),
     last_frame: UploadFile | None = File(None),
     reference_images: list[UploadFile] = File(default=[]),
+    reference_images_manifest: str = Form("[]"),
     reference_videos: list[UploadFile] = File(default=[]),
+    reference_videos_manifest: str = Form("[]"),
     reference_audio: list[UploadFile] = File(default=[]),
+    reference_audio_manifest: str = Form("[]"),
 ):
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    job_dir = UPLOAD_ROOT / uuid.uuid4().hex[:8]
-    job_dir.mkdir(parents=True, exist_ok=True)
+    job_dir = make_job_dir(UPLOAD_ROOT)
 
+    # first/last frame are single, non-reorderable slots -- no manifest needed,
+    # just save whatever was actually uploaded.
     first_frame_path = (
-        _save(job_dir, first_frame) if first_frame and first_frame.filename else None
+        save_upload(job_dir, first_frame)
+        if first_frame and first_frame.filename
+        else None
     )
     last_frame_path = (
-        _save(job_dir, last_frame) if last_frame and last_frame.filename else None
+        save_upload(job_dir, last_frame) if last_frame and last_frame.filename else None
     )
-    ref_image_paths = [_save(job_dir, f) for f in reference_images if f.filename]
-    ref_video_paths = [_save(job_dir, f) for f in reference_videos if f.filename]
-    ref_audio_paths = [_save(job_dir, f) for f in reference_audio if f.filename]
+
+    # reference_* are ordered, reusable multi-file lists -- these go through
+    # the manifest so previously-uploaded refs get reused by path instead of
+    # re-uploaded.
+    reference_image_paths = build_ordered_paths(
+        job_dir, reference_images_manifest, reference_images, ALLOWED_REF_ROOT
+    )
+    reference_video_paths = build_ordered_paths(
+        job_dir, reference_videos_manifest, reference_videos, ALLOWED_REF_ROOT
+    )
+    reference_audio_paths = build_ordered_paths(
+        job_dir, reference_audio_manifest, reference_audio, ALLOWED_REF_ROOT
+    )
 
     # api_key is intentionally excluded from the job's stored params -- it's
     # only ever passed straight through to the background task, never
@@ -148,9 +164,9 @@ async def run(
             **params,
             "first_frame_path": first_frame_path,
             "last_frame_path": last_frame_path,
-            "reference_image_paths": ref_image_paths,
-            "reference_video_paths": ref_video_paths,
-            "reference_audio_paths": ref_audio_paths,
+            "reference_image_paths": reference_image_paths,
+            "reference_video_paths": reference_video_paths,
+            "reference_audio_paths": reference_audio_paths,
         },
     )
 
@@ -164,26 +180,13 @@ def job_status(request: Request, job_id: str):
         return templates.TemplateResponse(
             request, "seedance_form.html", {}, status_code=404
         )
-
-    if job.get("status") == "done":
-        for idx, f in enumerate(job["result"]):
-            f["index"] = idx
-
+    attach_download_indexes(job)
     return templates.TemplateResponse(request, "seedance_status.html", {"job": job})
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int):
+def download_file(job_id: str, index: int, dl: int = Query(0)):
     job = get_job(job_id)
-    if job is None or job.get("status") != "done":
-        raise HTTPException(status_code=404, detail="Job not found or not finished")
-
-    files = job["result"]
-    if index < 0 or index >= len(files):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    path = Path(files[index]["path"])
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="File no longer exists on server")
-
-    return FileResponse(path, filename=path.name, media_type="application/octet-stream")
+    return serve_job_file(
+        job, index, as_attachment=bool(dl), default_media_type="video/mp4"
+    )

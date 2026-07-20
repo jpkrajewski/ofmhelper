@@ -71,6 +71,9 @@ class KieAIClient:
                 timeout=900,
             )
         r.raise_for_status()
+        if not r.json().get("success"):
+            raise Exception("Wrong API Key")
+
         url = r.json()["data"]["downloadUrl"]
         print(f"[upload] done {path} -> {url}", flush=True)
         return url

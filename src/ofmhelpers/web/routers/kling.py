@@ -1,5 +1,3 @@
-import shutil
-import uuid
 from pathlib import Path
 
 from fastapi import (
@@ -10,25 +8,23 @@ from fastapi import (
     File,
     BackgroundTasks,
     HTTPException,
+    Query,
 )
-from fastapi.responses import RedirectResponse, FileResponse
-import mimetypes
-from fastapi import Query
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.routers.task_helpers import (
+    make_job_dir,
+    build_ordered_paths,
+    attach_download_indexes,
+    serve_job_file,
+)
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 
 router = APIRouter(prefix="/kling3", tags=["kling3"])
 
 UPLOAD_ROOT = Path("uploads") / "kling3-refs"
-
-
-def _save(job_dir: Path, upload: UploadFile) -> str:
-    dest = job_dir / upload.filename
-    with dest.open("wb") as out:
-        shutil.copyfileobj(upload.file, out)
-    return str(dest)
+ALLOWED_REF_ROOT = Path("uploads")
 
 
 def _run_kling3(
@@ -41,9 +37,7 @@ def _run_kling3(
     image_paths: list[str],
 ) -> list[dict]:
     client = KieAIClient.from_env(api_key=api_key)
-
     image_urls = [client.upload_local_file(p) for p in image_paths]
-
     out_path = client.generate_video_kling3(
         prompt=prompt,
         image_urls=image_urls or None,
@@ -71,14 +65,15 @@ async def run(
     duration: str = Form("5"),
     sound: bool = Form(True),
     images: list[UploadFile] = File(default=[]),
+    images_manifest: str = Form("[]"),
 ):
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    job_dir = UPLOAD_ROOT / uuid.uuid4().hex[:8]
-    job_dir.mkdir(parents=True, exist_ok=True)
-
-    image_paths = [_save(job_dir, f) for f in images if f.filename]
+    job_dir = make_job_dir(UPLOAD_ROOT)
+    image_paths = build_ordered_paths(
+        job_dir, images_manifest, images, ALLOWED_REF_ROOT
+    )
 
     params = {
         "prompt": prompt,
@@ -92,12 +87,10 @@ async def run(
         run_job,
         job_id,
         _run_kling3,
-        {
-            "api_key": api_key,
-            **params,
-            "image_paths": image_paths,
-        },
+        {"api_key": api_key, **params, "image_paths": image_paths},
     )
+
+    from fastapi.responses import RedirectResponse
 
     return RedirectResponse(url=f"/kling3/jobs/{job_id}", status_code=303)
 
@@ -109,32 +102,13 @@ def job_status(request: Request, job_id: str):
         return templates.TemplateResponse(
             request, "kling3_form.html", {}, status_code=404
         )
-
-    if job.get("status") == "done":
-        for idx, f in enumerate(job["result"]):
-            f["index"] = idx
-
+    attach_download_indexes(job)
     return templates.TemplateResponse(request, "kling3_status.html", {"job": job})
 
 
 @router.get("/files/{job_id}/{index}")
 def download_file(job_id: str, index: int, dl: int = Query(0)):
     job = get_job(job_id)
-    if job is None or job.get("status") != "done":
-        raise HTTPException(status_code=404, detail="Job not found or not finished")
-
-    files = job["result"]
-    if index < 0 or index >= len(files):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    path = Path(files[index]["path"])
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="File no longer exists on server")
-
-    if dl:
-        return FileResponse(
-            path, filename=path.name, media_type="application/octet-stream"
-        )
-
-    media_type = mimetypes.guess_type(path.name)[0] or "video/mp4"
-    return FileResponse(path, media_type=media_type)
+    return serve_job_file(
+        job, index, as_attachment=bool(dl), default_media_type="video/mp4"
+    )

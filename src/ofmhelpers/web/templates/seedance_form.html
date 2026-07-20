@@ -83,24 +83,34 @@
     <div id="reference-fields" style="display:none">
         <p style="color:#888; font-size:13px; margin-top:-8px; margin-bottom:16px">
             Browsers sort multi-file pickers alphabetically, not by click order — so files here
-            are added one at a time and you control the order with ↑ / ↓.
+            are added one at a time and you control the order with ↑ / ↓. Previously-uploaded
+            refs can be reused from the dropdowns below without re-uploading.
         </p>
 
-        <div class="field file-picker" data-field="reference_images">
+        <div class="field file-picker" data-field="reference_images" data-kind="image">
             <label>Reference images (optional)</label>
             <input type="file" accept="image/*" class="file-add-input">
+            <select class="ref-select" data-kind="image" data-field="reference_images">
+                <option value="">— or pick a previously uploaded image —</option>
+            </select>
             <ul class="file-order-list"></ul>
         </div>
 
-        <div class="field file-picker" data-field="reference_videos">
+        <div class="field file-picker" data-field="reference_videos" data-kind="video">
             <label>Reference videos (optional)</label>
             <input type="file" accept="video/*" class="file-add-input">
+            <select class="ref-select" data-kind="video" data-field="reference_videos">
+                <option value="">— or pick a previously uploaded video —</option>
+            </select>
             <ul class="file-order-list"></ul>
         </div>
 
-        <div class="field file-picker" data-field="reference_audio">
+        <div class="field file-picker" data-field="reference_audio" data-kind="audio">
             <label>Reference audio (optional)</label>
             <input type="file" accept="audio/*" class="file-add-input">
+            <select class="ref-select" data-kind="audio" data-field="reference_audio">
+                <option value="">— or pick a previously uploaded audio file —</option>
+            </select>
             <ul class="file-order-list"></ul>
         </div>
     </div>
@@ -132,6 +142,7 @@
     .file-order-list li img.thumb-small {
         width: 100px; height: 100px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;
     }
+    .ref-select { margin-top: 6px; }
 </style>
 
 <script>
@@ -141,7 +152,9 @@ function toggleMode() {
     document.getElementById('reference-fields').style.display = mode === 'reference' ? 'block' : 'none';
 }
 
-// First/last frame previews -- single file, straightforward object URL swap
+// First/last frame previews -- single file, straightforward object URL swap.
+// These are simple slots (never reordered/reused), so they stay plain
+// <input type="file"> fields submitted directly via FormData.
 document.querySelectorAll('.preview-input').forEach((input) => {
     const img = document.getElementById(input.dataset.preview);
     let currentUrl = null;
@@ -155,9 +168,12 @@ document.querySelectorAll('.preview-input').forEach((input) => {
     });
 });
 
-// Ordered file lists: the browser sorts native multi-select FileLists
-// alphabetically, so we add one file at a time into a JS array we fully
-// control, with explicit up/down/remove -- then build the upload ourselves.
+// Reference media lists: ordered, reusable. Each item is either
+// {kind:'new', file: File} (from the file picker) or
+// {kind:'existing', path, name} (reused from the dropdown -- never
+// re-uploaded, since it already lives on the server). The browser sorts
+// native multi-select FileLists alphabetically, so files are added one at
+// a time into an array we fully control, with explicit up/down/remove.
 const orderedFiles = {
     reference_images: [],
     reference_videos: [],
@@ -166,20 +182,26 @@ const orderedFiles = {
 
 function renderList(field) {
     const picker = document.querySelector(`.file-picker[data-field="${field}"]`);
+    const kind = picker.dataset.kind;
     const listEl = picker.querySelector('.file-order-list');
     listEl.innerHTML = '';
-    orderedFiles[field].forEach((file, idx) => {
+    orderedFiles[field].forEach((item, idx) => {
         const li = document.createElement('li');
+        const name = item.kind === 'new' ? item.file.name : item.name;
 
-        if (field === 'reference_images' && file.type.startsWith('image/')) {
+        if (kind === 'image') {
             const thumb = document.createElement('img');
             thumb.className = 'thumb-small';
-            thumb.src = URL.createObjectURL(file);
+            if (item.kind === 'new') {
+                thumb.src = URL.createObjectURL(item.file);
+            } else {
+                thumb.src = `/refs/file?path=${encodeURIComponent(item.path)}`;
+            }
             li.appendChild(thumb);
         }
 
         const span = document.createElement('span');
-        span.textContent = `${idx + 1}. ${file.name}`;
+        span.textContent = `${idx + 1}. ${name}${item.kind === 'existing' ? ' (reused)' : ''}`;
         const up = document.createElement('button');
         up.type = 'button'; up.textContent = '↑';
         up.onclick = () => { moveFile(field, idx, -1); };
@@ -208,10 +230,36 @@ document.querySelectorAll('.file-picker').forEach((picker) => {
     const input = picker.querySelector('.file-add-input');
     input.addEventListener('change', () => {
         for (const file of input.files) {
-            orderedFiles[field].push(file);
+            orderedFiles[field].push({ kind: 'new', file });
         }
         input.value = '';
         renderList(field);
+    });
+});
+
+// Previously-uploaded dropdowns: just remember the existing server path,
+// never fetch the bytes -- that's what prevents duplicate uploads.
+document.querySelectorAll('.ref-select').forEach(async (select) => {
+    const kind = select.dataset.kind;
+    const resp = await fetch(`/refs?kind=${kind}`);
+    const files = await resp.json();
+    files.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = f.path;
+        opt.textContent = f.name;
+        select.appendChild(opt);
+    });
+
+    select.addEventListener('change', () => {
+        if (!select.value) return;
+        const field = select.dataset.field;
+        orderedFiles[field].push({
+            kind: 'existing',
+            path: select.value,
+            name: select.value.split('/').pop(),
+        });
+        renderList(field);
+        select.value = "";
     });
 });
 
@@ -220,10 +268,17 @@ document.getElementById('seedance-form').addEventListener('submit', async (e) =>
     const form = e.target;
     const formData = new FormData(form);  // prompt, model, resolution, mode, first_frame, last_frame, etc.
 
-    for (const [field, files] of Object.entries(orderedFiles)) {
-        for (const file of files) {
-            formData.append(field, file, file.name);
+    for (const [field, items] of Object.entries(orderedFiles)) {
+        const manifest = [];
+        for (const item of items) {
+            if (item.kind === 'new') {
+                formData.append(field, item.file, item.file.name);
+                manifest.push({ kind: 'new' });
+            } else {
+                manifest.push({ kind: 'existing', path: item.path });
+            }
         }
+        formData.append(`${field}_manifest`, JSON.stringify(manifest));
     }
 
     const resp = await fetch(form.action, { method: 'POST', body: formData });

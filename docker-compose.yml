@@ -29,6 +29,10 @@ services:
     read_only: false   # set true if your app doesn't write outside ./uploads
     cap_drop:
       - ALL
+    cap_add:
+      - DAC_OVERRIDE   # lets appuser (1000:1000) write to bind mounts it
+                        # doesn't literally own -- needed on Windows/Docker
+                        # Desktop bind mounts where real chown isn't reliable
 
   pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:latest
