@@ -134,6 +134,17 @@ it over:
 scp -i /path/to/your-key.pem /path/to/google-drive-token.json ubuntu@<PUBLIC_IP>:~/ofmhelper/secrets/google-drive-token.json
 ```
 
+Then, on the server, re-fix ownership — `scp` (especially if you ever ran it
+via `sudo`, or the destination already existed root-owned) can easily land
+the file as `root:root`, which the container's non-root user can't write
+back to when the token refreshes:
+
+```bash
+sudo chown -R 1000:1000 ~/ofmhelper/secrets
+```
+
+Do this every time you replace the token file, not just on first setup.
+
 ---
 
 ## 6. Environment variables
@@ -316,5 +327,6 @@ docker compose logs -f ofmhelpers   # confirm clean startup
 | Form submit shows "Method Not Allowed" | Red herring — `fetch()` follows a failed response's URL via GET. Check the Network tab for the *first* request's real status, not this one | — |
 | "Upload to Drive" fails with `FileNotFoundError: No Google Drive token` | `secrets/google-drive-token.json` missing on the host, or `secrets/` not bind-mounted | Run `uv run python -m ofmhelpers.gdrive.authorize` locally, `scp` the token to `secrets/google-drive-token.json` (step 5); confirm `docker-compose.yml` mounts `./secrets:/app/secrets` |
 | "Upload to Drive" fails with `[Errno 30] Read-only file system` on the token file | The OAuth token refreshes itself and rewrites the file on disk (unlike the old service-account key, which was static) — the `secrets/` mount must be writable, not `:ro` | Make sure `docker-compose.yml`'s volume line reads `./secrets:/app/secrets` (no `:ro`), then `docker compose up -d` |
+| "Upload to Drive" fails with `PermissionError: [Errno 13]` writing `google-drive-token.json` specifically | The mount is writable, but the token file itself is `root`-owned (common after `scp`-ing a fresh token, especially via `sudo`) — the container runs as uid 1000, so it can't overwrite a `root:root` file on refresh even though the directory looks fine | `sudo chown -R 1000:1000 secrets/`; no restart needed, next refresh just works |
 | "Upload to Drive" fails with `storageQuotaExceeded` | Using a service-account key instead of the OAuth token flow — service accounts have no storage quota on a personal Drive | Follow step 6's OAuth setup instead (`ofmhelpers.gdrive.authorize`), not a service account key |
 | "Upload to Drive" fails with a 404 from the Drive API | Destination folder doesn't belong to (or isn't shared with) the account you authorized | Re-run the authorize flow with the Google account that owns/has access to the target folder |
