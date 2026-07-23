@@ -24,9 +24,14 @@ PROTECTED_PAGES = [
     "/helpers/elevenlabs",
     "/helpers/scraper",
     "/helpers/radio-comms",
-    "/uploads-manager",
-    "/jobs",
+    "/file-manager",
+    "/action-log",
     "/cookies",
+]
+
+ADMIN_ONLY_PAGES = [
+    "/file-manager",
+    "/action-log",
 ]
 
 
@@ -57,6 +62,20 @@ def test_protected_page_redirects_when_logged_out(path):
 
 @pytest.mark.parametrize("path", PROTECTED_PAGES)
 def test_protected_page_loads_once_logged_in(path):
+    client = TestClient(app)
+    client.post("/login", data={"password": "test-admin", "next": "/"})
+    assert client.get(path).status_code == 200
+
+
+@pytest.mark.parametrize("path", ADMIN_ONLY_PAGES)
+def test_admin_only_page_returns_403_for_va(path):
+    client = TestClient(app)
+    client.post("/login", data={"password": "test-va", "next": "/"})
+    assert client.get(path).status_code == 403
+
+
+@pytest.mark.parametrize("path", ADMIN_ONLY_PAGES)
+def test_admin_only_page_loads_for_admin(path):
     client = TestClient(app)
     client.post("/login", data={"password": "test-admin", "next": "/"})
     assert client.get(path).status_code == 200

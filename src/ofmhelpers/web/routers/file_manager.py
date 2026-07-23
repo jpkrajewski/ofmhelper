@@ -1,18 +1,24 @@
 """
-ofmhelpers/web/routers/uploads_manager.py
+ofmhelpers/web/routers/file_manager.py
 
-Browse, download, and delete files under uploads/ and downloads/.
+Browse, download, and delete files under uploads/ and downloads/. Admin-only
+-- a VA browsing to raw uploads/downloads and deleting things isn't part of
+their job, so the whole router is gated via require_admin instead of
+individual routes.
 """
 
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request, HTTPException
+from fastapi import APIRouter, Depends, Form, Request, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.auth import require_admin
 
-router = APIRouter(prefix="/uploads-manager", tags=["uploads-manager"])
+router = APIRouter(
+    prefix="/file-manager", tags=["file-manager"], dependencies=[Depends(require_admin)]
+)
 
 # Named roots the manager is allowed to browse. Add more here (e.g.
 # "kieai_out") if you want them browsable too -- everything else stays
@@ -85,7 +91,7 @@ def browse(request: Request, root: str = DEFAULT_ROOT, path: str = ""):
 
     return templates.TemplateResponse(
         request,
-        "uploads_manager.html",
+        "file_manager.html",
         {
             "roots": list(ROOTS.keys()),
             "current_root": root,
@@ -123,7 +129,7 @@ def delete_one(path: str = Form(...), root: str = Form(DEFAULT_ROOT)):
         else ""
     )
     return RedirectResponse(
-        url=f"/uploads-manager?root={root}&path={parent}", status_code=303
+        url=f"/file-manager?root={root}&path={parent}", status_code=303
     )
 
 
@@ -140,5 +146,5 @@ def delete_all(path: str = Form(""), root: str = Form(DEFAULT_ROOT)):
             entry.unlink()
 
     return RedirectResponse(
-        url=f"/uploads-manager?root={root}&path={path}", status_code=303
+        url=f"/file-manager?root={root}&path={path}", status_code=303
     )

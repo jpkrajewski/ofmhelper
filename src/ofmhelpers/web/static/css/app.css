@@ -264,7 +264,47 @@ footer .footer-links a:hover { color: var(--accent-soft); }
 .fail-note { height: auto; padding: 8px; margin-top: 8px; color: var(--fail); border-color: #6b2525; }
 
 /* ---- Todo page ---- */
-.todo-add-form { max-width: 640px; margin-bottom: 30px; }
+.todo-add-form { max-width: 640px; margin-bottom: 20px; }
+.todo-io-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+.todo-export-btn,
+.todo-import-form button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    box-sizing: border-box;
+    background: none;
+    border: 1px solid var(--accent-soft);
+    border-radius: 6px;
+    color: var(--accent-soft);
+    font-size: 13px;
+    padding: 0 14px;
+    text-decoration: none;
+    cursor: pointer;
+}
+.todo-export-btn:hover,
+.todo-import-form button:hover { background: var(--surface); }
+.todo-import-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.todo-import-form input[type="file"] {
+    height: 34px;
+    box-sizing: border-box;
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 220px;
+}
 .todo-table .todo-comments {
     max-width: 320px;
     white-space: pre-wrap;

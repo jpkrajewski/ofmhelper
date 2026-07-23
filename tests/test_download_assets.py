@@ -122,7 +122,7 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     va_job = r.json()["job_id"]
     assert JOBS[va_job]["actor"] == "va"
 
-    html = client.get("/jobs").text
+    html = client.get("/action-log").text
     assert "Action log" in html
     assert 'actor-admin">admin' in html
     assert 'actor-va">va' in html

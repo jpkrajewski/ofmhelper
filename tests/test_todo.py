@@ -1,9 +1,10 @@
 """
 Covers the admin-managed Todo page (web/todos.py + routers/todo.py): admins
 add "model name / link to replicate / comments" tasks for VAs to work
-through. VAs can see the list but every write endpoint (add/toggle/delete)
-is enforced admin-only server-side, not just hidden in the template -- a VA
-could otherwise still POST straight to these routes.
+through. VAs can see the list but every write endpoint
+(add/toggle/delete/export/import) is enforced admin-only server-side, not
+just hidden in the template -- a VA could otherwise still POST straight to
+these routes.
 """
 
 import os
@@ -11,6 +12,8 @@ import os
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
+
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -149,6 +152,101 @@ def test_admin_can_delete_va_cannot(client, va_client):
 def test_toggle_and_delete_404_for_unknown_id(client):
     assert client.post("/todo/doesnotexist/toggle").status_code == 404
     assert client.post("/todo/doesnotexist/delete").status_code == 404
+
+
+def test_admin_can_export_todos_as_json(client):
+    todos.add_todo("Model A", "https://a", "note", "admin")
+
+    r = client.get("/todo/export")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    assert 'filename="todos.json"' in r.headers["content-disposition"]
+
+    exported = r.json()
+    assert len(exported) == 1
+    assert exported[0]["model_name"] == "Model A"
+
+
+def test_va_cannot_export(client, va_client):
+    todos.add_todo("Model A", "https://a", "", "admin")
+    assert va_client.get("/todo/export").status_code == 403
+
+
+def test_admin_can_import_todos_json(client):
+    payload = [
+        {"model_name": "Model A", "url": "https://a", "comments": "first"},
+        {"model_name": "Model B", "url": "https://b", "comments": ""},
+    ]
+    files = {"file": ("todos.json", json.dumps(payload), "application/json")}
+    r = client.post("/todo/import", files=files, follow_redirects=False)
+    assert r.status_code == 303
+
+    items = todos.list_todos()
+    assert len(items) == 2
+    names = {t["model_name"] for t in items}
+    assert names == {"Model A", "Model B"}
+    assert all(t["created_by"] == "admin" for t in items)
+    assert all(t["checked"] is False for t in items)
+
+
+def test_va_cannot_import(client, va_client):
+    payload = [{"model_name": "Model A", "url": "https://a", "comments": ""}]
+    files = {"file": ("todos.json", json.dumps(payload), "application/json")}
+    r = va_client.post("/todo/import", files=files)
+    assert r.status_code == 403
+    assert todos.list_todos() == []
+
+
+def test_import_rejects_invalid_json(client):
+    files = {"file": ("todos.json", "not json at all", "application/json")}
+    r = client.post("/todo/import", files=files)
+    assert r.status_code == 400
+    assert todos.list_todos() == []
+
+
+def test_import_rejects_non_list_json(client):
+    files = {
+        "file": (
+            "todos.json",
+            json.dumps({"model_name": "Model A", "url": "https://a"}),
+            "application/json",
+        )
+    }
+    r = client.post("/todo/import", files=files)
+    assert r.status_code == 400
+    assert todos.list_todos() == []
+
+
+def test_import_is_all_or_nothing_on_bad_entry(client):
+    payload = [
+        {"model_name": "Model A", "url": "https://a", "comments": ""},
+        {"model_name": "Model B", "url": "   ", "comments": ""},  # blank url
+    ]
+    files = {"file": ("todos.json", json.dumps(payload), "application/json")}
+    r = client.post("/todo/import", files=files)
+    assert r.status_code == 400
+    assert todos.list_todos() == [], "a bad row must not let earlier rows through"
+
+
+def test_import_ignores_uploaded_id_checked_and_created_by(client):
+    payload = [
+        {
+            "id": "forged00",
+            "model_name": "Model A",
+            "url": "https://a",
+            "comments": "",
+            "checked": True,
+            "created_by": "someone-else",
+        }
+    ]
+    files = {"file": ("todos.json", json.dumps(payload), "application/json")}
+    client.post("/todo/import", files=files)
+
+    items = todos.list_todos()
+    assert len(items) == 1
+    assert items[0]["id"] != "forged00"
+    assert items[0]["checked"] is False
+    assert items[0]["created_by"] == "admin"
 
 
 def test_list_todos_sorted_newest_first():

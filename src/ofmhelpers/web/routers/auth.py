@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse
 
 from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.auth import check_password
+from ofmhelpers.web.auth import check_password, ROLE_VA
 from ofmhelpers.web.jobs import log_event
 
 router = APIRouter(tags=["auth"])
@@ -34,7 +34,7 @@ def login_submit(
 
     request.session["authenticated"] = True
     request.session["role"] = role
-    if role == "va":
+    if role == ROLE_VA:
         log_event("login", actor=role)
     return RedirectResponse(url=next or "/", status_code=303)
 
@@ -42,7 +42,7 @@ def login_submit(
 @router.post("/logout")
 def logout(request: Request):
     role = request.session.get("role")
-    if role == "va":
+    if role == ROLE_VA:
         log_event("logout", actor=role)  # capture before clearing
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)

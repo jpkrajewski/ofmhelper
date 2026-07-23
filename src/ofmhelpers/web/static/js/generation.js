@@ -167,7 +167,7 @@
                 card.replaceWith(
                     buildFailedCard(
                         label,
-                        `Lost track of this job's status -- check /jobs for job ${jobId}.`
+                        `Lost track of this job's status -- check /action-log for job ${jobId}.`
                     )
                 );
             });

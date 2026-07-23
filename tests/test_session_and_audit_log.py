@@ -96,7 +96,7 @@ def test_login_and_logout_appear_in_the_action_log_page(client_factory):
 
     # log back in to view the page (it's auth-gated like everything else)
     client.post("/login", data={"password": "test-admin", "next": "/"})
-    html = client.get("/jobs").text
+    html = client.get("/action-log").text
 
     assert "Action log" in html
     assert ">login<" in html

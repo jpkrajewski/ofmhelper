@@ -55,6 +55,42 @@ def add_todo(model_name: str, url: str, comments: str, created_by: str | None) -
     return todo
 
 
+def import_todos(entries: list[dict], created_by: str | None) -> int:
+    """Bulk-adds todos parsed from an uploaded JSON file (e.g. a previous
+    /todo/export). Each entry needs at least model_name + url; anything else
+    in it (id/checked/created_at/created_by) is ignored -- imported rows
+    always become fresh tasks, same as the manual add form, so a stale or
+    edited-by-hand upload can never overwrite or resurrect existing state.
+    All-or-nothing: raises ValueError (naming the offending item) before
+    writing anything if any entry is invalid.
+    """
+    new_items = []
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise ValueError(f"item {i} is not a JSON object")
+        model_name = str(entry.get("model_name") or "").strip()
+        url = str(entry.get("url") or "").strip()
+        if not model_name or not url:
+            raise ValueError(f"item {i} is missing model_name or url")
+        comments = str(entry.get("comments") or "").strip()
+        new_items.append(
+            {
+                "id": uuid.uuid4().hex[:8],
+                "model_name": model_name,
+                "url": url,
+                "comments": comments,
+                "checked": False,
+                "created_at": time.time(),
+                "created_by": created_by,
+            }
+        )
+
+    items = _load()
+    items.extend(new_items)
+    _save(items)
+    return len(new_items)
+
+
 def toggle_todo(todo_id: str) -> bool:
     """Flips checked/unchecked. Returns False if no such todo exists."""
     items = _load()

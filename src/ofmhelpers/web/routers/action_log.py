@@ -1,12 +1,15 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import list_jobs
+from ofmhelpers.web.auth import require_admin
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(
+    prefix="/action-log", tags=["action-log"], dependencies=[Depends(require_admin)]
+)
 
 # Maps a job's "task" field to the URL prefix of its dedicated status page.
 # Add one line here whenever you add a new task type -- everything else
@@ -41,5 +44,5 @@ def dashboard(request: Request):
 
     any_running = any(j["status"] in ("running", "queued") for j in jobs)
     return templates.TemplateResponse(
-        request, "jobs_dashboard.html", {"jobs": jobs, "any_running": any_running}
+        request, "action_log.html", {"jobs": jobs, "any_running": any_running}
     )

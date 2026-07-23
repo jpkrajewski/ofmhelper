@@ -67,4 +67,14 @@
     {% endfor %}
 </table>
 {% endif %}
+
+{% if is_admin %}
+<div class="todo-io-bar">
+    <a href="/todo/export" class="todo-export-btn">⬇ Download JSON</a>
+    <form method="post" action="/todo/import" enctype="multipart/form-data" class="todo-import-form">
+        <input type="file" name="file" accept="application/json,.json" required>
+        <button type="submit">⬆ Upload JSON</button>
+    </form>
+</div>
+{% endif %}
 {% endblock %}

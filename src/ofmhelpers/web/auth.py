@@ -9,9 +9,16 @@ moment they're mounted on `app`, because this runs before routing.
 
 import os
 
+from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
+
+# The two roles the shared passwords resolve to -- centralized here so every
+# role check in the app compares against these instead of a hand-typed
+# literal (a typo'd literal silently fails a role check instead of erroring).
+ROLE_ADMIN = "admin"
+ROLE_VA = "va"
 
 # Paths that must stay reachable without being logged in.
 # Keep this list short and explicit -- anything not listed is protected,
@@ -57,9 +64,9 @@ def check_password(candidate: str) -> str | None:
     va_password = os.environ["APP_PASSWORD_VA"]  # required -- fail loudly if unset
 
     if hmac.compare_digest(candidate, admin_password):
-        return "admin"
+        return ROLE_ADMIN
     if hmac.compare_digest(candidate, va_password):
-        return "va"
+        return ROLE_VA
     return None
 
 
@@ -71,5 +78,17 @@ def get_kie_api_key(request: Request) -> str:
     before roles existed.
     """
     role = request.session.get("role")
-    env_var = "KIE_AI_API_KEY_ADMIN" if role == "admin" else "KIE_AI_API_KEY_VA"
+    env_var = "KIE_AI_API_KEY_ADMIN" if role == ROLE_ADMIN else "KIE_AI_API_KEY_VA"
     return os.getenv(env_var, "")
+
+
+def require_admin(request: Request) -> None:
+    """FastAPI dependency: 403s any request whose session role isn't admin.
+
+    Use as a router-level `dependencies=[Depends(require_admin)]` for whole
+    pages VAs shouldn't reach at all (file-manager, action-log). For routes
+    where VAs can view but only admins can mutate, check role inline per-route
+    instead -- see routers/todo.py.
+    """
+    if request.session.get("role") != ROLE_ADMIN:
+        raise HTTPException(status_code=403, detail="Admins only")
