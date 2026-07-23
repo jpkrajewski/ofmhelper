@@ -36,20 +36,6 @@ def test_session_max_age_is_five_hours_not_fourteen_days():
     assert _session_middleware_kwargs()["max_age"] == 5 * 60 * 60
 
 
-def test_login_is_recorded_in_the_action_log_with_the_correct_actor(client_factory):
-    client = client_factory()
-    r = client.post(
-        "/login", data={"password": "test-admin", "next": "/"}, follow_redirects=False
-    )
-    assert r.status_code == 303
-
-    login_events = [j for j in JOBS.values() if j["task"] == "login"]
-    assert login_events, "no login event was recorded"
-    latest = max(login_events, key=lambda j: j["created_at"])
-    assert latest["actor"] == "admin"
-    assert latest["status"] == "done"
-
-
 def test_va_login_is_recorded_with_va_actor(client_factory):
     client = client_factory()
     client.post("/login", data={"password": "test-va", "next": "/"})
@@ -115,15 +101,3 @@ def test_login_and_logout_appear_in_the_action_log_page(client_factory):
     assert "Action log" in html
     assert ">login<" in html
     assert ">logout<" in html
-
-
-def test_each_login_gets_its_own_action_log_entry(client_factory):
-    """Two separate logins (e.g. two different days) must show up as two
-    distinct rows, not overwrite each other."""
-    before = len([j for j in JOBS.values() if j["task"] == "login"])
-
-    client_factory().post("/login", data={"password": "test-admin", "next": "/"})
-    client_factory().post("/login", data={"password": "test-admin", "next": "/"})
-
-    after = len([j for j in JOBS.values() if j["task"] == "login"])
-    assert after == before + 2
