@@ -72,3 +72,18 @@ def test_va_password_also_logs_in():
     client = TestClient(app)
     client.post("/login", data={"password": "test-va", "next": "/"})
     assert client.get("/generate").status_code == 200
+
+
+def test_generation_js_disables_submit_button_with_a_cooldown():
+    """Static check on the shipped JS -- there's no browser/JS runtime in
+    this test suite to actually click a button and watch a timer, so this
+    locks in that the cooldown logic (disable on submit, a 3s constant,
+    scheduled re-enable) is present and wired, guarding against it being
+    silently removed later. It does not verify real click timing."""
+    client = TestClient(app)
+    js = client.get("/static/js/generation.js").text
+
+    assert "SUBMIT_COOLDOWN_MS = 3000" in js
+    assert "submitBtn.disabled = true" in js
+    assert "submitBtn.disabled = false" in js
+    assert "setTimeout" in js

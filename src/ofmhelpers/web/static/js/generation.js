@@ -27,6 +27,13 @@
     // only give up after several consecutive failures.
     const MAX_CONSECUTIVE_FAILURES = 5;
 
+    // Users unsure whether their click registered tend to click Generate
+    // again right away -- this is a flat cooldown on the button itself, not
+    // a "wait for this job to finish" lock (jobs still run in parallel and
+    // resolve into the gallery independently); it just stops an impatient
+    // double-click from firing the same job twice.
+    const SUBMIT_COOLDOWN_MS = 3000;
+
     // Finished/failed job cards carry the same data-job-id/data-task/
     // data-params attributes the server-rendered gallery cards do, plus a
     // "↻ Recreate" button -- so the delegation in the page templates picks
@@ -181,6 +188,14 @@
         const panel = document.getElementById("results-panel");
         const statusEl = panel.querySelector(".generation-status");
         const gallery = panel.querySelector(".results");
+        const submitBtn = form.querySelector('button[type="submit"]');
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            setTimeout(() => {
+                submitBtn.disabled = false;
+            }, SUBMIT_COOLDOWN_MS);
+        }
 
         function setSubmitError(message) {
             statusEl.innerHTML = '<div class="generation-error"></div>';

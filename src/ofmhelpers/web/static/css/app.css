@@ -320,6 +320,11 @@ footer .footer-links a:hover { color: var(--accent-soft); }
     cursor: pointer;
 }
 .generate-form-col button[type="submit"]:hover { filter: brightness(1.15); }
+.generate-form-col button[type="submit"]:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    filter: none;
+}
 .form-hint { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
 .picker-help { color: var(--text-muted); font-size: 13px; margin-top: -4px; }
 
