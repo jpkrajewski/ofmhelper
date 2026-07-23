@@ -11,6 +11,7 @@ services:
       - OFM_KIEAI_OUT_DIR=/app/kieai_out
       - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
       - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
+      - GOOGLE_DRIVE_TOKEN_FILE=/app/secrets/google-drive-token.json
     env_file:
       - .env
     volumes:
@@ -19,6 +20,9 @@ services:
       - ./uploads:/app/uploads
       - ./downloads:/app/downloads
       - ./kieai_out:/app/kieai_out
+      - ./secrets:/app/secrets   # writable -- the Drive OAuth token file
+                                  # rewrites itself on every refresh (see
+                                  # gdrive/client.py); read-only broke that
     depends_on:
       pot-provider:
         condition: service_started

@@ -1,0 +1,14 @@
+{% import "_asset_media.html" as am %}
+{% if t.asset %}
+<div class="result-item todo-asset-card">
+    {{ am.asset_media(t.asset) }}
+    <a href="{{ t.asset.view_url }}" download="{{ t.asset.name }}" class="download-btn">⬇ Download</a>
+    <div class="todo-asset-status">
+        {% include "_todo_asset_status.html" %}
+    </div>
+</div>
+{% endif %}
+<form method="post" action="/todo/{{ t.id }}/asset" enctype="multipart/form-data" class="todo-asset-form todo-slow-form" data-busy-label="Uploading…">
+    <input type="file" name="file" class="todo-file-input" required>
+    <button type="submit" class="todo-io-btn">{{ '↻ Replace' if t.asset else '⬆ Upload asset' }}</button>
+</form>

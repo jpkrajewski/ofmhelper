@@ -123,6 +123,17 @@ If you ever see `PermissionError: [Errno 13] Permission denied` in the app
 logs after a fresh clone on a *new* machine, this is almost always the
 cause — re-run the `chown` above.
 
+### Google Drive token
+The todo list's "Upload to Drive" button (see step 6) needs a token file at
+`secrets/google-drive-token.json` — it's never committed (`secrets/` is
+gitignored) and can't be generated on a headless server (the one-time
+consent needs a browser), so generate it on your own machine first and copy
+it over:
+
+```bash
+scp -i /path/to/your-key.pem /path/to/google-drive-token.json ubuntu@<PUBLIC_IP>:~/ofmhelper/secrets/google-drive-token.json
+```
+
 ---
 
 ## 6. Environment variables
@@ -152,6 +163,35 @@ KIE_AI_API_KEY_VA=...
 ```
 The field stays editable either way — if these aren't set, or you need a
 different key for a one-off job, just paste over the pre-filled value.
+
+Required for the todo list's "Upload to Drive" feature:
+```
+GOOGLE_DRIVE_TOKEN_FILE=secrets/google-drive-token.json
+GOOGLE_DRIVE_FOLDER_ID=<the destination Drive folder's id>
+```
+Auth is OAuth as your own Google account, not a service account — a service
+account has zero storage quota of its own, so it can't upload to a personal
+(non-Workspace) Drive even if the folder is shared with it. Uploading as you
+spends your own quota instead, which is what you want anyway.
+
+One-time setup, done **locally** (needs a browser — not on the server):
+1. In [Google Cloud Console](https://console.cloud.google.com/): create (or
+   reuse) a project → **APIs & Services → Library** → enable the **Google
+   Drive API**.
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   → application type **Desktop app**. Download the JSON and save it as
+   `secrets/google-oauth-client.json`.
+3. Run the consent flow — it opens a browser, you approve access, and it
+   writes the resulting token:
+   ```bash
+   uv run python -m ofmhelpers.gdrive.authorize
+   ```
+   This writes `secrets/google-drive-token.json`. That's the only file the
+   server needs — the OAuth client JSON from step 2 isn't used again after
+   this.
+4. Copy the token file onto the server (see step 5 above) and find the
+   destination folder's id — the last segment of its Drive URL:
+   `drive.google.com/drive/folders/<THIS_PART>`.
 
 Plus whatever other provider keys the app needs (ElevenLabs, etc.).
 
@@ -274,3 +314,7 @@ docker compose logs -f ofmhelpers   # confirm clean startup
 | `PermissionError: [Errno 13]` writing to downloads/uploads/etc | Bind-mounted host folder owned by root | `sudo chown -R 1000:1000 uploads downloads kieai_out secrets` |
 | Container keeps restarting / `Connection reset by peer` | Missing required env var (`APP_PASSWORD_ADMIN`, `APP_PASSWORD_VA`, `SESSION_SECRET`) crashing app on boot | Check `docker compose logs ofmhelpers`; verify `.env` |
 | Form submit shows "Method Not Allowed" | Red herring — `fetch()` follows a failed response's URL via GET. Check the Network tab for the *first* request's real status, not this one | — |
+| "Upload to Drive" fails with `FileNotFoundError: No Google Drive token` | `secrets/google-drive-token.json` missing on the host, or `secrets/` not bind-mounted | Run `uv run python -m ofmhelpers.gdrive.authorize` locally, `scp` the token to `secrets/google-drive-token.json` (step 5); confirm `docker-compose.yml` mounts `./secrets:/app/secrets` |
+| "Upload to Drive" fails with `[Errno 30] Read-only file system` on the token file | The OAuth token refreshes itself and rewrites the file on disk (unlike the old service-account key, which was static) — the `secrets/` mount must be writable, not `:ro` | Make sure `docker-compose.yml`'s volume line reads `./secrets:/app/secrets` (no `:ro`), then `docker compose up -d` |
+| "Upload to Drive" fails with `storageQuotaExceeded` | Using a service-account key instead of the OAuth token flow — service accounts have no storage quota on a personal Drive | Follow step 6's OAuth setup instead (`ofmhelpers.gdrive.authorize`), not a service account key |
+| "Upload to Drive" fails with a 404 from the Drive API | Destination folder doesn't belong to (or isn't shared with) the account you authorized | Re-run the authorize flow with the Google account that owns/has access to the target folder |

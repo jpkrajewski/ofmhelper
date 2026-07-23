@@ -31,8 +31,8 @@ WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
 
-RUN mkdir -p /app/downloads /app/uploads /app/cookies && \
-    chown -R appuser:appuser /app/downloads /app/uploads /app/cookies
+RUN mkdir -p /app/downloads /app/uploads /app/cookies /app/secrets && \
+    chown -R appuser:appuser /app/downloads /app/uploads /app/cookies /app/secrets
 
 ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

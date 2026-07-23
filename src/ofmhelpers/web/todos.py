@@ -49,10 +49,84 @@ def add_todo(model_name: str, url: str, comments: str, created_by: str | None) -
         "checked": False,
         "created_at": time.time(),
         "created_by": created_by,
+        "asset_path": None,
+        "asset_name": None,
+        "approved": False,
+        "drive_file_id": None,
+        "drive_uploaded_at": None,
+        "drive_upload_job_id": None,
     }
     items.append(todo)
     _save(items)
     return todo
+
+
+def get_todo(todo_id: str) -> dict | None:
+    for t in _load():
+        if t["id"] == todo_id:
+            return t
+    return None
+
+
+def attach_asset(todo_id: str, asset_path: str, asset_name: str) -> bool:
+    """VA uploads a ready asset for a task. A new asset resets any prior
+    approval/upload -- those applied to the old file, not this one."""
+    items = _load()
+    for t in items:
+        if t["id"] == todo_id:
+            t["asset_path"] = asset_path
+            t["asset_name"] = asset_name
+            t["approved"] = False
+            t["drive_file_id"] = None
+            t["drive_uploaded_at"] = None
+            t["drive_upload_job_id"] = None
+            _save(items)
+            return True
+    return False
+
+
+def approve_todo(todo_id: str) -> bool:
+    """Admin approves the attached asset. Returns False if the todo doesn't
+    exist or has no asset attached yet."""
+    items = _load()
+    for t in items:
+        if t["id"] == todo_id:
+            if not t.get("asset_path"):
+                return False
+            t["approved"] = True
+            _save(items)
+            return True
+    return False
+
+
+def set_drive_upload_job(todo_id: str, job_id: str) -> bool:
+    """Records which background job (see web/jobs.py) is currently uploading
+    this todo's asset to Drive, so the list page can show its live status."""
+    items = _load()
+    for t in items:
+        if t["id"] == todo_id:
+            t["drive_upload_job_id"] = job_id
+            _save(items)
+            return True
+    return False
+
+
+def mark_uploaded(todo_id: str, asset_path: str, drive_file_id: str) -> bool:
+    """asset_path must match the todo's *current* asset -- the upload runs in
+    a background job, so by the time it finishes a VA may have replaced the
+    asset (attach_asset resets asset_path). Without this check, a slow
+    upload of the old file could land after a replacement and incorrectly
+    mark the new, never-uploaded asset as done."""
+    items = _load()
+    for t in items:
+        if t["id"] == todo_id:
+            if t.get("asset_path") != asset_path:
+                return False
+            t["drive_file_id"] = drive_file_id
+            t["drive_uploaded_at"] = time.time()
+            _save(items)
+            return True
+    return False
 
 
 def import_todos(entries: list[dict], created_by: str | None) -> int:

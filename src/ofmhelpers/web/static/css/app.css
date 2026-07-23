@@ -274,8 +274,11 @@ footer .footer-links a:hover { color: var(--accent-soft); }
     padding-top: 20px;
     border-top: 1px solid var(--border);
 }
-.todo-export-btn,
-.todo-import-form button {
+/* Shared pill-button + file-input look for every upload/download action on
+   this page (Download/Upload JSON, upload/replace asset, approve, upload to
+   Drive) -- one style so the whole page reads as one consistent set of
+   actions instead of a different button per feature. */
+.todo-io-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -289,21 +292,49 @@ footer .footer-links a:hover { color: var(--accent-soft); }
     padding: 0 14px;
     text-decoration: none;
     cursor: pointer;
+    white-space: nowrap;
 }
-.todo-export-btn:hover,
-.todo-import-form button:hover { background: var(--surface); }
+.todo-io-btn:hover { background: var(--surface); }
+.todo-io-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: none;
+}
+/* A native <input type="file">'s "choose file" control is OS chrome that
+   ordinary CSS on the input itself can't reach -- only the
+   ::file-selector-button pseudo-element (Chrome/Firefox/Edge) and its older
+   -webkit- alias can restyle it. This is what actually reskins the button in
+   the screenshot; styling .todo-file-input alone only affects the trailing
+   "no file chosen" text. */
+.todo-file-input {
+    height: 50px;
+    box-sizing: border-box;
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 220px;
+}
+.todo-file-input::file-selector-button,
+.todo-file-input::-webkit-file-upload-button {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    box-sizing: border-box;
+    background: none;
+    border: 1px solid var(--accent-soft);
+    border-radius: 6px;
+    color: var(--accent-soft);
+    font-size: 13px;
+    padding: 0 12px;
+    margin-right: 10px;
+    cursor: pointer;
+}
+.todo-file-input::file-selector-button:hover,
+.todo-file-input::-webkit-file-upload-button:hover { background: var(--surface); }
 .todo-import-form {
     display: flex;
     align-items: center;
     gap: 8px;
     margin: 0;
-}
-.todo-import-form input[type="file"] {
-    height: 34px;
-    box-sizing: border-box;
-    font-size: 13px;
-    color: var(--text-muted);
-    max-width: 220px;
 }
 .todo-table .todo-comments {
     max-width: 320px;
@@ -340,6 +371,63 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
     cursor: pointer;
 }
 .todo-delete-btn:hover { border-color: var(--fail); background: #2a1518; }
+/* Asset column -- reuses the same .result-item/.result-image/.result-video/
+   .download-btn card look every other asset preview in the app uses (see
+   _asset_grid.html / job_status.html), just contained in a bordered card
+   (a table cell is much tighter than the open grid those normally sit in,
+   so without a visible boundary the media/buttons/status just float loose
+   against the row) and height-capped so a portrait video/image can't blow
+   out the row's height. */
+.todo-asset { min-width: 280px; vertical-align: top; }
+.todo-asset-card {
+    width: 260px;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+}
+.todo-asset-card .result-video,
+.todo-asset-card .result-image {
+    max-height: 260px;
+    object-fit: contain;
+}
+.todo-asset-status {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 13px;
+}
+.todo-drive-uploaded { color: var(--ok); }
+.todo-approved { color: var(--text-muted); }
+.todo-uploading { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); }
+.todo-upload-error {
+    color: var(--fail);
+    font-size: 12px;
+    word-break: break-word;
+    margin: 0 0 8px;
+}
+.todo-asset-status form { margin: 0; }
+.todo-asset-status .todo-io-btn { width: 100%; }
+
+/* The upload/replace form sits below the card (or stands alone with no
+   asset yet) -- stacked full-width, not inline with the button, so a long
+   filename/native "no file chosen" text never crowds or truncates against
+   the button the way it does when squeezed onto one row (see conversation:
+   this was the "clunky" file-input layout). */
+.todo-asset-form {
+    margin: 10px 0 0;
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.todo-asset-form .todo-file-input {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+}
+.todo-asset-form .todo-io-btn { width: 100%; }
 
 /* Job-status "Inputs" section (prompt/settings/reference files a job was
    actually run with -- seedance/kling3/nanobanana/fake_ai job pages) */

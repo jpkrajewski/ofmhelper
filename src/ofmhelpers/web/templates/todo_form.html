@@ -32,6 +32,7 @@
         <th>Link</th>
         <th>Comments</th>
         <th>Added</th>
+        <th>Asset</th>
         {% if is_admin %}<th></th>{% endif %}
     </tr>
     {% for t in todos %}
@@ -55,6 +56,9 @@
         </td>
         <td class="todo-comments">{{ t.comments or '—' }}</td>
         <td class="todo-added">{{ t.created_at_display }}</td>
+        <td class="todo-asset" data-todo-id="{{ t.id }}">
+            {% include "_todo_asset_cell.html" %}
+        </td>
         {% if is_admin %}
         <td>
             <form method="post" action="/todo/{{ t.id }}/delete" class="todo-delete-form"
@@ -70,11 +74,74 @@
 
 {% if is_admin %}
 <div class="todo-io-bar">
-    <a href="/todo/export" class="todo-export-btn">⬇ Download JSON</a>
-    <form method="post" action="/todo/import" enctype="multipart/form-data" class="todo-import-form">
-        <input type="file" name="file" accept="application/json,.json" required>
-        <button type="submit">⬆ Upload JSON</button>
+    <a href="/todo/export" class="todo-io-btn">⬇ Download JSON</a>
+    <form method="post" action="/todo/import" enctype="multipart/form-data" class="todo-import-form todo-slow-form" data-busy-label="Importing…">
+        <input type="file" name="file" class="todo-file-input" accept="application/json,.json" required>
+        <button type="submit" class="todo-io-btn">⬆ Upload JSON</button>
     </form>
 </div>
 {% endif %}
+
+<script>
+function applyBusyLabel(form) {
+    const btn = form.querySelector("button[type=submit]");
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = form.dataset.busyLabel || "Working…";
+}
+
+// The JSON import bar isn't part of any row -- leave it a normal form
+// submit (full-page reload is fine for a one-off admin action like this),
+// just show busy feedback while it runs.
+document.querySelectorAll(".todo-io-bar .todo-slow-form").forEach((form) => {
+    form.addEventListener("submit", () => applyBusyLabel(form));
+});
+
+// Every per-row asset action (upload/replace/approve/upload-to-drive/retry)
+// submits via fetch and only swaps that row's Asset cell -- not a page
+// reload. This replaces plain <form> POSTs, which by nature navigate the
+// whole page for something that only ever changes one cell (see
+// conversation -- that was the actual complaint here, not just the earlier
+// <meta refresh> job-status polling).
+function wireAssetCell(cell) {
+    cell.querySelectorAll("form").forEach((form) => {
+        if (form.dataset.ajaxWired) return;
+        form.dataset.ajaxWired = "1";
+        form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            applyBusyLabel(form);
+            fetch(form.action, { method: "POST", body: new FormData(form) })
+                .then((r) => {
+                    if (!r.ok) {
+                        return r.json().then((body) => {
+                            throw new Error(body.detail || `Request failed (${r.status})`);
+                        });
+                    }
+                })
+                .then(() => refreshAssetCell(cell))
+                .catch((err) => {
+                    alert(err.message || "Something went wrong, reloading the page.");
+                    window.location.reload();
+                });
+        });
+    });
+    // Still uploading to Drive -- check again shortly. refreshAssetCell
+    // re-runs wireAssetCell on the new markup, which re-evaluates this and
+    // either schedules the next check or stops once it's done/failed.
+    if (cell.querySelector(".todo-uploading")) {
+        setTimeout(() => refreshAssetCell(cell), 2000);
+    }
+}
+
+function refreshAssetCell(cell) {
+    fetch(`/todo/${cell.dataset.todoId}/asset-cell`)
+        .then((r) => r.text())
+        .then((html) => {
+            cell.innerHTML = html;
+            wireAssetCell(cell);
+        });
+}
+
+document.querySelectorAll(".todo-asset").forEach(wireAssetCell);
+</script>
 {% endblock %}
