@@ -207,6 +207,18 @@ def approve(request: Request, todo_id: str):
     return RedirectResponse(url="/todo", status_code=303)
 
 
+@router.post("/{todo_id}/reject")
+def reject(request: Request, todo_id: str, comment: str = Form(...)):
+    require_admin(request)
+    if not comment.strip():
+        raise HTTPException(status_code=400, detail="A comment is required")
+    if not todos.reject_todo(todo_id, comment.strip()):
+        raise HTTPException(
+            status_code=404, detail="Todo not found or has no asset attached"
+        )
+    return RedirectResponse(url="/todo", status_code=303)
+
+
 def _upload_to_drive(todo_id: str, asset_path: str) -> str:
     """Runs in the background via BackgroundTasks -- a Drive upload is a
     network call with no bound on how long it takes (large video = long

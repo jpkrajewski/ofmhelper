@@ -10,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import AuthMiddleware
 from ofmhelpers.web.recovery import recovery_loop
+from ofmhelpers.web.jobs import load_jobs
 
 from ofmhelpers.web.routers.download_reels import router as download_reels_router
 from ofmhelpers.web.routers.clean_image import router as clean_images_router
@@ -34,6 +35,11 @@ from ofmhelpers.web.routers.todo import router as todo_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Job history (the /generate gallery, Action log, every task's status
+    # page) is persisted to disk -- reload it now so a restart/rebuild
+    # doesn't start with a blank slate. See ofmhelpers/web/jobs.py.
+    load_jobs()
+
     # Background recovery sweeper: auto-downloads kie.ai generations whose
     # in-request poll timed out (or that a restart orphaned) -- see
     # ofmhelpers/web/recovery.py. Cancelled cleanly on shutdown.

@@ -578,3 +578,104 @@ def test_full_page_also_hides_admin_asset_action_buttons_from_va(client, va_clie
 
     admin_html = client.get("/todo").text
     assert f'action="/todo/{todo["id"]}/upload-drive"' in admin_html
+
+
+def test_admin_can_reject_asset_with_comment_va_cannot(client, va_client):
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"bytes", "image/png")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+
+    r = va_client.post(f"/todo/{todo['id']}/reject", data={"comment": "wrong caption"})
+    assert r.status_code == 403
+    assert todos.get_todo(todo["id"])["rejected"] is False
+
+    r = client.post(
+        f"/todo/{todo['id']}/reject",
+        data={"comment": "wrong caption"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    stored = todos.get_todo(todo["id"])
+    assert stored["rejected"] is True
+    assert stored["reject_comment"] == "wrong caption"
+    assert stored["approved"] is False
+
+
+def test_reject_requires_a_non_blank_comment(client):
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"bytes", "image/png")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+
+    r = client.post(f"/todo/{todo['id']}/reject", data={"comment": "   "})
+    assert r.status_code == 400
+    assert todos.get_todo(todo["id"])["rejected"] is False
+
+
+def test_reject_requires_an_asset_to_already_be_attached(client):
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    r = client.post(f"/todo/{todo['id']}/reject", data={"comment": "no asset yet"})
+    assert r.status_code == 404
+
+
+def test_reject_404s_for_a_todo_id_that_does_not_exist_at_all(client):
+    r = client.post("/todo/doesnotexist/reject", data={"comment": "x"})
+    assert r.status_code == 404
+
+
+def test_rejection_comment_shows_in_its_own_column_and_clears_on_reupload(client):
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"bytes", "image/png")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+
+    # Before any rejection, the column just shows a placeholder.
+    html = client.get("/todo").text
+    assert 'class="todo-reject-col">—<' in html
+
+    client.post(f"/todo/{todo['id']}/reject", data={"comment": "fix the caption"})
+    html = client.get("/todo").text
+    assert "fix the caption" in html
+
+    # A fresh asset upload is a new attempt -- the old rejection shouldn't
+    # linger and confuse the VA into thinking the new file is still rejected.
+    files2 = {"file": ("v2.png", b"new bytes", "image/png")}
+    client.post(f"/todo/{todo['id']}/asset", files=files2)
+    stored = todos.get_todo(todo["id"])
+    assert stored["rejected"] is False
+    assert stored["reject_comment"] is None
+
+    html = client.get("/todo").text
+    assert "fix the caption" not in html
+
+
+def test_approve_after_reject_clears_the_rejection(client):
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"bytes", "image/png")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+    client.post(f"/todo/{todo['id']}/reject", data={"comment": "fix it"})
+
+    client.post(f"/todo/{todo['id']}/approve")
+    stored = todos.get_todo(todo["id"])
+    assert stored["approved"] is True
+    assert stored["rejected"] is False
+    assert stored["reject_comment"] is None
+
+
+def test_admin_can_reupload_to_drive_after_a_successful_upload(client):
+    """Covers the 'accidentally deleted the file on Drive' scenario: once
+    drive_file_id is already set, upload-drive must still be re-triggerable
+    (not blocked as a no-op), so admins can push a fresh copy without having
+    to reject+reapprove first."""
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"bytes", "image/png")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+    client.post(f"/todo/{todo['id']}/approve")
+
+    with mock.patch.object(todo_router, "gdrive_upload_file", return_value="id-1"):
+        client.post(f"/todo/{todo['id']}/upload-drive")
+    assert todos.get_todo(todo["id"])["drive_file_id"] == "id-1"
+
+    with mock.patch.object(todo_router, "gdrive_upload_file", return_value="id-2"):
+        r = client.post(f"/todo/{todo['id']}/upload-drive", follow_redirects=False)
+
+    assert r.status_code == 303
+    assert todos.get_todo(todo["id"])["drive_file_id"] == "id-2"

@@ -179,7 +179,7 @@ def test_gallery_shows_recreate_button_on_done_and_failed_cards(
         ), f"job {job_id}'s card is missing the Recreate button"
 
 
-def test_still_running_card_carries_poll_attributes_on_page_reload(client):
+def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_path):
     """Regression test: leaving /generate (e.g. to check the Action log)
     while a job is still running and coming back must not leave that job's
     card spinning forever. The server-rendered card for a running job has to
@@ -208,8 +208,10 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client):
     assert 'data-poll-prefix="/fake-ai"' in card.group(1)
 
     # once it finishes, the pending marker disappears (server already knows)
+    out_file = tmp_path / "x.png"
+    out_file.write_bytes(b"fake image")
     JOBS[job_id]["status"] = "done"
-    JOBS[job_id]["result"] = [{"name": "x.png", "path": "/tmp/x.png"}]
+    JOBS[job_id]["result"] = [{"name": "x.png", "path": str(out_file)}]
     html2 = client.get("/generate").text
     card2 = re.search(rf'data-job-id="{job_id}"(.*?)>', html2, re.S)
     assert "data-pending" not in card2.group(1)

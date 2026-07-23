@@ -52,6 +52,8 @@ def add_todo(model_name: str, url: str, comments: str, created_by: str | None) -
         "asset_path": None,
         "asset_name": None,
         "approved": False,
+        "rejected": False,
+        "reject_comment": None,
         "drive_file_id": None,
         "drive_uploaded_at": None,
         "drive_upload_job_id": None,
@@ -70,13 +72,16 @@ def get_todo(todo_id: str) -> dict | None:
 
 def attach_asset(todo_id: str, asset_path: str, asset_name: str) -> bool:
     """VA uploads a ready asset for a task. A new asset resets any prior
-    approval/upload -- those applied to the old file, not this one."""
+    approval/rejection/upload -- those applied to the old file, not this
+    one."""
     items = _load()
     for t in items:
         if t["id"] == todo_id:
             t["asset_path"] = asset_path
             t["asset_name"] = asset_name
             t["approved"] = False
+            t["rejected"] = False
+            t["reject_comment"] = None
             t["drive_file_id"] = None
             t["drive_uploaded_at"] = None
             t["drive_upload_job_id"] = None
@@ -94,6 +99,25 @@ def approve_todo(todo_id: str) -> bool:
             if not t.get("asset_path"):
                 return False
             t["approved"] = True
+            t["rejected"] = False
+            t["reject_comment"] = None
+            _save(items)
+            return True
+    return False
+
+
+def reject_todo(todo_id: str, comment: str) -> bool:
+    """Admin rejects the attached asset with a comment telling the VA what
+    to fix. Returns False if the todo doesn't exist or has no asset attached
+    yet."""
+    items = _load()
+    for t in items:
+        if t["id"] == todo_id:
+            if not t.get("asset_path"):
+                return False
+            t["approved"] = False
+            t["rejected"] = True
+            t["reject_comment"] = comment
             _save(items)
             return True
     return False

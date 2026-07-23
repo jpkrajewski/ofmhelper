@@ -15,6 +15,7 @@
     --gradient-btn: linear-gradient(135deg, #7c3aed, #ec4899);
     --ok: #34d399;
     --fail: #f87171;
+    --warn: #fb923c;
 }
 
 /* ---- Base chrome ---- */
@@ -336,13 +337,25 @@ footer .footer-links a:hover { color: var(--accent-soft); }
     gap: 8px;
     margin: 0;
 }
+.todo-table { table-layout: fixed; }
+.todo-table th, .todo-table td { padding: 14px 12px; }
 .todo-table .todo-comments {
-    max-width: 320px;
     white-space: pre-wrap;
     word-break: break-word;
+    overflow-wrap: break-word;
     color: var(--text-muted);
 }
-.todo-link { max-width: 260px; word-break: break-all; }
+.todo-link {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.todo-reject-col {
+    color: var(--warn);
+    font-size: 13px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
 .todo-added { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
 tr.todo-done td { opacity: 0.5; }
 tr.todo-done td.todo-comments,
@@ -378,7 +391,7 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
    so without a visible boundary the media/buttons/status just float loose
    against the row) and height-capped so a portrait video/image can't blow
    out the row's height. */
-.todo-asset { min-width: 280px; vertical-align: top; }
+.todo-asset { min-width: 280px; vertical-align: top; text-align: center; }
 .todo-asset-card {
     width: 260px;
     box-sizing: border-box;
@@ -386,6 +399,8 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface);
+    margin: 0 auto;
+    text-align: left;
 }
 .todo-asset-card .result-video,
 .todo-asset-card .result-image {
@@ -398,7 +413,7 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
     border-top: 1px solid var(--border-soft);
     font-size: 13px;
 }
-.todo-drive-uploaded { color: var(--ok); }
+.todo-drive-uploaded { color: var(--ok); display: block; margin-bottom: 8px; }
 .todo-approved { color: var(--text-muted); }
 .todo-uploading { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); }
 .todo-upload-error {
@@ -409,6 +424,28 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
 }
 .todo-asset-status form { margin: 0; }
 .todo-asset-status .todo-io-btn { width: 100%; }
+.todo-review-actions { display: flex; gap: 8px; }
+.todo-review-actions form,
+.todo-review-actions .todo-reject-toggle { flex: 1; }
+.todo-reject-btn { color: var(--warn); border-color: var(--warn); }
+.todo-reject-form {
+    margin-top: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+}
+.todo-reject-form.open { display: flex; }
+.todo-reject-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    background: var(--surface);
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font: inherit;
+}
 
 /* The upload/replace form sits below the card (or stands alone with no
    asset yet) -- stacked full-width, not inline with the button, so a long
@@ -416,11 +453,12 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
    the button the way it does when squeezed onto one row (see conversation:
    this was the "clunky" file-input layout). */
 .todo-asset-form {
-    margin: 10px 0 0;
+    margin: 10px auto 0;
     width: 260px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    text-align: left;
 }
 .todo-asset-form .todo-file-input {
     width: 100%;

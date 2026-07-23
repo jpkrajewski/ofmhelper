@@ -7,6 +7,7 @@ their job, so the whole router is gated via require_admin instead of
 individual routes.
 """
 
+import os
 import shutil
 from pathlib import Path
 
@@ -20,12 +21,15 @@ router = APIRouter(
     prefix="/file-manager", tags=["file-manager"], dependencies=[Depends(require_admin)]
 )
 
-# Named roots the manager is allowed to browse. Add more here (e.g.
-# "kieai_out") if you want them browsable too -- everything else stays
+# Named roots the manager is allowed to browse -- everything else stays
 # off-limits since _safe_path only resolves within whichever root is picked.
+# "kieai_out" is where AI-generation output actually lands (see
+# KieAIClient's out_dir); without it, finding/removing those files meant
+# shelling into the server instead of using this page.
 ROOTS = {
     "uploads": Path("uploads").resolve(),
     "downloads": Path("downloads").resolve(),
+    "kieai_out": Path(os.getenv("OFM_KIEAI_OUT_DIR", "kieai_out")).resolve(),
 }
 DEFAULT_ROOT = "uploads"
 

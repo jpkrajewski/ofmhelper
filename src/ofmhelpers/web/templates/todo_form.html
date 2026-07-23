@@ -26,11 +26,22 @@
 <p class="pending">No tasks yet.</p>
 {% else %}
 <table class="todo-table">
+    <colgroup>
+        <col style="width: 32px;">
+        <col style="width: 130px;">
+        <col style="width: 14%;">
+        <col style="width: 20%;">
+        <col style="width: 16%;">
+        <col style="width: 9%;">
+        <col style="width: 41%;">
+        {% if is_admin %}<col style="width: 70px;">{% endif %}
+    </colgroup>
     <tr>
         <th></th>
         <th>Model name</th>
         <th>Link</th>
-        <th>Comments</th>
+        <th>Requirements</th>
+        <th>Changes needed</th>
         <th>Added</th>
         <th>Asset</th>
         {% if is_admin %}<th></th>{% endif %}
@@ -49,12 +60,13 @@
         <td>{{ t.model_name }}</td>
         <td class="todo-link">
             {% if t.url.startswith('http://') or t.url.startswith('https://') %}
-            <a href="{{ t.url }}" target="_blank" rel="noopener">{{ t.url }}</a>
+            <a href="{{ t.url }}" target="_blank" rel="noopener" title="{{ t.url }}">{{ t.url }}</a>
             {% else %}
             {{ t.url }}
             {% endif %}
         </td>
         <td class="todo-comments">{{ t.comments or '—' }}</td>
+        <td class="todo-reject-col">{{ t.reject_comment if t.rejected else '—' }}</td>
         <td class="todo-added">{{ t.created_at_display }}</td>
         <td class="todo-asset" data-todo-id="{{ t.id }}">
             {% include "_todo_asset_cell.html" %}
@@ -104,6 +116,20 @@ document.querySelectorAll(".todo-io-bar .todo-slow-form").forEach((form) => {
 // conversation -- that was the actual complaint here, not just the earlier
 // <meta refresh> job-status polling).
 function wireAssetCell(cell) {
+    // The Reject button doesn't submit anything itself -- it just reveals
+    // the comment textarea's form, which is hidden until an admin actually
+    // decides to reject (typing the comment inline, not a native prompt()
+    // dialog, which can't be styled to match the rest of the page).
+    cell.querySelectorAll(".todo-reject-toggle").forEach((btn) => {
+        if (btn.dataset.wired) return;
+        btn.dataset.wired = "1";
+        btn.addEventListener("click", () => {
+            const form = cell.querySelector(".todo-reject-form");
+            if (!form) return;
+            const opened = form.classList.toggle("open");
+            if (opened) form.querySelector("textarea").focus();
+        });
+    });
     cell.querySelectorAll("form").forEach((form) => {
         if (form.dataset.ajaxWired) return;
         form.dataset.ajaxWired = "1";
@@ -118,7 +144,21 @@ function wireAssetCell(cell) {
                         });
                     }
                 })
-                .then(() => refreshAssetCell(cell))
+                .then(() => {
+                    // Approve/reject also change the Rejection comment
+                    // column, which sits outside this cell -- a full reload
+                    // is simplest there. Every other asset action (upload/
+                    // replace/upload-to-drive/retry) only ever changes this
+                    // cell, so those keep the no-reload swap.
+                    const changesOtherColumns =
+                        form.classList.contains("todo-approve-form") ||
+                        form.classList.contains("todo-reject-form");
+                    if (changesOtherColumns) {
+                        window.location.reload();
+                    } else {
+                        refreshAssetCell(cell);
+                    }
+                })
                 .catch((err) => {
                     alert(err.message || "Something went wrong, reloading the page.");
                     window.location.reload();

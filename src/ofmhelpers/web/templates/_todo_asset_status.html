@@ -1,5 +1,10 @@
 {% if t.drive_file_id %}
 <span class="todo-drive-uploaded">✔ Uploaded to Drive</span>
+    {% if is_admin %}
+    <form method="post" action="/todo/{{ t.id }}/upload-drive" class="todo-drive-form todo-slow-form" data-busy-label="Uploading…">
+        <button type="submit" class="todo-io-btn">↻ Reupload to Drive</button>
+    </form>
+    {% endif %}
 {% elif t.drive_upload_job and t.drive_upload_job.status == 'running' %}
 <span class="todo-uploading"><span class="spinner"></span> Uploading to Drive…</span>
 {% elif t.drive_upload_job and t.drive_upload_job.status == 'failed' %}
@@ -17,10 +22,25 @@
     {% else %}
     <span class="todo-approved">Approved — awaiting upload</span>
     {% endif %}
-{% else %}
+{% elif t.rejected %}
     {% if is_admin %}
     <form method="post" action="/todo/{{ t.id }}/approve" class="todo-approve-form">
-        <button type="submit" class="todo-io-btn">Approve</button>
+        <button type="submit" class="todo-io-btn">Approve anyway</button>
+    </form>
+    {% else %}
+    <span class="form-hint">Rejected — see comment, then upload a fixed asset above.</span>
+    {% endif %}
+{% else %}
+    {% if is_admin %}
+    <div class="todo-review-actions">
+        <form method="post" action="/todo/{{ t.id }}/approve" class="todo-approve-form">
+            <button type="submit" class="todo-io-btn">Approve</button>
+        </form>
+        <button type="button" class="todo-io-btn todo-reject-btn todo-reject-toggle">Reject</button>
+    </div>
+    <form method="post" action="/todo/{{ t.id }}/reject" class="todo-reject-form">
+        <textarea name="comment" class="todo-reject-textarea" placeholder="What needs to change?" rows="2" required></textarea>
+        <button type="submit" class="todo-io-btn todo-reject-btn">Submit changes</button>
     </form>
     {% else %}
     <span class="form-hint">Awaiting admin approval</span>
