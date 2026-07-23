@@ -434,7 +434,7 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
     flex-direction: column;
     gap: 8px;
 }
-.todo-reject-form.open { display: flex; }
+.todo-reject-form.open { display: flex; margin-top: 15px;}
 .todo-reject-textarea {
     width: 100%;
     box-sizing: border-box;
