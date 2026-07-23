@@ -1,7 +1,43 @@
 {% extends "base.html" %}
+{% import "_asset_media.html" as am %}
 {% block content %}
 <h1>{{ title|default("Job") }} <code>{{ job.id }}</code></h1>
 <p>Status: <strong>{{ job.status }}</strong></p>
+
+{% if job_inputs and (job_inputs.settings or job_inputs.long_text or job_inputs.file_groups) %}
+<div class="job-inputs">
+    <h2 class="col-title">Inputs</h2>
+
+    {% if job_inputs.settings %}
+    <table class="inputs-table">
+        {% for s in job_inputs.settings %}
+        <tr><th>{{ s.label }}</th><td>{{ s.value }}</td></tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    {% for t in job_inputs.long_text %}
+    <div class="field">
+        <label>{{ t.label }}</label>
+        <pre class="inputs-long-text">{{ t.value }}</pre>
+    </div>
+    {% endfor %}
+
+    {% for group in job_inputs.file_groups %}
+    <div class="field">
+        <label>{{ group.label }} ({{ group.assets|length }})</label>
+        <div class="results inputs-refs">
+            {% for a in group.assets %}
+            <div class="result-item">
+                {{ am.asset_media(a) }}
+                <p class="filename">{{ a.name }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 {% if job.status == "running" %}
 <meta http-equiv="refresh" content="2">
@@ -11,6 +47,7 @@
 <pre class="fail">{{ job.error }}</pre>
 
 {% elif job.status == "done" %}
+{% if job_inputs %}<h2 class="col-title">Output</h2>{% endif %}
 {% if failed_sources %}
 <ul class="fail-list">
     {% for f in failed_sources %}

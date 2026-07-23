@@ -263,6 +263,28 @@ footer .footer-links a:hover { color: var(--accent-soft); }
 /* Partial-failure note inside a done card */
 .fail-note { height: auto; padding: 8px; margin-top: 8px; color: var(--fail); border-color: #6b2525; }
 
+/* Job-status "Inputs" section (prompt/settings/reference files a job was
+   actually run with -- seedance/kling3/nanobanana/fake_ai job pages) */
+.job-inputs { margin-bottom: 30px; }
+.inputs-table { max-width: 640px; margin-top: 0; }
+.inputs-table th { width: 1%; white-space: nowrap; padding-right: 24px; text-transform: capitalize; }
+.inputs-table td { word-break: break-word; }
+.inputs-long-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 320px;
+    overflow-y: auto;
+    margin: 0;
+}
+.inputs-refs { margin-top: 8px; }
+.inputs-refs .result-item { width: 200px; }
+
 /* ---- Two-column tool pages (/generate, /download-assets) ---- */
 .generate-layout {
     display: grid;

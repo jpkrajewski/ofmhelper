@@ -4,17 +4,13 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, classify_kind
+from ofmhelpers.web.routers.task_helpers import (
+    ASSETS_ROOT,
+    classify_kind,
+    strip_asset_hash_prefix,
+)
 
 router = APIRouter(prefix="/refs", tags=["refs"])
-
-
-def _display_name(path: Path) -> str:
-    """Strip the "{sha256}__" content-hash prefix save_asset() stores files
-    under -- the hash is only there to dedupe/avoid collisions on disk, the
-    reuse dropdown should still show the original filename."""
-    _, _, rest = path.name.partition("__")
-    return rest or path.name
 
 
 @router.get("")
@@ -31,7 +27,7 @@ def list_refs(kind: str | None = Query(None)):
         files.append(
             {
                 "path": str(path),
-                "name": _display_name(path),
+                "name": strip_asset_hash_prefix(path.name),
                 "kind": file_kind,
                 "mtime": path.stat().st_mtime,
             }

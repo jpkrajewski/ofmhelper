@@ -15,6 +15,7 @@ from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     serve_job_file,
     job_status_payload,
+    job_inputs,
 )
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 
@@ -102,6 +103,7 @@ def job_status(request: Request, job_id: str):
         {
             "job": job,
             "assets": assets,
+            "job_inputs": job_inputs(job),
             "title": "Nano Banana Pro",
             "pending_message": "Generating image…",
             "back_url": "/generate",

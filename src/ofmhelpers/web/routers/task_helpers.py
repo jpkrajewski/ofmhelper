@@ -16,6 +16,7 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import FileResponse
@@ -41,6 +42,14 @@ def classify_kind(name: str) -> str:
     if ext in AUDIO_EXTS:
         return "audio"
     return "other"
+
+
+def strip_asset_hash_prefix(filename: str) -> str:
+    """Strip the "{sha256}__" content-hash prefix save_asset() stores files
+    under -- the hash is only there to dedupe/avoid collisions on disk;
+    anywhere a file gets shown to a human should show the original name."""
+    _, _, rest = filename.partition("__")
+    return rest or filename
 
 
 def make_job_dir(upload_root: Path) -> Path:
@@ -192,6 +201,48 @@ def grouped_job_status_payload(job: dict | None, files_prefix: str) -> dict:
         "result": assets,
         "failed_sources": failed_sources,
     }
+
+
+def reference_asset(path: str) -> dict:
+    """One reference-file entry for a job's "inputs" display: a file already
+    sitting in the shared uploads/assets/ store, served through the same
+    /refs/file endpoint the picker widget's own previews use -- no new
+    endpoint needed, and it's already scoped/validated to ASSETS_ROOT."""
+    name = strip_asset_hash_prefix(Path(path).name)
+    return {
+        "name": name,
+        "kind": classify_kind(name),
+        "view_url": f"/refs/file?path={quote(path)}",
+    }
+
+
+# Params long enough that they belong in their own block (below the settings
+# table) rather than crammed into a table cell -- currently just the prompt,
+# but keyed generically in case a future field needs the same treatment.
+_LONG_TEXT_THRESHOLD = 60
+
+
+def job_inputs(job: dict) -> dict:
+    """Splits a job's stored params into the three shapes the "Inputs"
+    section on an AI-generation job-status page renders: short scalar
+    settings (a table), long text (prompt -- its own block), and reference
+    file lists (previewed via reference_asset). Generic over every AI-gen
+    task's params shape -- a param is a reference-file list simply because
+    its value is a list at all; none of these jobs ever store a list of
+    anything else."""
+    settings, long_text, file_groups = [], [], []
+    for key, value in (job.get("params") or {}).items():
+        label = key.replace("_", " ")
+        if isinstance(value, list):
+            if value:  # an empty ref slot has nothing worth showing
+                file_groups.append(
+                    {"label": label, "assets": [reference_asset(p) for p in value]}
+                )
+        elif isinstance(value, str) and len(value) > _LONG_TEXT_THRESHOLD:
+            long_text.append({"label": label, "value": value})
+        else:
+            settings.append({"label": label, "value": value})
+    return {"settings": settings, "long_text": long_text, "file_groups": file_groups}
 
 
 def job_status_payload(job: dict | None, files_prefix: str) -> dict:

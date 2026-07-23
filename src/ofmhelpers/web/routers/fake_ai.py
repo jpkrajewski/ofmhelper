@@ -42,6 +42,7 @@ from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     job_status_payload,
     serve_job_file,
+    job_inputs,
 )
 
 router = APIRouter(prefix="/fake-ai", tags=["fake-ai"])
@@ -193,6 +194,7 @@ def job_status(request: Request, job_id: str):
         {
             "job": job,
             "assets": assets,
+            "job_inputs": job_inputs(job),
             "title": "Fake AI Model",
             "pending_message": "Simulating a generation…",
             "back_url": "/generate",
