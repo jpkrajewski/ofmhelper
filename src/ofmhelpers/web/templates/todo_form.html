@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Todo</h1>
+
+{% if is_admin %}
+<form method="post" action="/todo/add" class="todo-add-form">
+    <div class="field">
+        <label>Model name</label>
+        <input type="text" name="model_name" required>
+    </div>
+    <div class="field">
+        <label>Link to replicate</label>
+        <input type="text" name="url" required placeholder="https://...">
+    </div>
+    <div class="field">
+        <label>Comments</label>
+        <textarea name="comments" rows="3"></textarea>
+    </div>
+    <button type="submit">Add task</button>
+</form>
+{% else %}
+<p class="form-hint">Admins add tasks here -- you can see them, but only an admin can add, check off, or remove one.</p>
+{% endif %}
+
+{% if not todos %}
+<p class="pending">No tasks yet.</p>
+{% else %}
+<table class="todo-table">
+    <tr>
+        <th></th>
+        <th>Model name</th>
+        <th>Link</th>
+        <th>Comments</th>
+        <th>Added</th>
+        {% if is_admin %}<th></th>{% endif %}
+    </tr>
+    {% for t in todos %}
+    <tr class="{{ 'todo-done' if t.checked else '' }}">
+        <td>
+            {% if is_admin %}
+            <form method="post" action="/todo/{{ t.id }}/toggle" class="todo-toggle-form">
+                <button type="submit" class="todo-checkbox" aria-label="Toggle done">{{ '☑' if t.checked else '☐' }}</button>
+            </form>
+            {% else %}
+            <span class="todo-checkbox-readonly">{{ '☑' if t.checked else '☐' }}</span>
+            {% endif %}
+        </td>
+        <td>{{ t.model_name }}</td>
+        <td class="todo-link">
+            {% if t.url.startswith('http://') or t.url.startswith('https://') %}
+            <a href="{{ t.url }}" target="_blank" rel="noopener">{{ t.url }}</a>
+            {% else %}
+            {{ t.url }}
+            {% endif %}
+        </td>
+        <td class="todo-comments">{{ t.comments or '—' }}</td>
+        <td class="todo-added">{{ t.created_at_display }}</td>
+        {% if is_admin %}
+        <td>
+            <form method="post" action="/todo/{{ t.id }}/delete" class="todo-delete-form"
+                  onsubmit="return confirm('Delete this task?');">
+                <button type="submit" class="todo-delete-btn">✕ Delete</button>
+            </form>
+        </td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

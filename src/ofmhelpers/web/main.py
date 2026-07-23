@@ -29,6 +29,7 @@ from ofmhelpers.web.routers.download_images import router as download_images_rou
 from ofmhelpers.web.routers.generate import router as generate_router
 from ofmhelpers.web.routers.fake_ai import router as fake_ai_router
 from ofmhelpers.web.routers.download_assets import router as download_assets_router
+from ofmhelpers.web.routers.todo import router as todo_router
 
 
 @asynccontextmanager
@@ -82,6 +83,7 @@ app.include_router(download_images_router)
 app.include_router(generate_router)
 app.include_router(fake_ai_router)
 app.include_router(download_assets_router)
+app.include_router(todo_router)
 
 
 @app.get("/")

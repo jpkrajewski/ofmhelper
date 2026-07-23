@@ -263,6 +263,44 @@ footer .footer-links a:hover { color: var(--accent-soft); }
 /* Partial-failure note inside a done card */
 .fail-note { height: auto; padding: 8px; margin-top: 8px; color: var(--fail); border-color: #6b2525; }
 
+/* ---- Todo page ---- */
+.todo-add-form { max-width: 640px; margin-bottom: 30px; }
+.todo-table .todo-comments {
+    max-width: 320px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+}
+.todo-link { max-width: 260px; word-break: break-all; }
+.todo-added { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+tr.todo-done td { opacity: 0.5; }
+tr.todo-done td.todo-comments,
+tr.todo-done .todo-link,
+tr.todo-done td:nth-child(2) { text-decoration: line-through; }
+.todo-toggle-form, .todo-delete-form { margin: 0; display: inline; }
+.todo-checkbox {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--accent-soft);
+}
+.todo-checkbox-readonly { font-size: 20px; color: var(--text-muted); }
+.todo-delete-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fail);
+    font-size: 12px;
+    padding: 4px 10px;
+    margin: 0;
+    cursor: pointer;
+}
+.todo-delete-btn:hover { border-color: var(--fail); background: #2a1518; }
+
 /* Job-status "Inputs" section (prompt/settings/reference files a job was
    actually run with -- seedance/kling3/nanobanana/fake_ai job pages) */
 .job-inputs { margin-bottom: 30px; }
