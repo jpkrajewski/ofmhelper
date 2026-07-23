@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% import "_asset_media.html" as am %}
+{% block content %}
+<h1>Download Assets</h1>
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<h2 class="col-title">Fetch / clean</h2>
+
+<form id="download-assets-form" method="post" action="/download-videos/run" enctype="multipart/form-data"
+      data-prefix="/download-videos" data-result-kind="video">
+    <div class="field">
+        <label>Tool</label>
+        <select id="tool-select">
+            <option value="download_videos" data-action="/download-videos/run" data-prefix="/download-videos" data-result-kind="video">Download videos</option>
+            <option value="download_images" data-action="/download-images/run" data-prefix="/download-images" data-result-kind="image">Download images</option>
+            <option value="clean_images" data-action="/clean-images/run" data-prefix="/clean-images" data-result-kind="image">Clean image metadata</option>
+        </select>
+    </div>
+
+    <fieldset class="tool-fields" data-tool="download_videos">
+        <legend>Download videos</legend>
+        <div class="field">
+            <label>URLs (one per line)</label>
+            <textarea name="urls" rows="6" placeholder="https://www.tiktok.com/@user/video/123&#10;https://www.instagram.com/reel/abc123/"></textarea>
+        </div>
+        <p class="picker-help">
+            Login/cookies error on a link? Upload a fresh <code>cookies.txt</code> on the
+            <a href="/cookies">Upload Cookies</a> page first.
+        </p>
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="download_images" disabled style="display:none">
+        <legend>Download images</legend>
+        <div class="field">
+            <label>URLs (one per line)</label>
+            <textarea name="urls" rows="6" placeholder="https://www.instagram.com/p/abc123/&#10;https://x.com/user/status/123"></textarea>
+        </div>
+        <p class="picker-help">
+            Instagram posts, Twitter/X posts, Pinterest, TikTok photo posts, etc.
+            Login/cookies error? Upload a fresh <code>cookies.txt</code> on the
+            <a href="/cookies">Upload Cookies</a> page first.
+        </p>
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="clean_images" disabled style="display:none">
+        <legend>Clean image metadata</legend>
+        <div class="field">
+            <label>Images to clean (EXIF/GPS/location metadata gets stripped)</label>
+            <input type="file" name="files" multiple accept="image/*">
+        </div>
+    </fieldset>
+
+    <button type="submit">Run</button>
+    <p class="form-hint">
+        Running doesn't block the form -- fire several and watch them land on the
+        right. Hit ↻ Recreate on a past run to reload its URLs.
+    </p>
+</form>
+</div>
+
+<div class="generate-gallery-col">
+<h2 class="col-title">Results</h2>
+
+<div id="results-panel">
+    <div class="generation-status"></div>
+    <div class="results">
+        {% for job in gallery %}
+        <div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"
+             data-params='{{ job.params_json }}'
+             {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}"{% endif %}>
+            {% if job.status == "done" and (job.assets or job.failed_sources) %}
+                {% if job.assets %}
+                    {{ am.asset_media(job.assets[0]) }}
+                    {% if job.assets[0].source %}<p class="source">{{ job.assets[0].source }}</p>{% endif %}
+                    <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" class="download-btn">⬇ Download</a>
+                {% endif %}
+                {% if job.failed_sources %}
+                    <div class="result-file fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">
+                        ⚠ {{ job.failed_sources|length }} source(s) failed
+                    </div>
+                {% endif %}
+                <button type="button" class="recreate-btn">↻ Recreate</button>
+            {% elif job.status == "failed" %}
+                <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
+                <button type="button" class="recreate-btn">↻ Recreate</button>
+            {% elif job.status == "done" %}
+                <div class="result-file">no output</div>
+                <button type="button" class="recreate-btn">↻ Recreate</button>
+            {% else %}
+                <div class="result-file"><span class="spinner"></span> working…</div>
+            {% endif %}
+            <p class="source">{{ job.task_label }}{% if job.assets|length > 1 %} · <a href="/{{ job.task | replace('_', '-') }}/jobs/{{ job.job_id }}">all {{ job.assets|length }} files →</a>{% endif %}</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+</div>
+</div>
+
+<script>
+// Same pattern as /generate: only one tool's fieldset is shown/enabled at a
+// time (`disabled` keeps FormData from submitting the inactive tools'
+// same-named fields, display:none hides them).
+document.getElementById('tool-select').addEventListener('change', (e) => {
+    const option = e.target.selectedOptions[0];
+    const form = document.getElementById('download-assets-form');
+    form.action = option.dataset.action;
+    form.dataset.prefix = option.dataset.prefix;
+    form.dataset.resultKind = option.dataset.resultKind;
+
+    document.querySelectorAll('.tool-fields').forEach((fieldset) => {
+        const active = fieldset.dataset.tool === option.value;
+        fieldset.disabled = !active;
+        fieldset.style.display = active ? '' : 'none';
+    });
+});
+
+// ↻ Recreate: restore a past run's inputs. urls come back as a list ->
+// rejoin one-per-line into the textarea. File uploads (clean images) can't
+// be restored -- browsers don't allow setting a file input's value.
+document.querySelector('#results-panel .results').addEventListener('click', (e) => {
+    if (!e.target.closest('.recreate-btn')) return;
+    const card = e.target.closest('.result-item[data-task]');
+    if (!card) return;
+
+    const toolSelect = document.getElementById('tool-select');
+    toolSelect.value = card.dataset.task;
+    toolSelect.dispatchEvent(new Event('change'));
+
+    const params = JSON.parse(card.dataset.params || '{}');
+    const fieldset = document.querySelector(`fieldset[data-tool="${card.dataset.task}"]`);
+    for (const [key, value] of Object.entries(params)) {
+        const field = fieldset.querySelector(`[name="${key}"]`);
+        if (!field || field.type === 'file') continue;
+        field.value = Array.isArray(value) ? value.join('\n') : value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    document.getElementById('download-assets-form').scrollIntoView({ behavior: 'smooth' });
+});
+</script>
+<script src="/static/js/generation.js"></script>
+{% endblock %}

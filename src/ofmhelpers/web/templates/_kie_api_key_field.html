@@ -1,0 +1,35 @@
+<div class="field">
+    <label>API key</label>
+    <input type="password" name="api_key" id="kie-api-key" value="{{ kie_api_key|default('') }}"
+           data-server-value="{{ kie_api_key|default('') }}"
+           required autocomplete="new-password"
+           data-lpignore="true" data-1p-ignore data-bwignore="true" data-dashlane-ignore="true"
+           data-form-type="other">
+</div>
+<script>
+(function () {
+    // Browsers (and password-manager extensions, which have their own
+    // autofill separate from the browser's) routinely ignore
+    // autocomplete="off" on password fields and silently replace the
+    // server-rendered value with a saved credential for this origin --
+    // that's what was clobbering the auto-filled kie.ai key here.
+    // autocomplete="new-password" + the *ignore hints above fix most of
+    // it; this is the belt-and-suspenders fallback for whatever still
+    // slips through: restore the server value once, but only until the
+    // user actually touches the field -- after that it's their input to
+    // control, not ours to fight over.
+    const field = document.getElementById("kie-api-key");
+    if (!field || !field.dataset.serverValue) return;
+
+    let userTouched = false;
+    field.addEventListener("input", () => { userTouched = true; }, { once: true });
+
+    [0, 100, 400].forEach((delay) => {
+        setTimeout(() => {
+            if (!userTouched && field.value !== field.dataset.serverValue) {
+                field.value = field.dataset.serverValue;
+            }
+        }, delay);
+    });
+})();
+</script>

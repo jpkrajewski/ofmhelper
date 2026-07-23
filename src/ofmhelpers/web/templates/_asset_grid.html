@@ -1,0 +1,9 @@
+{% import "_asset_media.html" as am %}
+{% for a in assets %}
+<div class="result-item">
+    {{ am.asset_media(a) }}
+    {% if a.source %}<p class="source">{{ a.source }}</p>{% endif %}
+    <p class="filename">{{ a.name }}</p>
+    <a href="{{ a.download_url }}" download="{{ a.name }}" class="download-btn">⬇ Download</a>
+</div>
+{% endfor %}

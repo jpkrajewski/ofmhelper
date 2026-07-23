@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>All jobs</h1>
+<h1>Action log</h1>
 
 {% if any_running %}
 <meta http-equiv="refresh" content="3">
 {% endif %}
 
 {% if not jobs %}
-<p class="pending">No jobs yet.</p>
+<p class="pending">Nothing has been run yet.</p>
 {% else %}
 <table>
     <tr>
         <th>Time</th>
+        <th>By</th>
         <th>Task</th>
         <th>Status</th>
         <th>Summary</th>
@@ -20,6 +21,11 @@
     {% for job in jobs %}
     <tr>
         <td>{{ job.created_at_display }}</td>
+        <td>
+            {% if job.actor %}
+            <span class="actor-badge actor-{{ job.actor }}">{{ job.actor }}</span>
+            {% else %}—{% endif %}
+        </td>
         <td>{{ job.task }}</td>
         <td class="{{ 'ok' if job.status == 'done' else 'fail' if job.status == 'failed' else 'pending' }}">
             {{ job.status }}

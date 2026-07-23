@@ -22,4 +22,14 @@ HELPERS: list[HelperEntry] = [
         name="Radio Comms Modulator",
         description="Turns clean TTS audio into crunchy CoD/CS-style radio comms.",
     ),
+    HelperEntry(
+        slug="elevenlabs",
+        name="ElevenLabs TTS",
+        description="Text-to-speech generation via ElevenLabs.",
+    ),
+    HelperEntry(
+        slug="scraper",
+        name="Social Scraper",
+        description="Scrapes and ranks Instagram/TikTok profiles into a spreadsheet.",
+    ),
 ]

@@ -2,7 +2,7 @@
 {% block content %}
 <h1>ElevenLabs — text to speech</h1>
 
-<form method="post" action="/elevenlabs/run">
+<form method="post" action="/helpers/elevenlabs/run">
     <div class="field">
         <label>API key</label>
         <input type="password" name="api_key" required autocomplete="off">
@@ -36,11 +36,7 @@
 </form>
 
 <style>
-    .field { margin-bottom: 16px; }
-    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
-    select, input[type="text"], input[type="password"], textarea {
-        padding: 6px; width: 100%; box-sizing: border-box;
-    }
+    /* .field / select-input sizing now live in static/css/app.css */
     textarea { min-height: 120px; resize: vertical; }
 </style>
 {% endblock %}

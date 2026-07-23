@@ -20,6 +20,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from ofmhelpers.utils.radio_comms_fx import PRESETS, process_file, generate_variations
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.routers.task_helpers import asset_card
 
 router = APIRouter(prefix="/helpers/radio-comms", tags=["radio-comms"])
 
@@ -70,6 +71,7 @@ def form(request: Request):
 
 @router.post("/run")
 async def run(
+    request: Request,
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     preset: str = Form("cod_clean"),
@@ -98,7 +100,7 @@ async def run(
         "jitter_amount": jitter_amount,
         "seed": seed,
     }
-    job_id = create_job("radio_comms", params)
+    job_id = create_job("radio_comms", params, actor=request.session.get("role"))
     background_tasks.add_task(
         run_job,
         job_id,
@@ -121,11 +123,25 @@ def job_status(request: Request, job_id: str):
             request, "radio_comms_form.html", {}, status_code=404
         )
 
+    assets = []
     if job.get("status") == "done":
-        for idx, f in enumerate(job["result"]):
-            f["index"] = idx
+        assets = [
+            asset_card(f["name"], idx, f"/helpers/radio-comms/files/{job_id}")
+            for idx, f in enumerate(job["result"])
+        ]
 
-    return templates.TemplateResponse(request, "radio_comms_status.html", {"job": job})
+    return templates.TemplateResponse(
+        request,
+        "job_status.html",
+        {
+            "job": job,
+            "assets": assets,
+            "title": "Radio comms",
+            "pending_message": "Processing audio…",
+            "back_url": "/helpers/radio-comms",
+            "back_label": "process more audio",
+        },
+    )
 
 
 @router.get("/files/{job_id}/{index}")

@@ -133,7 +133,8 @@ nano .env
 
 Required:
 ```
-APP_PASSWORD=choose-a-password        # single shared login password
+APP_PASSWORD_ADMIN=choose-an-admin-password   # shared admin login
+APP_PASSWORD_VA=choose-a-va-password          # shared VA login
 SESSION_SECRET=<output of: openssl rand -hex 32>
 ```
 
@@ -142,14 +143,22 @@ Generate the session secret:
 openssl rand -hex 32
 ```
 
-Plus whatever provider keys the app needs (kie.ai, ElevenLabs, etc. — these
-are supplied per-job through the web forms for kie.ai jobs, not required in
-`.env`, but check the app for any keys that ARE expected globally).
+Optional — pre-fills the kie.ai API key field on the Seedance / Kling 3.0 /
+Nano Banana Pro forms based on which of the two passwords above was used to
+log in, so VAs don't have to paste a key in by hand:
+```
+KIE_AI_API_KEY_ADMIN=...
+KIE_AI_API_KEY_VA=...
+```
+The field stays editable either way — if these aren't set, or you need a
+different key for a one-off job, just paste over the pre-filled value.
 
-**Missing `SESSION_SECRET` or `APP_PASSWORD` will crash the app on startup**
-(`KeyError`) — if the container keeps restarting or `curl localhost:8000`
-resets the connection, check `docker compose logs ofmhelpers` first; this is
-the most common cause.
+Plus whatever other provider keys the app needs (ElevenLabs, etc.).
+
+**Missing `SESSION_SECRET`, `APP_PASSWORD_ADMIN`, or `APP_PASSWORD_VA` will
+crash the app on startup** (`KeyError`) — if the container keeps restarting
+or `curl localhost:8000` resets the connection, check
+`docker compose logs ofmhelpers` first; this is the most common cause.
 
 ---
 
@@ -263,5 +272,5 @@ docker compose logs -f ofmhelpers   # confirm clean startup
 | `502 Bad Gateway` from Nginx | App container down, or Nginx pointed at wrong port | `docker compose ps`; `curl -I http://127.0.0.1:8000` |
 | `nginx: ... failed to restart` | Port 80 already bound (usually Docker) | `sudo ss -tlnp \| grep :80`; fix compose port mapping |
 | `PermissionError: [Errno 13]` writing to downloads/uploads/etc | Bind-mounted host folder owned by root | `sudo chown -R 1000:1000 uploads downloads kieai_out secrets` |
-| Container keeps restarting / `Connection reset by peer` | Missing required env var (`APP_PASSWORD`, `SESSION_SECRET`) crashing app on boot | Check `docker compose logs ofmhelpers`; verify `.env` |
+| Container keeps restarting / `Connection reset by peer` | Missing required env var (`APP_PASSWORD_ADMIN`, `APP_PASSWORD_VA`, `SESSION_SECRET`) crashing app on boot | Check `docker compose logs ofmhelpers`; verify `.env` |
 | Form submit shows "Method Not Allowed" | Red herring — `fetch()` follows a failed response's URL via GET. Check the Network tab for the *first* request's real status, not this one | — |

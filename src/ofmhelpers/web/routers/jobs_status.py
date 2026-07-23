@@ -16,11 +16,12 @@ TASK_STATUS_PREFIX = {
     "download_images": "/download-images",
     "clean_images": "/clean-images",
     "seedance": "/seedance",
-    "elevenlabs": "/elevenlabs",
+    "elevenlabs": "/helpers/elevenlabs",
     "radio_comms": "/helpers/radio-comms",
-    "scraper": "/scraper",
+    "scraper": "/helpers/scraper",
     "nanobanana": "/nanobanana",
     "kling3": "/kling3",
+    "fake_ai": "/fake-ai",
 }
 
 

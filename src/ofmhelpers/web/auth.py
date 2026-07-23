@@ -42,10 +42,34 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
 
 
-def check_password(candidate: str) -> bool:
-    expected = os.environ["APP_PASSWORD"]  # required -- fail loudly if unset
-    # constant-time-ish comparison isn't critical here (single shared
-    # password, not per-user secrets), but cheap to do properly anyway.
+def check_password(candidate: str) -> str | None:
+    """Returns the matching role ("admin" / "va"), or None if it matches neither.
+
+    Two shared passwords instead of one -- there's still no per-user accounts,
+    just two roles, each gating which kie.ai key gets pre-filled (see
+    get_kie_api_key below).
+    """
     import hmac
 
-    return hmac.compare_digest(candidate, expected)
+    admin_password = os.environ[
+        "APP_PASSWORD_ADMIN"
+    ]  # required -- fail loudly if unset
+    va_password = os.environ["APP_PASSWORD_VA"]  # required -- fail loudly if unset
+
+    if hmac.compare_digest(candidate, admin_password):
+        return "admin"
+    if hmac.compare_digest(candidate, va_password):
+        return "va"
+    return None
+
+
+def get_kie_api_key(request: Request) -> str:
+    """Pre-fill value for the kie.ai API key field, based on the logged-in role.
+
+    Optional by design (os.getenv, not os.environ) -- an unset var just means
+    the field starts empty and the user pastes a key in manually, same as
+    before roles existed.
+    """
+    role = request.session.get("role")
+    env_var = "KIE_AI_API_KEY_ADMIN" if role == "admin" else "KIE_AI_API_KEY_VA"
+    return os.getenv(env_var, "")

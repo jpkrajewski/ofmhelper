@@ -8,8 +8,9 @@ from elevenlabs.client import ElevenLabs
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.routers.task_helpers import asset_card
 
-router = APIRouter(prefix="/elevenlabs", tags=["elevenlabs"])
+router = APIRouter(prefix="/helpers/elevenlabs", tags=["elevenlabs"])
 
 OUTPUT_ROOT = Path("uploads") / "elevenlabs-out"
 
@@ -18,7 +19,6 @@ VOICES = {
     "Chad": "eadgjmk4R4uojdsheG9t",
     "George": "JBFqnCBsd6RMkjVDRZzb",
 }
-"sk_96eabbd4c2d5f03d686056cb47477883058f12abe9a65f29"
 
 
 def _run_tts(
@@ -61,6 +61,7 @@ def form(request: Request):
 
 @router.post("/run")
 async def run(
+    request: Request,
     background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     text: str = Form(...),
@@ -84,7 +85,7 @@ async def run(
         "model_id": model_id,
         "output_format": output_format,
     }
-    job_id = create_job("elevenlabs", params)
+    job_id = create_job("elevenlabs", params, actor=request.session.get("role"))
     background_tasks.add_task(
         run_job,
         job_id,
@@ -96,7 +97,7 @@ async def run(
         },
     )
 
-    return RedirectResponse(url=f"/elevenlabs/jobs/{job_id}", status_code=303)
+    return RedirectResponse(url=f"/helpers/elevenlabs/jobs/{job_id}", status_code=303)
 
 
 @router.get("/jobs/{job_id}")
@@ -107,11 +108,25 @@ def job_status(request: Request, job_id: str):
             request, "elevenlabs_form.html", {}, status_code=404
         )
 
+    assets = []
     if job.get("status") == "done":
-        for idx, f in enumerate(job["result"]):
-            f["index"] = idx
+        assets = [
+            asset_card(f["name"], idx, f"/helpers/elevenlabs/files/{job_id}")
+            for idx, f in enumerate(job["result"])
+        ]
 
-    return templates.TemplateResponse(request, "elevenlabs_status.html", {"job": job})
+    return templates.TemplateResponse(
+        request,
+        "job_status.html",
+        {
+            "job": job,
+            "assets": assets,
+            "title": "ElevenLabs",
+            "pending_message": "Generating audio…",
+            "back_url": "/helpers/elevenlabs",
+            "back_label": "generate more audio",
+        },
+    )
 
 
 @router.get("/files/{job_id}/{index}")

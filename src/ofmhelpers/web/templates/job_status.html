@@ -1,36 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Download job <code>{{ job.id }}</code></h1>
+<h1>{{ title|default("Job") }} <code>{{ job.id }}</code></h1>
 <p>Status: <strong>{{ job.status }}</strong></p>
 
 {% if job.status == "running" %}
 <meta http-equiv="refresh" content="2">
-<p class="pending">Downloading {{ job.params.urls | length }} url(s)…</p>
+<p class="pending">{{ pending_message|default("Working…") }}</p>
 
 {% elif job.status == "failed" %}
-<p class="fail">{{ job.error }}</p>
+<pre class="fail">{{ job.error }}</pre>
 
 {% elif job.status == "done" %}
-<table>
-    <tr><th>URL</th><th>Status</th><th>Output</th></tr>
-    {% for r in job.result %}
-    <tr>
-        <td>{{ r.url }}</td>
-        {% if r.success %}
-        <td class="ok">done</td>
-        <td>
-            {% for d in r.downloads %}
-            <a href="/download-videos/files/{{ job.id }}/{{ d.index }}" download>⬇ {{ d.name }}</a><br>
-            {% endfor %}
-        </td>
-        {% else %}
-        <td class="fail">failed</td>
-        <td>{{ r.error }}</td>
-        {% endif %}
-    </tr>
+{% if failed_sources %}
+<ul class="fail-list">
+    {% for f in failed_sources %}
+    <li class="fail">{{ f.source }}: {{ f.error }}</li>
     {% endfor %}
-</table>
+</ul>
+{% endif %}
+<div class="results">
+    {% include "_asset_grid.html" %}
+</div>
 {% endif %}
 
-<p><a href="/download-videos">← new download</a></p>
+<p><a href="{{ back_url }}">← {{ back_label|default("run another") }}</a></p>
 {% endblock %}

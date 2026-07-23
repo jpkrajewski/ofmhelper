@@ -11,9 +11,6 @@ services:
       - OFM_KIEAI_OUT_DIR=/app/kieai_out
       - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
       - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
-      - OFM_BATTLE_TESTED_FILE=/app/kieai_out/battle_tested.json
-      - SESSION_SECRET=dasdaSDasdgsdfaasd1231231dasdasda
-      - APP_PASSWORD=JAAVOFM123!@#!@#
     env_file:
       - .env
     volumes:

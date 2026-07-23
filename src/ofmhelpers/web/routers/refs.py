@@ -4,41 +4,34 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
+from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, classify_kind
+
 router = APIRouter(prefix="/refs", tags=["refs"])
 
-UPLOAD_ROOT = Path("uploads")
 
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-VIDEO_EXTS = {".mp4", ".mov", ".webm", ".mkv"}
-AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg"}
-
-
-def _kind(path: Path) -> str:
-    ext = path.suffix.lower()
-    if ext in IMAGE_EXTS:
-        return "image"
-    if ext in VIDEO_EXTS:
-        return "video"
-    if ext in AUDIO_EXTS:
-        return "audio"
-    return "other"
+def _display_name(path: Path) -> str:
+    """Strip the "{sha256}__" content-hash prefix save_asset() stores files
+    under -- the hash is only there to dedupe/avoid collisions on disk, the
+    reuse dropdown should still show the original filename."""
+    _, _, rest = path.name.partition("__")
+    return rest or path.name
 
 
 @router.get("")
 def list_refs(kind: str | None = Query(None)):
-    """Just walks the existing uploads/*-refs folders and lists what's
-    already there -- no separate storage, this is the real files."""
+    """Lists what's already in the shared asset store -- no separate
+    metadata store, this is the real files."""
     files = []
-    for path in UPLOAD_ROOT.rglob("*"):
+    for path in ASSETS_ROOT.glob("*"):
         if not path.is_file():
             continue
-        file_kind = _kind(path)
+        file_kind = classify_kind(path.name)
         if kind and file_kind != kind:
             continue
         files.append(
             {
                 "path": str(path),
-                "name": path.name,
+                "name": _display_name(path),
                 "kind": file_kind,
                 "mtime": path.stat().st_mtime,
             }
@@ -50,8 +43,8 @@ def list_refs(kind: str | None = Query(None)):
 @router.get("/file")
 def get_ref_file(path: str = Query(...)):
     file_path = Path(path)
-    # keep this scoped to the uploads folder
-    if UPLOAD_ROOT.resolve() not in file_path.resolve().parents:
+    # keep this scoped to the shared asset store
+    if ASSETS_ROOT.resolve() not in file_path.resolve().parents:
         raise HTTPException(status_code=403, detail="Invalid path")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")

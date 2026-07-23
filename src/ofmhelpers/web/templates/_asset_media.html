@@ -1,0 +1,11 @@
+{% macro asset_media(a) %}
+{% if a.kind == 'video' %}
+<video src="{{ a.view_url }}" controls class="result-video"></video>
+{% elif a.kind == 'image' %}
+<img src="{{ a.view_url }}" class="result-image" alt="{{ a.name }}">
+{% elif a.kind == 'audio' %}
+<audio src="{{ a.view_url }}" controls class="result-audio"></audio>
+{% else %}
+<div class="result-file">📄 {{ a.name }}</div>
+{% endif %}
+{% endmacro %}

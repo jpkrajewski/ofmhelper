@@ -5,6 +5,8 @@ import time
 
 import requests
 
+from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
+
 
 class KieAIClient:
     """
@@ -15,6 +17,11 @@ class KieAIClient:
     inside an aggregator process.
     """
 
+    # How long resume_pending keeps retrying a pending task before writing
+    # it off. kie.ai's result URLs are only reliably valid ~24h, so anything
+    # older than this is unrecoverable anyway.
+    RESUME_MAX_AGE_S = 48 * 3600
+
     def __init__(
         self,
         api_key: str,
@@ -23,6 +30,7 @@ class KieAIClient:
         out_dir: str | pathlib.Path = "./out",
         task_log: str | pathlib.Path = "./tasks.jsonl",
         completions_log: str | pathlib.Path = "./completions.jsonl",
+        resolved_log: str | pathlib.Path = "./resolved.jsonl",
     ) -> None:
         self.api_key = api_key
         self.JOBS_BASE = jobs_base
@@ -32,10 +40,12 @@ class KieAIClient:
         self.OUT_DIR = pathlib.Path(out_dir)
         self.TASK_LOG = pathlib.Path(task_log)
         self.COMPLETIONS_LOG = pathlib.Path(completions_log)
+        self.RESOLVED_LOG = pathlib.Path(resolved_log)
 
         self.OUT_DIR.mkdir(parents=True, exist_ok=True)
         self.TASK_LOG.parent.mkdir(parents=True, exist_ok=True)
         self.COMPLETIONS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        self.RESOLVED_LOG.parent.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # internal logging helper
@@ -59,8 +69,25 @@ class KieAIClient:
     # LOCAL file. kie.ai's input fields (image_input, first_frame_url,
     # reference_*_urls) take hosted URLs, not raw bytes, so local files
     # go through this first.
+    #
+    # Reference files get reused across many generations (the /generate
+    # reuse pickers exist specifically for this), so this checks
+    # upload_cache before re-uploading the same bytes to kie.ai yet again --
+    # a cache hit is still confirmed live (kie.ai's tempfile host doesn't
+    # guarantee to keep files forever) before being trusted.
     # ------------------------------------------------------------------
     def upload_local_file(self, path: str, upload_path: str = "refs") -> str:
+        cached_url = upload_cache.get(self.api_key, path)
+        if cached_url is not None:
+            if self._remote_file_exists(cached_url):
+                print(f"[upload] cache hit for {path} -> {cached_url}", flush=True)
+                return cached_url
+            print(
+                f"[upload] cached url for {path} no longer resolves, re-uploading",
+                flush=True,
+            )
+            upload_cache.discard(self.api_key, path)
+
         print(f"[upload] starting {path} ...", flush=True)
         with open(path, "rb") as fh:
             r = requests.post(
@@ -76,7 +103,19 @@ class KieAIClient:
 
         url = r.json()["data"]["downloadUrl"]
         print(f"[upload] done {path} -> {url}", flush=True)
+        upload_cache.put(self.api_key, path, url)
         return url
+
+    def _remote_file_exists(self, url: str) -> bool:
+        """Best-effort existence check for a previously-uploaded file's
+        hosted URL. Fails closed: any error/exception is treated as "not
+        there" so the caller falls back to a fresh upload rather than
+        risking a broken reference being handed to kie.ai."""
+        try:
+            r = requests.head(url, timeout=10, allow_redirects=True)
+            return r.status_code < 400
+        except requests.RequestException:
+            return False
 
     # ------------------------------------------------------------------
     # Core async task lifecycle - shared by every Market model, including
@@ -144,9 +183,36 @@ class KieAIClient:
             interval = min(interval * 1.5, max_interval)
 
         raise TimeoutError(
-            f"{task_id} not done after {timeout_s}s -- it's safe in {self.TASK_LOG}, "
-            f"call poll_task('{task_id}') again anytime"
+            f"kie.ai is still generating (task {task_id}, waited {timeout_s}s). "
+            f"No action needed -- the background recovery sweeper will download "
+            f"it to the server automatically once it finishes."
         )
+
+    # ------------------------------------------------------------------
+    # Single-shot status check - one recordInfo call, no waiting. Used by
+    # the recovery sweeper so a sweep over many pending tasks never blocks.
+    # ------------------------------------------------------------------
+    def check_task(self, task_id: str) -> tuple[str, list[str] | str | None]:
+        """Returns (state, payload): ("success", [urls]) / ("fail", failMsg) /
+        ("unknown", api message -- e.g. wrong key or unknown task) / any
+        in-flight state ("waiting"/"queuing"/"generating", None)."""
+        r = requests.get(
+            f"{self.JOBS_BASE}/recordInfo",
+            headers=self.HEADERS,
+            params={"taskId": task_id},
+            timeout=30,
+        )
+        r.raise_for_status()
+        body = r.json()
+        data = body.get("data") or {}
+        state = data.get("state")
+        if state == "success":
+            return "success", json.loads(data["resultJson"])["resultUrls"]
+        if state == "fail":
+            return "fail", data.get("failMsg")
+        if state is None:
+            return "unknown", body.get("msg")
+        return state, None
 
     def download_urls(
         self, urls: list[str], task_id: str, ext: str
@@ -155,7 +221,11 @@ class KieAIClient:
         only reliably valid ~24h, even though the underlying file may live 14 days."""
         saved = []
         for i, url in enumerate(urls):
-            out = self.OUT_DIR / f"{task_id}_{i}.{ext}"
+            # Only disambiguate with an index suffix when there's more than
+            # one result to save -- every model here returns exactly one
+            # today, so this is normally just "{task_id}.{ext}".
+            suffix = f"_{i}" if len(urls) > 1 else ""
+            out = self.OUT_DIR / f"{task_id}{suffix}.{ext}"
             with requests.get(url, stream=True, timeout=60) as r:
                 r.raise_for_status()
                 with open(out, "wb") as f:
@@ -246,7 +316,7 @@ class KieAIClient:
                 payload["reference_audio_urls"] = reference_audio_urls
 
         task_id = self.create_task(model, payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=900)
+        urls = self.poll_task(task_id, timeout_s=1800)
         return self.download_urls(urls, task_id, "mp4")[0]
 
     # ------------------------------------------------------------------
@@ -294,35 +364,90 @@ class KieAIClient:
             payload["kling_elements"] = kling_elements
 
         task_id = self.create_task("kling-3.0/video", payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=900)
+        urls = self.poll_task(task_id, timeout_s=1800)
         return self.download_urls(urls, task_id, "mp4")[0]
 
     # ------------------------------------------------------------------
-    # Crash recovery - re-run any time. Sweeps tasks.jsonl for anything
-    # created but never downloaded (script died, laptop slept, etc.) and
-    # finishes the job.
+    # Crash/timeout recovery - safe to re-run any time; the web app's
+    # background sweeper calls this every few minutes. Sweeps tasks.jsonl
+    # for anything created but never downloaded (poll timed out, server
+    # restarted mid-generation, etc.) and finishes the job. Terminal
+    # outcomes are appended to RESOLVED_LOG so dead tasks are never
+    # re-checked on later sweeps.
     # ------------------------------------------------------------------
-    def resume_pending(self) -> None:
-        if not self.TASK_LOG.exists():
-            return
-        for line in open(self.TASK_LOG):
-            rec = json.loads(line)
-            tid = rec["taskId"]
-            if any(self.OUT_DIR.glob(f"{tid}_*")):
-                continue  # already downloaded
+    def _load_resolved(self) -> set[str]:
+        if not self.RESOLVED_LOG.exists():
+            return set()
+        ids = set()
+        for line in self.RESOLVED_LOG.read_text().splitlines():
             try:
-                urls = self.poll_task(
-                    tid, timeout_s=30
-                )  # quick check, don't block 15 min per task
+                ids.add(json.loads(line)["taskId"])
+            except (json.JSONDecodeError, KeyError):
+                continue
+        return ids
+
+    def _mark_resolved(self, task_id: str, outcome: str) -> None:
+        with open(self.RESOLVED_LOG, "a") as f:
+            f.write(
+                json.dumps(
+                    {"taskId": task_id, "outcome": outcome, "resolvedAt": time.time()}
+                )
+                + "\n"
+            )
+
+    def resume_pending(self) -> list[dict]:
+        recovered = []
+        if not self.TASK_LOG.exists():
+            return recovered
+        resolved = self._load_resolved()
+
+        for line in self.TASK_LOG.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            tid = rec["taskId"]
+
+            if tid in resolved:
+                continue
+            # "{tid}.ext" for a single result, "{tid}_0.ext" etc. for several.
+            if any(self.OUT_DIR.glob(f"{tid}.*")) or any(self.OUT_DIR.glob(f"{tid}_*")):
+                self._mark_resolved(tid, "already-downloaded")
+                continue
+            if time.time() - rec.get("createdAt", 0) > self.RESUME_MAX_AGE_S:
+                # result URLs are long dead by now -- stop checking forever
+                self._mark_resolved(tid, "expired")
+                continue
+
+            try:
+                state, payload = self.check_task(tid)
+            except Exception as exc:  # network blip etc. -- next sweep retries
+                print(f"[recovery] {tid}: status check failed: {exc}", flush=True)
+                continue
+
+            if state == "success":
                 ext = (
                     "mp4"
-                    if any(k in rec["model"] for k in ("seedance", "kling"))
+                    if any(k in rec.get("model", "") for k in ("seedance", "kling"))
                     else "png"
                 )
-                self.download_urls(urls, tid, ext)
-                print(f"recovered {tid}")
-            except (RuntimeError, TimeoutError) as e:
-                print(f"still pending or failed: {tid} -> {e}")
+                try:
+                    self.download_urls(payload, tid, ext)
+                except Exception as exc:  # leave pending, next sweep retries
+                    print(f"[recovery] {tid}: download failed: {exc}", flush=True)
+                    continue
+                self._mark_resolved(tid, "downloaded")
+                recovered.append({"taskId": tid, "outcome": "downloaded"})
+                print(f"[recovery] downloaded {tid}", flush=True)
+            elif state == "fail":
+                self._mark_resolved(tid, "failed")
+                print(f"[recovery] {tid} failed on kie.ai: {payload}", flush=True)
+            # "unknown" (task belongs to a different key, etc.) and in-flight
+            # states are left pending -- another key or a later sweep gets it,
+            # and the age cutoff above guarantees it can't linger forever.
+        return recovered
 
     @classmethod
     def from_env(cls, api_key):
@@ -332,5 +457,8 @@ class KieAIClient:
             task_log=os.getenv("OFM_KIEAI_TASK_LOG", "/app/kieai_out/tasks.jsonl"),
             completions_log=os.getenv(
                 "OFM_KIEAI_COMPLETIONS_LOG", "/app/kieai_out/completions.jsonl"
+            ),
+            resolved_log=os.getenv(
+                "OFM_KIEAI_RESOLVED_LOG", "/app/kieai_out/resolved.jsonl"
             ),
         )

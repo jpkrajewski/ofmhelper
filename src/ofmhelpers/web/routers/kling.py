@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import (
     APIRouter,
     Request,
@@ -14,17 +12,15 @@ from fastapi import (
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
 from ofmhelpers.web.routers.task_helpers import (
-    make_job_dir,
+    ASSETS_ROOT,
     build_ordered_paths,
-    attach_download_indexes,
+    asset_card,
     serve_job_file,
+    job_status_payload,
 )
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 
 router = APIRouter(prefix="/kling3", tags=["kling3"])
-
-UPLOAD_ROOT = Path("uploads") / "kling3-refs"
-ALLOWED_REF_ROOT = Path("uploads")
 
 
 def _run_kling3(
@@ -50,13 +46,9 @@ def _run_kling3(
     return [{"name": out_path.name, "path": str(out_path)}]
 
 
-@router.get("")
-def form(request: Request):
-    return templates.TemplateResponse(request, "kling3_form.html", {})
-
-
 @router.post("/run")
 async def run(
+    request: Request,
     background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     prompt: str = Form(...),
@@ -70,10 +62,7 @@ async def run(
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    job_dir = make_job_dir(UPLOAD_ROOT)
-    image_paths = build_ordered_paths(
-        job_dir, images_manifest, images, ALLOWED_REF_ROOT
-    )
+    image_paths = build_ordered_paths(images_manifest, images, ASSETS_ROOT)
 
     params = {
         "prompt": prompt,
@@ -82,7 +71,11 @@ async def run(
         "duration": duration,
         "sound": sound,
     }
-    job_id = create_job("kling3", params)
+    # "images" matches the form's picker field name so /generate's
+    # click-to-reuse can restore the refs as "existing" picker entries.
+    job_id = create_job(
+        "kling3", {**params, "images": image_paths}, actor=request.session.get("role")
+    )
     background_tasks.add_task(
         run_job,
         job_id,
@@ -90,20 +83,39 @@ async def run(
         {"api_key": api_key, **params, "image_paths": image_paths},
     )
 
-    from fastapi.responses import RedirectResponse
-
-    return RedirectResponse(url=f"/kling3/jobs/{job_id}", status_code=303)
+    return {"job_id": job_id}
 
 
 @router.get("/jobs/{job_id}")
 def job_status(request: Request, job_id: str):
     job = get_job(job_id)
     if job is None:
-        return templates.TemplateResponse(
-            request, "kling3_form.html", {}, status_code=404
-        )
-    attach_download_indexes(job)
-    return templates.TemplateResponse(request, "kling3_status.html", {"job": job})
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    assets = []
+    if job.get("status") == "done":
+        assets = [
+            asset_card(f["name"], idx, f"/kling3/files/{job_id}")
+            for idx, f in enumerate(job["result"])
+        ]
+
+    return templates.TemplateResponse(
+        request,
+        "job_status.html",
+        {
+            "job": job,
+            "assets": assets,
+            "title": "Kling 3.0",
+            "pending_message": "Generating video… this can take a few minutes.",
+            "back_url": "/generate",
+            "back_label": "generate another",
+        },
+    )
+
+
+@router.get("/jobs/{job_id}/status")
+def job_status_json(job_id: str):
+    return job_status_payload(get_job(job_id), "/kling3/files")
 
 
 @router.get("/files/{job_id}/{index}")

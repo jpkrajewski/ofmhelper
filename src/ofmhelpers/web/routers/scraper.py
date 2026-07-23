@@ -29,8 +29,9 @@ from ofmhelpers.utils.profile_loader import normalize_profiles_names
 from ofmhelpers.utils.sheets_to_columns import sheets_columns_to_keys
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.routers.task_helpers import asset_card
 
-router = APIRouter(prefix="/scraper", tags=["scraper"])
+router = APIRouter(prefix="/helpers/scraper", tags=["scraper"])
 
 UPLOAD_ROOT = Path("uploads") / "scraper"
 
@@ -83,6 +84,7 @@ def form(request: Request):
 
 @router.post("/run")
 async def run(
+    request: Request,
     background_tasks: BackgroundTasks,
     api_keys: str = Form(...),  # textarea, one token per line
     sheet: UploadFile = File(...),
@@ -109,7 +111,7 @@ async def run(
         "results_per_profile": results_per_profile,
         "results_days_back": results_days_back,
     }
-    job_id = create_job("scraper", params)
+    job_id = create_job("scraper", params, actor=request.session.get("role"))
     background_tasks.add_task(
         run_job,
         job_id,
@@ -123,7 +125,7 @@ async def run(
         },
     )
 
-    return RedirectResponse(url=f"/scraper/jobs/{job_id}", status_code=303)
+    return RedirectResponse(url=f"/helpers/scraper/jobs/{job_id}", status_code=303)
 
 
 @router.get("/jobs/{job_id}")
@@ -134,11 +136,25 @@ def job_status(request: Request, job_id: str):
             request, "scraper_form.html", {}, status_code=404
         )
 
+    assets = []
     if job.get("status") == "done":
-        for idx, f in enumerate(job["result"]):
-            f["index"] = idx
+        assets = [
+            asset_card(f["name"], idx, f"/helpers/scraper/files/{job_id}")
+            for idx, f in enumerate(job["result"])
+        ]
 
-    return templates.TemplateResponse(request, "scraper_status.html", {"job": job})
+    return templates.TemplateResponse(
+        request,
+        "job_status.html",
+        {
+            "job": job,
+            "assets": assets,
+            "title": "Scraper",
+            "pending_message": "Scraping profiles…",
+            "back_url": "/helpers/scraper",
+            "back_label": "run another scrape",
+        },
+    )
 
 
 @router.get("/files/{job_id}/{index}")

@@ -1,5 +1,4 @@
 from enum import Enum
-from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -11,23 +10,18 @@ from fastapi import (
     HTTPException,
     Query,
 )
-from fastapi.responses import RedirectResponse
-
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
 from ofmhelpers.web.routers.task_helpers import (
-    make_job_dir,
-    save_upload,
+    ASSETS_ROOT,
     build_ordered_paths,
-    attach_download_indexes,
+    asset_card,
     serve_job_file,
+    job_status_payload,
 )
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 
 router = APIRouter(prefix="/seedance", tags=["seedance"])
-
-UPLOAD_ROOT = Path("uploads") / "seedance-refs"
-ALLOWED_REF_ROOT = Path("uploads")
 
 
 class SeedanceModel(str, Enum):
@@ -44,9 +38,6 @@ def _run_seedance(
     aspect_ratio: str,
     duration: int,
     generate_audio: bool,
-    mode: str,
-    first_frame_path: str | None,
-    last_frame_path: str | None,
     reference_image_paths: list[str],
     reference_video_paths: list[str],
     reference_audio_paths: list[str],
@@ -62,39 +53,26 @@ def _run_seedance(
         generate_audio=generate_audio,
     )
 
-    if mode == "frames":
-        kwargs["first_frame_url"] = client.upload_local_file(first_frame_path)
-        if last_frame_path:
-            kwargs["last_frame_url"] = client.upload_local_file(last_frame_path)
-    else:  # mode == "reference"
-        if reference_image_paths:
-            kwargs["reference_image_urls"] = [
-                client.upload_local_file(p) for p in reference_image_paths
-            ]
-        if reference_video_paths:
-            kwargs["reference_video_urls"] = [
-                client.upload_local_file(p) for p in reference_video_paths
-            ]
-        if reference_audio_paths:
-            kwargs["reference_audio_urls"] = [
-                client.upload_local_file(p) for p in reference_audio_paths
-            ]
+    if reference_image_paths:
+        kwargs["reference_image_urls"] = [
+            client.upload_local_file(p) for p in reference_image_paths
+        ]
+    if reference_video_paths:
+        kwargs["reference_video_urls"] = [
+            client.upload_local_file(p) for p in reference_video_paths
+        ]
+    if reference_audio_paths:
+        kwargs["reference_audio_urls"] = [
+            client.upload_local_file(p) for p in reference_audio_paths
+        ]
 
     out_path = client.generate_video_seedance2(**kwargs)
     return [{"name": out_path.name, "path": str(out_path)}]
 
 
-@router.get("")
-def form(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "seedance_form.html",
-        {"models": [m.value for m in SeedanceModel]},
-    )
-
-
 @router.post("/run")
 async def run(
+    request: Request,
     background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     prompt: str = Form(...),
@@ -102,10 +80,7 @@ async def run(
     resolution: str = Form("720p"),
     aspect_ratio: str = Form("16:9"),
     duration: int = Form(10),
-    generate_audio: bool = Form(True),
-    mode: str = Form(...),  # "frames" or "reference"
-    first_frame: UploadFile | None = File(None),
-    last_frame: UploadFile | None = File(None),
+    generate_audio: bool = Form(False),
     reference_images: list[UploadFile] = File(default=[]),
     reference_images_manifest: str = Form("[]"),
     reference_videos: list[UploadFile] = File(default=[]),
@@ -116,30 +91,17 @@ async def run(
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    job_dir = make_job_dir(UPLOAD_ROOT)
-
-    # first/last frame are single, non-reorderable slots -- no manifest needed,
-    # just save whatever was actually uploaded.
-    first_frame_path = (
-        save_upload(job_dir, first_frame)
-        if first_frame and first_frame.filename
-        else None
-    )
-    last_frame_path = (
-        save_upload(job_dir, last_frame) if last_frame and last_frame.filename else None
-    )
-
     # reference_* are ordered, reusable multi-file lists -- these go through
     # the manifest so previously-uploaded refs get reused by path instead of
     # re-uploaded.
     reference_image_paths = build_ordered_paths(
-        job_dir, reference_images_manifest, reference_images, ALLOWED_REF_ROOT
+        reference_images_manifest, reference_images, ASSETS_ROOT
     )
     reference_video_paths = build_ordered_paths(
-        job_dir, reference_videos_manifest, reference_videos, ALLOWED_REF_ROOT
+        reference_videos_manifest, reference_videos, ASSETS_ROOT
     )
     reference_audio_paths = build_ordered_paths(
-        job_dir, reference_audio_manifest, reference_audio, ALLOWED_REF_ROOT
+        reference_audio_manifest, reference_audio, ASSETS_ROOT
     )
 
     # api_key is intentionally excluded from the job's stored params -- it's
@@ -152,9 +114,20 @@ async def run(
         "aspect_ratio": aspect_ratio,
         "duration": duration,
         "generate_audio": generate_audio,
-        "mode": mode,
     }
-    job_id = create_job("seedance", params)
+    # Stored params also carry the reference paths, keyed by the form's
+    # picker field names -- that's what lets /generate's click-to-reuse
+    # restore them as "existing" picker entries (with previews) later.
+    job_id = create_job(
+        "seedance",
+        {
+            **params,
+            "reference_images": reference_image_paths,
+            "reference_videos": reference_video_paths,
+            "reference_audio": reference_audio_paths,
+        },
+        actor=request.session.get("role"),
+    )
     background_tasks.add_task(
         run_job,
         job_id,
@@ -162,26 +135,45 @@ async def run(
         {
             "api_key": api_key,
             **params,
-            "first_frame_path": first_frame_path,
-            "last_frame_path": last_frame_path,
             "reference_image_paths": reference_image_paths,
             "reference_video_paths": reference_video_paths,
             "reference_audio_paths": reference_audio_paths,
         },
     )
 
-    return RedirectResponse(url=f"/seedance/jobs/{job_id}", status_code=303)
+    return {"job_id": job_id}
 
 
 @router.get("/jobs/{job_id}")
 def job_status(request: Request, job_id: str):
     job = get_job(job_id)
     if job is None:
-        return templates.TemplateResponse(
-            request, "seedance_form.html", {}, status_code=404
-        )
-    attach_download_indexes(job)
-    return templates.TemplateResponse(request, "seedance_status.html", {"job": job})
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    assets = []
+    if job.get("status") == "done":
+        assets = [
+            asset_card(f["name"], idx, f"/seedance/files/{job_id}")
+            for idx, f in enumerate(job["result"])
+        ]
+
+    return templates.TemplateResponse(
+        request,
+        "job_status.html",
+        {
+            "job": job,
+            "assets": assets,
+            "title": "Seedance",
+            "pending_message": "Generating video… this can take a few minutes.",
+            "back_url": "/generate",
+            "back_label": "generate another",
+        },
+    )
+
+
+@router.get("/jobs/{job_id}/status")
+def job_status_json(job_id: str):
+    return job_status_payload(get_job(job_id), "/seedance/files")
 
 
 @router.get("/files/{job_id}/{index}")

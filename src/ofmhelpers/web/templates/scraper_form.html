@@ -3,7 +3,7 @@
 <h1>Profile Scraper</h1>
 <p>Upload a sheet with <code>INSTAGRAM_PROFILES</code> and <code>TIKTOK_PROFILES</code> columns.</p>
 
-<form method="post" action="/scraper/run" enctype="multipart/form-data">
+<form method="post" action="/helpers/scraper/run" enctype="multipart/form-data">
     <div class="field">
         <label>API keys (one per line — the client with the most credits is used)</label>
         <textarea name="api_keys" required placeholder="apify_api_xxx&#10;apify_api_yyy"></textarea>
@@ -28,9 +28,9 @@
 </form>
 
 <style>
-    .field { margin-bottom: 16px; }
-    .field label { display: block; margin-bottom: 4px; font-weight: bold; }
-    select, input[type="number"], input[type="file"], textarea { padding: 6px; width: 100%; box-sizing: border-box; }
+    /* .field / select+number sizing now live in static/css/app.css -- this
+       page intentionally overrides the dashed drop-zone file input style. */
+    input[type="file"] { padding: 6px; width: 100%; box-sizing: border-box; }
     textarea { min-height: 100px; resize: vertical; }
 </style>
 {% endblock %}

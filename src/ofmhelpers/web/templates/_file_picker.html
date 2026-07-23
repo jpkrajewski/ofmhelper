@@ -1,0 +1,12 @@
+{% macro file_picker(field, kind, label, help_text='') %}
+<div class="field file-picker" data-field="{{ field }}" data-kind="{{ kind }}">
+    <label>{{ label }}</label>
+    {% if help_text %}
+    <p class="picker-help">{{ help_text }}</p>
+    {% endif %}
+    <input type="file" accept="{{ kind }}/*" class="file-add-input">
+    <button type="button" class="ref-toggle">🗂 Reuse an uploaded {{ kind }}</button>
+    <div class="ref-browser" style="display:none"></div>
+    <ul class="file-order-list"></ul>
+</div>
+{% endmacro %}
