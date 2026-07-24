@@ -178,39 +178,23 @@ async def upload_asset(request: Request, todo_id: str, file: UploadFile = File(.
     return RedirectResponse(url="/todo", status_code=303)
 
 
-def _notify_discord_for_review(todo: dict) -> None:
-    """Sends the Discord webhook a VA/admin's asset upload triggers: the
-    asset itself, shown inline, plus a human-friendly, one-tap approval
-    link hidden behind masked markdown text (`[text](url)`) -- embeds
-    support that syntax, plain message content doesn't. Deliberately bare
-    of any todo id / filename / model name -- this is a glanceable phone
-    notification, not a debug log.
+_DIVIDER = "▬" * 30  # or "─" * 40, whichever reads cleaner in your server's font
 
-    Images use embed.image -- Discord fetches and renders the picture
-    directly, no URL ever shown. Video can't get that same treatment:
-    Discord's embed `video` field is only ever populated by Discord's
-    *own* link-crawler unfurling a *visible* URL typed in message content
-    -- a bot/webhook can't set it directly to force a playable video
-    embed. Confirmed by testing: a webhook message carrying the
-    /asset/preview URL (routers/approve.py's asset_preview -- a tiny HTML
-    page with Open Graph video tags, since a *direct* video file link is
-    itself unreliable for Discord's crawler) *alongside* the approval
-    embed did not get auto-unfurled, while a human retyping that exact
-    same link into its own plain message worked instantly. So for video,
-    the preview link goes out as its own separate webhook call with no
-    embeds attached at all -- reproducing the exact "plain link" message
-    shape Discord reliably unfurls -- while the header + approval button
-    go out as a first, separate call."""
-    base_url = os.environ["APP_BASE_URL"].rstrip(
-        "/"
-    )  # required -- fail loudly if unset
+
+def _notify_discord_for_review(todo: dict) -> None:
+    """..."""
+    base_url = os.environ["APP_BASE_URL"].rstrip("/")
     token = approval_tokens.create_token(todo["id"], todo["asset_path"])
     approve_url = f"{base_url}/approve/{token}"
     asset_url = f"{base_url}/approve/{token}/asset"
     preview_url = f"{asset_url}/preview"
 
     header = "📥 **New asset awaiting approval**"
-    approve_line = f"[✅ Approve & Upload to Google Drive]({approve_url})"
+    approve_line = (
+        f"[✅ Approve & Upload to Google Drive (CLICK THIS TO APPROVE)]({approve_url})"
+    )
+
+    send_webhook(_DIVIDER)  # separates this group from whatever came before
 
     if classify_kind(Path(todo["asset_path"]).name) == "image":
         send_webhook(
@@ -218,7 +202,7 @@ def _notify_discord_for_review(todo: dict) -> None:
         )
     else:
         send_webhook(
-            header, [{"description": f"{approve_line}\n\nCheck video below ⬇️⬇️⬇️"}]
+            header, [{"description": f"{approve_line}\n\nCheck video below ⬇️⬇️⬇️⬇️⬇️⬇️"}]
         )
         send_webhook(preview_url)
 
