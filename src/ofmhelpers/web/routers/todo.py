@@ -191,16 +191,22 @@ def _notify_discord_for_review(todo: dict) -> None:
     image) can't get that same treatment: Discord's embed `video` field is
     only ever populated by Discord's *own* link-crawler unfurling a
     *visible* URL typed in message content -- a bot/webhook can't set it
-    directly to force a playable video embed; there's no API-level way to
-    both auto-preview a video and hide its link. Showing the video inline
-    wins here, so the asset URL is posted bare in content for that case --
-    the approval link stays hidden either way."""
+    directly to force a playable video embed. Worse, a *direct* video file
+    link is notoriously unreliable for that crawler even when posted
+    bare -- Discord has longstanding, open bugs where the exact same valid
+    media URL intermittently just doesn't unfurl. Posting the
+    /asset/preview URL instead (routers/approve.py's asset_preview) -- a
+    tiny HTML page carrying Open Graph video tags -- is the standard
+    workaround self-hosted media tools use, since Discord's crawler reads
+    those tags reliably even when raw-file unfurling flakes. Either way,
+    the approval link stays hidden behind masked text."""
     base_url = os.environ["APP_BASE_URL"].rstrip(
         "/"
     )  # required -- fail loudly if unset
     token = approval_tokens.create_token(todo["id"], todo["asset_path"])
     approve_url = f"{base_url}/approve/{token}"
     asset_url = f"{base_url}/approve/{token}/asset"
+    preview_url = f"{asset_url}/preview"
 
     header = "📥 **New asset awaiting approval**"
     embed = {"description": f"[✅ Approve & Upload to Google Drive]({approve_url})"}
@@ -208,7 +214,7 @@ def _notify_discord_for_review(todo: dict) -> None:
         content = header
         embed["image"] = {"url": asset_url}
     else:
-        content = f"{header}\n\n{asset_url}"
+        content = f"{header}\n\n{preview_url}"
 
     send_webhook(content, [embed])
 

@@ -340,27 +340,27 @@ def test_asset_upload_sends_discord_notification_with_image_embedded(client):
     assert "url" not in embed
 
 
-def test_asset_upload_for_video_posts_bare_link_for_inline_preview(client):
-    """Discord's embed.video field is only ever populated by Discord's own
-    link-crawler when it unfurls a *visible* URL in message content -- a
-    bot/webhook can't set it directly to force a playable video embed.
-    Showing the video inline wins over hiding the link for this case, so
-    the asset URL is posted bare in content (the approval link still stays
-    hidden either way)."""
+def test_asset_upload_for_video_posts_bare_preview_link_for_inline_playback(client):
+    """A direct video/mp4 link is unreliable for Discord's webhook
+    link-crawler even when posted bare (longstanding Discord-side bugs).
+    The video branch must point at the /asset/preview HTML wrapper (Open
+    Graph video tags -- see routers/approve.py's asset_preview), not the
+    raw file, for a dependable inline player. The approve link stays
+    hidden behind masked text either way."""
     todo = todos.add_todo("Model A", "https://a", "", "admin")
     files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
     client.post(f"/todo/{todo['id']}/asset", files=files)
 
     content, embeds = todo_router.send_webhook.call_args[0]
     embed = embeds[0]
-    asset_url = content.splitlines()[-1]
-    assert asset_url.startswith("https://test.example/approve/")
-    assert asset_url.endswith("/asset")
+    preview_url = content.splitlines()[-1]
+    assert preview_url.startswith("https://test.example/approve/")
+    assert preview_url.endswith("/asset/preview")
     assert "image" not in embed
     # The approve link is still hidden behind masked text, never bare.
-    assert asset_url not in embed["description"]
+    assert preview_url not in embed["description"]
     assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
-        asset_url.removesuffix("/asset") + ")"
+        preview_url.removesuffix("/asset/preview") + ")"
     )
 
 

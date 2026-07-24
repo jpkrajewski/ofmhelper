@@ -10,10 +10,11 @@ off the Drive upload in one shot. Security comes from the token itself
 """
 
 import mimetypes
+import os
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from ofmhelpers.web import approval_tokens, todos
 from ofmhelpers.web.jobs import create_job, run_job
@@ -59,6 +60,46 @@ def view_asset(token: str):
 
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=media_type)
+
+
+@router.get("/{token}/asset/preview")
+def asset_preview(token: str):
+    """An HTML wrapper around the video, with Open Graph video tags, for
+    Discord to unfurl instead of the raw file link. Posting a direct
+    video/mp4 link is notoriously unreliable for Discord's webhook
+    link-crawler -- open, longstanding Discord-side bugs mean it
+    intermittently just doesn't generate an embed for an otherwise
+    perfectly valid direct media link, correct headers and all. Pointing
+    the crawler at an og:video/twitter:player HTML page instead is the
+    standard workaround self-hosted media tools use, since Discord reads
+    those tags reliably even when raw-file unfurling flakes."""
+    record = approval_tokens.get_token(token)
+    if record is None:
+        raise HTTPException(status_code=404, detail="This approval link is invalid.")
+
+    path = Path(record["asset_path"])
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Asset file no longer exists")
+
+    base_url = os.environ["APP_BASE_URL"].rstrip("/")
+    video_url = f"{base_url}/approve/{token}/asset"
+    media_type = mimetypes.guess_type(path.name)[0] or "video/mp4"
+
+    html = f"""<!doctype html>
+<html>
+<head>
+<meta property="og:type" content="video.other">
+<meta property="og:video" content="{video_url}">
+<meta property="og:video:secure_url" content="{video_url}">
+<meta property="og:video:type" content="{media_type}">
+<meta property="og:video:width" content="1280">
+<meta property="og:video:height" content="720">
+<meta property="twitter:card" content="player">
+<meta property="twitter:player" content="{video_url}">
+</head>
+<body></body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 @router.get("/{token}")

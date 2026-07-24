@@ -95,6 +95,35 @@ def test_anonymous_can_view_asset_preview_with_no_session(client, anon_client):
     assert r.content == b"the actual bytes"
 
 
+def test_asset_preview_page_carries_og_video_tags_pointing_at_the_asset(
+    client, anon_client
+):
+    """The /asset/preview HTML wrapper (see routers/approve.py's
+    asset_preview) is what Discord's crawler is pointed at for video
+    assets instead of the raw file -- it needs Open Graph video tags
+    pointing back at the real /asset URL for Discord to build a playable
+    embed from."""
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+
+    approve_url = _approve_url_for(todo["id"])
+    token_path = approve_url.replace("https://test.example", "")
+    video_url = f"https://test.example{token_path}/asset"
+
+    r = anon_client.get(f"{token_path}/asset/preview")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert f'content="{video_url}"' in r.text
+    assert 'property="og:video"' in r.text
+    assert 'property="twitter:player"' in r.text
+
+
+def test_asset_preview_404s_for_unknown_token(anon_client):
+    r = anon_client.get("/approve/not-a-real-token/asset/preview")
+    assert r.status_code == 404
+
+
 def test_reusing_the_same_link_fails_the_second_time(client, anon_client):
     todo = todos.add_todo("Model A", "https://a", "", "admin")
     _upload_asset(client, todo["id"])
