@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Replicate — Clone a Reel</h1>
+<p>Paste a reel link (or upload the file), pick a shape/look, and get back an editable
+Seedance 2.0 script with your character dropped in.</p>
+
+<form id="replicate-intake-form" method="post" action="/replicate/intake" enctype="multipart/form-data">
+    <div class="field">
+        <label>Reel URL</label>
+        <input type="url" name="source_url" placeholder="https://www.tiktok.com/... or a Reels/Shorts link">
+    </div>
+
+    <div class="field">
+        <label>...or upload the file directly (use this if the platform blocks downloads)</label>
+        <input type="file" name="source_file" accept="video/*">
+    </div>
+
+    <div class="field">
+        <label>Shape</label>
+        <select name="shape">
+            {% for key, shape in shapes.items() %}
+            <option value="{{ key }}" {% if key == "solo_monologue" %}selected{% endif %}>{{ shape_labels[key] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Look (camera / lens)</label>
+        <select name="look">
+            {% for key, look in looks.items() %}
+            <option value="{{ key }}" {% if key == "phone_selfie" %}selected{% endif %}>{{ look.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="field">
+        <label>Gender</label>
+        <select name="gender">
+            {% for key, g in genders.items() %}
+            <option value="{{ key }}" {% if key == "female" %}selected{% endif %}>{{ g.label|capitalize }} ({{ g.noun }}, {{ g.tag }})</option>
+            {% endfor %}
+        </select>
+        <p class="picker-help">Picks pronouns and voice register (SHE/HE/THEY) in the timeline. Never describes appearance — identity always comes from your reference images.</p>
+    </div>
+
+    <div class="field">
+        <label>Target / persona (optional)</label>
+        <input type="text" name="target" placeholder="e.g. confident fitness coach pitching a program, girl-next-door CTA, dominant tone">
+        <p class="picker-help">Steers dialogue TONE and delivery only — never physical appearance (identity always comes from your reference images).</p>
+    </div>
+
+    <div class="field">
+        <label>Duration (seconds)</label>
+        <input type="number" name="duration" value="15" min="4" max="15">
+    </div>
+
+    <div class="field">
+        <label>Script writer</label>
+        <select name="llm_provider">
+            <option value="template" selected>Template (free, deterministic, no vision)</option>
+            <option value="groq">Groq (free-tier, dialogue punch-up only — no vision)</option>
+            <option value="gemini">Gemini (free-tier, real vision — watches the reel)</option>
+            <option value="anthropic">Claude API (paid, best quality, vision)</option>
+        </select>
+    </div>
+
+    <button type="submit">Analyze reel</button>
+    <div class="generation-status"></div>
+</form>
+
+<script>
+document.getElementById('replicate-intake-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const statusEl = form.querySelector('.generation-status');
+    const btn = form.querySelector('button[type="submit"]');
+    const formData = new FormData(form);
+    const file = formData.get('source_file');
+
+    if (!formData.get('source_url').trim() && !(file && file.size)) {
+        statusEl.textContent = 'Paste a reel URL or upload a file.';
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = 'Starting intake — downloading, extracting frames, transcribing…';
+
+    fetch(form.action, { method: 'POST', body: formData })
+        .then(async (r) => {
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.detail || 'Request failed.');
+            window.location = `/replicate/jobs/${data.job_id}`;
+        })
+        .catch((err) => {
+            statusEl.textContent = err.message;
+            btn.disabled = false;
+        });
+});
+</script>
+{% endblock %}

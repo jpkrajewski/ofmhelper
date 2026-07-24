@@ -27,12 +27,14 @@ TASK_LABELS = {
     "kling3": "Kling 3.0",
     "nanobanana": "Nano Banana Pro",
     "fake_ai": "Fake AI Model",
+    "replicate": "Replicate (Reel Clone)",
 }
 FILES_PREFIX = {
     "seedance": "/seedance/files",
     "kling3": "/kling3/files",
     "nanobanana": "/nanobanana/files",
     "fake_ai": "/fake-ai/files",
+    "replicate": "/replicate/files",
 }
 
 

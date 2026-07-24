@@ -17,6 +17,7 @@
             {% set is_admin = request.session.get("role") == "admin" %}
             {% set nav_items = [
                 ("/generate", "✨ Generate AI Assets"),
+                ("/replicate", "🎬 Replicate"),
                 ("/download-assets", "⬇ Download Assets"),
                 ("/todo", "☑ Todo"),
                 ("/helpers", "Helpers"),
