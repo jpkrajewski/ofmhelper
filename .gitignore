@@ -14,3 +14,5 @@ kieai_out
 out
 secrets
 downloads
+CLAUDE.local.md
+deploy.local.env
