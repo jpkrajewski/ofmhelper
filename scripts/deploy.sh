@@ -44,7 +44,8 @@ ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
 echo "== health check =="
 for i in 1 2 3 4 5; do
   status=$(ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
-    "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" || echo "000")
+    "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" 2>/dev/null)
+  status="${status:-000}"
   if [ "$status" = "200" ]; then
     echo "Health check OK (200)"
     exit 0
