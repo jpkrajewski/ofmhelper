@@ -180,16 +180,21 @@ async def upload_asset(request: Request, todo_id: str, file: UploadFile = File(.
 
 def _notify_discord_for_review(todo: dict) -> None:
     """Sends the Discord webhook a VA/admin's asset upload triggers: the
-    asset's own served URL, bare and alone on its own line in the message
-    *content*, so Discord's own link-unfurling generates the image/video
-    preview automatically (works the same for either kind -- no need to
-    branch on file type). Discord's plain message content has no
-    masked-link markdown, so the human-friendly "Approve & Upload to
-    Google Drive" action can only render as clickable text (rather than a
-    bare, scary-looking token URL) inside an embed's description, which
-    *does* support `[text](url)` links. Deliberately bare of any todo id /
-    filename / model name -- this is a glanceable phone notification, not a
-    debug log."""
+    asset itself, shown inline, plus a human-friendly, one-tap approval
+    link hidden behind masked markdown text (`[text](url)`) -- embeds
+    support that syntax, plain message content doesn't. Deliberately bare
+    of any todo id / filename / model name -- this is a glanceable phone
+    notification, not a debug log.
+
+    Images use embed.image -- Discord fetches and renders the picture
+    directly, no URL ever shown. Video (and anything else that isn't an
+    image) can't get that same treatment: Discord's embed `video` field is
+    only ever populated by Discord's *own* link-crawler unfurling a
+    *visible* URL typed in message content -- a bot/webhook can't set it
+    directly to force a playable video embed; there's no API-level way to
+    both auto-preview a video and hide its link. Showing the video inline
+    wins here, so the asset URL is posted bare in content for that case --
+    the approval link stays hidden either way."""
     base_url = os.environ["APP_BASE_URL"].rstrip(
         "/"
     )  # required -- fail loudly if unset
@@ -197,8 +202,14 @@ def _notify_discord_for_review(todo: dict) -> None:
     approve_url = f"{base_url}/approve/{token}"
     asset_url = f"{base_url}/approve/{token}/asset"
 
-    content = f"📥 **New asset awaiting approval**\n\n{asset_url}"
+    header = "📥 **New asset awaiting approval**"
     embed = {"description": f"[✅ Approve & Upload to Google Drive]({approve_url})"}
+    if classify_kind(Path(todo["asset_path"]).name) == "image":
+        content = header
+        embed["image"] = {"url": asset_url}
+    else:
+        content = f"{header}\n\n{asset_url}"
+
     send_webhook(content, [embed])
 
 

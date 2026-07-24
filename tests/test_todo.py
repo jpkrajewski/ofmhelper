@@ -309,12 +309,12 @@ def test_va_can_attach_asset_and_it_shows_up_with_preview(client, va_client):
     assert f"/todo/{todo['id']}/asset" in html
 
 
-def test_asset_upload_sends_discord_notification_with_approve_link(client):
-    """Covers _notify_discord_for_review: every asset upload must send
-    exactly one Discord webhook whose content is just the bare asset URL
-    (so Discord auto-embeds the preview) and whose embed hides the approval
-    link behind human-friendly text -- no todo id, filename, or raw
-    approval URL visible."""
+def test_asset_upload_sends_discord_notification_with_image_embedded(client):
+    """Covers _notify_discord_for_review for images: the picture must
+    render directly via embed.image (Discord fetches and displays it, no
+    visible URL text) and the approval link must be hidden behind
+    human-friendly masked text -- no todo id, filename, or raw URL visible
+    anywhere in the message."""
     todo = todos.add_todo("Model A", "https://a", "", "admin")
     files = {"file": ("ready.png", b"fake image bytes", "image/png")}
     r = client.post(f"/todo/{todo['id']}/asset", files=files, follow_redirects=False)
@@ -329,28 +329,39 @@ def test_asset_upload_sends_discord_notification_with_approve_link(client):
     assert "ready.png" not in content
     assert "ready.png" not in embed["description"]
 
-    assert content.count("https://test.example/approve/") == 1
-    asset_url = content.splitlines()[-1]
-    assert asset_url.endswith("/asset")
+    assert "http" not in content  # header text only, no raw link
+    assert embed["image"]["url"].startswith("https://test.example/approve/")
+    assert embed["image"]["url"].endswith("/asset")
 
     assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
-        asset_url.removesuffix("/asset") + ")"
+        embed["image"]["url"].removesuffix("/asset") + ")"
     )
     assert "title" not in embed
     assert "url" not in embed
-    assert "image" not in embed
 
 
-def test_asset_upload_notification_same_shape_for_video(client):
-    """No file-type branching needed -- Discord's link unfurling previews
-    both images and videos from a bare content URL the same way."""
+def test_asset_upload_for_video_posts_bare_link_for_inline_preview(client):
+    """Discord's embed.video field is only ever populated by Discord's own
+    link-crawler when it unfurls a *visible* URL in message content -- a
+    bot/webhook can't set it directly to force a playable video embed.
+    Showing the video inline wins over hiding the link for this case, so
+    the asset URL is posted bare in content (the approval link still stays
+    hidden either way)."""
     todo = todos.add_todo("Model A", "https://a", "", "admin")
     files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
     client.post(f"/todo/{todo['id']}/asset", files=files)
 
     content, embeds = todo_router.send_webhook.call_args[0]
-    assert content.splitlines()[-1].startswith("https://test.example/approve/")
-    assert "image" not in embeds[0]
+    embed = embeds[0]
+    asset_url = content.splitlines()[-1]
+    assert asset_url.startswith("https://test.example/approve/")
+    assert asset_url.endswith("/asset")
+    assert "image" not in embed
+    # The approve link is still hidden behind masked text, never bare.
+    assert asset_url not in embed["description"]
+    assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
+        asset_url.removesuffix("/asset") + ")"
+    )
 
 
 def test_asset_upload_fails_loudly_when_discord_send_fails(client, monkeypatch):
