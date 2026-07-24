@@ -10,7 +10,6 @@ otherwise still POST straight to these endpoints.
 
 import json
 import mimetypes
-import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +25,7 @@ from fastapi import (
 )
 from fastapi.responses import RedirectResponse, Response, FileResponse
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import require_admin, ROLE_ADMIN
 from ofmhelpers.web import todos, approval_tokens
@@ -183,7 +183,10 @@ _DIVIDER = "▬" * 30  # or "─" * 40, whichever reads cleaner in your server's
 
 def _notify_discord_for_review(todo: dict) -> None:
     """..."""
-    base_url = os.environ["APP_BASE_URL"].rstrip("/")
+    app_base_url = settings.web.app_base_url
+    if app_base_url is None:
+        raise KeyError("APP_BASE_URL")
+    base_url = app_base_url.rstrip("/")
     token = approval_tokens.create_token(todo["id"], todo["asset_path"])
     approve_url = f"{base_url}/approve/{token}"
     asset_url = f"{base_url}/approve/{token}/asset"

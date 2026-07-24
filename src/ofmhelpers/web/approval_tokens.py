@@ -16,14 +16,15 @@ guards against for the Drive-upload job.
 from __future__ import annotations
 
 import json
-import os
 import secrets
 import time
 from pathlib import Path
 
-STORE_FILE = Path(os.getenv("OFM_APPROVAL_TOKENS_FILE", "uploads/approval_tokens.json"))
+from ofmhelpers.config import settings
 
-TOKEN_TTL_SECONDS = 3 * 24 * 3600  # 3 days
+STORE_FILE = Path(settings.web.approval_tokens_file)
+
+TOKEN_TTL_SECONDS = settings.web.approval_token_ttl_seconds  # 3 days
 
 
 def _load() -> list[dict]:

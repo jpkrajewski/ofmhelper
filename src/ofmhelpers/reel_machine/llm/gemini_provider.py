@@ -21,9 +21,9 @@ the Gemini API.
 """
 
 import json
-import os
 from pathlib import Path
 
+from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
 from ofmhelpers.reel_machine.llm.groq_provider import (
     ANALYZE_SYSTEM_PROMPT,
@@ -39,8 +39,11 @@ class GeminiProvider:
     name = "gemini"
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
-        self.api_key = api_key or os.environ["GEMINI_API_KEY"]
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+        s = settings.reel_machine
+        self.api_key = api_key or s.gemini_api_key
+        if self.api_key is None:
+            raise KeyError("GEMINI_API_KEY")
+        self.model = model or s.gemini_model
 
     def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict:
         from google import genai

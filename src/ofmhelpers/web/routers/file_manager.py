@@ -7,13 +7,13 @@ their job, so the whole router is gated via require_admin instead of
 individual routes.
 """
 
-import os
 import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import require_admin
 
@@ -29,7 +29,7 @@ router = APIRouter(
 ROOTS = {
     "uploads": Path("uploads").resolve(),
     "downloads": Path("downloads").resolve(),
-    "kieai_out": Path(os.getenv("OFM_KIEAI_OUT_DIR", "kieai_out")).resolve(),
+    "kieai_out": Path(settings.kieai.out_dir).resolve(),
 }
 DEFAULT_ROOT = "uploads"
 

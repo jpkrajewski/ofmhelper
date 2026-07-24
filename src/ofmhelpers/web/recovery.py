@@ -15,18 +15,19 @@ nothing is re-checked forever.
 """
 
 import asyncio
-import os
 import traceback
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.config import settings
 
-SWEEP_INTERVAL_S = 300
+SWEEP_INTERVAL_S = settings.web.recovery_sweep_interval_s
 
 
 def _configured_keys() -> list[str]:
+    s = settings.web
     keys = []
-    for var in ("KIE_AI_API_KEY_ADMIN", "KIE_AI_API_KEY_VA"):
-        key = os.getenv(var, "").strip()
+    for key in (s.kie_ai_api_key_admin, s.kie_ai_api_key_va):
+        key = (key or "").strip()
         if key and key not in keys:
             keys.append(key)
     return keys

@@ -1,10 +1,10 @@
 # ofmhelpers/web/routers/cookies.py
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/cookies", tags=["admin"])
@@ -19,7 +19,7 @@ def form(request: Request, uploaded: bool = False):
 
 @router.post("")
 async def upload_cookies(file: UploadFile):
-    dest = Path(os.getenv("OFM_COOKIES_FILE", "cookies/cookies.txt"))
+    dest = Path(settings.downloaders.cookies_file)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(await file.read())
     return RedirectResponse(url="/cookies?uploaded=1", status_code=303)

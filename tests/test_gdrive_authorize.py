@@ -6,6 +6,7 @@ real browser or talks to Google.
 
 import unittest.mock as mock
 
+from ofmhelpers.config import settings
 from ofmhelpers.gdrive import authorize
 
 
@@ -31,7 +32,7 @@ def test_main_uses_default_paths_and_writes_token_file(tmp_path, monkeypatch):
         authorize.main()
 
     from_secrets.assert_called_once_with(
-        authorize.DEFAULT_CLIENT_FILE, authorize.SCOPES
+        settings.gdrive.oauth_client_file, authorize.SCOPES
     )
     fake_flow.run_local_server.assert_called_once_with(port=0)
 

@@ -17,7 +17,6 @@ for reference uploads (task_helpers.ASSETS_ROOT) -- so this is a genuine
 stand-in for the real upload/output plumbing, not a separate code path.
 """
 
-import os
 import subprocess
 import time
 import uuid
@@ -34,6 +33,7 @@ from fastapi import (
 )
 from PIL import Image, ImageDraw
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
 from ofmhelpers.web.routers.task_helpers import (
@@ -49,8 +49,9 @@ router = APIRouter(prefix="/fake-ai", tags=["fake-ai"])
 
 # Same env var + same default KieAIClient.from_env uses -- fake generations
 # land right alongside real ones, not in a separate folder.
-OUT_DIR = Path(os.getenv("OFM_KIEAI_OUT_DIR", "/app/kieai_out"))
-VIDEO_DURATION_SECONDS = 3
+_kieai_settings = settings.kieai
+OUT_DIR = Path(_kieai_settings.out_dir)
+VIDEO_DURATION_SECONDS = _kieai_settings.fake_ai_video_duration_seconds
 
 
 def _build_frame(prompt: str) -> Image.Image:

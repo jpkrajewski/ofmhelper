@@ -12,6 +12,7 @@ import json
 
 from fastapi import APIRouter, Request
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import list_jobs
 from ofmhelpers.web.auth import get_kie_api_key
@@ -20,7 +21,7 @@ from ofmhelpers.web.routers.task_helpers import asset_card
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
-GALLERY_LIMIT = 20
+GALLERY_LIMIT = settings.web.gallery_limit
 
 TASK_LABELS = {
     "seedance": "Seedance 2.0",

@@ -11,12 +11,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.intake import Transcript
 
 # A gap this long or longer between two words marks a beat boundary -- this
 # is the same "word-level gaps are the pause structure" idea the original
 # reel-intake skill used to find the pacing/beat map.
-BEAT_GAP_S = 0.5
+BEAT_GAP_S = settings.reel_machine.beat_gap_s
 
 
 @dataclass

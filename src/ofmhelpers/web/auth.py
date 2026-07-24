@@ -7,12 +7,12 @@ every request. New routers need zero changes -- they're protected the
 moment they're mounted on `app`, because this runs before routing.
 """
 
-import os
-
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
+
+from ofmhelpers.config import settings
 
 # The two roles the shared passwords resolve to -- centralized here so every
 # role check in the app compares against these instead of a hand-typed
@@ -61,10 +61,13 @@ def check_password(candidate: str) -> str | None:
     """
     import hmac
 
-    admin_password = os.environ[
-        "APP_PASSWORD_ADMIN"
-    ]  # required -- fail loudly if unset
-    va_password = os.environ["APP_PASSWORD_VA"]  # required -- fail loudly if unset
+    s = settings.web
+    if s.app_password_admin is None:
+        raise KeyError("APP_PASSWORD_ADMIN")  # required -- fail loudly if unset
+    if s.app_password_va is None:
+        raise KeyError("APP_PASSWORD_VA")  # required -- fail loudly if unset
+    admin_password = s.app_password_admin
+    va_password = s.app_password_va
 
     if hmac.compare_digest(candidate, admin_password):
         return ROLE_ADMIN
@@ -81,8 +84,9 @@ def get_kie_api_key(request: Request) -> str:
     before roles existed.
     """
     role = request.session.get("role")
-    env_var = "KIE_AI_API_KEY_ADMIN" if role == ROLE_ADMIN else "KIE_AI_API_KEY_VA"
-    return os.getenv(env_var, "")
+    s = settings.web
+    key = s.kie_ai_api_key_admin if role == ROLE_ADMIN else s.kie_ai_api_key_va
+    return key or ""
 
 
 def require_admin(request: Request) -> None:

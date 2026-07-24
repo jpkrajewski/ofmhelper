@@ -1,5 +1,4 @@
 import json
-import os
 import pathlib
 import time
 from typing import Callable
@@ -7,6 +6,7 @@ from typing import Callable
 import requests
 
 from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
+from ofmhelpers.config import settings
 
 
 class KieAIClient:
@@ -21,7 +21,7 @@ class KieAIClient:
     # How long resume_pending keeps retrying a pending task before writing
     # it off. kie.ai's result URLs are only reliably valid ~24h, so anything
     # older than this is unrecoverable anyway.
-    RESUME_MAX_AGE_S = 48 * 3600
+    RESUME_MAX_AGE_S = settings.kieai.resume_max_age_s
 
     def __init__(
         self,
@@ -464,14 +464,11 @@ class KieAIClient:
 
     @classmethod
     def from_env(cls, api_key):
+        s = settings.kieai
         return cls(
             api_key=api_key,
-            out_dir=os.getenv("OFM_KIEAI_OUT_DIR", "/app/kieai_out"),
-            task_log=os.getenv("OFM_KIEAI_TASK_LOG", "/app/kieai_out/tasks.jsonl"),
-            completions_log=os.getenv(
-                "OFM_KIEAI_COMPLETIONS_LOG", "/app/kieai_out/completions.jsonl"
-            ),
-            resolved_log=os.getenv(
-                "OFM_KIEAI_RESOLVED_LOG", "/app/kieai_out/resolved.jsonl"
-            ),
+            out_dir=s.out_dir,
+            task_log=s.task_log,
+            completions_log=s.completions_log,
+            resolved_log=s.resolved_log,
         )

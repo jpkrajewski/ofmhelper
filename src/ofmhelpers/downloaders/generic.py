@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
 
 
@@ -13,7 +13,7 @@ def _default_extra_ydl_opts() -> dict:
     over the Docker network, if BGUTIL_POT_PROVIDER_URL is set. Without this,
     the plugin defaults to 127.0.0.1:4416, which inside Docker means "this
     container," not the separate pot-provider service."""
-    pot_url = os.getenv("BGUTIL_POT_PROVIDER_URL")
+    pot_url = settings.downloaders.bgutil_pot_provider_url
     if not pot_url:
         return {}
     return {"extractor_args": {"youtubepot-bgutilhttp": {"base_url": [pot_url]}}}
@@ -38,7 +38,7 @@ class DownloadConfig:
     # actually has a real Firefox profile, i.e. NOT inside Docker. Set via
     # env var if you need it for local/non-container use.
     cookies_from_browser: str | None = field(
-        default_factory=lambda: os.getenv("OFM_COOKIES_FROM_BROWSER")
+        default_factory=lambda: settings.downloaders.cookies_from_browser
     )
 
     # TikTok downloads only — re-encode to H.264/AAC (fixes tools that

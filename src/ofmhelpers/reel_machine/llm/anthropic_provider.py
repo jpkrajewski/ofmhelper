@@ -13,9 +13,9 @@ Requires ANTHROPIC_API_KEY and the optional `anthropic` package:
 
 import base64
 import json
-import os
 from pathlib import Path
 
+from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
 from ofmhelpers.reel_machine.llm.groq_provider import (
     ANALYZE_SYSTEM_PROMPT,
@@ -31,7 +31,9 @@ class AnthropicProvider:
     name = "anthropic"
 
     def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-5"):
-        self.api_key = api_key or os.environ["ANTHROPIC_API_KEY"]
+        self.api_key = api_key or settings.reel_machine.anthropic_api_key
+        if self.api_key is None:
+            raise KeyError("ANTHROPIC_API_KEY")
         self.model = model
 
     def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict:

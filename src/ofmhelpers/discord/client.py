@@ -6,9 +6,9 @@ Nothing else (no bot, no gateway connection) -- that's all this app needs.
 See https://discord.com/developers/docs/resources/webhook#execute-webhook.
 """
 
-import os
-
 import requests
+
+from ofmhelpers.config import settings
 
 
 def send_webhook(content: str, embeds: list[dict] | None = None) -> None:
@@ -27,7 +27,9 @@ def send_webhook(content: str, embeds: list[dict] | None = None) -> None:
     produces -- unfurls reliably. See routers/todo.py's
     _notify_discord_for_review, which relies on this by sending the asset
     preview link in its own call with no embeds attached."""
-    url = os.environ["DISCORD_WEBHOOK_URL"]
+    url = settings.discord.webhook_url
+    if url is None:
+        raise KeyError("DISCORD_WEBHOOK_URL")
     payload = {"content": content}
     if embeds:
         payload["embeds"] = embeds

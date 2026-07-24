@@ -18,19 +18,18 @@ That client file itself is only needed for this one-time run, never on the
 server -- the saved token embeds what's needed to refresh itself.
 """
 
-import os
 from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-from ofmhelpers.gdrive.client import SCOPES, DEFAULT_TOKEN_FILE
-
-DEFAULT_CLIENT_FILE = "secrets/google-oauth-client.json"
+from ofmhelpers.config import settings
+from ofmhelpers.gdrive.client import SCOPES
 
 
 def main() -> None:
-    client_file = os.getenv("GOOGLE_OAUTH_CLIENT_FILE", DEFAULT_CLIENT_FILE)
-    token_file = Path(os.getenv("GOOGLE_DRIVE_TOKEN_FILE", DEFAULT_TOKEN_FILE))
+    s = settings.gdrive
+    client_file = s.oauth_client_file
+    token_file = Path(s.token_file)
 
     flow = InstalledAppFlow.from_client_secrets_file(client_file, SCOPES)
     creds = flow.run_local_server(port=0)

@@ -17,7 +17,6 @@ At runtime this module only ever reads that token file and, when it's
 expired, refreshes it silently -- no browser involved after the first time.
 """
 
-import os
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -25,19 +24,15 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+from ofmhelpers.config import settings
+
 # drive.file: only sees/manages files this app itself created -- narrower
 # than the full "drive" scope, so a leaked token can't read the rest of Drive.
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
-# Same convention as OFM_COOKIES_FILE/OFM_TODO_FILE elsewhere in this app --
-# an env var override with a default that matches where the token actually
-# lives (secrets/ is gitignored; see docker-compose.yml for how it's mounted
-# into the container at the same relative path).
-DEFAULT_TOKEN_FILE = "secrets/google-drive-token.json"
-
 
 def _get_credentials() -> Credentials:
-    token_file = Path(os.getenv("GOOGLE_DRIVE_TOKEN_FILE", DEFAULT_TOKEN_FILE))
+    token_file = Path(settings.gdrive.token_file)
     if not token_file.is_file():
         raise FileNotFoundError(
             f"No Google Drive token at '{token_file}' -- run "
@@ -62,7 +57,9 @@ def upload_file(local_path: str | Path, folder_id: str | None = None) -> str:
     """Uploads local_path to the given (or GOOGLE_DRIVE_FOLDER_ID) Drive
     folder. Returns the new file's Drive id."""
     local_path = Path(local_path)
-    folder_id = folder_id or os.environ["GOOGLE_DRIVE_FOLDER_ID"]
+    folder_id = folder_id or settings.gdrive.folder_id
+    if folder_id is None:
+        raise KeyError("GOOGLE_DRIVE_FOLDER_ID")
 
     service = _get_service()
     metadata = {"name": local_path.name, "parents": [folder_id]}

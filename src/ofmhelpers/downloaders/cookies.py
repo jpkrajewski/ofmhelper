@@ -1,7 +1,8 @@
-import os
 from pathlib import Path
 
-COOKIES_FILE = Path(os.getenv("OFM_COOKIES_FILE", "cookies/cookies.txt"))
+from ofmhelpers.config import settings
+
+COOKIES_FILE = Path(settings.downloaders.cookies_file)
 
 
 def get_cookiefile() -> str | None:

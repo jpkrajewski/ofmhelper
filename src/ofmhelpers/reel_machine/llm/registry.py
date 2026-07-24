@@ -8,8 +8,7 @@ provider that starts working (network hiccup mid-call) is still handled by
 pipeline.draft_script's own try/except around the actual call.
 """
 
-import os
-
+from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.llm.base import LLMProvider
 from ofmhelpers.reel_machine.llm.template_provider import TemplateProvider
 
@@ -17,7 +16,7 @@ PROVIDER_NAMES = ("template", "groq", "gemini", "anthropic")
 
 
 def get_provider(name: str | None = None) -> LLMProvider:
-    name = name or os.getenv("REEL_MACHINE_LLM_PROVIDER", "template")
+    name = name or settings.reel_machine.llm_provider
     if name not in PROVIDER_NAMES:
         name = "template"
 

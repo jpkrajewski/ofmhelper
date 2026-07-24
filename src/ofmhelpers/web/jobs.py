@@ -16,20 +16,21 @@ this file for a real DB -- nothing else changes.
 """
 
 import json
-import os
 import time
 import traceback
 import uuid
 from pathlib import Path
 
+from ofmhelpers.config import settings
+
 JOBS: dict[str, dict] = {}
 
-STORE_FILE = Path(os.getenv("OFM_JOBS_FILE", "uploads/jobs.json"))
+STORE_FILE = Path(settings.web.jobs_file)
 
 # Keep the persisted history from growing forever now that it survives
 # restarts -- without a cap, a handful of VAs generating for months would
 # leave thousands of dead rows in the file and on the Action log page.
-MAX_JOBS = 500
+MAX_JOBS = settings.web.max_jobs
 
 
 def load_jobs() -> None:

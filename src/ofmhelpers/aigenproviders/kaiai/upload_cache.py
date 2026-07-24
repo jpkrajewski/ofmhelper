@@ -26,7 +26,9 @@ from __future__ import annotations
 import threading
 from collections import OrderedDict
 
-MAX_ENTRIES = 100
+from ofmhelpers.config import settings
+
+MAX_ENTRIES = settings.kieai.upload_cache_max_entries
 
 
 class UploadCache:

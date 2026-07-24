@@ -12,12 +12,13 @@ change.
 from __future__ import annotations
 
 import json
-import os
 import time
 import uuid
 from pathlib import Path
 
-STORE_FILE = Path(os.getenv("OFM_TODO_FILE", "uploads/todos.json"))
+from ofmhelpers.config import settings
+
+STORE_FILE = Path(settings.web.todo_file)
 
 
 def _load() -> list[dict]:

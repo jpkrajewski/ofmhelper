@@ -1,0 +1,158 @@
+"""
+Centralized scalar configuration (pydantic-settings). Single source of
+truth for every env-var name/type/default in this app. Business/domain
+data (SHAPES, LOOKS, GENDERS, TASK_LABELS, SCRAPRES_REGISTRY, PUBLIC_PATHS,
+ROLE_ADMIN/VA, etc.) is NOT here -- see each owning module.
+
+Grouped by subsystem rather than one flat class, and consumed via
+`ofmhelpers.config.settings` (see config/__init__.py) whose group
+properties construct their class fresh on every access. Never cache a
+group instance across a monkeypatch boundary in a test, and never build a
+module-level singleton of one of these classes directly -- see
+config/__init__.py's docstring for why.
+"""
+
+from __future__ import annotations
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class SessionSettings(BaseSettings):
+    """Only ever constructed by web/main.py, at app-construction time.
+    Deliberately its own class -- SESSION_SECRET is the one truly-required
+    (no default) field in this app; keeping it isolated means no unrelated
+    settings class construction (WebSettings, LLMSettings, ...) can ever
+    fail because of it."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    session_secret: str
+    session_https_only: bool = False
+
+
+class WebSettings(BaseSettings):
+    """auth.py, recovery.py, jobs.py, todos.py, approval_tokens.py,
+    routers/todo.py, routers/approve.py, routers/generate.py,
+    routers/download_assets.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    app_password_admin: str | None = None
+    app_password_va: str | None = None
+    kie_ai_api_key_admin: str | None = None
+    kie_ai_api_key_va: str | None = None
+    app_base_url: str | None = None
+
+    jobs_file: str = Field(
+        default="uploads/jobs.json", validation_alias="OFM_JOBS_FILE"
+    )
+    todo_file: str = Field(
+        default="uploads/todos.json", validation_alias="OFM_TODO_FILE"
+    )
+    approval_tokens_file: str = Field(
+        default="uploads/approval_tokens.json",
+        validation_alias="OFM_APPROVAL_TOKENS_FILE",
+    )
+
+    max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
+    recovery_sweep_interval_s: int = Field(
+        default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
+    )
+    approval_token_ttl_seconds: int = Field(
+        default=3 * 24 * 3600, validation_alias="OFM_APPROVAL_TOKEN_TTL_SECONDS"
+    )
+    gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
+
+
+class KieAISettings(BaseSettings):
+    """aigenproviders/kaiai/client.py, upload_cache.py, routers/fake_ai.py,
+    routers/file_manager.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    out_dir: str = Field(default="/app/kieai_out", validation_alias="OFM_KIEAI_OUT_DIR")
+    task_log: str = Field(
+        default="/app/kieai_out/tasks.jsonl", validation_alias="OFM_KIEAI_TASK_LOG"
+    )
+    completions_log: str = Field(
+        default="/app/kieai_out/completions.jsonl",
+        validation_alias="OFM_KIEAI_COMPLETIONS_LOG",
+    )
+    resolved_log: str = Field(
+        default="/app/kieai_out/resolved.jsonl",
+        validation_alias="OFM_KIEAI_RESOLVED_LOG",
+    )
+    resume_max_age_s: int = Field(
+        default=48 * 3600, validation_alias="OFM_KIEAI_RESUME_MAX_AGE_S"
+    )
+    upload_cache_max_entries: int = Field(
+        default=100, validation_alias="OFM_KIEAI_UPLOAD_CACHE_MAX_ENTRIES"
+    )
+    fake_ai_video_duration_seconds: int = Field(
+        default=3, validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS"
+    )
+
+
+class DownloadersSettings(BaseSettings):
+    """downloaders/cookies.py, downloaders/generic.py, routers/cookies.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    cookies_file: str = Field(
+        default="cookies/cookies.txt", validation_alias="OFM_COOKIES_FILE"
+    )
+    bgutil_pot_provider_url: str | None = None
+    cookies_from_browser: str | None = Field(
+        default=None, validation_alias="OFM_COOKIES_FROM_BROWSER"
+    )
+
+
+class DiscordSettings(BaseSettings):
+    """discord/client.py. Constructed fresh, every call, inside
+    send_webhook() -- see tests/test_discord_client.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    webhook_url: str | None = Field(
+        default=None, validation_alias="DISCORD_WEBHOOK_URL"
+    )
+
+
+class ReelMachineSettings(BaseSettings):
+    """reel_machine/llm/*.py, reel_machine/intake.py, reel_machine/teardown.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    llm_provider: str = Field(
+        default="template", validation_alias="REEL_MACHINE_LLM_PROVIDER"
+    )
+    anthropic_api_key: str | None = None
+    groq_api_key: str | None = None
+    groq_vision_model: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-flash-latest"
+    hf_token: str | None = None
+    huggingface_token: str | None = None
+    beat_gap_s: float = Field(
+        default=0.5, validation_alias="OFM_REEL_MACHINE_BEAT_GAP_S"
+    )
+
+
+class GDriveSettings(BaseSettings):
+    """gdrive/authorize.py, gdrive/client.py. Constructed fresh, every
+    call -- see tests/test_gdrive_client.py / test_gdrive_authorize.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    oauth_client_file: str = Field(
+        default="secrets/google-oauth-client.json",
+        validation_alias="GOOGLE_OAUTH_CLIENT_FILE",
+    )
+    token_file: str = Field(
+        default="secrets/google-drive-token.json",
+        validation_alias="GOOGLE_DRIVE_TOKEN_FILE",
+    )
+    folder_id: str | None = Field(
+        default=None, validation_alias="GOOGLE_DRIVE_FOLDER_ID"
+    )

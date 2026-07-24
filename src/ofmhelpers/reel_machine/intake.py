@@ -11,11 +11,11 @@ reel/video tool in this repo uses).
 
 from __future__ import annotations
 
-import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ofmhelpers.config import settings
 from ofmhelpers.downloaders.generic import DownloadConfig, download
 
 
@@ -163,7 +163,7 @@ def diarize(video_path: Path, transcript: Transcript) -> Transcript:
     exactly like the original bash skill treated this step as optional.
     Install with: pip install 'ofmhelpers[diarization]'
     """
-    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+    hf_token = settings.reel_machine.hf_token or settings.reel_machine.huggingface_token
     if not hf_token:
         print("[reel_machine] no HF_TOKEN set, skipping diarization", flush=True)
         return transcript

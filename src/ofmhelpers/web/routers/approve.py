@@ -10,12 +10,12 @@ off the Drive upload in one shot. Security comes from the token itself
 """
 
 import mimetypes
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
+from ofmhelpers.config import settings
 from ofmhelpers.web import approval_tokens, todos
 from ofmhelpers.web.jobs import create_job, run_job
 from ofmhelpers.web.routers.todo import _upload_to_drive
@@ -81,7 +81,10 @@ def asset_preview(token: str):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Asset file no longer exists")
 
-    base_url = os.environ["APP_BASE_URL"].rstrip("/")
+    app_base_url = settings.web.app_base_url
+    if app_base_url is None:
+        raise KeyError("APP_BASE_URL")
+    base_url = app_base_url.rstrip("/")
     video_url = f"{base_url}/approve/{token}/asset"
     media_type = mimetypes.guess_type(path.name)[0] or "video/mp4"
 

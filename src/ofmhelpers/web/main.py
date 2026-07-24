@@ -1,5 +1,4 @@
 import asyncio
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import AuthMiddleware
 from ofmhelpers.web.recovery import recovery_loop
@@ -58,13 +58,14 @@ app = FastAPI(title="Global Ascend LLC — Content Ops", lifespan=lifespan)
 # wraps AuthMiddleware (Starlette applies middleware outside-in in the
 # order added, so Session needs to be added AFTER Auth here -- the last
 # .add_middleware() call ends up outermost / runs first).
+_session_settings = settings.session
 app.add_middleware(AuthMiddleware)
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.environ["SESSION_SECRET"],  # required -- set in .env
+    secret_key=_session_settings.session_secret,  # required -- set in .env
     session_cookie="ofm_session",
     max_age=60 * 60 * 5,  # 5 hours -- shared admin/VA passwords, keep it short
-    https_only=os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true",
+    https_only=_session_settings.session_https_only,
 )
 
 app.mount(

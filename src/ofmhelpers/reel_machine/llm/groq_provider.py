@@ -21,9 +21,9 @@ this project, see pyproject.toml).
 
 import base64
 import json
-import os
 from pathlib import Path
 
+from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
 from ofmhelpers.reel_machine.looks import Look
 from ofmhelpers.reel_machine.prompt_builder import build_prompt_package
@@ -72,9 +72,12 @@ class GroqProvider:
         text_model: str = "llama-3.3-70b-versatile",
         vision_model: str | None = None,
     ):
-        self.api_key = api_key or os.environ["GROQ_API_KEY"]
+        s = settings.reel_machine
+        self.api_key = api_key or s.groq_api_key
+        if self.api_key is None:
+            raise KeyError("GROQ_API_KEY")
         self.text_model = text_model
-        self.vision_model = vision_model or os.getenv("GROQ_VISION_MODEL")
+        self.vision_model = vision_model or s.groq_vision_model
 
     def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict:
         if not self.vision_model:
