@@ -12,6 +12,8 @@ import os
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
+os.environ.setdefault("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/test")
+os.environ.setdefault("APP_BASE_URL", "https://test.example")
 
 import json
 import unittest.mock as mock
@@ -20,7 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
-from ofmhelpers.web import todos
+from ofmhelpers.web import todos, approval_tokens
 from ofmhelpers.web.jobs import get_job, JOBS
 from ofmhelpers.web.routers import todo as todo_router
 
@@ -46,6 +48,15 @@ def _isolated_store(monkeypatch, tmp_path):
     monkeypatch.setattr(todos, "STORE_FILE", tmp_path / "todos.json")
     # Same for asset uploads -- keep them out of the real uploads/ dir.
     monkeypatch.setattr(todo_router, "ASSET_ROOT", tmp_path / "todo_assets")
+    # Same for approval tokens -- keep them out of the real
+    # uploads/approval_tokens.json.
+    monkeypatch.setattr(
+        approval_tokens, "STORE_FILE", tmp_path / "approval_tokens.json"
+    )
+    # Every asset upload now sends a Discord notification (see
+    # _notify_discord_for_review) -- mock it so these pre-existing tests
+    # don't make a real network call against a fake webhook URL.
+    monkeypatch.setattr(todo_router, "send_webhook", mock.Mock())
 
 
 def test_empty_page_renders_for_both_roles(client, va_client):
@@ -298,6 +309,66 @@ def test_va_can_attach_asset_and_it_shows_up_with_preview(client, va_client):
     assert f"/todo/{todo['id']}/asset" in html
 
 
+def test_asset_upload_sends_discord_notification_with_approve_link(client):
+    """Covers _notify_discord_for_review: every asset upload must send
+    exactly one Discord webhook whose content is just the bare asset URL
+    (so Discord auto-embeds the preview) and whose embed hides the approval
+    link behind human-friendly text -- no todo id, filename, or raw
+    approval URL visible."""
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"fake image bytes", "image/png")}
+    r = client.post(f"/todo/{todo['id']}/asset", files=files, follow_redirects=False)
+    assert r.status_code == 303
+
+    todo_router.send_webhook.assert_called_once()
+    content, embeds = todo_router.send_webhook.call_args[0]
+    embed = embeds[0]
+
+    assert todo["id"] not in content
+    assert todo["id"] not in embed["description"]
+    assert "ready.png" not in content
+    assert "ready.png" not in embed["description"]
+
+    assert content.count("https://test.example/approve/") == 1
+    asset_url = content.splitlines()[-1]
+    assert asset_url.endswith("/asset")
+
+    assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
+        asset_url.removesuffix("/asset") + ")"
+    )
+    assert "title" not in embed
+    assert "url" not in embed
+    assert "image" not in embed
+
+
+def test_asset_upload_notification_same_shape_for_video(client):
+    """No file-type branching needed -- Discord's link unfurling previews
+    both images and videos from a bare content URL the same way."""
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
+    client.post(f"/todo/{todo['id']}/asset", files=files)
+
+    content, embeds = todo_router.send_webhook.call_args[0]
+    assert content.splitlines()[-1].startswith("https://test.example/approve/")
+    assert "image" not in embeds[0]
+
+
+def test_asset_upload_fails_loudly_when_discord_send_fails(client, monkeypatch):
+    """A silently-lost notification defeats the point of the feature -- if
+    the webhook call fails, the upload request must surface that error
+    rather than reporting success."""
+    monkeypatch.setattr(
+        todo_router, "send_webhook", mock.Mock(side_effect=RuntimeError("down"))
+    )
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+    files = {"file": ("ready.png", b"bytes", "image/png")}
+    r = client.post(f"/todo/{todo['id']}/asset", files=files)
+
+    assert r.status_code == 502
+    # The asset itself is still saved/attached -- only the notification failed.
+    assert todos.get_todo(todo["id"])["asset_name"] == "ready.png"
+
+
 def test_asset_upload_404s_for_unknown_todo(va_client):
     files = {"file": ("ready.png", b"bytes", "image/png")}
     r = va_client.post("/todo/doesnotexist/asset", files=files)
@@ -404,6 +475,29 @@ def test_new_asset_upload_resets_prior_approval_and_upload_state(client):
     assert stored["asset_name"] == "v2.png"
     assert stored["approved"] is False
     assert stored["drive_file_id"] is None
+
+
+def test_new_asset_upload_overwrites_old_file_on_disk(client, va_client):
+    """Regression: VA uploads under different filenames each time (e.g. two
+    phone recordings) used to pile up in the todo's asset dir instead of
+    replacing each other -- only the DB pointer moved, the old file was
+    orphaned on disk. A new upload must leave exactly one file behind."""
+    todo = todos.add_todo("Model A", "https://a", "", "admin")
+
+    files1 = {"file": ("clip_a.mp4", b"first clip bytes", "video/mp4")}
+    va_client.post(f"/todo/{todo['id']}/asset", files=files1)
+
+    files2 = {"file": ("clip_b.mp4", b"second clip bytes", "video/mp4")}
+    va_client.post(f"/todo/{todo['id']}/asset", files=files2)
+
+    asset_dir = todo_router.ASSET_ROOT / todo["id"]
+    remaining = list(asset_dir.iterdir())
+    assert [p.name for p in remaining] == ["clip_b.mp4"]
+
+    stored = todos.get_todo(todo["id"])
+    assert stored["asset_name"] == "clip_b.mp4"
+    r = client.get(f"/todo/{todo['id']}/asset")
+    assert r.content == b"second clip bytes"
 
 
 def test_upload_to_drive_runs_as_a_background_job_not_inline(client):

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ "Approved" if ok else "Approval failed" }} — Global Ascend LLC</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="login-screen">
+        <div class="login-card">
+            <div class="login-logo">GLOBAL ASCEND</div>
+            <p class="login-sub">LLC · Content Ops Command Center</p>
+
+            {% if ok %}
+            <p>✅ Approved — uploading to Google Drive now.</p>
+            {% else %}
+            <p class="login-error">❌ {{ message }}</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -10,6 +10,7 @@ otherwise still POST straight to these endpoints.
 
 import json
 import mimetypes
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -27,10 +28,11 @@ from fastapi.responses import RedirectResponse, Response, FileResponse
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import require_admin, ROLE_ADMIN
-from ofmhelpers.web import todos
+from ofmhelpers.web import todos, approval_tokens
 from ofmhelpers.web.jobs import create_job, run_job, get_job
 from ofmhelpers.web.routers.task_helpers import classify_kind
 from ofmhelpers.gdrive.client import upload_file as gdrive_upload_file
+from ofmhelpers.discord.client import send_webhook
 
 router = APIRouter(prefix="/todo", tags=["todo"])
 
@@ -150,13 +152,54 @@ async def upload_asset(request: Request, todo_id: str, file: UploadFile = File(.
         raise HTTPException(status_code=400, detail="A file is required")
 
     asset_dir = ASSET_ROOT / todo_id
+    if asset_dir.is_dir():
+        shutil.rmtree(asset_dir)
     asset_dir.mkdir(parents=True, exist_ok=True)
     dest = asset_dir / file.filename
     with dest.open("wb") as out:
         shutil.copyfileobj(file.file, out)
 
     todos.attach_asset(todo_id, str(dest), file.filename)
+
+    todo = todos.get_todo(todo_id)
+    try:
+        _notify_discord_for_review(todo)
+    except Exception as exc:
+        # The asset is already saved and attached at this point -- a failed
+        # notification doesn't undo that (no other write path in this app
+        # rolls back on a downstream failure either). It does need to
+        # surface loudly though: this notification is the *only* way the
+        # reviewer finds out there's something to approve.
+        raise HTTPException(
+            status_code=502,
+            detail=f"Asset saved, but Discord notification failed: {exc}",
+        )
+
     return RedirectResponse(url="/todo", status_code=303)
+
+
+def _notify_discord_for_review(todo: dict) -> None:
+    """Sends the Discord webhook a VA/admin's asset upload triggers: the
+    asset's own served URL, bare and alone on its own line in the message
+    *content*, so Discord's own link-unfurling generates the image/video
+    preview automatically (works the same for either kind -- no need to
+    branch on file type). Discord's plain message content has no
+    masked-link markdown, so the human-friendly "Approve & Upload to
+    Google Drive" action can only render as clickable text (rather than a
+    bare, scary-looking token URL) inside an embed's description, which
+    *does* support `[text](url)` links. Deliberately bare of any todo id /
+    filename / model name -- this is a glanceable phone notification, not a
+    debug log."""
+    base_url = os.environ["APP_BASE_URL"].rstrip(
+        "/"
+    )  # required -- fail loudly if unset
+    token = approval_tokens.create_token(todo["id"], todo["asset_path"])
+    approve_url = f"{base_url}/approve/{token}"
+    asset_url = f"{base_url}/approve/{token}/asset"
+
+    content = f"📥 **New asset awaiting approval**\n\n{asset_url}"
+    embed = {"description": f"[✅ Approve & Upload to Google Drive]({approve_url})"}
+    send_webhook(content, [embed])
 
 
 @router.get("/{todo_id}/asset")

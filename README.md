@@ -204,6 +204,19 @@ One-time setup, done **locally** (needs a browser — not on the server):
    destination folder's id — the last segment of its Drive URL:
    `drive.google.com/drive/folders/<THIS_PART>`.
 
+Required for the todo list's Discord approval notifications (see
+`web/approval_tokens.py` / `web/routers/approve.py`) — whenever a VA/admin
+uploads an asset for review, a Discord message goes out with a preview and a
+one-tap, no-login approval link:
+```
+DISCORD_WEBHOOK_URL=<Discord channel → Edit Channel → Integrations → Webhooks>
+APP_BASE_URL=https://your-domain-or-sslip-io-host
+```
+`APP_BASE_URL` is the origin reviewers reach the app at from outside (what
+you set up in steps 8–9 below) — it's used to build the absolute preview/
+approval links Discord needs, since the app isn't configured to trust
+proxy headers for scheme/host detection.
+
 Plus whatever other provider keys the app needs (ElevenLabs, etc.).
 
 **Missing `SESSION_SECRET`, `APP_PASSWORD_ADMIN`, or `APP_PASSWORD_VA` will

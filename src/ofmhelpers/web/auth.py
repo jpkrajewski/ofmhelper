@@ -27,7 +27,10 @@ PUBLIC_PATHS = {
     "/login",
     "/health",
 }
-PUBLIC_PREFIXES = ("/static/",)  # css/js/images, if you serve any
+PUBLIC_PREFIXES = (
+    "/static/",  # css/js/images, if you serve any
+    "/approve/",  # magic-link asset approval -- see routers/approve.py
+)
 
 
 def is_public(path: str) -> bool:
