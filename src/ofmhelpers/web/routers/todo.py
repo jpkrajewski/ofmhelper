@@ -187,19 +187,20 @@ def _notify_discord_for_review(todo: dict) -> None:
     notification, not a debug log.
 
     Images use embed.image -- Discord fetches and renders the picture
-    directly, no URL ever shown. Video (and anything else that isn't an
-    image) can't get that same treatment: Discord's embed `video` field is
-    only ever populated by Discord's *own* link-crawler unfurling a
-    *visible* URL typed in message content -- a bot/webhook can't set it
-    directly to force a playable video embed. Worse, a *direct* video file
-    link is notoriously unreliable for that crawler even when posted
-    bare -- Discord has longstanding, open bugs where the exact same valid
-    media URL intermittently just doesn't unfurl. Posting the
-    /asset/preview URL instead (routers/approve.py's asset_preview) -- a
-    tiny HTML page carrying Open Graph video tags -- is the standard
-    workaround self-hosted media tools use, since Discord's crawler reads
-    those tags reliably even when raw-file unfurling flakes. Either way,
-    the approval link stays hidden behind masked text."""
+    directly, no URL ever shown. Video can't get that same treatment:
+    Discord's embed `video` field is only ever populated by Discord's
+    *own* link-crawler unfurling a *visible* URL typed in message content
+    -- a bot/webhook can't set it directly to force a playable video
+    embed. Confirmed by testing: a webhook message carrying the
+    /asset/preview URL (routers/approve.py's asset_preview -- a tiny HTML
+    page with Open Graph video tags, since a *direct* video file link is
+    itself unreliable for Discord's crawler) *alongside* the approval
+    embed did not get auto-unfurled, while a human retyping that exact
+    same link into its own plain message worked instantly. So for video,
+    the preview link goes out as its own separate webhook call with no
+    embeds attached at all -- reproducing the exact "plain link" message
+    shape Discord reliably unfurls -- while the header + approval button
+    go out as a first, separate call."""
     base_url = os.environ["APP_BASE_URL"].rstrip(
         "/"
     )  # required -- fail loudly if unset
@@ -209,14 +210,17 @@ def _notify_discord_for_review(todo: dict) -> None:
     preview_url = f"{asset_url}/preview"
 
     header = "📥 **New asset awaiting approval**"
-    embed = {"description": f"[✅ Approve & Upload to Google Drive]({approve_url})"}
-    if classify_kind(Path(todo["asset_path"]).name) == "image":
-        content = header
-        embed["image"] = {"url": asset_url}
-    else:
-        content = f"{header}\n\n{preview_url}"
+    approve_line = f"[✅ Approve & Upload to Google Drive]({approve_url})"
 
-    send_webhook(content, [embed])
+    if classify_kind(Path(todo["asset_path"]).name) == "image":
+        send_webhook(
+            header, [{"description": approve_line, "image": {"url": asset_url}}]
+        )
+    else:
+        send_webhook(
+            header, [{"description": f"{approve_line}\n\nCheck video below ⬇️⬇️⬇️"}]
+        )
+        send_webhook(preview_url)
 
 
 @router.get("/{todo_id}/asset")

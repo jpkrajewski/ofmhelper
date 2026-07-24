@@ -340,27 +340,39 @@ def test_asset_upload_sends_discord_notification_with_image_embedded(client):
     assert "url" not in embed
 
 
-def test_asset_upload_for_video_posts_bare_preview_link_for_inline_playback(client):
-    """A direct video/mp4 link is unreliable for Discord's webhook
-    link-crawler even when posted bare (longstanding Discord-side bugs).
-    The video branch must point at the /asset/preview HTML wrapper (Open
-    Graph video tags -- see routers/approve.py's asset_preview), not the
-    raw file, for a dependable inline player. The approve link stays
-    hidden behind masked text either way."""
+def test_asset_upload_for_video_sends_the_preview_link_in_its_own_bare_call(client):
+    """A webhook message carrying a bare URL *alongside* a custom embeds
+    array unreliably fails to also get Discord's own auto-unfurl for that
+    URL (confirmed by testing) -- so the video branch must send two
+    separate send_webhook calls: one with the header + hidden approval
+    button (an embed, no raw link), and a second with *only* the bare
+    preview link and no embeds attached at all, reproducing the exact
+    "plain link" message shape Discord reliably unfurls."""
     todo = todos.add_todo("Model A", "https://a", "", "admin")
     files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
     client.post(f"/todo/{todo['id']}/asset", files=files)
 
-    content, embeds = todo_router.send_webhook.call_args[0]
+    assert todo_router.send_webhook.call_count == 2
+    first_call, second_call = todo_router.send_webhook.call_args_list
+
+    header_content, embeds = first_call.args
     embed = embeds[0]
-    preview_url = content.splitlines()[-1]
-    assert preview_url.startswith("https://test.example/approve/")
-    assert preview_url.endswith("/asset/preview")
+    assert "http" not in header_content
     assert "image" not in embed
+    assert "Check video below" in embed["description"]
+
+    # Second call: bare preview link, no embeds attached at all -- not even
+    # an empty list -- so Discord treats it exactly like a plain link.
+    assert second_call.args[0].endswith("/asset/preview")
+    assert len(second_call.args) == 1
+    assert second_call.kwargs == {}
+
+    preview_url = second_call.args[0]
+    assert preview_url.startswith("https://test.example/approve/")
     # The approve link is still hidden behind masked text, never bare.
     assert preview_url not in embed["description"]
     assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
-        preview_url.removesuffix("/asset/preview") + ")"
+        preview_url.removesuffix("/asset/preview") + ")\n\nCheck video below ⬇️⬇️⬇️"
     )
 
 

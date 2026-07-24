@@ -29,7 +29,15 @@ def test_send_webhook_posts_expected_payload(monkeypatch):
     fake_response.raise_for_status.assert_called_once()
 
 
-def test_send_webhook_defaults_embeds_to_empty_list(monkeypatch):
+def test_send_webhook_omits_embeds_key_entirely_when_none_given(monkeypatch):
+    """Not just an empty list -- the "embeds" key must be absent altogether,
+    matching the exact payload shape of a plain human-typed message with no
+    embeds. A webhook message that includes an embeds array (even one
+    unrelated to a URL also in content) unreliably fails to also get
+    Discord's own auto-unfurl for that URL -- confirmed by testing -- so
+    callers that want a bare link to unfurl reliably (see
+    web/routers/todo.py's _notify_discord_for_review) must not attach any
+    embeds to that call at all."""
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/abc")
     fake_response = mock.Mock()
     fake_response.raise_for_status = mock.Mock()
@@ -38,7 +46,19 @@ def test_send_webhook_defaults_embeds_to_empty_list(monkeypatch):
         discord_client.requests, "post", return_value=fake_response
     ) as post:
         discord_client.send_webhook("hello")
-        assert post.call_args.kwargs["json"]["embeds"] == []
+        assert post.call_args.kwargs["json"] == {"content": "hello"}
+
+
+def test_send_webhook_omits_embeds_key_for_an_empty_list_too(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/abc")
+    fake_response = mock.Mock()
+    fake_response.raise_for_status = mock.Mock()
+
+    with mock.patch.object(
+        discord_client.requests, "post", return_value=fake_response
+    ) as post:
+        discord_client.send_webhook("hello", [])
+        assert "embeds" not in post.call_args.kwargs["json"]
 
 
 def test_send_webhook_missing_env_var_raises(monkeypatch):
