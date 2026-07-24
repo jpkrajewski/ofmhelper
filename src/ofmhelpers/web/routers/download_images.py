@@ -17,8 +17,13 @@ router = APIRouter(prefix="/download-images", tags=["download-images"])
 
 
 def _run_downloads(urls: list[str]) -> list[dict]:
+    """asdict() leaves output_paths as Path objects -- stringify them so the
+    result is safe for json.dumps (jobs.py._save() persists every job)."""
     results = download_all(urls)
-    return [asdict(r) for r in results]
+    dicts = [asdict(r) for r in results]
+    for d in dicts:
+        d["output_paths"] = [str(p) for p in d["output_paths"]]
+    return dicts
 
 
 def _flatten_paths(job: dict) -> list[Path]:

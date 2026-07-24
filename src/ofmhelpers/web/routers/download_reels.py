@@ -17,9 +17,14 @@ router = APIRouter(prefix="/download-videos", tags=["download-videos"])
 
 def _run_downloads(urls: list[str]) -> list[dict]:
     """Runs in the background. Converts DownloadResult dataclasses to plain
-    dicts so they're safe to render in Jinja2 / store in the job dict."""
+    dicts so they're safe to render in Jinja2 / store in the job dict.
+    asdict() alone isn't enough -- it leaves output_paths as Path objects,
+    which json.dumps can't serialize (jobs.py._save() persists every job)."""
     results = download_all(urls)
-    return [asdict(r) for r in results]
+    dicts = [asdict(r) for r in results]
+    for d in dicts:
+        d["output_paths"] = [str(p) for p in d["output_paths"]]
+    return dicts
 
 
 def _flatten_paths(job: dict) -> list[Path]:

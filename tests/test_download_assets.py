@@ -12,14 +12,20 @@ os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
+import json
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from ofmhelpers.downloaders.generic import DownloadResult
+from ofmhelpers.downloaders.images import ImageDownloadResult
+from ofmhelpers.web import jobs
+from ofmhelpers.web.jobs import JOBS, create_job, run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.jobs import JOBS, create_job
 from ofmhelpers.web.routers import clean_image as clean_image_router
+from ofmhelpers.web.routers import download_images as download_images_router
 from ofmhelpers.web.routers import download_reels as download_reels_router
 
 
@@ -141,3 +147,57 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client):
     assert card, f"no gallery card for job {job_id}"
     assert "data-pending" in card.group(1)
     assert 'data-poll-prefix="/download-videos"' in card.group(1)
+
+
+def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
+    """Regression: DownloadResult.output_paths is list[Path], and
+    dataclasses.asdict() does NOT stringify Path objects. A raw Path landing
+    in a job's "result" used to crash json.dumps in jobs.py._save() -- and
+    because JOBS is mutated before _save() runs, that one bad job then broke
+    every future job save (including unrelated tools like nanobanana) until
+    the process restarted."""
+    out_file = tmp_path / "clip.mp4"
+    out_file.write_bytes(b"fake video")
+
+    def fake_download_all(urls):
+        return [DownloadResult(url=urls[0], success=True, output_paths=[out_file])]
+
+    monkeypatch.setattr(download_reels_router, "download_all", fake_download_all)
+
+    result = download_reels_router._run_downloads(["https://a.example/1"])
+
+    assert result[0]["output_paths"] == [str(out_file)]
+    json.dumps(result)  # must not raise
+
+
+def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
+    out_file = tmp_path / "pic.png"
+    out_file.write_bytes(b"fake image")
+
+    def fake_download_all(urls):
+        return [ImageDownloadResult(url=urls[0], success=True, output_paths=[out_file])]
+
+    monkeypatch.setattr(download_images_router, "download_all", fake_download_all)
+
+    result = download_images_router._run_downloads(["https://a.example/1"])
+
+    assert result[0]["output_paths"] == [str(out_file)]
+    json.dumps(result)  # must not raise
+
+
+def test_a_bad_job_result_cannot_permanently_break_future_job_saves():
+    """Defense in depth for jobs.py._save(): even if a caller slips a
+    non-JSON-safe value (e.g. a stray Path) into a job's result, _save()
+    must self-heal (via json.dumps(default=str)) instead of leaving JOBS
+    poisoned so that every subsequent, unrelated create_job()/_save() call
+    fails too -- which is exactly how one crashed download-videos job used
+    to take down nanobanana's /run endpoint."""
+    poisoned_job = create_job("download_videos", {"urls": ["https://a.example/1"]})
+    run_job(poisoned_job, lambda: [{"path": Path("/tmp/gone.mp4")}], {})
+    assert JOBS[poisoned_job]["status"] == "done"
+
+    # an unrelated job created afterwards must still save successfully
+    next_job = create_job("nanobanana", {"prompt": "a cat"})
+    on_disk = json.loads(jobs.STORE_FILE.read_text())
+    assert on_disk[next_job]["task"] == "nanobanana"
+    assert on_disk[poisoned_job]["result"] == [{"path": str(Path("/tmp/gone.mp4"))}]

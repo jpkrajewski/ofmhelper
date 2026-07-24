@@ -52,7 +52,13 @@ def _save() -> None:
         for j in stale:
             del JOBS[j["id"]]
     STORE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STORE_FILE.write_text(json.dumps(JOBS, indent=2))
+    # default=str: a job's result/params should only ever hold JSON-safe
+    # values, but one stray Path (or similar) slipping in would otherwise
+    # raise here forever after -- JOBS is already mutated by the time _save()
+    # runs, so every future save would re-hit the same poisoned entry until
+    # the process restarts. Falling back to str() is a self-healing safety
+    # net, not a substitute for callers stringifying paths themselves.
+    STORE_FILE.write_text(json.dumps(JOBS, indent=2, default=str))
 
 
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
