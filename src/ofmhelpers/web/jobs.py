@@ -119,6 +119,19 @@ def get_job(job_id: str) -> dict | None:
     return JOBS.get(job_id)
 
 
+def set_job_preview(job_id: str, preview: dict) -> None:
+    """Lets a still-running generation job publish an interim, already-usable
+    result (a hosted remote_url) before its final local-file `result` is
+    ready. job_status_payload only serves this while status is "running" --
+    once the job finishes (done or failed) the real `result`/`error` takes
+    over and this is simply never read again."""
+    job = JOBS.get(job_id)
+    if job is None:
+        return
+    job["preview"] = preview
+    _save()
+
+
 def _result_matches_files(result: list[dict]) -> list[dict]:
     """Filters one job's result down to entries whose file(s) still exist on
     disk. Handles both shapes a job's "result" list comes in:
@@ -128,7 +141,10 @@ def _result_matches_files(result: list[dict]) -> list[dict]:
       (download_images/download_videos)
     """
     if "path" in result[0]:
-        return [f for f in result if Path(f["path"]).is_file()]
+        # A path of None means the local download never finished and this
+        # entry only ever lived as a remote_url (see job_status_payload) --
+        # there's no local file to go stale, so it's never pruned.
+        return [f for f in result if f["path"] is None or Path(f["path"]).is_file()]
 
     kept = []
     for entry in result:

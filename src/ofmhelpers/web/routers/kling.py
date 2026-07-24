@@ -10,11 +10,12 @@ from fastapi import (
 )
 
 from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     build_ordered_paths,
     asset_card,
+    register_generated_asset,
     serve_job_file,
     job_status_payload,
     job_inputs,
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/kling3", tags=["kling3"])
 
 
 def _run_kling3(
+    job_id: str,
     api_key: str,
     prompt: str,
     mode: str,
@@ -35,15 +37,36 @@ def _run_kling3(
 ) -> list[dict]:
     client = KieAIClient.from_env(api_key=api_key)
     image_urls = [client.upload_local_file(p) for p in image_paths]
-    out_path = client.generate_video_kling3(
-        prompt=prompt,
-        image_urls=image_urls or None,
-        mode=mode,
-        aspect_ratio=aspect_ratio,
-        duration=duration,
-        sound=sound,
-        multi_shots=False,
-    )
+
+    remote_urls: list[str] = []
+
+    def _on_result_urls(urls: list[str]) -> None:
+        remote_urls.extend(urls)
+        set_job_preview(job_id, {"remote_url": urls[0], "kind": "video"})
+
+    try:
+        out_path = client.generate_video_kling3(
+            prompt=prompt,
+            image_urls=image_urls or None,
+            mode=mode,
+            aspect_ratio=aspect_ratio,
+            duration=duration,
+            sound=sound,
+            multi_shots=False,
+            on_result_urls=_on_result_urls,
+        )
+    except Exception:
+        if not remote_urls:
+            raise
+        print(
+            f"[kling3] local download failed, serving remote_url only: "
+            f"{remote_urls[0]}",
+            flush=True,
+        )
+        name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or "video.mp4"
+        return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
+
+    register_generated_asset(out_path, ASSETS_ROOT)
     return [{"name": out_path.name, "path": str(out_path)}]
 
 
@@ -81,7 +104,7 @@ async def run(
         run_job,
         job_id,
         _run_kling3,
-        {"api_key": api_key, **params, "image_paths": image_paths},
+        {"job_id": job_id, "api_key": api_key, **params, "image_paths": image_paths},
     )
 
     return {"job_id": job_id}
@@ -96,7 +119,12 @@ def job_status(request: Request, job_id: str):
     assets = []
     if job.get("status") == "done":
         assets = [
-            asset_card(f["name"], idx, f"/kling3/files/{job_id}")
+            asset_card(
+                f["name"],
+                idx,
+                f"/kling3/files/{job_id}",
+                remote_url=f.get("remote_url"),
+            )
             for idx, f in enumerate(job["result"])
         ]
 

@@ -43,7 +43,7 @@ def _gallery_card(job: dict) -> dict:
     if job["status"] == "done":
         prefix = f"{FILES_PREFIX[job['task']]}/{job['id']}"
         assets = [
-            asset_card(f["name"], idx, prefix)
+            asset_card(f["name"], idx, prefix, remote_url=f.get("remote_url"))
             for idx, f in enumerate(job.get("result") or [])
         ]
     return {

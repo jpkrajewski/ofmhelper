@@ -41,7 +41,16 @@
 
 {% if job.status == "running" %}
 <meta http-equiv="refresh" content="2">
+{% if job.preview and job.preview.remote_url %}
+<div class="results">
+    <div class="result-item">
+        {{ am.asset_media({"kind": job.preview.kind or "image", "view_url": job.preview.remote_url, "name": "preview"}) }}
+    </div>
+</div>
+<p class="pending">{{ pending_message|default("Working…") }} (showing the hosted result — saving a local copy…)</p>
+{% else %}
 <p class="pending">{{ pending_message|default("Working…") }}</p>
+{% endif %}
 
 {% elif job.status == "failed" %}
 <pre class="fail">{{ job.error }}</pre>

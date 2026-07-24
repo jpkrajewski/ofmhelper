@@ -12,6 +12,7 @@ paths from the client, serving the final file) lives here once.
 import hashlib
 import json
 import mimetypes
+import os
 import shutil
 import tempfile
 import uuid
@@ -100,6 +101,47 @@ def save_asset(upload: UploadFile, assets_root: Path = ASSETS_ROOT) -> str:
     return str(final_path)
 
 
+def register_generated_asset(
+    path: Path, assets_root: Path = ASSETS_ROOT
+) -> Path | None:
+    """Link a freshly-generated output file into the shared, content-addressed
+    asset store so it shows up in the "reuse an uploaded ..." picker right
+    away, exactly like a manual upload -- generated output used to live only
+    in OUT_DIR (kieai_out/), a tree /refs never looks at. Same naming scheme
+    as save_asset() (content-hash prefix), so a generated file that happens
+    to match an already-uploaded one dedupes for free.
+
+    Hardlinks rather than copying (falls back to a copy across filesystems)
+    -- cheap, and the link's mtime matches the source's, so a fresh
+    generation naturally sorts to the top of /refs alongside real uploads.
+
+    Best-effort: the job already finished generating by the time this runs,
+    so a bookkeeping failure here (e.g. a test double pointing at a path that
+    was never really written) must never turn a successful job into a failed
+    one -- just skip registering it."""
+    try:
+        assets_root.mkdir(parents=True, exist_ok=True)
+        hasher = hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                hasher.update(chunk)
+        digest = hasher.hexdigest()
+
+        existing = next(assets_root.glob(f"{digest}__*"), None)
+        if existing is not None:
+            return existing
+
+        dest = assets_root / f"{digest}__{path.name}"
+        try:
+            os.link(path, dest)
+        except OSError:
+            shutil.copy2(path, dest)
+        return dest
+    except OSError as exc:
+        print(f"[assets] could not register generated asset {path}: {exc}", flush=True)
+        return None
+
+
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     """Validate a path the client claims points at a previously-uploaded
     file. Raises HTTPException(400) if it's outside allowed_root or
@@ -144,17 +186,26 @@ def build_ordered_paths(
 
 
 def asset_card(
-    name: str, index: int, files_prefix: str, source: str | None = None
+    name: str,
+    index: int,
+    files_prefix: str,
+    source: str | None = None,
+    remote_url: str | None = None,
 ) -> dict:
     """One entry for the generic asset grid / status page: what kind of
     preview to render, and the two URLs a client can already reach (never
-    the server-side path a result dict carries internally)."""
+    the server-side path a result dict carries internally).
+
+    remote_url is set only for a result whose local download never
+    completed (see job_status_payload) -- in that case there is no local
+    file for `/files/{job_id}/{index}` to serve, so the card points straight
+    at the still-good hosted URL instead."""
     return {
         "name": name,
         "index": index,
         "kind": classify_kind(name),
-        "view_url": f"{files_prefix}/{index}",
-        "download_url": f"{files_prefix}/{index}?dl=1",
+        "view_url": remote_url or f"{files_prefix}/{index}",
+        "download_url": remote_url or f"{files_prefix}/{index}?dl=1",
         "source": source,
     }
 
@@ -255,9 +306,16 @@ def job_status_payload(job: dict | None, files_prefix: str) -> dict:
     result = []
     if job.get("status") == "done":
         for idx, f in enumerate(job.get("result") or []):
-            result.append(asset_card(f["name"], idx, f"{files_prefix}/{job['id']}"))
+            result.append(
+                asset_card(
+                    f["name"],
+                    idx,
+                    f"{files_prefix}/{job['id']}",
+                    remote_url=f.get("remote_url"),
+                )
+            )
 
-    return {
+    payload = {
         "job_id": job["id"],
         "task": job["task"],
         "params": job["params"],
@@ -265,6 +323,14 @@ def job_status_payload(job: dict | None, files_prefix: str) -> dict:
         "error": job.get("error"),
         "result": result,
     }
+    # A generation still in flight can already have a hosted result URL
+    # (kie.ai's poll succeeded; only the local download is still running) --
+    # surface it so the frontend can render it immediately instead of
+    # blocking on the download. Cleared implicitly once status flips to
+    # "done"/"failed" (this key is only ever read while still "running").
+    if job.get("status") == "running" and job.get("preview"):
+        payload["preview"] = job["preview"]
+    return payload
 
 
 def serve_job_file(
@@ -283,7 +349,15 @@ def serve_job_file(
     if index < 0 or index >= len(files):
         raise HTTPException(status_code=404, detail="File not found")
 
-    path = Path(files[index]["path"])
+    raw_path = files[index].get("path")
+    if raw_path is None:
+        # Local download never completed -- this asset only ever existed as
+        # a remote_url (see job_status_payload), which the client already
+        # has and points its view/download links at directly. There's
+        # nothing local for this route to serve.
+        raise HTTPException(status_code=404, detail="File was never downloaded locally")
+
+    path = Path(raw_path)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="File no longer exists on server")
 

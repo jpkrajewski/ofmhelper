@@ -191,6 +191,59 @@
             });
     }
 
+    // Clipboard files (screenshots, copied images) rarely carry a real
+    // filename -- give them one so the server's extension-based classify_kind
+    // / save_asset still work like they do for a normal file-input upload.
+    function ensureNamedFile(file, kind) {
+        if (file.name) return file;
+        const ext = (file.type.split("/")[1] || kind || "png").split("+")[0];
+        return new File([file], `pasted-${Date.now()}.${ext}`, { type: file.type });
+    }
+
+    // Ctrl+V/Cmd+V (same browser "paste" event on both platforms) support for
+    // adding a copied/screenshotted image straight into a picker -- same
+    // {kind: "new", file} shape and upload path as the file-input, so it's
+    // thumbnailed/stored/attached identically. Listens on `document`, no
+    // click-to-focus anything first -- Ctrl+V anywhere on the page just
+    // works. Routes purely by clipboard CONTENT, not by what happens to be
+    // focused: if the clipboard holds no file matching an active picker's
+    // kind (e.g. it's plain text), `picker` below stays undefined and the
+    // handler returns before preventDefault(), so normal text paste into
+    // the prompt textarea/any other field is completely unaffected. This is
+    // also why checking the focused element would be wrong -- the prompt
+    // textarea is very often focused right when you go to paste a
+    // screenshot, and an editable-target check would swallow it there.
+    document.addEventListener("paste", (e) => {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+
+        const picker = [...document.querySelectorAll(".file-picker")].find((p) => {
+            if (!p._items || !isActive(p)) return false;
+            const kind = p.dataset.kind;
+            return [...items].some(
+                (item) => item.kind === "file" && item.type.startsWith(`${kind}/`)
+            );
+        });
+        if (!picker) return;
+
+        const kind = picker.dataset.kind;
+        const matched = [];
+        for (const item of items) {
+            if (item.kind === "file" && item.type.startsWith(`${kind}/`)) {
+                const file = item.getAsFile();
+                if (file) matched.push(ensureNamedFile(file, kind));
+            }
+        }
+        if (!matched.length) return;
+
+        // Only now that we know this paste is actually image/video/audio
+        // data meant for a picker do we take over the event -- anything else
+        // (plain text, a paste with no matching-kind files) is left alone.
+        e.preventDefault();
+        matched.forEach((file) => picker._items.push({ kind: "new", file }));
+        renderList(picker);
+    });
+
     function initPicker(picker) {
         picker._items = [];
 

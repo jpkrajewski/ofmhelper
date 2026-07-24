@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import time
+from typing import Callable
 
 import requests
 
@@ -247,6 +248,7 @@ class KieAIClient:
         resolution: str = "1K",
         output_format: str = "png",
         callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
         payload = {
             "prompt": prompt,
@@ -257,6 +259,11 @@ class KieAIClient:
         }
         task_id = self.create_task("nano-banana-pro", payload, callback_url)
         urls = self.poll_task(task_id)
+        # kie.ai's hosted result is already live at this point -- the caller
+        # (the web app) uses this to show it immediately instead of blocking
+        # on the download below.
+        if on_result_urls:
+            on_result_urls(urls)
         return self.download_urls(urls, task_id, output_format)[0]
 
     # ------------------------------------------------------------------
@@ -287,6 +294,7 @@ class KieAIClient:
         reference_video_urls: list[str] | None = None,
         reference_audio_urls: list[str] | None = None,
         callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
         if model not in self.SEEDANCE2_MODELS:
             raise ValueError(
@@ -317,6 +325,8 @@ class KieAIClient:
 
         task_id = self.create_task(model, payload, callback_url)
         urls = self.poll_task(task_id, timeout_s=1800)
+        if on_result_urls:
+            on_result_urls(urls)
         return self.download_urls(urls, task_id, "mp4")[0]
 
     # ------------------------------------------------------------------
@@ -341,6 +351,7 @@ class KieAIClient:
         multi_prompt: list[dict] | None = None,
         kling_elements: list[dict] | None = None,
         callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
         if mode not in self.KLING3_MODES:
             raise ValueError(
@@ -365,6 +376,8 @@ class KieAIClient:
 
         task_id = self.create_task("kling-3.0/video", payload, callback_url)
         urls = self.poll_task(task_id, timeout_s=1800)
+        if on_result_urls:
+            on_result_urls(urls)
         return self.download_urls(urls, task_id, "mp4")[0]
 
     # ------------------------------------------------------------------

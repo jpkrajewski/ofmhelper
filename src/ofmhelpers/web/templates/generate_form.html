@@ -231,6 +231,41 @@
 </div>
 
 <script>
+// Editable *default* prompt text for tools that benefit from one -- typing
+// or clearing it is a normal edit, never restored automatically except by
+// re-opening the panel (switching tool-select back to it). Never overwrites
+// a prompt the user has already typed something into.
+const KLING_DEFAULT_PROMPT =
+    "Handheld camera movement, slight natural shake and micro-tremors, " +
+    "real person filming casually on iPhone, authentic motion blur on fast " +
+    "pans, natural lighting with slight overexposure, vertical 9:16 format, " +
+    "candid documentary feel, imperfect framing, shallow depth of field, " +
+    "warm color grade, smooth but slightly jerky movement like a real hand " +
+    "holding phone, ambient background noise feel, zoom drift, real-time " +
+    "speed, no cinematic stabilization";
+const NANOBANANA_MULTI_REF_PROMPT =
+    "Refer to first image and second image, replicate third image.";
+
+// Tracks whatever default this function itself last set, so a later call
+// can tell "still holding the default I put there" (safe to replace, e.g.
+// Kling's template sitting untouched when you switch to Nanobanana) apart
+// from "you actually typed something" (never touched).
+let lastAppliedPromptDefault = '';
+
+function applyPromptDefault(tool) {
+    const promptEl = document.querySelector('textarea[name="prompt"]');
+    if (!promptEl) return;
+    if (promptEl.value !== '' && promptEl.value !== lastAppliedPromptDefault) return;
+
+    let next = '';
+    if (tool === 'kling3') next = KLING_DEFAULT_PROMPT;
+    else if (tool === 'nanobanana') next = NANOBANANA_MULTI_REF_PROMPT;
+
+    promptEl.value = next;
+    lastAppliedPromptDefault = next;
+    promptEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 // Only one tool's fieldset is ever shown/enabled at a time. Both matter:
 // `disabled` (not just hidden) is what keeps FormData(form) from submitting
 // two conflicting values for fields that mean different things per tool
@@ -256,6 +291,8 @@ document.getElementById('tool-select').addEventListener('change', (e) => {
             });
         }
     });
+
+    applyPromptDefault(option.value);
 });
 
 // "↻ Recreate" on a gallery card (finished or failed) reloads its

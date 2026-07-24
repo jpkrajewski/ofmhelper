@@ -89,6 +89,33 @@
         return div;
     }
 
+    // kie.ai's hosted result can be ready well before the server's local
+    // download finishes (see task_helpers.job_status_payload's "preview"
+    // key) -- as soon as a poll response carries one, swap the spinner for
+    // the actual media playing straight from that remote URL. When the job
+    // finally reports "done", pollJob's normal card.replaceWith(...) swaps
+    // this out for the locally-served version -- no extra code needed here
+    // for that half of the swap.
+    function showPreview(card, preview, resultKind) {
+        if (card.dataset.previewUrl === preview.remote_url) return; // already showing it
+        card.dataset.previewUrl = preview.remote_url;
+
+        const kind = preview.kind || resultKind;
+        const media = document.createElement(kind === "video" ? "video" : "img");
+        media.src = preview.remote_url;
+        media.className = kind === "video" ? "result-video" : "result-image";
+        if (kind === "video") {
+            media.controls = true;
+            media.muted = true;
+        } else {
+            media.alt = "generating… (showing hosted preview)";
+        }
+
+        const placeholder = card.querySelector(".result-file");
+        if (placeholder) placeholder.replaceWith(media);
+        else card.prepend(media);
+    }
+
     // job is optional: the "lost track of this job" fallback has no params
     // to restore, so that card gets no Recreate button.
     function buildFailedCard(label, error, job) {
@@ -122,6 +149,9 @@
             })
             .then((job) => {
                 if (job.status === "running" || job.status === "queued") {
+                    if (job.preview && job.preview.remote_url) {
+                        showPreview(card, job.preview, resultKind);
+                    }
                     setTimeout(
                         () =>
                             pollJob(card, prefix, jobId, label, resultKind,

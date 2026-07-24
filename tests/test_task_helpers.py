@@ -16,10 +16,13 @@ import pytest
 from fastapi import HTTPException, UploadFile
 
 from ofmhelpers.web.routers.task_helpers import (
+    asset_card,
     build_ordered_paths,
+    register_generated_asset,
     resolve_existing_ref,
     save_asset,
     save_upload,
+    serve_job_file,
 )
 
 
@@ -145,3 +148,81 @@ def test_resolve_existing_ref_rejects_missing_file(tmp_path):
         resolve_existing_ref(str(uploads / "nope.png"), uploads)
 
     assert exc_info.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# register_generated_asset() -- a generated image/video (Nano Banana, Kling,
+# Seedance, ...) must land in the same content-addressed store save_asset()
+# writes into, so it shows up in the "reuse an uploaded ..." picker (/refs)
+# immediately, just like a manual upload.
+# ---------------------------------------------------------------------------
+
+
+def test_register_generated_asset_writes_into_the_shared_store(tmp_path):
+    assets_root = tmp_path / "assets"
+    generated = tmp_path / "out" / "result.png"
+    generated.parent.mkdir()
+    generated.write_bytes(b"generated pixels")
+
+    dest = register_generated_asset(generated, assets_root)
+
+    assert dest is not None
+    assert dest.parent == assets_root
+    assert dest.name.endswith("__result.png")
+    assert dest.read_bytes() == b"generated pixels"
+
+
+def test_register_generated_asset_dedupes_against_an_existing_upload(tmp_path):
+    assets_root = tmp_path / "assets"
+    save_asset(make_upload("uploaded.png", b"identical bytes"), assets_root)
+
+    generated = tmp_path / "out" / "generated.png"
+    generated.parent.mkdir()
+    generated.write_bytes(b"identical bytes")
+
+    dest = register_generated_asset(generated, assets_root)
+
+    # same content as the earlier upload -- reused, not duplicated
+    assert len(list(assets_root.iterdir())) == 1
+    assert dest.name.endswith("__uploaded.png")
+
+
+def test_register_generated_asset_is_best_effort_on_a_missing_source(tmp_path):
+    assets_root = tmp_path / "assets"
+
+    # A job's generation succeeded already by the time this runs -- a
+    # bookkeeping failure here (source file gone, unwritable dir, ...) must
+    # never raise and blow up an otherwise-successful job.
+    result = register_generated_asset(tmp_path / "does-not-exist.png", assets_root)
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# asset_card()/serve_job_file() with a remote-only result (local download
+# never completed -- see job_status_payload's "preview"/nbp.py's remote_url
+# fallback): the card must point straight at the hosted URL, and the
+# `/files/{id}/{index}` route must never be asked to serve a local file that
+# was never actually downloaded.
+# ---------------------------------------------------------------------------
+
+
+def test_asset_card_with_remote_url_points_view_and_download_at_it():
+    card = asset_card(
+        "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
+    )
+
+    assert card["view_url"] == "https://cdn.kie.ai/x.mp4"
+    assert card["download_url"] == "https://cdn.kie.ai/x.mp4"
+
+
+def test_serve_job_file_404s_for_a_result_with_no_local_path():
+    job = {
+        "status": "done",
+        "result": [{"name": "x.png", "path": None, "remote_url": "https://cdn/x.png"}],
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        serve_job_file(job, 0)
+
+    assert exc_info.value.status_code == 404

@@ -11,11 +11,12 @@ from fastapi import (
     Query,
 )
 from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     build_ordered_paths,
     asset_card,
+    register_generated_asset,
     serve_job_file,
     job_status_payload,
     job_inputs,
@@ -32,6 +33,7 @@ class SeedanceModel(str, Enum):
 
 
 def _run_seedance(
+    job_id: str,
     api_key: str,
     prompt: str,
     model: str,
@@ -67,7 +69,28 @@ def _run_seedance(
             client.upload_local_file(p) for p in reference_audio_paths
         ]
 
-    out_path = client.generate_video_seedance2(**kwargs)
+    remote_urls: list[str] = []
+
+    def _on_result_urls(urls: list[str]) -> None:
+        remote_urls.extend(urls)
+        set_job_preview(job_id, {"remote_url": urls[0], "kind": "video"})
+
+    try:
+        out_path = client.generate_video_seedance2(
+            on_result_urls=_on_result_urls, **kwargs
+        )
+    except Exception:
+        if not remote_urls:
+            raise
+        print(
+            f"[seedance] local download failed, serving remote_url only: "
+            f"{remote_urls[0]}",
+            flush=True,
+        )
+        name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or "video.mp4"
+        return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
+
+    register_generated_asset(out_path, ASSETS_ROOT)
     return [{"name": out_path.name, "path": str(out_path)}]
 
 
@@ -134,6 +157,7 @@ async def run(
         job_id,
         _run_seedance,
         {
+            "job_id": job_id,
             "api_key": api_key,
             **params,
             "reference_image_paths": reference_image_paths,
@@ -154,7 +178,12 @@ def job_status(request: Request, job_id: str):
     assets = []
     if job.get("status") == "done":
         assets = [
-            asset_card(f["name"], idx, f"/seedance/files/{job_id}")
+            asset_card(
+                f["name"],
+                idx,
+                f"/seedance/files/{job_id}",
+                remote_url=f.get("remote_url"),
+            )
             for idx, f in enumerate(job["result"])
         ]
 
