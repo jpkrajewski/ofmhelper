@@ -14,14 +14,27 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 os.environ.setdefault("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/test")
 os.environ.setdefault("APP_BASE_URL", "https://test.example")
 
+import time
 import unittest.mock as mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
-from ofmhelpers.web import todos, approval_tokens
+from ofmhelpers.web import todos
+from ofmhelpers.web.db import repository
 from ofmhelpers.web.routers import todo as todo_router
+
+
+class _FrozenClock:
+    """Stands in for the `time` module inside the repository so a test can
+    push the token store's clock past the TTL."""
+
+    def __init__(self, value: float):
+        self._value = value
+
+    def time(self) -> float:
+        return self._value
 
 
 @pytest.fixture
@@ -40,11 +53,10 @@ def anon_client():
 
 @pytest.fixture(autouse=True)
 def _isolated_store(monkeypatch, tmp_path):
-    monkeypatch.setattr(todos, "STORE_FILE", tmp_path / "todos.json")
+    # todos + approval tokens are isolated by conftest (test DB truncated per
+    # test). Keep asset uploads out of the real uploads/ dir, and don't make a
+    # real Discord call.
     monkeypatch.setattr(todo_router, "ASSET_ROOT", tmp_path / "todo_assets")
-    monkeypatch.setattr(
-        approval_tokens, "STORE_FILE", tmp_path / "approval_tokens.json"
-    )
     monkeypatch.setattr(todo_router, "send_webhook", mock.Mock())
 
 
@@ -171,8 +183,8 @@ def test_expired_link_is_rejected(client, anon_client, monkeypatch):
     approve_url = _approve_url_for(todo["id"])
     path = approve_url.replace("https://test.example", "")
 
-    future = approval_tokens.time.time() + approval_tokens.TOKEN_TTL_SECONDS + 10
-    monkeypatch.setattr(approval_tokens.time, "time", lambda: future)
+    # Jump the token store's clock far past the TTL so the link reads expired.
+    monkeypatch.setattr(repository, "time", _FrozenClock(time.time() + 10**9))
 
     r = anon_client.get(path, follow_redirects=False)
     assert r.status_code == 303

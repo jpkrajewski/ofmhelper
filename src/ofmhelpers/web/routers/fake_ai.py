@@ -28,7 +28,6 @@ from fastapi import (
     Form,
     UploadFile,
     File,
-    BackgroundTasks,
     HTTPException,
 )
 from PIL import Image, ImageDraw
@@ -36,6 +35,7 @@ from PIL import Image, ImageDraw
 from ofmhelpers.config import settings
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     build_ordered_paths,
@@ -123,7 +123,6 @@ def _run_fake_ai(
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     prompt: str = Form(...),
     outcome: str = Form("success"),  # "success" or "error"
     asset_type: str = Form("image"),  # "image" or "video"
@@ -171,7 +170,7 @@ async def run(
         },
         actor=request.session.get("role"),
     )
-    background_tasks.add_task(run_job, job_id, _run_fake_ai, params)
+    enqueue(run_job, job_id, _run_fake_ai, params)
 
     return {"job_id": job_id}
 

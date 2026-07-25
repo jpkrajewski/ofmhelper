@@ -22,8 +22,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
-from ofmhelpers.web import todos, approval_tokens
-from ofmhelpers.web.jobs import get_job, JOBS
+from ofmhelpers.web import todos
+from ofmhelpers.web.jobs import create_job, get_job
 from ofmhelpers.web.routers import todo as todo_router
 
 
@@ -43,16 +43,9 @@ def va_client():
 
 @pytest.fixture(autouse=True)
 def _isolated_store(monkeypatch, tmp_path):
-    # Every test in this module writes todos -- point STORE_FILE at a temp
-    # file so we never touch the real uploads/todos.json.
-    monkeypatch.setattr(todos, "STORE_FILE", tmp_path / "todos.json")
-    # Same for asset uploads -- keep them out of the real uploads/ dir.
+    # todos + approval tokens are isolated by conftest (the test DB is
+    # truncated between tests). Keep asset uploads out of the real uploads/ dir.
     monkeypatch.setattr(todo_router, "ASSET_ROOT", tmp_path / "todo_assets")
-    # Same for approval tokens -- keep them out of the real
-    # uploads/approval_tokens.json.
-    monkeypatch.setattr(
-        approval_tokens, "STORE_FILE", tmp_path / "approval_tokens.json"
-    )
     # Every asset upload now sends a Discord notification (see
     # _notify_discord_for_review) -- mock it so these pre-existing tests
     # don't make a real network call against a fake webhook URL.
@@ -266,28 +259,34 @@ def test_import_ignores_uploaded_id_checked_and_created_by(client):
 
 
 def test_list_todos_sorted_newest_first():
-    todos._save(
-        [
-            {
-                "id": "a",
-                "model_name": "First",
-                "url": "https://a",
-                "comments": "",
-                "checked": False,
-                "created_at": 100.0,
-                "created_by": "admin",
-            },
-            {
-                "id": "b",
-                "model_name": "Second",
-                "url": "https://b",
-                "comments": "",
-                "checked": False,
-                "created_at": 200.0,
-                "created_by": "admin",
-            },
-        ]
-    )
+    # Seed two rows with explicit, distinct created_at so ordering is
+    # deterministic (add_todo would stamp them microseconds apart).
+    from ofmhelpers.web.db.models import TodoRow
+    from ofmhelpers.web.db.session import session_scope
+
+    with session_scope() as s:
+        s.add(
+            TodoRow(
+                id="a",
+                model_name="First",
+                url="https://a",
+                comments="",
+                checked=False,
+                created_at=100.0,
+                created_by="admin",
+            )
+        )
+        s.add(
+            TodoRow(
+                id="b",
+                model_name="Second",
+                url="https://b",
+                comments="",
+                checked=False,
+                created_at=200.0,
+                created_by="admin",
+            )
+        )
 
     items = todos.list_todos()
     assert [t["model_name"] for t in items] == ["Second", "First"]
@@ -573,21 +572,15 @@ def test_upload_to_drive_does_not_start_a_second_job_while_one_is_running(client
 
     # Simulate an in-flight job without actually blocking -- TestClient runs
     # background tasks synchronously, so there's no other way to observe a
-    # "still running" job mid-request.
-    JOBS["fake-running-job"] = {
-        "id": "fake-running-job",
-        "task": "todo_drive_upload",
-        "status": "running",
-        "result": None,
-        "error": None,
-    }
-    todos.set_drive_upload_job(todo["id"], "fake-running-job")
+    # "still running" job mid-request. create_job leaves it "running".
+    running_job = create_job("todo_drive_upload", {})
+    todos.set_drive_upload_job(todo["id"], running_job)
 
     with mock.patch.object(todo_router, "gdrive_upload_file") as upload_mock:
         client.post(f"/todo/{todo['id']}/upload-drive")
 
     upload_mock.assert_not_called()
-    assert todos.get_todo(todo["id"])["drive_upload_job_id"] == "fake-running-job"
+    assert todos.get_todo(todo["id"])["drive_upload_job_id"] == running_job
 
 
 def test_mark_uploaded_ignores_a_result_for_a_since_replaced_asset():
@@ -617,14 +610,8 @@ def test_asset_cell_fragment_reflects_running_job(client):
     client.post(f"/todo/{todo['id']}/asset", files=files)
     client.post(f"/todo/{todo['id']}/approve")
 
-    JOBS["fake-running-job"] = {
-        "id": "fake-running-job",
-        "task": "todo_drive_upload",
-        "status": "running",
-        "result": None,
-        "error": None,
-    }
-    todos.set_drive_upload_job(todo["id"], "fake-running-job")
+    running_job = create_job("todo_drive_upload", {})
+    todos.set_drive_upload_job(todo["id"], running_job)
 
     r = client.get(f"/todo/{todo['id']}/asset-cell")
     assert r.status_code == 200

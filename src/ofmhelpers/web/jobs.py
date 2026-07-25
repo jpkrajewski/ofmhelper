@@ -1,123 +1,71 @@
 """
-Job history: an in-memory dict (JOBS) for fast reads, kept in sync with a
-JSON file on disk -- every create_job/log_event/run_job call persists too,
-and load_jobs() (called once from main.py's lifespan at startup) reloads it
-back into JOBS. Before this, JOBS was memory-only, so restarting the
-container (or `docker build`ing a new image) silently wiped the /generate
-gallery and Action log even though the generated files were still sitting
-on disk untouched.
+Job history, now backed by Postgres (see web/db/) instead of an in-memory
+dict mirrored to uploads/jobs.json. The public API here is unchanged --
+create_job/log_event/run_job/get_job/set_job_preview/list_jobs -- so the
+routers and templates that use it are untouched; only the storage underneath
+moved to the database.
 
-Jobs run via FastAPI's built-in BackgroundTasks (in-process, no worker needed).
+Why the move: the old in-memory JOBS dict was invisible to any other process,
+so once generation runs in a separate RQ worker container the API could no
+longer see a job's status. Postgres is the shared source of truth both the API
+and the worker read/write. It also removes the lock-free read-modify-write
+race the JSON file documented -- each status transition is now a single atomic
+UPDATE (see JobRepository.update_status).
 
-No locking around the read-modify-write to disk -- two jobs finishing in the
-exact same instant could race. Fine for a handful of VAs on one machine,
-same tradeoff web/todos.py already makes. If you outgrow this later, swap
-this file for a real DB -- nothing else changes.
+Result files still live inside a job's `result` payload exactly as before (a
+list of {"name","path"} dicts, a grouped {"url","success","output_paths"}
+list, or a bare id string) -- there is no separate file-reference table.
 """
 
-import json
-import time
+from __future__ import annotations
+
 import traceback
-import uuid
 from pathlib import Path
 
-from ofmhelpers.config import settings
+from ofmhelpers.web.db.repository import JobRepository
 
-JOBS: dict[str, dict] = {}
-
-STORE_FILE = Path(settings.web.jobs_file)
-
-# Keep the persisted history from growing forever now that it survives
-# restarts -- without a cap, a handful of VAs generating for months would
-# leave thousands of dead rows in the file and on the Action log page.
-MAX_JOBS = settings.web.max_jobs
+_repo = JobRepository()
 
 
 def load_jobs() -> None:
-    """Populate JOBS from disk. Call once at app startup (see main.py's
-    lifespan) -- not at import time, so tests that never trigger the real
-    app lifespan still start with a clean, empty JOBS like before."""
-    if not STORE_FILE.exists():
-        return
-    try:
-        JOBS.update(json.loads(STORE_FILE.read_text()))
-    except json.JSONDecodeError:
-        pass
-
-
-def _save() -> None:
-    if len(JOBS) > MAX_JOBS:
-        stale = sorted(JOBS.values(), key=lambda j: j["created_at"], reverse=True)[
-            MAX_JOBS:
-        ]
-        for j in stale:
-            del JOBS[j["id"]]
-    STORE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    # default=str: a job's result/params should only ever hold JSON-safe
-    # values, but one stray Path (or similar) slipping in would otherwise
-    # raise here forever after -- JOBS is already mutated by the time _save()
-    # runs, so every future save would re-hit the same poisoned entry until
-    # the process restarts. Falling back to str() is a self-healing safety
-    # net, not a substitute for callers stringifying paths themselves.
-    STORE_FILE.write_text(json.dumps(JOBS, indent=2, default=str))
+    """No-op kept for main.py's lifespan call. Job history now lives in
+    Postgres, so there is nothing to reload into memory at startup -- the
+    database *is* the persistent store that survives a restart."""
+    return None
 
 
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
     """actor is the logged-in role ("admin" / "va") -- recorded so the Action
     log can show who ran what."""
-    job_id = str(uuid.uuid4())[:8]
-    JOBS[job_id] = {
-        "id": job_id,
-        "task": task_name,
-        "params": params,
-        "actor": actor,
-        "status": "running",
-        "result": None,
-        "error": None,
-        "created_at": time.time(),
-    }
-    _save()
-    return job_id
+    return _repo.create(task_name, params, actor=actor, status="running")
 
 
 def log_event(task_name: str, actor: str | None) -> str:
     """For instantaneous audit events (login/logout) rather than background
     work -- recorded straight into the Action log already "done", no
     background task involved."""
-    job_id = str(uuid.uuid4())[:8]
-    JOBS[job_id] = {
-        "id": job_id,
-        "task": task_name,
-        "params": {},
-        "actor": actor,
-        "status": "done",
-        "result": None,
-        "error": None,
-        "created_at": time.time(),
-    }
-    _save()
-    return job_id
+    return _repo.create(task_name, {}, actor=actor, status="done")
 
 
 def run_job(job_id: str, fn, kwargs: dict):
-    """Call this via BackgroundTasks.add_task(run_job, job_id, fn, kwargs)"""
+    """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
+    endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
+    status transition straight to Postgres so the API process sees it even
+    when this runs in a separate worker."""
     try:
         result = fn(**kwargs)
-        JOBS[job_id]["status"] = "done"
-        JOBS[job_id]["result"] = result
+        _repo.update_status(job_id, "done", result=result)
     except Exception as exc:
-        JOBS[job_id]["status"] = "failed"
         # The status pages show this directly to whoever is running the job --
         # a raw traceback isn't useful to them, just the exception's own
         # message (e.g. "Wrong API Key"). Full detail still goes to the
         # server's stdout/logs for whoever's actually debugging it.
-        JOBS[job_id]["error"] = str(exc) or exc.__class__.__name__
+        _repo.update_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
         traceback.print_exc()
-    _save()
 
 
 def get_job(job_id: str) -> dict | None:
-    return JOBS.get(job_id)
+    return _repo.get(job_id)
 
 
 def set_job_preview(job_id: str, preview: dict) -> None:
@@ -126,11 +74,7 @@ def set_job_preview(job_id: str, preview: dict) -> None:
     ready. job_status_payload only serves this while status is "running" --
     once the job finishes (done or failed) the real `result`/`error` takes
     over and this is simply never read again."""
-    job = JOBS.get(job_id)
-    if job is None:
-        return
-    job["preview"] = preview
-    _save()
+    _repo.set_preview(job_id, preview)
 
 
 def _result_matches_files(result: list[dict]) -> list[dict]:
@@ -157,39 +101,36 @@ def _result_matches_files(result: list[dict]) -> list[dict]:
     return kept
 
 
-def _prune_missing_files() -> bool:
-    """Self-heals the job history after a result file is gone -- deleted
-    through the file manager, or by hand on the server. Drops just the
+def list_jobs() -> list[dict]:
+    """Newest first. Self-heals history when a result file was deleted on disk
+    (through the file manager, or by hand on the server): drops just the
     missing file(s) from a job's result, or the whole job if nothing in it
     still exists, so a removed file's gallery card disappears instead of
-    turning into a dead link. Returns True if anything changed."""
-    changed = False
-    for job_id in list(JOBS):
-        job = JOBS[job_id]
+    turning into a dead link. The healed state is written back to Postgres."""
+    surviving: list[dict] = []
+    for job in _repo.list_all():
         result = job.get("result")
-        if job.get("status") != "done" or not result:
-            continue
-        # Not every job's result is a list of file dicts -- e.g.
-        # todo_drive_upload stores a plain Drive file ID string. Only the
-        # generator/downloader jobs produce the shapes _result_matches_files
-        # understands, so leave anything else untouched.
-        if not isinstance(result, list) or not isinstance(result[0], dict):
+        # Not every job's result is a list of file dicts -- e.g. a still-
+        # running job (result None) or todo_drive_upload (a plain Drive file
+        # ID string). Only the generator/downloader jobs produce the shapes
+        # _result_matches_files understands; leave anything else untouched.
+        if (
+            job.get("status") != "done"
+            or not result
+            or not isinstance(result, list)
+            or not isinstance(result[0], dict)
+        ):
+            surviving.append(job)
             continue
 
         kept = _result_matches_files(result)
         if kept == result:
-            continue
-
-        changed = True
-        if kept:
+            surviving.append(job)
+        elif kept:
             job["result"] = kept
+            _repo.update_result(job["id"], kept)
+            surviving.append(job)
         else:
-            del JOBS[job_id]
-    return changed
-
-
-def list_jobs() -> list[dict]:
-    """Newest first."""
-    if _prune_missing_files():
-        _save()
-    return sorted(JOBS.values(), key=lambda j: j["created_at"], reverse=True)
+            # Nothing of this job still exists on disk -- drop it entirely.
+            _repo.delete(job["id"])
+    return surviving

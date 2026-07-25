@@ -6,12 +6,12 @@ from fastapi import (
     Form,
     UploadFile,
     File,
-    BackgroundTasks,
     HTTPException,
     Query,
 )
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     build_ordered_paths,
@@ -97,7 +97,6 @@ def _run_seedance(
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     prompt: str = Form(...),
     model: SeedanceModel = Form(SeedanceModel.standard),
@@ -152,7 +151,7 @@ async def run(
         },
         actor=request.session.get("role"),
     )
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_seedance,

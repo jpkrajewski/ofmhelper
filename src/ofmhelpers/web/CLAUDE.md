@@ -26,26 +26,41 @@ verbatim by seven+ tools; a new one should almost never need new plumbing.
   `get_kie_api_key(request)` pre-fills the kie.ai API key field based on
   role. `require_admin` is a FastAPI dependency for admin-only routers.
 - `jobs.py` — **the core background-job pattern every generation/download
-  tool uses.** In-memory `JOBS` dict synced to `uploads/jobs.json` on every
-  write (`OFM_JOBS_FILE` env var to override). `create_job(task_name,
-  params, actor)` -> `background_tasks.add_task(run_job, job_id, fn,
-  kwargs)` -> `get_job(job_id)` for polling. `run_job` catches exceptions
-  and stores just the message (not a traceback) as `job["error"]`. No
-  locking (read-modify-write) — acceptable at VA-team scale; swap for a
-  real DB if that's ever outgrown. `list_jobs()` self-heals history when a
-  result file was deleted on disk.
+  tool uses.** Backed by Postgres via `db/` (was an in-memory `JOBS` dict +
+  `uploads/jobs.json`); the public API is unchanged. `create_job(task_name,
+  params, actor)` -> `enqueue(run_job, job_id, fn, kwargs)` (see `queue.py`)
+  -> `get_job(job_id)` for polling. `run_job` catches exceptions and stores
+  just the message (not a traceback) as `job["error"]`. Status transitions
+  are atomic single UPDATEs now (the old read-modify-write race is gone).
+  `list_jobs()` self-heals history when a result file was deleted on disk.
+  Result files still live inside a job's `result` payload (JSONB) — there is
+  no separate file-reference table.
+- `db/` — the persistence layer (Postgres). `models.py` (SQLAlchemy tables:
+  jobs, todos, approval_tokens), `session.py` (lazy engine/session from
+  `settings.infra`), `repository.py` (**the only code that touches the DB** —
+  jobs/todos/approval_tokens delegate to it), `backfill.py` (one-time JSON ->
+  Postgres migration, driven by `scripts/backfill_state.py`). Schema changes
+  are versioned with Alembic (`alembic/` at the repo root).
+- `queue.py` — the RQ queue (Redis) the API enqueues onto and the `worker`
+  container consumes, replacing FastAPI BackgroundTasks. `enqueue(...)` runs
+  jobs on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs
+  them inline, exactly like the old BackgroundTasks, so TestClient still sees
+  results immediately.
+- `schemas.py` — Pydantic v2 models (`Job`/`Todo`/`ApprovalToken`), the typed
+  contract at the persistence boundary.
 - `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
   key, so an in-request poll timeout or a server restart mid-generation
   still gets downloaded automatically.
 - `todos.py` — persisted VA task list (model name, link to replicate,
-  comments), JSON-backed (`OFM_TODO_FILE`), unlike `jobs.py` written to disk
-  on every change (losing outstanding tasks on restart would be a real
-  problem, unlike losing job *history*).
+  comments), Postgres-backed via `db/` (public API unchanged). Durable across
+  restarts (losing outstanding tasks would be a real problem, unlike losing
+  job *history*).
 - `approval_tokens.py` — single-use "magic link" tokens (no login needed)
-  for approving a VA-uploaded asset, used by `routers/approve.py`. Snapshots
-  the asset path it was issued for; `consume()` reports "stale" rather than
-  approving the wrong file if the asset was replaced after the link went out.
+  for approving a VA-uploaded asset, used by `routers/approve.py`. Postgres-
+  backed via `db/`. Snapshots the asset path it was issued for; `consume()`
+  reports "stale" rather than approving the wrong file if the asset was
+  replaced after the link went out.
 - `helpers_registry.py` — `HELPERS: list[HelperEntry]`, the registry for the
   `/helpers` index page (radio-comms, elevenlabs, scraper, ...). Add one
   entry here for a new "helper" tool; the index page itself is generic.

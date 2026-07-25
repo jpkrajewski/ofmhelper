@@ -16,7 +16,7 @@ import unittest.mock as mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.jobs import JOBS
+from ofmhelpers.web.jobs import get_job
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.filterwarnings("ignore")
@@ -73,7 +73,7 @@ def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
 
     assert r.status_code == 200
     job_id = r.json()["job_id"]
-    job = JOBS[job_id]
+    job = get_job(job_id)
     assert job["task"] == "replicate_intake"
     assert job["status"] == "done"
     assert job["result"]["draft_script"] == "DRAFT SCRIPT TEXT"
@@ -103,7 +103,7 @@ def test_intake_threads_target_and_gender_to_draft_script(client, tmp_path):
         "confident fitness coach pitching a program"
     )
     assert mock_draft_script.call_args.kwargs["gender"] == "male"
-    job = JOBS[job_id]
+    job = get_job(job_id)
     assert job["result"]["target"] == "confident fitness coach pitching a program"
     assert job["result"]["gender"] == "male"
 
@@ -176,7 +176,7 @@ def test_generate_creates_a_replicate_job(client, tmp_path):
 
     assert r.status_code == 200
     job_id = r.json()["job_id"]
-    job = JOBS[job_id]
+    job = get_job(job_id)
     assert job["task"] == "replicate"
     assert job["status"] == "done"
     assert job["result"][0]["name"] == "clone.mp4"

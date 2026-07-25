@@ -25,6 +25,7 @@ from ofmhelpers.config.settings import (
     DiscordSettings,
     DownloadersSettings,
     GDriveSettings,
+    InfraSettings,
     KieAISettings,
     ReelMachineSettings,
     SessionSettings,
@@ -40,6 +41,10 @@ class Settings:
     @property
     def web(self) -> WebSettings:
         return WebSettings()
+
+    @property
+    def infra(self) -> InfraSettings:
+        return InfraSettings()
 
     @property
     def kieai(self) -> KieAISettings:

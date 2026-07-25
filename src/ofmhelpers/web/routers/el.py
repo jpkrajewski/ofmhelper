@@ -1,13 +1,14 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Form, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse, FileResponse
 
 from elevenlabs.client import ElevenLabs
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
 
 router = APIRouter(prefix="/helpers/elevenlabs", tags=["elevenlabs"])
@@ -62,7 +63,6 @@ def form(request: Request):
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     text: str = Form(...),
     voice: str = Form("George"),
@@ -86,7 +86,7 @@ async def run(
         "output_format": output_format,
     }
     job_id = create_job("elevenlabs", params, actor=request.session.get("role"))
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_tts,

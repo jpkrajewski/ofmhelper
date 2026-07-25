@@ -65,6 +65,33 @@ class WebSettings(BaseSettings):
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
 
 
+class InfraSettings(BaseSettings):
+    """Backing services shared by the API and the RQ worker: Postgres (the
+    durable job/todo/token store) and Redis (the RQ broker). Kept in one
+    class so the worker process and the API read the exact same connection
+    strings. Defaults point at the docker-compose service names, so a plain
+    `docker compose up` wires everything with no extra env; override both for
+    local-outside-Docker runs and for prod."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    database_url: str = Field(
+        default="postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers",
+        validation_alias="OFM_DATABASE_URL",
+    )
+    redis_url: str = Field(
+        default="redis://redis:6379/0", validation_alias="OFM_REDIS_URL"
+    )
+    # Generation jobs poll kie.ai for up to ~15 min, far past RQ's 180s default
+    # job timeout -- give the worker plenty of headroom before it kills a job.
+    rq_job_timeout_s: int = Field(default=1800, validation_alias="OFM_RQ_JOB_TIMEOUT_S")
+    # When False, enqueue() runs the job inline in the calling process instead
+    # of handing it to the worker -- RQ's built-in synchronous mode. Prod runs
+    # async (True); the test suite forces it False so TestClient sees the same
+    # "background work already ran" behavior FastAPI BackgroundTasks gave.
+    rq_async: bool = Field(default=True, validation_alias="OFM_RQ_ASYNC")
+
+
 class KieAISettings(BaseSettings):
     """aigenproviders/kaiai/client.py, upload_cache.py, routers/fake_ai.py,
     routers/file_manager.py."""

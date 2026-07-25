@@ -27,7 +27,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
-from ofmhelpers.web.jobs import JOBS, create_job
+from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.jobs import create_job, get_job
 from ofmhelpers.web.routers import fake_ai as fake_ai_router
 
 
@@ -112,7 +113,7 @@ def test_every_stored_param_has_a_matching_form_field(
     client, task, tmp_path, monkeypatch
 ):
     job_id = SUBMITTERS[task](client, tmp_path, monkeypatch)
-    params = JOBS[job_id]["params"]
+    params = get_job(job_id)["params"]
 
     html = client.get("/generate").text
     field_names = _fieldset_field_names(html, task)
@@ -199,7 +200,7 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_p
             "reference_audio": [],
         },
     )
-    assert JOBS[job_id]["status"] == "running"
+    assert get_job(job_id)["status"] == "running"
 
     html = client.get("/generate").text
     card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.S)
@@ -210,8 +211,9 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_p
     # once it finishes, the pending marker disappears (server already knows)
     out_file = tmp_path / "x.png"
     out_file.write_bytes(b"fake image")
-    JOBS[job_id]["status"] = "done"
-    JOBS[job_id]["result"] = [{"name": "x.png", "path": str(out_file)}]
+    JobRepository().update_status(
+        job_id, "done", result=[{"name": "x.png", "path": str(out_file)}]
+    )
     html2 = client.get("/generate").text
     card2 = re.search(rf'data-job-id="{job_id}"(.*?)>', html2, re.S)
     assert "data-pending" not in card2.group(1)

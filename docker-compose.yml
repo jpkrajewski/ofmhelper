@@ -1,3 +1,29 @@
+# Shared app config, reused by the API and the RQ worker via YAML anchors so
+# the worker always mounts exactly the same filesystem the API serves results
+# from (uploads/kieai_out/downloads) and reads the same env.
+x-app-environment: &app-environment
+  - BGUTIL_POT_PROVIDER_URL=http://pot-provider:4416
+  - OFM_COOKIES_FILE=/app/cookies/cookies.txt
+  - OFM_KIEAI_OUT_DIR=/app/kieai_out
+  - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
+  - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
+  - GOOGLE_DRIVE_TOKEN_FILE=/app/secrets/google-drive-token.json
+  # Postgres (durable job/todo/token store) and Redis (RQ broker). The code
+  # defaults these to the service names, but we set them explicitly so the same
+  # file documents the wiring on any host.
+  - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers
+  - OFM_REDIS_URL=redis://redis:6379/0
+
+x-app-volumes: &app-volumes
+  - ./src:/app/src
+  - cookies_data:/app/cookies
+  - ./uploads:/app/uploads
+  - ./downloads:/app/downloads
+  - ./kieai_out:/app/kieai_out
+  - ./secrets:/app/secrets   # writable -- the Drive OAuth token file rewrites
+                              # itself on every refresh (see gdrive/client.py);
+                              # read-only broke that
+
 services:
   ofmhelpers:
     build: .
@@ -5,27 +31,17 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    environment:
-      - BGUTIL_POT_PROVIDER_URL=http://pot-provider:4416
-      - OFM_COOKIES_FILE=/app/cookies/cookies.txt
-      - OFM_KIEAI_OUT_DIR=/app/kieai_out
-      - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
-      - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
-      - GOOGLE_DRIVE_TOKEN_FILE=/app/secrets/google-drive-token.json
+    environment: *app-environment
     env_file:
       - .env
-    volumes:
-      - ./src:/app/src
-      - cookies_data:/app/cookies
-      - ./uploads:/app/uploads
-      - ./downloads:/app/downloads
-      - ./kieai_out:/app/kieai_out
-      - ./secrets:/app/secrets   # writable -- the Drive OAuth token file
-                                  # rewrites itself on every refresh (see
-                                  # gdrive/client.py); read-only broke that
+    volumes: *app-volumes
     depends_on:
       pot-provider:
         condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - internal
     security_opt:
@@ -37,6 +53,90 @@ services:
       - DAC_OVERRIDE   # lets appuser (1000:1000) write to bind mounts it
                         # doesn't literally own -- needed on Windows/Docker
                         # Desktop bind mounts where real chown isn't reliable
+
+  # RQ worker: runs the background jobs the API used to run in-process. A pool
+  # of processes (default 10, OFM_RQ_WORKERS to tune) so at least 10 upload/
+  # poll/download jobs run concurrently. Its own restart policy, independent of
+  # the API -- a worker crash must not take down the web app, and vice versa.
+  worker:
+    build: .
+    container_name: ofmhelpers-worker
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - rq worker-pool --num-workers "$${OFM_RQ_WORKERS:-10}" --url "$$OFM_REDIS_URL"
+    # The image's HTTP healthcheck (probes :8000/health) is meaningless for the
+    # worker, which runs no web server -- disable it so status isn't "unhealthy".
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    volumes: *app-volumes
+    depends_on:
+      pot-provider:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
+  postgres:
+    image: postgres:16
+    container_name: ofmhelpers-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=ofmhelpers
+      - POSTGRES_PASSWORD=ofmhelpers
+      - POSTGRES_DB=ofmhelpers
+    ports:
+      # Bound to localhost only (not 0.0.0.0) so host-run `uv run pytest` and
+      # `alembic upgrade` can reach it, without exposing the DB off-box in prod.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ofmhelpers"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7
+    container_name: ofmhelpers-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      # Localhost only -- lets host-run RQ integration tests reach the broker.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    # No `cap_drop: ALL` here: the redis image's entrypoint uses setpriv to
+    # step down from root to the redis user, which needs SETUID/SETGID.
+    # Dropping all caps makes it crash-loop ("setpriv: setresuid failed").
+    # Same reason postgres above keeps default caps.
 
   pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:latest
@@ -51,8 +151,39 @@ services:
     cap_drop:
       - ALL
 
+  # Dev-only RQ job dashboard. Off by default -- start it explicitly with
+  # `docker compose --profile dev up rq-dashboard` (or `--profile dev up`).
+  # Reuses the app image (rq-dashboard is a project dependency) so there's no
+  # extra unpinned third-party image.
+  rq-dashboard:
+    build: .
+    container_name: ofmhelpers-rq-dashboard
+    profiles:
+      - dev
+    command:
+      - rq-dashboard
+      - --redis-url
+      - redis://redis:6379/0
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "9181"
+    ports:
+      - "127.0.0.1:9181:9181"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   cookies_data:
+  postgres_data:
+  redis_data:
 
 networks:
   internal:

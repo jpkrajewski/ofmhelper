@@ -20,7 +20,6 @@ from pathlib import Path
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     File,
     Form,
     HTTPException,
@@ -36,6 +35,7 @@ from ofmhelpers.reel_machine.looks import LOOKS
 from ofmhelpers.reel_machine.shapes import SHAPES, render_shape
 from ofmhelpers.web.auth import get_kie_api_key
 from ofmhelpers.web.jobs import create_job, get_job, run_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     asset_card,
@@ -129,7 +129,6 @@ def form(request: Request):
 @router.post("/intake")
 async def intake(
     request: Request,
-    background_tasks: BackgroundTasks,
     source_url: str = Form(""),
     source_file: UploadFile | None = File(None),
     shape: str = Form(pipeline.DEFAULT_SHAPE),
@@ -158,7 +157,7 @@ async def intake(
         "gender": gender,
     }
     job_id = create_job("replicate_intake", params, actor=request.session.get("role"))
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_replicate_intake,
@@ -241,7 +240,6 @@ def contact_sheet(job_id: str):
 @router.post("/generate")
 async def generate(
     request: Request,
-    background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     script: str = Form(...),
     duration: int = Form(15),
@@ -264,7 +262,7 @@ async def generate(
         {**params, "character_images": character_ref_paths},
         actor=request.session.get("role"),
     )
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_replicate_generate,

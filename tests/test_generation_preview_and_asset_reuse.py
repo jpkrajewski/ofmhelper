@@ -25,7 +25,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
-from ofmhelpers.web.jobs import JOBS, create_job, run_job
+from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.routers import nbp as nbp_router
 from ofmhelpers.web.routers import kling as kling_router
 from ofmhelpers.web.routers import refs as refs_router
@@ -123,7 +124,7 @@ def test_nanobanana_publishes_a_preview_as_soon_as_the_poll_succeeds(tmp_path):
         MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
         nbp_router._run_nanobanana(job_id=job_id, **NBP_KWARGS)
 
-    assert JOBS[job_id]["preview"] == {
+    assert get_job(job_id)["preview"] == {
         "remote_url": "https://cdn.kie.ai/out/abc.png",
         "kind": "image",
     }
@@ -147,8 +148,8 @@ def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only():
             {"job_id": job_id, **NBP_KWARGS},
         )
 
-    assert JOBS[job_id]["status"] == "done"
-    assert JOBS[job_id]["result"] == [
+    assert get_job(job_id)["status"] == "done"
+    assert get_job(job_id)["result"] == [
         {
             "name": "xyz.png",
             "path": None,
@@ -168,8 +169,8 @@ def test_nanobanana_failure_before_any_result_url_still_fails_the_job():
         )
         run_job(job_id, nbp_router._run_nanobanana, {"job_id": job_id, **NBP_KWARGS})
 
-    assert JOBS[job_id]["status"] == "failed"
-    assert JOBS[job_id]["error"] == "Wrong API Key"
+    assert get_job(job_id)["status"] == "failed"
+    assert get_job(job_id)["error"] == "Wrong API Key"
 
 
 def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only():
@@ -185,8 +186,8 @@ def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only():
         )
         run_job(job_id, kling_router._run_kling3, {"job_id": job_id, **KLING_KWARGS})
 
-    assert JOBS[job_id]["status"] == "done"
-    assert JOBS[job_id]["result"] == [
+    assert get_job(job_id)["status"] == "done"
+    assert get_job(job_id)["result"] == [
         {
             "name": "clip.mp4",
             "path": None,
@@ -202,14 +203,15 @@ def test_job_status_json_surfaces_preview_only_while_running(tmp_path):
 
     set_job_preview(job_id, {"remote_url": "https://cdn.kie.ai/x.png", "kind": "image"})
 
-    running_payload = job_status_payload(JOBS[job_id], "/nanobanana/files")
+    running_payload = job_status_payload(get_job(job_id), "/nanobanana/files")
     assert running_payload["preview"] == {
         "remote_url": "https://cdn.kie.ai/x.png",
         "kind": "image",
     }
 
-    JOBS[job_id]["status"] = "done"
-    JOBS[job_id]["result"] = [{"name": "x.png", "path": str(tmp_path / "x.png")}]
     (tmp_path / "x.png").write_bytes(b"x")
-    done_payload = job_status_payload(JOBS[job_id], "/nanobanana/files")
+    JobRepository().update_status(
+        job_id, "done", result=[{"name": "x.png", "path": str(tmp_path / "x.png")}]
+    )
+    done_payload = job_status_payload(get_job(job_id), "/nanobanana/files")
     assert "preview" not in done_payload

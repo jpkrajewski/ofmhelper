@@ -14,6 +14,7 @@ from ofmhelpers.config.settings import (
     DiscordSettings,
     DownloadersSettings,
     GDriveSettings,
+    InfraSettings,
     KieAISettings,
     ReelMachineSettings,
     SessionSettings,
@@ -35,6 +36,10 @@ ALL_ENV_VARS = [
     "OFM_RECOVERY_SWEEP_INTERVAL_S",
     "OFM_APPROVAL_TOKEN_TTL_SECONDS",
     "OFM_GALLERY_LIMIT",
+    "OFM_DATABASE_URL",
+    "OFM_REDIS_URL",
+    "OFM_RQ_JOB_TIMEOUT_S",
+    "OFM_RQ_ASYNC",
     "OFM_KIEAI_OUT_DIR",
     "OFM_KIEAI_TASK_LOG",
     "OFM_KIEAI_COMPLETIONS_LOG",
@@ -119,6 +124,24 @@ def test_web_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.recovery_sweep_interval_s == 300
     assert s.approval_token_ttl_seconds == 3 * 24 * 3600
     assert s.gallery_limit == 20
+
+
+def test_infra_settings_defaults_point_at_compose_service_names(clean_env):
+    s = InfraSettings(_env_file=None)
+    assert s.database_url == (
+        "postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers"
+    )
+    assert s.redis_url == "redis://redis:6379/0"
+    assert s.rq_job_timeout_s == 1800
+    assert s.rq_async is True
+
+
+def test_infra_settings_env_overrides(monkeypatch):
+    monkeypatch.setenv("OFM_DATABASE_URL", "postgresql+psycopg://u:p@localhost/db")
+    monkeypatch.setenv("OFM_REDIS_URL", "redis://localhost:6380/1")
+    s = InfraSettings(_env_file=None)
+    assert s.database_url == "postgresql+psycopg://u:p@localhost/db"
+    assert s.redis_url == "redis://localhost:6380/1"
 
 
 def test_kieai_settings_defaults_match_pre_refactor_values(clean_env):

@@ -21,8 +21,7 @@ from fastapi.testclient import TestClient
 
 from ofmhelpers.downloaders.generic import DownloadResult
 from ofmhelpers.downloaders.images import ImageDownloadResult
-from ofmhelpers.web import jobs
-from ofmhelpers.web.jobs import JOBS, create_job, run_job
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import clean_image as clean_image_router
 from ofmhelpers.web.routers import download_images as download_images_router
@@ -119,14 +118,14 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     # admin runs one
     r = client.post("/download-videos/run", data={"urls": "https://a.example/1"})
     admin_job = r.json()["job_id"]
-    assert JOBS[admin_job]["actor"] == "admin"
+    assert get_job(admin_job)["actor"] == "admin"
 
     # va runs one
     va_client = TestClient(app)
     va_client.post("/login", data={"password": "test-va", "next": "/"})
     r = va_client.post("/download-videos/run", data={"urls": "https://a.example/2"})
     va_job = r.json()["job_id"]
-    assert JOBS[va_job]["actor"] == "va"
+    assert get_job(va_job)["actor"] == "va"
 
     html = client.get("/action-log").text
     assert "Action log" in html
@@ -140,7 +139,7 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client):
     the server-rendered card needs data-pending + data-poll-prefix so
     generation.js resumes polling it instead of requiring a manual refresh."""
     job_id = create_job("download_videos", {"urls": ["https://a.example/1"]})
-    assert JOBS[job_id]["status"] == "running"
+    assert get_job(job_id)["status"] == "running"
 
     html = client.get("/download-assets").text
     card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.S)
@@ -185,19 +184,19 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
     json.dumps(result)  # must not raise
 
 
-def test_a_bad_job_result_cannot_permanently_break_future_job_saves():
-    """Defense in depth for jobs.py._save(): even if a caller slips a
-    non-JSON-safe value (e.g. a stray Path) into a job's result, _save()
-    must self-heal (via json.dumps(default=str)) instead of leaving JOBS
-    poisoned so that every subsequent, unrelated create_job()/_save() call
-    fails too -- which is exactly how one crashed download-videos job used
-    to take down nanobanana's /run endpoint."""
+def test_a_bad_job_result_cannot_break_future_jobs():
+    """In the old JSON store a single job whose result held a non-serializable
+    value (a stray Path) poisoned the shared in-memory JOBS dict, so every
+    later save failed too -- one crashed download-videos job could take down
+    nanobanana's /run endpoint. With each job persisted in its own Postgres
+    transaction that failure mode is structurally gone: the bad job fails in
+    isolation and unrelated jobs still persist fine."""
     poisoned_job = create_job("download_videos", {"urls": ["https://a.example/1"]})
+    # A raw Path is not JSON-serializable, so writing it fails -- but only for
+    # this job; run_job records it as failed rather than crashing.
     run_job(poisoned_job, lambda: [{"path": Path("/tmp/gone.mp4")}], {})
-    assert JOBS[poisoned_job]["status"] == "done"
+    assert get_job(poisoned_job)["status"] == "failed"
 
-    # an unrelated job created afterwards must still save successfully
+    # An unrelated job created afterwards must still persist successfully.
     next_job = create_job("nanobanana", {"prompt": "a cat"})
-    on_disk = json.loads(jobs.STORE_FILE.read_text())
-    assert on_disk[next_job]["task"] == "nanobanana"
-    assert on_disk[poisoned_job]["result"] == [{"path": str(Path("/tmp/gone.mp4"))}]
+    assert get_job(next_job)["task"] == "nanobanana"

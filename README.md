@@ -236,15 +236,39 @@ ports:
   - "8000:8000"
 ```
 
+The stack is one `docker-compose.yml` (dev and prod): `ofmhelpers` (API),
+`worker` (RQ background jobs), `postgres` (durable job/todo/token store),
+`redis` (RQ broker), and `pot-provider`. Postgres/Redis persist to named
+volumes, so no extra host directories are needed for them.
+
 ```bash
 docker compose up -d --build
-docker compose ps                    # both services should show "Up"
+docker compose ps                    # api healthy; postgres/redis healthy; worker up
 docker compose logs -f ofmhelpers    # watch for "Application startup complete"
 ```
+
+**Apply the database schema** (first run, and after any migration — idempotent):
+```bash
+docker compose exec ofmhelpers alembic upgrade head
+```
+
+**One-time backfill** of any pre-existing JSON state (`uploads/jobs.json`,
+`todos.json`, `approval_tokens.json`) into Postgres. Idempotent (upserts by id)
+and archives the originals to `uploads/archive/`:
+```bash
+docker compose exec ofmhelpers python -m ofmhelpers.web.db.backfill
+```
+(`scripts/deploy.sh` runs both of the above for you on every deploy, so you only
+need to run them by hand on a manual first bring-up.)
 
 Sanity check from the box itself:
 ```bash
 curl -I http://127.0.0.1:8000
+```
+
+Optional dev-only RQ job dashboard (off by default; localhost:9181):
+```bash
+docker compose --profile dev up -d rq-dashboard
 ```
 
 ---
@@ -316,12 +340,49 @@ with a real, trusted cert, entirely free, forever.
 
 ## 10. Updating / redeploying after code changes
 
+**From your local machine** (recommended) — commits, pushes, pulls on the
+server, rebuilds, migrates, and backfills in one shot:
+
+```bash
+./scripts/deploy.sh "your commit message"
+```
+
+It reads the server connection details from `deploy.local.env` (gitignored; see
+`deploy.local.env.example`) and, on the server, runs:
+`git pull && docker compose up -d --build && alembic upgrade head &&
+python -m ofmhelpers.web.db.backfill`, then polls `/health`.
+
+**Or manually on the server:**
 ```bash
 cd ~/ofmhelper
 git pull
 docker compose up -d --build
+docker compose exec -T ofmhelpers alembic upgrade head
 docker compose logs -f ofmhelpers   # confirm clean startup
 ```
+
+The `worker` container has its own `restart: unless-stopped` policy,
+independent of the API — a worker crash won't take down the web app, and vice
+versa.
+
+---
+
+## 11. Running the tests
+
+The test suite is Postgres- and Redis-backed (the durable stores and the RQ
+queue), so bring those up first, then run pytest from the repo root:
+
+```bash
+docker compose up -d postgres redis
+uv run pytest
+```
+
+A throwaway `ofmhelpers_test` database is created automatically and truncated
+between tests — it never touches dev/prod data. Point the suite at a different
+instance with `OFM_TEST_DATABASE_URL` / `OFM_TEST_REDIS_URL` if needed.
+
+Before considering a change done (see `CLAUDE.md`): run
+`pre-commit run --files <changed>` and `uv run pytest`.
 
 ---
 

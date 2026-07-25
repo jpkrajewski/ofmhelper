@@ -1,30 +1,98 @@
+import os
+
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 
 from ofmhelpers.config.settings import (
     DiscordSettings,
     DownloadersSettings,
     GDriveSettings,
+    InfraSettings,
     KieAISettings,
     ReelMachineSettings,
     SessionSettings,
     WebSettings,
 )
-from ofmhelpers.web import jobs
+
+# The three durable stores (jobs, todos, approval tokens) are Postgres-backed
+# now, so the test suite needs a running Postgres. Bring one up first with:
+#     docker compose up -d postgres redis
+# Tests run against a SEPARATE database (ofmhelpers_test) so they never touch
+# dev/prod data, and every table is truncated between tests for isolation.
+TEST_DATABASE_URL = os.environ.get(
+    "OFM_TEST_DATABASE_URL",
+    "postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test",
+)
+# RQ integration tests use a real broker; db 1 keeps them off dev's db 0.
+TEST_REDIS_URL = os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1")
+
+
+def _ensure_test_database(url: str) -> None:
+    """CREATE DATABASE <test db> if it doesn't exist yet, by connecting to the
+    server's default `postgres` database with autocommit."""
+    parsed = make_url(url)
+    admin_url = parsed.set(database="postgres")
+    engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :n"),
+                {"n": parsed.database},
+            ).scalar()
+            if not exists:
+                conn.execute(text(f'CREATE DATABASE "{parsed.database}"'))
+    except OperationalError as exc:  # pragma: no cover - environment guard
+        raise RuntimeError(
+            "Cannot reach Postgres for the test suite. Start it first with "
+            "`docker compose up -d postgres redis` (or set OFM_TEST_DATABASE_URL "
+            f"to a reachable instance). Original error: {exc}"
+        ) from exc
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _test_database():
+    """Point the whole app at the throwaway test database and create the
+    schema once per session."""
+    _ensure_test_database(TEST_DATABASE_URL)
+    # Set on the real environment (not monkeypatch): session-scoped, and it
+    # must be visible before any app code builds its lazy engine / redis conn.
+    os.environ["OFM_DATABASE_URL"] = TEST_DATABASE_URL
+    os.environ["OFM_REDIS_URL"] = TEST_REDIS_URL
+    # Run enqueued jobs inline (like the old BackgroundTasks) so TestClient
+    # tests see the result immediately. test_worker_integration flips this back
+    # to async to exercise the real worker.
+    os.environ["OFM_RQ_ASYNC"] = "false"
+
+    # Import here, after the env var is set, so the engine binds to the test DB.
+    from ofmhelpers.web.db.models import Base
+    from ofmhelpers.web.db.session import get_engine
+
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    yield
 
 
 @pytest.fixture(autouse=True)
-def _isolated_jobs_store(monkeypatch, tmp_path):
-    """web/jobs.py now persists every job to disk (see jobs.py) -- point it
-    at a per-test temp file so the test suite never reads or writes the
-    real uploads/jobs.json. JOBS itself (the in-memory dict) stays
-    process-wide across tests, same as before this change; this only
-    isolates the on-disk copy."""
-    monkeypatch.setattr(jobs, "STORE_FILE", tmp_path / "jobs.json")
+def _clean_tables():
+    """Truncate the three stores before each test so nothing leaks between
+    tests -- the DB equivalent of the old per-test temp JSON files."""
+    from ofmhelpers.web.db.session import get_engine
+
+    with get_engine().begin() as conn:
+        conn.execute(
+            text("TRUNCATE jobs, todos, approval_tokens RESTART IDENTITY CASCADE")
+        )
+    yield
 
 
 _SETTINGS_CLASSES = (
     SessionSettings,
     WebSettings,
+    InfraSettings,
     KieAISettings,
     DownloadersSettings,
     DiscordSettings,

@@ -2,11 +2,12 @@ import mimetypes
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Form, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import FileResponse
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     flatten_grouped_results,
     grouped_job_status_payload,
@@ -35,7 +36,7 @@ def _flatten_paths(job: dict) -> list[Path]:
 
 
 @router.post("/run")
-def run(request: Request, background_tasks: BackgroundTasks, urls: str = Form(...)):
+def run(request: Request, urls: str = Form(...)):
     url_list = [u.strip() for u in urls.splitlines() if u.strip()]
     if not url_list:
         raise HTTPException(status_code=400, detail="At least one URL is required")
@@ -43,7 +44,7 @@ def run(request: Request, background_tasks: BackgroundTasks, urls: str = Form(..
     job_id = create_job(
         "download_images", {"urls": url_list}, actor=request.session.get("role")
     )
-    background_tasks.add_task(run_job, job_id, _run_downloads, {"urls": url_list})
+    enqueue(run_job, job_id, _run_downloads, {"urls": url_list})
 
     return {"job_id": job_id}
 

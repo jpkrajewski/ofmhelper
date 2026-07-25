@@ -4,13 +4,13 @@ from fastapi import (
     Form,
     UploadFile,
     File,
-    BackgroundTasks,
     HTTPException,
     Query,
 )
 
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     build_ordered_paths,
@@ -73,7 +73,6 @@ def _run_kling3(
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     prompt: str = Form(...),
     mode: str = Form("pro"),
@@ -100,7 +99,7 @@ async def run(
     job_id = create_job(
         "kling3", {**params, "images": image_paths}, actor=request.session.get("role")
     )
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_kling3,

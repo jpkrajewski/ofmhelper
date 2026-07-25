@@ -30,6 +30,10 @@ WORKDIR /app
 
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
+# Alembic config + migrations, so `alembic upgrade head` can run inside the
+# container on deploy (see scripts/deploy.sh).
+COPY --chown=appuser:appuser alembic.ini /app/alembic.ini
+COPY --chown=appuser:appuser alembic /app/alembic
 
 RUN mkdir -p /app/downloads /app/uploads /app/cookies /app/secrets && \
     chown -R appuser:appuser /app/downloads /app/uploads /app/cookies /app/secrets

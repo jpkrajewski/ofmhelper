@@ -4,11 +4,11 @@ from fastapi import (
     Form,
     UploadFile,
     File,
-    BackgroundTasks,
     HTTPException,
 )
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     build_ordered_paths,
@@ -75,7 +75,6 @@ def _run_nanobanana(
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     api_key: str = Form(...),
     prompt: str = Form(...),
     aspect_ratio: str = Form("1:1"),
@@ -104,7 +103,7 @@ async def run(
         {**params, "image_input": image_input_paths},
         actor=request.session.get("role"),
     )
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_nanobanana,

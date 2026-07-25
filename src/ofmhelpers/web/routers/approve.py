@@ -12,12 +12,13 @@ off the Drive upload in one shot. Security comes from the token itself
 import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from ofmhelpers.config import settings
 from ofmhelpers.web import approval_tokens, todos
 from ofmhelpers.web.jobs import create_job, run_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.todo import _upload_to_drive
 from ofmhelpers.web.templates_config import templates
 
@@ -106,7 +107,7 @@ def asset_preview(token: str):
 
 
 @router.get("/{token}")
-def approve(token: str, background_tasks: BackgroundTasks):
+def approve(token: str):
     record = approval_tokens.get_token(token)
     if record is None:
         return RedirectResponse(
@@ -134,7 +135,7 @@ def approve(token: str, background_tasks: BackgroundTasks):
     asset_path = todo["asset_path"]
     job_id = create_job("todo_drive_upload", {"todo_id": todo["id"]}, actor="discord")
     todos.set_drive_upload_job(todo["id"], job_id)
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _upload_to_drive,

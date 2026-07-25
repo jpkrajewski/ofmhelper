@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 
 from ofmhelpers.utils.metadata_cleaner import clean_metadata
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     make_job_dir,
     save_upload,
@@ -28,7 +29,6 @@ def _run_clean(job_dir: str) -> list[dict]:
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(default=[]),
 ):
     files = [f for f in files if f.filename]
@@ -43,7 +43,7 @@ async def run(
         {"dir": str(job_dir), "files": saved_names},
         actor=request.session.get("role"),
     )
-    background_tasks.add_task(run_job, job_id, _run_clean, {"job_dir": str(job_dir)})
+    enqueue(run_job, job_id, _run_clean, {"job_dir": str(job_dir)})
 
     return {"job_id": job_id}
 

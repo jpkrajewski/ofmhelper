@@ -1,46 +1,42 @@
 """
-Covers web/jobs.py's disk persistence (create_job/log_event/run_job now
-write through to a JSON file, and load_jobs() reloads it into JOBS -- see
-main.py's lifespan) and its self-healing prune: a "done" job whose result
-file(s) have been deleted (through the file manager, or by hand on the
-server) should drop out of list_jobs() instead of leaving a dead link in
-the /generate gallery or the Action log.
+Covers web/jobs.py's Postgres persistence (create_job/log_event/run_job write
+through to the jobs table, and the record survives a restart because the DB is
+the store) and its self-healing prune: a "done" job whose result file(s) have
+been deleted (through the file manager, or by hand on the server) should drop
+out of list_jobs() instead of leaving a dead link in the /generate gallery or
+the Action log.
 
-conftest.py's autouse _isolated_jobs_store fixture already points
-jobs.STORE_FILE at a per-test temp file, so these tests never touch the
-real uploads/jobs.json.
+conftest.py points the app at a throwaway test database and truncates the
+tables between tests, so these never touch dev/prod data.
 """
 
-import json
-
-from ofmhelpers.web import jobs
+from ofmhelpers.web.db.repository import JobRepository
 from ofmhelpers.web.jobs import (
-    JOBS,
     create_job,
     get_job,
     list_jobs,
-    load_jobs,
     log_event,
     run_job,
 )
 
 
-def test_create_job_persists_to_disk_immediately():
+def test_create_job_persists_immediately():
     job_id = create_job("seedance", {"prompt": "a cat"}, actor="admin")
 
-    on_disk = json.loads(jobs.STORE_FILE.read_text())
-    assert on_disk[job_id]["task"] == "seedance"
-    assert on_disk[job_id]["params"] == {"prompt": "a cat"}
-    assert on_disk[job_id]["status"] == "running"
+    job = get_job(job_id)
+    assert job["task"] == "seedance"
+    assert job["params"] == {"prompt": "a cat"}
+    assert job["status"] == "running"
+    assert job["actor"] == "admin"
 
 
 def test_run_job_success_persists_result():
     job_id = create_job("seedance", {})
     run_job(job_id, lambda: [{"name": "out.mp4", "path": "/tmp/out.mp4"}], {})
 
-    on_disk = json.loads(jobs.STORE_FILE.read_text())
-    assert on_disk[job_id]["status"] == "done"
-    assert on_disk[job_id]["result"] == [{"name": "out.mp4", "path": "/tmp/out.mp4"}]
+    job = get_job(job_id)
+    assert job["status"] == "done"
+    assert job["result"] == [{"name": "out.mp4", "path": "/tmp/out.mp4"}]
 
 
 def test_run_job_failure_persists_error():
@@ -51,25 +47,20 @@ def test_run_job_failure_persists_error():
 
     run_job(job_id, boom, {})
 
-    on_disk = json.loads(jobs.STORE_FILE.read_text())
-    assert on_disk[job_id]["status"] == "failed"
-    assert on_disk[job_id]["error"] == "Wrong API Key"
+    job = get_job(job_id)
+    assert job["status"] == "failed"
+    assert job["error"] == "Wrong API Key"
 
 
-def test_load_jobs_survives_a_simulated_restart():
-    """The actual bug: JOBS used to be memory-only, so restarting the
-    process wiped it even though the file on disk (and the generated
-    files it points at) were untouched. Simulate a restart by clearing
-    JOBS and reloading straight from what's on disk."""
+def test_jobs_survive_a_simulated_restart():
+    """The original bug this guards: JOBS used to be memory-only, so restarting
+    the process wiped it even though the generated files were untouched. Now
+    the database is the store -- a brand-new repository instance (what a fresh
+    process would use) reads the same row straight back."""
     job_id = create_job("kling3", {"prompt": "hi"}, actor="va")
     run_job(job_id, lambda: [{"name": "a.mp4", "path": "/tmp/a.mp4"}], {})
 
-    JOBS.clear()
-    assert get_job(job_id) is None  # gone, just like after a real restart
-
-    load_jobs()
-
-    restored = get_job(job_id)
+    restored = JobRepository().get(job_id)
     assert restored is not None
     assert restored["task"] == "kling3"
     assert restored["status"] == "done"
@@ -89,8 +80,6 @@ def test_list_jobs_drops_a_job_whose_flat_result_file_was_deleted(tmp_path):
 
     assert not any(j["id"] == job_id for j in list_jobs())
     assert get_job(job_id) is None
-    on_disk = json.loads(jobs.STORE_FILE.read_text())
-    assert job_id not in on_disk
 
 
 def test_list_jobs_keeps_a_job_still_running_even_with_no_result_yet():

@@ -12,7 +12,6 @@ from fastapi import (
     Form,
     UploadFile,
     File,
-    BackgroundTasks,
     HTTPException,
 )
 from fastapi.responses import RedirectResponse, FileResponse
@@ -20,6 +19,7 @@ from fastapi.responses import RedirectResponse, FileResponse
 from ofmhelpers.utils.radio_comms_fx import PRESETS, process_file, generate_variations
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
 
 router = APIRouter(prefix="/helpers/radio-comms", tags=["radio-comms"])
@@ -72,7 +72,6 @@ def form(request: Request):
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     preset: str = Form("cod_clean"),
     mode: str = Form("single"),  # "single" or "variations"
@@ -101,7 +100,7 @@ async def run(
         "seed": seed,
     }
     job_id = create_job("radio_comms", params, actor=request.session.get("role"))
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_radio_comms,

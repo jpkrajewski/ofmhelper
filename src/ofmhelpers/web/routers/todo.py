@@ -16,7 +16,6 @@ from pathlib import Path
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Request,
     Form,
     HTTPException,
@@ -30,6 +29,7 @@ from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import require_admin, ROLE_ADMIN
 from ofmhelpers.web import todos, approval_tokens
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import classify_kind
 from ofmhelpers.gdrive.client import upload_file as gdrive_upload_file
 from ofmhelpers.discord.client import send_webhook
@@ -271,9 +271,9 @@ def reject(request: Request, todo_id: str, comment: str = Form(...)):
 
 
 def _upload_to_drive(todo_id: str, asset_path: str) -> str:
-    """Runs in the background via BackgroundTasks -- a Drive upload is a
-    network call with no bound on how long it takes (large video = long
-    upload), so doing it inline would tie up the request, and the browser
+    """Runs in the background on the RQ worker (see web/queue.py) -- a Drive
+    upload is a network call with no bound on how long it takes (large video =
+    long upload), so doing it inline would tie up the request, and the browser
     tab, for however long that takes. run_job (see web/jobs.py) records
     success/failure so the todo list can poll and show live status instead.
     """
@@ -283,7 +283,7 @@ def _upload_to_drive(todo_id: str, asset_path: str) -> str:
 
 
 @router.post("/{todo_id}/upload-drive")
-def upload_drive(request: Request, todo_id: str, background_tasks: BackgroundTasks):
+def upload_drive(request: Request, todo_id: str):
     require_admin(request)
     todo = todos.get_todo(todo_id)
     if todo is None:
@@ -305,7 +305,7 @@ def upload_drive(request: Request, todo_id: str, background_tasks: BackgroundTas
         "todo_drive_upload", {"todo_id": todo_id}, actor=request.session.get("role")
     )
     todos.set_drive_upload_job(todo_id, job_id)
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _upload_to_drive,

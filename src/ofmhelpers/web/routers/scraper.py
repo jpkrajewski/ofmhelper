@@ -12,7 +12,6 @@ from fastapi import (
     Form,
     UploadFile,
     File,
-    BackgroundTasks,
     HTTPException,
 )
 from fastapi.responses import RedirectResponse, FileResponse
@@ -29,6 +28,7 @@ from ofmhelpers.utils.profile_loader import normalize_profiles_names
 from ofmhelpers.utils.sheets_to_columns import sheets_columns_to_keys
 from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
 
 router = APIRouter(prefix="/helpers/scraper", tags=["scraper"])
@@ -85,7 +85,6 @@ def form(request: Request):
 @router.post("/run")
 async def run(
     request: Request,
-    background_tasks: BackgroundTasks,
     api_keys: str = Form(...),  # textarea, one token per line
     sheet: UploadFile = File(...),
     results_per_profile: int = Form(20),
@@ -112,7 +111,7 @@ async def run(
         "results_days_back": results_days_back,
     }
     job_id = create_job("scraper", params, actor=request.session.get("role"))
-    background_tasks.add_task(
+    enqueue(
         run_job,
         job_id,
         _run_scrape,
