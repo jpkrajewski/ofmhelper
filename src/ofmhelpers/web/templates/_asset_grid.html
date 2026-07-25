@@ -4,6 +4,6 @@
     {{ am.asset_media(a) }}
     {% if a.source %}<p class="source">{{ a.source }}</p>{% endif %}
     <p class="filename">{{ a.name }}</p>
-    <a href="{{ a.download_url }}" download="{{ a.name }}" class="download-btn">⬇ Download</a>
+    <a href="{{ a.download_url }}" download="{{ a.name }}" data-local-fallback-url="{{ a.local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
 </div>
 {% endfor %}

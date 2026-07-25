@@ -75,11 +75,22 @@ def test_nanobanana_output_registers_into_the_shared_assets_store(
     out.write_bytes(b"generated pixels")
 
     job_id = create_job("nanobanana", {"prompt": "p"})
+
+    def fake_generate(**kwargs):
+        kwargs["on_result_urls"](["https://cdn.kie.ai/out/abc123.png"])
+        return out
+
     with mock.patch.object(nbp_router, "KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_image_nbp.return_value = out
+        MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
         result = nbp_router._run_nanobanana(job_id=job_id, **NBP_KWARGS)
 
-    assert result == [{"name": "abc123.png", "path": str(out)}]
+    assert result == [
+        {
+            "name": "abc123.png",
+            "path": str(out),
+            "remote_url": "https://cdn.kie.ai/out/abc123.png",
+        }
+    ]
     saved = list(assets_dir.iterdir())
     assert len(saved) == 1
     assert saved[0].name.endswith("__abc123.png")
@@ -97,8 +108,13 @@ def test_generated_asset_shows_up_in_the_reuse_picker_immediately(
     out.write_bytes(b"generated pixels")
 
     job_id = create_job("nanobanana", {"prompt": "p"})
+
+    def fake_generate(**kwargs):
+        kwargs["on_result_urls"](["https://cdn.kie.ai/out/fresh.png"])
+        return out
+
     with mock.patch.object(nbp_router, "KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_image_nbp.return_value = out
+        MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
         nbp_router._run_nanobanana(job_id=job_id, **NBP_KWARGS)
 
     names = [f["name"] for f in client.get("/refs?kind=image").json()]

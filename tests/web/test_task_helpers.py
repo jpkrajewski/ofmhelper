@@ -216,6 +216,19 @@ def test_asset_card_with_remote_url_points_view_and_download_at_it():
     assert card["download_url"] == "https://cdn.kie.ai/x.mp4"
 
 
+def test_asset_card_prefers_remote_url_even_when_a_local_path_also_exists():
+    """A successful generation now keeps both a local path and remote_url
+    (see seedance.py/kling.py/nbp.py) -- the kie.ai URL must still win, since
+    it's faster than our own proxy and kie.ai keeps the file for 14 days."""
+    card = asset_card(
+        "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
+    )
+
+    assert card["view_url"] == "https://cdn.kie.ai/x.mp4"
+    assert card["download_url"] == "https://cdn.kie.ai/x.mp4"
+    assert card["view_url"] != "/kling3/files/abc123/0"
+
+
 def test_serve_job_file_404s_for_a_result_with_no_local_path():
     job = {
         "status": "done",

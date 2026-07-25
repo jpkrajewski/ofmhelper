@@ -69,10 +69,25 @@
         media.className = kind === "video" ? "result-video" : "result-image";
         if (kind === "video") media.controls = true;
         else media.alt = item.name;
+        // item.local_fallback_url is only set when view_url points at kie.ai
+        // and a local copy also exists -- swap to it once the hosted URL
+        // goes stale (kie.ai's result URLs are only reliably valid ~24h)
+        // instead of leaving a broken video/image.
+        if (item.local_fallback_url) {
+            media.addEventListener(
+                "error",
+                function onErr() {
+                    media.removeEventListener("error", onErr);
+                    media.src = item.local_fallback_url;
+                },
+                { once: true }
+            );
+        }
 
         const dl = document.createElement("a");
         dl.href = item.download_url;
         dl.download = item.name;
+        dl.dataset.localFallbackUrl = item.local_fallback_url || "";
         dl.className = "download-btn";
         dl.textContent = "⬇ Download";
 
@@ -272,6 +287,46 @@
         });
     }
 
+    // Result assets are prioritised to kie.ai's own hosted URL (faster than
+    // proxying through our server, and it stays valid for kie.ai's 14-day
+    // retention window). But browsers ignore the `download` attribute on a
+    // cross-origin link -- it just opens/plays the file instead of saving it.
+    // Fetch it client-side (browser -> kie.ai directly, never through our
+    // server) and save the blob instead; same-origin links (the local
+    // `/files/...` fallback) keep working via plain navigation.
+    function wireDownloadButtons() {
+        document.addEventListener("click", (e) => {
+            const link = e.target.closest("a.download-btn");
+            if (!link) return;
+            if (new URL(link.href, location.href).origin === location.origin) return;
+
+            e.preventDefault();
+            fetch(link.href)
+                .then((r) => {
+                    if (!r.ok) throw new Error("download failed");
+                    return r.blob();
+                })
+                .then((blob) => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = link.download || "";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(blobUrl);
+                })
+                .catch(() => {
+                    // kie.ai's URL has gone stale -- fall back to our own
+                    // copy (same-origin, so plain navigation triggers a real
+                    // download) if one was ever recorded for this asset.
+                    const fallback = link.dataset.localFallbackUrl;
+                    if (fallback) window.location.href = fallback;
+                    else window.open(link.href, "_blank");
+                });
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         // data-manual-submit opts a form out of auto-wiring -- for pages that
         // need to transform the FormData themselves before handing off to
@@ -280,6 +335,7 @@
             .querySelectorAll("form[data-prefix][data-result-kind]:not([data-manual-submit])")
             .forEach(initGenerationForm);
         resumePendingCards();
+        wireDownloadButtons();
     });
 
     window.Generation = { submit };

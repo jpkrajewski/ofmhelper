@@ -214,7 +214,7 @@
              {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}"{% endif %}>
             {% if job.status == "done" and job.assets %}
                 {{ am.asset_media(job.assets[0]) }}
-                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" class="download-btn">⬇ Download</a>
+                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" data-local-fallback-url="{{ job.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
                 <button type="button" class="recreate-btn">↻ Recreate</button>
             {% elif job.status == "failed" %}
                 <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("generation failed", true)|truncate(80) }}</div>

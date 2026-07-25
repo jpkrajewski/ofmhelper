@@ -196,16 +196,22 @@ def asset_card(
     preview to render, and the two URLs a client can already reach (never
     the server-side path a result dict carries internally).
 
-    remote_url is set only for a result whose local download never
-    completed (see job_status_payload) -- in that case there is no local
-    file for `/files/{job_id}/{index}` to serve, so the card points straight
-    at the still-good hosted URL instead."""
+    remote_url, when set, is always preferred (kie.ai is faster than
+    proxying through our own server, and it keeps the file for 14 days) --
+    but kie.ai's URL is only reliably valid ~24h, so `local_fallback_url` is
+    always included too (even when remote_url is what's actually used) so
+    the frontend can swap to our own copy client-side (an <video onerror>,
+    see generation.js) once the hosted one goes stale. There may be no local
+    copy at all (see job_status_payload's remote-only result) -- callers
+    that never had a local file just won't see this field used."""
+    local_url = f"{files_prefix}/{index}"
     return {
         "name": name,
         "index": index,
         "kind": classify_kind(name),
-        "view_url": remote_url or f"{files_prefix}/{index}",
-        "download_url": remote_url or f"{files_prefix}/{index}?dl=1",
+        "view_url": remote_url or local_url,
+        "download_url": remote_url or f"{local_url}?dl=1",
+        "local_fallback_url": local_url if remote_url else None,
         "source": source,
     }
 

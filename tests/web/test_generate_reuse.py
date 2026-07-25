@@ -55,10 +55,18 @@ def _fieldset_picker_fields(html: str, tool: str) -> set[str]:
     return set(re.findall(r'data-field="([a-zA-Z_]+)"', _fieldset_html(html, tool)))
 
 
+def _with_remote_url(path: str, url: str):
+    def fake_generate(**kwargs):
+        kwargs["on_result_urls"]([url])
+        return Path(path)
+
+    return fake_generate
+
+
 def _submit_seedance(client):
     with mock.patch("ofmhelpers.web.routers.seedance.KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_video_seedance2.return_value = Path(
-            "/tmp/fake.mp4"
+        MockClient.from_env.return_value.generate_video_seedance2.side_effect = (
+            _with_remote_url("/tmp/fake.mp4", "https://cdn.kie.ai/out/fake.mp4")
         )
         with mock.patch("pathlib.Path.is_file", return_value=True):
             r = client.post(
@@ -70,8 +78,8 @@ def _submit_seedance(client):
 
 def _submit_kling3(client):
     with mock.patch("ofmhelpers.web.routers.kling.KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_video_kling3.return_value = Path(
-            "/tmp/fake.mp4"
+        MockClient.from_env.return_value.generate_video_kling3.side_effect = (
+            _with_remote_url("/tmp/fake.mp4", "https://cdn.kie.ai/out/fake.mp4")
         )
         with mock.patch("pathlib.Path.is_file", return_value=True):
             r = client.post("/kling3/run", data={"api_key": "k", "prompt": "p"})
@@ -80,8 +88,8 @@ def _submit_kling3(client):
 
 def _submit_nanobanana(client):
     with mock.patch("ofmhelpers.web.routers.nbp.KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_image_nbp.return_value = Path(
-            "/tmp/fake.png"
+        MockClient.from_env.return_value.generate_image_nbp.side_effect = (
+            _with_remote_url("/tmp/fake.png", "https://cdn.kie.ai/out/fake.png")
         )
         with mock.patch("pathlib.Path.is_file", return_value=True):
             r = client.post("/nanobanana/run", data={"api_key": "k", "prompt": "p"})

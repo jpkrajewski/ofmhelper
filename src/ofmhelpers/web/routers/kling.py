@@ -67,7 +67,9 @@ def _run_kling3(
         return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
 
     register_generated_asset(out_path, ASSETS_ROOT)
-    return [{"name": out_path.name, "path": str(out_path)}]
+    return [
+        {"name": out_path.name, "path": str(out_path), "remote_url": remote_urls[0]}
+    ]
 
 
 @router.post("/run")

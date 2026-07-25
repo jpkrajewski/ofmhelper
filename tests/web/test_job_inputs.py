@@ -90,8 +90,13 @@ def test_reference_preview_url_actually_serves_the_file(client, tmp_path, monkey
 
 def test_seedance_job_status_shows_settings_and_reference_video(client):
     with mock.patch("ofmhelpers.web.routers.seedance.KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_video_seedance2.return_value = Path(
-            "/tmp/fake.mp4"
+
+        def fake_generate(**kwargs):
+            kwargs["on_result_urls"](["https://cdn.kie.ai/out/fake.mp4"])
+            return Path("/tmp/fake.mp4")
+
+        MockClient.from_env.return_value.generate_video_seedance2.side_effect = (
+            fake_generate
         )
         with mock.patch("pathlib.Path.is_file", return_value=True):
             files = {
@@ -115,8 +120,13 @@ def test_seedance_job_status_shows_settings_and_reference_video(client):
 
 def test_kling3_job_status_shows_settings(client):
     with mock.patch("ofmhelpers.web.routers.kling.KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_video_kling3.return_value = Path(
-            "/tmp/fake.mp4"
+
+        def fake_generate(**kwargs):
+            kwargs["on_result_urls"](["https://cdn.kie.ai/out/fake.mp4"])
+            return Path("/tmp/fake.mp4")
+
+        MockClient.from_env.return_value.generate_video_kling3.side_effect = (
+            fake_generate
         )
         with mock.patch("pathlib.Path.is_file", return_value=True):
             job_id = client.post(
@@ -130,9 +140,12 @@ def test_kling3_job_status_shows_settings(client):
 
 def test_nanobanana_job_status_shows_settings(client):
     with mock.patch("ofmhelpers.web.routers.nbp.KieAIClient") as MockClient:
-        MockClient.from_env.return_value.generate_image_nbp.return_value = Path(
-            "/tmp/fake.png"
-        )
+
+        def fake_generate(**kwargs):
+            kwargs["on_result_urls"](["https://cdn.kie.ai/out/fake.png"])
+            return Path("/tmp/fake.png")
+
+        MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
         with mock.patch("pathlib.Path.is_file", return_value=True):
             job_id = client.post(
                 "/nanobanana/run",

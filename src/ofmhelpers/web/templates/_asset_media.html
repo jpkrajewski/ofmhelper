@@ -1,10 +1,14 @@
 {% macro asset_media(a) %}
+{# a.local_fallback_url is only set when view_url points at kie.ai and a
+   local copy also exists (see task_helpers.asset_card) -- once kie.ai's URL
+   goes stale (its result URLs are only reliably valid ~24h) the element
+   swaps to our own copy instead of showing a broken video/image. #}
 {% if a.kind == 'video' %}
-<video src="{{ a.view_url }}" controls class="result-video"></video>
+<video src="{{ a.view_url }}" controls class="result-video"{% if a.local_fallback_url %} onerror="this.onerror=null;this.src='{{ a.local_fallback_url }}'"{% endif %}></video>
 {% elif a.kind == 'image' %}
-<img src="{{ a.view_url }}" class="result-image" alt="{{ a.name }}">
+<img src="{{ a.view_url }}" class="result-image" alt="{{ a.name }}"{% if a.local_fallback_url %} onerror="this.onerror=null;this.src='{{ a.local_fallback_url }}'"{% endif %}>
 {% elif a.kind == 'audio' %}
-<audio src="{{ a.view_url }}" controls class="result-audio"></audio>
+<audio src="{{ a.view_url }}" controls class="result-audio"{% if a.local_fallback_url %} onerror="this.onerror=null;this.src='{{ a.local_fallback_url }}'"{% endif %}></audio>
 {% else %}
 <div class="result-file">📄 {{ a.name }}</div>
 {% endif %}
