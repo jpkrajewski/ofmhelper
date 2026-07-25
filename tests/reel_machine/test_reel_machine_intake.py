@@ -6,12 +6,13 @@ reels) so the failure is actionable from the job's error message alone,
 not just a raw yt-dlp error.
 """
 
+import subprocess
 from unittest import mock
 
 import pytest
 
 from ofmhelpers.downloaders.generic import DownloadResult
-from ofmhelpers.reel_machine.intake import fetch_source
+from ofmhelpers.reel_machine.intake import fetch_source, probe_duration
 
 
 def test_local_file_is_copied_into_the_work_dir(tmp_path):
@@ -61,3 +62,32 @@ def test_failed_non_instagram_download_has_no_cookie_hint(tmp_path):
         with pytest.raises(RuntimeError) as exc_info:
             fetch_source("https://www.tiktok.com/@x/video/1", tmp_path)
     assert "/cookies" not in str(exc_info.value)
+
+
+def test_probe_duration_parses_ffprobes_stdout(tmp_path):
+    video_path = tmp_path / "reference.mp4"
+    with mock.patch(
+        "ofmhelpers.reel_machine.intake.subprocess.run",
+        return_value=mock.Mock(stdout="12.345000\n"),
+    ):
+        assert probe_duration(video_path) == 12.345
+
+
+def test_probe_duration_reports_missing_ffprobe_clearly(tmp_path):
+    with mock.patch(
+        "ofmhelpers.reel_machine.intake.subprocess.run",
+        side_effect=FileNotFoundError(),
+    ):
+        with pytest.raises(RuntimeError, match="ffprobe isn't installed"):
+            probe_duration(tmp_path / "reference.mp4")
+
+
+def test_probe_duration_surfaces_ffprobe_stderr(tmp_path):
+    with mock.patch(
+        "ofmhelpers.reel_machine.intake.subprocess.run",
+        side_effect=subprocess.CalledProcessError(
+            1, ["ffprobe"], stderr="not a valid video file"
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="not a valid video file"):
+            probe_duration(tmp_path / "reference.mp4")

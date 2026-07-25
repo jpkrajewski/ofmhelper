@@ -319,8 +319,10 @@ def test_asset_upload_sends_discord_notification_with_image_embedded(client):
     r = client.post(f"/todo/{todo['id']}/asset", files=files, follow_redirects=False)
     assert r.status_code == 303
 
-    todo_router.send_webhook.assert_called_once()
-    content, embeds = todo_router.send_webhook.call_args[0]
+    # First call is the divider separating this notification group from
+    # whatever came before; the actual notification is the second call.
+    assert todo_router.send_webhook.call_count == 2
+    content, embeds = todo_router.send_webhook.call_args_list[1].args
     embed = embeds[0]
 
     assert todo["id"] not in content
@@ -332,7 +334,9 @@ def test_asset_upload_sends_discord_notification_with_image_embedded(client):
     assert embed["image"]["url"].startswith("https://test.example/approve/")
     assert embed["image"]["url"].endswith("/asset")
 
-    assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
+    assert embed[
+        "description"
+    ] == "[✅ Approve & Upload to Google Drive (CLICK THIS TO APPROVE)](" + (
         embed["image"]["url"].removesuffix("/asset") + ")"
     )
     assert "title" not in embed
@@ -351,8 +355,10 @@ def test_asset_upload_for_video_sends_the_preview_link_in_its_own_bare_call(clie
     files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
     client.post(f"/todo/{todo['id']}/asset", files=files)
 
-    assert todo_router.send_webhook.call_count == 2
-    first_call, second_call = todo_router.send_webhook.call_args_list
+    # First call is the divider; the header+embed and the bare preview
+    # link are the second and third calls.
+    assert todo_router.send_webhook.call_count == 3
+    _divider_call, first_call, second_call = todo_router.send_webhook.call_args_list
 
     header_content, embeds = first_call.args
     embed = embeds[0]
@@ -370,8 +376,10 @@ def test_asset_upload_for_video_sends_the_preview_link_in_its_own_bare_call(clie
     assert preview_url.startswith("https://test.example/approve/")
     # The approve link is still hidden behind masked text, never bare.
     assert preview_url not in embed["description"]
-    assert embed["description"] == "[✅ Approve & Upload to Google Drive](" + (
-        preview_url.removesuffix("/asset/preview") + ")\n\nCheck video below ⬇️⬇️⬇️"
+    assert embed[
+        "description"
+    ] == "[✅ Approve & Upload to Google Drive (CLICK THIS TO APPROVE)](" + (
+        preview_url.removesuffix("/asset/preview") + ")\n\nCheck video below ⬇️⬇️⬇️⬇️⬇️⬇️"
     )
 
 

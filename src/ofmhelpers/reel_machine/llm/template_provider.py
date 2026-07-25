@@ -18,7 +18,12 @@ from ofmhelpers.reel_machine.teardown import Teardown
 class TemplateProvider:
     name = "template"
 
-    def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict:
+    def analyze_reel(
+        self,
+        contact_sheet: Path,
+        transcript_text: str,
+        video_path: Path | None = None,
+    ) -> dict:
         return {}
 
     def write_prompt_package(

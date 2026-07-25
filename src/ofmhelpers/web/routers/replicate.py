@@ -59,14 +59,14 @@ def _run_replicate_intake(
     source: str,
     shape: str,
     look: str,
-    duration: int,
     llm_provider: str,
     target: str,
     gender: str,
     work_dir: str,
 ) -> dict:
     intake = pipeline.intake_reel(source, Path(work_dir))
-    script = pipeline.draft_script(
+    duration = pipeline.clamp_duration(intake.duration)
+    draft = pipeline.draft_script_full(
         intake,
         shape_key=shape,
         look_key=look,
@@ -78,7 +78,8 @@ def _run_replicate_intake(
     return {
         "contact_sheet": str(intake.contact_sheet),
         "transcript": intake.transcript.text,
-        "draft_script": script,
+        "draft_script": draft.script,
+        "main_subject": draft.main_subject,
         "shape": shape,
         "look": look,
         "duration": duration,
@@ -133,7 +134,6 @@ async def intake(
     source_file: UploadFile | None = File(None),
     shape: str = Form(pipeline.DEFAULT_SHAPE),
     look: str = Form(pipeline.DEFAULT_LOOK),
-    duration: int = Form(15),
     llm_provider: str = Form("template"),
     target: str = Form(""),
     gender: str = Form(DEFAULT_GENDER),
@@ -151,7 +151,6 @@ async def intake(
         "source": source,
         "shape": shape,
         "look": look,
-        "duration": duration,
         "llm_provider": llm_provider,
         "target": target,
         "gender": gender,

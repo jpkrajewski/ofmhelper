@@ -44,6 +44,20 @@ class Teardown:
         "(edit me) describe the lens/vignette/camera height/holder -- see reel_machine.looks"
     )
     duration: float = 15.0
+    # Internal targeting aid for the vision LLM only -- helps it lock onto
+    # the right person when a reel has multiple people/objects in frame, so
+    # hook/viral_mechanic/camera_look/subject_action describe that subject's
+    # actions accurately. Never merged into prompt_builder's PROMPT block:
+    # identity in the actual generation still comes from the reference
+    # images only.
+    main_subject: str = ""
+    # The main subject's actual physical motion across the whole clip (e.g.
+    # "walks away from the camera the entire clip, back turned"). Overrides
+    # prompt_builder's default static "one stable pose" line -- unlike
+    # main_subject, this DOES go into the generated PROMPT block, since it
+    # describes motion/action, not physical appearance (still no face/body/
+    # outfit description, per the RULE block).
+    subject_action: str = ""
 
 
 def _group_into_beats(words: list, duration: float) -> list[Beat]:

@@ -16,6 +16,7 @@ import unittest.mock as mock
 import pytest
 from fastapi.testclient import TestClient
 
+from ofmhelpers.reel_machine.pipeline import DraftResult
 from ofmhelpers.web.jobs import get_job
 from ofmhelpers.web.main import app
 
@@ -29,12 +30,14 @@ def client():
     return c
 
 
-def _mock_intake_result(tmp_path):
+def _mock_intake_result(tmp_path, duration=15.0):
     contact_sheet = tmp_path / "contact-sheet.jpg"
     contact_sheet.write_bytes(b"fake jpg")
     return mock.Mock(
         contact_sheet=contact_sheet,
         transcript=mock.Mock(text="hi there, watch this"),
+        video_path=tmp_path / "reference.mp4",
+        duration=duration,
     )
 
 
@@ -56,8 +59,8 @@ def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script",
-            return_value="DRAFT SCRIPT TEXT",
+            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            return_value=DraftResult(script="DRAFT SCRIPT TEXT"),
         ),
     ):
         r = client.post(
@@ -66,7 +69,6 @@ def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
                 "source_url": "https://example.com/reel",
                 "shape": "solo_monologue",
                 "look": "phone_selfie",
-                "duration": "15",
                 "llm_provider": "template",
             },
         )
@@ -77,6 +79,7 @@ def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
     assert job["task"] == "replicate_intake"
     assert job["status"] == "done"
     assert job["result"]["draft_script"] == "DRAFT SCRIPT TEXT"
+    assert job["result"]["duration"] == 15  # auto-detected from the source reel
 
 
 def test_intake_threads_target_and_gender_to_draft_script(client, tmp_path):
@@ -86,8 +89,8 @@ def test_intake_threads_target_and_gender_to_draft_script(client, tmp_path):
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script",
-            return_value="DRAFT",
+            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            return_value=DraftResult(script="DRAFT"),
         ) as mock_draft_script,
     ):
         job_id = client.post(
@@ -122,8 +125,8 @@ def test_review_page_renders_the_draft_script_editable(client, tmp_path):
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script",
-            return_value="MY DRAFT SCRIPT",
+            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            return_value=DraftResult(script="MY DRAFT SCRIPT"),
         ),
     ):
         job_id = client.post(
@@ -213,8 +216,8 @@ def test_jobs_status_json_dispatches_by_task(client, tmp_path):
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script",
-            return_value="a draft",
+            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            return_value=DraftResult(script="a draft"),
         ),
     ):
         intake_job_id = client.post(

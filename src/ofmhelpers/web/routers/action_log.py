@@ -25,6 +25,8 @@ TASK_STATUS_PREFIX = {
     "nanobanana": "/nanobanana",
     "kling3": "/kling3",
     "fake_ai": "/fake-ai",
+    "replicate_intake": "/replicate",
+    "replicate": "/replicate",
 }
 
 

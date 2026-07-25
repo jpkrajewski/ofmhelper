@@ -21,10 +21,12 @@ the Gemini API.
 """
 
 import json
+import time
 from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
+from ofmhelpers.reel_machine.llm.base import strip_llm_preamble
 from ofmhelpers.reel_machine.llm.groq_provider import (
     ANALYZE_SYSTEM_PROMPT,
     WRITE_SYSTEM_PROMPT,
@@ -33,6 +35,12 @@ from ofmhelpers.reel_machine.looks import Look
 from ofmhelpers.reel_machine.prompt_builder import build_prompt_package
 from ofmhelpers.reel_machine.shapes import Shape
 from ofmhelpers.reel_machine.teardown import Teardown
+
+# How long to wait for an uploaded video to finish processing (Gemini
+# requires state == "ACTIVE" before it can be referenced in a generate_content
+# call) before giving up and falling back to the contact-sheet image.
+_VIDEO_ACTIVE_TIMEOUT_S = 60
+_VIDEO_ACTIVE_POLL_S = 2
 
 
 class GeminiProvider:
@@ -45,19 +53,30 @@ class GeminiProvider:
             raise KeyError("GEMINI_API_KEY")
         self.model = model or s.gemini_model
 
-    def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict:
+    def analyze_reel(
+        self,
+        contact_sheet: Path,
+        transcript_text: str,
+        video_path: Path | None = None,
+    ) -> dict:
+        """Prefers sending the actual video -- a static contact sheet loses
+        motion/timing/transitions, which is what made action descriptions
+        unreliable. Falls back to the contact-sheet image (same as before)
+        if no video_path is given, or if the upload/processing step fails,
+        so a flaky upload never fails the whole intake job."""
         from google import genai
         from google.genai import types
 
         client = genai.Client(api_key=self.api_key)
+
+        video_part = self._upload_video_part(client, video_path) if video_path else None
+        media_part = video_part or types.Part.from_bytes(
+            data=contact_sheet.read_bytes(), mime_type="image/jpeg"
+        )
+
         response = client.models.generate_content(
             model=self.model,
-            contents=[
-                types.Part.from_bytes(
-                    data=contact_sheet.read_bytes(), mime_type="image/jpeg"
-                ),
-                f"Transcript:\n{transcript_text}",
-            ],
+            contents=[media_part, f"Transcript:\n{transcript_text}"],
             config=types.GenerateContentConfig(
                 system_instruction=ANALYZE_SYSTEM_PROMPT,
                 response_mime_type="application/json",
@@ -65,6 +84,41 @@ class GeminiProvider:
             ),
         )
         return json.loads(response.text or "{}")
+
+    def _upload_video_part(self, client, video_path: Path):
+        """Uploads the reel via the Files API and waits for it to become
+        ACTIVE (required before Gemini can reference it in a generate_content
+        call). Returns None (triggering the contact-sheet fallback) rather
+        than raising, on any failure or timeout."""
+        try:
+            uploaded = client.files.upload(file=str(video_path))
+            deadline = time.monotonic() + _VIDEO_ACTIVE_TIMEOUT_S
+            while uploaded.state and uploaded.state.name == "PROCESSING":
+                if time.monotonic() > deadline:
+                    print(
+                        f"[reel_machine] gemini video upload for {video_path.name} "
+                        "timed out waiting to become ACTIVE, falling back to "
+                        "contact sheet",
+                        flush=True,
+                    )
+                    return None
+                time.sleep(_VIDEO_ACTIVE_POLL_S)
+                uploaded = client.files.get(name=uploaded.name)
+            if not uploaded.state or uploaded.state.name != "ACTIVE":
+                print(
+                    f"[reel_machine] gemini video upload for {video_path.name} "
+                    f"ended in state {uploaded.state}, falling back to contact sheet",
+                    flush=True,
+                )
+                return None
+            return uploaded
+        except Exception as exc:
+            print(
+                f"[reel_machine] gemini video upload failed ({exc}), falling "
+                "back to contact sheet",
+                flush=True,
+            )
+            return None
 
     def write_prompt_package(
         self,
@@ -90,4 +144,4 @@ class GeminiProvider:
                 temperature=0.7,
             ),
         )
-        return response.text or draft
+        return strip_llm_preamble(response.text or draft, draft)

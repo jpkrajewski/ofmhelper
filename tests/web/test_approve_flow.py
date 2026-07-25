@@ -119,10 +119,10 @@ def test_asset_preview_page_carries_og_video_tags_pointing_at_the_asset(
     files = {"file": ("clip.mp4", b"fake video bytes", "video/mp4")}
     client.post(f"/todo/{todo['id']}/asset", files=files)
 
-    # Video uploads send two webhook calls (see
-    # _notify_discord_for_review) -- the preview link is the bare content
-    # of the second one.
-    preview_url = todo_router.send_webhook.call_args_list[1].args[0]
+    # Video uploads send three webhook calls (see
+    # _notify_discord_for_review): a leading divider, the header+embed,
+    # then the preview link as the bare content of the third call.
+    preview_url = todo_router.send_webhook.call_args_list[2].args[0]
     asset_path = preview_url.replace("https://test.example", "").removesuffix(
         "/preview"
     )

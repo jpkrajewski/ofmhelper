@@ -1,10 +1,16 @@
 """
-Builds the Seedance 2.0 prompt package -- the exact block structure the old
-reel-machine skill bundle's package-spec.md required (SETUP / RULE / IMAGE
-REFERENCE MAP / PROMPT / VOICE & PACING / PER-SECOND TIMELINE / EFFECTS /
-SCENE-LOCKS / NEGATIVE / PREFLIGHT / COST), filled in from a Teardown +
-Shape + Look. This is the "template" LLM provider's implementation -- plain
-string formatting, no API calls, always available.
+Builds the Seedance 2.0 prompt package -- the block structure the old
+reel-machine skill bundle's package-spec.md required, trimmed to what's
+actually needed to fire a generation (SETUP / IMAGE REFERENCE MAP / PROMPT /
+VOICE & PACING / PER-SECOND TIMELINE / EFFECTS / SCENE-LOCKS / NEGATIVE /
+VIRAL MECHANIC / CAMERA-LOOK), filled in from a Teardown + Shape + Look.
+TARGET/PERSONA, RULE, SHAPE, PREFLIGHT, and COST/RISK are internal
+authoring scaffolding -- useful while building this module, not to a VA
+firing the final prompt -- so they're intentionally left out of the
+package text itself (the RULE constraint they encode is still enforced
+upstream, see llm/groq_provider.py's ANALYZE_SYSTEM_PROMPT/
+WRITE_SYSTEM_PROMPT). This is the "template" LLM provider's implementation
+-- plain string formatting, no API calls, always available.
 
 Settings below are ported from settings-lock.md (the "settings lock" the
 old bundle hardcoded into its WaveSpeed shell scripts): 9:16 vertical,
@@ -37,19 +43,6 @@ BASE_NEGATIVE = (
     "watermark, studio glamour, cinematic grading, gimbal smoothness, nudity"
 )
 
-PREFLIGHT_CHECKLIST = [
-    "every second timed, every line tagged",
-    "one camera holder",
-    "lens described",
-    "pose locked",
-    "no person description (identity = reference images only)",
-    "outfit in prompt",
-    "word budget fits duration",
-    "settings match the SETUP block",
-    "brand-safe",
-    "no internal names/slugs/file IDs inside the PROMPT text",
-]
-
 
 def _format_timeline(teardown: Teardown, gender) -> str:
     lines = []
@@ -71,22 +64,25 @@ def build_prompt_package(
 ) -> str:
     """Deterministic first-draft prompt package. Meant to be reviewed and
     hand-edited (dialogue, camera_look, viral_mechanic) before generation --
-    it fills the required structure, not the creative content.
+    it fills the required structure, not the creative content. Ready-to-fire
+    text only -- TARGET/PERSONA, RULE, SHAPE, PREFLIGHT, COST/RISK are left
+    out of the output (see module docstring); `shape`/`gender` still drive
+    the PROMPT/VOICE & PACING/timeline content, they're just not echoed back
+    as their own labeled blocks.
 
-    `target` is a persona/tone brief (e.g. "confident fitness coach pitching
-    a program") -- it steers dialogue TONE only, never physical appearance;
-    identity always comes from the reference images (see the RULE block
-    below). `gender` picks which pronouns/voice-register the shape's
-    templates render with (see gender.py / shapes.render_shape) -- it does
-    not describe the character's looks either.
+    `target` steers dialogue TONE only (never physical appearance -- see
+    module docstring) but no longer appears as its own block; `gender`
+    picks which pronouns/voice-register the shape's templates render with
+    (see gender.py / shapes.render_shape) and which speaker tag the timeline
+    uses -- it does not describe the character's looks either.
     """
     g = get_gender(gender)
     shape = render_shape(shape, g)
-    preflight = "\n".join(f"  [ ] {item}" for item in PREFLIGHT_CHECKLIST)
-    target_brief = target.strip() or (
-        "(edit me) who/what this video is for -- persona, tone, vibe (e.g. "
-        "'confident fitness coach pitching a program', 'girl-next-door CTA'). "
-        "Never physical appearance -- identity comes from the reference images only."
+
+    pose_line = (
+        f"  {teardown.subject_action.strip()}"
+        if teardown.subject_action.strip()
+        else "  ONE stable pose the entire clip -- no walk-in, no walking, no pose change."
     )
 
     return f"""SETUP
@@ -95,34 +91,21 @@ def build_prompt_package(
   Generate Audio ON - Reference Audios {SETTINGS["reference_audios"]} -
   Reference Videos {SETTINGS["reference_videos"]} - Web Search OFF
 
-TARGET / PERSONA
-  Gender: {g.label} ({g.noun}) -- speaker tag {g.tag} in the timeline below.
-  Brief: {target_brief}
-
-RULE
-  Describe ONLY scene + outfit + lens -- NEVER the person. Identity = the reference images only.
-
 IMAGE REFERENCE MAP
   face refs -> face/identity - body sheet -> body - outfit refs (1-2) -> the outfit
-
-SHAPE
-  {shape.name} | voices: {shape.voices} | camera: {shape.camera}
-  pacing: {shape.pacing}
-  notes: {shape.notes}
 
 PROMPT
   A continuous {duration}-second vertical {SETTINGS["aspect_ratio"]} video, authentic amateur UGC,
   {look.prompt}.
   Build {character_name}'s exact face, body and identity from the reference images and keep them
   identical the entire clip; never change {g.possessive} face.
-  ONE stable pose the entire clip -- no walk-in, no walking, no pose change.
+{pose_line}
   (edit me) outfit: describe the exact, consistent outfit here.
   Mild grain, phone exposure, face sharp while the background stays slightly soft.
   ONE continuous take, no cuts, start mid-action.
 
 VOICE & PACING
   {shape.voices}. Pacing: {shape.pacing}.
-  Delivery tone matches the TARGET/PERSONA brief above.
   Always: natural connected speech, never robotic, never one word at a time; keep the
   voices clearly distinct.
 
@@ -136,7 +119,7 @@ EFFECTS
   4 Motion flow: (edit me) opening -> build -> resolution in one line each
 
 SCENE-LOCKS
-  [POSE] one stable pose the entire clip
+  [POSE] {teardown.subject_action.strip() or "one stable pose the entire clip"}
   [CAMERA] {shape.camera}
   (edit me) [WALLS/ENV] / [PROP/SOUND] -- only the ones this scene needs
 
@@ -144,16 +127,9 @@ NEGATIVE
   {BASE_NEGATIVE},
   {look.negative}
 
-PREFLIGHT
-{preflight}
-
 VIRAL MECHANIC
   {teardown.viral_mechanic}
 
 CAMERA / LOOK
   {teardown.camera_look}
-
-COST / RISK
-  Draft {SETTINGS["resolution_draft"]} ~$1.50 - final {SETTINGS["resolution_final"]} ~$3 - never 1080p/4k -
-  lip-sync slurs -> best visual + dub in edit - which line is THE trigger (regenerate rather than lose it)
 """

@@ -26,7 +26,12 @@ from ofmhelpers.reel_machine.teardown import Teardown
 class LLMProvider(Protocol):
     name: str
 
-    def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict: ...
+    def analyze_reel(
+        self,
+        contact_sheet: Path,
+        transcript_text: str,
+        video_path: Path | None = None,
+    ) -> dict: ...
 
     def write_prompt_package(
         self,
@@ -37,3 +42,24 @@ class LLMProvider(Protocol):
         target: str = "",
         gender: str = DEFAULT_GENDER,
     ) -> str: ...
+
+
+def strip_llm_preamble(text: str, draft: str) -> str:
+    """Drop commentary an LLM sometimes prepends/appends around the actual
+    package text (e.g. "Here is the rewritten prompt:", wrapping ``` code
+    fences) before it reaches the user-facing textarea. The package always
+    starts with "SETUP" (see prompt_builder.build_prompt_package) -- if that
+    marker is missing entirely, the response isn't a valid rewrite and the
+    original draft is returned instead of showing the user a leaked prompt.
+    """
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+        if cleaned.startswith("text\n") or cleaned.startswith("txt\n"):
+            cleaned = cleaned.split("\n", 1)[1]
+
+    marker = "SETUP"
+    idx = cleaned.find(marker)
+    if idx == -1:
+        return draft
+    return cleaned[idx:].rstrip()

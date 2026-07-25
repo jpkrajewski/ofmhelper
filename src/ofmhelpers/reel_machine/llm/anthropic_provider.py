@@ -17,6 +17,7 @@ from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
+from ofmhelpers.reel_machine.llm.base import strip_llm_preamble
 from ofmhelpers.reel_machine.llm.groq_provider import (
     ANALYZE_SYSTEM_PROMPT,
     WRITE_SYSTEM_PROMPT,
@@ -36,7 +37,16 @@ class AnthropicProvider:
             raise KeyError("ANTHROPIC_API_KEY")
         self.model = model
 
-    def analyze_reel(self, contact_sheet: Path, transcript_text: str) -> dict:
+    def analyze_reel(
+        self,
+        contact_sheet: Path,
+        transcript_text: str,
+        video_path: Path | None = None,
+    ) -> dict:
+        # Claude's Messages API vision support is image-only (no native
+        # video input), so video_path is accepted only to satisfy the
+        # shared LLMProvider interface and is never used -- always analyzes
+        # the contact sheet. See gemini_provider.py for real video input.
         import anthropic
 
         client = anthropic.Anthropic(api_key=self.api_key)
@@ -85,4 +95,4 @@ class AnthropicProvider:
             system=WRITE_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": draft}],
         )
-        return response.content[0].text or draft
+        return strip_llm_preamble(response.content[0].text or draft, draft)

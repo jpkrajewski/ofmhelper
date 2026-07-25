@@ -40,6 +40,7 @@ class IntakeResult:
     contact_sheet: Path
     transcript: Transcript
     source_url: str | None = None
+    duration: float = 15.0
 
 
 def fetch_source(url_or_path: str, out_dir: Path) -> Path:
@@ -135,6 +136,33 @@ def extract_frames(video_path: Path, out_dir: Path, fps: int = 1) -> tuple[Path,
     return frames_dir, contact_sheet
 
 
+def probe_duration(video_path: Path) -> float:
+    """Source reel duration in seconds via ffprobe -- the generated clone
+    must always match this exactly (see reel_machine/CLAUDE.md), so there's
+    no manual "Length" field for the user to get wrong."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(video_path),
+            ],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffprobe isn't installed/on PATH") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"ffprobe failed: {exc.stderr.strip()}") from exc
+    return float(result.stdout.strip())
+
+
 def transcribe(video_path: Path, model_size: str = "small") -> Transcript:
     """Word-level transcript via faster-whisper -- a free, open-source,
     drop-in replacement for the old reel-machine bundle's `whisper` CLI call
@@ -198,10 +226,12 @@ def run_intake(url_or_path: str, work_dir: Path) -> IntakeResult:
     video_path = fetch_source(url_or_path, work_dir)
     frames_dir, contact_sheet = extract_frames(video_path, work_dir)
     transcript = transcribe(video_path)
+    duration = probe_duration(video_path)
     return IntakeResult(
         video_path=video_path,
         frames_dir=frames_dir,
         contact_sheet=contact_sheet,
         transcript=transcript,
         source_url=url_or_path if not Path(url_or_path).is_file() else None,
+        duration=duration,
     )
