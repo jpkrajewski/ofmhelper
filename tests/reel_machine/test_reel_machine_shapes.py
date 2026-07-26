@@ -31,9 +31,9 @@ def test_render_shape_leaves_no_unresolved_placeholders(shape_key, gender_key):
         rendered.notes,
     ):
         for token in PLACEHOLDER_TOKENS:
-            assert (
-                token not in field
-            ), f"{shape_key}/{gender_key}: unresolved {token} in {field!r}"
+            assert token not in field, (
+                f"{shape_key}/{gender_key}: unresolved {token} in {field!r}"
+            )
 
 
 def test_woman_x_woman_name_adapts_to_gender():

@@ -43,7 +43,8 @@ def test_run_job_failure_persists_error():
     job_id = create_job("seedance", {})
 
     def boom():
-        raise ValueError("Wrong API Key")
+        msg = "Wrong API Key"
+        raise ValueError(msg)
 
     run_job(job_id, boom, {})
 

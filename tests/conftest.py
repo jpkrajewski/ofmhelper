@@ -44,11 +44,12 @@ def _ensure_test_database(url: str) -> None:
             if not exists:
                 conn.execute(text(f'CREATE DATABASE "{parsed.database}"'))
     except OperationalError as exc:  # pragma: no cover - environment guard
-        raise RuntimeError(
+        msg = (
             "Cannot reach Postgres for the test suite. Start it first with "
             "`docker compose up -d postgres redis` (or set OFM_TEST_DATABASE_URL "
             f"to a reachable instance). Original error: {exc}"
-        ) from exc
+        )
+        raise RuntimeError(msg) from exc
     finally:
         engine.dispose()
 
@@ -73,7 +74,6 @@ def _test_database():
 
     engine = get_engine()
     Base.metadata.create_all(engine)
-    yield
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +86,6 @@ def _clean_tables():
         conn.execute(
             text("TRUNCATE jobs, todos, approval_tokens RESTART IDENTITY CASCADE")
         )
-    yield
 
 
 _SETTINGS_CLASSES = (

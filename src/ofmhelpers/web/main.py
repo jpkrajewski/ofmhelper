@@ -7,32 +7,38 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.web.auth import AuthMiddleware
-from ofmhelpers.web.recovery import recovery_loop
 from ofmhelpers.web.jobs import load_jobs
-
-from ofmhelpers.web.routers.download_reels import router as download_reels_router
-from ofmhelpers.web.routers.clean_image import router as clean_images_router
-from ofmhelpers.web.routers.seedance import router as seedance_router
+from ofmhelpers.web.recovery import recovery_loop
 from ofmhelpers.web.routers.action_log import router as action_log_router
-from ofmhelpers.web.routers.el import router as el_router
-from ofmhelpers.web.routers.helper_index import router as helper_router
-from ofmhelpers.web.routers.radio_comms import router as radio_router
-from ofmhelpers.web.routers.scraper import router as scraper_router
-from ofmhelpers.web.routers.file_manager import router as file_manager_router
-from ofmhelpers.web.routers.cookies import router as cookie_router
-from ofmhelpers.web.routers.nbp import router as nbp_router
-from ofmhelpers.web.routers.kling import router as kling_router
-from ofmhelpers.web.routers.refs import router as ref_router
-from ofmhelpers.web.routers.auth import router as auth_router
-from ofmhelpers.web.routers.download_images import router as download_images_router
-from ofmhelpers.web.routers.generate import router as generate_router
-from ofmhelpers.web.routers.fake_ai import router as fake_ai_router
-from ofmhelpers.web.routers.download_assets import router as download_assets_router
-from ofmhelpers.web.routers.todo import router as todo_router
 from ofmhelpers.web.routers.approve import router as approve_router
+from ofmhelpers.web.routers.auth import router as auth_router
+from ofmhelpers.web.routers.clean_image import router as clean_images_router
+from ofmhelpers.web.routers.cookies import router as cookie_router
+from ofmhelpers.web.routers.download_assets import router as download_assets_router
+from ofmhelpers.web.routers.download_images import router as download_images_router
+from ofmhelpers.web.routers.download_reels import router as download_reels_router
+from ofmhelpers.web.routers.el import router as el_router
+from ofmhelpers.web.routers.fake_ai import router as fake_ai_router
+from ofmhelpers.web.routers.file_manager import router as file_manager_router
+from ofmhelpers.web.routers.generate import router as generate_router
+from ofmhelpers.web.routers.helper_index import router as helper_router
+from ofmhelpers.web.routers.kling import router as kling_router
+from ofmhelpers.web.routers.nbp import router as nbp_router
+from ofmhelpers.web.routers.radio_comms import router as radio_router
+from ofmhelpers.web.routers.refs import router as ref_router
 from ofmhelpers.web.routers.replicate import router as replicate_router
+from ofmhelpers.web.routers.scraper import router as scraper_router
+from ofmhelpers.web.routers.seedance import router as seedance_router
+from ofmhelpers.web.routers.todo import router as todo_router
+from ofmhelpers.web.templates_config import templates
+
+# Before anything else in the process logs: uvicorn imports this module to
+# find `app`, so this runs ahead of the first request and ahead of uvicorn's
+# own startup records. See ofmhelpers/log.py.
+configure_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -46,8 +52,10 @@ async def lifespan(app: FastAPI):
     # in-request poll timed out (or that a restart orphaned) -- see
     # ofmhelpers/web/recovery.py. Cancelled cleanly on shutdown.
     sweeper = asyncio.create_task(recovery_loop())
+    logger.info("startup complete: job history loaded, recovery sweeper running")
     yield
     sweeper.cancel()
+    logger.info("shutdown: recovery sweeper cancelled")
 
 
 app = FastAPI(title="Global Ascend LLC — Content Ops", lifespan=lifespan)

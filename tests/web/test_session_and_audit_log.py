@@ -15,8 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
 
-from ofmhelpers.web.main import app
 from ofmhelpers.web.jobs import list_jobs
+from ofmhelpers.web.main import app
 
 
 @pytest.fixture
@@ -56,6 +56,31 @@ def test_failed_login_does_not_record_a_login_event(client_factory):
     assert after == before, "a failed login attempt must not be logged as a login"
 
 
+def test_login_redirects_to_the_next_target_after_success(client_factory):
+    """The post-login redirect target travels as the wire name `next` on both
+    the query string and the form body -- the handlers bind it to a
+    `next_url` identifier via an alias (`next` shadows a builtin), so this
+    pins the external name against an accidental rename."""
+    client = client_factory()
+
+    r = client.post(
+        "/login",
+        data={"password": "test-admin", "next": "/todo"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert r.headers["location"] == "/todo"
+
+
+def test_login_form_honors_next_query_param_when_already_authenticated(client_factory):
+    client = client_factory()
+    client.post("/login", data={"password": "test-admin", "next": "/"})
+
+    r = client.get("/login", params={"next": "/todo"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/todo"
+
+
 def test_logout_is_recorded_with_the_actor_that_was_logged_in(client_factory):
     client = client_factory()
     client.post("/login", data={"password": "test-va", "next": "/"})
@@ -66,9 +91,9 @@ def test_logout_is_recorded_with_the_actor_that_was_logged_in(client_factory):
     logout_events = [j for j in list_jobs() if j["task"] == "logout"]
     assert logout_events, "no logout event was recorded"
     latest = max(logout_events, key=lambda j: j["created_at"])
-    assert (
-        latest["actor"] == "va"
-    ), "logout must capture the actor before the session is cleared"
+    assert latest["actor"] == "va", (
+        "logout must capture the actor before the session is cleared"
+    )
 
 
 def test_logout_while_unauthenticated_is_blocked_before_logging_anything(

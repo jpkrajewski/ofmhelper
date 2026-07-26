@@ -365,6 +365,35 @@ The `worker` container has its own `restart: unless-stopped` policy,
 independent of the API — a worker crash won't take down the web app, and vice
 versa.
 
+### CI/CD (GitHub Actions)
+
+Three workflows in `.github/workflows/`:
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `ci.yml` | push/PR to `dev` or `main` | ruff check + ruff format, pytest against real Postgres 16 + Redis 7 service containers, and a Docker build |
+| `promote.yml` | CI green on `dev` | Opens (or comments on) a PR `dev` → `main`. Never merges — you do |
+| `deploy.yml` | CI green on `main`, or manual | SSHes to the server, `git reset --hard origin/main`, `docker compose up -d --build`, `alembic upgrade head`, then polls `/health` |
+
+Normal flow: work on `dev` → CI runs → promotion PR appears → you review and
+merge → `main` CI runs → deploy. `scripts/deploy.sh` still works as the manual
+escape hatch and is unchanged.
+
+**Required repository secrets** (Settings → Secrets and variables → Actions).
+These mirror `deploy.local.env`; without them the deploy job fails fast with an
+explicit message rather than a confusing SSH error:
+
+| Secret | Example | Notes |
+|---|---|---|
+| `OFM_DEPLOY_HOST` | `ubuntu@203.0.113.10` | user@host |
+| `OFM_DEPLOY_DIR` | `/home/ubuntu/ofmhelper` | repo path on the server |
+| `OFM_DEPLOY_SSH_KEY` | *(private key)* | full contents of the PEM, including header/footer lines |
+| `OFM_DEPLOY_KNOWN_HOSTS` | *(optional)* | output of `ssh-keyscan -H <host>`. Omitted → the runner trusts the key on first connect and logs a warning |
+
+The deploy job runs under a `production` GitHub Environment, so you can add a
+required reviewer there if you want a second gate before anything reaches the
+server.
+
 ---
 
 ## 11. Running the tests

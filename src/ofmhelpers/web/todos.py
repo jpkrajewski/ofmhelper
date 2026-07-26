@@ -78,11 +78,15 @@ def import_todos(entries: list[dict], created_by: str | None) -> int:
     validated = []
     for i, entry in enumerate(entries):
         if not isinstance(entry, dict):
-            raise ValueError(f"item {i} is not a JSON object")
+            # ValueError, not TypeError: the /todo/import route maps this
+            # whole validation pass onto a single HTTP 400.
+            msg = f"item {i} is not a JSON object"
+            raise ValueError(msg)  # noqa: TRY004
         model_name = str(entry.get("model_name") or "").strip()
         url = str(entry.get("url") or "").strip()
         if not model_name or not url:
-            raise ValueError(f"item {i} is missing model_name or url")
+            msg = f"item {i} is missing model_name or url"
+            raise ValueError(msg)
         comments = str(entry.get("comments") or "").strip()
         validated.append({"model_name": model_name, "url": url, "comments": comments})
 

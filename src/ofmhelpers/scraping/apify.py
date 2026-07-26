@@ -1,5 +1,9 @@
 from apify_client import ApifyClient
 
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
+
 
 def get_client_with_most_credits(api_keys: list[str]) -> ApifyClient:
     best_client = None
@@ -11,15 +15,20 @@ def get_client_with_most_credits(api_keys: list[str]) -> ApifyClient:
             user = client.user().get()
             limits = client.user().limits()
         except Exception as exc:
-            print(f"[{key[-8:]}] error: {exc}")
+            logger.warning("apify key ...%s: %s", key[-8:], exc)
             continue
 
         limit = limits.limits.max_monthly_usage_usd
         used = limits.current.monthly_usage_usd
         remaining = limit - used
 
-        print(
-            f"[{key[-8:]}] {user.email} — ${used:.2f} / ${limit:.2f} (${remaining:.2f} left)"
+        logger.info(
+            "apify key ...%s (%s): $%.2f / $%.2f ($%.2f left)",
+            key[-8:],
+            user.email,
+            used,
+            limit,
+            remaining,
         )
 
         if remaining > best_remaining:
@@ -27,7 +36,8 @@ def get_client_with_most_credits(api_keys: list[str]) -> ApifyClient:
             best_client = client
 
     if best_client is None:
-        raise RuntimeError("No usable Apify key found.")
+        msg = "No usable Apify key found."
+        raise RuntimeError(msg)
 
     return best_client
 

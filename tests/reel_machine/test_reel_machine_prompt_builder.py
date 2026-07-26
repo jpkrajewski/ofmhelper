@@ -39,13 +39,13 @@ REMOVED_BLOCKS = [
 
 
 def _sample_teardown(**overrides) -> Teardown:
-    defaults = dict(
-        hook="hi there",
-        beats=[Beat(start=0.0, end=1.5, text="hi there, watch this")],
-        viral_mechanic="call-out hook -> withhold -> twist",
-        camera_look="phone selfie, arm's length",
-        duration=15.0,
-    )
+    defaults = {
+        "hook": "hi there",
+        "beats": [Beat(start=0.0, end=1.5, text="hi there, watch this")],
+        "viral_mechanic": "call-out hook -> withhold -> twist",
+        "camera_look": "phone selfie, arm's length",
+        "duration": 15.0,
+    }
     defaults.update(overrides)
     return Teardown(**defaults)
 

@@ -34,7 +34,8 @@ MAX_ENTRIES = settings.kieai.upload_cache_max_entries
 class UploadCache:
     def __init__(self, max_entries: int = MAX_ENTRIES) -> None:
         if max_entries < 1:
-            raise ValueError("max_entries must be at least 1")
+            msg = "max_entries must be at least 1"
+            raise ValueError(msg)
         self._max_entries = max_entries
         self._entries: OrderedDict[tuple[str, str], str] = OrderedDict()
         self._lock = threading.Lock()

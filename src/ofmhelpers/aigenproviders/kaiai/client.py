@@ -1,12 +1,15 @@
 import json
 import pathlib
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import requests
 
 from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 
 class KieAIClient:
@@ -22,6 +25,10 @@ class KieAIClient:
     # it off. kie.ai's result URLs are only reliably valid ~24h, so anything
     # older than this is unrecoverable anyway.
     RESUME_MAX_AGE_S = settings.kieai.resume_max_age_s
+
+    # kie.ai signals success in a JSON body field, not the HTTP status.
+    _HTTP_ERROR = 400
+    _API_OK = 200
 
     def __init__(
         self,
@@ -52,7 +59,7 @@ class KieAIClient:
     # internal logging helper
     # ------------------------------------------------------------------
     def _log_task(self, task_id: str, model: str, prompt: str) -> None:
-        with open(self.TASK_LOG, "a") as f:
+        with self.TASK_LOG.open("a") as f:
             f.write(
                 json.dumps(
                     {
@@ -81,16 +88,13 @@ class KieAIClient:
         cached_url = upload_cache.get(self.api_key, path)
         if cached_url is not None:
             if self._remote_file_exists(cached_url):
-                print(f"[upload] cache hit for {path} -> {cached_url}", flush=True)
+                logger.info("upload cache hit for %s -> %s", path, cached_url)
                 return cached_url
-            print(
-                f"[upload] cached url for {path} no longer resolves, re-uploading",
-                flush=True,
-            )
+            logger.info("cached url for %s no longer resolves, re-uploading", path)
             upload_cache.discard(self.api_key, path)
 
-        print(f"[upload] starting {path} ...", flush=True)
-        with open(path, "rb") as fh:
+        logger.info("upload starting: %s", path)
+        with pathlib.Path(path).open("rb") as fh:
             r = requests.post(
                 f"{self.UPLOAD_BASE}/api/file-stream-upload",
                 headers=self.HEADERS,
@@ -100,10 +104,11 @@ class KieAIClient:
             )
         r.raise_for_status()
         if not r.json().get("success"):
-            raise Exception("Wrong API Key")
+            msg = "Wrong API Key"
+            raise RuntimeError(msg)
 
         url = r.json()["data"]["downloadUrl"]
-        print(f"[upload] done {path} -> {url}", flush=True)
+        logger.info("upload done: %s -> %s", path, url)
         upload_cache.put(self.api_key, path, url)
         return url
 
@@ -114,9 +119,10 @@ class KieAIClient:
         risking a broken reference being handed to kie.ai."""
         try:
             r = requests.head(url, timeout=10, allow_redirects=True)
-            return r.status_code < 400
         except requests.RequestException:
             return False
+        else:
+            return r.status_code < self._HTTP_ERROR
 
     # ------------------------------------------------------------------
     # Core async task lifecycle - shared by every Market model, including
@@ -135,8 +141,9 @@ class KieAIClient:
         )
         r.raise_for_status()
         data = r.json()
-        if data.get("code") != 200:
-            raise RuntimeError(f"createTask rejected: {data}")
+        if data.get("code") != self._API_OK:
+            msg = f"createTask rejected: {data}"
+            raise RuntimeError(msg)
         task_id = data["data"]["taskId"]
         self._log_task(task_id, model, input_payload.get("prompt", ""))
         return task_id
@@ -161,10 +168,12 @@ class KieAIClient:
             r.raise_for_status()
             d = r.json()["data"]
             state = d["state"]  # waiting -> queuing -> generating -> success/fail
-            print(d)
+            # Polled every ~2.5s for up to 15 min -- debug, or one generation
+            # buries every other line in the container log.
+            logger.debug("poll %s: state=%s payload=%s", task_id, state, d)
 
             if state == "success":
-                with open(self.COMPLETIONS_LOG, "a") as f:
+                with self.COMPLETIONS_LOG.open("a") as f:
                     f.write(
                         json.dumps(
                             {
@@ -178,16 +187,18 @@ class KieAIClient:
                 return json.loads(d["resultJson"])["resultUrls"]
 
             if state == "fail":
-                raise RuntimeError(f"{task_id} failed: {d.get('failMsg')}")
+                msg = f"{task_id} failed: {d.get('failMsg')}"
+                raise RuntimeError(msg)
 
             time.sleep(interval)
             interval = min(interval * 1.5, max_interval)
 
-        raise TimeoutError(
+        msg = (
             f"kie.ai is still generating (task {task_id}, waited {timeout_s}s). "
             f"No action needed -- the background recovery sweeper will download "
             f"it to the server automatically once it finishes."
         )
+        raise TimeoutError(msg)
 
     # ------------------------------------------------------------------
     # Single-shot status check - one recordInfo call, no waiting. Used by
@@ -229,9 +240,8 @@ class KieAIClient:
             out = self.OUT_DIR / f"{task_id}{suffix}.{ext}"
             with requests.get(url, stream=True, timeout=60) as r:
                 r.raise_for_status()
-                with open(out, "wb") as f:
-                    for chunk in r.iter_content(1 << 16):
-                        f.write(chunk)
+                with pathlib.Path(out).open("wb") as f:
+                    f.writelines(r.iter_content(1 << 16))
             saved.append(out)
         return saved
 
@@ -297,9 +307,10 @@ class KieAIClient:
         on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
         if model not in self.SEEDANCE2_MODELS:
-            raise ValueError(
+            msg = (
                 f"Unsupported model {model!r}; expected one of {self.SEEDANCE2_MODELS}"
             )
+            raise ValueError(msg)
 
         payload = {
             "prompt": prompt,
@@ -354,9 +365,8 @@ class KieAIClient:
         on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
         if mode not in self.KLING3_MODES:
-            raise ValueError(
-                f"Unsupported mode {mode!r}; expected one of {self.KLING3_MODES}"
-            )
+            msg = f"Unsupported mode {mode!r}; expected one of {self.KLING3_MODES}"
+            raise ValueError(msg)
 
         payload: dict = {
             "mode": mode,
@@ -400,7 +410,7 @@ class KieAIClient:
         return ids
 
     def _mark_resolved(self, task_id: str, outcome: str) -> None:
-        with open(self.RESOLVED_LOG, "a") as f:
+        with self.RESOLVED_LOG.open("a") as f:
             f.write(
                 json.dumps(
                     {"taskId": task_id, "outcome": outcome, "resolvedAt": time.time()}
@@ -436,8 +446,8 @@ class KieAIClient:
 
             try:
                 state, payload = self.check_task(tid)
-            except Exception as exc:  # network blip etc. -- next sweep retries
-                print(f"[recovery] {tid}: status check failed: {exc}", flush=True)
+            except Exception:  # network blip etc. -- next sweep retries
+                logger.warning("recovery %s: status check failed", tid, exc_info=True)
                 continue
 
             if state == "success":
@@ -448,15 +458,15 @@ class KieAIClient:
                 )
                 try:
                     self.download_urls(payload, tid, ext)
-                except Exception as exc:  # leave pending, next sweep retries
-                    print(f"[recovery] {tid}: download failed: {exc}", flush=True)
+                except Exception:  # leave pending, next sweep retries
+                    logger.warning("recovery %s: download failed", tid, exc_info=True)
                     continue
                 self._mark_resolved(tid, "downloaded")
                 recovered.append({"taskId": tid, "outcome": "downloaded"})
-                print(f"[recovery] downloaded {tid}", flush=True)
+                logger.info("recovery downloaded %s", tid)
             elif state == "fail":
                 self._mark_resolved(tid, "failed")
-                print(f"[recovery] {tid} failed on kie.ai: {payload}", flush=True)
+                logger.error("recovery %s failed on kie.ai: %s", tid, payload)
             # "unknown" (task belongs to a different key, etc.) and in-flight
             # states are left pending -- another key or a later sweep gets it,
             # and the age cutoff above guarantees it can't linger forever.

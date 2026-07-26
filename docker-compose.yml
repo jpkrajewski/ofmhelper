@@ -62,10 +62,11 @@ services:
     build: .
     container_name: ofmhelpers-worker
     restart: unless-stopped
-    command:
-      - sh
-      - -c
-      - rq worker-pool --num-workers "$${OFM_RQ_WORKERS:-10}" --url "$$OFM_REDIS_URL"
+    # Runs RQ via ofmhelpers.worker so the pool starts with the app's logging
+    # configured (see ofmhelpers/log.py); it reads OFM_RQ_WORKERS/OFM_REDIS_URL
+    # from settings itself, so no shell is needed to expand them -- exec form
+    # also keeps signals going straight to the process.
+    command: ["python", "-m", "ofmhelpers.worker"]
     # The image's HTTP healthcheck (probes :8000/health) is meaningless for the
     # worker, which runs no web server -- disable it so status isn't "unhealthy".
     healthcheck:

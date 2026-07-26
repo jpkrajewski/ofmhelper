@@ -11,28 +11,29 @@ otherwise still POST straight to these endpoints.
 import json
 import mimetypes
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Request,
+    File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
-    File,
 )
-from fastapi.responses import RedirectResponse, Response, FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.auth import require_admin, ROLE_ADMIN
-from ofmhelpers.web import todos, approval_tokens
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.discord.client import send_webhook
+from ofmhelpers.gdrive.client import upload_file as gdrive_upload_file
+from ofmhelpers.web import approval_tokens, todos
+from ofmhelpers.web.auth import ROLE_ADMIN, require_admin
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import classify_kind
-from ofmhelpers.gdrive.client import upload_file as gdrive_upload_file
-from ofmhelpers.discord.client import send_webhook
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/todo", tags=["todo"])
 
@@ -63,7 +64,7 @@ def _decorate_asset(t: dict) -> dict:
 def form(request: Request):
     items = todos.list_todos()
     for t in items:
-        t["created_at_display"] = datetime.fromtimestamp(t["created_at"]).strftime(
+        t["created_at_display"] = datetime.fromtimestamp(t["created_at"], UTC).strftime(
             "%Y-%m-%d %H:%M"
         )
         _decorate_asset(t)
@@ -81,9 +82,9 @@ def form(request: Request):
 @router.post("/add")
 def add(
     request: Request,
-    model_name: str = Form(...),
-    url: str = Form(...),
-    comments: str = Form(""),
+    model_name: Annotated[str, Form()],
+    url: Annotated[str, Form()],
+    comments: Annotated[str, Form()] = "",
 ):
     require_admin(request)
     if not model_name.strip() or not url.strip():
@@ -107,20 +108,22 @@ def export(request: Request):
 
 
 @router.post("/import")
-async def import_(request: Request, file: UploadFile = File(...)):
+async def import_(request: Request, file: Annotated[UploadFile, File()]):
     require_admin(request)
     raw = await file.read()
     try:
         entries = json.loads(raw)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Uploaded file is not valid JSON")
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=400, detail="Uploaded file is not valid JSON"
+        ) from e
     if not isinstance(entries, list):
         raise HTTPException(status_code=400, detail="JSON must be a list of tasks")
 
     try:
         todos.import_todos(entries, request.session.get("role"))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return RedirectResponse(url="/todo", status_code=303)
 
@@ -142,7 +145,9 @@ def delete(request: Request, todo_id: str):
 
 
 @router.post("/{todo_id}/asset")
-async def upload_asset(request: Request, todo_id: str, file: UploadFile = File(...)):
+async def upload_asset(
+    _request: Request, todo_id: str, file: Annotated[UploadFile, File()]
+):
     """VA (or admin) attaches a ready asset to a task -- no role check, both
     logged-in roles are allowed to do this, unlike add/toggle/delete/approve/
     upload-drive below."""
@@ -173,7 +178,7 @@ async def upload_asset(request: Request, todo_id: str, file: UploadFile = File(.
         raise HTTPException(
             status_code=502,
             detail=f"Asset saved, but Discord notification failed: {exc}",
-        )
+        ) from exc
 
     return RedirectResponse(url="/todo", status_code=303)
 
@@ -185,7 +190,8 @@ def _notify_discord_for_review(todo: dict) -> None:
     """..."""
     app_base_url = settings.web.app_base_url
     if app_base_url is None:
-        raise KeyError("APP_BASE_URL")
+        msg = "APP_BASE_URL"
+        raise KeyError(msg)
     base_url = app_base_url.rstrip("/")
     token = approval_tokens.create_token(todo["id"], todo["asset_path"])
     approve_url = f"{base_url}/approve/{token}"
@@ -259,7 +265,7 @@ def approve(request: Request, todo_id: str):
 
 
 @router.post("/{todo_id}/reject")
-def reject(request: Request, todo_id: str, comment: str = Form(...)):
+def reject(request: Request, todo_id: str, comment: Annotated[str, Form()]):
     require_admin(request)
     if not comment.strip():
         raise HTTPException(status_code=400, detail="A comment is required")

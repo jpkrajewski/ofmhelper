@@ -16,14 +16,14 @@ os.environ.setdefault("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/t
 os.environ.setdefault("APP_BASE_URL", "https://test.example")
 
 import json
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.main import app
 from ofmhelpers.web import todos
 from ofmhelpers.web.jobs import create_job, get_job
+from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import todo as todo_router
 
 
@@ -562,9 +562,9 @@ def test_upload_to_drive_failure_is_recorded_on_the_job_not_raised(client):
     ):
         r = client.post(f"/todo/{todo['id']}/upload-drive", follow_redirects=False)
 
-    assert (
-        r.status_code == 303
-    ), "the request itself succeeds -- the upload failed, not the click"
+    assert r.status_code == 303, (
+        "the request itself succeeds -- the upload failed, not the click"
+    )
     stored = todos.get_todo(todo["id"])
     assert stored["drive_file_id"] is None
     job = get_job(stored["drive_upload_job_id"])

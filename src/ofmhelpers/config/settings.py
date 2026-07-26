@@ -90,6 +90,9 @@ class InfraSettings(BaseSettings):
     # async (True); the test suite forces it False so TestClient sees the same
     # "background work already ran" behavior FastAPI BackgroundTasks gave.
     rq_async: bool = Field(default=True, validation_alias="OFM_RQ_ASYNC")
+    # Worker-pool size. >=10 so at least 10 upload/poll/download jobs run
+    # concurrently; read by ofmhelpers/worker.py, the worker entrypoint.
+    rq_workers: int = Field(default=10, validation_alias="OFM_RQ_WORKERS")
 
 
 class KieAISettings(BaseSettings):
@@ -164,6 +167,23 @@ class ReelMachineSettings(BaseSettings):
     beat_gap_s: float = Field(
         default=0.5, validation_alias="OFM_REEL_MACHINE_BEAT_GAP_S"
     )
+
+
+class LoggingSettings(BaseSettings):
+    """Read once per process by ofmhelpers.logging.configure_logging(), which
+    every entrypoint (web/main.py, the RQ worker, alembic/env.py) calls before
+    doing any work. Not read anywhere else -- modules just call
+    get_logger(__name__)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    level: str = Field(default="INFO", validation_alias="OFM_LOG_LEVEL")
+    # "text" is readable in `docker compose logs`; "json" emits one JSON object
+    # per line for a log aggregator that parses structured fields.
+    format: str = Field(default="text", validation_alias="OFM_LOG_FORMAT")
+    # Uvicorn's per-request access log is noise once a reverse proxy in front
+    # is already logging the same requests.
+    access_log: bool = Field(default=True, validation_alias="OFM_LOG_ACCESS")
 
 
 class GDriveSettings(BaseSettings):

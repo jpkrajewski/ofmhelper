@@ -5,31 +5,29 @@ ofmhelpers/web/routers/scraper.py
 import shutil
 import uuid
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Request,
-    Form,
-    UploadFile,
     File,
+    Form,
     HTTPException,
+    Request,
+    UploadFile,
 )
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.config.scrapers import SCRAPRES_REGISTRY, Scrapers
 from ofmhelpers.scraping.apify import get_client_with_most_credits, run_actor
-
 from ofmhelpers.scraping.models import PostBase, Reel, TikTokVideo
-
 from ofmhelpers.scraping.post_exporter import PostExcelExporter
 from ofmhelpers.scraping.post_scorer import PostFilterProcessor
 from ofmhelpers.utils.profile_loader import normalize_profiles_names
-
 from ofmhelpers.utils.sheets_to_columns import sheets_columns_to_keys
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/helpers/scraper", tags=["scraper"])
 
@@ -85,10 +83,10 @@ def form(request: Request):
 @router.post("/run")
 async def run(
     request: Request,
-    api_keys: str = Form(...),  # textarea, one token per line
-    sheet: UploadFile = File(...),
-    results_per_profile: int = Form(20),
-    results_days_back: int = Form(7),
+    api_keys: Annotated[str, Form()],  # textarea, one token per line
+    sheet: Annotated[UploadFile, File()],
+    results_per_profile: Annotated[int, Form()] = 20,
+    results_days_back: Annotated[int, Form()] = 7,
 ):
     keys = [k.strip() for k in api_keys.splitlines() if k.strip()]
     if not keys:

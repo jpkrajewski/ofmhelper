@@ -65,7 +65,7 @@ def test_run_ffmpeg_surfaces_stderr_instead_of_a_bare_error(tmp_path):
 
 def test_run_ffmpeg_reports_missing_binary_clearly(monkeypatch):
     def _raise_not_found(*args, **kwargs):
-        raise FileNotFoundError()
+        raise FileNotFoundError
 
     monkeypatch.setattr(subprocess, "run", _raise_not_found)
     with pytest.raises(RuntimeError, match="ffmpeg isn't installed"):

@@ -10,14 +10,13 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 
 from ofmhelpers.web.db.backfill_remote_urls import extract_task_id, run
 from ofmhelpers.web.db.repository import JobRepository
 from ofmhelpers.web.jobs import get_job
-
 
 TASK_ID = "5a458500123456789abcdef012345678"
 

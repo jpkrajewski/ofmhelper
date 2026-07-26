@@ -18,13 +18,13 @@ a grouped `{"url", "success", "output_paths"}` list, or a bare id string).
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 
-class JobStatus(str, Enum):
+class JobStatus(StrEnum):
     """The only three states web/jobs.py ever assigns."""
 
     running = "running"

@@ -26,7 +26,8 @@ def sheets_columns_to_keys(path: str | Path) -> dict[Scrapers, list[str]]:
     rows = ws.iter_rows(values_only=True)
     header = next(rows, None)
     if header is None:
-        raise ValueError(f"Sheet at {path} is empty — no header row found")
+        msg = f"Sheet at {path} is empty — no header row found"
+        raise ValueError(msg)
 
     # column name -> column index
     col_index: dict[str, int] = {

@@ -3,7 +3,7 @@ Covers discord/client.py: the minimal webhook sender behind the Discord
 approval notifications (see web/routers/todo.py's upload_asset).
 """
 
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 import requests
@@ -81,10 +81,12 @@ def test_send_webhook_raises_on_http_error(monkeypatch):
 
 def test_send_webhook_raises_on_network_error(monkeypatch):
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/abc")
-    with mock.patch.object(
-        discord_client.requests,
-        "post",
-        side_effect=requests.ConnectionError("no route to host"),
+    with (
+        mock.patch.object(
+            discord_client.requests,
+            "post",
+            side_effect=requests.ConnectionError("no route to host"),
+        ),
+        pytest.raises(requests.ConnectionError),
     ):
-        with pytest.raises(requests.ConnectionError):
-            discord_client.send_webhook("hello")
+        discord_client.send_webhook("hello")

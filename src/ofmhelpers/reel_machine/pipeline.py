@@ -7,6 +7,7 @@ prompt_builder.py so the web layer only needs these two entry points.
 from dataclasses import dataclass
 from pathlib import Path
 
+from ofmhelpers.log import get_logger
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
 from ofmhelpers.reel_machine.intake import IntakeResult, run_intake
 from ofmhelpers.reel_machine.llm.registry import get_provider
@@ -15,6 +16,7 @@ from ofmhelpers.reel_machine.looks import LOOKS
 from ofmhelpers.reel_machine.shapes import SHAPES
 from ofmhelpers.reel_machine.teardown import build_teardown_draft
 
+logger = get_logger(__name__)
 DEFAULT_SHAPE = "solo_monologue"
 DEFAULT_LOOK = "phone_selfie"
 
@@ -106,11 +108,11 @@ def draft_script_full(
         analysis = provider.analyze_reel(
             intake.contact_sheet, intake.transcript.text, video_path=intake.video_path
         )
-    except Exception as exc:
-        print(
-            f"[reel_machine] {provider.name} analyze_reel failed ({exc}), "
-            "keeping the (edit me) placeholders",
-            flush=True,
+    except Exception:
+        logger.warning(
+            "%s analyze_reel failed, keeping the (edit me) placeholders",
+            provider.name,
+            exc_info=True,
         )
         analysis = {}
     if analysis.get("main_subject"):
@@ -128,10 +130,11 @@ def draft_script_full(
         script = provider.write_prompt_package(
             teardown, shape, look, duration, target=target, gender=gender
         )
-    except Exception as exc:
-        print(
-            f"[reel_machine] {provider.name} provider failed ({exc}), falling back to template",
-            flush=True,
+    except Exception:
+        logger.warning(
+            "%s provider failed, falling back to template",
+            provider.name,
+            exc_info=True,
         )
         script = TemplateProvider().write_prompt_package(
             teardown, shape, look, duration, target=target, gender=gender

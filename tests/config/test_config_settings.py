@@ -213,6 +213,6 @@ def test_no_stray_env_reads_outside_settings():
         text = path.read_text(encoding="utf-8")
         if ENV_READ_PATTERN.search(text):
             offenders.append(str(path.relative_to(SRC)))
-    assert (
-        not offenders
-    ), f"os.getenv/os.environ found outside config/settings.py: {offenders}"
+    assert not offenders, (
+        f"os.getenv/os.environ found outside config/settings.py: {offenders}"
+    )

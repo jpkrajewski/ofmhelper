@@ -9,13 +9,14 @@ individual routes.
 
 import shutil
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.auth import require_admin
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(
     prefix="/file-manager", tags=["file-manager"], dependencies=[Depends(require_admin)]
@@ -50,12 +51,15 @@ def _safe_path(root_name: str, rel_path: str) -> Path:
     return candidate
 
 
+_BYTES_PER_UNIT = 1024
+
+
 def _human_size(num_bytes: int) -> str:
     size = float(num_bytes)
     for unit in ("B", "KB", "MB", "GB"):
-        if size < 1024:
+        if size < _BYTES_PER_UNIT:
             return f"{size:.1f} {unit}"
-        size /= 1024
+        size /= _BYTES_PER_UNIT
     return f"{size:.1f} TB"
 
 
@@ -118,7 +122,9 @@ def download(path: str, root: str = DEFAULT_ROOT):
 
 
 @router.post("/delete")
-def delete_one(path: str = Form(...), root: str = Form(DEFAULT_ROOT)):
+def delete_one(
+    path: Annotated[str, Form()], root: Annotated[str, Form()] = DEFAULT_ROOT
+):
     target = _safe_path(root, path)
     if target.is_file():
         target.unlink()
@@ -138,7 +144,9 @@ def delete_one(path: str = Form(...), root: str = Form(DEFAULT_ROOT)):
 
 
 @router.post("/delete-all")
-def delete_all(path: str = Form(""), root: str = Form(DEFAULT_ROOT)):
+def delete_all(
+    path: Annotated[str, Form()] = "", root: Annotated[str, Form()] = DEFAULT_ROOT
+):
     directory = _safe_path(root, path)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")

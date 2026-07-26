@@ -50,7 +50,9 @@ def test_vision_analysis_overrides_the_placeholders(tmp_path):
         "camera_look": "GoPro porthole, held low, strong barrel distortion",
     }
     fake_provider.write_prompt_package.side_effect = (
-        lambda teardown, shape, look, duration, target="", gender="female": teardown.camera_look
+        lambda teardown, shape, look, duration, target="", gender="female": (
+            teardown.camera_look
+        )
     )
 
     with mock.patch(
@@ -92,7 +94,9 @@ def test_failed_vision_analysis_falls_back_to_placeholders_without_raising(tmp_p
     fake_provider.name = "flaky-vision"
     fake_provider.analyze_reel.side_effect = RuntimeError("vision call failed")
     fake_provider.write_prompt_package.side_effect = (
-        lambda teardown, shape, look, duration, target="", gender="female": teardown.camera_look
+        lambda teardown, shape, look, duration, target="", gender="female": (
+            teardown.camera_look
+        )
     )
 
     with mock.patch(

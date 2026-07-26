@@ -55,7 +55,7 @@ def strip_llm_preamble(text: str, draft: str) -> str:
     cleaned = text.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.strip("`").strip()
-        if cleaned.startswith("text\n") or cleaned.startswith("txt\n"):
+        if cleaned.startswith(("text\n", "txt\n")):
             cleaned = cleaned.split("\n", 1)[1]
 
     marker = "SETUP"

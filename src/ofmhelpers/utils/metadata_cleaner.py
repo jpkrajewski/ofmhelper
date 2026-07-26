@@ -1,7 +1,12 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from PIL import Image
 
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 SUPPORTED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff")
 
 
@@ -36,6 +41,6 @@ def clean_metadata(path: Path) -> None:
         if src != dst:
             src.unlink()
 
-        print(f"  {src.name} → {dst.name}")
+        logger.info("%s -> %s", src.name, dst.name)
 
-    print("Done.")
+    logger.info("done")

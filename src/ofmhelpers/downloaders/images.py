@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import time
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -79,11 +79,10 @@ def download(
             continue
         mtime = p.stat().st_mtime
         # new file, or existing file that was just overwritten during this run
-        if p not in before_mtimes or mtime > before_mtimes[p]:
-            if (
-                mtime >= start_time - 1
-            ):  # small buffer for filesystem timestamp granularity
-                changed_files.append(p)
+        if (p not in before_mtimes or mtime > before_mtimes[p]) and (
+            mtime >= start_time - 1
+        ):  # small buffer for filesystem timestamp granularity
+            changed_files.append(p)
 
     changed_files.sort(key=lambda p: p.stat().st_mtime)
 

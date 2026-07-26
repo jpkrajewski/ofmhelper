@@ -12,9 +12,9 @@ it works on Windows too) and returns once the queue is drained.
 """
 
 import pytest
+import worker_tasks
 from rq import SimpleWorker
 
-import worker_tasks
 from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import get_queue, get_redis
 

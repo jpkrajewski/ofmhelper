@@ -19,10 +19,14 @@ old bundle hardcoded into its WaveSpeed shell scripts): 9:16 vertical,
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER, get_gender
-from ofmhelpers.reel_machine.looks import Look
 from ofmhelpers.reel_machine.shapes import Shape, render_shape
-from ofmhelpers.reel_machine.teardown import Teardown
+
+if TYPE_CHECKING:
+    from ofmhelpers.reel_machine.looks import Look
+    from ofmhelpers.reel_machine.teardown import Teardown
 
 SETTINGS = {
     "aspect_ratio": "9:16",
@@ -59,7 +63,7 @@ def build_prompt_package(
     look: Look,
     duration: int,
     character_name: str = "your character",
-    target: str = "",
+    target: str = "",  # noqa: ARG001  # kept as API surface; see docstring
     gender: str = DEFAULT_GENDER,
 ) -> str:
     """Deterministic first-draft prompt package. Meant to be reviewed and
@@ -70,8 +74,10 @@ def build_prompt_package(
     the PROMPT/VOICE & PACING/timeline content, they're just not echoed back
     as their own labeled blocks.
 
-    `target` steers dialogue TONE only (never physical appearance -- see
-    module docstring) but no longer appears as its own block; `gender`
+    `target` is accepted (every LLM provider forwards it) but this
+    deterministic builder does not consume it -- it steers dialogue TONE
+    only in the LLM-backed paths, never physical appearance, and no longer
+    appears as its own block here; `gender`
     picks which pronouns/voice-register the shape's templates render with
     (see gender.py / shapes.render_shape) and which speaker tag the timeline
     uses -- it does not describe the character's looks either.

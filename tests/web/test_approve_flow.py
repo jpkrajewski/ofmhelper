@@ -15,14 +15,14 @@ os.environ.setdefault("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/t
 os.environ.setdefault("APP_BASE_URL", "https://test.example")
 
 import time
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.main import app
 from ofmhelpers.web import todos
 from ofmhelpers.web.db import repository
+from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import todo as todo_router
 
 
@@ -71,7 +71,7 @@ def _approve_url_for(todo_id):
     hidden behind masked markdown text in the embed description
     ("[label](url)"), never shown as a raw URL, so it has to be parsed out
     rather than read off a dedicated field."""
-    content, embeds = todo_router.send_webhook.call_args[0]
+    _content, embeds = todo_router.send_webhook.call_args[0]
     description = embeds[0]["description"]
     return description.split("](", 1)[1].rstrip(")")
 

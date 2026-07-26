@@ -19,16 +19,16 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.main import app
 from ofmhelpers.web.db.repository import JobRepository
 from ofmhelpers.web.jobs import create_job, get_job, run_job
-from ofmhelpers.web.routers import nbp as nbp_router
+from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import kling as kling_router
+from ofmhelpers.web.routers import nbp as nbp_router
 from ofmhelpers.web.routers import refs as refs_router
 
 
@@ -39,24 +39,24 @@ def client():
     return c
 
 
-NBP_KWARGS = dict(
-    api_key="k",
-    prompt="p",
-    aspect_ratio="1:1",
-    resolution="1K",
-    output_format="png",
-    image_input_paths=[],
-)
+NBP_KWARGS = {
+    "api_key": "k",
+    "prompt": "p",
+    "aspect_ratio": "1:1",
+    "resolution": "1K",
+    "output_format": "png",
+    "image_input_paths": [],
+}
 
-KLING_KWARGS = dict(
-    api_key="k",
-    prompt="p",
-    mode="pro",
-    aspect_ratio="16:9",
-    duration="5",
-    sound=True,
-    image_paths=[],
-)
+KLING_KWARGS = {
+    "api_key": "k",
+    "prompt": "p",
+    "mode": "pro",
+    "aspect_ratio": "16:9",
+    "duration": "5",
+    "sound": True,
+    "image_paths": [],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,8 @@ def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only():
 
     def fake_generate(**kwargs):
         kwargs["on_result_urls"](["https://cdn.kie.ai/out/xyz.png"])
-        raise ConnectionError("connection reset mid-download")
+        msg = "connection reset mid-download"
+        raise ConnectionError(msg)
 
     with mock.patch.object(nbp_router, "KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
@@ -194,7 +195,8 @@ def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only():
 
     def fake_generate(**kwargs):
         kwargs["on_result_urls"](["https://cdn.kie.ai/out/clip.mp4"])
-        raise ConnectionError("connection reset mid-download")
+        msg = "connection reset mid-download"
+        raise ConnectionError(msg)
 
     with mock.patch.object(kling_router, "KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_video_kling3.side_effect = (

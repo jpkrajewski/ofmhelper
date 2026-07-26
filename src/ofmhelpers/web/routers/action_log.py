@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import list_jobs
 from ofmhelpers.web.auth import require_admin
+from ofmhelpers.web.jobs import list_jobs
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(
     prefix="/action-log", tags=["action-log"], dependencies=[Depends(require_admin)]
@@ -40,9 +40,9 @@ def dashboard(request: Request):
     jobs = list_jobs()
     for job in jobs:
         job["status_url"] = _status_url(job)
-        job["created_at_display"] = datetime.fromtimestamp(job["created_at"]).strftime(
-            "%H:%M:%S"
-        )
+        job["created_at_display"] = datetime.fromtimestamp(
+            job["created_at"], UTC
+        ).strftime("%H:%M:%S")
 
     any_running = any(j["status"] in ("running", "queued") for j in jobs)
     return templates.TemplateResponse(

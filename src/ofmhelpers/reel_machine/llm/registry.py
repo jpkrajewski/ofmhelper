@@ -9,8 +9,11 @@ pipeline.draft_script's own try/except around the actual call.
 """
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.reel_machine.llm.base import LLMProvider
 from ofmhelpers.reel_machine.llm.template_provider import TemplateProvider
+
+logger = get_logger(__name__)
 
 PROVIDER_NAMES = ("template", "groq", "gemini", "anthropic")
 
@@ -25,10 +28,11 @@ def get_provider(name: str | None = None) -> LLMProvider:
             from ofmhelpers.reel_machine.llm.groq_provider import GroqProvider
 
             return GroqProvider()
-        except Exception as exc:
-            print(
-                f"[reel_machine] groq provider unavailable ({exc}), falling back to template",
-                flush=True,
+        except Exception:
+            logger.warning(
+                "%s provider unavailable, falling back to template",
+                "groq",
+                exc_info=True,
             )
             return TemplateProvider()
 
@@ -37,10 +41,11 @@ def get_provider(name: str | None = None) -> LLMProvider:
             from ofmhelpers.reel_machine.llm.gemini_provider import GeminiProvider
 
             return GeminiProvider()
-        except Exception as exc:
-            print(
-                f"[reel_machine] gemini provider unavailable ({exc}), falling back to template",
-                flush=True,
+        except Exception:
+            logger.warning(
+                "%s provider unavailable, falling back to template",
+                "gemini",
+                exc_info=True,
             )
             return TemplateProvider()
 
@@ -49,10 +54,11 @@ def get_provider(name: str | None = None) -> LLMProvider:
             from ofmhelpers.reel_machine.llm.anthropic_provider import AnthropicProvider
 
             return AnthropicProvider()
-        except Exception as exc:
-            print(
-                f"[reel_machine] anthropic provider unavailable ({exc}), falling back to template",
-                flush=True,
+        except Exception:
+            logger.warning(
+                "%s provider unavailable, falling back to template",
+                "anthropic",
+                exc_info=True,
             )
             return TemplateProvider()
 

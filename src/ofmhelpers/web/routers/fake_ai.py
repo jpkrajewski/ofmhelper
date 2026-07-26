@@ -21,29 +21,30 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Request,
-    Form,
-    UploadFile,
     File,
+    Form,
     HTTPException,
+    Request,
+    UploadFile,
 )
 from PIL import Image, ImageDraw
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
-    build_ordered_paths,
     asset_card,
+    build_ordered_paths,
+    job_inputs,
     job_status_payload,
     serve_job_file,
-    job_inputs,
 )
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/fake-ai", tags=["fake-ai"])
 
@@ -103,14 +104,14 @@ def _run_fake_ai(
                 check=True,
             )
         except FileNotFoundError as exc:
-            raise RuntimeError(
-                "Fake AI Model: ffmpeg isn't installed/on PATH, can't fake a video"
-            ) from exc
+            msg = "Fake AI Model: ffmpeg isn't installed/on PATH, can't fake a video"
+            raise RuntimeError(msg) from exc
         except subprocess.CalledProcessError as exc:
-            raise RuntimeError(
+            msg = (
                 f"Fake AI Model: ffmpeg failed building the fake video: "
                 f"{exc.stderr.decode(errors='replace')[-500:]}"
-            ) from exc
+            )
+            raise RuntimeError(msg) from exc
         finally:
             frame_path.unlink(missing_ok=True)
     else:
@@ -123,22 +124,28 @@ def _run_fake_ai(
 @router.post("/run")
 async def run(
     request: Request,
-    prompt: str = Form(...),
-    outcome: str = Form("success"),  # "success" or "error"
-    asset_type: str = Form("image"),  # "image" or "video"
-    delay: int = Form(2),
-    error_message: str = Form("Simulated failure for testing"),
-    reference_images: list[UploadFile] = File(default=[]),
-    reference_images_manifest: str = Form("[]"),
-    reference_videos: list[UploadFile] = File(default=[]),
-    reference_videos_manifest: str = Form("[]"),
-    reference_audio: list[UploadFile] = File(default=[]),
-    reference_audio_manifest: str = Form("[]"),
+    prompt: Annotated[str, Form()],
+    outcome: Annotated[str, Form()] = "success",  # "success" or "error"
+    asset_type: Annotated[str, Form()] = "image",  # "image" or "video"
+    delay: Annotated[int, Form()] = 2,
+    error_message: Annotated[str, Form()] = "Simulated failure for testing",
+    reference_images: Annotated[list[UploadFile] | None, File()] = None,
+    reference_images_manifest: Annotated[str, Form()] = "[]",
+    reference_videos: Annotated[list[UploadFile] | None, File()] = None,
+    reference_videos_manifest: Annotated[str, Form()] = "[]",
+    reference_audio: Annotated[list[UploadFile] | None, File()] = None,
+    reference_audio_manifest: Annotated[str, Form()] = "[]",
 ):
     # These reference uploads don't feed into the fake generation at all --
     # this only exists so the upload/dedupe/reuse plumbing (the same
     # uploads/assets store seedance/kling3/nanobanana use) has a no-cost tool
     # to exercise.
+    if reference_audio is None:
+        reference_audio = []
+    if reference_videos is None:
+        reference_videos = []
+    if reference_images is None:
+        reference_images = []
     reference_image_paths = build_ordered_paths(
         reference_images_manifest, reference_images, ASSETS_ROOT
     )

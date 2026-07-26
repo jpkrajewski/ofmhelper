@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -8,16 +7,16 @@ class PostBase:
     username: str
     url: str
     timestamp: datetime
-    views: Optional[int]
-    likes: Optional[int]
-    comments: Optional[int]
-    caption: Optional[str]
-    duration_seconds: Optional[float]
+    views: int | None
+    likes: int | None
+    comments: int | None
+    caption: str | None
+    duration_seconds: float | None
     hashtags: list[str] = field(default_factory=list)
 
     @classmethod
     def from_apify(cls, item: dict) -> "PostBase":
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_valid(self) -> bool:
         return self.username and self.url and self.views
@@ -28,11 +27,11 @@ class Reel(PostBase):
     username: str
     url: str
     timestamp: datetime
-    views: Optional[int]
-    likes: Optional[int]
-    comments: Optional[int]
-    caption: Optional[str]
-    duration_seconds: Optional[float]
+    views: int | None
+    likes: int | None
+    comments: int | None
+    caption: str | None
+    duration_seconds: float | None
     hashtags: list[str] = field(default_factory=list)
 
     @classmethod
@@ -46,13 +45,13 @@ class Reel(PostBase):
         )
         try:
             if isinstance(raw_ts, (int, float)):
-                ts = datetime.fromtimestamp(raw_ts, tz=timezone.utc)
+                ts = datetime.fromtimestamp(raw_ts, tz=UTC)
             elif raw_ts:
-                ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                ts = datetime.fromisoformat(raw_ts)
             else:
-                ts = datetime.now(timezone.utc)
+                ts = datetime.now(UTC)
         except Exception:
-            ts = datetime.now(timezone.utc)
+            ts = datetime.now(UTC)
 
         hashtags = item.get("hashtags", [])
         if isinstance(hashtags, list):
@@ -146,11 +145,11 @@ class TikTokVideo(PostBase):
         ts_unix = item.get("createTime")
 
         if ts_iso:
-            posted_at = datetime.fromisoformat(ts_iso.replace("Z", "+00:00"))
+            posted_at = datetime.fromisoformat(ts_iso)
         elif ts_unix:
-            posted_at = datetime.fromtimestamp(ts_unix, tz=timezone.utc)
+            posted_at = datetime.fromtimestamp(ts_unix, tz=UTC)
         else:
-            posted_at = datetime.now(timezone.utc)
+            posted_at = datetime.now(UTC)
 
         hashtags = [h["name"] for h in item.get("hashtags", []) if h.get("name")]
 

@@ -1,25 +1,30 @@
+from typing import Annotated
+
 from fastapi import (
     APIRouter,
-    Request,
-    Form,
-    UploadFile,
     File,
+    Form,
     HTTPException,
+    Request,
+    UploadFile,
 )
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
+
+from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.log import get_logger
+from ofmhelpers.web.jobs import create_job, get_job, run_job, set_job_preview
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
-    build_ordered_paths,
     asset_card,
+    build_ordered_paths,
+    job_inputs,
+    job_status_payload,
     register_generated_asset,
     serve_job_file,
-    job_status_payload,
-    job_inputs,
 )
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.web.templates_config import templates
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/nanobanana", tags=["nanobanana"])
 
 
@@ -60,10 +65,10 @@ def _run_nanobanana(
         # only the local download failed. Never fail the job over that --
         # keep serving the hosted copy indefinitely instead of leaving the
         # asset in a broken state.
-        print(
-            f"[nanobanana] local download failed, serving remote_url only: "
-            f"{remote_urls[0]}",
-            flush=True,
+        logger.warning(
+            "local download failed, serving remote_url only: %s",
+            remote_urls[0],
+            exc_info=True,
         )
         name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or "image.png"
         return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
@@ -77,14 +82,16 @@ def _run_nanobanana(
 @router.post("/run")
 async def run(
     request: Request,
-    api_key: str = Form(...),
-    prompt: str = Form(...),
-    aspect_ratio: str = Form("1:1"),
-    resolution: str = Form("1K"),
-    output_format: str = Form("png"),
-    image_input: list[UploadFile] = File(default=[]),
-    image_input_manifest: str = Form("[]"),
+    api_key: Annotated[str, Form()],
+    prompt: Annotated[str, Form()],
+    aspect_ratio: Annotated[str, Form()] = "1:1",
+    resolution: Annotated[str, Form()] = "1K",
+    output_format: Annotated[str, Form()] = "png",
+    image_input: Annotated[list[UploadFile] | None, File()] = None,
+    image_input_manifest: Annotated[str, Form()] = "[]",
 ):
+    if image_input is None:
+        image_input = []
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 

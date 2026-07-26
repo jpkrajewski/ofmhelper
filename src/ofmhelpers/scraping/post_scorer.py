@@ -14,14 +14,21 @@ from __future__ import annotations
 
 import re
 import shutil
-from datetime import datetime, date
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
 
-from ofmhelpers.config.scrapers import ScraperConfig
 from openpyxl import load_workbook
-from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
+if TYPE_CHECKING:
+    from openpyxl.worksheet.worksheet import Worksheet
+
+    from ofmhelpers.config.scrapers import ScraperConfig
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 
@@ -69,7 +76,11 @@ def _parse_date(v) -> date | None:
     if isinstance(v, date):
         return v
     try:
-        return datetime.strptime(str(v)[:16], "%Y-%m-%d %H:%M").date()
+        # Scraped timestamps carry no UTC offset; treat them as UTC so the
+        # age comparison against `date.today()` below has a single basis.
+        return (
+            datetime.strptime(str(v)[:16], "%Y-%m-%d %H:%M").replace(tzinfo=UTC).date()
+        )
     except Exception:
         return None
 
@@ -77,7 +88,7 @@ def _parse_date(v) -> date | None:
 def _days_since(posted: date | None) -> float | None:
     if posted is None:
         return None
-    return max((date.today() - posted).days, 1)
+    return max((datetime.now(UTC).date() - posted).days, 1)
 
 
 def _normalize(values: list) -> list[float]:
@@ -106,8 +117,9 @@ def copy_fill(f):
     if f.fill_type and f.fill_type != "none":
         try:
             return PatternFill("solid", start_color=f.fgColor.rgb)
-        except Exception:
-            pass
+        except (AttributeError, ValueError, TypeError):
+            # theme/indexed fills have no usable .rgb -- fall back to blank
+            return PatternFill()
     return PatternFill()
 
 
@@ -121,7 +133,12 @@ def copy_alignment(a):
 
 
 class PostFilterProcessor:
-    NEW_HEADERS = ["Like Rate (%)", "Comment Rate (%)", "Avg Views/Day", "Score"]
+    NEW_HEADERS: ClassVar[list[str]] = [
+        "Like Rate (%)",
+        "Comment Rate (%)",
+        "Avg Views/Day",
+        "Score",
+    ]
 
     HEADER_FONT = Font(bold=True, color="FFFFFF", name="Arial", size=10)
     HEADER_FILL = PatternFill("solid", start_color="1a1a2e")
@@ -130,32 +147,38 @@ class PostFilterProcessor:
     NEW_HEADER_FILL = PatternFill("solid", start_color="0d3b6e")
     SCORE_HEADER_FILL = PatternFill("solid", start_color="1a4731")
 
+    # Below this score a row is tinted flat grey instead of green-scaled.
+    SCORE_HIGHLIGHT_MIN = 30
+
+    # Row 1 is the header, so data starts at row 2.
+    FIRST_DATA_ROW = 2
+
     def process(self, src_path: str, sheet_configs: dict[str, ScraperConfig]) -> str:
         """
         sheet_configs: maps sheet name -> ScraperConfig
         Sheets not in the dict are skipped.
         """
         src = Path(src_path)
-        ts = datetime.now().strftime("%Y%m%d_%H_%M_%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H_%M_%S")
         dst = src.parent / f"{src.stem}_filtered_{ts}.xlsx"
 
         shutil.copy2(src, dst)
-        print(f"Copied  {src.name} -> {dst.name}")
+        logger.info("copied %s -> %s", src.name, dst.name)
 
         wb = load_workbook(dst)
         for sheet_name in wb.sheetnames:
             if sheet_name not in sheet_configs:
-                print(f"  Skipping '{sheet_name}' — no config provided")
+                logger.info("skipping %r -- no config provided", sheet_name)
                 continue
             self._process_sheet(wb[sheet_name], sheet_configs[sheet_name])
 
         wb.save(dst)
-        print(f"Saved   {dst}")
+        logger.info("saved %s", dst)
         return str(dst)
 
     def _process_sheet(self, ws: Worksheet, config: ScraperConfig) -> None:
-        if ws.max_row < 2:
-            return
+        if ws.max_row < self.FIRST_DATA_ROW:
+            return  # header only, no data rows
 
         header = [cell.value for cell in ws[1]]
         try:
@@ -164,12 +187,12 @@ class PostFilterProcessor:
             col_comments = header.index("Comments")
             col_date = header.index("Date Posted")
         except ValueError:
-            print(f"  Skipping '{ws.title}' — missing expected columns")
+            logger.warning("skipping %r -- missing expected columns", ws.title)
             return
 
         # ── Read all data rows into memory ────────────────────────────────────
         all_rows: list[list[dict]] = []
-        for row in range(2, ws.max_row + 1):
+        for row in range(self.FIRST_DATA_ROW, ws.max_row + 1):
             row_data = []
             for col in range(1, ws.max_column + 1):
                 cell = ws.cell(row=row, column=col)
@@ -185,7 +208,7 @@ class PostFilterProcessor:
             all_rows.append(row_data)
 
         # ── Filter & compute metrics ──────────────────────────────────────────
-        today = date.today()
+        today = datetime.now(UTC).date()
         kept_rows: list[list[dict]] = []
         metrics: list[dict] = []
         removed = 0
@@ -225,7 +248,7 @@ class PostFilterProcessor:
             )
 
         if not kept_rows:
-            print(f"  Sheet '{ws.title}': 0 rows after filtering")
+            logger.info("sheet %r: 0 rows after filtering", ws.title)
             for row in range(ws.max_row, 1, -1):
                 ws.delete_rows(row)
             return
@@ -283,7 +306,7 @@ class PostFilterProcessor:
             intensity = int(255 - (score / 100) * 180)
             score_fill = (
                 PatternFill("solid", start_color=f"00{intensity:02X}00")
-                if score > 30
+                if score > self.SCORE_HIGHLIGHT_MIN
                 else PatternFill("solid", start_color="CCCCCC")
             )
             row_data.append(
@@ -330,7 +353,15 @@ class PostFilterProcessor:
 
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
-        print(
-            f"  Sheet '{ws.title}': kept {len(kept_rows)}, removed {removed} low-view rows"
+        logger.info(
+            "sheet %r: kept %d, removed %d low-view rows",
+            ws.title,
+            len(kept_rows),
+            removed,
         )
-        print(f"    #1: {kept_rows[0][0]['value']} | score {kept_rows[0][-1]['value']}")
+        logger.info(
+            "sheet %r top row: %s | score %s",
+            ws.title,
+            kept_rows[0][0]["value"],
+            kept_rows[0][-1]["value"],
+        )

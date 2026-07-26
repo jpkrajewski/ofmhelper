@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
 from ofmhelpers.reel_machine.llm.base import strip_llm_preamble
 from ofmhelpers.reel_machine.looks import Look
@@ -31,6 +32,7 @@ from ofmhelpers.reel_machine.prompt_builder import build_prompt_package
 from ofmhelpers.reel_machine.shapes import Shape
 from ofmhelpers.reel_machine.teardown import Teardown
 
+logger = get_logger(__name__)
 WRITE_SYSTEM_PROMPT = (
     "You punch up Seedance 2.0 video-generation prompt packages for a reel-cloning "
     "pipeline. Keep the EXACT block structure and every setting in the draft "
@@ -122,7 +124,8 @@ class GroqProvider:
         s = settings.reel_machine
         self.api_key = api_key or s.groq_api_key
         if self.api_key is None:
-            raise KeyError("GROQ_API_KEY")
+            msg = "GROQ_API_KEY"
+            raise KeyError(msg)
         self.text_model = text_model
         self.vision_model = vision_model or s.groq_vision_model
 
@@ -136,12 +139,11 @@ class GroqProvider:
         # (see module docstring) -- video_path is accepted only to satisfy
         # the shared LLMProvider interface, never used.
         if not self.vision_model:
-            print(
-                "[reel_machine] groq has no vision model configured (none is "
-                "available on the free tier as of this writing) -- skipping "
-                "vision analysis, keeping the (edit me) placeholders. Use the "
-                "gemini provider for free vision analysis instead.",
-                flush=True,
+            logger.warning(
+                "groq has no vision model configured (none is available on the "
+                "free tier as of this writing) -- skipping vision analysis, "
+                "keeping the (edit me) placeholders. Use the gemini provider "
+                "for free vision analysis instead."
             )
             return {}
 

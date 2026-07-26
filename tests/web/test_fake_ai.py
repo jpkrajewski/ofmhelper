@@ -14,14 +14,14 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
 import json
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.main import app
 from ofmhelpers.web.jobs import get_job
+from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import fake_ai as fake_ai_router
 
 

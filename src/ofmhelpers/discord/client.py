@@ -29,7 +29,8 @@ def send_webhook(content: str, embeds: list[dict] | None = None) -> None:
     preview link in its own call with no embeds attached."""
     url = settings.discord.webhook_url
     if url is None:
-        raise KeyError("DISCORD_WEBHOOK_URL")
+        msg = "DISCORD_WEBHOOK_URL"
+        raise KeyError(msg)
     payload = {"content": content}
     if embeds:
         payload["embeds"] = embeds

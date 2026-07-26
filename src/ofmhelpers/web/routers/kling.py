@@ -1,27 +1,31 @@
+from typing import Annotated
+
 from fastapi import (
     APIRouter,
-    Request,
-    Form,
-    UploadFile,
     File,
+    Form,
     HTTPException,
     Query,
+    Request,
+    UploadFile,
 )
 
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
+from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.log import get_logger
+from ofmhelpers.web.jobs import create_job, get_job, run_job, set_job_preview
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
-    build_ordered_paths,
     asset_card,
+    build_ordered_paths,
+    job_inputs,
+    job_status_payload,
     register_generated_asset,
     serve_job_file,
-    job_status_payload,
-    job_inputs,
 )
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.web.templates_config import templates
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/kling3", tags=["kling3"])
 
 
@@ -58,10 +62,10 @@ def _run_kling3(
     except Exception:
         if not remote_urls:
             raise
-        print(
-            f"[kling3] local download failed, serving remote_url only: "
-            f"{remote_urls[0]}",
-            flush=True,
+        logger.warning(
+            "local download failed, serving remote_url only: %s",
+            remote_urls[0],
+            exc_info=True,
         )
         name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or "video.mp4"
         return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
@@ -75,15 +79,17 @@ def _run_kling3(
 @router.post("/run")
 async def run(
     request: Request,
-    api_key: str = Form(...),
-    prompt: str = Form(...),
-    mode: str = Form("pro"),
-    aspect_ratio: str = Form("16:9"),
-    duration: str = Form("5"),
-    sound: bool = Form(True),
-    images: list[UploadFile] = File(default=[]),
-    images_manifest: str = Form("[]"),
+    api_key: Annotated[str, Form()],
+    prompt: Annotated[str, Form()],
+    mode: Annotated[str, Form()] = "pro",
+    aspect_ratio: Annotated[str, Form()] = "16:9",
+    duration: Annotated[str, Form()] = "5",
+    sound: Annotated[bool, Form()] = True,
+    images: Annotated[list[UploadFile] | None, File()] = None,
+    images_manifest: Annotated[str, Form()] = "[]",
 ):
+    if images is None:
+        images = []
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
@@ -150,7 +156,7 @@ def job_status_json(job_id: str):
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int, dl: int = Query(0)):
+def download_file(job_id: str, index: int, dl: Annotated[int, Query()] = 0):
     job = get_job(job_id)
     return serve_job_file(
         job, index, as_attachment=bool(dl), default_media_type="video/mp4"

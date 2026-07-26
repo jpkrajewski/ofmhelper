@@ -39,6 +39,19 @@ Before finishing:
   ```
 - If checks can't be run, explain why.
 
+## Logging
+
+- `logger = get_logger(__name__)` from `ofmhelpers.log`, at module scope.
+  Never `print()` in library code, never `logging.basicConfig()`, never add
+  a handler or set a level outside an entrypoint.
+- Lazy args: `logger.info("uploaded %s", path)`, not an f-string.
+- In an `except` block use `exc_info=True` (or `logger.exception`) — don't
+  interpolate the exception into the message and lose the traceback.
+- Entrypoints (and only entrypoints) call `configure_logging()`:
+  `web/main.py` and `worker.py`. Operator CLIs that exist to print a report
+  (`web/db/backfill_remote_urls.py`) keep using `print()` on purpose.
+- `OFM_LOG_LEVEL` / `OFM_LOG_FORMAT=json` / `OFM_LOG_ACCESS` tune it.
+
 ## New Code
 
 - Add a small test for every code change.

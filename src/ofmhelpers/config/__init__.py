@@ -27,6 +27,7 @@ from ofmhelpers.config.settings import (
     GDriveSettings,
     InfraSettings,
     KieAISettings,
+    LoggingSettings,
     ReelMachineSettings,
     SessionSettings,
     WebSettings,
@@ -66,7 +67,11 @@ class Settings:
     def gdrive(self) -> GDriveSettings:
         return GDriveSettings()
 
+    @property
+    def logging(self) -> LoggingSettings:
+        return LoggingSettings()
+
 
 settings = Settings()
 
-__all__ = ["settings", "Settings"]
+__all__ = ["Settings", "settings"]

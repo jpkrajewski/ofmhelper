@@ -5,22 +5,23 @@ ofmhelpers/web/routers/radio_comms.py
 import shutil
 import uuid
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Request,
-    Form,
-    UploadFile,
     File,
+    Form,
     HTTPException,
+    Request,
+    UploadFile,
 )
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
-from ofmhelpers.utils.radio_comms_fx import PRESETS, process_file, generate_variations
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.utils.radio_comms_fx import PRESETS, generate_variations, process_file
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/helpers/radio-comms", tags=["radio-comms"])
 
@@ -40,8 +41,8 @@ def _run_radio_comms(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[Path] = []
-    for in_path in input_paths:
-        in_path = Path(in_path)
+    for raw_path in input_paths:
+        in_path = Path(raw_path)
         if mode == "variations":
             paths = generate_variations(
                 str(in_path),
@@ -72,12 +73,12 @@ def form(request: Request):
 @router.post("/run")
 async def run(
     request: Request,
-    files: list[UploadFile] = File(...),
-    preset: str = Form("cod_clean"),
-    mode: str = Form("single"),  # "single" or "variations"
-    count: int = Form(10),
-    jitter_amount: float = Form(0.18),
-    seed: int | None = Form(None),
+    files: Annotated[list[UploadFile], File()],
+    preset: Annotated[str, Form()] = "cod_clean",
+    mode: Annotated[str, Form()] = "single",  # "single" or "variations"
+    count: Annotated[int, Form()] = 10,
+    jitter_amount: Annotated[float, Form()] = 0.18,
+    seed: Annotated[int | None, Form()] = None,
 ):
     if preset not in PRESETS:
         raise HTTPException(status_code=400, detail=f"Unknown preset '{preset}'")
