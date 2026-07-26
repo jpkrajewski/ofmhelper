@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Oneshot deploy: commit + push + pull-on-server + rebuild + DB migrate +
-# JSON->Postgres backfill + health check.
+# JSON->Postgres backfill + orphaned-job recovery + health check.
 #
 # Usage: scripts/deploy.sh "commit message"
 #
@@ -56,7 +56,8 @@ echo "== deploying to $OFM_DEPLOY_HOST =="
 ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
   "cd '$OFM_DEPLOY_DIR' && git pull && docker compose up -d --build && \
    docker compose exec -T ofmhelpers alembic upgrade head && \
-   docker compose exec -T ofmhelpers python -m ofmhelpers.web.db.backfill"
+   docker compose exec -T ofmhelpers python -m ofmhelpers.web.db.backfill && \
+   docker compose exec -T ofmhelpers python -m ofmhelpers.web.db.recover_orphaned_jobs"
 
 echo "== health check =="
 for i in 1 2 3 4 5; do

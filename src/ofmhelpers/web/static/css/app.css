@@ -211,6 +211,15 @@ footer .footer-links a:hover { color: var(--accent-soft); }
     margin-bottom: 8px;
     background: #000;
 }
+.result-image {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+}
+.result-image:hover {
+    transform: scale(2.2);
+    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
 .result-audio { width: 100%; margin-bottom: 8px; }
 .result-file {
     display: flex; align-items: center; justify-content: center;
