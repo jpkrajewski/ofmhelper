@@ -262,14 +262,22 @@ def grouped_job_status_payload(job: dict | None, files_prefix: str) -> dict:
 
 def reference_asset(path: str) -> dict:
     """One reference-file entry for a job's "inputs" display: a file already
-    sitting in the shared uploads/assets/ store, served through the same
-    /refs/file endpoint the picker widget's own previews use -- no new
-    endpoint needed, and it's already scoped/validated to ASSETS_ROOT."""
+    sitting in the shared uploads/assets/ store. Only ever rendered small
+    (see .inputs-refs .result-item CSS, ~200px), so images go through
+    /refs/thumb (cached, small) rather than /refs/file (full original) --
+    this dict has no other consumer that needs the full-res URL."""
     name = strip_asset_hash_prefix(Path(path).name)
+    kind = classify_kind(name)
+    quoted = quote(path)
+    view_url = (
+        f"/refs/thumb?path={quoted}&size=200"
+        if kind == "image"
+        else f"/refs/file?path={quoted}"
+    )
     return {
         "name": name,
-        "kind": classify_kind(name),
-        "view_url": f"/refs/file?path={quote(path)}",
+        "kind": kind,
+        "view_url": view_url,
     }
 
 

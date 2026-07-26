@@ -19,11 +19,21 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from ofmhelpers.web.main import app
 from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
 from ofmhelpers.web.routers import download_reels as download_reels_router
 from ofmhelpers.web.routers import fake_ai as fake_ai_router
+
+
+def _png_bytes() -> bytes:
+    """A real (Pillow-decodable) PNG -- the reference-preview path now
+    thumbnails images, so tests need actual image bytes, not a placeholder
+    string."""
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 300), color="red").save(buf, format="PNG")
+    return buf.getvalue()
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +80,8 @@ def test_fake_ai_job_status_shows_settings_prompt_and_reference_preview(
 def test_reference_preview_url_actually_serves_the_file(client, tmp_path, monkeypatch):
     monkeypatch.setattr(fake_ai_router, "OUT_DIR", tmp_path)
 
-    files = {"reference_images": ("myref.png", io.BytesIO(b"ref bytes"), "image/png")}
+    ref_bytes = _png_bytes()
+    files = {"reference_images": ("myref.png", io.BytesIO(ref_bytes), "image/png")}
     data = {
         "prompt": "short",
         "outcome": "success",
@@ -80,12 +91,14 @@ def test_reference_preview_url_actually_serves_the_file(client, tmp_path, monkey
     job_id = client.post("/fake-ai/run", data=data, files=files).json()["job_id"]
     html = client.get(f"/fake-ai/jobs/{job_id}").text
 
-    match = re.search(r'/refs/file\?path=[^"&]+', html)
-    assert match, "no reference preview URL found on the page"
+    # Image reference previews render through the cached thumbnail endpoint
+    # (see task_helpers.reference_asset), not the full-res original.
+    match = re.search(r'/refs/thumb\?path=[^"&]+', html)
+    assert match, "no reference thumbnail URL found on the page"
 
     r = client.get(match.group(0))
     assert r.status_code == 200
-    assert r.content == b"ref bytes"
+    assert r.content != ref_bytes, "should be a resized thumbnail, not the original"
 
 
 def test_seedance_job_status_shows_settings_and_reference_video(client):

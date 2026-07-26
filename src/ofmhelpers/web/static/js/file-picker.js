@@ -41,13 +41,20 @@
     }
 
     function buildPreview(kind, item) {
+        // Existing images preview through /refs/thumb (small, cached) --
+        // .thumb-small is a 100px box, a full-res original would be pure
+        // waste. Freshly-picked files have no server path yet, so those
+        // still preview via a local object URL.
         const src =
             item.kind === "new"
                 ? URL.createObjectURL(item.file)
-                : `/refs/file?path=${encodeURIComponent(item.path)}`;
+                : kind === "image"
+                  ? `/refs/thumb?path=${encodeURIComponent(item.path)}&size=150`
+                  : `/refs/file?path=${encodeURIComponent(item.path)}`;
         if (kind === "image") {
             const thumb = document.createElement("img");
             thumb.className = "thumb-small";
+            thumb.loading = "lazy";
             thumb.src = src;
             return thumb;
         }
@@ -153,7 +160,8 @@
                     const src = `/refs/file?path=${encodeURIComponent(f.path)}`;
                     if (kind === "image") {
                         const img = document.createElement("img");
-                        img.src = src;
+                        img.src = `/refs/thumb?path=${encodeURIComponent(f.path)}&size=200`;
+                        img.loading = "lazy";
                         img.alt = f.name;
                         tile.appendChild(img);
                     } else if (kind === "video") {
