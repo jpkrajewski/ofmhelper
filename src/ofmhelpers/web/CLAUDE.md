@@ -38,13 +38,14 @@ verbatim by seven+ tools; a new one should almost never need new plumbing.
 - `db/` — the persistence layer (Postgres). `models.py` (SQLAlchemy tables:
   jobs, todos, approval_tokens), `session.py` (lazy engine/session from
   `settings.infra`), `repository.py` (**the only code that touches the DB** —
-  jobs/todos/approval_tokens delegate to it), `backfill.py` (one-time JSON ->
-  Postgres migration, driven by `scripts/backfill_state.py`),
-  `recover_orphaned_jobs.py` (idempotent: inserts a `done` job row for any
-  `kieai_out/` file no job's `result` references yet — covers a completion
-  write that never landed in Postgres; run every deploy via `deploy.sh`, safe
-  to run repeatedly). Schema changes are versioned with Alembic (`alembic/`
-  at the repo root).
+  jobs/todos/approval_tokens delegate to it), `backfill_remote_urls.py`
+  (one-time, manually-run: re-derives kie.ai `remote_url` for old jobs that
+  predate that field — see its docstring, `--apply` to write, dry-run by
+  default). Schema changes are versioned with Alembic (`alembic/` at the repo
+  root). The original JSON->Postgres migration (`backfill.py`) and a
+  since-retired `recover_orphaned_jobs.py` (one-off fix for a local dev-only
+  data gap) have both served their purpose and were removed — prod's job
+  history has been fully Postgres-native since the RQ/Postgres migration.
 - `queue.py` — the RQ queue (Redis) the API enqueues onto and the `worker`
   container consumes, replacing FastAPI BackgroundTasks. `enqueue(...)` runs
   jobs on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs

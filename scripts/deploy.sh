@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Oneshot deploy: commit + push + pull-on-server + rebuild + DB migrate +
-# JSON->Postgres backfill + orphaned-job recovery + health check.
+# health check.
 #
 # Usage: scripts/deploy.sh "commit message"
 #
@@ -49,15 +49,10 @@ else
 fi
 
 echo "== deploying to $OFM_DEPLOY_HOST =="
-# Bring the stack up (postgres/redis/worker/api), apply DB migrations, then
-# backfill any old JSON state into Postgres. The backfill is idempotent
-# (upserts by PK) and archives the JSON files after the first run, so it's a
-# no-op on every subsequent deploy.
+# Bring the stack up (postgres/redis/worker/api) and apply DB migrations.
 ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
   "cd '$OFM_DEPLOY_DIR' && git pull && docker compose up -d --build && \
-   docker compose exec -T ofmhelpers alembic upgrade head && \
-   docker compose exec -T ofmhelpers python -m ofmhelpers.web.db.backfill && \
-   docker compose exec -T ofmhelpers python -m ofmhelpers.web.db.recover_orphaned_jobs"
+   docker compose exec -T ofmhelpers alembic upgrade head"
 
 echo "== health check =="
 for i in 1 2 3 4 5; do
