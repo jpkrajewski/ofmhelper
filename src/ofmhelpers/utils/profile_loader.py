@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 
 class PlatformNormalizer(ABC):
@@ -33,7 +34,8 @@ class PlatformNormalizer(ABC):
 
         match = self._URL_PATTERN.search(raw)
         if not match:
-            raise ValueError(f"Could not extract username from URL: {raw!r}")
+            msg = f"Could not extract username from URL: {raw!r}"
+            raise ValueError(msg)
 
         return self._clean(match.group(2))
 
@@ -54,7 +56,8 @@ class InstagramNormalizer(PlatformNormalizer):
             path = self.extract_from_url(raw)
             # instagram.com/<username>/ — but reject non-profile paths.
             if path.lower() in {"p", "reel", "reels", "stories", "tv"}:
-                raise ValueError(f"Not a profile URL: {raw!r}")
+                msg = f"Not a profile URL: {raw!r}"
+                raise ValueError(msg)
             return path
 
         return self._clean(raw.strip())
@@ -96,7 +99,8 @@ class XNormalizer(PlatformNormalizer):
         if self.matches(raw):
             path = self.extract_from_url(raw)
             if path.lower() in self._RESERVED_PATHS:
-                raise ValueError(f"Not a profile URL: {raw!r}")
+                msg = f"Not a profile URL: {raw!r}"
+                raise ValueError(msg)
             return path
 
         return self._clean(raw.strip())
@@ -134,7 +138,8 @@ class RedditNormalizer(PlatformNormalizer):
         if match:
             prefix, name = match.group(2), match.group(3)
             if prefix not in self._USER_PREFIXES:
-                raise ValueError(f"Not a user profile URL (subreddit): {raw!r}")
+                msg = f"Not a user profile URL (subreddit): {raw!r}"
+                raise ValueError(msg)
             return self._clean(name)
 
         return self._clean(raw.strip())
@@ -174,8 +179,8 @@ class ProfileLoader:
         self.normalizer = normalizer or ProfileNormalizer()
 
     def load(self) -> list[str]:
-        with open(self.path) as f:
-            return self._normalize(profiles=[line for line in f])
+        with Path(self.path).open(encoding="utf-8") as f:
+            return self._normalize(profiles=list(f))
 
     def _normalize(self, profiles: list[str]) -> list[str]:
         normalized = (

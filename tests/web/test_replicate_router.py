@@ -11,7 +11,7 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient

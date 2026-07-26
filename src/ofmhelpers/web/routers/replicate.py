@@ -17,6 +17,7 @@ Two job types share this router, dispatched by `job["task"]`:
 """
 
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
@@ -130,13 +131,13 @@ def form(request: Request):
 @router.post("/intake")
 async def intake(
     request: Request,
-    source_url: str = Form(""),
-    source_file: UploadFile | None = File(None),
-    shape: str = Form(pipeline.DEFAULT_SHAPE),
-    look: str = Form(pipeline.DEFAULT_LOOK),
-    llm_provider: str = Form("template"),
-    target: str = Form(""),
-    gender: str = Form(DEFAULT_GENDER),
+    source_url: Annotated[str, Form()] = "",
+    source_file: Annotated[UploadFile | None, File()] = None,
+    shape: Annotated[str, Form()] = pipeline.DEFAULT_SHAPE,
+    look: Annotated[str, Form()] = pipeline.DEFAULT_LOOK,
+    llm_provider: Annotated[str, Form()] = "template",
+    target: Annotated[str, Form()] = "",
+    gender: Annotated[str, Form()] = DEFAULT_GENDER,
 ):
     source = source_url.strip()
     if source_file is not None and source_file.filename:
@@ -239,13 +240,15 @@ def contact_sheet(job_id: str):
 @router.post("/generate")
 async def generate(
     request: Request,
-    api_key: str = Form(...),
-    script: str = Form(...),
-    duration: int = Form(15),
-    resolution: str = Form("720p"),
-    character_images: list[UploadFile] = File(default=[]),
-    character_images_manifest: str = Form("[]"),
+    api_key: Annotated[str, Form()],
+    script: Annotated[str, Form()],
+    duration: Annotated[int, Form()] = 15,
+    resolution: Annotated[str, Form()] = "720p",
+    character_images: Annotated[list[UploadFile] | None, File()] = None,
+    character_images_manifest: Annotated[str, Form()] = "[]",
 ):
+    if character_images is None:
+        character_images = []
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
     if not script.strip():
@@ -271,7 +274,7 @@ async def generate(
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int, dl: int = Query(0)):
+def download_file(job_id: str, index: int, dl: Annotated[int, Query()] = 0):
     job = get_job(job_id)
     return serve_job_file(
         job, index, as_attachment=bool(dl), default_media_type="video/mp4"

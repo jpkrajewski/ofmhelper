@@ -9,10 +9,14 @@ beats by pause length) that the user edits in the browser before generating.
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
-from ofmhelpers.reel_machine.intake import Transcript
+
+if TYPE_CHECKING:
+    from ofmhelpers.reel_machine.intake import Transcript
 
 # A gap this long or longer between two words marks a beat boundary -- this
 # is the same "word-level gaps are the pause structure" idea the original
@@ -40,9 +44,7 @@ class Teardown:
     viral_mechanic: str = (
         "(edit me) e.g. call-out hook -> withhold -> debatable twist -> comment bait"
     )
-    camera_look: str = (
-        "(edit me) describe the lens/vignette/camera height/holder -- see reel_machine.looks"
-    )
+    camera_look: str = "(edit me) describe the lens/vignette/camera height/holder -- see reel_machine.looks"
     duration: float = 15.0
     # Internal targeting aid for the vision LLM only -- helps it lock onto
     # the right person when a reel has multiple people/objects in frame, so
@@ -72,7 +74,7 @@ def _group_into_beats(words: list, duration: float) -> list[Beat]:
 
     beats: list[Beat] = []
     current_words = [words[0]]
-    for prev, word in zip(words, words[1:]):
+    for prev, word in itertools.pairwise(words):
         if word.start - prev.end >= BEAT_GAP_S:
             beats.append(
                 Beat(

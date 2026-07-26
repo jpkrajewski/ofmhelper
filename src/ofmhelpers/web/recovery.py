@@ -26,8 +26,8 @@ SWEEP_INTERVAL_S = settings.web.recovery_sweep_interval_s
 def _configured_keys() -> list[str]:
     s = settings.web
     keys = []
-    for key in (s.kie_ai_api_key_admin, s.kie_ai_api_key_va):
-        key = (key or "").strip()
+    for raw_key in (s.kie_ai_api_key_admin, s.kie_ai_api_key_va):
+        key = (raw_key or "").strip()
         if key and key not in keys:
             keys.append(key)
     return keys

@@ -29,38 +29,44 @@ def test_local_file_is_copied_into_the_work_dir(tmp_path):
 
 
 def test_failed_download_raises_with_the_downloader_error(tmp_path):
-    with mock.patch(
-        "ofmhelpers.reel_machine.intake.download",
-        return_value=DownloadResult(
-            url="https://example.com/x", success=False, error="network blip"
+    with (
+        mock.patch(
+            "ofmhelpers.reel_machine.intake.download",
+            return_value=DownloadResult(
+                url="https://example.com/x", success=False, error="network blip"
+            ),
         ),
+        pytest.raises(RuntimeError, match="network blip"),
     ):
-        with pytest.raises(RuntimeError, match="network blip"):
-            fetch_source("https://example.com/x", tmp_path)
+        fetch_source("https://example.com/x", tmp_path)
 
 
 def test_failed_instagram_download_hints_at_the_cookies_page(tmp_path):
-    with mock.patch(
-        "ofmhelpers.reel_machine.intake.download",
-        return_value=DownloadResult(
-            url="https://www.instagram.com/reel/abc123/",
-            success=False,
-            error="HTTP Error 400: Bad Request",
+    with (
+        mock.patch(
+            "ofmhelpers.reel_machine.intake.download",
+            return_value=DownloadResult(
+                url="https://www.instagram.com/reel/abc123/",
+                success=False,
+                error="HTTP Error 400: Bad Request",
+            ),
         ),
+        pytest.raises(RuntimeError, match="/cookies"),
     ):
-        with pytest.raises(RuntimeError, match="/cookies"):
-            fetch_source("https://www.instagram.com/reel/abc123/", tmp_path)
+        fetch_source("https://www.instagram.com/reel/abc123/", tmp_path)
 
 
 def test_failed_non_instagram_download_has_no_cookie_hint(tmp_path):
-    with mock.patch(
-        "ofmhelpers.reel_machine.intake.download",
-        return_value=DownloadResult(
-            url="https://www.tiktok.com/@x/video/1", success=False, error="boom"
+    with (
+        mock.patch(
+            "ofmhelpers.reel_machine.intake.download",
+            return_value=DownloadResult(
+                url="https://www.tiktok.com/@x/video/1", success=False, error="boom"
+            ),
         ),
+        pytest.raises(RuntimeError) as exc_info,
     ):
-        with pytest.raises(RuntimeError) as exc_info:
-            fetch_source("https://www.tiktok.com/@x/video/1", tmp_path)
+        fetch_source("https://www.tiktok.com/@x/video/1", tmp_path)
     assert "/cookies" not in str(exc_info.value)
 
 
@@ -74,20 +80,24 @@ def test_probe_duration_parses_ffprobes_stdout(tmp_path):
 
 
 def test_probe_duration_reports_missing_ffprobe_clearly(tmp_path):
-    with mock.patch(
-        "ofmhelpers.reel_machine.intake.subprocess.run",
-        side_effect=FileNotFoundError(),
+    with (
+        mock.patch(
+            "ofmhelpers.reel_machine.intake.subprocess.run",
+            side_effect=FileNotFoundError(),
+        ),
+        pytest.raises(RuntimeError, match="ffprobe isn't installed"),
     ):
-        with pytest.raises(RuntimeError, match="ffprobe isn't installed"):
-            probe_duration(tmp_path / "reference.mp4")
+        probe_duration(tmp_path / "reference.mp4")
 
 
 def test_probe_duration_surfaces_ffprobe_stderr(tmp_path):
-    with mock.patch(
-        "ofmhelpers.reel_machine.intake.subprocess.run",
-        side_effect=subprocess.CalledProcessError(
-            1, ["ffprobe"], stderr="not a valid video file"
+    with (
+        mock.patch(
+            "ofmhelpers.reel_machine.intake.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                1, ["ffprobe"], stderr="not a valid video file"
+            ),
         ),
+        pytest.raises(RuntimeError, match="not a valid video file"),
     ):
-        with pytest.raises(RuntimeError, match="not a valid video file"):
-            probe_duration(tmp_path / "reference.mp4")
+        probe_duration(tmp_path / "reference.mp4")

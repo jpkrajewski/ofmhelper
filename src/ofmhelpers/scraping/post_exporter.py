@@ -1,19 +1,25 @@
 from __future__ import annotations
 
+import contextlib
 import csv
-import logging
 import re
-from typing import Optional
-from ofmhelpers.scraping.models import PostBase
+from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-logger = logging.getLogger(__name__)
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    from ofmhelpers.scraping.models import PostBase
 
 
 class PostExcelExporter:
-    HEADER = [
+    HEADER: ClassVar[list[str]] = [
         "Username",
         "URL",
         "Date Posted",
@@ -24,7 +30,10 @@ class PostExcelExporter:
         "Caption",
         "Hashtags",
     ]
-    COL_WIDTHS = [18, 45, 20, 12, 12, 12, 14, 60, 50]
+    COL_WIDTHS: ClassVar[list[int]] = [18, 45, 20, 12, 12, 12, 14, 60, 50]
+
+    # 1-based column index of "URL" in HEADER -- rendered as a link.
+    URL_COL = 2
 
     HEADER_FILL = PatternFill("solid", start_color="1a1a2e")
     HEADER_FONT = Font(bold=True, color="FFFFFF", name="Arial", size=10)
@@ -43,13 +52,13 @@ class PostExcelExporter:
     def _to_str(self, v) -> str:
         return self._XML_BAD.sub("", str(v)) if v is not None else ""
 
-    def _to_int(self, v) -> Optional[int]:
+    def _to_int(self, v) -> int | None:
         try:
             return int(v) if v is not None else None
         except (ValueError, TypeError):
             return None
 
-    def _to_float(self, v) -> Optional[float]:
+    def _to_float(self, v) -> float | None:
         try:
             return float(v) if v is not None else None
         except (ValueError, TypeError):
@@ -71,7 +80,7 @@ class PostExcelExporter:
 
         try:
             wb.save(output_path)
-            print(f"\nSaved -> {output_path}")
+            logger.info("saved -> %s", output_path)
         except Exception as exc:
             all_posts = [post for _, posts in sheets for post in posts]
             self._fallback_csv(all_posts, output_path, exc)
@@ -94,7 +103,9 @@ class PostExcelExporter:
     def _write_sheet(self, ws, posts: list[PostBase]) -> None:
         ws.append(self.HEADER)
 
-        for col_idx, (cell, width) in enumerate(zip(ws[1], self.COL_WIDTHS), start=1):
+        for col_idx, (cell, width) in enumerate(
+            zip(ws[1], self.COL_WIDTHS, strict=False), start=1
+        ):
             cell.font = self.HEADER_FONT
             cell.fill = self.HEADER_FILL
             cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -105,12 +116,14 @@ class PostExcelExporter:
             try:
                 ws.append(self._post_row(post))
             except Exception as exc:
-                print(f"  Warning: skipped row {row_idx} ({post.username}) — {exc}")
+                logger.warning("skipped row %d (%s): %s", row_idx, post.username, exc)
                 continue
 
             fill = self.ALT_FILL if row_idx % 2 == 0 else None
             for col_idx, cell in enumerate(ws[row_idx], start=1):
-                cell.font = self.LINK_FONT if col_idx == 2 else self.BODY_FONT
+                cell.font = (
+                    self.LINK_FONT if col_idx == self.URL_COL else self.BODY_FONT
+                )
                 cell.alignment = Alignment(
                     vertical="center", wrap_text=col_idx in (8, 9)
                 )
@@ -118,10 +131,8 @@ class PostExcelExporter:
                     cell.fill = fill
 
             if post.url.startswith("http"):
-                try:
+                with contextlib.suppress(Exception):
                     ws.cell(row=row_idx, column=2).hyperlink = post.url
-                except Exception:
-                    pass
 
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
@@ -130,8 +141,8 @@ class PostExcelExporter:
         self, posts: list[PostBase], xlsx_path: str, exc: Exception
     ) -> None:
         csv_path = xlsx_path.replace(".xlsx", ".csv")
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        with Path(csv_path).open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(self.HEADER)
             writer.writerows(self._post_row(post) for post in posts)
-        print(f"\nFailed to save xlsx ({exc}) — dumped to {csv_path}")
+        logger.error("failed to save xlsx (%s) -- dumped to %s", exc, csv_path)

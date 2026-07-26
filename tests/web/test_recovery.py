@@ -55,7 +55,7 @@ def test_finished_task_gets_downloaded_and_marked_resolved(client, monkeypatch):
     assert downloads == [("t1", "mp4")]  # seedance model -> mp4
     # marked resolved: a second sweep never touches the API again
     calls = []
-    monkeypatch.setattr(client, "check_task", lambda tid: calls.append(tid))
+    monkeypatch.setattr(client, "check_task", calls.append)
     assert client.resume_pending() == []
     assert calls == []
 
@@ -67,7 +67,7 @@ def test_failed_task_marked_resolved_and_never_rechecked(client, monkeypatch):
     assert client.resume_pending() == []
 
     calls = []
-    monkeypatch.setattr(client, "check_task", lambda tid: calls.append(tid))
+    monkeypatch.setattr(client, "check_task", calls.append)
     client.resume_pending()
     assert calls == []
 
@@ -125,7 +125,8 @@ def test_download_failure_leaves_task_pending_for_retry(client, monkeypatch):
     monkeypatch.setattr(client, "check_task", lambda tid: ("success", ["http://x/f"]))
 
     def boom(urls, tid, ext):
-        raise RuntimeError("url expired mid-download")
+        msg = "url expired mid-download"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(client, "download_urls", boom)
     assert client.resume_pending() == []
@@ -158,7 +159,8 @@ def test_run_recovery_once_survives_a_broken_key(monkeypatch):
         def resume_pending(self):
             FakeClient.calls.append(self.api_key)
             if self.api_key == "key-a":
-                raise RuntimeError("first key exploded")
+                msg = "first key exploded"
+                raise RuntimeError(msg)
             return [{"taskId": "x", "outcome": "downloaded"}]
 
     monkeypatch.setattr(

@@ -1,18 +1,19 @@
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from ofmhelpers.utils.metadata_cleaner import clean_metadata
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
+    asset_card,
+    job_status_payload,
     make_job_dir,
     save_upload,
-    asset_card,
     serve_job_file,
-    job_status_payload,
 )
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/clean-images", tags=["clean-images"])
 
@@ -29,8 +30,10 @@ def _run_clean(job_dir: str) -> list[dict]:
 @router.post("/run")
 async def run(
     request: Request,
-    files: list[UploadFile] = File(default=[]),
+    files: Annotated[list[UploadFile] | None, File()] = None,
 ):
+    if files is None:
+        files = []
     files = [f for f in files if f.filename]
     if not files:
         raise HTTPException(status_code=400, detail="At least one image is required")

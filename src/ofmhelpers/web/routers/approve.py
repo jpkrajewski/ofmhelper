@@ -84,7 +84,8 @@ def asset_preview(token: str):
 
     app_base_url = settings.web.app_base_url
     if app_base_url is None:
-        raise KeyError("APP_BASE_URL")
+        msg = "APP_BASE_URL"
+        raise KeyError(msg)
     base_url = app_base_url.rstrip("/")
     video_url = f"{base_url}/approve/{token}/asset"
     media_type = mimetypes.guess_type(path.name)[0] or "video/mp4"

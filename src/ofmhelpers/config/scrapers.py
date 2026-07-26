@@ -1,6 +1,6 @@
-from dataclasses import dataclass
 import enum
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 
 class Scrapers(enum.StrEnum):

@@ -24,6 +24,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive.client import SCOPES
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 
 def main() -> None:
@@ -36,7 +39,7 @@ def main() -> None:
 
     token_file.parent.mkdir(parents=True, exist_ok=True)
     token_file.write_text(creds.to_json())
-    print(f"Saved Google Drive token to {token_file}")
+    logger.info("saved Google Drive token to %s", token_file)
 
 
 if __name__ == "__main__":

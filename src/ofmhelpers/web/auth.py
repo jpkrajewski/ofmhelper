@@ -63,9 +63,11 @@ def check_password(candidate: str) -> str | None:
 
     s = settings.web
     if s.app_password_admin is None:
-        raise KeyError("APP_PASSWORD_ADMIN")  # required -- fail loudly if unset
+        msg = "APP_PASSWORD_ADMIN"
+        raise KeyError(msg)  # required -- fail loudly if unset
     if s.app_password_va is None:
-        raise KeyError("APP_PASSWORD_VA")  # required -- fail loudly if unset
+        msg = "APP_PASSWORD_VA"
+        raise KeyError(msg)  # required -- fail loudly if unset
     admin_password = s.app_password_admin
     va_password = s.app_password_va
 

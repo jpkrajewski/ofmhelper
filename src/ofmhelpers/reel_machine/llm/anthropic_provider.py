@@ -34,7 +34,8 @@ class AnthropicProvider:
     def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-5"):
         self.api_key = api_key or settings.reel_machine.anthropic_api_key
         if self.api_key is None:
-            raise KeyError("ANTHROPIC_API_KEY")
+            msg = "ANTHROPIC_API_KEY"
+            raise KeyError(msg)
         self.model = model
 
     def analyze_reel(

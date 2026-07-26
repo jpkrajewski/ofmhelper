@@ -19,9 +19,12 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import UploadFile, HTTPException
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 # Single shared store for reference-asset uploads (Seedance/Kling/Nano Banana
 # Pro reference images/videos/audio) -- content-addressed so the same file
 # uploaded twice (even under a different name, even through a different
@@ -135,11 +138,14 @@ def register_generated_asset(
         try:
             os.link(path, dest)
         except OSError:
+            # cross-device or a filesystem without hardlinks -- copy instead.
+            # A failure here still falls through to the outer handler.
             shutil.copy2(path, dest)
-        return dest
-    except OSError as exc:
-        print(f"[assets] could not register generated asset {path}: {exc}", flush=True)
+    except OSError:
+        logger.warning("could not register generated asset %s", path, exc_info=True)
         return None
+    else:
+        return dest
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:

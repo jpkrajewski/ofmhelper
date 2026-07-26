@@ -20,15 +20,15 @@ os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import re
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.main import app
 from ofmhelpers.web.db.repository import JobRepository
 from ofmhelpers.web.jobs import create_job, get_job
+from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import fake_ai as fake_ai_router
 
 
@@ -41,7 +41,7 @@ def client():
 
 def _fieldset_html(html: str, tool: str) -> str:
     match = re.search(
-        rf'<fieldset[^>]*data-tool="{tool}"[^>]*>(.*?)</fieldset>', html, re.S
+        rf'<fieldset[^>]*data-tool="{tool}"[^>]*>(.*?)</fieldset>', html, re.DOTALL
     )
     assert match, f'no <fieldset data-tool="{tool}"> found in /generate'
     return match.group(1)
@@ -181,11 +181,13 @@ def test_gallery_shows_recreate_button_on_done_and_failed_cards(
 
     html = client.get("/generate").text
     for job_id in (done_id, failed_id):
-        card = re.search(rf'data-job-id="{job_id}"(.*?)<p class="source">', html, re.S)
+        card = re.search(
+            rf'data-job-id="{job_id}"(.*?)<p class="source">', html, re.DOTALL
+        )
         assert card, f"no gallery card for job {job_id}"
-        assert "recreate-btn" in card.group(
-            1
-        ), f"job {job_id}'s card is missing the Recreate button"
+        assert "recreate-btn" in card.group(1), (
+            f"job {job_id}'s card is missing the Recreate button"
+        )
 
 
 def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_path):
@@ -211,7 +213,7 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_p
     assert get_job(job_id)["status"] == "running"
 
     html = client.get("/generate").text
-    card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.S)
+    card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.DOTALL)
     assert card, f"no gallery card for job {job_id}"
     assert "data-pending" in card.group(1)
     assert 'data-poll-prefix="/fake-ai"' in card.group(1)
@@ -223,5 +225,5 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_p
         job_id, "done", result=[{"name": "x.png", "path": str(out_file)}]
     )
     html2 = client.get("/generate").text
-    card2 = re.search(rf'data-job-id="{job_id}"(.*?)>', html2, re.S)
+    card2 = re.search(rf'data-job-id="{job_id}"(.*?)>', html2, re.DOTALL)
     assert "data-pending" not in card2.group(1)

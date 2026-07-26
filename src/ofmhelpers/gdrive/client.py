@@ -34,12 +34,13 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 def _get_credentials() -> Credentials:
     token_file = Path(settings.gdrive.token_file)
     if not token_file.is_file():
-        raise FileNotFoundError(
+        msg = (
             f"No Google Drive token at '{token_file}' -- run "
             "`uv run python -m ofmhelpers.gdrive.authorize` once locally (it "
             "opens a browser for you to grant access), then copy the token "
             "file it writes to that path. See README."
         )
+        raise FileNotFoundError(msg)
 
     creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
     if creds.expired and creds.refresh_token:
@@ -59,7 +60,8 @@ def upload_file(local_path: str | Path, folder_id: str | None = None) -> str:
     local_path = Path(local_path)
     folder_id = folder_id or settings.gdrive.folder_id
     if folder_id is None:
-        raise KeyError("GOOGLE_DRIVE_FOLDER_ID")
+        msg = "GOOGLE_DRIVE_FOLDER_ID"
+        raise KeyError(msg)
 
     service = _get_service()
     metadata = {"name": local_path.name, "parents": [folder_id]}

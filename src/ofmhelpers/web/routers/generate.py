@@ -13,11 +13,11 @@ import json
 from fastapi import APIRouter, Request
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import list_jobs
 from ofmhelpers.web.auth import get_kie_api_key
+from ofmhelpers.web.jobs import list_jobs
 from ofmhelpers.web.routers.seedance import SeedanceModel
 from ofmhelpers.web.routers.task_helpers import asset_card
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 

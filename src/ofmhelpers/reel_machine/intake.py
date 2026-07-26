@@ -17,6 +17,9 @@ from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.generic import DownloadConfig, download
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -75,7 +78,8 @@ def fetch_source(url_or_path: str, out_dir: Path) -> Path:
                 "save the reel via any reel-downloader site and upload the .mp4 "
                 "directly on the /replicate form instead of pasting the link."
             )
-        raise RuntimeError(f"Could not download {url_or_path}: {result.error}.{hint}")
+        msg = f"Could not download {url_or_path}: {result.error}.{hint}"
+        raise RuntimeError(msg)
     return result.output_paths[0]
 
 
@@ -86,11 +90,11 @@ def _run_ffmpeg(cmd: list[str]) -> None:
     try:
         subprocess.run(cmd, capture_output=True, check=True)
     except FileNotFoundError as exc:
-        raise RuntimeError("ffmpeg isn't installed/on PATH") from exc
+        msg = "ffmpeg isn't installed/on PATH"
+        raise RuntimeError(msg) from exc
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"ffmpeg failed: {exc.stderr.decode(errors='replace')[-800:]}"
-        ) from exc
+        msg = f"ffmpeg failed: {exc.stderr.decode(errors='replace')[-800:]}"
+        raise RuntimeError(msg) from exc
 
 
 def extract_frames(video_path: Path, out_dir: Path, fps: int = 1) -> tuple[Path, Path]:
@@ -157,9 +161,11 @@ def probe_duration(video_path: Path) -> float:
             text=True,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError("ffprobe isn't installed/on PATH") from exc
+        msg = "ffprobe isn't installed/on PATH"
+        raise RuntimeError(msg) from exc
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(f"ffprobe failed: {exc.stderr.strip()}") from exc
+        msg = f"ffprobe failed: {exc.stderr.strip()}"
+        raise RuntimeError(msg) from exc
     return float(result.stdout.strip())
 
 
@@ -176,8 +182,10 @@ def transcribe(video_path: Path, model_size: str = "small") -> Transcript:
     text_parts: list[str] = []
     for segment in segments:
         text_parts.append(segment.text.strip())
-        for w in segment.words or []:
-            words.append(Word(text=w.word.strip(), start=w.start, end=w.end))
+        words.extend(
+            Word(text=w.word.strip(), start=w.start, end=w.end)
+            for w in segment.words or []
+        )
 
     return Transcript(text=" ".join(text_parts), words=words, language=info.language)
 
@@ -193,16 +201,15 @@ def diarize(video_path: Path, transcript: Transcript) -> Transcript:
     """
     hf_token = settings.reel_machine.hf_token or settings.reel_machine.huggingface_token
     if not hf_token:
-        print("[reel_machine] no HF_TOKEN set, skipping diarization", flush=True)
+        logger.info("no HF_TOKEN set, skipping diarization")
         return transcript
 
     try:
         from pyannote.audio import Pipeline
     except ImportError:
-        print(
-            "[reel_machine] pyannote.audio not installed, skipping diarization "
-            "(pip install 'ofmhelpers[diarization]' to enable)",
-            flush=True,
+        logger.info(
+            "pyannote.audio not installed, skipping diarization "
+            "(pip install 'ofmhelpers[diarization]' to enable)"
         )
         return transcript
 

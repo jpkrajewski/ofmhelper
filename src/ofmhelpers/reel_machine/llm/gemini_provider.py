@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.reel_machine.gender import DEFAULT_GENDER
 from ofmhelpers.reel_machine.llm.base import strip_llm_preamble
 from ofmhelpers.reel_machine.llm.groq_provider import (
@@ -39,6 +40,8 @@ from ofmhelpers.reel_machine.teardown import Teardown
 # How long to wait for an uploaded video to finish processing (Gemini
 # requires state == "ACTIVE" before it can be referenced in a generate_content
 # call) before giving up and falling back to the contact-sheet image.
+logger = get_logger(__name__)
+
 _VIDEO_ACTIVE_TIMEOUT_S = 60
 _VIDEO_ACTIVE_POLL_S = 2
 
@@ -50,7 +53,8 @@ class GeminiProvider:
         s = settings.reel_machine
         self.api_key = api_key or s.gemini_api_key
         if self.api_key is None:
-            raise KeyError("GEMINI_API_KEY")
+            msg = "GEMINI_API_KEY"
+            raise KeyError(msg)
         self.model = model or s.gemini_model
 
     def analyze_reel(
@@ -95,30 +99,30 @@ class GeminiProvider:
             deadline = time.monotonic() + _VIDEO_ACTIVE_TIMEOUT_S
             while uploaded.state and uploaded.state.name == "PROCESSING":
                 if time.monotonic() > deadline:
-                    print(
-                        f"[reel_machine] gemini video upload for {video_path.name} "
-                        "timed out waiting to become ACTIVE, falling back to "
-                        "contact sheet",
-                        flush=True,
+                    logger.warning(
+                        "gemini video upload for %s timed out waiting to become "
+                        "ACTIVE, falling back to contact sheet",
+                        video_path.name,
                     )
                     return None
                 time.sleep(_VIDEO_ACTIVE_POLL_S)
                 uploaded = client.files.get(name=uploaded.name)
             if not uploaded.state or uploaded.state.name != "ACTIVE":
-                print(
-                    f"[reel_machine] gemini video upload for {video_path.name} "
-                    f"ended in state {uploaded.state}, falling back to contact sheet",
-                    flush=True,
+                logger.warning(
+                    "gemini video upload for %s ended in state %s, falling back "
+                    "to contact sheet",
+                    video_path.name,
+                    uploaded.state,
                 )
                 return None
-            return uploaded
-        except Exception as exc:
-            print(
-                f"[reel_machine] gemini video upload failed ({exc}), falling "
-                "back to contact sheet",
-                flush=True,
+        except Exception:
+            logger.warning(
+                "gemini video upload failed, falling back to contact sheet",
+                exc_info=True,
             )
             return None
+        else:
+            return uploaded
 
     def write_prompt_package(
         self,

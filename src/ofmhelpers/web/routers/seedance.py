@@ -1,32 +1,36 @@
-from enum import Enum
+from enum import StrEnum
+from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Request,
-    Form,
-    UploadFile,
     File,
+    Form,
     HTTPException,
     Query,
+    Request,
+    UploadFile,
 )
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job, set_job_preview
+
+from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.log import get_logger
+from ofmhelpers.web.jobs import create_job, get_job, run_job, set_job_preview
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
-    build_ordered_paths,
     asset_card,
+    build_ordered_paths,
+    job_inputs,
+    job_status_payload,
     register_generated_asset,
     serve_job_file,
-    job_status_payload,
-    job_inputs,
 )
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.web.templates_config import templates
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/seedance", tags=["seedance"])
 
 
-class SeedanceModel(str, Enum):
+class SeedanceModel(StrEnum):
     standard = "bytedance/seedance-2"
     fast = "bytedance/seedance-2-fast"
     mini = "bytedance/seedance-2-mini"
@@ -47,14 +51,14 @@ def _run_seedance(
 ) -> list[dict]:
     client = KieAIClient.from_env(api_key=api_key)
 
-    kwargs = dict(
-        prompt=prompt,
-        model=model,
-        resolution=resolution,
-        aspect_ratio=aspect_ratio,
-        duration=duration,
-        generate_audio=generate_audio,
-    )
+    kwargs = {
+        "prompt": prompt,
+        "model": model,
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "duration": duration,
+        "generate_audio": generate_audio,
+    }
 
     if reference_image_paths:
         kwargs["reference_image_urls"] = [
@@ -82,10 +86,10 @@ def _run_seedance(
     except Exception:
         if not remote_urls:
             raise
-        print(
-            f"[seedance] local download failed, serving remote_url only: "
-            f"{remote_urls[0]}",
-            flush=True,
+        logger.warning(
+            "local download failed, serving remote_url only: %s",
+            remote_urls[0],
+            exc_info=True,
         )
         name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or "video.mp4"
         return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
@@ -99,20 +103,26 @@ def _run_seedance(
 @router.post("/run")
 async def run(
     request: Request,
-    api_key: str = Form(...),
-    prompt: str = Form(...),
-    model: SeedanceModel = Form(SeedanceModel.standard),
-    resolution: str = Form("720p"),
-    aspect_ratio: str = Form("16:9"),
-    duration: int = Form(10),
-    generate_audio: bool = Form(False),
-    reference_images: list[UploadFile] = File(default=[]),
-    reference_images_manifest: str = Form("[]"),
-    reference_videos: list[UploadFile] = File(default=[]),
-    reference_videos_manifest: str = Form("[]"),
-    reference_audio: list[UploadFile] = File(default=[]),
-    reference_audio_manifest: str = Form("[]"),
+    api_key: Annotated[str, Form()],
+    prompt: Annotated[str, Form()],
+    model: Annotated[SeedanceModel, Form()] = SeedanceModel.standard,
+    resolution: Annotated[str, Form()] = "720p",
+    aspect_ratio: Annotated[str, Form()] = "16:9",
+    duration: Annotated[int, Form()] = 10,
+    generate_audio: Annotated[bool, Form()] = False,
+    reference_images: Annotated[list[UploadFile] | None, File()] = None,
+    reference_images_manifest: Annotated[str, Form()] = "[]",
+    reference_videos: Annotated[list[UploadFile] | None, File()] = None,
+    reference_videos_manifest: Annotated[str, Form()] = "[]",
+    reference_audio: Annotated[list[UploadFile] | None, File()] = None,
+    reference_audio_manifest: Annotated[str, Form()] = "[]",
 ):
+    if reference_audio is None:
+        reference_audio = []
+    if reference_videos is None:
+        reference_videos = []
+    if reference_images is None:
+        reference_images = []
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
@@ -209,7 +219,7 @@ def job_status_json(job_id: str):
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int, dl: int = Query(0)):
+def download_file(job_id: str, index: int, dl: Annotated[int, Query()] = 0):
     job = get_job(job_id)
     return serve_job_file(
         job, index, as_attachment=bool(dl), default_media_type="video/mp4"

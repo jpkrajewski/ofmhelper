@@ -12,13 +12,16 @@ fresh one.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from ofmhelpers.config import settings
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _engine: Engine | None = None
 _engine_url: str | None = None

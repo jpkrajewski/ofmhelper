@@ -1,15 +1,15 @@
 import uuid
 from pathlib import Path
-
-from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse, FileResponse
+from typing import Annotated
 
 from elevenlabs.client import ElevenLabs
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse
 
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/helpers/elevenlabs", tags=["elevenlabs"])
 
@@ -63,11 +63,11 @@ def form(request: Request):
 @router.post("/run")
 async def run(
     request: Request,
-    api_key: str = Form(...),
-    text: str = Form(...),
-    voice: str = Form("George"),
-    model_id: str = Form("eleven_v3"),
-    output_format: str = Form("mp3_44100_128"),
+    api_key: Annotated[str, Form()],
+    text: Annotated[str, Form()],
+    voice: Annotated[str, Form()] = "George",
+    model_id: Annotated[str, Form()] = "eleven_v3",
+    output_format: Annotated[str, Form()] = "mp3_44100_128",
 ):
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")

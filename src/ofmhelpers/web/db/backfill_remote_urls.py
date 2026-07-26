@@ -15,6 +15,12 @@ Defaults to a dry run (prints what it would change, writes nothing). Pass
 Run in the container with:
     docker compose exec ofmhelpers python -m ofmhelpers.web.db.backfill_remote_urls
     docker compose exec ofmhelpers python -m ofmhelpers.web.db.backfill_remote_urls --apply
+
+Deliberately uses print(), not the app logger (ofmhelpers/log.py): this is an
+operator-facing CLI run by hand, and its stdout IS its output -- the report of
+what would change is the whole point of the dry run. Logging it would subject
+that report to a level/format meant for long-running services, and it'd be
+suppressible via OFM_LOG_LEVEL. Every long-running code path logs instead.
 """
 
 from __future__ import annotations

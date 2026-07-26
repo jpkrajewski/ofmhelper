@@ -12,14 +12,13 @@ stale or cross-account URL is worse than no cache at all.
 """
 
 import threading
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
 import requests
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.upload_cache import UploadCache, upload_cache
-
 
 # ======================================================================
 # UploadCache: the standalone LRU, no network involved
@@ -294,9 +293,9 @@ def test_remote_check_network_error_triggers_reupload(client, ref_file):
         second = client.upload_local_file(str(ref_file))
 
     assert second == "https://tempfile.example/new"
-    assert (
-        mreq.post.call_count == 2
-    ), "a failed liveness check must fail closed, not trust the cache"
+    assert mreq.post.call_count == 2, (
+        "a failed liveness check must fail closed, not trust the cache"
+    )
 
 
 def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
@@ -325,9 +324,9 @@ def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
 
     assert url_a == "https://tempfile.example/for-a"
     assert url_b == "https://tempfile.example/for-b"
-    assert (
-        mreq.post.call_count == 2
-    ), "same file under two different keys must upload twice"
+    assert mreq.post.call_count == 2, (
+        "same file under two different keys must upload twice"
+    )
 
 
 def test_wrong_api_key_response_raises_and_never_populates_cache(client, ref_file):

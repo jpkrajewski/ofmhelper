@@ -13,4 +13,5 @@ def make_result(name):
 
 def always_fails():
     """Mimics a task that raises (e.g. a bad API key)."""
-    raise ValueError("Wrong API Key")
+    msg = "Wrong API Key"
+    raise ValueError(msg)

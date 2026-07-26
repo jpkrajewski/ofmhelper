@@ -5,8 +5,8 @@ ofmhelpers/web/routers/helpers_index.py
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from ofmhelpers.web.templates_config import templates
 from ofmhelpers.web.helpers_registry import HELPERS
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/helpers", tags=["helpers"])
 

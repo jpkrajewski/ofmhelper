@@ -1,5 +1,6 @@
 import mimetypes
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -22,7 +23,7 @@ THUMBS_DIR = ASSETS_ROOT / ".thumbs"
 
 
 @router.get("")
-def list_refs(kind: str | None = Query(None)):
+def list_refs(kind: Annotated[str | None, Query()] = None):
     """Lists what's already in the shared asset store -- no separate
     metadata store, this is the real files."""
     files = []
@@ -45,7 +46,7 @@ def list_refs(kind: str | None = Query(None)):
 
 
 @router.get("/file")
-def get_ref_file(path: str = Query(...)):
+def get_ref_file(path: Annotated[str, Query()]):
     file_path = Path(path)
     # keep this scoped to the shared asset store
     if ASSETS_ROOT.resolve() not in file_path.resolve().parents:
@@ -57,7 +58,9 @@ def get_ref_file(path: str = Query(...)):
 
 
 @router.get("/thumb")
-def get_ref_thumb(path: str = Query(...), size: int = Query(200, ge=16, le=1024)):
+def get_ref_thumb(
+    path: Annotated[str, Query()], size: Annotated[int, Query(ge=16, le=1024)] = 200
+):
     """Small cached preview for the reuse-picker/inputs grids -- never the
     original (see THUMBS_DIR comment). Only images have a thumbnail; video/
     audio tiles use preload="metadata"/an icon client-side and never fetch

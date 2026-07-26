@@ -1,0 +1,25 @@
+# Normalize to LF in the repository. This is developed on Windows but runs on
+# Linux (Docker, the prod server, GitHub runners) -- a CRLF that sneaks into a
+# shell script produces `$'\r': command not found` there, and a CRLF in a
+# Dockerfile/entrypoint fails the same way.
+* text=auto eol=lf
+
+# Files that must be LF no matter what the local core.autocrlf says.
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.py        text eol=lf
+Dockerfile  text eol=lf
+*.ini       text eol=lf
+*.toml      text eol=lf
+
+# Binary: never touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.mp4  binary
+*.wav  binary
+*.xlsx binary
+*.zip  binary

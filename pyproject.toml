@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "apify-client>=3.0.2",
     "bgutil-ytdlp-pot-provider>=1.3.1",
-    "black>=26.5.1",
     "elevenlabs>=2.58.0",
     "faster-whisper>=1.1.0",
     "fastapi>=0.136.3",
@@ -52,10 +51,9 @@ llm-anthropic = ["anthropic>=0.75.0"]
 
 [dependency-groups]
 dev = [
-    "black>=26.5.1",
     "httpx2>=2.9.1",
     "pre-commit>=4.6.0",
-    "ruff>=0.15.22",
+    "ruff>=0.16.0",
 ]
 
 [build-system]
@@ -64,3 +62,91 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ofmhelpers"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Formatter owns layout; these fight `ruff format`.
+    "COM812",
+    "E501",
+    # No copyright headers in this repo.
+    "CPY001",
+    # Docstrings and annotations are used where they earn their keep; this
+    # codebase documents modules/classes, not every helper signature.
+    "D",
+    "ANN",
+    # stdout IS the log here (Docker captures it). Note ruff's T201 fix
+    # DELETES the print rather than converting it -- never autofix this.
+    "T201",
+    # Deferred imports are deliberate: optional heavy deps (anthropic, torch)
+    # must not be required at module import time. See reel_machine/CLAUDE.md.
+    "PLC0415",
+    # ffmpeg/ffprobe/yt-dlp run with fixed argv lists, never shell=True.
+    "S603",
+    "S607",
+    # Arity/complexity metrics. Route handlers and generation wrappers mirror
+    # their API contracts one-parameter-per-field; collapsing them into config
+    # objects is a refactor with no correctness payoff.
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR0917",
+    "C901",
+    # Boolean flags here are form/query fields and provider knobs, not
+    # call-site readability traps.
+    "FBT001",
+    "FBT002",
+    # Deliberate fault isolation at external boundaries: a job runner, an
+    # API-key sweep loop, or a per-post parse must record the failure and
+    # keep going rather than take the worker down. Every site does something
+    # with the exception (logs it, stores it on the job, falls back).
+    "BLE001",
+]
+
+[tool.ruff.lint.flake8-unused-arguments]
+# `_`-prefixed params are the signal for "required by the interface, unused".
+ignore-variadic-names = true
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: asserts are the point, fixtures shadow names, magic values are data,
+# and the "passwords" are dummy env values.
+"tests/**" = [
+    "S101",              # asserts are the entire point
+    "PLR2004",           # expected values are literals by nature
+    "ARG001", "ARG005",  # stub/monkeypatch signatures ignore args
+    "SLF001",            # tests verify private state directly
+    "INP001",            # pytest collects these without __init__.py
+    "S105", "S106", "S107", "S108",  # dummy creds and fake /tmp paths
+    "N806",              # `MockClient = ...` locals hold classes
+    "PLC0415",           # deferred imports inside tests are deliberate
+    "PT011", "PT019", "RUF043",
+    "BLE001", "PTH123", "RUF012", "S603", "S607", "SIM117", "FBT002",
+]
+# Lazy singletons that rebuild when the configured URL changes -- `global`
+# is inherent to the pattern.
+"src/ofmhelpers/web/queue.py" = ["PLW0603"]
+"src/ofmhelpers/web/db/session.py" = ["PLW0603"]
+# Same: a once-per-process "already configured" flag.
+"src/ofmhelpers/log.py" = ["PLW0603"]
+# LLM providers implement a shared protocol; a given backend legitimately
+# ignores inputs another one uses (TemplateProvider is deterministic and
+# reads none of them). Renaming would break the positional callers.
+"src/ofmhelpers/reel_machine/llm/*.py" = ["ARG002"]
+# `lifespan(app)` is Starlette's required signature.
+"src/ofmhelpers/web/main.py" = ["ARG001"]
+# DSP helpers share one (audio, sr, ...) positional shape by design.
+"src/ofmhelpers/utils/radio_comms_fx.py" = ["ARG001"]
+# Standalone scripts and migrations aren't importable packages.
+"scripts/**" = ["INP001"]
+"alembic/**" = ["INP001"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+docstring-code-format = true

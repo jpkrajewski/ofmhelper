@@ -31,7 +31,7 @@ def load_jobs() -> None:
     """No-op kept for main.py's lifespan call. Job history now lives in
     Postgres, so there is nothing to reload into memory at startup -- the
     database *is* the persistent store that survives a restart."""
-    return None
+    return
 
 
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:

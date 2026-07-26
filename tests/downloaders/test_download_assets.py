@@ -142,7 +142,7 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client):
     assert get_job(job_id)["status"] == "running"
 
     html = client.get("/download-assets").text
-    card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.S)
+    card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.DOTALL)
     assert card, f"no gallery card for job {job_id}"
     assert "data-pending" in card.group(1)
     assert 'data-poll-prefix="/download-videos"' in card.group(1)

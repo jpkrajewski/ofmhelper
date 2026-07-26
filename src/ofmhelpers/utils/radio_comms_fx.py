@@ -13,11 +13,15 @@ Batch mode (process a whole folder of barks):
     python radio_comms_fx.py --batch ./tts_output ./radio_output --preset cod_clean
 """
 
-import os
+from pathlib import Path
+
 import numpy as np
 import soundfile as sf
-from scipy.signal import butter, sosfilt, resample_poly
+from scipy.signal import butter, resample_poly, sosfilt
 
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Core DSP building blocks
 # ---------------------------------------------------------------------------
@@ -112,69 +116,69 @@ def normalize(audio, peak=0.9):
 
 PRESETS = {
     # Clean-ish military radio - readable, still gritty. Good for squad comms.
-    "cod_clean": dict(
-        bp_low=400,
-        bp_high=3200,
-        bp_order=4,
-        drive=2.0,
-        clip_mode="soft",
-        bitdepth=None,
-        target_sr=11025,
-        noise_amount=0.008,
-        crackle_density=0.0002,
-        comp_threshold=0.25,
-        comp_ratio=6,
-        comp_makeup=5,
-        tremolo=False,
-    ),
+    "cod_clean": {
+        "bp_low": 400,
+        "bp_high": 3200,
+        "bp_order": 4,
+        "drive": 2.0,
+        "clip_mode": "soft",
+        "bitdepth": None,
+        "target_sr": 11025,
+        "noise_amount": 0.008,
+        "crackle_density": 0.0002,
+        "comp_threshold": 0.25,
+        "comp_ratio": 6,
+        "comp_makeup": 5,
+        "tremolo": False,
+    },
     # Crunchier, more aggressive - CS-style comms
-    "cs_crunch": dict(
-        bp_low=300,
-        bp_high=3400,
-        bp_order=6,
-        drive=4.5,
-        clip_mode="hard",
-        bitdepth=8,
-        target_sr=8000,
-        noise_amount=0.015,
-        crackle_density=0.0008,
-        comp_threshold=0.15,
-        comp_ratio=10,
-        comp_makeup=7,
-        tremolo=False,
-    ),
+    "cs_crunch": {
+        "bp_low": 300,
+        "bp_high": 3400,
+        "bp_order": 6,
+        "drive": 4.5,
+        "clip_mode": "hard",
+        "bitdepth": 8,
+        "target_sr": 8000,
+        "noise_amount": 0.015,
+        "crackle_density": 0.0008,
+        "comp_threshold": 0.15,
+        "comp_ratio": 10,
+        "comp_makeup": 7,
+        "tremolo": False,
+    },
     # Signal cutting out, heavy static - "man down" / low health radio
-    "dying_static": dict(
-        bp_low=350,
-        bp_high=3000,
-        bp_order=4,
-        drive=3.5,
-        clip_mode="hard",
-        bitdepth=6,
-        target_sr=7000,
-        noise_amount=0.05,
-        crackle_density=0.003,
-        comp_threshold=0.15,
-        comp_ratio=12,
-        comp_makeup=8,
-        tremolo=True,
-    ),
+    "dying_static": {
+        "bp_low": 350,
+        "bp_high": 3000,
+        "bp_order": 4,
+        "drive": 3.5,
+        "clip_mode": "hard",
+        "bitdepth": 6,
+        "target_sr": 7000,
+        "noise_amount": 0.05,
+        "crackle_density": 0.003,
+        "comp_threshold": 0.15,
+        "comp_ratio": 12,
+        "comp_makeup": 8,
+        "tremolo": True,
+    },
     # Long-range/far-off radio, thin and weak
-    "long_range": dict(
-        bp_low=600,
-        bp_high=2600,
-        bp_order=6,
-        drive=2.5,
-        clip_mode="soft",
-        bitdepth=8,
-        target_sr=8000,
-        noise_amount=0.025,
-        crackle_density=0.0015,
-        comp_threshold=0.2,
-        comp_ratio=8,
-        comp_makeup=6,
-        tremolo=True,
-    ),
+    "long_range": {
+        "bp_low": 600,
+        "bp_high": 2600,
+        "bp_order": 6,
+        "drive": 2.5,
+        "clip_mode": "soft",
+        "bitdepth": 8,
+        "target_sr": 8000,
+        "noise_amount": 0.025,
+        "crackle_density": 0.0015,
+        "comp_threshold": 0.2,
+        "comp_ratio": 8,
+        "comp_makeup": 6,
+        "tremolo": True,
+    },
 }
 
 
@@ -277,15 +281,16 @@ def generate_variations(
     its own random seed so noise/crackle/tremolo placement AND the exact
     filter/drive/compression settings differ slightly -> genuinely different
     takes to choose between, not just noise in a different spot."""
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir_path = Path(out_dir)
+    out_dir_path.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(base_seed)
-    stem = os.path.splitext(os.path.basename(in_path))[0]
+    stem = Path(in_path).stem
 
     results = []
     for i in range(1, count + 1):
         variant_seed = int(rng.integers(0, 2**31))
         out_name = f"{stem}_{preset}_v{i:02d}_seed{variant_seed}.wav"
-        out_path = os.path.join(out_dir, out_name)
+        out_path = str(out_dir_path / out_name)
         process_file(
             in_path,
             out_path,
@@ -295,7 +300,7 @@ def generate_variations(
             jitter_amount=jitter_amount,
         )
         results.append(out_path)
-        print(f"[{i}/{count}] {out_name}")
+        logger.info("variation %d/%d: %s", i, count, out_name)
 
-    print(f"\nDone. {count} variations of '{preset}' in: {out_dir}")
+    logger.info("done: %d variations of %r in %s", count, preset, out_dir)
     return results

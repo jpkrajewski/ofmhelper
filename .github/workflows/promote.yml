@@ -1,0 +1,71 @@
+name: Promote dev to main
+
+# When CI goes green on dev, open (or refresh) a PR into main. Deliberately
+# does NOT merge: a green suite means "nothing we test is broken", not "this
+# is safe in production". You press merge; merging main is what deploys.
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [dev]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    name: Open PR into main
+    runs-on: ubuntu-latest
+    # Only when the CI run actually succeeded. workflow_run fires on failure
+    # too, and without this a red dev build would still raise a PR.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open or update the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Nothing to promote if dev hasn't moved past main.
+          ahead=$(git rev-list --count origin/main..origin/dev)
+          if [ "$ahead" -eq 0 ]; then
+            echo "dev is not ahead of main -- nothing to promote."
+            exit 0
+          fi
+          echo "dev is $ahead commit(s) ahead of main."
+
+          existing=$(gh pr list --base main --head dev --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already open; it tracks dev automatically."
+            gh pr comment "$existing" \
+              --body "CI passed on \`dev\` @ \`${GITHUB_SHA:0:7}\`. $ahead commit(s) ready to promote."
+            exit 0
+          fi
+
+          # Plain variable, not a heredoc: YAML block scalars indent every
+          # line, and bash ignores an indented heredoc terminator.
+          body='Automated promotion PR.
+
+          CI (lint + tests + docker build) passed on `dev`. Merging this into
+          `main` triggers the deploy workflow, which SSHes to the server,
+          rebuilds the stack, applies Alembic migrations, and health-checks.
+
+          Review the diff before merging -- CI green is not the same as
+          verified-in-production.'
+
+          gh pr create \
+            --base main \
+            --head dev \
+            --title "Promote dev to main" \
+            --body "$body"

@@ -1,18 +1,19 @@
 import mimetypes
 from dataclasses import asdict
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from ofmhelpers.web.templates_config import templates
-from ofmhelpers.web.jobs import create_job, run_job, get_job
+from ofmhelpers.downloaders.images import download_all
+from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     flatten_grouped_results,
     grouped_job_status_payload,
 )
-from ofmhelpers.downloaders.images import download_all
+from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/download-images", tags=["download-images"])
 
@@ -30,13 +31,12 @@ def _run_downloads(urls: list[str]) -> list[dict]:
 def _flatten_paths(job: dict) -> list[Path]:
     paths: list[Path] = []
     for r in job.get("result") or []:
-        for p in r.get("output_paths", []):
-            paths.append(Path(p))
+        paths.extend(Path(p) for p in r.get("output_paths", []))
     return paths
 
 
 @router.post("/run")
-def run(request: Request, urls: str = Form(...)):
+def run(request: Request, urls: Annotated[str, Form()]):
     url_list = [u.strip() for u in urls.splitlines() if u.strip()]
     if not url_list:
         raise HTTPException(status_code=400, detail="At least one URL is required")

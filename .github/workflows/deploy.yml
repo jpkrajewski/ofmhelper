@@ -1,0 +1,151 @@
+name: Deploy
+
+# Deploys main to the production server over SSH. Mirrors what
+# scripts/deploy.sh does by hand (pull -> up -d --build -> alembic upgrade ->
+# health check); the script stays the manual escape hatch.
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  # Manual re-deploy (e.g. after fixing something on the server itself).
+  workflow_dispatch:
+
+# Never two deploys at once: they'd race on `git pull` and `docker compose
+# up` in the same directory. Queue instead of cancelling -- cancelling
+# mid-deploy could leave the stack half-rebuilt.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    # Gate on CI having actually passed for this commit. Without this, a red
+    # main build would still deploy.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    # Attach a GitHub Environment so you can add a required reviewer or
+    # restrict which branches may deploy in repo settings if you ever want a
+    # second gate. Also where the URL shows up in the Actions UI.
+    environment:
+      name: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail with a clear message now, rather than an opaque ssh error later.
+      - name: Check required secrets are set
+        env:
+          HOST: ${{ secrets.OFM_DEPLOY_HOST }}
+          DIR: ${{ secrets.OFM_DEPLOY_DIR }}
+          KEY: ${{ secrets.OFM_DEPLOY_SSH_KEY }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing OFM_DEPLOY_HOST"
+          [ -n "$DIR" ]  || missing="$missing OFM_DEPLOY_DIR"
+          [ -n "$KEY" ]  || missing="$missing OFM_DEPLOY_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Add them under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          KEY: ${{ secrets.OFM_DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.OFM_DEPLOY_HOST }}
+          KNOWN_HOSTS: ${{ secrets.OFM_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+          hostname="${HOST#*@}"
+          if [ -n "$KNOWN_HOSTS" ]; then
+            # Preferred: pin the host key so a MITM'd DNS entry can't
+            # silently receive a deploy.
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::OFM_DEPLOY_KNOWN_HOSTS not set -- trusting the \
+            host key on first use. Add it (ssh-keyscan <host>) to pin it."
+            ssh-keyscan -H "$hostname" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.OFM_DEPLOY_HOST }}
+          DIR: ${{ secrets.OFM_DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          # Same sequence as scripts/deploy.sh. `set -e` inside the remote
+          # shell too, so a failed migration fails the job instead of being
+          # masked by the next command's exit code.
+          # A single-quoted variable, not a heredoc: inside a YAML block
+          # scalar every line is indented, and bash does not recognise an
+          # indented heredoc terminator -- it would swallow the rest of the
+          # step. Single quotes keep $1/$(pwd) for the REMOTE shell to expand.
+          remote_script='
+            set -eu
+            cd "$1"
+            echo "== pulling =="
+            git fetch origin main
+            git reset --hard origin/main
+            echo "== building & starting =="
+            docker compose up -d --build
+            echo "== migrating =="
+            docker compose exec -T ofmhelpers alembic upgrade head
+          '
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
+            bash -s -- "$DIR" <<< "$remote_script"
+
+      - name: Health check
+        env:
+          HOST: ${{ secrets.OFM_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            status=$(ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
+              "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" \
+              2>/dev/null) || true
+            status="${status:-000}"
+            if [ "$status" = "200" ]; then
+              echo "Health check OK (200) after $i attempt(s)."
+              exit 0
+            fi
+            echo "Attempt $i: got $status, retrying in 5s..."
+            sleep 5
+          done
+          echo "::error::Health check failed -- the app is not serving 200 on /health."
+          exit 1
+
+      - name: Report container state on failure
+        if: failure()
+        env:
+          HOST: ${{ secrets.OFM_DEPLOY_HOST }}
+          DIR: ${{ secrets.OFM_DEPLOY_DIR }}
+        run: |
+          # Deploy failures are usually obvious from the logs; pull them into
+          # the run output so you don't have to SSH in to find out why.
+          remote_script='
+            cd "$1"
+            echo "== docker compose ps =="
+            docker compose ps
+            echo "== last 100 log lines =="
+            docker compose logs --tail=100 ofmhelpers worker
+          '
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
+            bash -s -- "$DIR" <<< "$remote_script" || true
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

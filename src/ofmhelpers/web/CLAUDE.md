@@ -13,7 +13,10 @@ verbatim by seven+ tools; a new one should almost never need new plumbing.
 
 # Top-level files
 
-- `main.py` — assembles the app: middleware order (AuthMiddleware added
+- `main.py` — also the API's logging entrypoint: calls
+  `ofmhelpers.log.configure_logging()` at import time (uvicorn imports this
+  module to find `app`, so it runs before the first request). Otherwise:
+  assembles the app: middleware order (AuthMiddleware added
   first so SessionMiddleware ends up outermost — Starlette applies
   middleware outside-in in *added* order), static mount, `lifespan`
   (reloads job history via `jobs.load_jobs()`, starts `recovery.py`'s

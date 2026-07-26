@@ -31,8 +31,9 @@ def _stub_lifecycle(client, monkeypatch, urls, calls):
     monkeypatch.setattr(
         client,
         "download_urls",
-        lambda urls, tid, ext: calls.append(("download_urls", urls))
-        or [client.OUT_DIR / f"{tid}.{ext}"],
+        lambda urls, tid, ext: (
+            calls.append(("download_urls", urls)) or [client.OUT_DIR / f"{tid}.{ext}"]
+        ),
     )
 
 

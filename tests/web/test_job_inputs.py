@@ -14,15 +14,15 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
 import re
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from ofmhelpers.web.main import app
 from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
+from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import download_reels as download_reels_router
 from ofmhelpers.web.routers import fake_ai as fake_ai_router
 
@@ -70,9 +70,12 @@ def test_fake_ai_job_status_shows_settings_prompt_and_reference_preview(
 
     assert "Inputs" in html
     assert "Output" in html
-    assert long_prompt in html and "inputs-long-text" in html
-    assert "<th>outcome</th>" in html and "<td>success</td>" in html
-    assert "<th>asset type</th>" in html and "<td>image</td>" in html
+    assert long_prompt in html
+    assert "inputs-long-text" in html
+    assert "<th>outcome</th>" in html
+    assert "<td>success</td>" in html
+    assert "<th>asset type</th>" in html
+    assert "<td>image</td>" in html
     assert "reference images" in html
     assert "myref.png" in html
 
@@ -126,7 +129,8 @@ def test_seedance_job_status_shows_settings_and_reference_video(client):
             ]
 
     html = client.get(f"/seedance/jobs/{job_id}").text
-    assert "<th>resolution</th>" in html and "<td>720p</td>" in html
+    assert "<th>resolution</th>" in html
+    assert "<td>720p</td>" in html
     assert "reference videos" in html
     assert "clip.mp4" in html
 
@@ -148,7 +152,8 @@ def test_kling3_job_status_shows_settings(client):
             ).json()["job_id"]
 
     html = client.get(f"/kling3/jobs/{job_id}").text
-    assert "<th>mode</th>" in html and "<td>pro</td>" in html
+    assert "<th>mode</th>" in html
+    assert "<td>pro</td>" in html
 
 
 def test_nanobanana_job_status_shows_settings(client):
@@ -166,7 +171,8 @@ def test_nanobanana_job_status_shows_settings(client):
             ).json()["job_id"]
 
     html = client.get(f"/nanobanana/jobs/{job_id}").text
-    assert "<th>resolution</th>" in html and "<td>2K</td>" in html
+    assert "<th>resolution</th>" in html
+    assert "<td>2K</td>" in html
 
 
 def test_non_ai_gen_job_status_page_has_no_inputs_section(client, monkeypatch):

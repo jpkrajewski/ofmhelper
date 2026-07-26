@@ -4,7 +4,7 @@ consent script. InstalledAppFlow is mocked throughout -- this never opens a
 real browser or talks to Google.
 """
 
-import unittest.mock as mock
+from unittest import mock
 
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive import authorize
@@ -22,7 +22,7 @@ def test_main_uses_default_paths_and_writes_token_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_FILE", raising=False)
     monkeypatch.delenv("GOOGLE_DRIVE_TOKEN_FILE", raising=False)
-    fake_flow, fake_creds = _fake_flow('{"token": "default-path"}')
+    fake_flow, _fake_creds = _fake_flow('{"token": "default-path"}')
 
     with mock.patch.object(
         authorize.InstalledAppFlow,
@@ -47,7 +47,7 @@ def test_main_respects_env_var_overrides(tmp_path, monkeypatch):
     token_file = tmp_path / "out" / "token.json"
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_FILE", str(client_file))
     monkeypatch.setenv("GOOGLE_DRIVE_TOKEN_FILE", str(token_file))
-    fake_flow, fake_creds = _fake_flow('{"token": "overridden"}')
+    fake_flow, _fake_creds = _fake_flow('{"token": "overridden"}')
 
     with mock.patch.object(
         authorize.InstalledAppFlow,
