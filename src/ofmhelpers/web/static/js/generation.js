@@ -264,12 +264,14 @@
 
         fetch(form.action, { method: "POST", body: formData })
             .then(async (r) => {
-                // A dropped session redirects to the login page -- HTML, not
-                // JSON. Report that as itself instead of an opaque JSON parse
-                // error that reads like the generator broke.
+                // An expired session never reaches here -- session.js turns
+                // that 401 into a redirect to /login. This is the residual
+                // case: some other non-JSON response (a proxy error page, a
+                // 502), which would otherwise surface as an opaque JSON parse
+                // error that reads like the generator itself broke.
                 if (r.redirected || !isJson(r)) {
                     throw new Error(
-                        "Not signed in any more -- reload the page and log in."
+                        `Unexpected non-JSON response (${r.status}) -- try again.`
                     );
                 }
                 const data = await r.json();

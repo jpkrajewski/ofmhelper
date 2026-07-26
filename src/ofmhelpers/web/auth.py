@@ -10,7 +10,7 @@ moment they're mounted on `app`, because this runs before routing.
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from ofmhelpers.config import settings
 
@@ -39,6 +39,33 @@ def is_public(path: str) -> bool:
     return any(path.startswith(p) for p in PUBLIC_PREFIXES)
 
 
+def is_fetch(request: Request) -> bool:
+    """True for a fetch()/XHR call, false for a browser page navigation.
+
+    Matters because `fetch` follows a 303 transparently: an expired session
+    made every background call resolve to the *login page's HTML* with
+    status 200, which the JS then tried to parse as JSON (or, worse, injected
+    into the page). Those callers need a machine-readable 401 instead so they
+    can redirect the whole tab -- see static/js/session.js.
+
+    Detected by ruling navigation *out* rather than trying to enumerate what
+    a fetch looks like: `sec-fetch-mode: navigate` is sent by every browser
+    for a top-level page load (typing a URL, clicking a link, submitting a
+    non-JS form) and never for fetch()/XHR. Only when that header is absent
+    entirely (a non-browser client, an old browser) do we fall back to the
+    `x-requested-with` / `accept: application/json` hints -- a plain
+    document request stays a redirect, which is what keeps the login bounce
+    working for real navigations.
+    """
+    mode = request.headers.get("sec-fetch-mode")
+    if mode:
+        return mode != "navigate"
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return True
+    accept = request.headers.get("accept", "")
+    return "application/json" in accept and "text/html" not in accept
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if is_public(request.url.path) or request.session.get("authenticated"):
@@ -49,6 +76,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         next_url = request.url.path
         if request.url.query:
             next_url += f"?{request.url.query}"
+
+        if is_fetch(request):
+            return JSONResponse(
+                {"detail": "Session expired", "login_url": f"/login?next={next_url}"},
+                status_code=401,
+            )
         return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
 
 

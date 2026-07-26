@@ -72,7 +72,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=_session_settings.session_secret,  # required -- set in .env
     session_cookie="ofm_session",
-    max_age=60 * 60 * 5,  # 5 hours -- shared admin/VA passwords, keep it short
+    max_age=_session_settings.session_max_age_s,
     https_only=_session_settings.session_https_only,
 )
 
