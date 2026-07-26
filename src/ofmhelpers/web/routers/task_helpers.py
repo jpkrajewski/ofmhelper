@@ -148,6 +148,22 @@ def register_generated_asset(
         return dest
 
 
+def register_grouped_results(results: list[dict]) -> None:
+    """Adopt every output file of a grouped download job into the shared asset
+    store, so downloaded reels/images show up in the "reuse an uploaded ..."
+    picker instead of forcing a download-then-reupload round trip.
+
+    Mutates nothing the caller depends on: register_generated_asset() dedupes
+    by content hash and is already best-effort, so a file that fails to link
+    just doesn't appear in the picker.
+
+    Reads ASSETS_ROOT at call time rather than taking it as a defaulted
+    argument, so the destination stays overridable per-test."""
+    for result in results:
+        for raw in result.get("output_paths", []):
+            register_generated_asset(Path(raw), ASSETS_ROOT)
+
+
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     """Validate a path the client claims points at a previously-uploaded
     file. Raises HTTPException(400) if it's outside allowed_root or

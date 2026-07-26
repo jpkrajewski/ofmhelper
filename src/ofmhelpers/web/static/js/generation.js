@@ -218,6 +218,10 @@
             });
     }
 
+    function isJson(response) {
+        return (response.headers.get("content-type") || "").includes("json");
+    }
+
     function toolLabel(form) {
         const select = document.getElementById("tool-select");
         if (select && select.selectedOptions.length) {
@@ -249,17 +253,36 @@
 
         statusEl.innerHTML = "";
 
+        // The card goes up BEFORE the request, not after it resolves: /run
+        // uploads every reference file to kie.ai inside the request, so the
+        // response can be ~10s away. Waiting for job_id to draw anything left
+        // the user staring at an unchanged page long enough to assume the
+        // click was lost (and click again). The card is real UI immediately;
+        // polling just starts late, once we know what to poll for.
+        const card = buildPendingCard(label);
+        gallery.prepend(card);
+
         fetch(form.action, { method: "POST", body: formData })
             .then(async (r) => {
+                // A dropped session redirects to the login page -- HTML, not
+                // JSON. Report that as itself instead of an opaque JSON parse
+                // error that reads like the generator broke.
+                if (r.redirected || !isJson(r)) {
+                    throw new Error(
+                        "Not signed in any more -- reload the page and log in."
+                    );
+                }
                 const data = await r.json();
                 if (!r.ok) {
                     throw new Error(data.detail || "Request failed.");
                 }
-                const card = buildPendingCard(label);
-                gallery.prepend(card);
                 pollJob(card, prefix, data.job_id, label, resultKind);
             })
             .catch((err) => {
+                // The optimistic card can't become a result now -- turn it
+                // into the error so a failed submit never leaves a card
+                // spinning forever.
+                card.replaceWith(buildFailedCard(label, err.message));
                 setSubmitError(err.message);
             });
     }
