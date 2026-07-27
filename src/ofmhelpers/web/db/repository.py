@@ -11,6 +11,11 @@ is gone.
 
 Return values are plain dicts in the exact shape the old in-memory dicts had,
 so callers (templates, task_helpers, routers) are unaffected.
+
+Reads are cached (see db/cache.py); `@cached` marks a read method,
+`@invalidates_cache` marks a write method. Repositories never touch
+`self._cache` directly -- that plumbing lives in `CachedRepository` and the
+two decorators.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from typing import Any
 from sqlalchemy import delete, select, update
 
 from ofmhelpers.config import settings
+from ofmhelpers.web.db.cache import CachedRepository, cached, invalidates_cache
 from ofmhelpers.web.db.models import (
     ApprovalTokenRow,
     InstagramAccountRow,
@@ -50,7 +56,10 @@ def _job_to_dict(row: JobRow) -> dict:
     }
 
 
-class JobRepository:
+class JobRepository(CachedRepository):
+    cache_namespace = "job"
+
+    @invalidates_cache
     def create(
         self,
         task_name: str,
@@ -91,11 +100,13 @@ class JobRepository:
         if stale_ids:
             session.execute(delete(JobRow).where(JobRow.id.in_(stale_ids)))
 
+    @cached
     def get(self, job_id: str) -> dict | None:
         with session_scope() as s:
             row = s.get(JobRow, job_id)
             return _job_to_dict(row) if row is not None else None
 
+    @invalidates_cache
     def update_status(
         self,
         job_id: str,
@@ -112,20 +123,24 @@ class JobRepository:
         with session_scope() as s:
             s.execute(update(JobRow).where(JobRow.id == job_id).values(**values))
 
+    @invalidates_cache
     def set_preview(self, job_id: str, preview: dict) -> None:
         # UPDATE on a missing id touches 0 rows -- same no-op the old
         # set_job_preview did when the job wasn't found.
         with session_scope() as s:
             s.execute(update(JobRow).where(JobRow.id == job_id).values(preview=preview))
 
+    @invalidates_cache
     def update_result(self, job_id: str, result: Any) -> None:
         with session_scope() as s:
             s.execute(update(JobRow).where(JobRow.id == job_id).values(result=result))
 
+    @invalidates_cache
     def delete(self, job_id: str) -> None:
         with session_scope() as s:
             s.execute(delete(JobRow).where(JobRow.id == job_id))
 
+    @cached
     def list_all(self) -> list[dict]:
         """Newest first."""
         with session_scope() as s:
@@ -157,7 +172,10 @@ def _todo_to_dict(row: TodoRow) -> dict:
     }
 
 
-class TodoRepository:
+class TodoRepository(CachedRepository):
+    cache_namespace = "todo"
+
+    @invalidates_cache
     def add(
         self, model_name: str, url: str, comments: str, created_by: str | None
     ) -> dict:
@@ -175,11 +193,13 @@ class TodoRepository:
             s.flush()
             return _todo_to_dict(row)
 
+    @cached
     def get(self, todo_id: str) -> dict | None:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
             return _todo_to_dict(row) if row is not None else None
 
+    @cached
     def list_all(self) -> list[dict]:
         """Newest first."""
         with session_scope() as s:
@@ -190,6 +210,7 @@ class TodoRepository:
             )
             return [_todo_to_dict(r) for r in rows]
 
+    @invalidates_cache
     def attach_asset(self, todo_id: str, asset_path: str, asset_name: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -207,6 +228,7 @@ class TodoRepository:
             row.drive_upload_job_id = None
             return True
 
+    @invalidates_cache
     def approve(self, todo_id: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -217,6 +239,7 @@ class TodoRepository:
             row.reject_comment = None
             return True
 
+    @invalidates_cache
     def reject(self, todo_id: str, comment: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -227,6 +250,7 @@ class TodoRepository:
             row.reject_comment = comment
             return True
 
+    @invalidates_cache
     def set_drive_upload_job(self, todo_id: str, job_id: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -235,6 +259,7 @@ class TodoRepository:
             row.drive_upload_job_id = job_id
             return True
 
+    @invalidates_cache
     def mark_uploaded(self, todo_id: str, asset_path: str, drive_file_id: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -248,6 +273,7 @@ class TodoRepository:
             row.drive_uploaded_at = time.time()
             return True
 
+    @invalidates_cache
     def import_many(self, rows: list[dict], created_by: str | None) -> int:
         """Bulk insert already-validated fresh todos (see todos.import_todos)."""
         with session_scope() as s:
@@ -265,6 +291,7 @@ class TodoRepository:
                 )
             return len(rows)
 
+    @invalidates_cache
     def toggle(self, todo_id: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -273,6 +300,7 @@ class TodoRepository:
             row.checked = not row.checked
             return True
 
+    @invalidates_cache
     def delete(self, todo_id: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
@@ -300,7 +328,10 @@ def _model_to_dict(row: ModelRow) -> dict:
     }
 
 
-class ModelRepository:
+class ModelRepository(CachedRepository):
+    cache_namespace = "model"
+
+    @invalidates_cache
     def add(self, name: str, onlyfans_url: str) -> dict:
         row = ModelRow(
             id=uuid.uuid4().hex[:8],
@@ -313,11 +344,13 @@ class ModelRepository:
             s.flush()
             return _model_to_dict(row)
 
+    @cached
     def get(self, model_id: str) -> dict | None:
         with session_scope() as s:
             row = s.get(ModelRow, model_id)
             return _model_to_dict(row) if row is not None else None
 
+    @cached
     def list_all(self) -> list[dict]:
         """Newest first."""
         with session_scope() as s:
@@ -328,6 +361,7 @@ class ModelRepository:
             )
             return [_model_to_dict(r) for r in rows]
 
+    @invalidates_cache
     def update(self, model_id: str, name: str, onlyfans_url: str) -> bool:
         with session_scope() as s:
             row = s.get(ModelRow, model_id)
@@ -337,6 +371,7 @@ class ModelRepository:
             row.onlyfans_url = onlyfans_url or None
             return True
 
+    @invalidates_cache
     def set_profile_picture(
         self, model_id: str, picture_path: str, picture_name: str
     ) -> bool:
@@ -348,6 +383,7 @@ class ModelRepository:
             row.profile_picture_name = picture_name
             return True
 
+    @invalidates_cache
     def delete(self, model_id: str) -> bool:
         with session_scope() as s:
             row = s.get(ModelRow, model_id)
@@ -356,6 +392,7 @@ class ModelRepository:
             s.delete(row)
             return True
 
+    @invalidates_cache
     def add_instagram_account(self, model_id: str, url: str) -> dict | None:
         with session_scope() as s:
             model = s.get(ModelRow, model_id)
@@ -371,6 +408,7 @@ class ModelRepository:
             s.flush()
             return _instagram_account_to_dict(row)
 
+    @invalidates_cache
     def add_instagram_accounts_bulk(
         self, model_id: str, urls: list[str]
     ) -> list[dict] | None:
@@ -393,6 +431,7 @@ class ModelRepository:
             s.flush()
             return [_instagram_account_to_dict(r) for r in rows]
 
+    @invalidates_cache
     def update_instagram_account(self, account_id: str, url: str) -> bool:
         with session_scope() as s:
             row = s.get(InstagramAccountRow, account_id)
@@ -401,6 +440,7 @@ class ModelRepository:
             row.url = url
             return True
 
+    @invalidates_cache
     def delete_instagram_account(self, account_id: str) -> bool:
         with session_scope() as s:
             row = s.get(InstagramAccountRow, account_id)
@@ -421,12 +461,15 @@ def _token_to_dict(row: ApprovalTokenRow) -> dict:
     }
 
 
-class ApprovalTokenRepository:
+class ApprovalTokenRepository(CachedRepository):
+    cache_namespace = "approval_token"
+
     def _purge_expired(self, session, now: float) -> None:
         session.execute(
             delete(ApprovalTokenRow).where(ApprovalTokenRow.expires_at < now)
         )
 
+    @invalidates_cache
     def create(self, todo_id: str, asset_path: str, ttl_seconds: int) -> str:
         import secrets
 
@@ -446,11 +489,13 @@ class ApprovalTokenRepository:
             )
         return token
 
+    @cached
     def get(self, token: str) -> dict | None:
         with session_scope() as s:
             row = s.get(ApprovalTokenRow, token)
             return _token_to_dict(row) if row is not None else None
 
+    @invalidates_cache
     def consume(self, token: str, current_asset_path: str) -> str:
         """Validate and, only on success, mark used in the same transaction.
         Returns "ok" / "not_found" / "expired" / "used" / "stale"."""

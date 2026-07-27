@@ -7,12 +7,14 @@ updates must never leave a torn/half-written row.
 
 import threading
 
+from ofmhelpers.web.db.cache import RepositoryCache
 from ofmhelpers.web.db.repository import (
     ApprovalTokenRepository,
     JobRepository,
     ModelRepository,
     TodoRepository,
 )
+from ofmhelpers.web.queue import get_redis
 
 
 def test_job_create_get_round_trip():
@@ -144,3 +146,48 @@ def test_approval_token_consume_is_single_use():
     # A mismatched asset path is rejected as stale, not approved.
     other = repo.create("todo2", "/asset2.png", ttl_seconds=3600)
     assert repo.consume(other, "/different.png") == "stale"
+
+
+def test_job_get_is_served_from_cache_until_a_write_invalidates_it():
+    from ofmhelpers.web.db.models import JobRow
+    from ofmhelpers.web.db.session import session_scope
+
+    namespace = "test-job-cache"
+    cache = RepositoryCache(get_redis(), namespace)
+    repo = JobRepository(cache=cache)
+    job_id = repo.create("seedance", {})
+
+    first = repo.get(job_id)
+
+    # Mutate the row directly, bypassing the repo (and its bump()), to prove
+    # the get() below is answered from cache rather than a fresh DB read.
+    with session_scope() as s:
+        s.get(JobRow, job_id).status = "done"
+    assert repo.get(job_id) == first  # still cached, stale on purpose
+
+    repo.update_status(job_id, "done")  # goes through the repo -> bumps cache
+
+    assert repo.get(job_id)["status"] == "done"
+    # A second repo sharing the same cache namespace sees the invalidation too.
+    other_repo = JobRepository(cache=RepositoryCache(get_redis(), namespace))
+    assert other_repo.get(job_id)["status"] == "done"
+
+
+def test_repository_cache_bump_invalidates_all_prior_reads():
+    cache = RepositoryCache(get_redis(), "test-generic-cache")
+    calls = []
+
+    def loader():
+        calls.append(1)
+        return {"n": len(calls)}
+
+    first = cache.get_or_set("get", ("x",), loader)
+    second = cache.get_or_set("get", ("x",), loader)
+    assert first == second
+    assert len(calls) == 1  # second call was a cache hit
+
+    cache.bump()
+
+    third = cache.get_or_set("get", ("x",), loader)
+    assert len(calls) == 2  # bump() forced a fresh load
+    assert third != first

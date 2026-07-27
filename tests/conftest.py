@@ -79,8 +79,12 @@ def _test_database():
 @pytest.fixture(autouse=True)
 def _clean_tables():
     """Truncate the three stores before each test so nothing leaks between
-    tests -- the DB equivalent of the old per-test temp JSON files."""
+    tests -- the DB equivalent of the old per-test temp JSON files. Also
+    flushes the test Redis db: repository.py caches reads there, and a
+    cached list/get from a previous test would otherwise survive the
+    TRUNCATE above until its TTL expired."""
     from ofmhelpers.web.db.session import get_engine
+    from ofmhelpers.web.queue import get_redis
 
     with get_engine().begin() as conn:
         conn.execute(
@@ -89,6 +93,7 @@ def _clean_tables():
                 "RESTART IDENTITY CASCADE"
             )
         )
+    get_redis().flushdb()
 
 
 _SETTINGS_CLASSES = (
