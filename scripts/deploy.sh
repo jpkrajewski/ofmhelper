@@ -39,6 +39,16 @@ if [ -z "$commit_msg" ]; then
   exit 1
 fi
 
+# The server deploys origin/main. Committing on dev and then pushing `main`
+# pushed a stale local ref and shipped nothing -- refuse instead.
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" != "main" ]; then
+  echo "On branch '$branch', but this script deploys origin/main." >&2
+  echo "Merge into main first (the promote workflow opens the PR), or run" >&2
+  echo "the Deploy workflow manually." >&2
+  exit 1
+fi
+
 echo "== staging & committing =="
 git add -A
 if git diff --cached --quiet; then
@@ -49,13 +59,39 @@ else
 fi
 
 echo "== deploying to $OFM_DEPLOY_HOST =="
-# Bring the stack up (postgres/redis/worker/api) and apply DB migrations.
+# Same sequence as .github/workflows/deploy.yml -- keep the two in step.
+#
+# Order matters: migrate before the new code goes live (expand-then-deploy).
+# Old code tolerates a table it does not know about; new code against an
+# un-migrated database 500ed /models on 2026-07-27.
+remote_script='
+  set -eu
+  cd "$1"
+  # Production file only -- a dev overlay must never apply here.
+  compose="docker compose -f docker-compose.yml"
+  echo "== fetching =="
+  git fetch origin main
+  # Safe: production runs the code baked into the image, so the checkout does
+  # not touch the running container.
+  echo "== checking out =="
+  git reset --hard origin/main
+  echo "== building =="
+  $compose build ofmhelpers worker
+  # One-off container off the image just built -- `exec` would run the OLD
+  # image, which has none of the new revision files.
+  echo "== migrating =="
+  $compose run --rm -T ofmhelpers alembic upgrade head
+  echo "== swapping in the new containers =="
+  $compose up -d
+  # Otherwise every deploy leaves its predecessor dangling on the disk.
+  docker image prune -f >/dev/null
+'
 ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
-  "cd '$OFM_DEPLOY_DIR' && git pull && docker compose up -d --build && \
-   docker compose exec -T ofmhelpers alembic upgrade head"
+  bash -s -- "$OFM_DEPLOY_DIR" <<< "$remote_script"
 
 echo "== health check =="
-for i in 1 2 3 4 5; do
+# The app now starts cold on every deploy, so allow more than the old 5 x 3s.
+for i in $(seq 20); do
   status=$(ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
     "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" 2>/dev/null) || true
   status="${status:-000}"

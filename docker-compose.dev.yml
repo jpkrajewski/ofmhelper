@@ -1,0 +1,81 @@
+# LOCAL DEVELOPMENT overlay for docker-compose.yml. Never used on the server.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis   # just what pytest needs
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev up -d rq-dashboard
+#
+# Not named docker-compose.override.yml on purpose: an auto-loaded overlay
+# would also be picked up by a bare `docker compose` run on the production
+# server, which is exactly the hot-reload-in-prod setup that caused the
+# 2026-07-27 /models outage. Explicit flags cost a few characters and make the
+# failure mode "dev acts like prod" instead of "prod acts like dev".
+#
+# What this adds on top of the production stack:
+#   - ./src bind-mounted into the API and worker, so edits are visible without
+#     a rebuild (`docker compose ... restart worker` picks them up; the API
+#     reloads itself).
+#   - uvicorn --reload for the API.
+#   - postgres/redis published on 127.0.0.1 for host-run `uv run pytest`.
+#   - rq-dashboard, behind the `dev` profile so it stays off unless asked for.
+
+services:
+  ofmhelpers:
+    # The image's CMD is the production one (no --reload) -- override it here
+    # rather than baking a dev flag into the image.
+    command:
+      - uvicorn
+      - ofmhelpers.web.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/src
+    volumes:
+      # Merged with (not replacing) the base file's volume list.
+      - ./src:/app/src
+
+  worker:
+    # No reloader: RQ's worker pool forks per job, and a reloader restarting it
+    # mid-job would leave the job row stuck at "running". Restart it by hand
+    # after changing worker-side code.
+    volumes:
+      - ./src:/app/src
+
+  postgres:
+    ports:
+      # Bound to localhost, not 0.0.0.0 -- host-run pytest/alembic reach it,
+      # the rest of the network does not.
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  # RQ job dashboard. Reuses the app image (rq-dashboard is a project
+  # dependency) so there is no extra unpinned third-party image to trust.
+  rq-dashboard:
+    build: .
+    container_name: ofmhelpers-rq-dashboard
+    profiles:
+      - dev
+    command:
+      - rq-dashboard
+      - --redis-url
+      - redis://redis:6379/0
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "9181"
+    ports:
+      - "127.0.0.1:9181:9181"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

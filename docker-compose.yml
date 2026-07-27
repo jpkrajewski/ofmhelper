@@ -1,3 +1,20 @@
+# PRODUCTION stack. This file alone is what runs on the server -- it is
+# deliberately the boring, safe half: code comes from the image, nothing
+# hot-reloads, no database port is published, no dev tooling.
+#
+# Local development layers docker-compose.dev.yml on top:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# The overlay is never auto-loaded (it is not named docker-compose.override.yml
+# on purpose), so forgetting the flags degrades a dev box to production
+# behaviour -- annoying but harmless. The reverse mistake is the one that hurt:
+# the server used to run with ./src bind-mounted and uvicorn --reload, so a
+# `git reset --hard` went live in the running container minutes before its
+# Alembic migration did, and /models 500ed until the migration caught up
+# (2026-07-27). Both deploy paths pass `-f docker-compose.yml` explicitly so a
+# stray overlay on the server can never re-enable that.
+#
 # Shared app config, reused by the API and the RQ worker via YAML anchors so
 # the worker always mounts exactly the same filesystem the API serves results
 # from (uploads/kieai_out/downloads) and reads the same env.
@@ -15,7 +32,9 @@ x-app-environment: &app-environment
   - OFM_REDIS_URL=redis://redis:6379/0
 
 x-app-volumes: &app-volumes
-  - ./src:/app/src
+  # No ./src mount here -- production runs the code baked into the image, so a
+  # checkout on the server changes nothing until the image is rebuilt. The dev
+  # overlay adds the mount back.
   - cookies_data:/app/cookies
   - ./uploads:/app/uploads
   - ./downloads:/app/downloads
@@ -99,10 +118,10 @@ services:
       - POSTGRES_USER=ofmhelpers
       - POSTGRES_PASSWORD=ofmhelpers
       - POSTGRES_DB=ofmhelpers
-    ports:
-      # Bound to localhost only (not 0.0.0.0) so host-run `uv run pytest` and
-      # `alembic upgrade` can reach it, without exposing the DB off-box in prod.
-      - "127.0.0.1:5432:5432"
+    # No published port in production: nothing off the compose network needs to
+    # reach the database, and `docker compose exec postgres psql -U ofmhelpers`
+    # covers ad-hoc queries. The dev overlay publishes 127.0.0.1:5432 for
+    # host-run pytest/alembic.
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -120,9 +139,7 @@ services:
     container_name: ofmhelpers-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      # Localhost only -- lets host-run RQ integration tests reach the broker.
-      - "127.0.0.1:6379:6379"
+    # Same as postgres: published only by the dev overlay, for host-run tests.
     volumes:
       - redis_data:/data
     healthcheck:
@@ -152,34 +169,8 @@ services:
     cap_drop:
       - ALL
 
-  # Dev-only RQ job dashboard. Off by default -- start it explicitly with
-  # `docker compose --profile dev up rq-dashboard` (or `--profile dev up`).
-  # Reuses the app image (rq-dashboard is a project dependency) so there's no
-  # extra unpinned third-party image.
-  rq-dashboard:
-    build: .
-    container_name: ofmhelpers-rq-dashboard
-    profiles:
-      - dev
-    command:
-      - rq-dashboard
-      - --redis-url
-      - redis://redis:6379/0
-      - --bind
-      - 0.0.0.0
-      - --port
-      - "9181"
-    ports:
-      - "127.0.0.1:9181:9181"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - internal
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+  # rq-dashboard lives in docker-compose.dev.yml -- it has no place in a
+  # production stack.
 
 volumes:
   cookies_data:

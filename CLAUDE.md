@@ -32,10 +32,10 @@ Before finishing:
 
 - Run `pre-commit` on modified files (or `--all-files` for broader changes).
 - Run `uv run pytest` after code changes.
-- Start dependencies first:
+- Start dependencies first (dev overlay -- the base file publishes no DB port):
 
   ```bash
-  docker compose up -d postgres redis
+  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
   ```
 - If checks can't be run, explain why.
 
