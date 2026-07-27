@@ -33,6 +33,7 @@ from ofmhelpers.web.db.models import (
     InstagramAccountRow,
     InstagramStatsRow,
     JobRow,
+    ModelContactRow,
     ModelRow,
     TodoRow,
 )
@@ -311,8 +312,26 @@ class TodoRepository(CachedRepository):
             return True
 
 
+# The optional per-account details the edit form writes as one block.
+_ACCOUNT_DETAIL_FIELDS = ("owner", "phone", "sim_number", "password", "email")
+
+
 def _instagram_account_to_dict(row: InstagramAccountRow) -> dict:
-    return {"id": row.id, "model_id": row.model_id, "url": row.url}
+    return {
+        "id": row.id,
+        "model_id": row.model_id,
+        "url": row.url,
+        **{f: getattr(row, f) for f in _ACCOUNT_DETAIL_FIELDS},
+    }
+
+
+def _model_contact_to_dict(row: ModelContactRow) -> dict:
+    return {
+        "id": row.id,
+        "model_id": row.model_id,
+        "type": row.type,
+        "value": row.value,
+    }
 
 
 def _model_to_dict(row: ModelRow) -> dict:
@@ -326,6 +345,7 @@ def _model_to_dict(row: ModelRow) -> dict:
         "instagram_accounts": [
             _instagram_account_to_dict(a) for a in row.instagram_accounts
         ],
+        "contacts": [_model_contact_to_dict(c) for c in row.contacts],
     }
 
 
@@ -433,18 +453,61 @@ class ModelRepository(CachedRepository):
             return [_instagram_account_to_dict(r) for r in rows]
 
     @invalidates_cache
-    def update_instagram_account(self, account_id: str, url: str) -> bool:
+    def update_instagram_account(
+        self, account_id: str, url: str, **details: str
+    ) -> bool:
+        """`details` are the optional owner/phone/sim_number/password/email
+        fields; the edit form posts all of them at once, so an omitted one
+        means "blank", not "leave alone"."""
         with session_scope() as s:
             row = s.get(InstagramAccountRow, account_id)
             if row is None:
                 return False
             row.url = url
+            for field in _ACCOUNT_DETAIL_FIELDS:
+                setattr(row, field, details.get(field) or None)
             return True
 
     @invalidates_cache
     def delete_instagram_account(self, account_id: str) -> bool:
         with session_scope() as s:
             row = s.get(InstagramAccountRow, account_id)
+            if row is None:
+                return False
+            s.delete(row)
+            return True
+
+    @invalidates_cache
+    def add_contact(self, model_id: str, contact_type: str, value: str) -> dict | None:
+        with session_scope() as s:
+            model = s.get(ModelRow, model_id)
+            if model is None:
+                return None
+            row = ModelContactRow(
+                id=uuid.uuid4().hex[:8],
+                model_id=model_id,
+                type=contact_type,
+                value=value,
+                created_at=time.time(),
+            )
+            s.add(row)
+            s.flush()
+            return _model_contact_to_dict(row)
+
+    @invalidates_cache
+    def update_contact(self, contact_id: str, contact_type: str, value: str) -> bool:
+        with session_scope() as s:
+            row = s.get(ModelContactRow, contact_id)
+            if row is None:
+                return False
+            row.type = contact_type
+            row.value = value
+            return True
+
+    @invalidates_cache
+    def delete_contact(self, contact_id: str) -> bool:
+        with session_scope() as s:
+            row = s.get(ModelContactRow, contact_id)
             if row is None:
                 return False
             s.delete(row)

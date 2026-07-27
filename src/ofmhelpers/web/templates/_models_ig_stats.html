@@ -1,13 +1,16 @@
 {# One Instagram account's scraped stats. Shared by models_list.html (first
    paint) and models_stats_fragment.html (the in-place refresh), so the two
    can never drift apart. #}
+{# A field the scrape couldn't read shows 0, not "?": the sheet these numbers
+   get read off wants a number in every cell, and a failed scrape already says
+   so via the "last scrape failed" badge. #}
+{% macro count(value) %}{{ "{:,}".format(value or 0) }}{% endmacro %}
+
 {% macro ig_stats(account, stats) %}
 <div class="model-ig-stats-slot" data-stats-for="{{ account.id }}">
     {% if stats %}
     <div class="model-ig-stats">
-        <span class="model-ig-followers">
-            {{ "{:,}".format(stats.followers) if stats.followers is not none else "?" }} followers
-        </span>
+        <span class="model-ig-followers">{{ count(stats.followers) }} followers</span>
         {% if stats.error %}
         <span class="model-ig-stats-error" title="{{ stats.error }}">last scrape failed</span>
         {% endif %}
@@ -22,9 +25,9 @@
                     <a href="{{ p.url }}" target="_blank" rel="noopener"
                        title="{{ p.url }}">/reel/{{ p.url.rstrip("/").rsplit("/", 1)[-1] }}</a>
                 </td>
-                <td>{{ "{:,}".format(p.views) if p.views is not none else "?" }}</td>
-                <td>{{ "{:,}".format(p.likes) if p.likes is not none else "?" }}</td>
-                <td>{{ "{:,}".format(p.comments) if p.comments is not none else "?" }}</td>
+                <td>{{ count(p.views) }}</td>
+                <td>{{ count(p.likes) }}</td>
+                <td>{{ count(p.comments) }}</td>
             </tr>
             {% endfor %}
         </table>

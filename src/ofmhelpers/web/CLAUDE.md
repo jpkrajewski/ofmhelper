@@ -147,15 +147,22 @@ five endpoints wired to `task_helpers`, nothing else.
   — add an entry here for any new task type, same idea as `generate.py`'s
   registry but repo-wide, not just the AI-gen gallery).
 - `models.py` (router) — admin-only roster of models (name/picture/OnlyFans
-  link + many Instagram accounts), plus the Instagram stats shown inline on
+  link + many Instagram accounts, each with optional owner/phone/SIM/
+  password/email details, + many free-form contacts of type+value), plus the
+  Instagram stats shown inline on
   `/models`: `POST /models/refresh-stats` enqueues
   `scraping.instagram_stats_job.collect_all_instagram_stats` and answers
   `{"job_id": ...}`; the page polls `GET /models/refresh-stats/{job_id}` and
   swaps in `GET /models/stats-html` (the `_models_ig_stats.html` macro both
   it and the full page render) without reloading. `web/instagram_stats.py`
-  is the store, `web/models.py` the roster store.
+  is the store, `web/models.py` the roster store. Profile pictures are served
+  as cached webp thumbs (`GET /models/{id}/picture/thumb?size=`, via
+  `refs.write_image_thumb`) — never the original upload, which is whatever
+  multi-MB file came off a phone.
 - `refs.py` — serves/lists previously-uploaded reference files from
   `ASSETS_ROOT` for the file-picker widget's "reuse" browser.
+  `write_image_thumb` is the shared Pillow thumbnailer (also used by the
+  models router).
 - `cookies.py` — admin upload endpoint for `cookies/cookies.txt`
   (`downloaders.cookies`).
 - `auth.py` (router) — `/login`, `/logout`.

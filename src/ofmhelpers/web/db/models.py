@@ -82,11 +82,19 @@ class ModelRow(Base):
         cascade="all, delete-orphan",
         order_by="InstagramAccountRow.created_at",
     )
+    contacts: Mapped[list[ModelContactRow]] = relationship(
+        back_populates="model",
+        cascade="all, delete-orphan",
+        order_by="ModelContactRow.created_at",
+    )
 
     __table_args__ = (Index("ix_models_created_at", "created_at"),)
 
 
 class InstagramAccountRow(Base):
+    """The account itself plus the credentials/SIM the team manages it with --
+    all optional, filled in on the model's edit page."""
+
     __tablename__ = "instagram_accounts"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -94,11 +102,35 @@ class InstagramAccountRow(Base):
         String(64), ForeignKey("models.id", ondelete="CASCADE"), nullable=False
     )
     url: Mapped[str] = mapped_column(Text, nullable=False)
+    owner: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sim_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    password: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     model: Mapped[ModelRow] = relationship(back_populates="instagram_accounts")
 
     __table_args__ = (Index("ix_instagram_accounts_model_id", "model_id"),)
+
+
+class ModelContactRow(Base):
+    """One free-form contact channel for a model, e.g. type="WhatsApp",
+    value="+4534343434". Many per model."""
+
+    __tablename__ = "model_contacts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("models.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    model: Mapped[ModelRow] = relationship(back_populates="contacts")
+
+    __table_args__ = (Index("ix_model_contacts_model_id", "model_id"),)
 
 
 class InstagramStatsRow(Base):

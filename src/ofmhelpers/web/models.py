@@ -2,7 +2,9 @@
 ofmhelpers/web/models.py
 
 Admin-managed roster of Models: a name, a profile picture, one OnlyFans
-link, and any number of Instagram account links. Postgres-backed via
+link, any number of Instagram account links (each with optional
+owner/phone/SIM/password/email details) and any number of free-form
+contact channels (type + value, e.g. WhatsApp/+4534343434). Postgres-backed via
 web/db/ -- see routers/models.py for the admin-only CRUD surface.
 """
 
@@ -49,9 +51,22 @@ def add_instagram_accounts_bulk(model_id: str, urls: list[str]) -> list[dict] | 
     return _repo.add_instagram_accounts_bulk(model_id, cleaned)
 
 
-def update_instagram_account(account_id: str, url: str) -> bool:
-    return _repo.update_instagram_account(account_id, url)
+def update_instagram_account(account_id: str, url: str, **details: str) -> bool:
+    """`details`: owner/phone/sim_number/password/email, all optional."""
+    return _repo.update_instagram_account(account_id, url, **details)
 
 
 def delete_instagram_account(account_id: str) -> bool:
     return _repo.delete_instagram_account(account_id)
+
+
+def add_contact(model_id: str, contact_type: str, value: str) -> dict | None:
+    return _repo.add_contact(model_id, contact_type, value)
+
+
+def update_contact(contact_id: str, contact_type: str, value: str) -> bool:
+    return _repo.update_contact(contact_id, contact_type, value)
+
+
+def delete_contact(contact_id: str) -> bool:
+    return _repo.delete_contact(contact_id)
