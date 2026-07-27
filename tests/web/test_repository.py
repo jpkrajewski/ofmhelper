@@ -10,6 +10,7 @@ import threading
 from ofmhelpers.web.db.cache import RepositoryCache
 from ofmhelpers.web.db.repository import (
     ApprovalTokenRepository,
+    InstagramStatsRepository,
     JobRepository,
     ModelRepository,
     TodoRepository,
@@ -116,6 +117,42 @@ def test_model_add_instagram_accounts_bulk():
     stored = repo.get(model["id"])
     urls = {a["url"] for a in stored["instagram_accounts"]}
     assert urls == {"https://instagram.com/a", "https://instagram.com/b"}
+
+
+def test_instagram_stats_upsert_round_trip_and_overwrite():
+    model_repo = ModelRepository()
+    stats_repo = InstagramStatsRepository()
+    model = model_repo.add("Model A", "")
+    account = model_repo.add_instagram_account(model["id"], "https://instagram.com/a")
+
+    posts = [
+        {"url": "https://instagram.com/p/1", "views": 100, "likes": 10, "shares": None}
+    ]
+    stats_repo.upsert(account["id"], followers=1000, posts=posts, error=None)
+
+    stored = stats_repo.get(account["id"])
+    assert stored["followers"] == 1000
+    assert stored["posts"] == posts
+    assert stored["error"] is None
+
+    # A second scrape overwrites rather than accumulating history.
+    stats_repo.upsert(account["id"], followers=1100, posts=[], error="rate limited")
+    stored = stats_repo.get(account["id"])
+    assert stored["followers"] == 1100
+    assert stored["posts"] == []
+    assert stored["error"] == "rate limited"
+
+
+def test_instagram_stats_get_many():
+    model_repo = ModelRepository()
+    stats_repo = InstagramStatsRepository()
+    model = model_repo.add("Model A", "")
+    a1 = model_repo.add_instagram_account(model["id"], "https://instagram.com/a")
+    a2 = model_repo.add_instagram_account(model["id"], "https://instagram.com/b")
+    stats_repo.upsert(a1["id"], followers=1, posts=[], error=None)
+
+    many = stats_repo.get_many((a1["id"], a2["id"]))
+    assert set(many) == {a1["id"]}
 
 
 def test_model_add_instagram_accounts_bulk_returns_none_for_unknown_model():

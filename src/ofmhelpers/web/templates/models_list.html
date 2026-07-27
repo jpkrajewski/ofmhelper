@@ -1,8 +1,19 @@
 {% extends "base.html" %}
+{% import "_models_ig_stats.html" as ig %}
 {% block content %}
 <h1>Models</h1>
 
-<p><a href="/models/new" class="model-btn">+ Add model</a></p>
+<div class="model-toolbar">
+    <a href="/models/new" class="model-btn">+ Add model</a>
+    <button type="button" class="model-btn model-refresh-btn" id="model-refresh-btn"
+            data-action="/models/refresh-stats">
+        Refresh Instagram stats (all accounts)
+    </button>
+    <span class="model-refresh-status" id="model-refresh-status" hidden></span>
+    <span class="model-toolbar-note">
+        Scrapes every Instagram account; also runs automatically once a day.
+    </span>
+</div>
 
 {% if not models %}
 <p class="pending">No models yet.</p>
@@ -29,7 +40,11 @@
             {% if m.instagram_accounts %}
             <div class="model-ig-links">
                 {% for a in m.instagram_accounts %}
-                <a href="{{ a.url }}" target="_blank" rel="noopener" class="model-link">{{ a.url }}</a>
+                <div class="model-ig-account">
+                    <a href="{{ a.url }}" target="_blank" rel="noopener" class="model-link"
+                       title="{{ a.url }}">@{{ a.url.rstrip("/").rsplit("/", 1)[-1] }}</a>
+                    {{ ig.ig_stats(a, instagram_stats.get(a.id)) }}
+                </div>
                 {% endfor %}
             </div>
             {% else %}
@@ -60,26 +75,9 @@
 </table>
 {% endif %}
 
-<style>
-    .model-thumb { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; }
-    .model-thumb-empty {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 72px; height: 72px; border-radius: 50%; font-size: 24px;
-        background: var(--surface-2); color: var(--text-muted);
-    }
-    .model-name { font-size: 22px; font-weight: bold; }
-    .model-link { font-size: 20px; }
-    .model-ig-links { display: flex; flex-direction: column; gap: 10px; }
-    .model-actions { display: flex; gap: 8px; align-items: center; }
-    .model-btn {
-        display: inline-block; padding: 6px 14px; margin: 0; cursor: pointer;
-        border: 1px solid var(--border); border-radius: 6px;
-        background: var(--surface-2); color: var(--text);
-        font-size: 13px; text-decoration: none; line-height: 1.4;
-    }
-    .model-btn:hover { border-color: var(--accent); color: var(--accent-soft); }
-    .model-delete-btn:hover { border-color: var(--fail); color: var(--fail); }
+{% include "_models_style.html" %}
 
+<style>
     .model-popup-hint {
         display: none; position: fixed; inset: 0; z-index: 1000;
         background: rgba(0, 0, 0, 0.6);
@@ -110,6 +108,81 @@
 </div>
 
 <script>
+// Refresh stats without a page reload: kick off the sweep, poll the job, then
+// swap in the server-rendered stats blocks (/models/stats-html uses the same
+// Jinja macro as this page, so there's no second copy of the markup here).
+// 401s are handled globally by static/js/session.js -- see web/CLAUDE.md.
+const REFRESH_POLL_MS = 3000;
+const refreshBtn = document.getElementById("model-refresh-btn");
+const refreshStatus = document.getElementById("model-refresh-status");
+
+function setStatus(text, kind) {
+    refreshStatus.hidden = false;
+    refreshStatus.textContent = text;
+    refreshStatus.className = "model-refresh-status" + (kind ? " is-" + kind : "");
+}
+
+async function swapInFreshStats() {
+    const html = await (await fetch("/models/stats-html")).text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("[data-stats-for]").forEach((fresh) => {
+        const slot = document.querySelector(
+            `[data-stats-for="${fresh.dataset.statsFor}"]`);
+        if (slot) slot.replaceWith(fresh);
+    });
+}
+
+async function finish(message, kind) {
+    if (kind !== "error") await swapInFreshStats();
+    setStatus(message, kind);
+    refreshBtn.disabled = false;
+}
+
+function pollRefresh(jobId, startedAt) {
+    setTimeout(async () => {
+        const r = await fetch(`/models/refresh-stats/${jobId}`);
+        const {status, error} = await r.json();
+        const mins = Math.round((Date.now() - startedAt) / 60000);
+        if (status === "finished") {
+            finish("Stats updated.", "done");
+        } else if (status === "failed") {
+            finish("Refresh failed: " + (error || "see worker log"), "error");
+        } else {
+            setStatus(`Scraping Instagram... (${status}${mins ? `, ${mins} min` : ""})`);
+            pollRefresh(jobId, startedAt);
+        }
+    }, REFRESH_POLL_MS);
+}
+
+refreshBtn.addEventListener("click", async () => {
+    refreshBtn.disabled = true;
+    setStatus("Starting scrape...");
+    try {
+        const r = await fetch(refreshBtn.dataset.action, {method: "POST"});
+        const {job_id: jobId} = await r.json();
+        if (!jobId) {
+            // Synchronous mode: the sweep already ran inside that request.
+            await finish("Stats updated.", "done");
+            return;
+        }
+        setStatus("Scraping Instagram... this takes a minute or two.");
+        pollRefresh(jobId, Date.now());
+    } catch (e) {
+        finish("Could not start the refresh: " + e, "error");
+    }
+});
+
+// A sweep outlives the tab that started it (it runs on the RQ worker), so on
+// load, rejoin one that's still going instead of showing an idle button and
+// numbers that are about to change under the reader.
+(async () => {
+    const {job_id: jobId} = await (await fetch("/models/refresh-stats")).json();
+    if (!jobId) return;
+    refreshBtn.disabled = true;
+    setStatus("A refresh is already running...");
+    pollRefresh(jobId, Date.now());
+})();
+
 // Browsers cap how many window.open() calls one click can trigger (Firefox:
 // 1, Chrome: needs a fresh gesture per call) -- there's no JS trick around
 // that, it's deliberate anti-spam popup blocking. The one real fix is a

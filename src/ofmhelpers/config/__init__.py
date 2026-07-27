@@ -26,6 +26,7 @@ from ofmhelpers.config.settings import (
     DownloadersSettings,
     GDriveSettings,
     InfraSettings,
+    InstagramStatsSettings,
     KieAISettings,
     LoggingSettings,
     ReelMachineSettings,
@@ -66,6 +67,10 @@ class Settings:
     @property
     def gdrive(self) -> GDriveSettings:
         return GDriveSettings()
+
+    @property
+    def instagram_stats(self) -> InstagramStatsSettings:
+        return InstagramStatsSettings()
 
     @property
     def logging(self) -> LoggingSettings:

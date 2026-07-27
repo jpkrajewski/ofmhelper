@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -99,6 +99,26 @@ class InstagramAccountRow(Base):
     model: Mapped[ModelRow] = relationship(back_populates="instagram_accounts")
 
     __table_args__ = (Index("ix_instagram_accounts_model_id", "model_id"),)
+
+
+class InstagramStatsRow(Base):
+    """Latest scrape result for one instagram_accounts row (upserted in
+    place, not history -- see InstagramStatsRepository). `posts` holds the
+    last N posts as a JSON list of {"url", "views", "likes", "shares"}."""
+
+    __tablename__ = "instagram_stats"
+
+    account_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("instagram_accounts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    followers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    posts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    checked_at: Mapped[float] = mapped_column(Float, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ApprovalTokenRow(Base):

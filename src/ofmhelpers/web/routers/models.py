@@ -13,8 +13,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 
+from ofmhelpers.config import settings
+from ofmhelpers.scraping.instagram_stats_job import (
+    active_sweep_id,
+    collect_all_instagram_stats,
+)
+from ofmhelpers.web import instagram_stats
 from ofmhelpers.web import models as models_store
 from ofmhelpers.web.auth import require_admin
+from ofmhelpers.web.queue import enqueue, get_queue
 from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(
@@ -38,8 +45,78 @@ def _save_picture(model_id: str, file: UploadFile) -> str:
 
 @router.get("")
 def list_page(request: Request):
+    models = models_store.list_models()
+    account_ids = [a["id"] for m in models for a in m["instagram_accounts"]]
+    stats = instagram_stats.get_stats_many(account_ids)
     return templates.TemplateResponse(
-        request, "models_list.html", {"models": models_store.list_models()}
+        request, "models_list.html", {"models": models, "instagram_stats": stats}
+    )
+
+
+@router.post("/refresh-stats")
+def refresh_stats():
+    """Enqueues the same sweep the nightly scheduler runs (worker.py), for
+    an immediate refresh instead of waiting for the next run.
+
+    Answers JSON, not a redirect: the page polls `/refresh-stats/{job_id}`
+    and swaps in `/stats-html` when the sweep lands, so the admin gets
+    progress instead of a reloaded page that still shows yesterday's
+    numbers. `job_id` is null in synchronous mode (the test suite), where
+    enqueue() already ran the sweep inline and there is nothing to poll.
+
+    A sweep that's already queued or running is reused rather than doubled:
+    two browsers scraping the same accounts at once only buys a soft block
+    from Instagram."""
+    if settings.infra.rq_async:
+        running = active_sweep_id()
+        if running is not None:
+            return {"job_id": running}
+    job = enqueue(collect_all_instagram_stats)
+    return {"job_id": getattr(job, "id", None)}
+
+
+@router.get("/refresh-stats")
+def refresh_stats_active():
+    """The sweep runs on the worker, so it survives the admin closing the
+    tab -- but the "scraping..." indicator doesn't. The page asks this on
+    load and picks the polling back up, instead of looking idle while a
+    sweep is still writing rows."""
+    if not settings.infra.rq_async:
+        return {"job_id": None}
+    return {"job_id": active_sweep_id()}
+
+
+@router.get("/refresh-stats/{job_id}")
+def refresh_stats_status(job_id: str):
+    """Progress for one enqueued sweep. An unknown id reads as "finished":
+    RQ drops finished jobs after its result TTL, and a job that has aged out
+    is done by definition -- reporting "failed" there would cry wolf on
+    every slow page."""
+    job = get_queue().fetch_job(job_id)
+    if job is None:
+        return {"status": "finished", "error": None}
+
+    status = job.get_status()
+    status = getattr(status, "value", status)  # JobStatus enum -> "finished"
+    # Only the exception's last line: the whole traceback is in the worker
+    # log, and this string ends up in a one-line status banner.
+    error = None
+    if status == "failed" and job.exc_info:
+        error = job.exc_info.strip().splitlines()[-1]
+    return {"status": status, "error": error}
+
+
+@router.get("/stats-html")
+def stats_html(request: Request):
+    """The stats blocks alone, same markup the full page renders (shared
+    macro), for the refresh button to swap in place."""
+    models = models_store.list_models()
+    account_ids = [a["id"] for m in models for a in m["instagram_accounts"]]
+    stats = instagram_stats.get_stats_many(account_ids)
+    return templates.TemplateResponse(
+        request,
+        "models_stats_fragment.html",
+        {"models": models, "instagram_stats": stats},
     )
 
 

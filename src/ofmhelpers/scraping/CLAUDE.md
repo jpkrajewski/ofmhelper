@@ -21,6 +21,17 @@ then exporting the results to a formatted spreadsheet for review.
   `VIEWS_THRESHOLD_DEFAULT` / `VIEWS_THRESHOLD_TODAY` cutoffs. Its internal
   module docstring still says `filter_reels.py`, a stale name from before
   this file was renamed.
+- `instagram_public.py` — free, no-login Instagram scrape via Playwright
+  (headless Chromium), no Apify actor involved: `fetch_profile_stats(username)`
+  returns followers + the last N reels' views/likes/comments. **Always runs
+  the browser in a subprocess** — see its docstring, RQ forks per job and
+  fork+Playwright deadlocks. Tunables live in
+  `config.settings.InstagramStatsSettings`; selectors/regexes stay here.
+- `instagram_stats_job.py` — the RQ job that sweeps every Instagram account
+  in the models roster and persists the result (`web/instagram_stats.py`).
+  Runs daily: `ensure_scheduled()` (called at worker boot) seeds one
+  `enqueue_at`, and each sweep re-queues the next. Never use a thread for
+  this — see the docstring.
 - `post_exporter.py` — `PostExcelExporter`: writes `Reel`/`TikTokVideo`/
   `PostBase` lists to a formatted `.xlsx` (styled header, alternating row
   fills, sanitized sheet names).

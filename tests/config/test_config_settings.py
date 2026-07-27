@@ -15,6 +15,7 @@ from ofmhelpers.config.settings import (
     DownloadersSettings,
     GDriveSettings,
     InfraSettings,
+    InstagramStatsSettings,
     KieAISettings,
     ReelMachineSettings,
     SessionSettings,
@@ -40,6 +41,13 @@ ALL_ENV_VARS = [
     "OFM_REDIS_URL",
     "OFM_RQ_JOB_TIMEOUT_S",
     "OFM_RQ_ASYNC",
+    "OFM_IG_STATS_LAST_N_POSTS",
+    "OFM_IG_STATS_SUBPROCESS_TIMEOUT_S",
+    "OFM_IG_STATS_NAV_TIMEOUT_MS",
+    "OFM_IG_STATS_RENDER_WAIT_MS",
+    "OFM_IG_STATS_REEL_RENDER_WAIT_MS",
+    "OFM_IG_STATS_GRID_RETRY_WAIT_MS",
+    "OFM_IG_STATS_SWEEP_HOUR_UTC",
     "OFM_KIEAI_OUT_DIR",
     "OFM_KIEAI_TASK_LOG",
     "OFM_KIEAI_COMPLETIONS_LOG",
@@ -178,6 +186,27 @@ def test_reel_machine_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.hf_token is None
     assert s.huggingface_token is None
     assert s.beat_gap_s == 0.5
+
+
+def test_instagram_stats_settings_defaults_match_the_tuned_live_values(clean_env):
+    """These are the waits/timeouts the live scrape was actually tuned to --
+    a silent change here means empty grids or half-scraped accounts."""
+    s = InstagramStatsSettings(_env_file=None)
+    assert s.last_n_posts == 3
+    assert s.subprocess_timeout_s == 120
+    assert s.nav_timeout_ms == 30_000
+    assert s.render_wait_ms == 3000
+    assert s.reel_render_wait_ms == 2000
+    assert s.grid_retry_wait_ms == 4000
+    assert s.sweep_hour_utc == 0
+
+
+def test_instagram_stats_settings_env_overrides(monkeypatch):
+    monkeypatch.setenv("OFM_IG_STATS_LAST_N_POSTS", "5")
+    monkeypatch.setenv("OFM_IG_STATS_SWEEP_HOUR_UTC", "3")
+    s = InstagramStatsSettings(_env_file=None)
+    assert s.last_n_posts == 5
+    assert s.sweep_hour_utc == 3
 
 
 def test_gdrive_settings_defaults_match_pre_refactor_values(clean_env):

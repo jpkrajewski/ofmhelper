@@ -30,6 +30,13 @@ WORKDIR /app
 
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
+
+# Chromium for the free, in-house Instagram scraper (scraping/instagram_public.py)
+# -- no Apify actor, no credits. Installed as root (needs apt for --with-deps),
+# browsers pointed at a fixed path so appuser (below) can read them.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+RUN /app/.venv/bin/playwright install --with-deps chromium && \
+    chown -R appuser:appuser /opt/pw-browsers
 # Alembic config + migrations, so `alembic upgrade head` can run inside the
 # container on deploy (see scripts/deploy.sh).
 COPY --chown=appuser:appuser alembic.ini /app/alembic.ini
