@@ -82,12 +82,23 @@ remote_script='
   echo "== migrating =="
   $compose run --rm -T ofmhelpers alembic upgrade head
   echo "== swapping in the new containers =="
-  $compose up -d
+  $compose up -d postgres redis pot-provider
+  # --force-recreate on the app services: a deploy that leaves the old
+  # containers running while reporting success is the worst outcome, and worth
+  # one guaranteed restart. --no-deps so the database is not bounced with them.
+  $compose up -d --no-deps --force-recreate ofmhelpers worker
   # Otherwise every deploy leaves its predecessor dangling on the disk.
   docker image prune -f >/dev/null
+  echo "== deployed =="
+  $compose ps
 '
+# Delivered as a FILE, not piped into `bash -s`. Piping makes bash read the
+# script from stdin as it runs, so the first command that touches stdin --
+# `docker compose run` does -- swallows the rest of the script and bash exits 0
+# at EOF. That silently skipped `up -d` on 2026-07-27 while reporting success.
 ssh -i "$OFM_DEPLOY_SSH_KEY" "$OFM_DEPLOY_HOST" \
-  bash -s -- "$OFM_DEPLOY_DIR" <<< "$remote_script"
+  "cat > /tmp/ofm-deploy.sh && bash /tmp/ofm-deploy.sh '$OFM_DEPLOY_DIR'; \
+   rc=\$?; rm -f /tmp/ofm-deploy.sh; exit \$rc" <<< "$remote_script"
 
 echo "== health check =="
 # The app now starts cold on every deploy, so allow more than the old 5 x 3s.

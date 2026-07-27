@@ -132,14 +132,28 @@ jobs:
             $compose run --rm -T ofmhelpers alembic upgrade head
 
             echo "== swapping in the new containers =="
-            $compose up -d
+            $compose up -d postgres redis pot-provider
+            # --force-recreate on the app services specifically: a deploy that
+            # leaves the old containers running while reporting success is the
+            # worst possible outcome, and worth one guaranteed restart. --no-deps
+            # so this does not bounce the database underneath them.
+            $compose up -d --no-deps --force-recreate ofmhelpers worker
 
             # Every deploy leaves the previous image dangling; unreaped they
             # fill the server disk.
             docker image prune -f >/dev/null
+
+            echo "== deployed =="
+            $compose ps
           '
+          # The script is delivered as a FILE, not piped into `bash -s`. Piping
+          # it makes bash read the script from stdin as it goes, so the first
+          # command that touches stdin -- `docker compose run` does -- swallows
+          # the remaining lines and bash exits 0 at EOF. That silently skipped
+          # `up -d` on 2026-07-27 while the job reported success.
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
-            bash -s -- "$DIR" "$SHA" <<< "$remote_script"
+            "cat > /tmp/ofm-deploy.sh && bash /tmp/ofm-deploy.sh '$DIR' '$SHA'; \
+             rc=\$?; rm -f /tmp/ofm-deploy.sh; exit \$rc" <<< "$remote_script"
 
       - name: Health check
         env:
