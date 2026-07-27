@@ -1,8 +1,8 @@
 name: Deploy
 
 # Deploys main to the production server over SSH. Mirrors what
-# scripts/deploy.sh does by hand (pull -> up -d --build -> alembic upgrade ->
-# health check); the script stays the manual escape hatch.
+# scripts/deploy.sh does by hand (stop -> checkout -> build -> alembic upgrade
+# -> up -> health check); the script stays the manual escape hatch.
 on:
   workflow_run:
     workflows: [CI]
@@ -85,6 +85,11 @@ jobs:
         env:
           HOST: ${{ secrets.OFM_DEPLOY_HOST }}
           DIR: ${{ secrets.OFM_DEPLOY_DIR }}
+          # Deploy the exact commit CI went green on, not whatever origin/main
+          # points at by the time this job runs -- a push landing mid-run would
+          # otherwise ship an untested commit. Empty on workflow_dispatch, where
+          # the remote falls back to origin/main.
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           # Same sequence as scripts/deploy.sh. `set -e` inside the remote
@@ -97,23 +102,53 @@ jobs:
           remote_script='
             set -eu
             cd "$1"
-            echo "== pulling =="
+            target="${2:-}"
+
+            # Always the production file only. A dev overlay must never take
+            # effect here, whatever happens to be sitting in the checkout.
+            compose="docker compose -f docker-compose.yml"
+
+            echo "== fetching =="
             git fetch origin main
-            git reset --hard origin/main
-            echo "== building & starting =="
-            docker compose up -d --build
+            [ -n "$target" ] || target=$(git rev-parse origin/main)
+            echo "deploying $target"
+
+            # Safe now that production runs the code baked into the image: the
+            # checkout changes nothing until the swap at the end, so the old
+            # container keeps serving old code against the old schema.
+            echo "== checking out =="
+            git reset --hard "$target"
+
+            echo "== building =="
+            $compose build ofmhelpers worker
+
+            # Migrate BEFORE the new code goes live (expand-then-deploy): the
+            # old code tolerates a table it does not know about, whereas new
+            # code against an un-migrated database is the outage of
+            # 2026-07-27. A one-off container off the image just built --
+            # `exec` would run the OLD image, which does not have the new
+            # revision files.
             echo "== migrating =="
-            docker compose exec -T ofmhelpers alembic upgrade head
+            $compose run --rm -T ofmhelpers alembic upgrade head
+
+            echo "== swapping in the new containers =="
+            $compose up -d
+
+            # Every deploy leaves the previous image dangling; unreaped they
+            # fill the server disk.
+            docker image prune -f >/dev/null
           '
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
-            bash -s -- "$DIR" <<< "$remote_script"
+            bash -s -- "$DIR" "$SHA" <<< "$remote_script"
 
       - name: Health check
         env:
           HOST: ${{ secrets.OFM_DEPLOY_HOST }}
         run: |
           set -euo pipefail
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          # 20 x 5s: the app now starts from a cold container on every deploy
+          # (it used to be already up by the time this ran), so give it room.
+          for i in $(seq 20); do
             status=$(ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
               "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health" \
               2>/dev/null) || true
@@ -138,10 +173,11 @@ jobs:
           # the run output so you don't have to SSH in to find out why.
           remote_script='
             cd "$1"
+            compose="docker compose -f docker-compose.yml"
             echo "== docker compose ps =="
-            docker compose ps
+            $compose ps
             echo "== last 100 log lines =="
-            docker compose logs --tail=100 ofmhelpers worker
+            $compose logs --tail=100 ofmhelpers worker
           '
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
             bash -s -- "$DIR" <<< "$remote_script" || true

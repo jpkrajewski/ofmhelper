@@ -56,4 +56,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
+# Production default: no --reload. The reloader belongs to a dev box with
+# ./src bind-mounted (docker-compose.dev.yml overrides this command); in
+# production it only ever meant "serve half-deployed code".
+CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000"]
