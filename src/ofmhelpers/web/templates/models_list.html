@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Models</h1>
+
+<p><a href="/models/new" class="model-btn">+ Add model</a></p>
+
+{% if not models %}
+<p class="pending">No models yet.</p>
+{% else %}
+<table>
+    <tr>
+        <th></th>
+        <th>Name</th>
+        <th>Instagram accounts</th>
+        <th>OnlyFans</th>
+        <th>Actions</th>
+    </tr>
+    {% for m in models %}
+    <tr>
+        <td>
+            {% if m.profile_picture_path %}
+            <img src="/models/{{ m.id }}/picture" alt="{{ m.name }}" class="model-thumb">
+            {% else %}
+            <span class="model-thumb model-thumb-empty">?</span>
+            {% endif %}
+        </td>
+        <td class="model-name">{{ m.name }}</td>
+        <td>
+            {% if m.instagram_accounts %}
+            <div class="model-ig-links">
+                {% for a in m.instagram_accounts %}
+                <a href="{{ a.url }}" target="_blank" rel="noopener" class="model-link">{{ a.url }}</a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <span class="pending">none</span>
+            {% endif %}
+        </td>
+        <td>
+            {% if m.onlyfans_url %}
+            <a href="{{ m.onlyfans_url }}" target="_blank" rel="noopener" class="model-link">{{ m.onlyfans_url }}</a>
+            {% else %}
+            <span class="pending">—</span>
+            {% endif %}
+        </td>
+        <td class="model-actions">
+            <a href="/models/{{ m.id }}/edit" class="model-btn">Edit</a>
+            {% if m.instagram_accounts or m.onlyfans_url %}
+            <button type="button" class="model-btn model-inspect-btn"
+                    data-instagram='{{ (m.instagram_accounts | map(attribute="url") | list) | tojson }}'
+                    data-onlyfans="{{ m.onlyfans_url or '' }}">Inspect (open all)</button>
+            {% endif %}
+            <form method="post" action="/models/{{ m.id }}/delete" style="display:inline"
+                  onsubmit="return confirm('Delete {{ m.name }}?');">
+                <button type="submit" class="model-btn model-delete-btn">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+<style>
+    .model-thumb { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; }
+    .model-thumb-empty {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 72px; height: 72px; border-radius: 50%; font-size: 24px;
+        background: var(--surface-2); color: var(--text-muted);
+    }
+    .model-name { font-size: 22px; font-weight: bold; }
+    .model-link { font-size: 20px; }
+    .model-ig-links { display: flex; flex-direction: column; gap: 10px; }
+    .model-actions { display: flex; gap: 8px; align-items: center; }
+    .model-btn {
+        display: inline-block; padding: 6px 14px; margin: 0; cursor: pointer;
+        border: 1px solid var(--border); border-radius: 6px;
+        background: var(--surface-2); color: var(--text);
+        font-size: 13px; text-decoration: none; line-height: 1.4;
+    }
+    .model-btn:hover { border-color: var(--accent); color: var(--accent-soft); }
+    .model-delete-btn:hover { border-color: var(--fail); color: var(--fail); }
+
+    .model-popup-hint {
+        display: none; position: fixed; inset: 0; z-index: 1000;
+        background: rgba(0, 0, 0, 0.6);
+        align-items: center; justify-content: center;
+    }
+    .model-popup-hint.open { display: flex; }
+    .model-popup-hint-box {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 10px; padding: 24px; max-width: 420px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+    .model-popup-hint-box h3 { margin: 0 0 10px; }
+    .model-popup-hint-box p { color: var(--text-muted); line-height: 1.5; }
+    .model-popup-hint-box .model-btn { margin-top: 14px; }
+</style>
+
+<div class="model-popup-hint" id="model-popup-hint">
+    <div class="model-popup-hint-box">
+        <h3>Allow pop-ups to open every tab</h3>
+        <p>
+            Your browser only let one tab through. Click the pop-up-blocked
+            icon in the address bar and choose <strong>"Always allow
+            pop-ups from this site"</strong>, then hit Inspect again --
+            every tab will open from then on.
+        </p>
+        <button type="button" class="model-btn" id="model-popup-hint-dismiss">Got it</button>
+    </div>
+</div>
+
+<script>
+// Browsers cap how many window.open() calls one click can trigger (Firefox:
+// 1, Chrome: needs a fresh gesture per call) -- there's no JS trick around
+// that, it's deliberate anti-spam popup blocking. The one real fix is a
+// per-site exception the user grants once (address-bar popup icon -> Always
+// allow), after which every future window.open() call here just works.
+// This shows that instruction once (not a native alert(), and never again
+// once dismissed -- re-shown automatically if a later click still gets
+// blocked, since the user may not have granted the exception yet).
+const HINT_DISMISSED_KEY = "models_popup_hint_dismissed";
+const hint = document.getElementById("model-popup-hint");
+
+document.getElementById("model-popup-hint-dismiss").addEventListener("click", () => {
+    hint.classList.remove("open");
+    localStorage.setItem(HINT_DISMISSED_KEY, "1");
+});
+
+document.querySelectorAll(".model-inspect-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        const urls = [
+            ...JSON.parse(btn.dataset.instagram || "[]"),
+            ...(btn.dataset.onlyfans ? [btn.dataset.onlyfans] : []),
+        ];
+        const blocked = urls.filter((u) => !window.open(u, "_blank", "noopener"));
+        if (blocked.length && !localStorage.getItem(HINT_DISMISSED_KEY)) {
+            hint.classList.add("open");
+        }
+    });
+});
+</script>
+{% endblock %}

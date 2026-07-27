@@ -26,6 +26,13 @@ verbatim by seven+ tools; a new one should almost never need new plumbing.
   env vars), one `AuthMiddleware` that gates every request via a signed
   session cookie. `PUBLIC_PATHS`/`PUBLIC_PREFIXES` allowlist unauthenticated
   routes (keep this short — anything not listed is protected by default).
+  An unauthenticated request gets one of two answers, decided by `is_fetch`:
+  a page navigation gets the 303 to `/login?next=...`, a fetch/XHR gets
+  `401 {"login_url": ...}`. That split exists because `fetch` follows a 303
+  transparently — an expired session used to hand the JS the login page's
+  HTML with status 200. Session lifetime is
+  `settings.session.session_max_age_s` (config, not a literal), consumed by
+  `SessionMiddleware`'s `max_age` and by `static/js/session.js`.
   `get_kie_api_key(request)` pre-fills the kie.ai API key field based on
   role. `require_admin` is a FastAPI dependency for admin-only routers.
 - `jobs.py` — **the core background-job pattern every generation/download
@@ -161,6 +168,15 @@ auto-wires on page load, POSTs to `form.action`, then polls
 (or error) in place — no page navigation. `static/js/file-picker.js` is the
 reference-file picker widget (`FilePicker.collectFormData`); works with the
 manifest reuse pattern in `task_helpers.build_ordered_paths`.
+`static/js/session.js` is loaded in `base.html`'s `<head>` **before every
+other script** and wraps `window.fetch` once, globally: any `401` carrying a
+`login_url` shows a brief "Session expired" overlay and redirects the tab to
+`/login?next=...`. That's why no individual call site needs 401 handling —
+`generation.js`'s poller, `todo_form.html`, `replicate_form.html` and
+`file-picker.js` all inherit it. It also arms a wall-clock (not
+`setTimeout`-duration, so a suspended laptop still expires correctly) idle
+timer from `base.html`'s `data-session-max-age`, so an untouched tab logs
+itself out instead of sitting there looking signed in.
 `static/js/prompt-highlight.js` highlights `[Image1]`/`@audio1`-style
 reference markers in a prompt textarea (only relevant to tools that use
 that marker convention, e.g. `generate.py`'s unified form).

@@ -11,6 +11,7 @@ from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     flatten_grouped_results,
     grouped_job_status_payload,
+    register_grouped_results,
 )
 from ofmhelpers.web.templates_config import templates
 
@@ -26,6 +27,7 @@ def _run_downloads(urls: list[str]) -> list[dict]:
     dicts = [asdict(r) for r in results]
     for d in dicts:
         d["output_paths"] = [str(p) for p in d["output_paths"]]
+    register_grouped_results(dicts)
     return dicts
 
 

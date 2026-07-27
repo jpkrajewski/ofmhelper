@@ -157,19 +157,16 @@
                     tile.className = "ref-tile";
                     tile.title = f.name;
 
-                    const src = `/refs/file?path=${encodeURIComponent(f.path)}`;
-                    if (kind === "image") {
+                    // Both images and videos poster through /refs/thumb: this
+                    // grid paints up to 60 tiles at once, and the old
+                    // <video preload="metadata"> tile made that one range
+                    // request per clip against multi-MB originals.
+                    if (kind === "image" || kind === "video") {
                         const img = document.createElement("img");
                         img.src = `/refs/thumb?path=${encodeURIComponent(f.path)}&size=200`;
                         img.loading = "lazy";
                         img.alt = f.name;
                         tile.appendChild(img);
-                    } else if (kind === "video") {
-                        const vid = document.createElement("video");
-                        vid.src = src;
-                        vid.muted = true;
-                        vid.preload = "metadata";
-                        tile.appendChild(vid);
                     } else {
                         const icon = document.createElement("div");
                         icon.className = "ref-tile-icon";

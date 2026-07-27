@@ -6,10 +6,12 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from ofmhelpers.utils.metadata_cleaner import clean_metadata
 from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import enqueue
+from ofmhelpers.web.routers import task_helpers
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     job_status_payload,
     make_job_dir,
+    register_generated_asset,
     save_upload,
     serve_job_file,
 )
@@ -24,6 +26,11 @@ def _run_clean(job_dir: str) -> list[dict]:
     directory = Path(job_dir)
     clean_metadata(directory)
     files = sorted(p for p in directory.iterdir() if p.is_file())
+    # Adopt the stripped copies into the shared asset store so they're
+    # directly reusable in the generation pickers -- cleaning an image is
+    # usually the step right before generating with it.
+    for p in files:
+        register_generated_asset(p, task_helpers.ASSETS_ROOT)
     return [{"name": p.name, "path": str(p)} for p in files]
 
 

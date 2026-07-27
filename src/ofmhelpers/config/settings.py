@@ -29,6 +29,10 @@ class SessionSettings(BaseSettings):
 
     session_secret: str
     session_https_only: bool = False
+    # Cookie lifetime, and the deadline static/js/session.js counts down to
+    # so an idle tab logs itself out instead of sitting there looking signed
+    # in. Shared admin/VA passwords, so keep it short.
+    session_max_age_s: int = 60 * 60 * 5  # 5 hours
 
 
 class WebSettings(BaseSettings):

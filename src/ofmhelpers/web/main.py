@@ -25,6 +25,7 @@ from ofmhelpers.web.routers.file_manager import router as file_manager_router
 from ofmhelpers.web.routers.generate import router as generate_router
 from ofmhelpers.web.routers.helper_index import router as helper_router
 from ofmhelpers.web.routers.kling import router as kling_router
+from ofmhelpers.web.routers.models import router as models_router
 from ofmhelpers.web.routers.nbp import router as nbp_router
 from ofmhelpers.web.routers.radio_comms import router as radio_router
 from ofmhelpers.web.routers.refs import router as ref_router
@@ -72,7 +73,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=_session_settings.session_secret,  # required -- set in .env
     session_cookie="ofm_session",
-    max_age=60 * 60 * 5,  # 5 hours -- shared admin/VA passwords, keep it short
+    max_age=_session_settings.session_max_age_s,
     https_only=_session_settings.session_https_only,
 )
 
@@ -94,6 +95,7 @@ app.include_router(file_manager_router)
 app.include_router(cookie_router)
 app.include_router(nbp_router)
 app.include_router(kling_router)
+app.include_router(models_router)
 app.include_router(ref_router)
 app.include_router(auth_router)
 app.include_router(download_images_router)

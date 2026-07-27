@@ -4,8 +4,11 @@
     <meta charset="utf-8">
     <title>Global Ascend LLC — Content Ops</title>
     <link rel="stylesheet" href="/static/css/app.css">
+    <!-- Before every other script: it wraps fetch() so an expired session
+         redirects to /login instead of failing opaquely. -->
+    <script src="/static/js/session.js"></script>
 </head>
-<body>
+<body data-session-max-age="{{ session_max_age() }}">
     <div class="brand-band">
         <h1>GLOBAL ASCEND LLC</h1>
         <p class="tagline">Content Ops Command Center</p>
@@ -21,7 +24,7 @@
                 ("/download-assets", "⬇ Download Assets"),
                 ("/todo", "☑ Todo"),
                 ("/helpers", "Helpers"),
-            ] + ([("/file-manager", "File Manager"), ("/action-log", "Action log")] if is_admin else []) %}
+            ] + ([("/models", "Models"), ("/file-manager", "File Manager"), ("/action-log", "Action log")] if is_admin else []) %}
             {% for href, label in nav_items %}
             <a href="{{ href }}"
                {% if request.url.path == href or request.url.path.startswith(href ~ "/") %}class="active"{% endif %}>{{ label }}</a>
@@ -40,6 +43,7 @@
             <a href="/download-assets">Download</a>
             <a href="/todo">Todo</a>
             {% if is_admin %}
+            <a href="/models">Models</a>
             <a href="/file-manager">File Manager</a>
             <a href="/action-log">Action log</a>
             {% endif %}
