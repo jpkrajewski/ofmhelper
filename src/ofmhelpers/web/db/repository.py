@@ -22,7 +22,13 @@ from typing import Any
 from sqlalchemy import delete, select, update
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.db.models import ApprovalTokenRow, JobRow, TodoRow
+from ofmhelpers.web.db.models import (
+    ApprovalTokenRow,
+    InstagramAccountRow,
+    JobRow,
+    ModelRow,
+    TodoRow,
+)
 from ofmhelpers.web.db.session import session_scope
 
 # Sentinel so update_status can tell "leave this column alone" apart from
@@ -270,6 +276,134 @@ class TodoRepository:
     def delete(self, todo_id: str) -> bool:
         with session_scope() as s:
             row = s.get(TodoRow, todo_id)
+            if row is None:
+                return False
+            s.delete(row)
+            return True
+
+
+def _instagram_account_to_dict(row: InstagramAccountRow) -> dict:
+    return {"id": row.id, "model_id": row.model_id, "url": row.url}
+
+
+def _model_to_dict(row: ModelRow) -> dict:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "profile_picture_path": row.profile_picture_path,
+        "profile_picture_name": row.profile_picture_name,
+        "onlyfans_url": row.onlyfans_url,
+        "created_at": row.created_at,
+        "instagram_accounts": [
+            _instagram_account_to_dict(a) for a in row.instagram_accounts
+        ],
+    }
+
+
+class ModelRepository:
+    def add(self, name: str, onlyfans_url: str) -> dict:
+        row = ModelRow(
+            id=uuid.uuid4().hex[:8],
+            name=name,
+            onlyfans_url=onlyfans_url or None,
+            created_at=time.time(),
+        )
+        with session_scope() as s:
+            s.add(row)
+            s.flush()
+            return _model_to_dict(row)
+
+    def get(self, model_id: str) -> dict | None:
+        with session_scope() as s:
+            row = s.get(ModelRow, model_id)
+            return _model_to_dict(row) if row is not None else None
+
+    def list_all(self) -> list[dict]:
+        """Newest first."""
+        with session_scope() as s:
+            rows = (
+                s.execute(select(ModelRow).order_by(ModelRow.created_at.desc()))
+                .scalars()
+                .all()
+            )
+            return [_model_to_dict(r) for r in rows]
+
+    def update(self, model_id: str, name: str, onlyfans_url: str) -> bool:
+        with session_scope() as s:
+            row = s.get(ModelRow, model_id)
+            if row is None:
+                return False
+            row.name = name
+            row.onlyfans_url = onlyfans_url or None
+            return True
+
+    def set_profile_picture(
+        self, model_id: str, picture_path: str, picture_name: str
+    ) -> bool:
+        with session_scope() as s:
+            row = s.get(ModelRow, model_id)
+            if row is None:
+                return False
+            row.profile_picture_path = picture_path
+            row.profile_picture_name = picture_name
+            return True
+
+    def delete(self, model_id: str) -> bool:
+        with session_scope() as s:
+            row = s.get(ModelRow, model_id)
+            if row is None:
+                return False
+            s.delete(row)
+            return True
+
+    def add_instagram_account(self, model_id: str, url: str) -> dict | None:
+        with session_scope() as s:
+            model = s.get(ModelRow, model_id)
+            if model is None:
+                return None
+            row = InstagramAccountRow(
+                id=uuid.uuid4().hex[:8],
+                model_id=model_id,
+                url=url,
+                created_at=time.time(),
+            )
+            s.add(row)
+            s.flush()
+            return _instagram_account_to_dict(row)
+
+    def add_instagram_accounts_bulk(
+        self, model_id: str, urls: list[str]
+    ) -> list[dict] | None:
+        """Adds many Instagram accounts at once. Returns None if the model
+        doesn't exist; otherwise the newly created rows."""
+        with session_scope() as s:
+            model = s.get(ModelRow, model_id)
+            if model is None:
+                return None
+            rows = [
+                InstagramAccountRow(
+                    id=uuid.uuid4().hex[:8],
+                    model_id=model_id,
+                    url=url,
+                    created_at=time.time(),
+                )
+                for url in urls
+            ]
+            s.add_all(rows)
+            s.flush()
+            return [_instagram_account_to_dict(r) for r in rows]
+
+    def update_instagram_account(self, account_id: str, url: str) -> bool:
+        with session_scope() as s:
+            row = s.get(InstagramAccountRow, account_id)
+            if row is None:
+                return False
+            row.url = url
+            return True
+
+    def delete_instagram_account(self, account_id: str) -> bool:
+        with session_scope() as s:
+            row = s.get(InstagramAccountRow, account_id)
             if row is None:
                 return False
             s.delete(row)

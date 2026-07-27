@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Edit model</h1>
+<p><a href="/models">← back to models</a></p>
+
+<div>
+    {% if model.profile_picture_path %}
+    <img src="/models/{{ model.id }}/picture" alt="{{ model.name }}" class="model-thumb-large">
+    {% endif %}
+    <form method="post" action="/models/{{ model.id }}/picture" enctype="multipart/form-data">
+        <input type="file" name="profile_picture" accept="image/*" required>
+        <button type="submit">Upload picture</button>
+    </form>
+</div>
+
+<form method="post" action="/models/{{ model.id }}/update" class="todo-add-form">
+    <div class="field">
+        <label>Name</label>
+        <input type="text" name="name" value="{{ model.name }}" required>
+    </div>
+    <div class="field">
+        <label>OnlyFans link</label>
+        <input type="text" name="onlyfans_url" value="{{ model.onlyfans_url or '' }}" placeholder="https://onlyfans.com/...">
+    </div>
+    <button type="submit">Save</button>
+</form>
+
+<h2>Instagram accounts</h2>
+<table>
+    <tr><th>URL</th><th></th></tr>
+    {% for a in model.instagram_accounts %}
+    <tr>
+        <td>
+            <form method="post" action="/models/{{ model.id }}/instagram/{{ a.id }}/update" style="display:inline-flex; gap:8px;">
+                <input type="text" name="url" value="{{ a.url }}" required>
+                <button type="submit">Save</button>
+            </form>
+        </td>
+        <td>
+            <form method="post" action="/models/{{ model.id }}/instagram/{{ a.id }}/delete" style="display:inline"
+                  onsubmit="return confirm('Remove this Instagram account?');">
+                <button type="submit">Remove</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<form method="post" action="/models/{{ model.id }}/instagram/add" class="todo-add-form">
+    <div class="field">
+        <label>Add Instagram accounts (one URL per line)</label>
+        <textarea name="urls" rows="4" placeholder="https://instagram.com/a&#10;https://instagram.com/b" required></textarea>
+    </div>
+    <button type="submit">Add</button>
+</form>
+
+<style>
+    .model-thumb-large { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; display: block; margin-bottom: 8px; }
+</style>
+{% endblock %}

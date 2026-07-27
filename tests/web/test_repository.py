@@ -10,6 +10,7 @@ import threading
 from ofmhelpers.web.db.repository import (
     ApprovalTokenRepository,
     JobRepository,
+    ModelRepository,
     TodoRepository,
 )
 
@@ -78,6 +79,60 @@ def test_todo_repo_round_trip_and_asset_reset():
     stored = repo.get(todo["id"])
     assert stored["asset_path"] == "/p2.png"
     assert stored["approved"] is False  # reset by the new asset
+
+
+def test_model_repo_round_trip_with_instagram_accounts():
+    repo = ModelRepository()
+    model = repo.add("Model A", "https://onlyfans.com/a")
+
+    account = repo.add_instagram_account(model["id"], "https://instagram.com/a")
+    assert account is not None
+
+    stored = repo.get(model["id"])
+    assert stored["name"] == "Model A"
+    assert len(stored["instagram_accounts"]) == 1
+    assert stored["instagram_accounts"][0]["url"] == "https://instagram.com/a"
+
+    assert repo.update_instagram_account(account["id"], "https://instagram.com/a2")
+    stored = repo.get(model["id"])
+    assert stored["instagram_accounts"][0]["url"] == "https://instagram.com/a2"
+
+    assert repo.delete_instagram_account(account["id"])
+    stored = repo.get(model["id"])
+    assert stored["instagram_accounts"] == []
+
+
+def test_model_add_instagram_accounts_bulk():
+    repo = ModelRepository()
+    model = repo.add("Model A", "")
+
+    added = repo.add_instagram_accounts_bulk(
+        model["id"], ["https://instagram.com/a", "https://instagram.com/b"]
+    )
+    assert len(added) == 2
+
+    stored = repo.get(model["id"])
+    urls = {a["url"] for a in stored["instagram_accounts"]}
+    assert urls == {"https://instagram.com/a", "https://instagram.com/b"}
+
+
+def test_model_add_instagram_accounts_bulk_returns_none_for_unknown_model():
+    repo = ModelRepository()
+    assert repo.add_instagram_accounts_bulk("doesnotexist", ["https://a"]) is None
+
+
+def test_model_add_instagram_account_returns_none_for_unknown_model():
+    repo = ModelRepository()
+    assert repo.add_instagram_account("doesnotexist", "https://a") is None
+
+
+def test_model_delete_cascades_to_instagram_accounts():
+    repo = ModelRepository()
+    model = repo.add("Model A", "")
+    repo.add_instagram_account(model["id"], "https://instagram.com/a")
+
+    assert repo.delete(model["id"]) is True
+    assert repo.get(model["id"]) is None
 
 
 def test_approval_token_consume_is_single_use():

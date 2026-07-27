@@ -24,7 +24,7 @@
                 ("/download-assets", "⬇ Download Assets"),
                 ("/todo", "☑ Todo"),
                 ("/helpers", "Helpers"),
-            ] + ([("/file-manager", "File Manager"), ("/action-log", "Action log")] if is_admin else []) %}
+            ] + ([("/models", "Models"), ("/file-manager", "File Manager"), ("/action-log", "Action log")] if is_admin else []) %}
             {% for href, label in nav_items %}
             <a href="{{ href }}"
                {% if request.url.path == href or request.url.path.startswith(href ~ "/") %}class="active"{% endif %}>{{ label }}</a>
@@ -43,6 +43,7 @@
             <a href="/download-assets">Download</a>
             <a href="/todo">Todo</a>
             {% if is_admin %}
+            <a href="/models">Models</a>
             <a href="/file-manager">File Manager</a>
             <a href="/action-log">Action log</a>
             {% endif %}

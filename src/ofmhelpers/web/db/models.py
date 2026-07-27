@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Boolean, Float, Index, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -65,6 +65,40 @@ class TodoRow(Base):
     drive_upload_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (Index("ix_todos_created_at", "created_at"),)
+
+
+class ModelRow(Base):
+    __tablename__ = "models"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    profile_picture_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_picture_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onlyfans_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    instagram_accounts: Mapped[list[InstagramAccountRow]] = relationship(
+        back_populates="model",
+        cascade="all, delete-orphan",
+        order_by="InstagramAccountRow.created_at",
+    )
+
+    __table_args__ = (Index("ix_models_created_at", "created_at"),)
+
+
+class InstagramAccountRow(Base):
+    __tablename__ = "instagram_accounts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("models.id", ondelete="CASCADE"), nullable=False
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    model: Mapped[ModelRow] = relationship(back_populates="instagram_accounts")
+
+    __table_args__ = (Index("ix_instagram_accounts_model_id", "model_id"),)
 
 
 class ApprovalTokenRow(Base):
