@@ -12,6 +12,7 @@ import logging
 from rq import Worker
 
 from ofmhelpers import worker as worker_module
+from ofmhelpers.scraping import instagram_stats_job as stats_job
 from ofmhelpers.worker import ConfiguredWorker
 
 
@@ -62,6 +63,9 @@ def test_main_passes_our_worker_class_and_settings_to_rq(monkeypatch):
     monkeypatch.setenv("OFM_RQ_WORKERS", "7")
     monkeypatch.setenv("OFM_REDIS_URL", "redis://example:6379/3")
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
+    # main() seeds the nightly sweep on the way past; that needs a live broker
+    # and this test is about the rq argv.
+    monkeypatch.setattr(stats_job, "ensure_scheduled", lambda: None)
 
     argv = {}
     monkeypatch.setattr(worker_module, "rq_main", lambda: argv.update(v=sys_argv()))
@@ -79,6 +83,24 @@ def test_main_passes_our_worker_class_and_settings_to_rq(monkeypatch):
     assert cmd[cmd.index("--worker-class") + 1] == "ofmhelpers.worker.ConfiguredWorker"
     assert cmd[cmd.index("--num-workers") + 1] == "7"
     assert cmd[cmd.index("--url") + 1] == "redis://example:6379/3"
+
+
+def test_main_starts_the_pool_even_if_scheduling_the_sweep_fails(monkeypatch):
+    """A broker hiccup while seeding the nightly sweep must not stop the
+    worker pool -- the sweep reschedules itself at the end of every run."""
+    monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
+
+    def boom():
+        msg = "no broker"
+        raise ConnectionError(msg)
+
+    monkeypatch.setattr(stats_job, "ensure_scheduled", boom)
+    started = []
+    monkeypatch.setattr(worker_module, "rq_main", lambda: started.append(1))
+
+    worker_module.main()
+
+    assert started, "worker pool must start regardless"
 
 
 def test_worker_logger_is_named_for_the_module_not_main():

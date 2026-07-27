@@ -1,0 +1,5 @@
+{# Every account's stats slot, re-rendered server-side so the refresh button
+   can swap them in without a page reload (and without a second copy of the
+   markup living in JavaScript). #}
+{% import "_models_ig_stats.html" as ig %}
+{% for m in models %}{% for a in m.instagram_accounts %}{{ ig.ig_stats(a, instagram_stats.get(a.id)) }}{% endfor %}{% endfor %}

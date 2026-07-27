@@ -173,6 +173,47 @@ class ReelMachineSettings(BaseSettings):
     )
 
 
+class InstagramStatsSettings(BaseSettings):
+    """scraping/instagram_public.py + scraping/instagram_stats_job.py -- the
+    free, no-login Playwright scrape behind the /models page's follower and
+    last-N-reels numbers.
+
+    Every field here is a knob that has to be retuned when Instagram changes
+    (page render speed, how aggressively it soft-blocks scrapers), which is
+    exactly the case for an env var: retune on the server without a rebuild.
+    Selectors and regexes are NOT here -- those are code, not configuration."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    last_n_posts: int = Field(default=3, validation_alias="OFM_IG_STATS_LAST_N_POSTS")
+    # The scrape runs as a subprocess (see instagram_public.py's docstring);
+    # this bounds the whole per-account scrape, not one page load.
+    subprocess_timeout_s: int = Field(
+        default=120, validation_alias="OFM_IG_STATS_SUBPROCESS_TIMEOUT_S"
+    )
+    nav_timeout_ms: int = Field(
+        default=30_000, validation_alias="OFM_IG_STATS_NAV_TIMEOUT_MS"
+    )
+    # Instagram client-renders the profile header and the reels grid after
+    # domcontentloaded, so every goto is followed by a fixed settle wait.
+    render_wait_ms: int = Field(
+        default=3000, validation_alias="OFM_IG_STATS_RENDER_WAIT_MS"
+    )
+    reel_render_wait_ms: int = Field(
+        default=2000, validation_alias="OFM_IG_STATS_REEL_RENDER_WAIT_MS"
+    )
+    # One extra wait before giving up on an empty grid -- hydration is
+    # timing-sensitive (cookie banner, first-load jank).
+    grid_retry_wait_ms: int = Field(
+        default=4000, validation_alias="OFM_IG_STATS_GRID_RETRY_WAIT_MS"
+    )
+    # Hour (UTC) the nightly sweep runs at; the sweep re-queues its own next
+    # run, so a change takes effect from the run after next.
+    sweep_hour_utc: int = Field(
+        default=0, validation_alias="OFM_IG_STATS_SWEEP_HOUR_UTC"
+    )
+
+
 class LoggingSettings(BaseSettings):
     """Read once per process by ofmhelpers.logging.configure_logging(), which
     every entrypoint (web/main.py, the RQ worker, alembic/env.py) calls before

@@ -46,6 +46,31 @@ class ConfiguredWorker(Worker):
 def main() -> None:
     configure_logging()
 
+    # Seeds the first midnight-UTC instagram-stats sweep via RQ's OWN
+    # scheduler (a separate OS process -- see rq.scheduler, already started
+    # by `rq worker-pool` below) rather than a thread in this process.
+    #
+    # A `threading.Thread` running here used to do this instead, and it
+    # silently wedged every subsequent job: `rq worker-pool` forks a fresh
+    # OS process per job (Worker.execute_job -> fork_work_horse), and
+    # fork()ing a process that has an extra live thread is unsafe -- any
+    # lock that thread held at the exact moment of fork (GIL bookkeeping,
+    # the import lock, a library's internal lock) stays locked forever in
+    # the child. Confirmed live: jobs hung indefinitely (STARTED forever,
+    # no exception, no subprocess spawned) only after that thread existed;
+    # a plain one-shot call here, with no persistent thread, doesn't
+    # perturb the process rq forks from at all.
+    #
+    # Non-fatal: a broker that's not reachable *yet* must not stop the pool
+    # from starting -- rq's own connection handling retries, and a sweep gets
+    # rescheduled at the end of every run anyway.
+    from ofmhelpers.scraping.instagram_stats_job import ensure_scheduled
+
+    try:
+        ensure_scheduled()
+    except Exception:
+        logger.exception("could not schedule the instagram stats sweep at boot")
+
     infra = settings.infra
     workers = infra.rq_workers
     logger.info(
