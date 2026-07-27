@@ -67,7 +67,7 @@ def get_ref_file(path: Annotated[str, Query()]):
     return FileResponse(file_path, media_type=media_type)
 
 
-def _write_image_thumb(source: Path, dest: Path, size: int) -> None:
+def write_image_thumb(source: Path, dest: Path, size: int) -> None:
     with Image.open(source) as img:
         img.thumbnail((size, size))
         img.convert("RGB").save(dest, "WEBP")
@@ -149,7 +149,7 @@ def get_ref_thumb(
         THUMBS_DIR.mkdir(parents=True, exist_ok=True)
         try:
             if kind == "image":
-                _write_image_thumb(file_path, thumb_path, size)
+                write_image_thumb(file_path, thumb_path, size)
             else:
                 _write_video_thumb(file_path, thumb_path, size)
         except (

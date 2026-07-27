@@ -18,6 +18,11 @@ guessed:
   like count then comment count. `None` if the layout doesn't match
   (private account, markup drift, zero engagement so the element is
   omitted).
+- banned/deleted/renamed accounts: served as a normal 200 page reading
+  "Sorry, this page isn't available." (or, depending on the browser's
+  locale, "Przepraszamy, ta strona jest niedostępna") -- detected
+  explicitly (`_check_available`), otherwise it scrapes as a live account
+  with zero of everything.
 - shares: Instagram has never exposed a share count anywhere a logged-out
   (or even logged-in, non-owner) visitor can see it -- only the account
   owner's own Insights tab shows it. There is no free, in-house way to get
@@ -65,6 +70,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from dataclasses import asdict, dataclass
 
 from ofmhelpers.config import settings
@@ -84,6 +90,19 @@ els => els
     .filter(t => /^\\d{1,8}$/.test(t))
 """
 _BLOCKED_TITLE_MARKERS = ("page couldn't load", "page not found")
+# Instagram serves a banned/deleted/renamed account the same "sorry, this
+# page isn't available" body (HTTP 200) it serves a typo'd username, and it
+# is localised -- the container's locale decides which language comes back,
+# so both the English and the Polish wording have to be recognised. Matched
+# on a short distinctive fragment rather than the full sentence: the trailing
+# copy ("the link you followed may be broken...") gets reworded far more
+# often than the headline does.
+_PUNCTUATION_RE = re.compile(r"[^a-z0-9\s]+")
+_UNAVAILABLE_MARKERS = (
+    "page isnt available",  # EN (punctuation-stripped, see _normalize_text)
+    "strona jest niedostepna",  # PL
+)
+UNAVAILABLE_ERROR = "account unavailable (banned, deleted or renamed)"
 _NETSCAPE_COOKIE_FIELDS = 7
 _REEL_GRID_JS = """
 els => els.map(e => {
@@ -189,6 +208,33 @@ def _check_not_blocked(page) -> None:
         raise RuntimeError(msg)
 
 
+def _normalize_text(text: str) -> str:
+    """Lowercase, ASCII-fold and drop punctuation, so one plain marker matches
+    whichever apostrophe Instagram rendered ("isn't" typographic or straight)
+    and Polish diacritics ("niedostepna") alike."""
+    folded = unicodedata.normalize("NFKD", text.lower())
+    ascii_only = "".join(c for c in folded if not unicodedata.combining(c))
+    return _PUNCTUATION_RE.sub("", ascii_only)
+
+
+def is_unavailable_page(text: str) -> bool:
+    return any(marker in _normalize_text(text) for marker in _UNAVAILABLE_MARKERS)
+
+
+def _check_available(page) -> None:
+    """A banned, deleted or renamed account is not an HTTP error: Instagram
+    answers 200 with "Sorry, this page isn't available." / "Przepraszamy, ta
+    strona jest niedostępna". Left unchecked that scrapes as zero followers
+    and no posts -- indistinguishable from a quiet account. Raises so the
+    sweep records why the account went dark instead."""
+    try:
+        body = page.inner_text("body")
+    except Exception:
+        return
+    if is_unavailable_page(body):
+        raise RuntimeError(UNAVAILABLE_ERROR)
+
+
 def _meta_description(page) -> str:
     el = page.locator('meta[property="og:description"]').first
     return el.get_attribute("content") or "" if el.count() else ""
@@ -241,6 +287,7 @@ def _fetch_profile_stats_in_process(username: str, last_n_posts: int) -> Profile
                 # let the profile header client-render
                 page.wait_for_timeout(cfg.render_wait_ms)
                 _check_not_blocked(page)
+                _check_available(page)
                 followers = _extract_count(_FOLLOWERS_RE, _meta_description(page))
 
                 page.goto(

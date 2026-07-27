@@ -30,12 +30,24 @@
     <tr>
         <td>
             {% if m.profile_picture_path %}
-            <img src="/models/{{ m.id }}/picture" alt="{{ m.name }}" class="model-thumb">
+            {# A thumb, never the original upload: a roster of phone-camera
+               JPEGs was several MB of transfer to paint 48px tiles. #}
+            <img src="/models/{{ m.id }}/picture/thumb?size=96" alt="{{ m.name }}"
+                 class="model-thumb" loading="lazy">
             {% else %}
             <span class="model-thumb model-thumb-empty">?</span>
             {% endif %}
         </td>
-        <td class="model-name">{{ m.name }}</td>
+        <td class="model-name">
+            {{ m.name }}
+            {% if m.contacts %}
+            <div class="model-contacts">
+                {% for c in m.contacts %}
+                <span class="model-contact"><b>{{ c.type }}</b> {{ c.value }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </td>
         <td>
             {% if m.instagram_accounts %}
             <div class="model-ig-links">

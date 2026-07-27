@@ -2,18 +2,31 @@
 ofmhelpers/web/routers/models.py
 
 Admin-only roster of Models: name + profile picture + one OnlyFans link +
-many Instagram account links. Gated via require_admin like file_manager.py
-and action_log.py -- nobody but an admin needs to touch this roster.
+many Instagram account links (each carrying optional owner/phone/SIM/
+password/email details) + many free-form contacts (type + value). Gated via
+require_admin like file_manager.py and action_log.py -- nobody but an admin
+needs to touch this roster.
 """
 
 import shutil
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, RedirectResponse
+from PIL import Image
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.scraping.instagram_stats_job import (
     active_sweep_id,
     collect_all_instagram_stats,
@@ -22,7 +35,10 @@ from ofmhelpers.web import instagram_stats
 from ofmhelpers.web import models as models_store
 from ofmhelpers.web.auth import require_admin
 from ofmhelpers.web.queue import enqueue, get_queue
+from ofmhelpers.web.routers.refs import write_image_thumb
 from ofmhelpers.web.templates_config import templates
+
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/models", tags=["models"], dependencies=[Depends(require_admin)]
@@ -175,15 +191,41 @@ def upload_picture(model_id: str, profile_picture: Annotated[UploadFile, File()]
     return RedirectResponse(url=f"/models/{model_id}/edit", status_code=303)
 
 
-@router.get("/{model_id}/picture")
-def view_picture(model_id: str):
+def _picture_path(model_id: str) -> Path:
     model = models_store.get_model(model_id)
     if model is None or not model.get("profile_picture_path"):
         raise HTTPException(status_code=404, detail="No picture attached")
     path = Path(model["profile_picture_path"])
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Picture file no longer exists")
-    return FileResponse(path)
+    return path
+
+
+@router.get("/{model_id}/picture")
+def view_picture(model_id: str):
+    return FileResponse(_picture_path(model_id))
+
+
+@router.get("/{model_id}/picture/thumb")
+def view_picture_thumb(model_id: str, size: Annotated[int, Query(ge=16, le=512)] = 96):
+    """The roster paints a grid of ~48px avatars; serving each model's full
+    upload (multi-MB straight off a phone camera) just to fill that was the
+    whole page's load time. Cached next to the original, which _save_picture
+    rmtree's on replacement -- so there is nothing to invalidate by hand."""
+    path = _picture_path(model_id)
+    thumb_path = path.parent / f".thumb_{size}.webp"
+    if not thumb_path.is_file():
+        try:
+            write_image_thumb(path, thumb_path, size)
+        except (OSError, ValueError, Image.UnidentifiedImageError):
+            # An upload Pillow can't read still has to show *something* --
+            # fall back to the original rather than a broken tile.
+            logger.warning("could not thumbnail %s", path, exc_info=True)
+            return FileResponse(path)
+
+    # No max-age: the URL is stable across picture replacements, so let
+    # FileResponse's etag/last-modified revalidation decide instead.
+    return FileResponse(thumb_path, media_type="image/webp")
 
 
 @router.post("/{model_id}/delete")
@@ -208,10 +250,29 @@ def add_instagram(model_id: str, urls: Annotated[str, Form()]):
 
 
 @router.post("/{model_id}/instagram/{account_id}/update")
-def update_instagram(model_id: str, account_id: str, url: Annotated[str, Form()]):
+def update_instagram(
+    model_id: str,
+    account_id: str,
+    url: Annotated[str, Form()],
+    owner: Annotated[str, Form()] = "",
+    phone: Annotated[str, Form()] = "",
+    sim_number: Annotated[str, Form()] = "",
+    password: Annotated[str, Form()] = "",
+    email: Annotated[str, Form()] = "",
+):
+    """One form per account: the URL plus the optional details the team needs
+    to actually get into it (owner/phone/SIM/password/email)."""
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
-    if not models_store.update_instagram_account(account_id, url.strip()):
+    if not models_store.update_instagram_account(
+        account_id,
+        url.strip(),
+        owner=owner.strip(),
+        phone=phone.strip(),
+        sim_number=sim_number.strip(),
+        password=password.strip(),
+        email=email.strip(),
+    ):
         raise HTTPException(status_code=404, detail="Instagram account not found")
     return RedirectResponse(url=f"/models/{model_id}/edit", status_code=303)
 
@@ -220,4 +281,38 @@ def update_instagram(model_id: str, account_id: str, url: Annotated[str, Form()]
 def delete_instagram(model_id: str, account_id: str):
     if not models_store.delete_instagram_account(account_id):
         raise HTTPException(status_code=404, detail="Instagram account not found")
+    return RedirectResponse(url=f"/models/{model_id}/edit", status_code=303)
+
+
+@router.post("/{model_id}/contacts/add")
+def add_contact(
+    model_id: str,
+    contact_type: Annotated[str, Form()],
+    value: Annotated[str, Form()],
+):
+    if not contact_type.strip() or not value.strip():
+        raise HTTPException(status_code=400, detail="Type and value are required")
+    if models_store.add_contact(model_id, contact_type.strip(), value.strip()) is None:
+        raise HTTPException(status_code=404, detail="Model not found")
+    return RedirectResponse(url=f"/models/{model_id}/edit", status_code=303)
+
+
+@router.post("/{model_id}/contacts/{contact_id}/update")
+def update_contact(
+    model_id: str,
+    contact_id: str,
+    contact_type: Annotated[str, Form()],
+    value: Annotated[str, Form()],
+):
+    if not contact_type.strip() or not value.strip():
+        raise HTTPException(status_code=400, detail="Type and value are required")
+    if not models_store.update_contact(contact_id, contact_type.strip(), value.strip()):
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return RedirectResponse(url=f"/models/{model_id}/edit", status_code=303)
+
+
+@router.post("/{model_id}/contacts/{contact_id}/delete")
+def delete_contact(model_id: str, contact_id: str):
+    if not models_store.delete_contact(contact_id):
+        raise HTTPException(status_code=404, detail="Contact not found")
     return RedirectResponse(url=f"/models/{model_id}/edit", status_code=303)

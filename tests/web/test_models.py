@@ -281,6 +281,181 @@ def test_list_page_shows_stats_with_shortened_reel_links(client):
         assert value in html
 
 
+def test_instagram_account_carries_optional_owner_and_credentials(client):
+    """Everything but the URL is optional, and the account form saves the lot
+    in one POST."""
+    model = models_store.add_model("Model A", "")
+    models_store.add_instagram_account(model["id"], "https://instagram.com/a")
+    account = models_store.get_model(model["id"])["instagram_accounts"][0]
+    assert account["owner"] is None
+
+    r = client.post(
+        f"/models/{model['id']}/instagram/{account['id']}/update",
+        data={
+            "url": "https://instagram.com/a",
+            "owner": "Kasia",
+            "phone": "+48123456789",
+            "sim_number": "8948 0000 1111",
+            "password": "hunter2",
+            "email": "a@example.com",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    stored = models_store.get_model(model["id"])["instagram_accounts"][0]
+    assert stored["owner"] == "Kasia"
+    assert stored["phone"] == "+48123456789"
+    assert stored["sim_number"] == "8948 0000 1111"
+    assert stored["password"] == "hunter2"
+    assert stored["email"] == "a@example.com"
+
+    html = client.get(f"/models/{model['id']}/edit").text
+    assert 'value="Kasia"' in html
+
+
+def test_blank_account_detail_clears_it(client):
+    """The form posts every field together, so an emptied box means "gone",
+    not "unchanged"."""
+    model = models_store.add_model("Model A", "")
+    models_store.add_instagram_account(model["id"], "https://instagram.com/a")
+    account = models_store.get_model(model["id"])["instagram_accounts"][0]
+    models_store.update_instagram_account(
+        account["id"], "https://instagram.com/a", owner="Kasia"
+    )
+
+    client.post(
+        f"/models/{model['id']}/instagram/{account['id']}/update",
+        data={"url": "https://instagram.com/a", "owner": "  "},
+    )
+
+    stored = models_store.get_model(model["id"])["instagram_accounts"][0]
+    assert stored["owner"] is None
+
+
+def test_admin_can_add_edit_and_remove_contacts(client):
+    model = models_store.add_model("Model A", "")
+
+    r = client.post(
+        f"/models/{model['id']}/contacts/add",
+        data={"contact_type": "WhatsApp", "value": "+4534343434"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    contact = models_store.get_model(model["id"])["contacts"][0]
+    assert (contact["type"], contact["value"]) == ("WhatsApp", "+4534343434")
+
+    r = client.post(
+        f"/models/{model['id']}/contacts/{contact['id']}/update",
+        data={"contact_type": "Telegram", "value": "@modela"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    stored = models_store.get_model(model["id"])["contacts"][0]
+    assert (stored["type"], stored["value"]) == ("Telegram", "@modela")
+
+    # visible on the roster, not just the edit page
+    assert "@modela" in client.get("/models").text
+
+    r = client.post(
+        f"/models/{model['id']}/contacts/{contact['id']}/delete",
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert models_store.get_model(model["id"])["contacts"] == []
+
+
+def test_contact_add_rejects_a_blank_field(client):
+    model = models_store.add_model("Model A", "")
+    r = client.post(
+        f"/models/{model['id']}/contacts/add",
+        data={"contact_type": "WhatsApp", "value": "   "},
+    )
+    assert r.status_code == 400
+    assert models_store.get_model(model["id"])["contacts"] == []
+
+
+def test_contact_add_404s_for_unknown_model(client):
+    r = client.post(
+        "/models/doesnotexist/contacts/add",
+        data={"contact_type": "WhatsApp", "value": "+45"},
+    )
+    assert r.status_code == 404
+
+
+def test_va_gets_403_on_contact_routes(va_client):
+    model = models_store.add_model("Model A", "")
+    r = va_client.post(
+        f"/models/{model['id']}/contacts/add",
+        data={"contact_type": "WhatsApp", "value": "+45"},
+    )
+    assert r.status_code == 403
+
+
+def test_missing_stats_render_as_zero_not_a_question_mark(client):
+    """The numbers get read straight off this page into a sheet -- a "?" in a
+    count column is not a value anybody can use."""
+    model = models_store.add_model("Model A", "")
+    models_store.add_instagram_account(model["id"], "https://instagram.com/a")
+    account = models_store.get_model(model["id"])["instagram_accounts"][0]
+    instagram_stats.save_stats(
+        account["id"],
+        followers=None,
+        posts=[
+            {
+                "url": "https://www.instagram.com/a/reel/DbO0AIYgiRL/",
+                "views": None,
+                "likes": None,
+                "comments": None,
+            }
+        ],
+        error=None,
+    )
+
+    html = client.get("/models").text
+
+    assert "0 followers" in html
+    assert "?" not in html.split("model-ig-posts")[1].split("</table>")[0]
+
+
+def test_roster_serves_a_thumbnail_not_the_original_upload(client):
+    """A roster of phone-camera JPEGs was several MB of transfer to paint 48px
+    tiles."""
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00"
+        b"\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    client.post(
+        "/models/add",
+        data={"name": "Model A"},
+        files={"profile_picture": ("pic.png", png, "image/png")},
+    )
+    model = models_store.list_models()[0]
+
+    assert f"/models/{model['id']}/picture/thumb" in client.get("/models").text
+
+    r = client.get(f"/models/{model['id']}/picture/thumb?size=96")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/webp"
+
+
+def test_thumbnail_falls_back_to_the_original_for_an_unreadable_upload(client):
+    """A file Pillow can't decode still has to show something rather than a
+    broken tile."""
+    client.post(
+        "/models/add",
+        data={"name": "Model A"},
+        files={"profile_picture": ("pic.png", b"not an image", "image/png")},
+    )
+    model = models_store.list_models()[0]
+
+    r = client.get(f"/models/{model['id']}/picture/thumb")
+    assert r.status_code == 200
+    assert r.content == b"not an image"
+
+
 def test_refresh_stats_reports_no_active_sweep_in_sync_mode(client):
     """The page asks this on load to rejoin a sweep that outlived the tab.
     Synchronous mode has no worker and never has one in flight."""

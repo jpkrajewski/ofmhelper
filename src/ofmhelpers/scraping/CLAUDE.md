@@ -23,7 +23,9 @@ then exporting the results to a formatted spreadsheet for review.
   this file was renamed.
 - `instagram_public.py` — free, no-login Instagram scrape via Playwright
   (headless Chromium), no Apify actor involved: `fetch_profile_stats(username)`
-  returns followers + the last N reels' views/likes/comments. **Always runs
+  returns followers + the last N reels' views/likes/comments, and reports a
+  banned/deleted/renamed account as an `error` instead of a live account with
+  zero of everything (`_check_available`, EN + PL wording). **Always runs
   the browser in a subprocess** — see its docstring, RQ forks per job and
   fork+Playwright deadlocks. Tunables live in
   `config.settings.InstagramStatsSettings`; selectors/regexes stay here.

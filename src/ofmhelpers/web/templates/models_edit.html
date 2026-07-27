@@ -10,7 +10,8 @@
         <h2>Profile</h2>
         <div class="model-edit-picture">
             {% if model.profile_picture_path %}
-            <img src="/models/{{ model.id }}/picture" alt="{{ model.name }}" class="model-thumb-large">
+            <img src="/models/{{ model.id }}/picture/thumb?size=192" alt="{{ model.name }}"
+                 class="model-thumb-large">
             {% else %}
             <span class="model-thumb-large model-thumb-empty">?</span>
             {% endif %}
@@ -43,10 +44,25 @@
         <ul class="model-edit-accounts">
             {% for a in model.instagram_accounts %}
             <li>
+                {# One form for the URL and every optional detail: they save
+                   together, so a blank box means blank, not "unchanged". #}
                 <form method="post" action="/models/{{ model.id }}/instagram/{{ a.id }}/update"
                       class="model-edit-account-form">
-                    <input type="text" name="url" value="{{ a.url }}" required>
-                    <button type="submit" class="model-btn">Save</button>
+                    <input type="text" name="url" value="{{ a.url }}" class="model-account-url" required>
+                    <div class="model-account-details">
+                        {% for field, label in [
+                            ("owner", "Owner"), ("phone", "Phone"), ("sim_number", "SIM number"),
+                            ("password", "Password"), ("email", "Email")] %}
+                        <label class="model-field">
+                            <span>{{ label }}</span>
+                            <input type="text" name="{{ field }}" value="{{ a[field] or '' }}"
+                                   autocomplete="off">
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="model-account-actions">
+                        <button type="submit" class="model-btn">Save</button>
+                    </div>
                 </form>
                 <form method="post" action="/models/{{ model.id }}/instagram/{{ a.id }}/delete"
                       onsubmit="return confirm('Remove {{ a.url }}?');">
@@ -66,6 +82,45 @@
                           placeholder="https://instagram.com/a&#10;https://instagram.com/b" required></textarea>
             </label>
             <button type="submit" class="model-btn">Add</button>
+        </form>
+    </section>
+
+    <section class="model-card">
+        <h2>Contact info <span class="model-count">{{ model.contacts | length }}</span></h2>
+
+        {% if model.contacts %}
+        <ul class="model-edit-accounts">
+            {% for c in model.contacts %}
+            <li>
+                <form method="post" action="/models/{{ model.id }}/contacts/{{ c.id }}/update"
+                      class="model-edit-account-form">
+                    <input type="text" name="contact_type" value="{{ c.type }}"
+                           placeholder="WhatsApp" required>
+                    <input type="text" name="value" value="{{ c.value }}"
+                           placeholder="+4534343434" required>
+                    <button type="submit" class="model-btn">Save</button>
+                </form>
+                <form method="post" action="/models/{{ model.id }}/contacts/{{ c.id }}/delete"
+                      onsubmit="return confirm('Remove {{ c.type }} {{ c.value }}?');">
+                    <button type="submit" class="model-btn model-delete-btn">Remove</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="pending">No contact info yet.</p>
+        {% endif %}
+
+        <form method="post" action="/models/{{ model.id }}/contacts/add" class="model-edit-form">
+            <label class="model-field">
+                <span>Type</span>
+                <input type="text" name="contact_type" placeholder="WhatsApp" required>
+            </label>
+            <label class="model-field">
+                <span>Value</span>
+                <input type="text" name="value" placeholder="+4534343434" required>
+            </label>
+            <button type="submit" class="model-btn">Add contact</button>
         </form>
     </section>
 </div>
@@ -109,8 +164,19 @@
         padding: 8px 0; border-bottom: 1px solid var(--border);
     }
     .model-edit-accounts li:last-child { border-bottom: none; }
-    .model-edit-account-form { display: flex; gap: 8px; flex: 1; min-width: 240px; }
-    .model-edit-account-form input { flex: 1; }
+    .model-edit-account-form {
+        display: flex; gap: 8px; flex: 1; min-width: 240px; flex-wrap: wrap;
+    }
+    .model-edit-account-form input { flex: 1; min-width: 0; }
+    /* The URL is the account's identity -- it keeps a row to itself above the
+       optional credential boxes, which pack as many per row as fit. */
+    .model-account-url { flex-basis: 100%; }
+    .model-account-details {
+        display: grid; gap: 8px; width: 100%;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+    .model-account-details .model-field > span { font-size: 12px; }
+    .model-account-actions { width: 100%; }
     .model-edit-accounts form { margin: 0; }
 </style>
 {% endblock %}
