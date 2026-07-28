@@ -1,19 +1,27 @@
 {% extends "base.html" %}
 {% import "_asset_media.html" as am %}
 {% block content %}
-<h1>{{ title|default("Job") }} <code>{{ job.id }}</code></h1>
-<p>Status: <strong>{{ job.status }}</strong></p>
+<div class="page-head">
+    <h1>{{ title|default("Job") }} <code>{{ job.id }}</code></h1>
+    <div class="page-head-actions">
+        <span class="badge {{ 'badge-ok' if job.status == 'done' else 'badge-fail' if job.status == 'failed' else 'badge-neutral' }}">
+            {{ job.status }}
+        </span>
+    </div>
+</div>
 
 {% if job_inputs and (job_inputs.settings or job_inputs.long_text or job_inputs.file_groups) %}
 <div class="job-inputs">
     <h2 class="col-title">Inputs</h2>
 
     {% if job_inputs.settings %}
-    <table class="inputs-table">
-        {% for s in job_inputs.settings %}
-        <tr><th>{{ s.label }}</th><td>{{ s.value }}</td></tr>
-        {% endfor %}
-    </table>
+    <div class="table-wrap">
+        <table class="inputs-table">
+            {% for s in job_inputs.settings %}
+            <tr><th scope="row">{{ s.label }}</th><td>{{ s.value }}</td></tr>
+            {% endfor %}
+        </table>
+    </div>
     {% endif %}
 
     {% for t in job_inputs.long_text %}
@@ -49,11 +57,11 @@
 </div>
 <p class="pending">{{ pending_message|default("Working…") }} (showing the hosted result — saving a local copy…)</p>
 {% else %}
-<p class="pending">{{ pending_message|default("Working…") }}</p>
+<p class="pending"><span class="spinner" aria-hidden="true"></span> {{ pending_message|default("Working…") }}</p>
 {% endif %}
 
 {% elif job.status == "failed" %}
-<pre class="fail">{{ job.error }}</pre>
+<pre class="inputs-long-text fail">{{ job.error }}</pre>
 
 {% elif job.status == "done" %}
 {% if job_inputs %}<h2 class="col-title">Output</h2>{% endif %}
@@ -69,5 +77,5 @@
 </div>
 {% endif %}
 
-<p><a href="{{ back_url }}">← {{ back_label|default("run another") }}</a></p>
+<p class="section"><a href="{{ back_url }}">← {{ back_label|default("run another") }}</a></p>
 {% endblock %}

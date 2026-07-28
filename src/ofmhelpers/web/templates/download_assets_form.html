@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% import "_asset_media.html" as am %}
 {% block content %}
-<h1>Download Assets</h1>
+<div class="page-head">
+    <h1>Download Assets</h1>
+</div>
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -51,7 +53,7 @@
         </div>
     </fieldset>
 
-    <button type="submit">Run</button>
+    <button type="submit" class="btn-primary">Run</button>
     <p class="form-hint">
         Running doesn't block the form -- fire several and watch them land on the
         right. Hit ↻ Recreate on a past run to reload its URLs.

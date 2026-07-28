@@ -1,21 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Add model</h1>
-<p><a href="/models">← back to models</a></p>
+<div class="page-head">
+    <h1>Add model</h1>
+    <div class="page-head-actions">
+        <a href="/models" class="btn">← Back to models</a>
+    </div>
+</div>
 
-<form method="post" action="/models/add" enctype="multipart/form-data" class="todo-add-form">
+<form method="post" action="/models/add" enctype="multipart/form-data" class="card todo-add-form">
     <div class="field">
-        <label>Name</label>
-        <input type="text" name="name" required>
+        <label for="model-name">Name</label>
+        <input type="text" name="name" id="model-name" required>
     </div>
     <div class="field">
-        <label>OnlyFans link</label>
-        <input type="text" name="onlyfans_url" placeholder="https://onlyfans.com/...">
+        <label for="model-of">OnlyFans link</label>
+        <input type="text" name="onlyfans_url" id="model-of" placeholder="https://onlyfans.com/...">
     </div>
     <div class="field">
-        <label>Profile picture</label>
-        <input type="file" name="profile_picture" accept="image/*">
+        <label for="model-pic">Profile picture</label>
+        <input type="file" name="profile_picture" id="model-pic" accept="image/*">
     </div>
-    <button type="submit">Add model</button>
+    <button type="submit" class="btn-primary">Add model</button>
 </form>
 {% endblock %}

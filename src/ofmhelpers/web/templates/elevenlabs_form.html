@@ -1,21 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>ElevenLabs — text to speech</h1>
+<div class="page-head">
+    <h1>ElevenLabs — text to speech</h1>
+</div>
 
-<form method="post" action="/helpers/elevenlabs/run">
+<form method="post" action="/helpers/elevenlabs/run" class="card todo-add-form">
     <div class="field">
-        <label>API key</label>
-        <input type="password" name="api_key" required autocomplete="off">
+        <label for="el-key">API key</label>
+        <input type="password" name="api_key" id="el-key" required autocomplete="off">
     </div>
 
     <div class="field">
-        <label>Text</label>
-        <textarea name="text" required></textarea>
+        <label for="el-text">Text</label>
+        <textarea name="text" id="el-text" required></textarea>
     </div>
 
     <div class="field">
-        <label>Voice</label>
-        <select name="voice">
+        <label for="el-voice">Voice</label>
+        <select name="voice" id="el-voice">
             {% for v in voices|default([]) %}
             <option value="{{ v }}">{{ v }}</option>
             {% endfor %}
@@ -23,20 +25,15 @@
     </div>
 
     <div class="field">
-        <label>Model</label>
-        <input type="text" name="model_id" value="eleven_v3">
+        <label for="el-model">Model</label>
+        <input type="text" name="model_id" id="el-model" value="eleven_v3">
     </div>
 
     <div class="field">
-        <label>Output format</label>
-        <input type="text" name="output_format" value="mp3_44100_128">
+        <label for="el-format">Output format</label>
+        <input type="text" name="output_format" id="el-format" value="mp3_44100_128">
     </div>
 
-    <button type="submit">Generate audio</button>
+    <button type="submit" class="btn-primary">Generate audio</button>
 </form>
-
-<style>
-    /* .field / select-input sizing now live in static/css/app.css */
-    textarea { min-height: 120px; resize: vertical; }
-</style>
 {% endblock %}

@@ -72,9 +72,9 @@ def test_fake_ai_job_status_shows_settings_prompt_and_reference_preview(
     assert "Output" in html
     assert long_prompt in html
     assert "inputs-long-text" in html
-    assert "<th>outcome</th>" in html
+    assert '<th scope="row">outcome</th>' in html
     assert "<td>success</td>" in html
-    assert "<th>asset type</th>" in html
+    assert '<th scope="row">asset type</th>' in html
     assert "<td>image</td>" in html
     assert "reference images" in html
     assert "myref.png" in html
@@ -129,7 +129,7 @@ def test_seedance_job_status_shows_settings_and_reference_video(client):
             ]
 
     html = client.get(f"/seedance/jobs/{job_id}").text
-    assert "<th>resolution</th>" in html
+    assert '<th scope="row">resolution</th>' in html
     assert "<td>720p</td>" in html
     assert "reference videos" in html
     assert "clip.mp4" in html
@@ -152,7 +152,7 @@ def test_kling3_job_status_shows_settings(client):
             ).json()["job_id"]
 
     html = client.get(f"/kling3/jobs/{job_id}").text
-    assert "<th>mode</th>" in html
+    assert '<th scope="row">mode</th>' in html
     assert "<td>pro</td>" in html
 
 
@@ -171,7 +171,7 @@ def test_nanobanana_job_status_shows_settings(client):
             ).json()["job_id"]
 
     html = client.get(f"/nanobanana/jobs/{job_id}").text
-    assert "<th>resolution</th>" in html
+    assert '<th scope="row">resolution</th>' in html
     assert "<td>2K</td>" in html
 
 

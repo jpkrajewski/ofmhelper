@@ -1,5 +1,55 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Welcome to the Global Ascend toolkit</h1>
-<p>Pick a tool from the menu above.</p>
+<section class="hero">
+    <h1>GLOBAL ASCEND <span class="accent">Content Ops</span></h1>
+    <blockquote class="hero-quote">
+        "Speed is nothing without consistency. Consistency is nothing without tools."
+    </blockquote>
+</section>
+
+{# Same destinations as the header nav: on a phone the nav sits behind a
+   toggle, so the landing page keeps every tool one tap away. #}
+<section class="section" aria-labelledby="tools-title">
+    <h2 class="col-title" id="tools-title">Tools</h2>
+    <div class="card-grid">
+        <a class="link-card" href="/generate">
+            <span class="link-card-icon" aria-hidden="true">✨</span>
+            <span class="link-card-title">Generate AI Assets</span>
+        </a>
+        <a class="link-card" href="/replicate">
+            <span class="link-card-icon" aria-hidden="true">🎬</span>
+            <span class="link-card-title">Replicate</span>
+        </a>
+        <a class="link-card" href="/download-assets">
+            <span class="link-card-icon" aria-hidden="true">⬇</span>
+            <span class="link-card-title">Download Assets</span>
+        </a>
+        <a class="link-card" href="/todo">
+            <span class="link-card-icon" aria-hidden="true">☑</span>
+            <span class="link-card-title">Todo</span>
+        </a>
+        <a class="link-card" href="/helpers">
+            <span class="link-card-icon" aria-hidden="true">🧰</span>
+            <span class="link-card-title">Helpers</span>
+        </a>
+        {% if request.session.get("role") == "admin" %}
+        <a class="link-card" href="/models">
+            <span class="link-card-icon" aria-hidden="true">👤</span>
+            <span class="link-card-title">Models</span>
+        </a>
+        <a class="link-card" href="/competition">
+            <span class="link-card-icon" aria-hidden="true">🎯</span>
+            <span class="link-card-title">Competition</span>
+        </a>
+        <a class="link-card" href="/file-manager">
+            <span class="link-card-icon" aria-hidden="true">🗂</span>
+            <span class="link-card-title">File Manager</span>
+        </a>
+        <a class="link-card" href="/action-log">
+            <span class="link-card-icon" aria-hidden="true">📋</span>
+            <span class="link-card-title">Action log</span>
+        </a>
+        {% endif %}
+    </div>
+</section>
 {% endblock %}

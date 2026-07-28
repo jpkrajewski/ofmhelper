@@ -1,46 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Action log</h1>
+<div class="page-head">
+    <h1>Action log</h1>
+</div>
 
 {% if any_running %}
 <meta http-equiv="refresh" content="3">
 {% endif %}
 
 {% if not jobs %}
-<p class="pending">Nothing has been run yet.</p>
+<p class="empty-state">Nothing has been run yet.</p>
 {% else %}
-<table>
-    <tr>
-        <th>Time</th>
-        <th>By</th>
-        <th>Task</th>
-        <th>Status</th>
-        <th>Summary</th>
-        <th></th>
-    </tr>
-    {% for job in jobs %}
-    <tr>
-        <td>{{ job.created_at_display }}</td>
-        <td>
-            {% if job.actor %}
-            <span class="actor-badge actor-{{ job.actor }}">{{ job.actor }}</span>
-            {% else %}—{% endif %}
-        </td>
-        <td>{{ job.task }}</td>
-        <td class="{{ 'ok' if job.status == 'done' else 'fail' if job.status == 'failed' else 'pending' }}">
-            {{ job.status }}
-        </td>
-        <td>
-            {% if job.params.prompt %}{{ job.params.prompt[:60] }}
-            {% elif job.params.urls %}{{ job.params.urls | length }} url(s)
-            {% elif job.params.files %}{{ job.params.files | length }} file(s)
-            {% else %}—{% endif %}
-        </td>
-        <td>
-            {% if job.status_url %}<a href="{{ job.status_url }}">view →</a>{% endif %}
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Time</th>
+                <th scope="col">By</th>
+                <th scope="col">Task</th>
+                <th scope="col">Status</th>
+                <th scope="col">Summary</th>
+                <th scope="col"><span class="sr-only">Details</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td class="todo-added">{{ job.created_at_display }}</td>
+                <td>
+                    {% if job.actor %}
+                    <span class="actor-badge actor-{{ job.actor }}">{{ job.actor }}</span>
+                    {% else %}<span class="pending">—</span>{% endif %}
+                </td>
+                <td>{{ job.task }}</td>
+                <td>
+                    <span class="badge {{ 'badge-ok' if job.status == 'done' else 'badge-fail' if job.status == 'failed' else 'badge-neutral' }}">
+                        {{ job.status }}
+                    </span>
+                </td>
+                <td>
+                    {% if job.params.prompt %}{{ job.params.prompt[:60] }}
+                    {% elif job.params.urls %}{{ job.params.urls | length }} url(s)
+                    {% elif job.params.files %}{{ job.params.files | length }} file(s)
+                    {% else %}<span class="pending">—</span>{% endif %}
+                </td>
+                <td>
+                    {% if job.status_url %}<a href="{{ job.status_url }}">view →</a>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endif %}
 {% endblock %}

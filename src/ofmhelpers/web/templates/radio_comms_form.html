@@ -1,17 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Radio Comms Modulator</h1>
-<p>Turns clean voice lines into crunchy radio comms.</p>
+<div class="page-head">
+    <h1>Radio Comms Modulator</h1>
+    <p class="lead">Turns clean voice lines into crunchy radio comms.</p>
+</div>
 
-<form method="post" action="/helpers/radio-comms/run" enctype="multipart/form-data">
+<form method="post" action="/helpers/radio-comms/run" enctype="multipart/form-data" class="card todo-add-form">
     <div class="field">
-        <label>Input file(s) (.wav)</label>
-        <input type="file" name="files" accept="audio/*" multiple required>
+        <label for="rc-files">Input file(s) (.wav)</label>
+        <input type="file" name="files" id="rc-files" accept="audio/*" multiple required>
     </div>
 
     <div class="field">
-        <label>Preset</label>
-        <select name="preset">
+        <label for="rc-preset">Preset</label>
+        <select name="preset" id="rc-preset">
             {% for p in presets|default([]) %}
             <option value="{{ p }}" {% if p == "cod_clean" %}selected{% endif %}>{{ p }}</option>
             {% endfor %}
@@ -19,7 +21,7 @@
     </div>
 
     <div class="field">
-        <label>Mode</label>
+        <label for="mode">Mode</label>
         <select name="mode" id="mode" onchange="toggleMode()">
             <option value="single">Single output per file</option>
             <option value="variations">Generate N randomized variations</option>
@@ -28,28 +30,22 @@
 
     <div id="variations-fields" style="display:none">
         <div class="field">
-            <label>Variation count</label>
-            <input type="number" name="count" value="10" min="1" max="50">
+            <label for="rc-count">Variation count</label>
+            <input type="number" name="count" id="rc-count" value="10" min="1" max="50">
         </div>
         <div class="field">
-            <label>Jitter amount (0.0 - 1.0)</label>
-            <input type="number" name="jitter_amount" value="0.18" min="0" max="1" step="0.01">
+            <label for="rc-jitter">Jitter amount (0.0 - 1.0)</label>
+            <input type="number" name="jitter_amount" id="rc-jitter" value="0.18" min="0" max="1" step="0.01">
         </div>
     </div>
 
     <div class="field">
-        <label>Seed (optional, for reproducibility)</label>
-        <input type="number" name="seed">
+        <label for="rc-seed">Seed (optional, for reproducibility)</label>
+        <input type="number" name="seed" id="rc-seed">
     </div>
 
-    <button type="submit">Process</button>
+    <button type="submit" class="btn-primary">Process</button>
 </form>
-
-<style>
-    /* .field / select+number sizing now live in static/css/app.css -- this
-       page intentionally overrides the dashed drop-zone file input style. */
-    input[type="file"] { padding: 6px; width: 100%; box-sizing: border-box; }
-</style>
 
 <script>
 function toggleMode() {

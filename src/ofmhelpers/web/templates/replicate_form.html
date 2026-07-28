@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Replicate — Clone a Reel</h1>
-<p>Paste a reel link (or upload the file), pick a shape/look, and get back an editable
-Seedance 2.0 script with your character dropped in. Duration is detected automatically
-from the source reel -- the clone always matches its exact length.</p>
+<div class="page-head">
+    <h1>Replicate — Clone a Reel</h1>
+    <p class="lead">
+        Paste a reel link (or upload the file), pick a shape/look, and get back an editable
+        Seedance 2.0 script with your character dropped in. Duration is detected automatically
+        from the source reel -- the clone always matches its exact length.
+    </p>
+</div>
 
-<form id="replicate-intake-form" method="post" action="/replicate/intake" enctype="multipart/form-data">
+<form id="replicate-intake-form" method="post" action="/replicate/intake"
+      enctype="multipart/form-data" class="card todo-add-form">
     <div class="field">
         <label>Reel URL</label>
         <input type="url" name="source_url" placeholder="https://www.tiktok.com/... or a Reels/Shorts link">
@@ -60,7 +65,7 @@ from the source reel -- the clone always matches its exact length.</p>
         </select>
     </div>
 
-    <button type="submit">Analyze reel</button>
+    <button type="submit" class="btn-primary">Analyze reel</button>
     <div class="generation-status"></div>
 </form>
 

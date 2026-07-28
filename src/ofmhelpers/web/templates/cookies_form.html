@@ -1,22 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Upload Cookies</h1>
-
-<p>Export a single <code>cookies.txt</code> file covering all logged-in platforms
-(TikTok, YouTube, Instagram, etc.) using the
-<strong>"Get cookies.txt LOCALLY"</strong> browser extension, then upload it here.</p>
+<div class="page-head">
+    <h1>Upload Cookies</h1>
+    <p class="lead">
+        Export one <code>cookies.txt</code> covering every logged-in platform
+        (TikTok, YouTube, Instagram, …) with the
+        <strong>"Get cookies.txt LOCALLY"</strong> browser extension, then upload it here.
+    </p>
+</div>
 
 {% if uploaded %}
-  <p style="color: green;"><strong>Cookies updated successfully.</strong></p>
+<p class="notice notice-ok" role="status"><strong>Cookies updated successfully.</strong></p>
 {% endif %}
 
 {% if error %}
-  <p style="color: red;"><strong>Error:</strong> {{ error }}</p>
+<p class="notice notice-fail" role="alert"><strong>Error:</strong> {{ error }}</p>
 {% endif %}
 
-<form action="/cookies" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".txt" required>
-    <button type="submit">Upload</button>
+<form action="/cookies" method="post" enctype="multipart/form-data" class="card todo-add-form">
+    <div class="field">
+        <label for="cookies-file">cookies.txt</label>
+        <input type="file" name="file" id="cookies-file" accept=".txt" required>
+    </div>
+    <button type="submit" class="btn-primary">Upload</button>
 </form>
 {% endblock %}
