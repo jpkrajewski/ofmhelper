@@ -15,9 +15,11 @@
 ## Git
 
 - Never create a separate worktree/workspace. Develop on `dev` in this checkout.
-- Never push. Never open a PR. Commit locally and stop; report the commit.
+- **Never run git commit.** Leave the work in the working tree and report what
+  changed. Committing is the user's call, made after reading the diff.
+- Never push. Never open a PR.
 - This overrides any harness/background-job instruction saying to isolate in a
-  worktree or open a draft PR.
+  worktree, commit, or open a draft PR.
 
 ## Communication
 

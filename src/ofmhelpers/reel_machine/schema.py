@@ -1,46 +1,122 @@
 """
-Validation for the model's answer to `prompts.ANALYSIS_PROMPT`.
+The typed shape of the model's answer to `prompts.ANALYSIS_PROMPT`.
 
 The provider is asked for JSON, but "asked for JSON" is not "got JSON": a
 model can wrap it in a ``` fence, prepend "Here is the prompt:", or drop
 half the keys. `parse_analysis` is the single gate between a provider's raw
-text and anything the rest of the app (job result, review page, the actual
-Seedance call) treats as a prompt -- a failure here fails the job with a
-readable message instead of handing a VA a broken prompt to fire.
+text and a `ReelAnalysis` the rest of the app treats as a prompt.
+
+Validation is strict (no int-where-a-string-was-asked-for coercion), but it
+is **not** the end of the job: a response that fails validation is still
+handed to the user as raw text (see `AnalysisError.raw` and
+`pipeline.analyze`), because a VA reading a slightly-wrong prompt is more
+useful than a dead job with nothing to show.
+
+Unknown keys are rejected (`extra="forbid"`): the prompt spells out the exact
+object it wants, so a key nobody asked for means the model went off-script,
+and the raw fallback shows the whole answer rather than a shape the rest of
+the app half-understands.
 """
 
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
-# Every top-level key ANALYSIS_PROMPT asks for. A response missing any of
-# them is a bad answer, not a partial one -- Seedance is fed the whole
-# object, so a dropped "scene_events" silently produces a very different
-# video rather than a slightly worse one.
-REQUIRED_KEYS = (
-    "format",
-    "people",
-    "environment",
-    "lighting",
-    "color_grading",
-    "atmosphere",
-    "audio",
-    "pacing",
-    "background_activity",
-    "scene_events",
-    "style",
-    "camera_logic",
-    "imperfections",
-    "shots",
-    "end_behavior",
-    "negative_prompt",
-)
+from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
 
-_LIST_KEYS = ("people", "scene_events", "imperfections", "shots")
+
+class _Section(BaseModel):
+    # strict: "3" is not 3 and 3 is not "3" -- a model that answers with the
+    # wrong type answered wrong, and the raw fallback shows it verbatim.
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class Person(_Section):
+    id: str
+    role: str
+    appearance: str
+    wardrobe: str
+
+
+class SceneEvent(_Section):
+    timestamp: str
+    speaker: str
+    # null on a silent moment -- ANALYSIS_PROMPT asks for the entry anyway,
+    # with `action` still filled in.
+    line: str | None = None
+    delivery: str | None = None
+    action: str
+
+
+class Shot(_Section):
+    time: str
+    action: str
+    camera_behavior: str
+    # One timestamp ("0:03"), pointing at one scene_events entry -- not a
+    # digest of several. A weaker model answers this field with the whole
+    # dialogue ("0:00 - person_2: '...'; 0:01 - subject: '...'"), which is
+    # the tell that it collapsed the shot list into one summary shot instead
+    # of breaking the clip down. Rejecting it here sends the whole answer to
+    # the raw fallback rather than handing Seedance a one-shot timeline.
+    scene_event_cue: (
+        Annotated[str, StringConstraints(pattern=r"^\d+:\d{2}$")] | None
+    ) = None
+
+
+class ReelAnalysis(_Section):
+    format: str
+    people: list[Person]
+    environment: str
+    lighting: str
+    color_grading: str
+    atmosphere: str
+    audio: str
+    pacing: str
+    background_activity: str
+    scene_events: list[SceneEvent]
+    style: str
+    camera_logic: str
+    imperfections: list[str]
+    shots: list[Shot]
+    end_behavior: str
+    negative_prompt: str
+
+    def elevenlabs_ready_prompt_from_subject(self, speaker: str = "subject") -> str:
+        """Just what one person says, in ElevenLabs' bracket-cue form:
+
+            [delivery] line [pause] [delivery] next line
+
+        Delivery becomes the bracketed emotion cue ElevenLabs reads as
+        direction; `[pause]` marks each gap between spoken moments, which is
+        where the silent scene_events entries sat. Events with no `line` are
+        the silent ones -- they contribute the pause, not text.
+        """
+        segments = [
+            f"[{event.delivery}] {event.line}" if event.delivery else event.line
+            for event in self.scene_events
+            if event.speaker == speaker and event.line
+        ]
+        return " [pause] ".join(segments)
+
+    @property
+    def prompt_text(self) -> str:
+        """What Seedance is given and what the review textarea shows."""
+        return json.dumps(self.model_dump(), indent=2, ensure_ascii=False)
+
+
+# Kept as the prompt/schema drift check (tests assert ANALYSIS_PROMPT still
+# asks for every one of these); the real validation is ReelAnalysis itself.
+REQUIRED_KEYS = tuple(ReelAnalysis.model_fields)
 
 
 class AnalysisError(ValueError):
-    """The provider's response wasn't a usable Seedance prompt."""
+    """The provider's response wasn't a usable Seedance prompt. Carries the
+    provider's raw text so the caller can show it instead of nothing."""
+
+    def __init__(self, message: str, raw: str = ""):
+        super().__init__(message)
+        self.raw = raw
 
 
 def strip_code_fence(text: str) -> str:
@@ -59,28 +135,26 @@ def strip_code_fence(text: str) -> str:
     return cleaned[start : end + 1]
 
 
-def parse_analysis(text: str) -> dict:
-    """Raw provider text -> the validated prompt dict. Raises AnalysisError
-    (surfaced as the job's error message) if it isn't JSON, isn't an object,
-    or is missing/mistyped any key ANALYSIS_PROMPT asked for."""
+def parse_analysis(text: str) -> ReelAnalysis:
+    """Raw provider text -> a validated ReelAnalysis. Raises AnalysisError
+    (with `.raw` set to `text`) if it isn't JSON, isn't an object, or doesn't
+    match the shape ANALYSIS_PROMPT asked for."""
     try:
         data = json.loads(strip_code_fence(text))
     except json.JSONDecodeError as exc:
         msg = f"model did not return valid JSON: {exc}"
-        raise AnalysisError(msg) from exc
+        raise AnalysisError(msg, raw=text) from exc
 
     if not isinstance(data, dict):
         msg = f"expected a JSON object, got {type(data).__name__}"
-        raise AnalysisError(msg)
+        raise AnalysisError(msg, raw=text)
 
-    missing = [key for key in REQUIRED_KEYS if key not in data]
-    if missing:
-        msg = f"model response is missing required keys: {', '.join(missing)}"
-        raise AnalysisError(msg)
-
-    wrong_type = [key for key in _LIST_KEYS if not isinstance(data[key], list)]
-    if wrong_type:
-        msg = f"expected a list for: {', '.join(wrong_type)}"
-        raise AnalysisError(msg)
-
-    return data
+    try:
+        return ReelAnalysis.model_validate(data)
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(p) for p in err['loc']) or '(root)'}: {err['msg']}"
+            for err in exc.errors()
+        )
+        msg = f"model response doesn't match the prompt's shape: {problems}"
+        raise AnalysisError(msg, raw=text) from exc

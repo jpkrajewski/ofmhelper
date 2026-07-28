@@ -11,16 +11,21 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+import json
+from pathlib import Path
 from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.reel_machine.pipeline import AnalysisResult
+from ofmhelpers.reel_machine.schema import ReelAnalysis
 from ofmhelpers.web.main import app
 from ofmhelpers.web.stores.jobs import get_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
+
+EXAMPLE = Path(__file__).parents[1] / "reel_machine" / "example.json"
 
 
 @pytest.fixture
@@ -33,11 +38,26 @@ def client():
 def _analysis(tmp_path, duration=15, environment="a lift lobby"):
     video = tmp_path / "reference.mp4"
     video.write_bytes(b"fake video bytes")
+    payload = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    payload["environment"] = environment
     return AnalysisResult(
         video_path=video,
         duration=duration,
-        prompt={"format": "9:16 vertical", "environment": environment},
         provider="gemini",
+        raw=json.dumps(payload),
+        prompt=ReelAnalysis.model_validate(payload),
+    )
+
+
+def _unvalidated_analysis(tmp_path, raw="sorry, I can't help with that"):
+    video = tmp_path / "reference.mp4"
+    video.write_bytes(b"fake video bytes")
+    return AnalysisResult(
+        video_path=video,
+        duration=15,
+        provider="gemini",
+        raw=raw,
+        error="model did not return valid JSON: line 1 column 1",
     )
 
 
@@ -76,6 +96,8 @@ def test_intake_stores_the_validated_prompt_and_the_text_sent_to_seedance(
     assert '"environment": "a lift lobby"' in job["result"]["prompt_text"]
     assert job["result"]["duration"] == 15  # auto-detected from the source reel
     assert job["result"]["provider"] == "gemini"
+    assert job["result"]["analysis_error"] is None
+    assert job["result"]["speech"].startswith("[playful, pleading tone] Babe")
 
 
 def test_review_page_plays_the_source_video_and_shows_editable_json(client, tmp_path):
@@ -118,19 +140,39 @@ def test_source_video_404s_for_an_unknown_job(client):
 
 
 def test_intake_job_failure_is_surfaced_on_the_review_page(client):
-    """A model that returns something other than the requested JSON fails the
-    job (schema.parse_analysis raises) instead of handing over a broken
-    prompt -- the message has to reach the review page."""
+    """Everything before validation (download, API key, provider error) still
+    fails the job -- the message has to reach the review page."""
     with mock.patch(
         "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
-        side_effect=RuntimeError("model did not return valid JSON"),
+        side_effect=RuntimeError("could not download the reel"),
     ):
         job_id = client.post(
             "/replicate/intake", data={"source_url": "https://example.com/reel"}
         ).json()["job_id"]
 
     html = client.get(f"/replicate/jobs/{job_id}").text
+    assert "could not download the reel" in html
+
+
+def test_an_unvalidated_response_reaches_the_review_page_as_raw_text(client, tmp_path):
+    """A model answer that doesn't match the schema is shown verbatim, not
+    thrown away: the job succeeds and the VA edits what came back."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_unvalidated_analysis(tmp_path),
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    job = get_job(job_id)
+    assert job["status"] == "done"
+    assert job["result"]["prompt"] is None
+    assert job["result"]["prompt_text"] == "sorry, I can't help with that"
+
+    html = client.get(f"/replicate/jobs/{job_id}").text
     assert "model did not return valid JSON" in html
+    assert "match the expected prompt shape" in html
 
 
 def test_generate_requires_a_script(client):

@@ -21,9 +21,14 @@ access; this is a plain API-key call.
 
 import time
 from pathlib import Path
+from typing import ClassVar
+
+from google import genai
+from google.genai import types
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.reel_machine.schema import ReelAnalysis
 
 logger = get_logger(__name__)
 
@@ -34,14 +39,18 @@ _VIDEO_ACTIVE_POLL_S = 2
 
 
 class GeminiProvider:
-    name = "gemini"
+    name: ClassVar[str] = "gemini"
 
-    def __init__(self, api_key: str | None = None, model: str | None = None):
+    api_key: str
+    model: str
+
+    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         s = settings.reel_machine
-        self.api_key = api_key or s.gemini_api_key
-        if self.api_key is None:
+        key = api_key or s.gemini_api_key
+        if key is None:
             msg = "GEMINI_API_KEY"
             raise KeyError(msg)
+        self.api_key = key
         self.model = model or s.gemini_model
 
     def analyze_video(self, video_path: Path, prompt: str) -> str:
@@ -50,26 +59,41 @@ class GeminiProvider:
         answer half the questions the prompt asks (pacing, camera drift,
         per-second actions), so a failed upload fails the job instead of
         silently downgrading the analysis."""
-        from google import genai
-        from google.genai import types
-
         client = genai.Client(api_key=self.api_key)
-        video_part = self._upload_video(client, video_path)
+        video_part: types.File = self._upload_video(client, video_path)
 
-        response = client.models.generate_content(
+        response: types.GenerateContentResponse = client.models.generate_content(
             model=self.model,
             contents=[video_part, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                temperature=0.4,
+                # Constrained decoding against the exact model schema.py
+                # validates against, so the shape can't be wrong: no fence,
+                # no prose, no missing key, no extra key. schema.py still
+                # runs (a schema Google someday rejects must not silently
+                # become a free-text answer) but it stops being the thing
+                # that catches everyday sloppiness.
+                #
+                # `response_json_schema`, not `response_schema`:
+                # `extra="forbid"` emits `additionalProperties: false`, and
+                # `response_schema`'s OpenAPI subset 400s on it ("Unknown
+                # name additional_properties"). The full-JSON-Schema field
+                # takes it as-is.
+                response_json_schema=ReelAnalysis.model_json_schema(),
+                # Low: this is transcription-of-what-is-on-screen, not
+                # writing. Sampling variety is what lets the model paraphrase
+                # four camera beats into one summary shot.
+                temperature=0.15,
             ),
         )
         return response.text or ""
 
-    def _upload_video(self, client, video_path: Path):
-        uploaded = client.files.upload(file=str(video_path))
+    def _upload_video(self, client: genai.Client, video_path: Path) -> types.File:
+        """Blocks until Gemini has finished ingesting the upload: a file can
+        only be referenced in generate_content once it reaches ACTIVE."""
+        uploaded: types.File = client.files.upload(file=str(video_path))
         deadline = time.monotonic() + _VIDEO_ACTIVE_TIMEOUT_S
-        while uploaded.state and uploaded.state.name == "PROCESSING":
+        while uploaded.state is types.FileState.PROCESSING:
             if time.monotonic() > deadline:
                 msg = (
                     f"Gemini took longer than {_VIDEO_ACTIVE_TIMEOUT_S}s to process "
@@ -78,7 +102,7 @@ class GeminiProvider:
                 raise RuntimeError(msg)
             time.sleep(_VIDEO_ACTIVE_POLL_S)
             uploaded = client.files.get(name=uploaded.name)
-        if not uploaded.state or uploaded.state.name != "ACTIVE":
+        if uploaded.state is not types.FileState.ACTIVE:
             msg = f"Gemini could not process {video_path.name} (state {uploaded.state})"
             raise RuntimeError(msg)
         return uploaded

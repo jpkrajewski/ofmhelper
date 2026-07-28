@@ -64,13 +64,17 @@ def _run_replicate_intake(source: str, work_dir: str) -> dict:
     # Both shapes of the prompt are stored on purpose: `prompt` is the
     # validated object (what the Action log records, and proof the response
     # passed schema.parse_analysis), `prompt_text` is the exact string the
-    # review textarea shows and Seedance is given.
+    # review textarea shows and Seedance is given. A response that failed
+    # validation still lands here -- `prompt` is null, `analysis_error` says
+    # why, and `prompt_text` is the provider's raw answer for the VA to fix.
     return {
         "video_path": str(analysis.video_path),
         "duration": analysis.duration,
         "provider": analysis.provider,
-        "prompt": analysis.prompt,
+        "prompt": analysis.prompt.model_dump() if analysis.prompt else None,
         "prompt_text": analysis.prompt_text,
+        "speech": analysis.speech,
+        "analysis_error": analysis.error,
     }
 
 

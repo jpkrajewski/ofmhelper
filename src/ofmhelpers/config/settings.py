@@ -182,12 +182,22 @@ class ReelMachineSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # "gemini" (free tier, takes real video) or "anthropic" (paid, contact
-    # sheet only) -- see reel_machine/llm/registry.py.
+    # The analysis prompt is the one thing here that gets retuned by reading
+    # bad output and rewriting a sentence, so it lives in a file under the
+    # bind-mounted uploads/ dir rather than only in the image: edit it on the
+    # server and the next job uses it, no rebuild. Missing file = the frozen
+    # default in reel_machine/prompts.py.
+    prompt_file: str = Field(
+        default="uploads/analysis_prompt.txt",
+        validation_alias="REEL_MACHINE_PROMPT_FILE",
+    )
+
+    # "gemini" is the only provider -- see reel_machine/llm/registry.py. The
+    # field stays because an unknown name has to raise rather than silently
+    # run something nobody picked.
     llm_provider: str = Field(
         default="gemini", validation_alias="REEL_MACHINE_LLM_PROVIDER"
     )
-    anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-latest"
 

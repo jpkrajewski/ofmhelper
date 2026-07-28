@@ -1,12 +1,12 @@
 """
 Reel intake: get the reel onto disk and measure how long it is. That is the
-whole job now -- the frame extraction, whisper transcript, and diarization
-this module used to do were all inputs to a local prompt builder that no
-longer exists; the LLM watches the video itself.
+whole job -- the frame extraction, whisper transcript, and diarization this
+module used to do were all inputs to a local prompt builder that no longer
+exists; the LLM watches the video itself.
 
-The one leftover ffmpeg call is `build_contact_sheet`, used ONLY by the
-Anthropic provider (the Claude Messages API takes images, not video -- see
-llm/anthropic_provider.py). Gemini never calls it.
+Only ffprobe is shelled out to now. The `build_contact_sheet` ffmpeg call
+went with the Anthropic provider it existed for: Gemini takes the real video
+file, so nothing renders the reel down to stills any more.
 """
 
 from __future__ import annotations
@@ -63,48 +63,6 @@ def fetch_source(url_or_path: str, out_dir: Path) -> Path:
         msg = f"Could not download {url_or_path}: {result.error}.{hint}"
         raise RuntimeError(msg)
     return result.output_paths[0]
-
-
-def _run_ffmpeg(cmd: list[str]) -> None:
-    """Runs an ffmpeg command, surfacing real stderr in the raised error
-    instead of a bare CalledProcessError with no message -- matches the
-    pattern web/routers/generation/fake_ai.py already uses for its own ffmpeg
-    call."""
-    try:
-        subprocess.run(cmd, capture_output=True, check=True)
-    except FileNotFoundError as exc:
-        msg = "ffmpeg isn't installed/on PATH"
-        raise RuntimeError(msg) from exc
-    except subprocess.CalledProcessError as exc:
-        msg = f"ffmpeg failed: {exc.stderr.decode(errors='replace')[-800:]}"
-        raise RuntimeError(msg) from exc
-
-
-def build_contact_sheet(video_path: Path, out_dir: Path, fps: int = 1) -> Path:
-    """One 4x4 tile of 1-fps frames. Only the Anthropic provider needs this
-    (Claude's vision is image-only); Gemini gets the real video file."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    contact_sheet = out_dir / "contact-sheet.jpg"
-    _run_ffmpeg(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(video_path),
-            "-vf",
-            f"fps={fps},scale=320:-1,tile=4x4",
-            # -update 1: we're writing ONE static image, not an image
-            # sequence -- some ffmpeg builds hard-error on the image2 muxer
-            # without this ("does not contain an image sequence pattern"),
-            # others only warn; -update 1 makes it unambiguous everywhere.
-            "-frames:v",
-            "1",
-            "-update",
-            "1",
-            str(contact_sheet),
-        ]
-    )
-    return contact_sheet
 
 
 def probe_duration(video_path: Path) -> float:

@@ -44,13 +44,6 @@ dependencies = [
     "rq-dashboard>=0.9.0",
 ]
 
-# Paid extra for reel_machine kept out of the base install: the Claude API
-# is billed separately (pay-per-token) from a claude.ai subscription --
-# opt-in only, never installed by default. The default provider (Gemini,
-# google-genai) is a base dependency and free.
-[project.optional-dependencies]
-llm-anthropic = ["anthropic>=0.120.0"]
-
 [dependency-groups]
 dev = [
     "httpx2>=2.9.1",
@@ -84,8 +77,8 @@ ignore = [
     # stdout IS the log here (Docker captures it). Note ruff's T201 fix
     # DELETES the print rather than converting it -- never autofix this.
     "T201",
-    # Deferred imports are deliberate: optional heavy deps (anthropic, torch)
-    # must not be required at module import time. See reel_machine/CLAUDE.md.
+    # Deferred imports are deliberate: heavy deps (playwright, yt-dlp) must
+    # not be paid for at module import time, and a few break an import cycle.
     "PLC0415",
     # ffmpeg/ffprobe/yt-dlp run with fixed argv lists, never shell=True.
     "S603",

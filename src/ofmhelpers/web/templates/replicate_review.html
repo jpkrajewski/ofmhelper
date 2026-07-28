@@ -29,6 +29,17 @@
         <tr><th>Duration</th><td>{{ job.result.duration }}s (detected)</td></tr>
     </table>
 
+    {% if job.result.analysis_error %}
+    <div class="notice">
+        The model's answer didn't match the expected prompt shape, so it is shown
+        below exactly as it came back — fix it before generating.
+        <pre>{{ job.result.analysis_error }}</pre>
+    </div>
+    {% elif job.result.speech %}
+    <h2 class="col-title">Subject's speech (ElevenLabs)</h2>
+    <textarea class="prompt-input" rows="4" readonly>{{ job.result.speech }}</textarea>
+    {% endif %}
+
     <h2 class="col-title">Seedance 2.0 prompt JSON (edit before generating)</h2>
     <form id="replicate-generate-form" method="post" action="/replicate/generate"
           enctype="multipart/form-data" data-prefix="/replicate" data-result-kind="video">
