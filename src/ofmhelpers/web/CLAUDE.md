@@ -159,6 +159,11 @@ five endpoints wired to `task_helpers`, nothing else.
   as cached webp thumbs (`GET /models/{id}/picture/thumb?size=`, via
   `refs.write_image_thumb`) — never the original upload, which is whatever
   multi-MB file came off a phone.
+- `competition.py` — admin-only `/competition`: one row per model (thumb +
+  name) and a Competition column of competing Instagram profile links to
+  scroll daily, add (one URL per line) / delete only. Reads the same roster
+  store (`web/models.py`, `model["competitors"]`) and reuses
+  `_models_style.html`, so it can't drift from the Models page's look.
 - `refs.py` — serves/lists previously-uploaded reference files from
   `ASSETS_ROOT` for the file-picker widget's "reuse" browser.
   `write_image_thumb` is the shared Pillow thumbnailer (also used by the
@@ -169,12 +174,32 @@ five endpoints wired to `task_helpers`, nothing else.
 
 # `templates/` and `static/`
 
-Server-rendered Jinja2, extending `base.html` (brand header + role-aware
-nav — add a new top-level page's link in `base.html`'s `nav_items` list).
-Shared partials: `_file_picker.html` (multi-file ordered picker macro),
+Server-rendered Jinja2, extending `base.html` (sticky glass header +
+role-aware nav — add a new top-level page's link in `base.html`'s
+`nav_items` list; it also feeds the footer). Shared partials:
+`_file_picker.html` (multi-file ordered picker macro),
 `_kie_api_key_field.html`, `_asset_grid.html`/`_asset_media.html` (result
 rendering), `job_status.html` (the generic status/polling page every
 standard-shape tool reuses).
+
+**`static/css/app.css` is the whole design system** — tokens (colour,
+spacing, fluid type scale, motion) then base, layout, components. A page
+template should reach for the existing components instead of a `<style>`
+block: `.page-head` + `.lead` (page title), `.card`/`.card-grid`,
+`.link-card`, `.btn` + `.btn-primary`/`-outline`/`-danger`/`-ghost`,
+`.field`, `.table-wrap` (tables scroll instead of squashing on a phone),
+`.badge`, `.notice`, `.empty-state`, `.results`/`.result-item`, `.modal`.
+The legacy per-page names (`.model-btn`, `.todo-io-btn`, `.root-btn`,
+`.download-btn`, …) are aliased onto `.btn` rather than re-declared, so
+buttons cannot drift apart again. A new `<style>` block in a template means
+this file is missing a component — add it there. Class names the JS builds
+or queries (`.result-item`, `.ref-tile`, `.file-order-list`,
+`.prompt-backdrop`, `.session-expired-*`, `.spinner`, …) are contract.
+
+Layout is mobile-first: unprefixed rules are the phone layout, `min-width`
+queries add the wider ones. `static/js/nav.js` only drives the small-screen
+nav drawer (`aria-expanded` + `.open`); at ≥980px the CSS puts the links
+back in a row and hides the toggle, so the desktop nav needs no JS at all.
 
 `static/js/generation.js` is the shared "submit -> poll -> render inline"
 controller: any `<form data-prefix="..." data-result-kind="video|image">`

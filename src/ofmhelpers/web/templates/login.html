@@ -1,30 +1,32 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
     <title>Sign in — Global Ascend LLC</title>
     <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
-    <div class="login-screen">
+    <main class="login-screen">
         <div class="login-card">
-            <div class="login-logo">GLOBAL ASCEND</div>
+            <h1 class="login-logo">GLOBAL ASCEND</h1>
             <p class="login-sub">LLC · Content Ops Command Center</p>
 
             {% if error %}
-            <p class="login-error">{{ error }}</p>
+            <p class="login-error" role="alert">{{ error }}</p>
             {% endif %}
 
             <form method="post" action="/login">
                 <input type="hidden" name="next" value="{{ next }}">
                 <div class="field">
-                    <label>Password</label>
-                    <input type="password" name="password" required autofocus
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" required autofocus
                            autocomplete="current-password" placeholder="••••••••••">
                 </div>
                 <button type="submit" class="login-btn">Sign in</button>
             </form>
         </div>
-    </div>
+    </main>
 </body>
 </html>

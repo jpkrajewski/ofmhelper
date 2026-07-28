@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="model-edit-head">
+<div class="page-head">
     <h1>{{ model.name }}</h1>
-    <a href="/models" class="model-btn">&larr; Back to models</a>
+    <div class="page-head-actions">
+        <a href="/models" class="btn">&larr; Back to models</a>
+    </div>
 </div>
 
-<div class="model-edit-grid">
-    <section class="model-card">
+<div class="card-grid">
+    <section class="card">
         <h2>Profile</h2>
         <div class="model-edit-picture">
             {% if model.profile_picture_path %}
@@ -18,7 +20,7 @@
             <form method="post" action="/models/{{ model.id }}/picture"
                   enctype="multipart/form-data" class="model-edit-picture-form">
                 <input type="file" name="profile_picture" accept="image/*"
-                       class="todo-file-input" required>
+                       required>
                 <button type="submit" class="model-btn">Upload picture</button>
             </form>
         </div>
@@ -37,7 +39,7 @@
         </form>
     </section>
 
-    <section class="model-card">
+    <section class="card">
         <h2>Instagram accounts <span class="model-count">{{ model.instagram_accounts | length }}</span></h2>
 
         {% if model.instagram_accounts %}
@@ -85,7 +87,7 @@
         </form>
     </section>
 
-    <section class="model-card">
+    <section class="card">
         <h2>Contact info <span class="model-count">{{ model.contacts | length }}</span></h2>
 
         {% if model.contacts %}
@@ -125,58 +127,4 @@
     </section>
 </div>
 
-{% include "_models_style.html" %}
-
-<style>
-    .model-edit-head {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 16px; flex-wrap: wrap;
-    }
-    .model-edit-head h1 { margin: 0; }
-    /* Two columns on a wide screen, stacked on a narrow one -- the two
-       sections are independent, so neither needs to wait on the other. */
-    .model-edit-grid {
-        display: grid; gap: 20px; margin-top: 22px;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        align-items: start;
-    }
-    .model-card {
-        border: 1px solid var(--border); border-radius: 10px;
-        background: var(--surface); padding: 18px 20px;
-    }
-    .model-card h2 { margin: 0 0 16px; font-size: 17px; }
-    .model-count {
-        font-size: 13px; color: var(--text-muted); font-weight: normal;
-        border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px;
-    }
-    .model-thumb-large { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
-    .model-edit-picture { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-    .model-edit-picture-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .model-edit-form {
-        display: flex; flex-direction: column; align-items: flex-start;
-        gap: 14px; margin-top: 20px;
-    }
-    .model-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-    .model-field > span { color: var(--text-muted); font-size: 13px; }
-    .model-edit-accounts { list-style: none; margin: 0; padding: 0; }
-    .model-edit-accounts li {
-        display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-        padding: 8px 0; border-bottom: 1px solid var(--border);
-    }
-    .model-edit-accounts li:last-child { border-bottom: none; }
-    .model-edit-account-form {
-        display: flex; gap: 8px; flex: 1; min-width: 240px; flex-wrap: wrap;
-    }
-    .model-edit-account-form input { flex: 1; min-width: 0; }
-    /* The URL is the account's identity -- it keeps a row to itself above the
-       optional credential boxes, which pack as many per row as fit. */
-    .model-account-url { flex-basis: 100%; }
-    .model-account-details {
-        display: grid; gap: 8px; width: 100%;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    }
-    .model-account-details .model-field > span { font-size: 12px; }
-    .model-account-actions { width: 100%; }
-    .model-edit-accounts form { margin: 0; }
-</style>
 {% endblock %}

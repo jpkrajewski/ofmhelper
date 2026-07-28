@@ -1,20 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Helpers</h1>
-<p>Small standalone audio/media tools.</p>
+<div class="page-head">
+    <h1>Helpers</h1>
+    <p class="lead">Small standalone audio/media tools.</p>
+</div>
 
 <ul class="helper-list">
     {% for h in helpers %}
     <li>
-        <a href="/helpers/{{ h.slug }}"><strong>{{ h.name }}</strong></a>
-        <p>{{ h.description }}</p>
+        <a class="link-card" href="/helpers/{{ h.slug }}">
+            <span class="link-card-title">{{ h.name }}</span>
+            <span class="link-card-desc">{{ h.description }}</span>
+        </a>
     </li>
     {% endfor %}
 </ul>
-
-<style>
-    .helper-list { list-style: none; padding: 0; }
-    .helper-list li { padding: 12px 0; border-bottom: 1px solid #272738; }
-    .helper-list p { margin: 4px 0 0; color: #9a9aac; font-size: 14px; }
-</style>
 {% endblock %}

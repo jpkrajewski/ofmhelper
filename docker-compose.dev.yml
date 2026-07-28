@@ -15,6 +15,7 @@
 #     a rebuild (`docker compose ... restart worker` picks them up; the API
 #     reloads itself).
 #   - uvicorn --reload for the API.
+#   - a 2-process RQ pool instead of the production 10.
 #   - postgres/redis published on 127.0.0.1 for host-run `uv run pytest`.
 #   - rq-dashboard, behind the `dev` profile so it stays off unless asked for.
 
@@ -40,6 +41,11 @@ services:
     # No reloader: RQ's worker pool forks per job, and a reloader restarting it
     # mid-job would leave the job row stuck at "running". Restart it by hand
     # after changing worker-side code.
+    environment:
+      # 2 instead of the production 10: locally the pool is 10 idle Python
+      # processes competing for the same laptop, and startup/restart is the
+      # slow part of the dev loop. Bump if you need real concurrency here.
+      - OFM_RQ_WORKERS=2
     volumes:
       - ./src:/app/src
 

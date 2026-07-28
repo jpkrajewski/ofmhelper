@@ -1,30 +1,33 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Todo</h1>
+<div class="page-head">
+    <h1>Todo</h1>
+</div>
 
 {% if is_admin %}
-<form method="post" action="/todo/add" class="todo-add-form">
+<form method="post" action="/todo/add" class="card todo-add-form">
     <div class="field">
-        <label>Model name</label>
-        <input type="text" name="model_name" required>
+        <label for="todo-model">Model name</label>
+        <input type="text" name="model_name" id="todo-model" required>
     </div>
     <div class="field">
-        <label>Link to replicate</label>
-        <input type="text" name="url" required placeholder="https://...">
+        <label for="todo-url">Link to replicate</label>
+        <input type="text" name="url" id="todo-url" required placeholder="https://...">
     </div>
     <div class="field">
-        <label>Comments</label>
-        <textarea name="comments" rows="3"></textarea>
+        <label for="todo-comments">Comments</label>
+        <textarea name="comments" id="todo-comments" rows="3"></textarea>
     </div>
-    <button type="submit">Add task</button>
+    <button type="submit" class="btn-primary">Add task</button>
 </form>
 {% else %}
 <p class="form-hint">Admins add tasks here -- you can see them, but only an admin can add, check off, or remove one.</p>
 {% endif %}
 
 {% if not todos %}
-<p class="pending">No tasks yet.</p>
+<p class="empty-state">No tasks yet.</p>
 {% else %}
+<div class="table-wrap">
 <table class="todo-table">
     <colgroup>
         <col style="width: 32px;">
@@ -37,14 +40,14 @@
         {% if is_admin %}<col style="width: 70px;">{% endif %}
     </colgroup>
     <tr>
-        <th></th>
-        <th>Model name</th>
-        <th>Link</th>
-        <th>Requirements</th>
-        <th>Changes needed</th>
-        <th>Added</th>
-        <th>Asset</th>
-        {% if is_admin %}<th></th>{% endif %}
+        <th scope="col"><span class="sr-only">Done</span></th>
+        <th scope="col">Model name</th>
+        <th scope="col">Link</th>
+        <th scope="col">Requirements</th>
+        <th scope="col">Changes needed</th>
+        <th scope="col">Added</th>
+        <th scope="col">Asset</th>
+        {% if is_admin %}<th scope="col"><span class="sr-only">Actions</span></th>{% endif %}
     </tr>
     {% for t in todos %}
     <tr class="{{ 'todo-done' if t.checked else '' }}">
@@ -82,6 +85,7 @@
     </tr>
     {% endfor %}
 </table>
+</div>
 {% endif %}
 
 {% if is_admin %}

@@ -70,3 +70,14 @@ def update_contact(contact_id: str, contact_type: str, value: str) -> bool:
 
 def delete_contact(contact_id: str) -> bool:
     return _repo.delete_contact(contact_id)
+
+
+def add_competitors_bulk(model_id: str, urls: list[str]) -> list[dict] | None:
+    """One competing Instagram profile URL per line, blanks dropped. Returns
+    None if the model doesn't exist."""
+    cleaned = [u.strip() for u in urls if u.strip()]
+    return _repo.add_competitors_bulk(model_id, cleaned)
+
+
+def delete_competitor(competitor_id: str) -> bool:
+    return _repo.delete_competitor(competitor_id)

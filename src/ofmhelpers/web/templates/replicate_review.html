@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% import "_file_picker.html" as fp %}
 {% block content %}
-<h1>Replicate — Reel Teardown <code>{{ job.id }}</code></h1>
-<p>Status: <strong>{{ job.status }}</strong></p>
+<div class="page-head">
+    <h1>Replicate — Reel Teardown <code>{{ job.id }}</code></h1>
+    <div class="page-head-actions">
+        <span class="badge {{ 'badge-ok' if job.status == 'done' else 'badge-fail' if job.status == 'failed' else 'badge-neutral' }}">
+            {{ job.status }}
+        </span>
+    </div>
+</div>
 
 {% if job.status == "running" %}
 <meta http-equiv="refresh" content="2">
@@ -16,7 +22,8 @@
 <div class="generate-layout">
 <div class="generate-form-col">
     <h2 class="col-title">Teardown</h2>
-    <img src="/replicate/contact-sheet/{{ job.id }}" alt="contact sheet" style="max-width:100%">
+    <img src="/replicate/contact-sheet/{{ job.id }}" alt="Contact sheet of frames from the source reel"
+         class="media-full">
     <table class="inputs-table">
         <tr><th>Gender</th><td>{{ job.result.gender|default("female", true)|capitalize }}</td></tr>
         <tr><th>Target / persona</th><td>{{ job.result.target|default("", true) or "(none given)" }}</td></tr>
@@ -52,7 +59,7 @@
 
         {{ fp.file_picker('character_images', 'image', 'Your character — reference images (4-6, face first)') }}
 
-        <button type="submit">Generate video</button>
+        <button type="submit" class="btn-primary">Generate video</button>
     </form>
 </div>
 

@@ -2,7 +2,9 @@
 {% import "_file_picker.html" as fp %}
 {% import "_asset_media.html" as am %}
 {% block content %}
-<h1>Generate AI Assets</h1>
+<div class="page-head">
+    <h1>Generate AI Assets</h1>
+</div>
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -67,8 +69,8 @@
             <input type="number" name="duration" value="10" min="1" max="60">
         </div>
 
-        <label style="display:block; margin-bottom:16px">
-            <input type="checkbox" name="generate_audio" value="true" checked style="width:auto">
+        <label class="check-field">
+            <input type="checkbox" name="generate_audio" value="true" checked>
             Generate audio
         </label>
 
@@ -103,8 +105,8 @@
             <input type="number" name="duration" value="5" min="1" max="15">
         </div>
 
-        <label style="display:block; margin-bottom:16px">
-            <input type="checkbox" name="sound" value="true" checked style="width:auto">
+        <label class="check-field">
+            <input type="checkbox" name="sound" value="true" checked>
             Generate sound
         </label>
 
@@ -150,7 +152,7 @@
 
     <fieldset class="tool-fields" data-tool="fake_ai" disabled style="display:none">
         <legend>Fake AI Model settings</legend>
-        <p style="color:#888; font-size:13px; margin-top:-4px">
+        <p class="picker-help">
             Doesn't call any real provider -- pick an outcome to test the page's
             pending/success/error states on demand.
         </p>
@@ -181,7 +183,7 @@
             <input type="text" name="error_message" value="Simulated failure for testing">
         </div>
 
-        <p style="color:#888; font-size:13px; margin-top:-4px">
+        <p class="picker-help">
             These reference pickers don't feed into the fake generation --
             they're here so the upload/dedupe/reuse plumbing (the same
             uploads/assets store every real tool uses) has a no-cost tool to
@@ -192,7 +194,7 @@
         {{ fp.file_picker('reference_audio', 'audio', 'Reference audio (optional, for testing uploads)') }}
     </fieldset>
 
-    <button type="submit">Generate</button>
+    <button type="submit" class="btn-primary">Generate</button>
     <p class="form-hint">
         Generating doesn't block the form -- fire several runs and watch them land
         on the right. Hit ↻ Recreate on any past generation (even a failed one) to

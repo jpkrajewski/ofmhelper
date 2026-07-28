@@ -1,30 +1,33 @@
 {% extends "base.html" %}
 {% import "_models_ig_stats.html" as ig %}
 {% block content %}
-<h1>Models</h1>
+<div class="page-head">
+    <h1>Models</h1>
+</div>
 
 <div class="model-toolbar">
-    <a href="/models/new" class="model-btn">+ Add model</a>
+    <a href="/models/new" class="btn btn-primary">+ Add model</a>
     <button type="button" class="model-btn model-refresh-btn" id="model-refresh-btn"
             data-action="/models/refresh-stats">
         Refresh Instagram stats (all accounts)
     </button>
-    <span class="model-refresh-status" id="model-refresh-status" hidden></span>
+    <span class="model-refresh-status" id="model-refresh-status" role="status" hidden></span>
     <span class="model-toolbar-note">
         Scrapes every Instagram account; also runs automatically once a day.
     </span>
 </div>
 
 {% if not models %}
-<p class="pending">No models yet.</p>
+<p class="empty-state">No models yet.</p>
 {% else %}
+<div class="table-wrap">
 <table>
     <tr>
-        <th></th>
-        <th>Name</th>
-        <th>Instagram accounts</th>
-        <th>OnlyFans</th>
-        <th>Actions</th>
+        <th scope="col"><span class="sr-only">Picture</span></th>
+        <th scope="col">Name</th>
+        <th scope="col">Instagram accounts</th>
+        <th scope="col">OnlyFans</th>
+        <th scope="col">Actions</th>
     </tr>
     {% for m in models %}
     <tr>
@@ -85,30 +88,13 @@
     </tr>
     {% endfor %}
 </table>
+</div>
 {% endif %}
 
-{% include "_models_style.html" %}
-
-<style>
-    .model-popup-hint {
-        display: none; position: fixed; inset: 0; z-index: 1000;
-        background: rgba(0, 0, 0, 0.6);
-        align-items: center; justify-content: center;
-    }
-    .model-popup-hint.open { display: flex; }
-    .model-popup-hint-box {
-        background: var(--surface); border: 1px solid var(--border);
-        border-radius: 10px; padding: 24px; max-width: 420px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    }
-    .model-popup-hint-box h3 { margin: 0 0 10px; }
-    .model-popup-hint-box p { color: var(--text-muted); line-height: 1.5; }
-    .model-popup-hint-box .model-btn { margin-top: 14px; }
-</style>
-
-<div class="model-popup-hint" id="model-popup-hint">
-    <div class="model-popup-hint-box">
-        <h3>Allow pop-ups to open every tab</h3>
+<div class="modal" id="model-popup-hint" role="dialog" aria-modal="true"
+     aria-labelledby="model-popup-hint-title">
+    <div class="modal-box">
+        <h3 id="model-popup-hint-title">Allow pop-ups to open every tab</h3>
         <p>
             Your browser only let one tab through. Click the pop-up-blocked
             icon in the address bar and choose <strong>"Always allow

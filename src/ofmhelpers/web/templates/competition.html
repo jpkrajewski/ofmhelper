@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+    <h1>Competition</h1>
+</div>
+
+{% if not models %}
+<p class="empty-state">No models yet. <a href="/models/new">Add one</a> first.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+    <tr>
+        <th scope="col"><span class="sr-only">Picture</span></th>
+        <th scope="col">Name</th>
+        <th scope="col">Competition</th>
+    </tr>
+    {% for m in models %}
+    <tr>
+        <td>
+            {% if m.profile_picture_path %}
+            <img src="/models/{{ m.id }}/picture/thumb?size=96" alt="{{ m.name }}"
+                 class="model-thumb" loading="lazy">
+            {% else %}
+            <span class="model-thumb model-thumb-empty">?</span>
+            {% endif %}
+        </td>
+        <td class="model-name">
+            {{ m.name }}
+            {% if m.competitors %}
+            <div class="comp-actions">
+                <button type="button" class="model-btn comp-open-all-btn"
+                        data-urls='{{ (m.competitors | map(attribute="url") | list) | tojson }}'>
+                    Open all ({{ m.competitors | length }})
+                </button>
+            </div>
+            {% endif %}
+        </td>
+        <td>
+            {% if m.competitors %}
+            <div class="comp-list">
+                {% for c in m.competitors %}
+                <div class="comp-row">
+                    <a href="{{ c.url }}" target="_blank" rel="noopener" class="model-link"
+                       title="{{ c.url }}">@{{ c.url.rstrip("/").rsplit("/", 1)[-1] }}</a>
+                    <form method="post" action="/competition/{{ c.id }}/delete"
+                          onsubmit="return confirm('Remove {{ c.url }}?');">
+                        <button type="submit" class="model-btn model-delete-btn">Delete</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <span class="pending">none</span>
+            {% endif %}
+            <form method="post" action="/competition/{{ m.id }}/add" class="comp-add">
+                <label class="sr-only" for="comp-add-{{ m.id }}">Add competing profiles for {{ m.name }}</label>
+                <textarea name="urls" id="comp-add-{{ m.id }}" rows="2" required
+                          placeholder="https://instagram.com/profile — one per line"></textarea>
+                <button type="submit" class="btn-outline">+ Add</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+</div>
+{% endif %}
+
+<script>
+// Same browser popup cap as the Models page: the first window.open() of a
+// click is always allowed, the rest need a per-site "always allow popups"
+// exception the user grants once.
+document.querySelectorAll(".comp-open-all-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        JSON.parse(btn.dataset.urls || "[]").forEach(
+            (u) => window.open(u, "_blank", "noopener"));
+    });
+});
+</script>
+{% endblock %}

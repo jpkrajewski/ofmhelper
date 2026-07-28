@@ -15,6 +15,7 @@ from ofmhelpers.web.routers.action_log import router as action_log_router
 from ofmhelpers.web.routers.approve import router as approve_router
 from ofmhelpers.web.routers.auth import router as auth_router
 from ofmhelpers.web.routers.clean_image import router as clean_images_router
+from ofmhelpers.web.routers.competition import router as competition_router
 from ofmhelpers.web.routers.cookies import router as cookie_router
 from ofmhelpers.web.routers.download_assets import router as download_assets_router
 from ofmhelpers.web.routers.download_images import router as download_images_router
@@ -96,6 +97,7 @@ app.include_router(cookie_router)
 app.include_router(nbp_router)
 app.include_router(kling_router)
 app.include_router(models_router)
+app.include_router(competition_router)
 app.include_router(ref_router)
 app.include_router(auth_router)
 app.include_router(download_images_router)

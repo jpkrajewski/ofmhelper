@@ -1,52 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Global Ascend LLC — Content Ops</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>{% block title %}Global Ascend LLC — Content Ops{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/app.css">
     <!-- Before every other script: it wraps fetch() so an expired session
          redirects to /login instead of failing opaquely. -->
     <script src="/static/js/session.js"></script>
+    <script src="/static/js/nav.js" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
-    <div class="brand-band">
-        <h1>GLOBAL ASCEND LLC</h1>
-        <p class="tagline">Content Ops Command Center</p>
-        <p class="quote">"Speed is nothing without consistency. Consistency is nothing without tools."</p>
-    </div>
+    <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="page-content">
-        <nav>
-            {% set is_admin = request.session.get("role") == "admin" %}
-            {% set nav_items = [
-                ("/generate", "✨ Generate AI Assets"),
-                ("/replicate", "🎬 Replicate"),
-                ("/download-assets", "⬇ Download Assets"),
-                ("/todo", "☑ Todo"),
-                ("/helpers", "Helpers"),
-            ] + ([("/models", "Models"), ("/file-manager", "File Manager"), ("/action-log", "Action log")] if is_admin else []) %}
-            {% for href, label in nav_items %}
-            <a href="{{ href }}"
-               {% if request.url.path == href or request.url.path.startswith(href ~ "/") %}class="active"{% endif %}>{{ label }}</a>
-            {% endfor %}
+    {% set is_admin = request.session.get("role") == "admin" %}
+    {% set nav_items = [
+        ("/generate", "Generate AI Assets"),
+        ("/replicate", "Replicate"),
+        ("/download-assets", "Download Assets"),
+        ("/todo", "Todo"),
+        ("/helpers", "Helpers"),
+    ] + ([
+        ("/models", "Models"),
+        ("/competition", "Competition"),
+        ("/file-manager", "File Manager"),
+        ("/action-log", "Action log"),
+    ] if is_admin else []) %}
+
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a class="brand" href="/">
+                <span class="brand-name">GLOBAL ASCEND</span>
+                <span class="brand-sub">Content Ops</span>
+            </a>
+
+            <nav class="site-nav" id="site-nav" aria-label="Main">
+                <ul class="nav-links">
+                    {% for href, label in nav_items %}
+                    <li>
+                        <a href="{{ href }}"
+                           {% if request.url.path == href or request.url.path.startswith(href ~ "/") %}aria-current="page"{% endif %}>{{ label }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+
+            {# Log out lives in the bar itself, not in the nav list: it is
+               not a destination, and on a phone it must not be hidden
+               behind the menu toggle. #}
             <form method="post" action="/logout" class="logout-form">
-                <button type="submit">Log out</button>
+                <button type="submit" class="btn-ghost">Log out</button>
             </form>
-        </nav>
-        {% block content %}{% endblock %}
-    </div>
 
-    <footer>
-        <div>© 2026 Global Ascend LLC — internal content ops toolkit</div>
-        <div class="footer-links">
-            <a href="/generate">Generate</a>
-            <a href="/download-assets">Download</a>
-            <a href="/todo">Todo</a>
-            {% if is_admin %}
-            <a href="/models">Models</a>
-            <a href="/file-manager">File Manager</a>
-            <a href="/action-log">Action log</a>
-            {% endif %}
+            <button type="button" class="nav-toggle" aria-expanded="false"
+                    aria-controls="site-nav" aria-label="Toggle navigation">
+                <span class="nav-toggle-bars" aria-hidden="true"></span>
+            </button>
+        </div>
+    </header>
+
+    <main class="page-content" id="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-footer-inner">
+            <div class="footer-brand">
+                <strong>GLOBAL ASCEND LLC</strong>
+                <span>© 2026 — internal content ops toolkit</span>
+            </div>
+            <nav class="footer-links" aria-label="Footer">
+                <a href="/generate">Generate</a>
+                <a href="/download-assets">Download</a>
+                <a href="/todo">Todo</a>
+                <a href="/helpers">Helpers</a>
+                {% if is_admin %}
+                <a href="/models">Models</a>
+                <a href="/competition">Competition</a>
+                <a href="/file-manager">File Manager</a>
+                <a href="/action-log">Action log</a>
+                {% endif %}
+            </nav>
         </div>
     </footer>
 </body>
