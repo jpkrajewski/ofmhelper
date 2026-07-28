@@ -30,7 +30,7 @@ dependency).
 
 # Who calls this
 
-`web/routers/seedance.py`, `kling.py`, `nbp.py`, `fake_ai.py`, and
+`web/routers/generation/seedance.py`, `kling.py`, `nbp.py`, `fake_ai.py`, and
 `reel_machine/generation.py` all construct a `KieAIClient.from_env(api_key=...)`
 and call one of its `generate_*` methods. `web/recovery.py`'s background
 sweeper calls `resume_pending()` every few minutes across every configured API

@@ -1,5 +1,5 @@
 """
-Covers web/jobs.py's Postgres persistence (create_job/log_event/run_job write
+Covers web/stores/jobs.py's Postgres persistence (create_job/log_event/run_job write
 through to the jobs table, and the record survives a restart because the DB is
 the store) and its self-healing prune: a "done" job whose result file(s) have
 been deleted (through the file manager, or by hand on the server) should drop
@@ -11,7 +11,7 @@ tables between tests, so these never touch dev/prod data.
 """
 
 from ofmhelpers.web.db.repository import JobRepository
-from ofmhelpers.web.jobs import (
+from ofmhelpers.web.stores.jobs import (
     create_job,
     get_job,
     list_jobs,

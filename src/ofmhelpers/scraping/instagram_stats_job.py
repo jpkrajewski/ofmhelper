@@ -1,7 +1,7 @@
 """
 Nightly (and on-demand) sweep: scrape followers + last-3-posts stats for
 every Instagram account in the models roster and persist the latest result.
-Enqueued by the "Refresh stats" button in routers/models.py, and scheduled
+Enqueued by the "Refresh stats" button in routers/admin/models.py, and scheduled
 to recur at UTC midnight via `ensure_scheduled` -- see the "recurring" note
 below for why that's a plain RQ `enqueue_at`, not a background thread.
 
@@ -37,8 +37,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.scraping.instagram_public import fetch_profile_stats
 from ofmhelpers.utils.profile_loader import InstagramNormalizer
-from ofmhelpers.web import instagram_stats
-from ofmhelpers.web import models as models_store
+from ofmhelpers.web.stores import instagram_stats
+from ofmhelpers.web.stores import models as models_store
 
 logger = get_logger(__name__)
 

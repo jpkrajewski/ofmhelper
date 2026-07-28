@@ -1,5 +1,5 @@
 """
-Covers the admin-only Competition page (routers/competition.py): the
+Covers the admin-only Competition page (routers/admin/competition.py): the
 per-model list of competing Instagram profiles, add (one URL per line) and
 delete. Admin-gated like the roster it reads from.
 """
@@ -13,8 +13,8 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web import models as models_store
 from ofmhelpers.web.main import app
+from ofmhelpers.web.stores import models as models_store
 
 
 @pytest.fixture

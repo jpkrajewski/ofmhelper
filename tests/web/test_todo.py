@@ -1,5 +1,5 @@
 """
-Covers the admin-managed Todo page (web/todos.py + routers/todo.py): admins
+Covers the admin-managed Todo page (web/stores/todos.py + routers/workflow/todo.py): admins
 add "model name / link to replicate / comments" tasks for VAs to work
 through. VAs can see the list but every write endpoint
 (add/toggle/delete/export/import) is enforced admin-only server-side, not
@@ -21,10 +21,10 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web import todos
-from ofmhelpers.web.jobs import create_job, get_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import todo as todo_router
+from ofmhelpers.web.routers.workflow import todo as todo_router
+from ofmhelpers.web.stores import todos
+from ofmhelpers.web.stores.jobs import create_job, get_job
 
 
 @pytest.fixture
@@ -532,7 +532,7 @@ def test_new_asset_upload_overwrites_old_file_on_disk(client, va_client):
 
 def test_upload_to_drive_runs_as_a_background_job_not_inline(client):
     """The whole point of backgrounding: the route hands off to
-    BackgroundTasks/run_job (see web/jobs.py) instead of calling the Drive
+    BackgroundTasks/run_job (see web/stores/jobs.py) instead of calling the Drive
     client directly in the request, so a slow/large upload can't tie up the
     request indefinitely. Verified here by checking a job record was
     created and wired onto the todo, not by timing the request."""

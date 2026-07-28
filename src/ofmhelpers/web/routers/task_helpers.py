@@ -31,7 +31,10 @@ logger = get_logger(__name__)
 # tool's form) is only ever stored once. See save_asset().
 ASSETS_ROOT = Path("uploads") / "assets"
 
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+# Keep in step with utils/metadata_cleaner.SUPPORTED_EXTENSIONS: anything the
+# cleaner accepts must classify as an image here, or require_upload_kind
+# rejects an upload the tool behind it can actually process.
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
 VIDEO_EXTS = {".mp4", ".mov", ".webm", ".mkv"}
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg"}
 
@@ -48,12 +51,85 @@ def classify_kind(name: str) -> str:
     return "other"
 
 
+IMAGE_KINDS = frozenset({"image"})
+IMAGE_VIDEO_KINDS = frozenset({"image", "video"})
+MEDIA_KINDS = frozenset({"image", "video", "audio"})
+
+
+def require_upload_kind(name: str | None, allowed: frozenset[str]) -> str:
+    """safe_filename() plus an extension allowlist. Returns the safe name.
+
+    Extension, not the declared Content-Type: the client controls both, but
+    the extension is what later decides how the file is served back (see
+    media_response), so that is the thing worth constraining. Keeps
+    executable-in-a-browser uploads (.html, .svg, .xhtml) out of the store
+    entirely rather than relying on the serving side alone.
+    """
+    safe = safe_filename(name)
+    if classify_kind(safe) not in allowed:
+        allowed_exts = sorted(
+            ext
+            for kind, exts in (
+                ("image", IMAGE_EXTS),
+                ("video", VIDEO_EXTS),
+                ("audio", AUDIO_EXTS),
+            )
+            if kind in allowed
+            for ext in exts
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed_exts)}",
+        )
+    return safe
+
+
+def media_response(path: Path, filename: str | None = None) -> FileResponse:
+    """Serve a user-uploaded file without letting it run inside our origin.
+
+    Image/video/audio go back inline with their real type -- the app's own
+    <img>/<video> tags and Discord's link crawler both need that. Anything
+    else is forced to `application/octet-stream` as an attachment: uploads
+    are restricted to media now, but files stored before that (or reached by
+    some path this doesn't know about) must not be able to come back as
+    same-origin HTML and run script with the viewer's session cookie.
+    `nosniff` stops the browser overriding either decision.
+    """
+    headers = {"X-Content-Type-Options": "nosniff"}
+    name = filename or path.name
+    if classify_kind(name) in MEDIA_KINDS:
+        media_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        return FileResponse(path, media_type=media_type, headers=headers)
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        filename=name,  # Content-Disposition: attachment
+        headers=headers,
+    )
+
+
 def strip_asset_hash_prefix(filename: str) -> str:
     """Strip the "{sha256}__" content-hash prefix save_asset() stores files
     under -- the hash is only there to dedupe/avoid collisions on disk;
     anywhere a file gets shown to a human should show the original name."""
     _, _, rest = filename.partition("__")
     return rest or filename
+
+
+def safe_filename(name: str | None) -> str:
+    """The basename of a client-supplied upload name, and nothing else.
+
+    `UploadFile.filename` is whatever the client put in the multipart part --
+    "../../cookies/cookies.txt" is a legal value, and joining that onto an
+    upload directory writes outside it. Every path built from an upload name
+    goes through here first. Backslashes are folded to "/" so a Windows-style
+    path is stripped the same way on Linux, where "\\" is an ordinary
+    filename character.
+    """
+    base = Path((name or "").replace("\\", "/")).name
+    if not base or base in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid file name")
+    return base
 
 
 def make_job_dir(upload_root: Path) -> Path:
@@ -64,7 +140,7 @@ def make_job_dir(upload_root: Path) -> Path:
 
 
 def save_upload(job_dir: Path, upload: UploadFile) -> str:
-    dest = job_dir / upload.filename
+    dest = job_dir / safe_filename(upload.filename)
     with dest.open("wb") as out:
         shutil.copyfileobj(upload.file, out)
     return str(dest)
@@ -79,6 +155,10 @@ def save_asset(upload: UploadFile, assets_root: Path = ASSETS_ROOT) -> str:
     guarantees no collisions and makes "does this already exist" an O(1)
     glob instead of hashing every file already on disk; the original name is
     kept after the prefix purely for display (see refs.py)."""
+    # Before the temp file, so a rejected name doesn't leave one behind.
+    # Audio is allowed here (unlike the todo/model uploads): this store backs
+    # the reference-audio inputs of the generation tools.
+    stored_name = require_upload_kind(upload.filename, MEDIA_KINDS)
     assets_root.mkdir(parents=True, exist_ok=True)
 
     hasher = hashlib.sha256()
@@ -94,7 +174,7 @@ def save_asset(upload: UploadFile, assets_root: Path = ASSETS_ROOT) -> str:
         tmp_path.unlink()
         return str(existing)
 
-    final_path = assets_root / f"{digest}__{upload.filename}"
+    final_path = assets_root / f"{digest}__{stored_name}"
     try:
         tmp_path.rename(final_path)
     except FileExistsError:
@@ -373,11 +453,14 @@ def serve_job_file(
     job: dict | None,
     index: int,
     as_attachment: bool = True,
-    default_media_type: str = "application/octet-stream",
 ) -> FileResponse:
     """Generic '/files/{job_id}/{index}' implementation. The URL only ever
     carries a job id + integer index -- never a raw path -- and this only
-    ever serves a file that job's own result already points to."""
+    ever serves a file that job's own result already points to.
+
+    Inline serving goes through media_response, so a job whose output is not
+    image/video/audio comes back as a download instead of as a page in our
+    own origin (see media_response)."""
     if job is None or job.get("status") != "done":
         raise HTTPException(status_code=404, detail="Job not found or not finished")
 
@@ -402,5 +485,4 @@ def serve_job_file(
             path, filename=path.name, media_type="application/octet-stream"
         )
 
-    media_type = mimetypes.guess_type(path.name)[0] or default_media_type
-    return FileResponse(path, media_type=media_type)
+    return media_response(path)

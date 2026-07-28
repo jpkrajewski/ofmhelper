@@ -67,6 +67,10 @@ def _test_database():
     # tests see the result immediately. test_worker_integration flips this back
     # to async to exercise the real worker.
     os.environ["OFM_RQ_ASYNC"] = "false"
+    # Every test shares one client host ("testclient"), so the per-IP write
+    # ceiling would eventually trip on unrelated tests. Off by default; the
+    # rate-limit tests turn it back on explicitly.
+    os.environ["OFM_RATE_LIMIT_ENABLED"] = "false"
 
     # Import here, after the env var is set, so the engine binds to the test DB.
     from ofmhelpers.web.db.models import Base

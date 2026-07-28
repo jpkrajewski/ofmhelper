@@ -1,3 +1,9 @@
+"""
+The FastAPI application: logging, middleware, static files, lifespan, and
+the router registration loop. Nothing feature-specific lives here -- a new
+page is added to `routers/__init__.py`'s ROUTERS list, not to this file.
+"""
+
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,31 +15,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.web.auth import AuthMiddleware
-from ofmhelpers.web.jobs import load_jobs
+from ofmhelpers.web.ratelimit import WriteRateLimitMiddleware
 from ofmhelpers.web.recovery import recovery_loop
-from ofmhelpers.web.routers.action_log import router as action_log_router
-from ofmhelpers.web.routers.approve import router as approve_router
-from ofmhelpers.web.routers.auth import router as auth_router
-from ofmhelpers.web.routers.clean_image import router as clean_images_router
-from ofmhelpers.web.routers.competition import router as competition_router
-from ofmhelpers.web.routers.cookies import router as cookie_router
-from ofmhelpers.web.routers.download_assets import router as download_assets_router
-from ofmhelpers.web.routers.download_images import router as download_images_router
-from ofmhelpers.web.routers.download_reels import router as download_reels_router
-from ofmhelpers.web.routers.el import router as el_router
-from ofmhelpers.web.routers.fake_ai import router as fake_ai_router
-from ofmhelpers.web.routers.file_manager import router as file_manager_router
-from ofmhelpers.web.routers.generate import router as generate_router
-from ofmhelpers.web.routers.helper_index import router as helper_router
-from ofmhelpers.web.routers.kling import router as kling_router
-from ofmhelpers.web.routers.models import router as models_router
-from ofmhelpers.web.routers.nbp import router as nbp_router
-from ofmhelpers.web.routers.radio_comms import router as radio_router
-from ofmhelpers.web.routers.refs import router as ref_router
-from ofmhelpers.web.routers.replicate import router as replicate_router
-from ofmhelpers.web.routers.scraper import router as scraper_router
-from ofmhelpers.web.routers.seedance import router as seedance_router
-from ofmhelpers.web.routers.todo import router as todo_router
+from ofmhelpers.web.routers import ROUTERS
+from ofmhelpers.web.stores.jobs import load_jobs
 from ofmhelpers.web.templates_config import templates
 
 # Before anything else in the process logs: uvicorn imports this module to
@@ -46,8 +31,8 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Job history (the /generate gallery, Action log, every task's status
-    # page) is persisted to disk -- reload it now so a restart/rebuild
-    # doesn't start with a blank slate. See ofmhelpers/web/jobs.py.
+    # page) is persisted -- reload it now so a restart/rebuild doesn't start
+    # with a blank slate. See web/stores/jobs.py.
     load_jobs()
 
     # Background recovery sweeper: auto-downloads kie.ai generations whose
@@ -62,14 +47,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Global Ascend LLC — Content Ops", lifespan=lifespan)
 
-# --- Auth setup -------------------------------------------------------
-# SessionMiddleware signs/reads the cookie; AuthMiddleware gates every
-# request on it. Order matters: SessionMiddleware must be added so it
-# wraps AuthMiddleware (Starlette applies middleware outside-in in the
-# order added, so Session needs to be added AFTER Auth here -- the last
-# .add_middleware() call ends up outermost / runs first).
+# --- Middleware -------------------------------------------------------
+# Starlette applies middleware outside-in in the order added, so the LAST
+# .add_middleware() call ends up outermost / runs first. Reading bottom-up,
+# a request therefore passes: SessionMiddleware (reads/signs the cookie) ->
+# WriteRateLimitMiddleware (drops a flood before any auth work) ->
+# AuthMiddleware (gates everything not on the public allowlist).
 _session_settings = settings.session
 app.add_middleware(AuthMiddleware)
+app.add_middleware(WriteRateLimitMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=_session_settings.session_secret,  # required -- set in .env
@@ -84,29 +70,8 @@ app.mount(
     name="static",
 )
 
-app.include_router(download_reels_router)
-app.include_router(clean_images_router)
-app.include_router(seedance_router)
-app.include_router(action_log_router)
-app.include_router(el_router)
-app.include_router(helper_router)
-app.include_router(radio_router)
-app.include_router(scraper_router)
-app.include_router(file_manager_router)
-app.include_router(cookie_router)
-app.include_router(nbp_router)
-app.include_router(kling_router)
-app.include_router(models_router)
-app.include_router(competition_router)
-app.include_router(ref_router)
-app.include_router(auth_router)
-app.include_router(download_images_router)
-app.include_router(generate_router)
-app.include_router(fake_ai_router)
-app.include_router(download_assets_router)
-app.include_router(todo_router)
-app.include_router(approve_router)
-app.include_router(replicate_router)
+for router in ROUTERS:
+    app.include_router(router)
 
 
 @app.get("/")

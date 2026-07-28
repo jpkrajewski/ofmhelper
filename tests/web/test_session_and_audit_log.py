@@ -15,8 +15,8 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
 
-from ofmhelpers.web.jobs import list_jobs
 from ofmhelpers.web.main import app
+from ofmhelpers.web.stores.jobs import list_jobs
 
 
 @pytest.fixture

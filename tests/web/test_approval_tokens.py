@@ -1,14 +1,14 @@
 """
-Covers web/approval_tokens.py: the single-use "magic link" token store behind
-the Discord approval flow (see web/routers/approve.py). Backed by Postgres now
+Covers web/stores/approval_tokens.py: the single-use "magic link" token store behind
+the Discord approval flow (see web/routers/workflow/approve.py). Backed by Postgres now
 (conftest truncates the table between tests), so no on-disk isolation is
 needed. Expiry is exercised by swapping the repository's clock forward.
 """
 
 import time
 
-from ofmhelpers.web import approval_tokens
 from ofmhelpers.web.db import repository
+from ofmhelpers.web.stores import approval_tokens
 
 
 class _FrozenClock:

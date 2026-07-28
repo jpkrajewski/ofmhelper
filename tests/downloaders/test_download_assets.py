@@ -21,11 +21,11 @@ from fastapi.testclient import TestClient
 
 from ofmhelpers.downloaders.generic import DownloadResult
 from ofmhelpers.downloaders.images import ImageDownloadResult
-from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import clean_image as clean_image_router
-from ofmhelpers.web.routers import download_images as download_images_router
-from ofmhelpers.web.routers import download_reels as download_reels_router
+from ofmhelpers.web.routers.downloads import clean_image as clean_image_router
+from ofmhelpers.web.routers.downloads import images as download_images_router
+from ofmhelpers.web.routers.downloads import videos as download_reels_router
+from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
 @pytest.fixture

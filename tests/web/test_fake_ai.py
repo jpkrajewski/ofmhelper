@@ -20,9 +20,9 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.jobs import get_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import fake_ai as fake_ai_router
+from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
+from ofmhelpers.web.stores.jobs import get_job
 
 
 @pytest.fixture
@@ -73,7 +73,9 @@ def test_error_outcome_fails_with_the_exact_message_typed_in(client):
 def test_video_outcome_shells_out_to_ffmpeg(client, tmp_path, monkeypatch):
     monkeypatch.setattr(fake_ai_router, "OUT_DIR", tmp_path)
 
-    with mock.patch("ofmhelpers.web.routers.fake_ai.subprocess.run") as mock_run:
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.fake_ai.subprocess.run"
+    ) as mock_run:
         mock_run.return_value = mock.Mock(returncode=0)
         r = client.post(
             "/fake-ai/run",
@@ -100,7 +102,8 @@ def test_video_outcome_without_ffmpeg_installed_fails_cleanly(
     monkeypatch.setattr(fake_ai_router, "OUT_DIR", tmp_path)
 
     with mock.patch(
-        "ofmhelpers.web.routers.fake_ai.subprocess.run", side_effect=FileNotFoundError()
+        "ofmhelpers.web.routers.generation.fake_ai.subprocess.run",
+        side_effect=FileNotFoundError(),
     ):
         r = client.post(
             "/fake-ai/run",

@@ -16,12 +16,10 @@ import pytest
 from PIL import Image
 
 from ofmhelpers.downloaders.generic import DownloadResult
-from ofmhelpers.web.routers import (
-    clean_image,
-    download_images,
-    download_reels,
-    task_helpers,
-)
+from ofmhelpers.web.routers import task_helpers
+from ofmhelpers.web.routers.downloads import clean_image
+from ofmhelpers.web.routers.downloads import images as download_images
+from ofmhelpers.web.routers.downloads import videos as download_reels
 
 
 def _png_bytes() -> bytes:

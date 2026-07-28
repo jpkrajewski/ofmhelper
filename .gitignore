@@ -7,12 +7,18 @@ __pycache__
 .env
 .pytest_cache
 .ruff_cache
-uploads/
 *.egg-info
 .pre-commit-config.yaml
-kieai_out
-out
-secrets
-downloads
 CLAUDE.local.md
 deploy.local.env
+
+# Runtime data directories, anchored to the repo root with a leading slash.
+# Unanchored ("downloads"), git matches the name at ANY depth -- which
+# silently ignored src/ofmhelpers/web/routers/downloads/__init__.py once the
+# routers were grouped into packages. Keep these anchored.
+/uploads/
+/downloads/
+/kieai_out/
+/out/
+/secrets/
+/cookies/

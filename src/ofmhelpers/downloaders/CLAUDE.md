@@ -23,6 +23,6 @@ gallery-dl, plus shared cookie-file handling for authenticated sites
 
 # Who calls this
 
-`web/routers/download_reels.py` (video), `download_images.py` (images),
+`web/routers/downloads/videos.py` (video), `download_images.py` (images),
 `reel_machine/intake.py` (reel fetch — reuses `generic.download`, never a
 separate HTTP/yt-dlp call).

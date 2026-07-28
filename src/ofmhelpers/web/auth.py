@@ -29,7 +29,7 @@ PUBLIC_PATHS = {
 }
 PUBLIC_PREFIXES = (
     "/static/",  # css/js/images, if you serve any
-    "/approve/",  # magic-link asset approval -- see routers/approve.py
+    "/approve/",  # magic-link asset approval -- see routers/workflow/approve.py
 )
 
 
@@ -130,7 +130,7 @@ def require_admin(request: Request) -> None:
     Use as a router-level `dependencies=[Depends(require_admin)]` for whole
     pages VAs shouldn't reach at all (file-manager, action-log). For routes
     where VAs can view but only admins can mutate, check role inline per-route
-    instead -- see routers/todo.py.
+    instead -- see routers/workflow/todo.py.
     """
     if request.session.get("role") != ROLE_ADMIN:
         raise HTTPException(status_code=403, detail="Admins only")

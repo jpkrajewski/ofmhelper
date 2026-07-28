@@ -30,7 +30,7 @@ then exporting the results to a formatted spreadsheet for review.
   fork+Playwright deadlocks. Tunables live in
   `config.settings.InstagramStatsSettings`; selectors/regexes stay here.
 - `instagram_stats_job.py` — the RQ job that sweeps every Instagram account
-  in the models roster and persists the result (`web/instagram_stats.py`).
+  in the models roster and persists the result (`web/stores/instagram_stats.py`).
   Runs daily: `ensure_scheduled()` (called at worker boot) seeds one
   `enqueue_at`, and each sweep re-queues the next. Never use a thread for
   this — see the docstring.
@@ -40,7 +40,7 @@ then exporting the results to a formatted spreadsheet for review.
 
 # Who calls this
 
-`web/routers/scraper.py` drives this pipeline from the web UI: pick a
+`web/routers/helpers/scraper.py` drives this pipeline from the web UI: pick a
 scraper (`config.scrapers.SCRAPRES_REGISTRY`) -> run it via
 `get_client_with_most_credits` + `run_actor` -> normalize items via
 `Reel`/`TikTokVideo.from_apify` -> export via `PostExcelExporter` ->

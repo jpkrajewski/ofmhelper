@@ -17,8 +17,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.reel_machine.pipeline import DraftResult
-from ofmhelpers.web.jobs import get_job
 from ofmhelpers.web.main import app
+from ofmhelpers.web.stores.jobs import get_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -55,11 +55,11 @@ def test_intake_requires_a_source(client):
 def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
     with (
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.intake_reel",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
             return_value=DraftResult(script="DRAFT SCRIPT TEXT"),
         ),
     ):
@@ -85,11 +85,11 @@ def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
 def test_intake_threads_target_and_gender_to_draft_script(client, tmp_path):
     with (
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.intake_reel",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
             return_value=DraftResult(script="DRAFT"),
         ) as mock_draft_script,
     ):
@@ -121,11 +121,11 @@ def test_form_page_lists_genders(client):
 def test_review_page_renders_the_draft_script_editable(client, tmp_path):
     with (
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.intake_reel",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
             return_value=DraftResult(script="MY DRAFT SCRIPT"),
         ),
     ):
@@ -143,7 +143,7 @@ def test_review_page_renders_the_draft_script_editable(client, tmp_path):
 
 def test_intake_job_failure_is_surfaced_on_the_review_page(client):
     with mock.patch(
-        "ofmhelpers.web.routers.replicate.pipeline.intake_reel",
+        "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
         side_effect=RuntimeError("could not download reel"),
     ):
         job_id = client.post(
@@ -164,7 +164,7 @@ def test_generate_creates_a_replicate_job(client, tmp_path):
     fake_video.write_bytes(b"fake video bytes")
 
     with mock.patch(
-        "ofmhelpers.web.routers.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
         return_value=fake_video,
     ):
         r = client.post(
@@ -190,7 +190,7 @@ def test_generate_job_status_page_reuses_job_status_html(client, tmp_path):
     fake_video.write_bytes(b"fake video bytes")
 
     with mock.patch(
-        "ofmhelpers.web.routers.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
         return_value=fake_video,
     ):
         job_id = client.post(
@@ -203,7 +203,7 @@ def test_generate_job_status_page_reuses_job_status_html(client, tmp_path):
 
 
 def test_replicate_registered_in_generate_gallery():
-    from ofmhelpers.web.routers.generate import FILES_PREFIX, TASK_LABELS
+    from ofmhelpers.web.routers.generation.index import FILES_PREFIX, TASK_LABELS
 
     assert TASK_LABELS["replicate"] == "Replicate (Reel Clone)"
     assert FILES_PREFIX["replicate"] == "/replicate/files"
@@ -212,11 +212,11 @@ def test_replicate_registered_in_generate_gallery():
 def test_jobs_status_json_dispatches_by_task(client, tmp_path):
     with (
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.intake_reel",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
             return_value=_mock_intake_result(tmp_path),
         ),
         mock.patch(
-            "ofmhelpers.web.routers.replicate.pipeline.draft_script_full",
+            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
             return_value=DraftResult(script="a draft"),
         ),
     ):

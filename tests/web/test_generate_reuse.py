@@ -27,9 +27,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.db.repository import JobRepository
-from ofmhelpers.web.jobs import create_job, get_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import fake_ai as fake_ai_router
+from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
+from ofmhelpers.web.stores.jobs import create_job, get_job
 
 
 @pytest.fixture
@@ -64,7 +64,9 @@ def _with_remote_url(path: str, url: str):
 
 
 def _submit_seedance(client):
-    with mock.patch("ofmhelpers.web.routers.seedance.KieAIClient") as MockClient:
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.seedance.KieAIClient"
+    ) as MockClient:
         MockClient.from_env.return_value.generate_video_seedance2.side_effect = (
             _with_remote_url("/tmp/fake.mp4", "https://cdn.kie.ai/out/fake.mp4")
         )
@@ -77,7 +79,9 @@ def _submit_seedance(client):
 
 
 def _submit_kling3(client):
-    with mock.patch("ofmhelpers.web.routers.kling.KieAIClient") as MockClient:
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.kling.KieAIClient"
+    ) as MockClient:
         MockClient.from_env.return_value.generate_video_kling3.side_effect = (
             _with_remote_url("/tmp/fake.mp4", "https://cdn.kie.ai/out/fake.mp4")
         )
@@ -87,7 +91,7 @@ def _submit_kling3(client):
 
 
 def _submit_nanobanana(client):
-    with mock.patch("ofmhelpers.web.routers.nbp.KieAIClient") as MockClient:
+    with mock.patch("ofmhelpers.web.routers.generation.nbp.KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_nbp.side_effect = (
             _with_remote_url("/tmp/fake.png", "https://cdn.kie.ai/out/fake.png")
         )

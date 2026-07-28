@@ -20,5 +20,5 @@ quota of their own, so uploads to a personal Drive always fail with them).
 
 # Who calls this
 
-The todo-approval flow (`web/routers/todo.py` / `web/approval_tokens.py`) —
+The todo-approval flow (`web/routers/workflow/todo.py` / `web/stores/approval_tokens.py`) —
 approved assets get uploaded to Drive for VA/client handoff.

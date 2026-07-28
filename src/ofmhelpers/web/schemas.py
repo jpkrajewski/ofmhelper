@@ -1,7 +1,7 @@
 """
 Pydantic v2 models for the three durable stores that back the web app:
-jobs (web/jobs.py), todos (web/todos.py) and approval tokens
-(web/approval_tokens.py). These are the typed contract at the persistence
+jobs (web/stores/jobs.py), todos (web/stores/todos.py) and approval tokens
+(web/stores/approval_tokens.py). These are the typed contract at the persistence
 boundary -- one source of truth for the shapes that used to live only as
 ad-hoc dicts in JSON files.
 
@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class JobStatus(StrEnum):
-    """The only three states web/jobs.py ever assigns."""
+    """The only three states web/stores/jobs.py ever assigns."""
 
     running = "running"
     done = "done"
@@ -75,7 +75,7 @@ class Todo(BaseModel):
 
 
 class ApprovalToken(BaseModel):
-    """A single-use magic-link approval token (routers/approve.py). Snapshots
+    """A single-use magic-link approval token (routers/workflow/approve.py). Snapshots
     the asset_path it was issued for so a later asset swap is caught as
     'stale' rather than approving the wrong file."""
 

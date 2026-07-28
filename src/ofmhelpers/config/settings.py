@@ -37,8 +37,8 @@ class SessionSettings(BaseSettings):
 
 class WebSettings(BaseSettings):
     """auth.py, recovery.py, jobs.py, todos.py, approval_tokens.py,
-    routers/todo.py, routers/approve.py, routers/generate.py,
-    routers/download_assets.py."""
+    routers/workflow/todo.py, routers/workflow/approve.py, routers/generation/index.py,
+    routers/downloads/index.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -67,6 +67,30 @@ class WebSettings(BaseSettings):
         default=3 * 24 * 3600, validation_alias="OFM_APPROVAL_TOKEN_TTL_SECONDS"
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
+
+    # Rate limiting (web/ratelimit.py). The kill switch exists for the test
+    # suite, which fires hundreds of POSTs from one client host -- leave it on
+    # everywhere else.
+    rate_limit_enabled: bool = Field(
+        default=True, validation_alias="OFM_RATE_LIMIT_ENABLED"
+    )
+    # Failed logins per client IP before /login starts answering 429. Shared
+    # passwords with no per-user lockout, so this is the only thing standing
+    # between an attacker and unlimited guesses.
+    login_max_failures: int = Field(
+        default=10, validation_alias="OFM_LOGIN_MAX_FAILURES"
+    )
+    login_failure_window_s: int = Field(
+        default=900, validation_alias="OFM_LOGIN_FAILURE_WINDOW_S"
+    )
+    # Blunt per-IP ceiling on every mutating request. Generous on purpose: a
+    # legitimate multi-file upload burst must not hit it.
+    write_rate_limit_requests: int = Field(
+        default=120, validation_alias="OFM_WRITE_RATE_LIMIT_REQUESTS"
+    )
+    write_rate_limit_window_s: int = Field(
+        default=60, validation_alias="OFM_WRITE_RATE_LIMIT_WINDOW_S"
+    )
 
 
 class InfraSettings(BaseSettings):
@@ -100,8 +124,8 @@ class InfraSettings(BaseSettings):
 
 
 class KieAISettings(BaseSettings):
-    """aigenproviders/kaiai/client.py, upload_cache.py, routers/fake_ai.py,
-    routers/file_manager.py."""
+    """aigenproviders/kaiai/client.py, upload_cache.py, routers/generation/fake_ai.py,
+    routers/admin/file_manager.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -129,7 +153,7 @@ class KieAISettings(BaseSettings):
 
 
 class DownloadersSettings(BaseSettings):
-    """downloaders/cookies.py, downloaders/generic.py, routers/cookies.py."""
+    """downloaders/cookies.py, downloaders/generic.py, routers/admin/cookies.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

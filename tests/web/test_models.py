@@ -1,5 +1,5 @@
 """
-Covers the admin-only Models page (web/models.py + routers/models.py):
+Covers the admin-only Models page (web/models.py + routers/admin/models.py):
 CRUD for a model's name/profile picture/OnlyFans link, plus its nested
 Instagram accounts. Every route is admin-only server-side (whole router is
 gated via require_admin, like file_manager.py/action_log.py), so a VA must
@@ -16,10 +16,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.scraping.instagram_stats_job import collect_all_instagram_stats
-from ofmhelpers.web import instagram_stats
-from ofmhelpers.web import models as models_store
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import models as models_router
+from ofmhelpers.web.routers.admin import models as models_router
+from ofmhelpers.web.stores import instagram_stats
+from ofmhelpers.web.stores import models as models_store
 
 
 @pytest.fixture

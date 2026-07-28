@@ -86,7 +86,7 @@ def fetch_source(url_or_path: str, out_dir: Path) -> Path:
 def _run_ffmpeg(cmd: list[str]) -> None:
     """Runs an ffmpeg command, surfacing real stderr in the raised error
     instead of a bare CalledProcessError with no message -- matches the
-    pattern web/routers/fake_ai.py already uses for its own ffmpeg call."""
+    pattern web/routers/generation/fake_ai.py already uses for its own ffmpeg call."""
     try:
         subprocess.run(cmd, capture_output=True, check=True)
     except FileNotFoundError as exc:

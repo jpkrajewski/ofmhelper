@@ -23,8 +23,8 @@ from PIL import Image
 
 from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import download_reels as download_reels_router
-from ofmhelpers.web.routers import fake_ai as fake_ai_router
+from ofmhelpers.web.routers.downloads import videos as download_reels_router
+from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
 
 
 def _png_bytes() -> bytes:
@@ -105,7 +105,9 @@ def test_reference_preview_url_actually_serves_the_file(client, tmp_path, monkey
 
 
 def test_seedance_job_status_shows_settings_and_reference_video(client):
-    with mock.patch("ofmhelpers.web.routers.seedance.KieAIClient") as MockClient:
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.seedance.KieAIClient"
+    ) as MockClient:
 
         def fake_generate(**kwargs):
             kwargs["on_result_urls"](["https://cdn.kie.ai/out/fake.mp4"])
@@ -136,7 +138,9 @@ def test_seedance_job_status_shows_settings_and_reference_video(client):
 
 
 def test_kling3_job_status_shows_settings(client):
-    with mock.patch("ofmhelpers.web.routers.kling.KieAIClient") as MockClient:
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.kling.KieAIClient"
+    ) as MockClient:
 
         def fake_generate(**kwargs):
             kwargs["on_result_urls"](["https://cdn.kie.ai/out/fake.mp4"])
@@ -157,7 +161,7 @@ def test_kling3_job_status_shows_settings(client):
 
 
 def test_nanobanana_job_status_shows_settings(client):
-    with mock.patch("ofmhelpers.web.routers.nbp.KieAIClient") as MockClient:
+    with mock.patch("ofmhelpers.web.routers.generation.nbp.KieAIClient") as MockClient:
 
         def fake_generate(**kwargs):
             kwargs["on_result_urls"](["https://cdn.kie.ai/out/fake.png"])

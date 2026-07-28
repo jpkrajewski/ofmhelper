@@ -10,7 +10,7 @@ Bash scripts + Markdown "Claude Skill" files (a downloaded product template)
 that drove generation through the WaveSpeed CLI and only ran inside an
 interactive Claude Code session. This package is plain, testable Python,
 wired into the FastAPI web app at `/replicate` (see
-`web/routers/replicate.py`), and generates through the same `KieAIClient`
+`web/routers/generation/replicate.py`), and generates through the same `KieAIClient`
 every other tool in this repo uses (kie.ai, not WaveSpeed).
 
 Pipeline order: `intake.py` (download/frames/transcribe) -> `teardown.py`
@@ -26,7 +26,7 @@ together for the web layer.
   `downloaders.generic.download`; a failed Instagram download gets a hint
   appended pointing at `/cookies` -- Instagram blocks most logged-out reel
   downloads, and this repo already has cookie-upload support for exactly
-  that, see `web/routers/cookies.py`), `extract_frames` (ffmpeg subprocess
+  that, see `web/routers/admin/cookies.py`), `extract_frames` (ffmpeg subprocess
   via `_run_ffmpeg`, which surfaces real stderr instead of a bare
   `CalledProcessError`; 1fps frame sequence + a 4x4 contact sheet -- the
   contact-sheet command passes `-frames:v 1 -update 1` since it writes ONE
@@ -109,12 +109,12 @@ together for the web layer.
 - `generation.py` — `generate_reel_clone(...)`: uploads character reference
   images and calls the existing `KieAIClient.generate_video_seedance2` (no
   separate HTTP client — reuses `aigenproviders/kaiai/client.py`). Defaults
-  to `aspect_ratio="9:16"` (reels are vertical, unlike `web/routers/seedance.py`'s
+  to `aspect_ratio="9:16"` (reels are vertical, unlike `web/routers/generation/seedance.py`'s
   `16:9` default).
 - `pipeline.py` — `intake_reel` / `draft_script_full(intake, shape_key,
   look_key, duration=None, llm_provider, target="", gender=DEFAULT_GENDER)
   -> DraftResult(script, main_subject)`: the entry points
-  `web/routers/replicate.py` actually calls (`draft_script(...) -> str` is a
+  `web/routers/generation/replicate.py` actually calls (`draft_script(...) -> str` is a
   thin back-compat wrapper returning just `.script`, kept for callers that
   don't need `main_subject`). `duration` defaults to `None`, meaning "derive
   from `intake.duration` via `clamp_duration` (Seedance's 4-15s supported
@@ -223,6 +223,6 @@ requested, since they're either heavy or paid.
 
 # Who calls this
 
-`web/routers/replicate.py` is the only caller — see its own module docstring
+`web/routers/generation/replicate.py` is the only caller — see its own module docstring
 and `web/CLAUDE.md` for how the two-stage job flow (intake -> review/edit ->
 generate) is wired to this package.

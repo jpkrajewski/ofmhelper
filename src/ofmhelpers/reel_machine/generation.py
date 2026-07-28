@@ -2,7 +2,7 @@
 Fires the actual Seedance 2.0 generation via the *existing* KieAIClient --
 reel_machine has no HTTP client of its own; this only uploads the user's
 character reference images and calls generate_video_seedance2, same as
-web/routers/seedance.py does.
+web/routers/generation/seedance.py does.
 """
 
 from pathlib import Path
