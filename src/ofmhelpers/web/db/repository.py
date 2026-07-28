@@ -30,6 +30,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.web.db.cache import CachedRepository, cached, invalidates_cache
 from ofmhelpers.web.db.models import (
     ApprovalTokenRow,
+    CompetitorProfileRow,
     InstagramAccountRow,
     InstagramStatsRow,
     JobRow,
@@ -334,6 +335,10 @@ def _model_contact_to_dict(row: ModelContactRow) -> dict:
     }
 
 
+def _competitor_to_dict(row: CompetitorProfileRow) -> dict:
+    return {"id": row.id, "model_id": row.model_id, "url": row.url}
+
+
 def _model_to_dict(row: ModelRow) -> dict:
     return {
         "id": row.id,
@@ -346,6 +351,7 @@ def _model_to_dict(row: ModelRow) -> dict:
             _instagram_account_to_dict(a) for a in row.instagram_accounts
         ],
         "contacts": [_model_contact_to_dict(c) for c in row.contacts],
+        "competitors": [_competitor_to_dict(c) for c in row.competitors],
     }
 
 
@@ -508,6 +514,36 @@ class ModelRepository(CachedRepository):
     def delete_contact(self, contact_id: str) -> bool:
         with session_scope() as s:
             row = s.get(ModelContactRow, contact_id)
+            if row is None:
+                return False
+            s.delete(row)
+            return True
+
+    @invalidates_cache
+    def add_competitors_bulk(self, model_id: str, urls: list[str]) -> list[dict] | None:
+        """Competing Instagram profiles, one row per URL. None if the model
+        doesn't exist."""
+        with session_scope() as s:
+            model = s.get(ModelRow, model_id)
+            if model is None:
+                return None
+            rows = [
+                CompetitorProfileRow(
+                    id=uuid.uuid4().hex[:8],
+                    model_id=model_id,
+                    url=url,
+                    created_at=time.time(),
+                )
+                for url in urls
+            ]
+            s.add_all(rows)
+            s.flush()
+            return [_competitor_to_dict(r) for r in rows]
+
+    @invalidates_cache
+    def delete_competitor(self, competitor_id: str) -> bool:
+        with session_scope() as s:
+            row = s.get(CompetitorProfileRow, competitor_id)
             if row is None:
                 return False
             s.delete(row)

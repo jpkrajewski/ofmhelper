@@ -87,6 +87,11 @@ class ModelRow(Base):
         cascade="all, delete-orphan",
         order_by="ModelContactRow.created_at",
     )
+    competitors: Mapped[list[CompetitorProfileRow]] = relationship(
+        back_populates="model",
+        cascade="all, delete-orphan",
+        order_by="CompetitorProfileRow.created_at",
+    )
 
     __table_args__ = (Index("ix_models_created_at", "created_at"),)
 
@@ -131,6 +136,25 @@ class ModelContactRow(Base):
     model: Mapped[ModelRow] = relationship(back_populates="contacts")
 
     __table_args__ = (Index("ix_model_contacts_model_id", "model_id"),)
+
+
+class CompetitorProfileRow(Base):
+    """An Instagram profile the model competes with -- the list the team
+    opens and scrolls every day. Just a link per row; the model's own
+    accounts live in instagram_accounts."""
+
+    __tablename__ = "competitor_profiles"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("models.id", ondelete="CASCADE"), nullable=False
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    model: Mapped[ModelRow] = relationship(back_populates="competitors")
+
+    __table_args__ = (Index("ix_competitor_profiles_model_id", "model_id"),)
 
 
 class InstagramStatsRow(Base):
