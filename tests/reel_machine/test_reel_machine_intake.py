@@ -1,103 +1,70 @@
 """
-fetch_source: a local file is copied in directly; a URL goes through
-downloaders.generic.download. A failed Instagram download must surface a
-hint pointing at /cookies (Instagram blocks logged-out downloads for most
-reels) so the failure is actionable from the job's error message alone,
-not just a raw yt-dlp error.
+Intake is now just "get the file, measure it". These cover the two branches
+that aren't a subprocess call: a local upload is copied rather than
+downloaded, and a failed Instagram download gets the /cookies hint appended.
 """
 
-import subprocess
+from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from ofmhelpers.downloaders.generic import DownloadResult
-from ofmhelpers.reel_machine.intake import fetch_source, probe_duration
+from ofmhelpers.reel_machine import intake
 
 
-def test_local_file_is_copied_into_the_work_dir(tmp_path):
-    src_dir = tmp_path / "src"
-    src_dir.mkdir()
-    src_file = src_dir / "clip.mov"
-    src_file.write_bytes(b"fake video bytes")
+def test_local_file_is_copied_into_the_job_dir(tmp_path):
+    src = tmp_path / "upload.mp4"
+    src.write_bytes(b"video bytes")
+    work_dir = tmp_path / "job"
 
-    work_dir = tmp_path / "work"
-    result = fetch_source(str(src_file), work_dir)
+    dest = intake.fetch_source(str(src), work_dir)
 
-    assert result == work_dir / "reference.mov"
-    assert result.read_bytes() == b"fake video bytes"
+    assert dest == work_dir / "reference.mp4"
+    assert dest.read_bytes() == b"video bytes"
 
 
-def test_failed_download_raises_with_the_downloader_error(tmp_path):
-    with (
-        mock.patch(
-            "ofmhelpers.reel_machine.intake.download",
-            return_value=DownloadResult(
-                url="https://example.com/x", success=False, error="network blip"
-            ),
-        ),
-        pytest.raises(RuntimeError, match="network blip"),
+def test_url_is_downloaded(tmp_path):
+    downloaded = tmp_path / "reel.mp4"
+    downloaded.write_bytes(b"x")
+    with mock.patch.object(
+        intake,
+        "download",
+        return_value=mock.Mock(success=True, output_paths=[downloaded]),
     ):
-        fetch_source("https://example.com/x", tmp_path)
+        assert intake.fetch_source("https://example.com/r", tmp_path) == downloaded
 
 
-def test_failed_instagram_download_hints_at_the_cookies_page(tmp_path):
+def test_failed_instagram_download_points_at_the_cookies_page(tmp_path):
     with (
-        mock.patch(
-            "ofmhelpers.reel_machine.intake.download",
-            return_value=DownloadResult(
-                url="https://www.instagram.com/reel/abc123/",
-                success=False,
-                error="HTTP Error 400: Bad Request",
-            ),
+        mock.patch.object(
+            intake,
+            "download",
+            return_value=mock.Mock(success=False, output_paths=[], error="HTTP 400"),
         ),
         pytest.raises(RuntimeError, match="/cookies"),
     ):
-        fetch_source("https://www.instagram.com/reel/abc123/", tmp_path)
+        intake.fetch_source("https://instagram.com/reel/abc", tmp_path)
 
 
-def test_failed_non_instagram_download_has_no_cookie_hint(tmp_path):
+def test_run_intake_reports_the_probed_duration(tmp_path):
+    video = tmp_path / "reference.mp4"
+    video.write_bytes(b"x")
     with (
-        mock.patch(
-            "ofmhelpers.reel_machine.intake.download",
-            return_value=DownloadResult(
-                url="https://www.tiktok.com/@x/video/1", success=False, error="boom"
-            ),
-        ),
-        pytest.raises(RuntimeError) as exc_info,
+        mock.patch.object(intake, "fetch_source", return_value=video),
+        mock.patch.object(intake, "probe_duration", return_value=11.5),
     ):
-        fetch_source("https://www.tiktok.com/@x/video/1", tmp_path)
-    assert "/cookies" not in str(exc_info.value)
+        result = intake.run_intake("https://example.com/r", tmp_path)
+
+    assert result.video_path == video
+    assert result.duration == 11.5
+    assert result.source_url == "https://example.com/r"
 
 
-def test_probe_duration_parses_ffprobes_stdout(tmp_path):
-    video_path = tmp_path / "reference.mp4"
-    with mock.patch(
-        "ofmhelpers.reel_machine.intake.subprocess.run",
-        return_value=mock.Mock(stdout="12.345000\n"),
-    ):
-        assert probe_duration(video_path) == 12.345
-
-
-def test_probe_duration_reports_missing_ffprobe_clearly(tmp_path):
+def test_run_intake_records_no_source_url_for_a_local_upload(tmp_path):
+    upload = tmp_path / "upload.mp4"
+    upload.write_bytes(b"x")
     with (
-        mock.patch(
-            "ofmhelpers.reel_machine.intake.subprocess.run",
-            side_effect=FileNotFoundError(),
-        ),
-        pytest.raises(RuntimeError, match="ffprobe isn't installed"),
+        mock.patch.object(intake, "fetch_source", return_value=Path(upload)),
+        mock.patch.object(intake, "probe_duration", return_value=5.0),
     ):
-        probe_duration(tmp_path / "reference.mp4")
-
-
-def test_probe_duration_surfaces_ffprobe_stderr(tmp_path):
-    with (
-        mock.patch(
-            "ofmhelpers.reel_machine.intake.subprocess.run",
-            side_effect=subprocess.CalledProcessError(
-                1, ["ffprobe"], stderr="not a valid video file"
-            ),
-        ),
-        pytest.raises(RuntimeError, match="not a valid video file"),
-    ):
-        probe_duration(tmp_path / "reference.mp4")
+        assert intake.run_intake(str(upload), tmp_path).source_url is None
