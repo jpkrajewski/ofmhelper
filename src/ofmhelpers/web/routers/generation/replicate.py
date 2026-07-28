@@ -1,21 +1,27 @@
 """
 ofmhelpers/web/routers/generation/replicate.py
 
-The "Replicate" page: paste a reel link (or upload the file), and the
-reel_machine module downloads it, extracts frames, transcribes it, and
-drafts a Seedance 2.0 prompt package. The draft is shown back in an
-editable textarea -- along with the contact sheet and transcript -- so you
-can punch up the dialogue before dropping in your character's reference
-images and firing the actual generation through the existing KieAIClient
-(same as web/routers/generation/seedance.py).
+The "Replicate" page: paste a reel link (or upload the file) and nothing
+else. The reel_machine module downloads it, hands the video plus one fixed
+analysis prompt to Gemini, and validates the Seedance 2.0 prompt JSON that
+comes back. The review page plays the source video next to that JSON in an
+editable textarea, so you can tweak it before dropping in your character's
+reference images and firing the real generation through KieAIClient (same as
+web/routers/generation/seedance.py).
+
+There are no shape/look/gender/persona/provider inputs: everything that used
+to be assembled locally now comes out of the model's own reading of the
+video (see reel_machine/CLAUDE.md). The provider is an env-var deployment
+choice (`REEL_MACHINE_LLM_PROVIDER`), not a per-job form field.
 
 Two job types share this router, dispatched by `job["task"]`:
-  - "replicate_intake" -> download/frames/transcribe/draft-script (Stage 1),
-    rendered by the dedicated replicate_review.html template.
+  - "replicate_intake" -> download + analyze (Stage 1), rendered by the
+    dedicated replicate_review.html template.
   - "replicate" -> the final Seedance video generation (Stage 2), rendered
     by the same job_status.html template every other generation tool uses.
 """
 
+import mimetypes
 from pathlib import Path
 from typing import Annotated
 
@@ -31,9 +37,6 @@ from fastapi import (
 from fastapi.responses import FileResponse
 
 from ofmhelpers.reel_machine import generation, pipeline
-from ofmhelpers.reel_machine.gender import DEFAULT_GENDER, GENDERS, get_gender
-from ofmhelpers.reel_machine.looks import LOOKS
-from ofmhelpers.reel_machine.shapes import SHAPES, render_shape
 from ofmhelpers.web.auth import get_kie_api_key
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
@@ -51,41 +54,23 @@ from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/replicate", tags=["replicate"])
 
-# Where a job's downloaded reel/frames/transcript live -- separate from
-# ASSETS_ROOT (uploads/assets), which is only for reusable reference files.
+# Where a job's downloaded reel lives -- separate from ASSETS_ROOT
+# (uploads/assets), which is only for reusable reference files.
 INTAKE_ROOT = Path("uploads") / "replicate_intake"
 
 
-def _run_replicate_intake(
-    source: str,
-    shape: str,
-    look: str,
-    llm_provider: str,
-    target: str,
-    gender: str,
-    work_dir: str,
-) -> dict:
-    intake = pipeline.intake_reel(source, Path(work_dir))
-    duration = pipeline.clamp_duration(intake.duration)
-    draft = pipeline.draft_script_full(
-        intake,
-        shape_key=shape,
-        look_key=look,
-        duration=duration,
-        llm_provider=llm_provider,
-        target=target,
-        gender=gender,
-    )
+def _run_replicate_intake(source: str, work_dir: str) -> dict:
+    analysis = pipeline.analyze(source, Path(work_dir))
+    # Both shapes of the prompt are stored on purpose: `prompt` is the
+    # validated object (what the Action log records, and proof the response
+    # passed schema.parse_analysis), `prompt_text` is the exact string the
+    # review textarea shows and Seedance is given.
     return {
-        "contact_sheet": str(intake.contact_sheet),
-        "transcript": intake.transcript.text,
-        "draft_script": draft.script,
-        "main_subject": draft.main_subject,
-        "shape": shape,
-        "look": look,
-        "duration": duration,
-        "target": target,
-        "gender": gender,
+        "video_path": str(analysis.video_path),
+        "duration": analysis.duration,
+        "provider": analysis.provider,
+        "prompt": analysis.prompt,
+        "prompt_text": analysis.prompt_text,
     }
 
 
@@ -108,24 +93,7 @@ def _run_replicate_generate(
 
 @router.get("")
 def form(request: Request):
-    # Shape.name is a gender-templated string (e.g. "{noun_cap} x {noun}"),
-    # rendered here with the default gender purely for the dropdown label --
-    # cosmetic only. The actual generation always renders with whichever
-    # gender the user picks on submit (see pipeline.draft_script).
-    default_gender = get_gender(DEFAULT_GENDER)
-    shape_labels = {
-        key: render_shape(shape, default_gender).name for key, shape in SHAPES.items()
-    }
-    return templates.TemplateResponse(
-        request,
-        "replicate_form.html",
-        {
-            "shapes": SHAPES,
-            "shape_labels": shape_labels,
-            "looks": LOOKS,
-            "genders": GENDERS,
-        },
-    )
+    return templates.TemplateResponse(request, "replicate_form.html", {})
 
 
 @router.post("/intake")
@@ -133,11 +101,6 @@ async def intake(
     request: Request,
     source_url: Annotated[str, Form()] = "",
     source_file: Annotated[UploadFile | None, File()] = None,
-    shape: Annotated[str, Form()] = pipeline.DEFAULT_SHAPE,
-    look: Annotated[str, Form()] = pipeline.DEFAULT_LOOK,
-    llm_provider: Annotated[str, Form()] = "template",
-    target: Annotated[str, Form()] = "",
-    gender: Annotated[str, Form()] = DEFAULT_GENDER,
 ):
     source = source_url.strip()
     if source_file is not None and source_file.filename:
@@ -148,14 +111,7 @@ async def intake(
             status_code=400, detail="Provide a reel URL or upload a file"
         )
 
-    params = {
-        "source": source,
-        "shape": shape,
-        "look": look,
-        "llm_provider": llm_provider,
-        "target": target,
-        "gender": gender,
-    }
+    params = {"source": source}
     job_id = create_job("replicate_intake", params, actor=request.session.get("role"))
     enqueue(
         run_job,
@@ -176,12 +132,7 @@ def job_status(request: Request, job_id: str):
         return templates.TemplateResponse(
             request,
             "replicate_review.html",
-            {
-                "job": job,
-                "shapes": SHAPES,
-                "looks": LOOKS,
-                "kie_api_key": get_kie_api_key(request),
-            },
+            {"job": job, "kie_api_key": get_kie_api_key(request)},
         )
 
     assets = []
@@ -221,20 +172,24 @@ def job_status_json(job_id: str):
     return job_status_payload(job, "/replicate/files")
 
 
-@router.get("/contact-sheet/{job_id}")
-def contact_sheet(job_id: str):
+@router.get("/video/{job_id}")
+def source_video(job_id: str):
+    """Streams the downloaded source reel back for the review page's <video>
+    player -- the analysis is all about motion and timing, so reviewing it
+    against a grid of stills was never good enough."""
     job = get_job(job_id)
     if (
         job is None
         or job.get("task") != "replicate_intake"
         or job.get("status") != "done"
     ):
-        raise HTTPException(status_code=404, detail="Contact sheet not available")
+        raise HTTPException(status_code=404, detail="Source video not available")
 
-    path = Path(job["result"]["contact_sheet"])
+    path = Path(job["result"]["video_path"])
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="Contact sheet no longer exists")
-    return FileResponse(path, media_type="image/jpeg")
+        raise HTTPException(status_code=404, detail="Source video no longer exists")
+    media_type = mimetypes.guess_type(path.name)[0] or "video/mp4"
+    return FileResponse(path, media_type=media_type)
 
 
 @router.post("/generate")

@@ -178,23 +178,18 @@ class DiscordSettings(BaseSettings):
 
 
 class ReelMachineSettings(BaseSettings):
-    """reel_machine/llm/*.py, reel_machine/intake.py, reel_machine/teardown.py."""
+    """reel_machine/llm/*.py -- which model watches the reel, and its key."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # "gemini" (free tier, takes real video) or "anthropic" (paid, contact
+    # sheet only) -- see reel_machine/llm/registry.py.
     llm_provider: str = Field(
-        default="template", validation_alias="REEL_MACHINE_LLM_PROVIDER"
+        default="gemini", validation_alias="REEL_MACHINE_LLM_PROVIDER"
     )
     anthropic_api_key: str | None = None
-    groq_api_key: str | None = None
-    groq_vision_model: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-latest"
-    hf_token: str | None = None
-    huggingface_token: str | None = None
-    beat_gap_s: float = Field(
-        default=0.5, validation_alias="OFM_REEL_MACHINE_BEAT_GAP_S"
-    )
 
 
 class InstagramStatsSettings(BaseSettings):

@@ -2,7 +2,7 @@
 {% import "_file_picker.html" as fp %}
 {% block content %}
 <div class="page-head">
-    <h1>Replicate — Reel Teardown <code>{{ job.id }}</code></h1>
+    <h1>Replicate — Reel Analysis <code>{{ job.id }}</code></h1>
     <div class="page-head-actions">
         <span class="badge {{ 'badge-ok' if job.status == 'done' else 'badge-fail' if job.status == 'failed' else 'badge-neutral' }}">
             {{ job.status }}
@@ -12,7 +12,7 @@
 
 {% if job.status == "running" %}
 <meta http-equiv="refresh" content="2">
-<p class="pending">Downloading, extracting frames, transcribing, drafting the script… this can take a minute or two.</p>
+<p class="pending">Downloading the reel and analyzing it… this can take a minute or two.</p>
 
 {% elif job.status == "failed" %}
 <pre class="fail">{{ job.error }}</pre>
@@ -21,27 +21,22 @@
 {% elif job.status == "done" %}
 <div class="generate-layout">
 <div class="generate-form-col">
-    <h2 class="col-title">Teardown</h2>
-    <img src="/replicate/contact-sheet/{{ job.id }}" alt="Contact sheet of frames from the source reel"
-         class="media-full">
+    <h2 class="col-title">Source reel</h2>
+    <video src="/replicate/video/{{ job.id }}" class="media-full" controls playsinline
+           preload="metadata"></video>
     <table class="inputs-table">
-        <tr><th>Gender</th><td>{{ job.result.gender|default("female", true)|capitalize }}</td></tr>
-        <tr><th>Target / persona</th><td>{{ job.result.target|default("", true) or "(none given)" }}</td></tr>
-        <tr><th>Main subject (detected)</th><td>{{ job.result.main_subject|default("", true) or "(not detected -- template provider has no vision, or vision analysis failed)" }}</td></tr>
+        <tr><th>Analyzed by</th><td>{{ job.result.provider }}</td></tr>
+        <tr><th>Duration</th><td>{{ job.result.duration }}s (detected)</td></tr>
     </table>
-    <details>
-        <summary>Transcript</summary>
-        <pre class="inputs-long-text">{{ job.result.transcript }}</pre>
-    </details>
 
-    <h2 class="col-title">Seedance 2.0 script (edit before generating)</h2>
+    <h2 class="col-title">Seedance 2.0 prompt JSON (edit before generating)</h2>
     <form id="replicate-generate-form" method="post" action="/replicate/generate"
           enctype="multipart/form-data" data-prefix="/replicate" data-result-kind="video">
         {% include "_kie_api_key_field.html" %}
 
         <div class="field">
-            <label>Script</label>
-            <textarea name="script" class="prompt-input" rows="24">{{ job.result.draft_script }}</textarea>
+            <label>Prompt</label>
+            <textarea name="script" class="prompt-input" rows="28">{{ job.result.prompt_text }}</textarea>
         </div>
 
         <div class="field">

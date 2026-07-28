@@ -1,7 +1,7 @@
 """
 Covers /replicate end to end at the router level, with reel_machine's own
-pipeline/generation calls mocked out (no real download/ffmpeg/whisper/kie.ai
-calls) -- mirrors the mocking style tests/test_generate_reuse.py already
+pipeline/generation calls mocked out (no real download/ffmpeg/LLM/kie.ai
+calls) -- mirrors the mocking style tests/web/test_generate_reuse.py already
 uses for seedance/kling3/nanobanana.
 """
 
@@ -16,7 +16,7 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.reel_machine.pipeline import DraftResult
+from ofmhelpers.reel_machine.pipeline import AnalysisResult
 from ofmhelpers.web.main import app
 from ofmhelpers.web.stores.jobs import get_job
 
@@ -30,21 +30,26 @@ def client():
     return c
 
 
-def _mock_intake_result(tmp_path, duration=15.0):
-    contact_sheet = tmp_path / "contact-sheet.jpg"
-    contact_sheet.write_bytes(b"fake jpg")
-    return mock.Mock(
-        contact_sheet=contact_sheet,
-        transcript=mock.Mock(text="hi there, watch this"),
-        video_path=tmp_path / "reference.mp4",
+def _analysis(tmp_path, duration=15, environment="a lift lobby"):
+    video = tmp_path / "reference.mp4"
+    video.write_bytes(b"fake video bytes")
+    return AnalysisResult(
+        video_path=video,
         duration=duration,
+        prompt={"format": "9:16 vertical", "environment": environment},
+        provider="gemini",
     )
 
 
-def test_form_page_lists_shapes_and_looks(client):
+def test_form_page_has_only_the_two_source_inputs(client):
+    """The whole point of the rewrite: the user gives us a video, nothing
+    else. No shape/look/gender/persona/provider pickers."""
     html = client.get("/replicate").text
-    assert "Solo UGC monologue" in html
-    assert "Phone front-cam selfie" in html
+    assert 'name="source_url"' in html
+    assert 'name="source_file"' in html
+    for gone in ('name="shape"', 'name="look"', 'name="gender"', 'name="target"'):
+        assert gone not in html
+    assert 'name="llm_provider"' not in html
 
 
 def test_intake_requires_a_source(client):
@@ -52,106 +57,80 @@ def test_intake_requires_a_source(client):
     assert r.status_code == 400
 
 
-def test_intake_creates_a_job_and_drafts_a_script(client, tmp_path):
-    with (
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
-            return_value=_mock_intake_result(tmp_path),
-        ),
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
-            return_value=DraftResult(script="DRAFT SCRIPT TEXT"),
-        ),
+def test_intake_stores_the_validated_prompt_and_the_text_sent_to_seedance(
+    client, tmp_path
+):
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
     ):
         r = client.post(
-            "/replicate/intake",
-            data={
-                "source_url": "https://example.com/reel",
-                "shape": "solo_monologue",
-                "look": "phone_selfie",
-                "llm_provider": "template",
-            },
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
         )
 
     assert r.status_code == 200
-    job_id = r.json()["job_id"]
-    job = get_job(job_id)
+    job = get_job(r.json()["job_id"])
     assert job["task"] == "replicate_intake"
     assert job["status"] == "done"
-    assert job["result"]["draft_script"] == "DRAFT SCRIPT TEXT"
+    assert job["result"]["prompt"]["environment"] == "a lift lobby"
+    assert '"environment": "a lift lobby"' in job["result"]["prompt_text"]
     assert job["result"]["duration"] == 15  # auto-detected from the source reel
+    assert job["result"]["provider"] == "gemini"
 
 
-def test_intake_threads_target_and_gender_to_draft_script(client, tmp_path):
-    with (
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
-            return_value=_mock_intake_result(tmp_path),
-        ),
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
-            return_value=DraftResult(script="DRAFT"),
-        ) as mock_draft_script,
-    ):
-        job_id = client.post(
-            "/replicate/intake",
-            data={
-                "source_url": "https://example.com/reel",
-                "target": "confident fitness coach pitching a program",
-                "gender": "male",
-            },
-        ).json()["job_id"]
-
-    assert mock_draft_script.call_args.kwargs["target"] == (
-        "confident fitness coach pitching a program"
-    )
-    assert mock_draft_script.call_args.kwargs["gender"] == "male"
-    job = get_job(job_id)
-    assert job["result"]["target"] == "confident fitness coach pitching a program"
-    assert job["result"]["gender"] == "male"
-
-
-def test_form_page_lists_genders(client):
-    html = client.get("/replicate").text
-    assert 'name="gender"' in html
-    assert 'name="target"' in html
-    assert "Male" in html
-
-
-def test_review_page_renders_the_draft_script_editable(client, tmp_path):
-    with (
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
-            return_value=_mock_intake_result(tmp_path),
-        ),
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
-            return_value=DraftResult(script="MY DRAFT SCRIPT"),
-        ),
+def test_review_page_plays_the_source_video_and_shows_editable_json(client, tmp_path):
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path, environment="a rooftop at golden hour"),
     ):
         job_id = client.post(
             "/replicate/intake", data={"source_url": "https://example.com/reel"}
         ).json()["job_id"]
 
     html = client.get(f"/replicate/jobs/{job_id}").text
-    assert "MY DRAFT SCRIPT" in html
+    # The input video itself, not a contact sheet of frames.
+    assert f'src="/replicate/video/{job_id}"' in html
+    assert "contact-sheet" not in html
+    assert "a rooftop at golden hour" in html
     assert '<textarea name="script"' in html
     # Stage 2's form wires straight into the shared generation.js poller.
     assert 'data-prefix="/replicate"' in html
     assert 'data-result-kind="video"' in html
 
 
-def test_intake_job_failure_is_surfaced_on_the_review_page(client):
+def test_source_video_endpoint_streams_the_downloaded_reel(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
-        side_effect=RuntimeError("could not download reel"),
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    r = client.get(f"/replicate/video/{job_id}")
+    assert r.status_code == 200
+    assert r.content == b"fake video bytes"
+    assert r.headers["content-type"] == "video/mp4"
+
+
+def test_source_video_404s_for_an_unknown_job(client):
+    assert client.get("/replicate/video/nope").status_code == 404
+
+
+def test_intake_job_failure_is_surfaced_on_the_review_page(client):
+    """A model that returns something other than the requested JSON fails the
+    job (schema.parse_analysis raises) instead of handing over a broken
+    prompt -- the message has to reach the review page."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        side_effect=RuntimeError("model did not return valid JSON"),
     ):
         job_id = client.post(
             "/replicate/intake", data={"source_url": "https://example.com/reel"}
         ).json()["job_id"]
 
     html = client.get(f"/replicate/jobs/{job_id}").text
-    assert "could not download reel" in html
+    assert "model did not return valid JSON" in html
 
 
 def test_generate_requires_a_script(client):
@@ -171,15 +150,14 @@ def test_generate_creates_a_replicate_job(client, tmp_path):
             "/replicate/generate",
             data={
                 "api_key": "k",
-                "script": "a full seedance script",
+                "script": '{"format": "9:16 vertical"}',
                 "duration": "15",
                 "resolution": "720p",
             },
         )
 
     assert r.status_code == 200
-    job_id = r.json()["job_id"]
-    job = get_job(job_id)
+    job = get_job(r.json()["job_id"])
     assert job["task"] == "replicate"
     assert job["status"] == "done"
     assert job["result"][0]["name"] == "clone.mp4"
@@ -195,7 +173,7 @@ def test_generate_job_status_page_reuses_job_status_html(client, tmp_path):
     ):
         job_id = client.post(
             "/replicate/generate",
-            data={"api_key": "k", "script": "a script", "duration": "15"},
+            data={"api_key": "k", "script": "{}", "duration": "15"},
         ).json()["job_id"]
 
     html = client.get(f"/replicate/jobs/{job_id}").text
@@ -210,15 +188,9 @@ def test_replicate_registered_in_generate_gallery():
 
 
 def test_jobs_status_json_dispatches_by_task(client, tmp_path):
-    with (
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.intake_reel",
-            return_value=_mock_intake_result(tmp_path),
-        ),
-        mock.patch(
-            "ofmhelpers.web.routers.generation.replicate.pipeline.draft_script_full",
-            return_value=DraftResult(script="a draft"),
-        ),
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
     ):
         intake_job_id = client.post(
             "/replicate/intake", data={"source_url": "https://example.com/reel"}

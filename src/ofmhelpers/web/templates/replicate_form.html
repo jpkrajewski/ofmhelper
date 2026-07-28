@@ -3,9 +3,9 @@
 <div class="page-head">
     <h1>Replicate — Clone a Reel</h1>
     <p class="lead">
-        Paste a reel link (or upload the file), pick a shape/look, and get back an editable
-        Seedance 2.0 script with your character dropped in. Duration is detected automatically
-        from the source reel -- the clone always matches its exact length.
+        Paste a reel link (or upload the file). That's it — the reel is sent to Gemini,
+        which watches it and writes the Seedance 2.0 prompt JSON. Duration is detected
+        automatically, so the clone always matches the original's length.
     </p>
 </div>
 
@@ -19,50 +19,6 @@
     <div class="field">
         <label>...or upload the file directly (use this if the platform blocks downloads)</label>
         <input type="file" name="source_file" accept="video/*">
-    </div>
-
-    <div class="field">
-        <label>Shape</label>
-        <select name="shape">
-            {% for key, shape in shapes.items() %}
-            <option value="{{ key }}" {% if key == "solo_monologue" %}selected{% endif %}>{{ shape_labels[key] }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div class="field">
-        <label>Look (camera / lens)</label>
-        <select name="look">
-            {% for key, look in looks.items() %}
-            <option value="{{ key }}" {% if key == "phone_selfie" %}selected{% endif %}>{{ look.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <div class="field">
-        <label>Gender</label>
-        <select name="gender">
-            {% for key, g in genders.items() %}
-            <option value="{{ key }}" {% if key == "female" %}selected{% endif %}>{{ g.label|capitalize }} ({{ g.noun }}, {{ g.tag }})</option>
-            {% endfor %}
-        </select>
-        <p class="picker-help">Picks pronouns and voice register (SHE/HE/THEY) in the timeline. Never describes appearance — identity always comes from your reference images.</p>
-    </div>
-
-    <div class="field">
-        <label>Target / persona (optional)</label>
-        <input type="text" name="target" placeholder="e.g. confident fitness coach pitching a program, girl-next-door CTA, dominant tone">
-        <p class="picker-help">Steers dialogue TONE and delivery only — never physical appearance (identity always comes from your reference images).</p>
-    </div>
-
-    <div class="field">
-        <label>Script writer</label>
-        <select name="llm_provider">
-            <option value="template" selected>Template (free, deterministic, no vision)</option>
-            <option value="groq">Groq (free-tier, dialogue punch-up only — no vision)</option>
-            <option value="gemini">Gemini (free-tier, real vision — watches the reel)</option>
-            <option value="anthropic">Claude API (paid, best quality, vision)</option>
-        </select>
     </div>
 
     <button type="submit" class="btn-primary">Analyze reel</button>
@@ -84,7 +40,7 @@ document.getElementById('replicate-intake-form').addEventListener('submit', (e) 
     }
 
     btn.disabled = true;
-    statusEl.textContent = 'Starting intake — downloading, extracting frames, transcribing…';
+    statusEl.textContent = 'Starting intake — downloading and analyzing the reel…';
 
     fetch(form.action, { method: 'POST', body: formData })
         .then(async (r) => {

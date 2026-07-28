@@ -167,9 +167,13 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
 - `replicate.py` — reel-cloning pipeline (`/replicate`), see
-  `reel_machine/CLAUDE.md`. Two job task types share this one router,
-  dispatched by `job["task"]`: `"replicate_intake"` (download/frames/
-  transcribe/draft-script, rendered by `replicate_review.html`) and
+  `reel_machine/CLAUDE.md`. The form takes a reel URL or an uploaded file
+  and nothing else — no shape/look/gender/persona/provider fields; the model
+  reads all of that off the video, and the provider is an env-var
+  deployment choice. Two job task types share this one router, dispatched by
+  `job["task"]`: `"replicate_intake"` (download + LLM analysis, rendered by
+  `replicate_review.html`, which plays the source reel via
+  `GET /replicate/video/{job_id}` next to the editable prompt JSON) and
   `"replicate"` (the final Seedance generation, rendered by the standard
   `job_status.html`).
 
