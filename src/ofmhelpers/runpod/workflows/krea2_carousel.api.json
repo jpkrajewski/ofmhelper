@@ -1,0 +1,664 @@
+{
+  "29": {
+    "inputs": {
+      "filename_prefix": "Krea2_turbo",
+      "images": [
+        "963",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "55": {
+    "inputs": {
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "56": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "57": {
+    "inputs": {
+      "vae_name": "Wan2_1_VAE_fp32.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "73": {
+    "inputs": {
+      "text": "Raw handheld iPhone photo of an adult woman with long black hair and a seductive, direct expression. She wears a black fishnet long-sleeve crop top and a black thong. She is posed kneeling on the driver's seat of a car at night, leaning forward over the center console while looking back toward the lens. Her physique features natural medium breasts and big athletic round glutes. \n\nThe setting is a modern car interior with leather upholstery, illuminated by a harsh overhead dome light and dim streetlights outside. The image quality is an unedited smartphone capture with slight grain, mild sensor noise in shadows, and lower contrast. Deep sharp focus is maintained across the full frame, including the subject and car interior, with no bokeh or background blur. Authentic, unfiltered social-media aesthetic.",
+      "anything": [
+        "2306",
+        0
+      ]
+    },
+    "class_type": "easy showAnything",
+    "_meta": {
+      "title": "easy showAnything"
+    }
+  },
+  "947": {
+    "inputs": {
+      "images": [
+        "946:31",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "963": {
+    "inputs": {
+      "recipe": "custom",
+      "jpeg_quality": 90,
+      "passes": 1,
+      "noise_scale": 0,
+      "sharpness": 0.9,
+      "contrast": 0.9,
+      "posterize_bits": 8,
+      "blur_radius": 0,
+      "pixelate_box": 1,
+      "invert": false,
+      "grayscale": false,
+      "emboss": false,
+      "edge_enhance": false,
+      "seed": 170590753062308,
+      "image": [
+        "947",
+        0
+      ]
+    },
+    "class_type": "MoreJPEG",
+    "_meta": {
+      "title": "Realisim Enhancor"
+    }
+  },
+  "1030": {
+    "inputs": {
+      "image": "Krea2_turbo_00229_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "EDIT: source image"
+    }
+  },
+  "1031": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 1024,
+      "height": 1280,
+      "crop": "center",
+      "image": [
+        "1030",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "EDIT: resize to target AR"
+    }
+  },
+  "1032": {
+    "inputs": {
+      "pixels": [
+        "1031",
+        0
+      ],
+      "vae": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "EDIT: encode source"
+    }
+  },
+  "1033": {
+    "inputs": {
+      "lora_name": "krea2_identity_edit_v1_1.safetensors",
+      "strength_model": 1,
+      "model": [
+        "55",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "EDIT: identity-edit LoRA"
+    }
+  },
+  "1034": {
+    "inputs": {
+      "lora_name": "LivKrea2_step-002750_native.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1033",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Character lora"
+    }
+  },
+  "1035": {
+    "inputs": {
+      "ref_boost": 1,
+      "ref_boost_a": 1,
+      "fit_mode": "fit",
+      "model": [
+        "2305",
+        0
+      ],
+      "source_latent": [
+        "1032",
+        0
+      ]
+    },
+    "class_type": "Krea2EditModelPatch",
+    "_meta": {
+      "title": "EDIT: model patch"
+    }
+  },
+  "1036": {
+    "inputs": {
+      "prompt": [
+        "1052",
+        0
+      ],
+      "grounding_px": 1024,
+      "system_prompt": "",
+      "clip": [
+        "56",
+        0
+      ],
+      "image": [
+        "1031",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "EDIT: instruction (positive)"
+    }
+  },
+  "1037": {
+    "inputs": {
+      "prompt": "",
+      "grounding_px": 1024,
+      "system_prompt": "",
+      "clip": [
+        "56",
+        0
+      ],
+      "image": [
+        "1031",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "EDIT: grounded negative (leave empty)"
+    }
+  },
+  "1038": {
+    "inputs": {
+      "seed": 45877424038077,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "1035",
+        0
+      ],
+      "positive": [
+        "1036",
+        0
+      ],
+      "negative": [
+        "1037",
+        0
+      ],
+      "latent_image": [
+        "1039",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "EDIT: sampler (8 steps CFG 1)"
+    }
+  },
+  "1039": {
+    "inputs": {
+      "width": 1024,
+      "height": 1280,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EDIT: target latent (match AR!)"
+    }
+  },
+  "1040": {
+    "inputs": {
+      "samples": [
+        "1038",
+        0
+      ],
+      "vae": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "EDIT: decode"
+    }
+  },
+  "1050": {
+    "inputs": {
+      "value": "You are a shot director for a four-photo social media carousel. You receive the anchor photo (panel 1): a woman in a scene. Write instructions for three more panels as edits of the anchor: same woman, same outfit, same location, same light, a new shot each time, each one more seductive than the last.\n\nEvery line is one sentence, up to 50 words, starting with \"Make a new shot of <triggerword>, the woman,\". Name the new pose concretely: where her hands are, where her weight sits, which way her hips and shoulders turn, where she looks, and where the camera sits compared to the anchor.\n\nLine 1, the warm-up: relaxed and casual, a natural new stance, a warm inviting look toward the camera, a small playful touch like a hand in her hair or a thumb hooked in her waistband.\n\nLine 2, the tease: body angled to flatter her figure, back arched or hip pushed out, direct eye contact with a knowing expression, one hand actively pulling at her outfit, the camera moved closer or lower than line 1.\n\nLine 3, the peak: her most seductive pose that the outfit and scene allow, lips parted or biting her lip, the outfit worked to its most revealing believable state by her own hands, the camera at its closest and most intimate angle of the set, her gaze locked on the lens.\n\nEvery line describes only what changes and ends with: same outfit, same room, same light, same person.\nThe escalation must feel like one continuous moment building, believable frame to frame.\nWrite only positive statements about what is present in each shot.\n\nOutput exactly 3 lines, nothing else. Zero headings, zero numbering, zero commentary."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "CAROUSEL: shot director (Gemini template)"
+    }
+  },
+  "1052": {
+    "inputs": {
+      "strings": [
+        "2306",
+        0
+      ],
+      "multiline": false,
+      "select": 0
+    },
+    "class_type": "ImpactStringSelector",
+    "_meta": {
+      "title": "panel 2 instruction (line 0)"
+    }
+  },
+  "1060": {
+    "inputs": {
+      "image1": [
+        "1040",
+        0
+      ],
+      "image2": [
+        "2302",
+        0
+      ]
+    },
+    "class_type": "ImageBatch",
+    "_meta": {
+      "title": "batch panels"
+    }
+  },
+  "1061": {
+    "inputs": {
+      "image1": [
+        "1060",
+        0
+      ],
+      "image2": [
+        "2303",
+        0
+      ]
+    },
+    "class_type": "ImageBatch",
+    "_meta": {
+      "title": "batch panels"
+    }
+  },
+  "1062": {
+    "inputs": {
+      "lora_name": "LivKrea2_step-002750_native.safetensors",
+      "strength_model": 1,
+      "model": [
+        "55",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "detailer model: character lora"
+    }
+  },
+  "1063": {
+    "inputs": {
+      "text": "photo of an adult woman, natural detailed skin, sharp focus",
+      "clip": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "detailer positive"
+    }
+  },
+  "1064": {
+    "inputs": {
+      "conditioning": [
+        "1063",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "detailer negative"
+    }
+  },
+  "2002": {
+    "inputs": {
+      "strings": [
+        "2306",
+        0
+      ],
+      "multiline": false,
+      "select": 1
+    },
+    "class_type": "ImpactStringSelector",
+    "_meta": {
+      "title": "panel 3 instruction (line 1)"
+    }
+  },
+  "2003": {
+    "inputs": {
+      "strings": [
+        "2306",
+        0
+      ],
+      "multiline": false,
+      "select": 2
+    },
+    "class_type": "ImpactStringSelector",
+    "_meta": {
+      "title": "panel 4 instruction (line 2)"
+    }
+  },
+  "2102": {
+    "inputs": {
+      "prompt": [
+        "2002",
+        0
+      ],
+      "grounding_px": 1024,
+      "system_prompt": "",
+      "clip": [
+        "56",
+        0
+      ],
+      "image": [
+        "1031",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "EDIT encode panel 3"
+    }
+  },
+  "2103": {
+    "inputs": {
+      "prompt": [
+        "2003",
+        0
+      ],
+      "grounding_px": 1024,
+      "system_prompt": "",
+      "clip": [
+        "56",
+        0
+      ],
+      "image": [
+        "1031",
+        0
+      ]
+    },
+    "class_type": "Krea2EditGroundedEncode",
+    "_meta": {
+      "title": "EDIT encode panel 4"
+    }
+  },
+  "2202": {
+    "inputs": {
+      "seed": 324072600166223,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "1035",
+        0
+      ],
+      "positive": [
+        "2102",
+        0
+      ],
+      "negative": [
+        "1037",
+        0
+      ],
+      "latent_image": [
+        "1039",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "EDIT sampler panel 3"
+    }
+  },
+  "2203": {
+    "inputs": {
+      "seed": 480987828528483,
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "1035",
+        0
+      ],
+      "positive": [
+        "2103",
+        0
+      ],
+      "negative": [
+        "1037",
+        0
+      ],
+      "latent_image": [
+        "1039",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "EDIT sampler panel 4"
+    }
+  },
+  "2302": {
+    "inputs": {
+      "samples": [
+        "2202",
+        0
+      ],
+      "vae": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "decode panel 3"
+    }
+  },
+  "2303": {
+    "inputs": {
+      "samples": [
+        "2203",
+        0
+      ],
+      "vae": [
+        "57",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "decode panel 4"
+    }
+  },
+  "2305": {
+    "inputs": {
+      "lora_name": "RawGirlV2_epoch_10.safetensors",
+      "strength_model": 0.7,
+      "model": [
+        "1034",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "POV lora"
+    }
+  },
+  "2306": {
+    "inputs": {
+      "model_name": "Qwen3-VL-8B-Instruct",
+      "quantization": "None (FP16)",
+      "attention_mode": "auto",
+      "preset_prompt": "🖼️ Detailed Description",
+      "custom_prompt": [
+        "1050",
+        0
+      ],
+      "max_tokens": 512,
+      "keep_model_loaded": true,
+      "seed": 1,
+      "image": [
+        "1031",
+        0
+      ]
+    },
+    "class_type": "AILab_QwenVL",
+    "_meta": {
+      "title": "QwenVL"
+    }
+  },
+  "946:23": {
+    "inputs": {
+      "model_name": "sam_vit_b_01ec64.pth",
+      "device_mode": "AUTO"
+    },
+    "class_type": "SAMLoader",
+    "_meta": {
+      "title": "SAM Model"
+    }
+  },
+  "946:22": {
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "Face Detector (YOLO)"
+    }
+  },
+  "946:31": {
+    "inputs": {
+      "guide_size": 768,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": 433883349835412,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "ddim_uniform",
+      "denoise": 0.2,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.7,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 3,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false,
+      "image": [
+        "1061",
+        0
+      ],
+      "model": [
+        "1062",
+        0
+      ],
+      "clip": [
+        "56",
+        0
+      ],
+      "vae": [
+        "57",
+        0
+      ],
+      "positive": [
+        "1063",
+        0
+      ],
+      "negative": [
+        "1064",
+        0
+      ],
+      "bbox_detector": [
+        "946:22",
+        0
+      ],
+      "sam_model_opt": [
+        "946:23",
+        0
+      ]
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "FaceDetailer"
+    }
+  }
+}

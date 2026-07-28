@@ -1,0 +1,244 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "Krea2_Raw_convrot_int8mixed.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNET Loader - Krea2 Turbo FP8"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "c2n0n, dslr photo, amateur photo, candid photo, available light, underexposed, high resolution. \n\ndrow elf girl lying on a messy white bed, deep charcoal-black skin, long pointed elven ears, very long flowing white hair spread across the pillow and sheets, elegant side-profile pose, face partially in shadow, sharp delicate facial features, calm tired expression, wearing a white lace camisole / nightgown with thin straps and translucent frilled fabric, subtle gold earrings, soft natural body proportions, low indoor lighting, warm sunlight reflections scattered across white sheets, high contrast between dark skin and pale bedding, Despite the high-resolution capture, severe underexposure, crushed shadows, visible low-light noise, and a greenish-brown color cast obscure much of the scene. bad quality",
+      "clip": [
+        "17",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "8": {
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Negative (Zero Out)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "width": [
+        "16",
+        0
+      ],
+      "height": [
+        "16",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "13": {
+    "inputs": {
+      "clip_name": "Huihui-Qwen3-VL-4B-Instruct-abliterated.safetensors",
+      "type": "krea2",
+      "device": "cpu"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIP Loader - Krea2"
+    }
+  },
+  "16": {
+    "inputs": {
+      "resolution": "2.0"
+    },
+    "class_type": "FluxResolutionNode",
+    "_meta": {
+      "title": "Flux.1 Dev Resolution"
+    }
+  },
+  "17": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "krea2\\lenovo_krea2_3000.safetensors",
+        "strength": 0.7
+      },
+      "lora_2": {
+        "on": true,
+        "lora": "krea2\\nicegirls_krea2_000006000.safetensors",
+        "strength": 0.7
+      },
+      "lora_3": {
+        "on": false,
+        "lora": "krea2\\krea2_turbo_lora_rank_64_bf16.safetensors",
+        "strength": 0.6
+      },
+      "lora_4": {
+        "on": false,
+        "lora": "krea2\\krea2filterbypass3.safetensors",
+        "strength": 1
+      },
+      "lora_5": {
+        "on": false,
+        "lora": "krea2\\realism_engine_krea2_v2.safetensors",
+        "strength": 0.85
+      },
+      "lora_6": {
+        "on": false,
+        "lora": "krea2\\snofs_krea_v1.safetensors",
+        "strength": 0.75
+      },
+      "lora_7": {
+        "on": false,
+        "lora": "krea2\\grainscape\\grainscape_krea2.safetensors",
+        "strength": 0.8
+      },
+      "lora_8": {
+        "on": false,
+        "lora": "krea2\\vhs\\vhs_krea2.safetensors",
+        "strength": 0.8
+      },
+      "lora_9": {
+        "on": false,
+        "lora": "krea2\\snofs_krea_v1_1.safetensors",
+        "strength": 0.8
+      },
+      "lora_10": {
+        "on": false,
+        "lora": "krea2\\source\\source_krea2.safetensors",
+        "strength": 1
+      },
+      "lora_11": {
+        "on": false,
+        "lora": "krea2\\danrisi\\danrisi_krea2_000010000.safetensors",
+        "strength": 1
+      },
+      "lora_12": {
+        "on": false,
+        "lora": "krea2\\danrisi\\danrisi_krea2.safetensors",
+        "strength": 1
+      },
+      "lora_13": {
+        "on": true,
+        "lora": "krea2\\Krea2_TextFusion_Refusal_Reduction.safetensors",
+        "strength": 1
+      },
+      "lora_14": {
+        "on": true,
+        "lora": "krea2\\canon\\canon_krea2.safetensors",
+        "strength": 0.8
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "22": {
+    "inputs": {
+      "filename_prefix": "Krea2/Krea2",
+      "images": [
+        "29",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "25": {
+    "inputs": {
+      "eta": 0.5,
+      "sampler_name": "exponential/res_2s",
+      "scheduler": "beta",
+      "steps": 50,
+      "steps_to_run": -1,
+      "denoise": 1,
+      "cfg": 4,
+      "seed": 714321911679363,
+      "sampler_mode": "standard",
+      "bongmath": false,
+      "model": [
+        "17",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "27",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ClownsharKSampler_Beta",
+    "_meta": {
+      "title": "ClownsharKSampler"
+    }
+  },
+  "27": {
+    "inputs": {
+      "text": "uncanny anatomy, frame-perfect symmetry, fat, old, jpeg, jpeg artefacts",
+      "clip": [
+        "17",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "28": {
+    "inputs": {
+      "UNKNOWN": true
+    },
+    "_meta": {}
+  },
+  "29": {
+    "inputs": {
+      "UNKNOWN": 64,
+      "samples": [
+        "25",
+        0
+      ],
+      "vae": [
+        "28",
+        0
+      ]
+    },
+    "_meta": {}
+  }
+}

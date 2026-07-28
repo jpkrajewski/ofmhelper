@@ -12,6 +12,7 @@ from ofmhelpers.config.settings import (
     InfraSettings,
     KieAISettings,
     ReelMachineSettings,
+    RunpodSettings,
     SessionSettings,
     WebSettings,
 )
@@ -109,6 +110,7 @@ _SETTINGS_CLASSES = (
     DiscordSettings,
     ReelMachineSettings,
     GDriveSettings,
+    RunpodSettings,
 )
 
 

@@ -272,3 +272,29 @@ class GDriveSettings(BaseSettings):
     folder_id: str | None = Field(
         default=None, validation_alias="GOOGLE_DRIVE_FOLDER_ID"
     )
+
+
+class RunpodSettings(BaseSettings):
+    """runpod/client.py. The RunPod box is a *Pod* running ComfyUI, so the
+    client speaks ComfyUI's own HTTP API and `api_key` is unused on that path
+    -- it is read here only so a RunPod serverless transport can be added
+    later without a config change."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # RunPod publishes a pod's HTTP port at
+    # https://<pod-id>-<port>.proxy.runpod.net. Default is localhost so an SSH
+    # tunnel (-L 8188:localhost:8188) works with no config at all.
+    comfy_base_url: str = Field(
+        default="http://127.0.0.1:8188", validation_alias="OFM_RUNPOD_COMFY_BASE_URL"
+    )
+    api_key: str | None = Field(default=None, validation_alias="RUNPOD_API_KEY")
+    # Generous on purpose: a cold model load plus a multi-stage sampler graph
+    # is minutes, not seconds.
+    timeout_s: float = Field(default=600.0, validation_alias="OFM_RUNPOD_TIMEOUT_S")
+    poll_interval_s: float = Field(
+        default=1.5, validation_alias="OFM_RUNPOD_POLL_INTERVAL_S"
+    )
+    output_dir: str = Field(
+        default="output/runpod", validation_alias="OFM_RUNPOD_OUTPUT_DIR"
+    )

@@ -30,6 +30,7 @@ from ofmhelpers.config.settings import (
     KieAISettings,
     LoggingSettings,
     ReelMachineSettings,
+    RunpodSettings,
     SessionSettings,
     WebSettings,
 )
@@ -75,6 +76,10 @@ class Settings:
     @property
     def logging(self) -> LoggingSettings:
         return LoggingSettings()
+
+    @property
+    def runpod(self) -> RunpodSettings:
+        return RunpodSettings()
 
 
 settings = Settings()

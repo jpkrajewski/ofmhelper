@@ -1,0 +1,421 @@
+{
+  "6": {
+    "inputs": {
+      "text": [
+        "9341",
+        0
+      ],
+      "clip": [
+        "9269",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "145": {
+    "inputs": {
+      "samples": [
+        "9313:25",
+        0
+      ],
+      "vae": [
+        "9304",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "148": {
+    "inputs": {
+      "UNKNOWN": "",
+      "images": [
+        "9257:8986",
+        0
+      ]
+    },
+    "_meta": {}
+  },
+  "152": {
+    "inputs": {
+      "images": [
+        "145",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "9269": {
+    "inputs": {
+      "UNKNOWN": "[{\"name\":\"MysticXXX_KREA2_v1\",\"strength\":0.42,\"active\":false,\"expanded\":false,\"clipStrength\":0.42,\"locked\":false},{\"name\":\"krea2filterbypass3\",\"strength\":4.06,\"active\":false,\"expanded\":false,\"clipStrength\":4.06,\"locked\":false},{\"name\":\"KNP_V2_copy_copy\",\"strength\":0.2,\"active\":false,\"expanded\":false,\"clipStrength\":0.2,\"locked\":false},{\"name\":\"PussyHM_krea2_epoch10\",\"strength\":0.38,\"active\":false,\"expanded\":false,\"clipStrength\":0.38,\"locked\":false},{\"name\":\"realism_engine_krea2_v1\",\"strength\":1.33,\"active\":false,\"expanded\":false,\"clipStrength\":1.33,\"locked\":false},{\"name\":\"SummerVibesHM_krea2_epoch8\",\"strength\":0.42,\"active\":false,\"expanded\":false,\"clipStrength\":0.42,\"locked\":false},{\"name\":\"snofs_krea_v1\",\"strength\":\"0.52\",\"active\":false,\"expanded\":false,\"clipStrength\":\"0.52\",\"locked\":false},{\"name\":\"lenovo_krea2\",\"strength\":\"0.37\",\"active\":false,\"expanded\":false,\"clipStrength\":\"0.37\",\"locked\":false},{\"name\":\"realism_engine_krea2_v2\",\"strength\":0.34,\"active\":false,\"expanded\":false,\"clipStrength\":0.34,\"locked\":false},{\"name\":\"AMrealv3_000001750\",\"strength\":0.53,\"active\":false,\"expanded\":false,\"clipStrength\":0.53,\"locked\":false},{\"name\":\"krea2_turbo_lora_rank_64_final\",\"strength\":1,\"active\":false,\"expanded\":false,\"clipStrength\":1,\"locked\":false},{\"name\":\"AMREAL_000001750\",\"strength\":\"0.90\",\"active\":false,\"expanded\":false,\"clipStrength\":\"0.90\",\"locked\":false},{\"name\":\"GLoW_000001500\",\"strength\":0.7,\"active\":false,\"expanded\":false,\"clipStrength\":0.7,\"locked\":false},{\"name\":\"KRaST_000001250\",\"strength\":0.7,\"active\":false,\"expanded\":false,\"clipStrength\":0.7,\"locked\":false},{\"name\":\"Krea2_cx70\",\"strength\":1,\"active\":false,\"expanded\":false,\"clipStrength\":1,\"locked\":false}]",
+      "model": [
+        "9302",
+        0
+      ],
+      "clip": [
+        "9303",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "-"
+    }
+  },
+  "9271": {
+    "inputs": {
+      "UNKNOWN": "krea2RealVae_v10.safetensors"
+    },
+    "_meta": {}
+  },
+  "9273": {
+    "inputs": {
+      "UNKNOWN": "Huihui-Qwen3-VL-4B-Instruct-abliterated-fp8_scaled.safetensors"
+    },
+    "_meta": {}
+  },
+  "9276": {
+    "inputs": {
+      "UNKNOWN": "KRAST.safetensors"
+    },
+    "_meta": {}
+  },
+  "9287": {
+    "inputs": {
+      "pipe": [
+        "9288:9286",
+        0
+      ]
+    },
+    "class_type": "CR Data Bus Out",
+    "_meta": {
+      "title": "Model bus"
+    }
+  },
+  "9302": {
+    "inputs": {
+      "input": [
+        "9287",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "MODEL"
+    }
+  },
+  "9303": {
+    "inputs": {
+      "input": [
+        "9287",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "CLIP"
+    }
+  },
+  "9304": {
+    "inputs": {
+      "input": [
+        "9287",
+        3
+      ]
+    },
+    "_meta": {
+      "title": "VAE"
+    }
+  },
+  "9315": {
+    "inputs": {
+      "megapixels": 1,
+      "model": "4",
+      "aspect_ratio": "3:4 (Portrait)",
+      "divisible_by": 8
+    },
+    "class_type": "Resolution",
+    "_meta": {
+      "title": "Resolution (CRT)"
+    }
+  },
+  "9333": {
+    "inputs": {
+      "UNKNOWN": 0.5,
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "⚡RBG Smart Seed Variance 🌱⚡"
+    }
+  },
+  "9337": {
+    "inputs": {
+      "conditioning": [
+        "9333",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "9338": {
+    "inputs": {
+      "conditioning": [
+        "9333",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "9339": {
+    "inputs": {
+      "images": [
+        "9257:8986",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "9340": {
+    "inputs": {
+      "UNKNOWN": ""
+    },
+    "_meta": {}
+  },
+  "9341": {
+    "inputs": {
+      "input": [
+        "9340",
+        0
+      ]
+    },
+    "_meta": {}
+  },
+  "9288:9279": {
+    "inputs": {
+      "unet_name": [
+        "9276",
+        0
+      ],
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "9288:9280": {
+    "inputs": {
+      "clip_name": [
+        "9273",
+        0
+      ],
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "9288:9281": {
+    "inputs": {
+      "vae_name": [
+        "9271",
+        0
+      ]
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "9288:9286": {
+    "inputs": {
+      "any1": [
+        "9288:9279",
+        0
+      ],
+      "any2": [
+        "9288:9280",
+        0
+      ],
+      "any3": [
+        "9288:9281",
+        0
+      ]
+    },
+    "class_type": "CR Data Bus In",
+    "_meta": {
+      "title": "Model"
+    }
+  },
+  "9313:24": {
+    "inputs": {
+      "steps": 8,
+      "alpha": 0.6,
+      "beta": 0.6,
+      "model": [
+        "9269",
+        0
+      ]
+    },
+    "class_type": "BetaSamplingScheduler",
+    "_meta": {
+      "title": "BetaSamplingScheduler"
+    }
+  },
+  "9313:23": {
+    "inputs": {
+      "start": 0.996,
+      "end": 0,
+      "sigmas": [
+        "9313:24",
+        0
+      ]
+    },
+    "class_type": "Sigmas Rescale",
+    "_meta": {
+      "title": "Sigmas Rescale"
+    }
+  },
+  "9313:9319": {
+    "inputs": {},
+    "_meta": {}
+  },
+  "9313:9320": {
+    "inputs": {
+      "boolean": true,
+      "on_true": [
+        "9313:23",
+        0
+      ],
+      "on_false": [
+        "9313:9319",
+        0
+      ]
+    },
+    "class_type": "Switch any [Crystools]",
+    "_meta": {
+      "title": "🪛 Switch any"
+    }
+  },
+  "9313:25": {
+    "inputs": {
+      "eta": 0.5,
+      "sampler_name": "exponential/res_3s_strehmel_weiner",
+      "scheduler": "beta",
+      "steps": 8,
+      "steps_to_run": -1,
+      "denoise": 1,
+      "cfg": 1,
+      "seed": 47,
+      "sampler_mode": "standard",
+      "bongmath": true,
+      "model": [
+        "9269",
+        0
+      ],
+      "positive": [
+        "9333",
+        0
+      ],
+      "negative": [
+        "9337",
+        0
+      ],
+      "latent_image": [
+        "9315",
+        2
+      ],
+      "sigmas": [
+        "9313:9320",
+        0
+      ]
+    },
+    "class_type": "ClownsharKSampler_Beta",
+    "_meta": {
+      "title": "⚡ClownsharKSampler⚡"
+    }
+  },
+  "9257:8986": {
+    "inputs": {
+      "samples": [
+        "9257:9171",
+        0
+      ],
+      "vae": [
+        "9304",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9257:9171": {
+    "inputs": {
+      "eta": 0.91,
+      "sampler_name": "linear/euler",
+      "scheduler": "beta57",
+      "steps": 10,
+      "steps_to_run": -1,
+      "denoise": 0.5,
+      "cfg": 1,
+      "seed": 0,
+      "sampler_mode": "standard",
+      "bongmath": false,
+      "model": [
+        "9269",
+        0
+      ],
+      "positive": [
+        "9333",
+        0
+      ],
+      "negative": [
+        "9338",
+        0
+      ],
+      "latent_image": [
+        "9257:8988",
+        0
+      ]
+    },
+    "class_type": "ClownsharKSampler_Beta",
+    "_meta": {
+      "title": "stage 2"
+    }
+  },
+  "9257:8988": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "scale_by": 1.5,
+      "samples": [
+        "9313:25",
+        0
+      ]
+    },
+    "class_type": "LatentUpscaleBy",
+    "_meta": {
+      "title": "Upscale Latent By"
+    }
+  }
+}
