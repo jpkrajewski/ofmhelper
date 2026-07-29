@@ -1,0 +1,115 @@
+{
+    "format": "9:16 vertical video, 11 seconds, casual smartphone street clip",
+    "people": [
+        {
+            "id": "subject",
+            "role": "main subject on camera",
+            "appearance": "do not describe — reference image will be provided",
+            "wardrobe": "Yellow-and-green halter crop top with side stripes and a small logo, paired with tight grey ribbed high-waisted leggings. Midriff exposed"
+        },
+        {
+            "id": "person_2",
+            "role": "cameraman speaking off-camera",
+            "appearance": "off-camera, not visible on screen",
+            "wardrobe": "not visible"
+        }
+    ],
+    "environment": "the D Las Vegas, a hotel and casino located on the Fremont Street Experience in Downtown Las Vegas, Nevada",
+    "lighting": "intense red neon overhead wash lighting casting warm highlights on subject, ambient night lighting",
+    "color_grading": "natural smartphone camera profile with heavy red color cast",
+    "atmosphere": "playful, flirtatious, humorous street banter",
+    "audio": "outdoor ambient casino noise, off-camera male and subject spoken dialogue",
+    "pacing": "fast-paced dialogue with quick camera panning",
+    "background_activity": "pedestrians walking across illuminated plaza",
+    "scene_events": [
+        {
+            "timestamp": "0:00",
+            "speaker": "subject",
+            "line": "Babe… can we eat at The D? It’s my favorite place to get stuffed.",
+            "delivery": "playful, pleading tone",
+            "action": "Looks directly into camera lens in close-up"
+        },
+        {
+            "timestamp": "0:02",
+            "speaker": "person_2",
+            "line": "Where, there?",
+            "delivery": "curious off-camera voice",
+            "action": "Camera pans left to show background casino the D Las Vegas"
+        },
+        {
+            "timestamp": "0:03",
+            "speaker": "subject",
+            "line": "Yeah, the D. I love it.",
+            "delivery": "enthusiastic, smiling",
+            "action": "Points finger toward casino behind her while holding bag strap"
+        },
+        {
+            "timestamp": "0:05",
+            "speaker": "person_2",
+            "line": "The D?",
+            "delivery": "questioning tone",
+            "action": "Camera whip-pans left brief moment to background and back"
+        },
+        {
+            "timestamp": "0:06",
+            "speaker": "subject",
+            "line": "Yeah. What’s so hard to understand? …Get it? Hard. And filling.",
+            "delivery": "teasing, heavy double entendre, deadpan into a wicked smirk",
+            "action": "Looks into camera with deadpan expression, then breaks into a proud, naughty smirk, one eyebrow raised"
+        },
+        {
+            "timestamp": "0:10",
+            "speaker": "person_2",
+            "line": null,
+            "delivery": null,
+            "action": "Scoffs off-camera as subject turns her back and walks away toward plaza"
+        }
+    ],
+    "style": "Raw casual iPhone TikTok footage. NOT cinematic. NOT stabilized. NOT influencer-style. Feels like a real person filmed this on their phone.",
+    "camera_logic": "handheld close-up framing with rapid panning back and forth between subject and background landmark",
+    "imperfections": [
+        "handheld shake during quick whip pans",
+        "red neon overexposure on face",
+        "slight motion blur and focus re-tracking"
+    ],
+    "shots": [
+        {
+            "time": "0:00–0:02",
+            "action": "Subject asks question in close-up",
+            "camera_behavior": "tight handheld focus on subject face",
+            "scene_event_cue": "0:00"
+        },
+        {
+            "time": "0:02–0:03",
+            "action": "Shows casino landmark in background",
+            "camera_behavior": "pan left to background",
+            "scene_event_cue": "0:02"
+        },
+        {
+            "time": "0:03–0:05",
+            "action": "Subject points at landmark",
+            "camera_behavior": "pan back right to subject close-up",
+            "scene_event_cue": "0:03"
+        },
+        {
+            "time": "0:05–0:06",
+            "action": "Re-confirms location",
+            "camera_behavior": "quick whip-pan left and right",
+            "scene_event_cue": "0:05"
+        },
+        {
+            "time": "0:06–0:10",
+            "action": "Subject delivers joke and smirks",
+            "camera_behavior": "holds close-up framing on subject face",
+            "scene_event_cue": "0:06"
+        },
+        {
+            "time": "0:10–0:11",
+            "action": "Subject turns and walks away into background",
+            "camera_behavior": "tilts down slightly following movement",
+            "scene_event_cue": "0:10"
+        }
+    ],
+    "end_behavior": "clip ends abruptly mid-action like a casually uploaded viral TikTok",
+    "negative_prompt": "no smooth gimbal motion, no cinematic stabilization, no professional lighting, no beauty filter, no ring light, no AI skin smoothing, no influencer posing, no perfectly centered framing, no overly dramatic acting, no model behavior, no slow motion, no music video energy, no fashion campaign aesthetic, no drone footage feel"
+}

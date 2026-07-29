@@ -205,7 +205,7 @@ One-time setup, done **locally** (needs a browser — not on the server):
    `drive.google.com/drive/folders/<THIS_PART>`.
 
 Required for the todo list's Discord approval notifications (see
-`web/approval_tokens.py` / `web/routers/approve.py`) — whenever a VA/admin
+`web/stores/approval_tokens.py` / `web/routers/workflow/approve.py`) — whenever a VA/admin
 uploads an asset for review, a Discord message goes out with a preview and a
 one-tap, no-login approval link:
 ```

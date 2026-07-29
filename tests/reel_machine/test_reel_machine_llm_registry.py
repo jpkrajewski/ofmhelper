@@ -1,60 +1,54 @@
 """
-get_provider() must default to the free TemplateProvider and fall back to it
-whenever a paid/opt-in provider can't be constructed (missing package,
-missing API key) -- a misconfigured LLM choice should degrade the script
-quality, never fail the whole /replicate job.
+The registry has no fallback provider: an unusable choice must raise so the
+job fails with a readable reason, instead of silently swapping in a model
+nobody picked.
+
+`settings.reel_machine` is constructed fresh on every access (see
+config/__init__.py), so these drive it with monkeypatch.setenv rather than
+by patching an instance.
 """
 
-from ofmhelpers.reel_machine.llm.registry import get_provider
-from ofmhelpers.reel_machine.llm.template_provider import TemplateProvider
+import pytest
+
+from ofmhelpers.reel_machine.llm import registry
 
 
-def test_defaults_to_template_with_no_env_var(monkeypatch):
-    monkeypatch.delenv("REEL_MACHINE_LLM_PROVIDER", raising=False)
-    assert isinstance(get_provider(), TemplateProvider)
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch):
+    for var in ("REEL_MACHINE_LLM_PROVIDER", "GEMINI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
 
 
-def test_unknown_name_falls_back_to_template():
-    assert isinstance(get_provider("not-a-real-provider"), TemplateProvider)
+def test_defaults_to_gemini(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    assert registry.get_provider().name == "gemini"
 
 
-def test_groq_without_api_key_falls_back_to_template(monkeypatch):
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    provider = get_provider("groq")
-    assert isinstance(provider, TemplateProvider)
+def test_explicit_name_wins_over_the_env_var(monkeypatch):
+    monkeypatch.setenv("REEL_MACHINE_LLM_PROVIDER", "nope")
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    assert registry.get_provider("gemini").name == "gemini"
 
 
-def test_anthropic_without_api_key_falls_back_to_template(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    provider = get_provider("anthropic")
-    assert isinstance(provider, TemplateProvider)
+def test_env_var_selects_the_provider(monkeypatch):
+    monkeypatch.setenv("REEL_MACHINE_LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    assert registry.get_provider().name == "gemini"
 
 
-def test_gemini_without_api_key_falls_back_to_template(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    provider = get_provider("gemini")
-    assert isinstance(provider, TemplateProvider)
+def test_unknown_provider_raises(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    with pytest.raises(ValueError, match="unknown provider 'groq'"):
+        registry.get_provider("groq")
 
 
-def test_groq_analyze_reel_is_a_safe_noop_without_a_vision_model(monkeypatch, tmp_path):
-    """Groq's current model catalog has no vision-capable model -- analyze_reel
-    must not attempt a doomed API call by default, just return {} like the
-    template provider does."""
-    monkeypatch.delenv("GROQ_VISION_MODEL", raising=False)
-    monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    from ofmhelpers.reel_machine.llm.groq_provider import GroqProvider
-
-    provider = GroqProvider()
-    assert provider.analyze_reel(tmp_path / "x.jpg", "transcript") == {}
+def test_missing_api_key_raises_instead_of_falling_back():
+    with pytest.raises(KeyError, match="GEMINI_API_KEY"):
+        registry.get_provider("gemini")
 
 
-def test_env_var_is_used_when_name_omitted(monkeypatch):
-    monkeypatch.setenv("REEL_MACHINE_LLM_PROVIDER", "not-real")
-    assert isinstance(get_provider(), TemplateProvider)
-
-
-def test_explicit_name_overrides_env_var(monkeypatch):
-    monkeypatch.setenv("REEL_MACHINE_LLM_PROVIDER", "groq")
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    # explicit "template" wins over the env var, and needs no provider construction
-    assert isinstance(get_provider("template"), TemplateProvider)
+def test_every_registered_name_matches_its_provider():
+    """The map is keyed off each class's own `name`, so a provider renamed in
+    one place can't become unreachable under the other."""
+    for name, factory in registry.PROVIDERS.items():
+        assert factory.name == name

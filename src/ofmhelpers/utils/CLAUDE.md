@@ -29,6 +29,6 @@ platforms, an audio DSP effect chain, and a spreadsheet-to-dict loader.
 
 # Who calls this
 
-`web/routers/radio_comms.py` (radio_comms_fx), `web/routers/clean_image.py`
-(metadata_cleaner), `web/routers/scraper.py` (sheets_to_columns,
+`web/routers/helpers/radio_comms.py` (radio_comms_fx), `web/routers/downloads/clean_image.py`
+(metadata_cleaner), `web/routers/helpers/scraper.py` (sheets_to_columns,
 profile_loader).

@@ -1,6 +1,6 @@
 """
 Covers discord/client.py: the minimal webhook sender behind the Discord
-approval notifications (see web/routers/todo.py's upload_asset).
+approval notifications (see web/routers/workflow/todo.py's upload_asset).
 """
 
 from unittest import mock
@@ -36,7 +36,7 @@ def test_send_webhook_omits_embeds_key_entirely_when_none_given(monkeypatch):
     unrelated to a URL also in content) unreliably fails to also get
     Discord's own auto-unfurl for that URL -- confirmed by testing -- so
     callers that want a bare link to unfurl reliably (see
-    web/routers/todo.py's _notify_discord_for_review) must not attach any
+    web/routers/workflow/todo.py's _notify_discord_for_review) must not attach any
     embeds to that call at all."""
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/webhooks/abc")
     fake_response = mock.Mock()

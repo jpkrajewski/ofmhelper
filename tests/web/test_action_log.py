@@ -14,9 +14,9 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.jobs import create_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.action_log import TASK_STATUS_PREFIX, _status_url
+from ofmhelpers.web.routers.admin.action_log import TASK_STATUS_PREFIX, _status_url
+from ofmhelpers.web.stores.jobs import create_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

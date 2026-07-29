@@ -1,6 +1,6 @@
 """
-The ONLY module allowed to touch the database. web/jobs.py, web/todos.py and
-web/approval_tokens.py keep their existing public function signatures but
+The ONLY module allowed to touch the database. web/stores/jobs.py, web/stores/todos.py and
+web/stores/approval_tokens.py keep their existing public function signatures but
 delegate their bodies to the repositories here, so the ~13 routers that call
 those functions never change.
 

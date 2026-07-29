@@ -3,7 +3,7 @@ RQ queue the API enqueues background work onto, and the worker container
 (`rq worker-pool`) consumes. This replaces FastAPI BackgroundTasks: instead of
 running a job in-process, a route does `enqueue(run_job, job_id, fn, kwargs)`
 and returns immediately; a separate worker process runs it, writing status to
-Postgres (see web/jobs.py) that the API can then read back.
+Postgres (see web/stores/jobs.py) that the API can then read back.
 
 Connection + queue are built lazily from settings.infra (never at import), for
 the same reason the DB engine is: the worker and the API must bind to whatever

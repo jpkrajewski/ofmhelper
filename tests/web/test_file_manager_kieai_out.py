@@ -4,7 +4,7 @@ KieAIClient's out_dir) used to be invisible to the file manager entirely --
 finding or removing a stale generation meant shelling into the server. Now
 it's browsable/deletable like uploads/ and downloads/, and deleting through
 it is what makes a job's gallery card disappear too (see
-web/jobs.py's list_jobs()/_prune_missing_files()).
+web/stores/jobs.py's list_jobs()/_prune_missing_files()).
 """
 
 import os
@@ -16,9 +16,9 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.jobs import create_job, list_jobs, run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import file_manager
+from ofmhelpers.web.routers.admin import file_manager
+from ofmhelpers.web.stores.jobs import create_job, list_jobs, run_job
 
 
 @pytest.fixture

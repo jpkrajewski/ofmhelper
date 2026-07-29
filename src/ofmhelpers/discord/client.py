@@ -24,7 +24,7 @@ def send_webhook(content: str, embeds: list[dict] | None = None) -> None:
     unrelated to that URL, e.g. just an approval button) unreliably fails
     to also get Discord's own auto-unfurl embed for that URL. A message
     with no embeds key at all -- the same shape a plain human-typed link
-    produces -- unfurls reliably. See routers/todo.py's
+    produces -- unfurls reliably. See routers/workflow/todo.py's
     _notify_discord_for_review, which relies on this by sending the asset
     preview link in its own call with no embeds attached."""
     url = settings.discord.webhook_url

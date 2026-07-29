@@ -37,8 +37,8 @@ class SessionSettings(BaseSettings):
 
 class WebSettings(BaseSettings):
     """auth.py, recovery.py, jobs.py, todos.py, approval_tokens.py,
-    routers/todo.py, routers/approve.py, routers/generate.py,
-    routers/download_assets.py."""
+    routers/workflow/todo.py, routers/workflow/approve.py, routers/generation/index.py,
+    routers/downloads/index.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -67,6 +67,30 @@ class WebSettings(BaseSettings):
         default=3 * 24 * 3600, validation_alias="OFM_APPROVAL_TOKEN_TTL_SECONDS"
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
+
+    # Rate limiting (web/ratelimit.py). The kill switch exists for the test
+    # suite, which fires hundreds of POSTs from one client host -- leave it on
+    # everywhere else.
+    rate_limit_enabled: bool = Field(
+        default=True, validation_alias="OFM_RATE_LIMIT_ENABLED"
+    )
+    # Failed logins per client IP before /login starts answering 429. Shared
+    # passwords with no per-user lockout, so this is the only thing standing
+    # between an attacker and unlimited guesses.
+    login_max_failures: int = Field(
+        default=10, validation_alias="OFM_LOGIN_MAX_FAILURES"
+    )
+    login_failure_window_s: int = Field(
+        default=900, validation_alias="OFM_LOGIN_FAILURE_WINDOW_S"
+    )
+    # Blunt per-IP ceiling on every mutating request. Generous on purpose: a
+    # legitimate multi-file upload burst must not hit it.
+    write_rate_limit_requests: int = Field(
+        default=120, validation_alias="OFM_WRITE_RATE_LIMIT_REQUESTS"
+    )
+    write_rate_limit_window_s: int = Field(
+        default=60, validation_alias="OFM_WRITE_RATE_LIMIT_WINDOW_S"
+    )
 
 
 class InfraSettings(BaseSettings):
@@ -100,8 +124,8 @@ class InfraSettings(BaseSettings):
 
 
 class KieAISettings(BaseSettings):
-    """aigenproviders/kaiai/client.py, upload_cache.py, routers/fake_ai.py,
-    routers/file_manager.py."""
+    """aigenproviders/kaiai/client.py, upload_cache.py, routers/generation/fake_ai.py,
+    routers/admin/file_manager.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -129,7 +153,7 @@ class KieAISettings(BaseSettings):
 
 
 class DownloadersSettings(BaseSettings):
-    """downloaders/cookies.py, downloaders/generic.py, routers/cookies.py."""
+    """downloaders/cookies.py, downloaders/generic.py, routers/admin/cookies.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -154,23 +178,28 @@ class DiscordSettings(BaseSettings):
 
 
 class ReelMachineSettings(BaseSettings):
-    """reel_machine/llm/*.py, reel_machine/intake.py, reel_machine/teardown.py."""
+    """reel_machine/llm/*.py -- which model watches the reel, and its key."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    llm_provider: str = Field(
-        default="template", validation_alias="REEL_MACHINE_LLM_PROVIDER"
+    # The analysis prompt is the one thing here that gets retuned by reading
+    # bad output and rewriting a sentence, so it lives in a file under the
+    # bind-mounted uploads/ dir rather than only in the image: edit it on the
+    # server and the next job uses it, no rebuild. Missing file = the frozen
+    # default in reel_machine/prompts.py.
+    prompt_file: str = Field(
+        default="uploads/analysis_prompt.txt",
+        validation_alias="REEL_MACHINE_PROMPT_FILE",
     )
-    anthropic_api_key: str | None = None
-    groq_api_key: str | None = None
-    groq_vision_model: str | None = None
+
+    # "gemini" is the only provider -- see reel_machine/llm/registry.py. The
+    # field stays because an unknown name has to raise rather than silently
+    # run something nobody picked.
+    llm_provider: str = Field(
+        default="gemini", validation_alias="REEL_MACHINE_LLM_PROVIDER"
+    )
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-latest"
-    hf_token: str | None = None
-    huggingface_token: str | None = None
-    beat_gap_s: float = Field(
-        default=0.5, validation_alias="OFM_REEL_MACHINE_BEAT_GAP_S"
-    )
 
 
 class InstagramStatsSettings(BaseSettings):

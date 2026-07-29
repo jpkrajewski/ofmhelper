@@ -1,7 +1,7 @@
 """
 Covers the public (no-login) Discord magic-link approval flow:
-web/approval_tokens.py + web/routers/approve.py, wired in from
-web/routers/todo.py's upload_asset. The whole point is a reviewer can tap
+web/stores/approval_tokens.py + web/routers/workflow/approve.py, wired in from
+web/routers/workflow/todo.py's upload_asset. The whole point is a reviewer can tap
 the link from Discord on their phone with **no session cookie** and have it
 approve the asset and kick off the Google Drive upload in one shot.
 """
@@ -20,10 +20,10 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web import todos
 from ofmhelpers.web.db import repository
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import todo as todo_router
+from ofmhelpers.web.routers.workflow import todo as todo_router
+from ofmhelpers.web.stores import todos
 
 
 class _FrozenClock:
@@ -110,7 +110,7 @@ def test_anonymous_can_view_asset_preview_with_no_session(client, anon_client):
 def test_asset_preview_page_carries_og_video_tags_pointing_at_the_asset(
     client, anon_client
 ):
-    """The /asset/preview HTML wrapper (see routers/approve.py's
+    """The /asset/preview HTML wrapper (see routers/workflow/approve.py's
     asset_preview) is what Discord's crawler is pointed at for video
     assets instead of the raw file -- it needs Open Graph video tags
     pointing back at the real /asset URL for Discord to build a playable

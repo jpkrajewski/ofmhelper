@@ -60,7 +60,7 @@ ALL_ENV_VARS = [
     "OFM_COOKIES_FROM_BROWSER",
     "DISCORD_WEBHOOK_URL",
     "REEL_MACHINE_LLM_PROVIDER",
-    "ANTHROPIC_API_KEY",
+    "REEL_MACHINE_PROMPT_FILE",
     "GROQ_API_KEY",
     "GROQ_VISION_MODEL",
     "GEMINI_API_KEY",
@@ -175,17 +175,14 @@ def test_discord_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.webhook_url is None
 
 
-def test_reel_machine_settings_defaults_match_pre_refactor_values(clean_env):
+def test_reel_machine_settings_defaults_to_gemini(clean_env):
+    """Gemini is the only provider: the free API that takes the actual video
+    rather than stills -- see reel_machine/llm/registry.py."""
     s = ReelMachineSettings(_env_file=None)
-    assert s.llm_provider == "template"
-    assert s.anthropic_api_key is None
-    assert s.groq_api_key is None
-    assert s.groq_vision_model is None
+    assert s.llm_provider == "gemini"
     assert s.gemini_api_key is None
     assert s.gemini_model == "gemini-flash-latest"
-    assert s.hf_token is None
-    assert s.huggingface_token is None
-    assert s.beat_gap_s == 0.5
+    assert s.prompt_file == "uploads/analysis_prompt.txt"
 
 
 def test_instagram_stats_settings_defaults_match_the_tuned_live_values(clean_env):

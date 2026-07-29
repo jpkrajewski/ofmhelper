@@ -1,65 +1,29 @@
 """
-Picks the active LLMProvider by name (form dropdown) or from the
-REEL_MACHINE_LLM_PROVIDER env var, defaulting to the free template provider.
+Picks the active LLMProvider by name or from the REEL_MACHINE_LLM_PROVIDER
+env var, defaulting to Gemini (the only free API that takes video).
 
-Construction failures (missing package, missing API key) fall back to the
-template provider immediately rather than failing the whole job -- a
-provider that starts working (network hiccup mid-call) is still handled by
-pipeline.draft_script's own try/except around the actual call.
+No fallback provider: an unknown name or a missing API key raises, which
+fails the job with "GEMINI_API_KEY" rather than quietly producing a worse
+prompt from a stand-in nobody chose.
 """
 
+from collections.abc import Callable
+
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
-from ofmhelpers.reel_machine.llm.base import LLMProvider
-from ofmhelpers.reel_machine.llm.template_provider import TemplateProvider
+from ofmhelpers.reel_machine.llm import LLMProvider
+from ofmhelpers.reel_machine.llm.gemini_provider import GeminiProvider
 
-logger = get_logger(__name__)
-
-PROVIDER_NAMES = ("template", "groq", "gemini", "anthropic")
+PROVIDERS: dict[str, Callable[[], LLMProvider]] = {
+    GeminiProvider.name: GeminiProvider,
+}
+DEFAULT_PROVIDER = GeminiProvider.name
 
 
 def get_provider(name: str | None = None) -> LLMProvider:
-    name = name or settings.reel_machine.llm_provider
-    if name not in PROVIDER_NAMES:
-        name = "template"
-
-    if name == "groq":
-        try:
-            from ofmhelpers.reel_machine.llm.groq_provider import GroqProvider
-
-            return GroqProvider()
-        except Exception:
-            logger.warning(
-                "%s provider unavailable, falling back to template",
-                "groq",
-                exc_info=True,
-            )
-            return TemplateProvider()
-
-    if name == "gemini":
-        try:
-            from ofmhelpers.reel_machine.llm.gemini_provider import GeminiProvider
-
-            return GeminiProvider()
-        except Exception:
-            logger.warning(
-                "%s provider unavailable, falling back to template",
-                "gemini",
-                exc_info=True,
-            )
-            return TemplateProvider()
-
-    if name == "anthropic":
-        try:
-            from ofmhelpers.reel_machine.llm.anthropic_provider import AnthropicProvider
-
-            return AnthropicProvider()
-        except Exception:
-            logger.warning(
-                "%s provider unavailable, falling back to template",
-                "anthropic",
-                exc_info=True,
-            )
-            return TemplateProvider()
-
-    return TemplateProvider()
+    name = name or settings.reel_machine.llm_provider or DEFAULT_PROVIDER
+    try:
+        factory = PROVIDERS[name]
+    except KeyError:
+        msg = f"unknown provider {name!r} (expected one of {', '.join(PROVIDERS)})"
+        raise ValueError(msg) from None
+    return factory()

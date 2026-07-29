@@ -1,4 +1,3 @@
-import mimetypes
 import shutil
 import subprocess
 import tempfile
@@ -13,6 +12,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     classify_kind,
+    media_response,
     strip_asset_hash_prefix,
 )
 
@@ -63,8 +63,9 @@ def get_ref_file(path: Annotated[str, Query()]):
         raise HTTPException(status_code=403, detail="Invalid path")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type)
+    # Display name (hash prefix stripped) decides the type, and non-media is
+    # forced to a download -- see media_response.
+    return media_response(file_path, strip_asset_hash_prefix(file_path.name))
 
 
 def write_image_thumb(source: Path, dest: Path, size: int) -> None:

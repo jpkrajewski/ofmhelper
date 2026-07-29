@@ -15,8 +15,8 @@ import pytest
 import worker_tasks
 from rq import SimpleWorker
 
-from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.queue import get_queue, get_redis
+from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
 @pytest.fixture(autouse=True)

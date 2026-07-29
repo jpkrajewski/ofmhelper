@@ -1,6 +1,6 @@
 """
-SQLAlchemy ORM tables backing web/jobs.py, web/todos.py and
-web/approval_tokens.py. Column sets mirror the exact dict/JSON shapes those
+SQLAlchemy ORM tables backing web/stores/jobs.py, web/stores/todos.py and
+web/stores/approval_tokens.py. Column sets mirror the exact dict/JSON shapes those
 modules write today (see web/schemas.py for the Pydantic mirror), so the
 step-5 backfill is a straight field-for-field copy.
 

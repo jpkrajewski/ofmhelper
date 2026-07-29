@@ -25,11 +25,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.web.db.repository import JobRepository
-from ofmhelpers.web.jobs import create_job, get_job, run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import kling as kling_router
-from ofmhelpers.web.routers import nbp as nbp_router
 from ofmhelpers.web.routers import refs as refs_router
+from ofmhelpers.web.routers.generation import kling as kling_router
+from ofmhelpers.web.routers.generation import nbp as nbp_router
+from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
 @pytest.fixture
@@ -216,8 +216,8 @@ def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only():
 
 def test_job_status_json_surfaces_preview_only_while_running(tmp_path):
     job_id = create_job("nanobanana", {"prompt": "p"})
-    from ofmhelpers.web.jobs import set_job_preview
     from ofmhelpers.web.routers.task_helpers import job_status_payload
+    from ofmhelpers.web.stores.jobs import set_job_preview
 
     set_job_preview(job_id, {"remote_url": "https://cdn.kie.ai/x.png", "kind": "image"})
 

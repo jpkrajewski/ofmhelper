@@ -16,7 +16,7 @@ weighted.
 
 # Who calls this
 
-`web/routers/scraper.py` imports `SCRAPRES_REGISTRY` and `Scrapers` to drive
+`web/routers/helpers/scraper.py` imports `SCRAPRES_REGISTRY` and `Scrapers` to drive
 the scraper picker; `scraping/apify.py` (actor input building);
 `utils/sheets_to_columns.py` (reads the `Scrapers` enum to map spreadsheet
 columns to scrapers); `scraping/post_scorer.py` (ranking weights).

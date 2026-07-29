@@ -10,13 +10,13 @@ connection. Just POSTs a message to a webhook URL.
   unset). Deliberately omits the `embeds` key entirely when none are given
   (rather than sending `[]`) — a message carrying a bare URL *alongside* any
   embeds array unreliably fails to also get Discord's own auto-unfurl for
-  that URL (confirmed by testing). See `web/routers/todo.py`'s
+  that URL (confirmed by testing). See `web/routers/workflow/todo.py`'s
   `_notify_discord_for_review`, which relies on this by sending the asset
   preview link in its own separate call with no embeds attached.
 
 # Who calls this
 
-`web/routers/todo.py` (asset-ready-for-review notifications, login/logout
+`web/routers/workflow/todo.py` (asset-ready-for-review notifications, login/logout
 events indirectly via job logging). Raises on any non-2xx response or
 network error — callers that need a failed notification to not break their
 own request must catch it themselves.
