@@ -4,11 +4,9 @@
     <h1>ElevenLabs — text to speech</h1>
 </div>
 
-<form method="post" action="/helpers/elevenlabs/run" class="card todo-add-form">
-    <div class="field">
-        <label for="el-key">API key</label>
-        <input type="password" name="api_key" id="el-key" required autocomplete="off">
-    </div>
+<form method="post" action="/helpers/elevenlabs/run" class="card todo-add-form"
+      data-prefix="/helpers/elevenlabs" data-result-kind="audio">
+    {% include "_elevenlabs_api_key_field.html" %}
 
     <div class="field">
         <label for="el-text">Text</label>
@@ -34,6 +32,12 @@
         <input type="text" name="output_format" id="el-format" value="mp3_44100_128">
     </div>
 
-    <button type="submit" class="btn-primary">Generate audio</button>
+    <button type="submit" class="btn-primary btn-block">Generate audio</button>
 </form>
+
+<div id="results-panel">
+    <div class="generation-status"></div>
+    <div class="results"></div>
+</div>
+<script src="/static/js/generation.js"></script>
 {% endblock %}

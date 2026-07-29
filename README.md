@@ -175,6 +175,12 @@ KIE_AI_API_KEY_VA=...
 The field stays editable either way — if these aren't set, or you need a
 different key for a one-off job, just paste over the pre-filled value.
 
+Same idea for ElevenLabs (the `/helpers/elevenlabs` form and the "Subject's
+speech" panel on the `/replicate` review page) — one key, not one per role:
+```
+ELEVENLABS_API_KEY=...
+```
+
 Required for the todo list's "Upload to Drive" feature:
 ```
 GOOGLE_DRIVE_TOKEN_FILE=secrets/google-drive-token.json

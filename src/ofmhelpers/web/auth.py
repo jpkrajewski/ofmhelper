@@ -124,6 +124,16 @@ def get_kie_api_key(request: Request) -> str:
     return key or ""
 
 
+def get_elevenlabs_api_key() -> str:
+    """Pre-fill value for the ElevenLabs API key field.
+
+    Same optional-by-design contract as get_kie_api_key, but role-blind:
+    `ELEVENLABS_API_KEY` is one workspace key, so admin and VA get the same
+    one, and an unset var just leaves the field empty.
+    """
+    return settings.web.elevenlabs_api_key or ""
+
+
 def require_admin(request: Request) -> None:
     """FastAPI dependency: 403s any request whose session role isn't admin.
 

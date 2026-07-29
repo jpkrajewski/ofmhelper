@@ -931,7 +931,8 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 }
 .result-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
 .result-video,
-.result-image {
+.result-image,
+.result-audio {
     display: block;
     width: 100%;
     border-radius: var(--radius-sm);
@@ -1121,6 +1122,26 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 .prompt-backdrop .ref-mark-video { background: rgba(139, 92, 246, 0.35); }
 .prompt-backdrop .ref-mark-audio { background: rgba(251, 191, 36, 0.3); }
 
+/* JSON editor (static/js/json-editor.js). Same backdrop trick, but the
+   backdrop carries the colour and the textarea's own text is transparent --
+   class names here are contract with that file. */
+.json-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    margin-bottom: var(--s-2);
+}
+.json-bar .btn { padding: var(--s-1) var(--s-3); font-size: var(--step--1); }
+.json-status { font-size: var(--step--1); color: var(--text-muted); }
+.json-status.ok { color: var(--ok); }
+.json-status.bad { color: var(--fail); }
+.json-wrap textarea { color: transparent; caret-color: var(--text); }
+.json-backdrop { color: var(--text-muted); }
+.json-backdrop .jk { color: var(--accent-soft); }
+.json-backdrop .js { color: var(--ok); }
+.json-backdrop .jn { color: var(--warn); }
+.json-backdrop .jl { color: var(--accent-strong); }
+
 /* ---------------------------------------------------------------------
    13. Inline job results panel + spinner (static/js/generation.js)
    --------------------------------------------------------------------- */
@@ -1182,6 +1203,21 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
     }
 }
 .generate-form-col button[type="submit"] { width: 100%; min-height: 48px; font-size: var(--step-0); }
+
+/* Even split, for a page whose right column is an editor rather than a
+   gallery (/replicate review): the prompt JSON needs as much width as the
+   source reel, not the leftover 1fr. */
+@media (min-width: 1080px) {
+    .generate-layout--even { grid-template-columns: 1fr 1fr; }
+}
+
+/* Stacked sections inside a column -- without this the reel, the metadata
+   table and the speech box run together with no breathing room. */
+.review-block { margin-bottom: var(--s-7); }
+.review-block:last-child { margin-bottom: 0; }
+.review-block > .media-full { margin-bottom: var(--s-4); }
+.review-block .inputs-table { margin-bottom: var(--s-4); }
+.review-block .field:last-of-type { margin-bottom: var(--s-4); }
 
 /* Job "Inputs" section (prompt/settings/reference files a job ran with). */
 .job-inputs { margin-bottom: var(--s-6); }

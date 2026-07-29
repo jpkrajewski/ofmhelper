@@ -4,10 +4,11 @@ from typing import Annotated
 
 from elevenlabs.client import ElevenLabs
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 
+from ofmhelpers.web.auth import get_elevenlabs_api_key
 from ofmhelpers.web.queue import enqueue
-from ofmhelpers.web.routers.task_helpers import asset_card
+from ofmhelpers.web.routers.task_helpers import asset_card, job_status_payload
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 from ofmhelpers.web.templates_config import templates
 
@@ -56,7 +57,7 @@ def form(request: Request):
     return templates.TemplateResponse(
         request,
         "elevenlabs_form.html",
-        {"voices": list(VOICES.keys())},
+        {"voices": list(VOICES.keys()), "elevenlabs_api_key": get_elevenlabs_api_key()},
     )
 
 
@@ -68,6 +69,7 @@ async def run(
     voice: Annotated[str, Form()] = "George",
     model_id: Annotated[str, Form()] = "eleven_v3",
     output_format: Annotated[str, Form()] = "mp3_44100_128",
+    source_job_id: Annotated[str, Form()] = "",
 ):
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
@@ -85,7 +87,12 @@ async def run(
         "model_id": model_id,
         "output_format": output_format,
     }
-    job_id = create_job("elevenlabs", params, actor=request.session.get("role"))
+    stored_params = dict(params)
+    if source_job_id:
+        # Lets the reel-machine review page find and re-render its own last
+        # voice generation on reload (see replicate._latest_child_job).
+        stored_params["source_job_id"] = source_job_id
+    job_id = create_job("elevenlabs", stored_params, actor=request.session.get("role"))
     enqueue(
         run_job,
         job_id,
@@ -97,7 +104,13 @@ async def run(
         },
     )
 
-    return RedirectResponse(url=f"/helpers/elevenlabs/jobs/{job_id}", status_code=303)
+    return {"job_id": job_id}
+
+
+@router.get("/jobs/{job_id}/status")
+def job_status_json(job_id: str):
+    job = get_job(job_id)
+    return job_status_payload(job, "/helpers/elevenlabs/files")
 
 
 @router.get("/jobs/{job_id}")

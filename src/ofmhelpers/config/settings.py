@@ -46,6 +46,9 @@ class WebSettings(BaseSettings):
     app_password_va: str | None = None
     kie_ai_api_key_admin: str | None = None
     kie_ai_api_key_va: str | None = None
+    # One key for both roles, unlike kie.ai: ElevenLabs billing is per
+    # workspace here, so there is nothing to split per role.
+    elevenlabs_api_key: str | None = None
     app_base_url: str | None = None
 
     jobs_file: str = Field(

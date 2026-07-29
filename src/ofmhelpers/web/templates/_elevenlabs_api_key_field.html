@@ -1,0 +1,29 @@
+<div class="field">
+    <label for="el-api-key">ElevenLabs API key</label>
+    <input type="password" name="api_key" id="el-api-key"
+           value="{{ elevenlabs_api_key|default('') }}"
+           data-server-value="{{ elevenlabs_api_key|default('') }}"
+           required autocomplete="new-password"
+           data-lpignore="true" data-1p-ignore data-bwignore="true" data-dashlane-ignore="true"
+           data-form-type="other">
+</div>
+<script>
+(function () {
+    // Same fight as _kie_api_key_field.html: password managers replace a
+    // server-rendered key with a saved credential for this origin even with
+    // autocomplete="off". Restore the server value until the user types.
+    const field = document.getElementById("el-api-key");
+    if (!field || !field.dataset.serverValue) return;
+
+    let userTouched = false;
+    field.addEventListener("input", () => { userTouched = true; }, { once: true });
+
+    [0, 100, 400].forEach((delay) => {
+        setTimeout(() => {
+            if (!userTouched && field.value !== field.dataset.serverValue) {
+                field.value = field.dataset.serverValue;
+            }
+        }, delay);
+    });
+})();
+</script>
