@@ -931,7 +931,8 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 }
 .result-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
 .result-video,
-.result-image {
+.result-image,
+.result-audio {
     display: block;
     width: 100%;
     border-radius: var(--radius-sm);

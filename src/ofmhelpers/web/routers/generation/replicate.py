@@ -50,7 +50,7 @@ from ofmhelpers.web.routers.task_helpers import (
     save_upload,
     serve_job_file,
 )
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs, run_job
 from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/replicate", tags=["replicate"])
@@ -58,6 +58,21 @@ router = APIRouter(prefix="/replicate", tags=["replicate"])
 # Where a job's downloaded reel lives -- separate from ASSETS_ROOT
 # (uploads/assets), which is only for reusable reference files.
 INTAKE_ROOT = Path("uploads") / "replicate_intake"
+
+
+def _latest_child_job(source_job_id: str, task: str) -> dict | None:
+    """Most recent job of `task` (e.g. "replicate" or "elevenlabs") that was
+    generated *from* this intake job -- so the review page can re-render its
+    own last result on reload instead of a page refresh losing it (results
+    otherwise only ever existed in the client-side generation.js card).
+    list_jobs() is newest-first, so the first match is the latest run."""
+    for job in list_jobs():
+        if (
+            job["task"] == task
+            and (job.get("params") or {}).get("source_job_id") == source_job_id
+        ):
+            return job
+    return None
 
 
 def _run_replicate_intake(source: str, work_dir: str) -> dict:
@@ -134,6 +149,34 @@ def job_status(request: Request, job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     if job["task"] == "replicate_intake":
+        video_job = _latest_child_job(job_id, "replicate")
+        voice_job = _latest_child_job(job_id, "elevenlabs")
+        video_assets = (
+            [
+                asset_card(
+                    f["name"],
+                    idx,
+                    f"/replicate/files/{video_job['id']}",
+                    source="Seedance video",
+                )
+                for idx, f in enumerate(video_job["result"])
+            ]
+            if video_job and video_job.get("status") == "done"
+            else []
+        )
+        voice_assets = (
+            [
+                asset_card(
+                    f["name"],
+                    idx,
+                    f"/helpers/elevenlabs/files/{voice_job['id']}",
+                    source="ElevenLabs voice",
+                )
+                for idx, f in enumerate(voice_job["result"])
+            ]
+            if voice_job and voice_job.get("status") == "done"
+            else []
+        )
         return templates.TemplateResponse(
             request,
             "replicate_review.html",
@@ -144,6 +187,13 @@ def job_status(request: Request, job_id: str):
                 # /helpers/elevenlabs/run, so it needs that tool's voices.
                 "voices": list(ELEVENLABS_VOICES),
                 "elevenlabs_api_key": get_elevenlabs_api_key(),
+                # Re-renders the last video/voice generation made from this
+                # intake job, so a page reload doesn't lose a result that
+                # only ever existed in a client-side generation.js card.
+                "video_job": video_job,
+                "voice_job": voice_job,
+                "video_assets": video_assets,
+                "voice_assets": voice_assets,
             },
         )
 
@@ -213,6 +263,7 @@ async def generate(
     resolution: Annotated[str, Form()] = "720p",
     character_images: Annotated[list[UploadFile] | None, File()] = None,
     character_images_manifest: Annotated[str, Form()] = "[]",
+    source_job_id: Annotated[str, Form()] = "",
 ):
     if character_images is None:
         character_images = []
@@ -226,9 +277,14 @@ async def generate(
     )
 
     params = {"prompt": script, "duration": duration, "resolution": resolution}
+    stored_params = {**params, "character_images": character_ref_paths}
+    if source_job_id:
+        # Lets the review page find and re-render its own last generation on
+        # reload (see _latest_child_job) -- not used by the generation call.
+        stored_params["source_job_id"] = source_job_id
     job_id = create_job(
         "replicate",
-        {**params, "character_images": character_ref_paths},
+        stored_params,
         actor=request.session.get("role"),
     )
     enqueue(

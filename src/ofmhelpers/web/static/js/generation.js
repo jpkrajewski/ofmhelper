@@ -64,10 +64,11 @@
         div.className = "result-item";
         attachJobData(div, job);
 
-        const media = document.createElement(kind === "video" ? "video" : "img");
+        const tag = kind === "video" ? "video" : kind === "audio" ? "audio" : "img";
+        const media = document.createElement(tag);
         media.src = item.view_url;
-        media.className = kind === "video" ? "result-video" : "result-image";
-        if (kind === "video") media.controls = true;
+        media.className = `result-${tag === "img" ? "image" : tag}`;
+        if (tag === "video" || tag === "audio") media.controls = true;
         else media.alt = item.name;
         // item.local_fallback_url is only set when view_url points at kie.ai
         // and a local copy also exists -- swap to it once the hosted URL
@@ -116,12 +117,13 @@
         card.dataset.previewUrl = preview.remote_url;
 
         const kind = preview.kind || resultKind;
-        const media = document.createElement(kind === "video" ? "video" : "img");
+        const tag = kind === "video" ? "video" : kind === "audio" ? "audio" : "img";
+        const media = document.createElement(tag);
         media.src = preview.remote_url;
-        media.className = kind === "video" ? "result-video" : "result-image";
-        if (kind === "video") {
+        media.className = `result-${tag === "img" ? "image" : tag}`;
+        if (tag === "video" || tag === "audio") {
             media.controls = true;
-            media.muted = true;
+            if (tag === "video") media.muted = true;
         } else {
             media.alt = "generating… (showing hosted preview)";
         }
@@ -223,6 +225,7 @@
     }
 
     function toolLabel(form) {
+        if (form.dataset.toolLabel) return form.dataset.toolLabel;
         const select = document.getElementById("tool-select");
         if (select && select.selectedOptions.length) {
             return select.selectedOptions[0].textContent.trim();
@@ -234,7 +237,7 @@
         const prefix = form.dataset.prefix;
         const resultKind = form.dataset.resultKind;
         const label = toolLabel(form);
-        const panel = document.getElementById("results-panel");
+        const panel = document.getElementById(form.dataset.resultsTarget || "results-panel");
         const statusEl = panel.querySelector(".generation-status");
         const gallery = panel.querySelector(".results");
         const submitBtn = form.querySelector('button[type="submit"]');
@@ -308,7 +311,7 @@
             if (!prefix || !jobId) return;
             const label =
                 (card.querySelector(".source") || {}).textContent?.trim() || prefix;
-            pollJob(card, prefix, jobId, label, "image");
+            pollJob(card, prefix, jobId, label, card.dataset.pollKind || "image");
         });
     }
 

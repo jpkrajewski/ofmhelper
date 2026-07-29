@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from ofmhelpers.reel_machine.pipeline import AnalysisResult
 from ofmhelpers.reel_machine.schema import ReelAnalysis
 from ofmhelpers.web.main import app
-from ofmhelpers.web.stores.jobs import get_job
+from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -278,3 +278,194 @@ def test_jobs_status_json_dispatches_by_task(client, tmp_path):
     assert status["task"] == "replicate_intake"
     assert status["status"] == "done"
     assert "result" not in status  # intake jobs don't produce asset-shaped results
+
+
+def _boom():
+    msg = "kie.ai rejected the request"
+    raise RuntimeError(msg)
+
+
+def test_json_prompt_and_api_key_are_collapsed_behind_details(client, tmp_path):
+    """The redesign hides the JSON wall and the API key behind <details> --
+    collapsed by default so the page reads as a summary, not a JSON dump."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    html = client.get(f"/replicate/jobs/{job_id}").text
+    assert "<details>" in html
+    assert "Seedance API key" in html
+    assert "Prompt JSON" in html
+    # The JSON editor still initializes on the (hidden) textarea.
+    assert "data-json-editor" in html
+
+
+def test_analysis_summary_exposes_data_fields_for_the_live_json_sync(client, tmp_path):
+    """The Analysis table's cells carry data-field="..." so the page's inline
+    script can keep them in sync with hand-edits to the JSON textarea."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path, environment="a rooftop at golden hour"),
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    html = client.get(f"/replicate/jobs/{job_id}").text
+    assert 'id="analysis-summary"' in html
+    for field in (
+        "format",
+        "style",
+        "environment",
+        "lighting",
+        "camera_logic",
+        "audio",
+        "pacing",
+    ):
+        assert f'data-field="{field}"' in html
+    assert "a rooftop at golden hour" in html
+
+
+def test_elevenlabs_run_returns_job_id_json_not_a_redirect(client):
+    """/run used to 303-redirect to its own job page (opening a new tab from
+    the review page); it must now answer like every other generation tool so
+    generation.js's inline poller can drive it."""
+    fake_client = mock.MagicMock()
+    fake_client.text_to_speech.convert.return_value = [b"fake-mp3-bytes"]
+    with mock.patch(
+        "ofmhelpers.web.routers.helpers.elevenlabs.ElevenLabs",
+        return_value=fake_client,
+    ):
+        r = client.post(
+            "/helpers/elevenlabs/run",
+            data={"api_key": "k", "text": "hello", "voice": "George"},
+        )
+
+    assert r.status_code == 200
+    assert not r.is_redirect
+    assert "job_id" in r.json()
+
+
+def test_elevenlabs_run_has_a_json_status_endpoint_for_polling(client):
+    fake_client = mock.MagicMock()
+    fake_client.text_to_speech.convert.return_value = [b"fake-mp3-bytes"]
+    with mock.patch(
+        "ofmhelpers.web.routers.helpers.elevenlabs.ElevenLabs",
+        return_value=fake_client,
+    ):
+        job_id = client.post(
+            "/helpers/elevenlabs/run",
+            data={"api_key": "k", "text": "hello", "voice": "George"},
+        ).json()["job_id"]
+
+    status = client.get(f"/helpers/elevenlabs/jobs/{job_id}/status").json()
+    assert status["status"] == "done"
+    assert status["result"][0]["kind"] == "audio"
+
+
+def test_generate_links_back_to_its_source_job_and_survives_a_reload(client, tmp_path):
+    """A finished Seedance generation made from this review page must still
+    show up after a plain page reload -- it used to only exist in a
+    client-side generation.js card and vanished on refresh."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        intake_job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    fake_video = tmp_path / "clone.mp4"
+    fake_video.write_bytes(b"fake video bytes")
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        return_value=fake_video,
+    ):
+        client.post(
+            "/replicate/generate",
+            data={
+                "api_key": "k",
+                "script": "{}",
+                "duration": "15",
+                "source_job_id": intake_job_id,
+            },
+        )
+
+    html = client.get(f"/replicate/jobs/{intake_job_id}").text
+    assert "clone.mp4" in html
+    assert "Seedance video" in html
+
+
+def test_voice_generation_links_back_and_survives_a_reload(client, tmp_path):
+    """Same as the video case, for the inline ElevenLabs step this session
+    added -- this is the exact bug that was manually caught and fixed."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        intake_job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    fake_client = mock.MagicMock()
+    fake_client.text_to_speech.convert.return_value = [b"fake-mp3-bytes"]
+    with mock.patch(
+        "ofmhelpers.web.routers.helpers.elevenlabs.ElevenLabs",
+        return_value=fake_client,
+    ):
+        client.post(
+            "/helpers/elevenlabs/run",
+            data={
+                "api_key": "k",
+                "text": "hello",
+                "voice": "George",
+                "source_job_id": intake_job_id,
+            },
+        )
+
+    html = client.get(f"/replicate/jobs/{intake_job_id}").text
+    assert "ElevenLabs voice" in html
+    assert 'data-poll-kind="audio"' not in html  # it finished -- not a pending card
+
+
+def test_review_page_resumes_a_still_running_voice_job_on_reload(client, tmp_path):
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        intake_job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    # create_job() alone leaves the job "running" -- no run_job() call to
+    # transition it, simulating a reload while the worker is still busy.
+    voice_job_id = create_job(
+        "elevenlabs", {"source_job_id": intake_job_id}, actor="admin"
+    )
+
+    html = client.get(f"/replicate/jobs/{intake_job_id}").text
+    assert f'data-job-id="{voice_job_id}"' in html
+    assert 'data-poll-prefix="/helpers/elevenlabs"' in html
+    assert 'data-poll-kind="audio"' in html
+
+
+def test_review_page_shows_a_failed_child_job_inline(client, tmp_path):
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        intake_job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    video_job_id = create_job(
+        "replicate", {"source_job_id": intake_job_id}, actor="admin"
+    )
+    run_job(video_job_id, _boom, {})
+
+    html = client.get(f"/replicate/jobs/{intake_job_id}").text
+    assert "kie.ai rejected the request" in html
