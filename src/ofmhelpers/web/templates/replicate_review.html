@@ -19,61 +19,88 @@
 <p><a href="/replicate">← try another reel</a></p>
 
 {% elif job.status == "done" %}
-<div class="generate-layout">
+<div class="generate-layout generate-layout--even">
 <div class="generate-form-col">
-    <h2 class="col-title">Source reel</h2>
-    <video src="/replicate/video/{{ job.id }}" class="media-full" controls playsinline
-           preload="metadata"></video>
-    <table class="inputs-table">
-        <tr><th>Analyzed by</th><td>{{ job.result.provider }}</td></tr>
-        <tr><th>Duration</th><td>{{ job.result.duration }}s (detected)</td></tr>
-    </table>
+    <div class="review-block">
+        <h2 class="col-title">Source reel</h2>
+        <video src="/replicate/video/{{ job.id }}" class="media-full" controls playsinline
+               preload="metadata"></video>
+        <table class="inputs-table">
+            <tr><th>Analyzed by</th><td>{{ job.result.provider }}</td></tr>
+            <tr><th>Duration</th><td>{{ job.result.duration }}s (detected)</td></tr>
+        </table>
+    </div>
 
     {% if job.result.analysis_error %}
-    <div class="notice">
-        The model's answer didn't match the expected prompt shape, so it is shown
-        below exactly as it came back — fix it before generating.
-        <pre>{{ job.result.analysis_error }}</pre>
+    <div class="review-block">
+        <div class="notice">
+            The model's answer didn't match the expected prompt shape, so it is shown
+            beside this exactly as it came back — fix it before generating.
+            <pre>{{ job.result.analysis_error }}</pre>
+        </div>
     </div>
     {% elif job.result.speech %}
-    <h2 class="col-title">Subject's speech (ElevenLabs)</h2>
-    <textarea class="prompt-input" rows="4" readonly>{{ job.result.speech }}</textarea>
+    <div class="review-block">
+        <h2 class="col-title">Subject's speech (ElevenLabs)</h2>
+        <!-- Its own form: /helpers/elevenlabs/run redirects to its job page,
+             so it opens in a new tab and leaves this review page alone. -->
+        <form method="post" action="/helpers/elevenlabs/run" target="_blank">
+            <div class="field">
+                <label for="el-text">Script</label>
+                <textarea name="text" id="el-text" rows="5">{{ job.result.speech }}</textarea>
+            </div>
+            <div class="field">
+                <label for="el-voice">Voice</label>
+                <select name="voice" id="el-voice">
+                    {% for v in voices %}
+                    <option value="{{ v }}">{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% include "_elevenlabs_api_key_field.html" %}
+            <button type="submit" class="btn btn-outline">Generate speech (ElevenLabs)</button>
+        </form>
+    </div>
     {% endif %}
-
-    <h2 class="col-title">Seedance 2.0 prompt JSON (edit before generating)</h2>
-    <form id="replicate-generate-form" method="post" action="/replicate/generate"
-          enctype="multipart/form-data" data-prefix="/replicate" data-result-kind="video">
-        {% include "_kie_api_key_field.html" %}
-
-        <div class="field">
-            <label>Prompt</label>
-            <textarea name="script" class="prompt-input" rows="28">{{ job.result.prompt_text }}</textarea>
-        </div>
-
-        <div class="field">
-            <label>Duration (seconds) -- auto-detected from the source reel</label>
-            <input type="number" name="duration" value="{{ job.result.duration }}" min="4" max="15" readonly>
-        </div>
-
-        <div class="field">
-            <label>Resolution</label>
-            <select name="resolution">
-                <option value="480p">480p (draft, ~$1.50)</option>
-                <option value="720p" selected>720p (final, ~$3)</option>
-            </select>
-        </div>
-
-        {{ fp.file_picker('character_images', 'image', 'Your character — reference images (4-6, face first)') }}
-
-        <button type="submit" class="btn-primary">Generate video</button>
-    </form>
 </div>
 
 <div class="generate-gallery-col">
-    <h2 class="col-title">Generation</h2>
-    <div id="results-panel">
-        <div class="generation-status"></div>
-        <div class="results"></div>
+    <div class="review-block">
+        <h2 class="col-title">Seedance 2.0 prompt JSON (edit before generating)</h2>
+        <form id="replicate-generate-form" method="post" action="/replicate/generate"
+              enctype="multipart/form-data" data-prefix="/replicate" data-result-kind="video">
+            {% include "_kie_api_key_field.html" %}
+
+            <div class="field">
+                <label>Prompt</label>
+                <textarea name="script" rows="34" data-json-editor>{{ job.result.prompt_text }}</textarea>
+            </div>
+
+            <div class="field">
+                <label>Duration (seconds) -- auto-detected from the source reel</label>
+                <input type="number" name="duration" value="{{ job.result.duration }}" min="4" max="15" readonly>
+            </div>
+
+            <div class="field">
+                <label>Resolution</label>
+                <select name="resolution">
+                    <option value="480p">480p (draft, ~$1.50)</option>
+                    <option value="720p" selected>720p (final, ~$3)</option>
+                </select>
+            </div>
+
+            {{ fp.file_picker('character_images', 'image', 'Your character — reference images (4-6, face first)') }}
+
+            <button type="submit" class="btn-primary">Generate video</button>
+        </form>
+    </div>
+
+    <div class="review-block">
+        <h2 class="col-title">Generation</h2>
+        <div id="results-panel">
+            <div class="generation-status"></div>
+            <div class="results"></div>
+        </div>
     </div>
 </div>
 </div>
@@ -81,5 +108,6 @@
 
 <p><a href="/replicate">← analyze another reel</a></p>
 <script src="/static/js/file-picker.js"></script>
+<script src="/static/js/json-editor.js"></script>
 <script src="/static/js/generation.js"></script>
 {% endblock %}

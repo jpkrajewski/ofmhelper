@@ -5,10 +5,7 @@
 </div>
 
 <form method="post" action="/helpers/elevenlabs/run" class="card todo-add-form">
-    <div class="field">
-        <label for="el-key">API key</label>
-        <input type="password" name="api_key" id="el-key" required autocomplete="off">
-    </div>
+    {% include "_elevenlabs_api_key_field.html" %}
 
     <div class="field">
         <label for="el-text">Text</label>

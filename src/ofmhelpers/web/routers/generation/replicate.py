@@ -37,8 +37,9 @@ from fastapi import (
 from fastapi.responses import FileResponse
 
 from ofmhelpers.reel_machine import generation, pipeline
-from ofmhelpers.web.auth import get_kie_api_key
+from ofmhelpers.web.auth import get_elevenlabs_api_key, get_kie_api_key
 from ofmhelpers.web.queue import enqueue
+from ofmhelpers.web.routers.helpers.elevenlabs import VOICES as ELEVENLABS_VOICES
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     asset_card,
@@ -136,7 +137,14 @@ def job_status(request: Request, job_id: str):
         return templates.TemplateResponse(
             request,
             "replicate_review.html",
-            {"job": job, "kie_api_key": get_kie_api_key(request)},
+            {
+                "job": job,
+                "kie_api_key": get_kie_api_key(request),
+                # The review page can send the subject's speech straight to
+                # /helpers/elevenlabs/run, so it needs that tool's voices.
+                "voices": list(ELEVENLABS_VOICES),
+                "elevenlabs_api_key": get_elevenlabs_api_key(),
+            },
         )
 
     assets = []

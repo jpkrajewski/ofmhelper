@@ -120,6 +120,42 @@ def test_review_page_plays_the_source_video_and_shows_editable_json(client, tmp_
     assert 'data-result-kind="video"' in html
 
 
+def test_review_page_sends_the_subjects_speech_to_elevenlabs(client, tmp_path):
+    """The speech box is a real ElevenLabs form, not a readonly preview --
+    the point of the page is picking assets and generating the voice."""
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    html = client.get(f"/replicate/jobs/{job_id}").text
+    assert 'action="/helpers/elevenlabs/run"' in html
+    assert 'name="text"' in html
+    assert 'name="api_key"' in html
+    assert "George" in html  # a voice from the ElevenLabs router's roster
+    # The prompt textarea is wired to the JSON editor, on an even split.
+    assert "data-json-editor" in html
+    assert "/static/js/json-editor.js" in html
+    assert "generate-layout--even" in html
+
+
+def test_elevenlabs_key_is_prefilled_from_the_env(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key-123")
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    assert "el-key-123" in client.get(f"/replicate/jobs/{job_id}").text
+    assert "el-key-123" in client.get("/helpers/elevenlabs").text
+
+
 def test_source_video_endpoint_streams_the_downloaded_reel(client, tmp_path):
     with mock.patch(
         "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",

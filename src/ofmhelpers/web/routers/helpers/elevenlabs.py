@@ -6,6 +6,7 @@ from elevenlabs.client import ElevenLabs
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
+from ofmhelpers.web.auth import get_elevenlabs_api_key
 from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import asset_card
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
@@ -56,7 +57,7 @@ def form(request: Request):
     return templates.TemplateResponse(
         request,
         "elevenlabs_form.html",
-        {"voices": list(VOICES.keys())},
+        {"voices": list(VOICES.keys()), "elevenlabs_api_key": get_elevenlabs_api_key()},
     )
 
 
