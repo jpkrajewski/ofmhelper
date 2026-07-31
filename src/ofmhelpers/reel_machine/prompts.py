@@ -24,18 +24,23 @@ from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
 
-DEFAULT_ANALYSIS_PROMPT = """Analyze this reel carefully and return a JSON prompt to recreate it with the Seedance 2.0 AI video generator.
+DEFAULT_ANALYSIS_PROMPT = """
+Analyze this reel carefully and return a JSON prompt to recreate it with the Seedance 2.0 AI video generator.
 
 I will provide a reference image of the main subject separately — do NOT describe their physical appearance (face, skin tone, hair, body type). Only describe their clothing, accessories, and footwear. For any other people in the video, describe both their appearance and outfit.
 
-Study every detail: outfits, location, lighting, camera behavior, pacing, mood, dialogue timing, background activity, and who says/does what throughout the video. Log every moment — dialogue AND silent actions. If someone does something without speaking, still create an entry with line: null and delivery: null but describe the action in full detail. Nothing should be skipped because there's no dialogue.
+Study every detail: outfits, location, lighting, camera behavior, pacing, mood, dialogue timing, background activity, and who says/does what throughout the video. Log every moment — dialogue AND silent actions. If someone does something without speaking, still create an entry with line: null and delivery: null but describe the action in full detail pose and face_expression other than main subject: null. Nothing should be skipped because there's no dialogue.
 
 Break the video down, do not summarize it. Every scene_events entry is ONE moment and every shots entry is ONE continuous camera behavior, typically 1-3 seconds long. Start a new shots entry every time the camera changes what it is doing (pan, tilt, push in, cut, re-frame) or the action moves on. The shots array must cover the whole clip end to end with no gaps and no overlaps. A single shots entry spanning the entire video is wrong.
+
+
 
 Return ONLY the JSON below — no explanation, no markdown, no backticks. Fill every field with maximum detail extracted directly from the video.
 
 {
   "format": "describe aspect ratio, duration, and overall clip style",
+  "viral_factor": "Describe why its viral factor in one sentence",
+  "context": "Overall context of the scence mixed with context from user",
   "people": [
     {
       "id": "subject",
@@ -63,7 +68,9 @@ Return ONLY the JSON below — no explanation, no markdown, no backticks. Fill e
       "speaker": "use the id from people array — subject, person_2 etc",
       "line": "exact words spoken verbatim, null if no dialogue",
       "delivery": "how it is said — tone, energy, casual/laughing/distracted etc, null if no dialogue",
-      "action": "what this person is doing physically in this moment — always fill this in full detail even if no dialogue"
+      "action": "what this person is doing physically in this moment — always fill this in full detail even if no dialogue",
+      "pose": "what is the pose of the subject, if pose is sexy add more description, null if off camera, null if other than main subject",
+      "facial_expression": "whats the facial expresion of the subject, null if off camera null if other than main subject"
     }
   ],
   "style": "Raw casual iPhone TikTok footage. NOT cinematic. NOT stabilized. NOT influencer-style. Feels like a real person filmed this on their phone.",
@@ -84,11 +91,10 @@ Return ONLY the JSON below — no explanation, no markdown, no backticks. Fill e
 }"""
 
 
-def load_analysis_prompt() -> str:
-    """The prompt to send: the override file if there is one, else the frozen
-    default. Read per call, so editing the file takes effect on the next job
-    instead of the next restart. An empty or unreadable file falls back --
-    silently sending a blank prompt would waste a real API call."""
+CONTEXT_HEADER = "CONTEXT:"
+
+
+def _base_prompt() -> str:
     path = Path(settings.reel_machine.prompt_file)
     try:
         override = path.read_text(encoding="utf-8").strip()
@@ -99,3 +105,20 @@ def load_analysis_prompt() -> str:
         return DEFAULT_ANALYSIS_PROMPT
     logger.info("using the analysis prompt from %s", path)
     return override
+
+
+def load_analysis_prompt(context: str = "") -> str:
+    """The prompt to send: the override file if there is one, else the frozen
+    default. Read per call, so editing the file takes effect on the next job
+    instead of the next restart. An empty or unreadable file falls back --
+    silently sending a blank prompt would waste a real API call.
+
+    `context` is the operator's free-text note about this one reel (the
+    /replicate form's Context field). Appended at the very END, after the JSON
+    template: the template ends with a literal `}` the model is told to fill in
+    verbatim, so anything inserted before it reads as part of the shape being
+    asked for. An empty context leaves the prompt byte-identical."""
+    prompt = _base_prompt()
+    if context.strip():
+        prompt = f"{prompt}\n\n{CONTEXT_HEADER}\n{context.strip()}"
+    return prompt

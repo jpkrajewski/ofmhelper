@@ -16,10 +16,15 @@
 
 {% elif job.status == "failed" %}
 <pre class="fail">{{ job.error }}</pre>
-<p><a href="/replicate">← try another reel</a></p>
+{# Rerun keeps the context note and reuses the downloaded reel -- most
+   failures here are the analysis call, not the download. #}
+<p>
+    <a href="/replicate?from={{ job.id }}" class="btn btn-primary">↻ Rerun with the same context</a>
+    <a href="/replicate" class="btn btn-outline">← try another reel</a>
+</p>
 
 {% elif job.status == "done" %}
-<div class="generate-layout generate-layout--even">
+<div class="generate-layout generate-layout--split-30-70">
 <div class="generate-form-col">
     <div class="review-block">
         <h2 class="col-title">Source reel</h2>
@@ -29,22 +34,81 @@
 
     <div class="review-block">
         <h2 class="col-title">Analysis</h2>
+        {# Rendered unconditionally, even when validation failed and there is
+           nothing to put in them: the cells are what the JSON editor's live
+           sync writes into, so gating them on job.result.prompt left the one
+           case that most needs the feedback -- a VA pasting a corrected
+           prompt -- staring at a table that never changes. #}
+        {% set p = job.result.prompt or {} %}
         <table class="inputs-table" id="analysis-summary">
             <tr><th>Analyzed by</th><td>{{ job.result.provider }}</td></tr>
             <tr><th>Duration</th><td>{{ job.result.duration }}s (detected)</td></tr>
-            {% if job.result.prompt %}
-            <tr><th>Format</th><td data-field="format">{{ job.result.prompt.format }}</td></tr>
-            <tr><th>Style</th><td data-field="style">{{ job.result.prompt.style }}</td></tr>
-            <tr><th>Environment</th><td data-field="environment">{{ job.result.prompt.environment }}</td></tr>
-            <tr><th>Lighting</th><td data-field="lighting">{{ job.result.prompt.lighting }}</td></tr>
-            <tr><th>Camera</th><td data-field="camera_logic">{{ job.result.prompt.camera_logic }}</td></tr>
-            <tr><th>Audio</th><td data-field="audio">{{ job.result.prompt.audio }}</td></tr>
-            <tr><th>Pacing</th><td data-field="pacing">{{ job.result.prompt.pacing }}</td></tr>
-            <tr><th>People</th><td data-field="people">{{ job.result.prompt.people|length }}</td></tr>
-            <tr><th>Scenes / shots</th><td data-field="scenes_shots">{{ job.result.prompt.scene_events|length }} / {{ job.result.prompt.shots|length }}</td></tr>
-            {% endif %}
+            <tr><th>Format</th><td data-field="format">{{ p.get('format', '') }}</td></tr>
+            <tr><th>Style</th><td data-field="style">{{ p.get('style', '') }}</td></tr>
+            <tr><th>Environment</th><td data-field="environment">{{ p.get('environment', '') }}</td></tr>
+            <tr><th>Lighting</th><td data-field="lighting">{{ p.get('lighting', '') }}</td></tr>
+            <tr><th>Camera</th><td data-field="camera_logic">{{ p.get('camera_logic', '') }}</td></tr>
+            <tr><th>Audio</th><td data-field="audio">{{ p.get('audio', '') }}</td></tr>
+            <tr><th>Pacing</th><td data-field="pacing">{{ p.get('pacing', '') }}</td></tr>
+            <tr><th>People</th><td data-field="people">{{ (p.get('people') or [])|length }}</td></tr>
+            <tr><th>Scenes / shots</th><td data-field="scenes_shots">{{ (p.get('scene_events') or [])|length }} / {{ (p.get('shots') or [])|length }}</td></tr>
         </table>
     </div>
+
+    {% if outfit_searches %}
+    <div class="review-block">
+        <h2 class="col-title">Wardrobe hunt</h2>
+        <p class="picker-help">
+            Searches built from this reel's setting and wardrobe — open one, grab an
+            outfit image, turn it into a clothes sheet, then add it as a reference image.
+        </p>
+        <ul class="search-list">
+            {% for s in outfit_searches %}
+            <li>
+                <span class="search-query" title="{{ s.query }}">{{ s.query }}</span>
+                {% for link in s.links %}
+                <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-ghost">{{ link.label }}</a>
+                {% endfor %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {# Gated on the searches, not the fixed links: with no valid analysis there
+       is no niche to hunt in, and a lone "trending" button is noise. #}
+    {% if reel_searches %}
+    <div class="review-block">
+        <h2 class="col-title">Similar reel hunt</h2>
+        <p class="picker-help">
+            More reels in this one's niche and format — the next thing to clone.
+        </p>
+        <ul class="search-list">
+            {# The /popular/<slug> topic pages the second model named for this
+               reel's niche -- the only Instagram surface here that isn't
+               login-gated. Nothing renders when it named none. #}
+            {% if reel_topic_links %}
+            <li>
+                <span class="search-query">this niche on Instagram</span>
+                {% for link in reel_topic_links %}
+                <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-ghost">{{ link.label }}</a>
+                {% endfor %}
+            </li>
+            {% endif %}
+            {% for s in reel_searches %}
+            <li>
+                <span class="search-query" title="{{ s.query }}">{{ s.query }}</span>
+                {% for link in s.links %}
+                <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-ghost">{{ link.label }}</a>
+                {% endfor %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 
     {% if job.result.analysis_error %}
     <div class="review-block">
@@ -52,10 +116,12 @@
             The model's answer didn't match the expected prompt shape, so it is shown
             beside this exactly as it came back — fix it before generating.
             <pre>{{ job.result.analysis_error }}</pre>
+            <a href="/replicate?from={{ job.id }}">↻ Rerun the analysis instead (same context, same reel)</a>
         </div>
     </div>
     {% endif %}
 
+    <a href="/replicate?from={{ job.id }}" class="btn btn-outline btn-block">↻ Rerun this analysis</a>
     <a href="/replicate" class="btn btn-outline btn-block">← Analyze another reel</a>
 </div>
 
@@ -92,6 +158,8 @@
             </div>
 
             {{ fp.file_picker('character_images', 'image', 'Your character — reference images (4-6, face first)') }}
+            {{ fp.file_picker('character_videos', 'video', 'Reference videos (optional)', 'Seedance can take motion references as well as stills.') }}
+            {{ fp.file_picker('character_audio', 'audio', 'Reference audio (optional)', 'A voice or ambience clip to steer the generated audio.') }}
 
             <input type="hidden" name="source_job_id" value="{{ job.id }}">
             <button type="submit" class="btn-primary btn-block">Generate Video</button>
@@ -118,7 +186,10 @@
         </div>
     </div>
 
-    {% if job.result.speech and not job.result.analysis_error %}
+    {# Not gated on job.result.speech any more: on a failed analysis there is no
+       typed dialogue to read, but the JSON editor's live sync fills this in the
+       moment the pasted prompt parses -- and that is exactly the case where a
+       VA needs the voice step. #}
     <div class="review-block">
         <h2 class="col-title">Step 2 — ElevenLabs voice</h2>
         <form method="post" action="/helpers/elevenlabs/run"
@@ -166,7 +237,6 @@
             </div>
         </div>
     </div>
-    {% endif %}
 
     <div class="review-block">
         <h2 class="col-title">Step 3 — Export</h2>
@@ -189,12 +259,30 @@
 })();
 
 (function () {
-    // Keeps the Analysis summary in step with hand-edits to the JSON prompt
-    // textarea -- otherwise the table shows the original analysis forever,
-    // even after the user changes what's about to be submitted.
+    // Keeps the Analysis summary and the ElevenLabs script in step with edits
+    // to the JSON prompt textarea -- otherwise both show the original analysis
+    // forever, even after the user changes what's about to be submitted.
+    // `input` covers typing, paste, cut and drop, so there is nothing extra to
+    // bind for a pasted-in prompt.
     const script = document.querySelector('textarea[name="script"]');
     const summary = document.getElementById("analysis-summary");
+    const elText = document.getElementById("el-text");
     if (!script || !summary) return;
+
+    // The server-rendered value is itself auto-derived, so it is the starting
+    // point for "has the user touched this?" -- we stop overwriting the script
+    // the moment they edit it by hand.
+    let lastAuto = elText ? elText.value : "";
+
+    // Mirror of ReelAnalysis.elevenlabs_ready_prompt_from_subject: the
+    // subject's spoken lines only, each prefixed with its delivery cue, joined
+    // by the pauses the silent moments stand for.
+    function speechFrom(data) {
+        return (Array.isArray(data.scene_events) ? data.scene_events : [])
+            .filter((e) => e && e.speaker === "subject" && e.line)
+            .map((e) => (e.delivery ? `[${e.delivery}] ${e.line}` : e.line))
+            .join(" [pause] ");
+    }
 
     function sync() {
         let data;
@@ -219,9 +307,17 @@
             }
             if (typeof data[field] === "string") cell.textContent = data[field];
         });
+
+        if (elText && elText.value === lastAuto) {
+            lastAuto = speechFrom(data);
+            elText.value = lastAuto;
+            // Wakes the character/duration readout above, which listens on input.
+            elText.dispatchEvent(new Event("input"));
+        }
     }
 
     script.addEventListener("input", sync);
+    sync();
 })();
 </script>
 {% endif %}

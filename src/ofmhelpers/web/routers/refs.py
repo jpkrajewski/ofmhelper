@@ -32,11 +32,23 @@ _FFMPEG_TIMEOUT_S = 20
 THUMBS_DIR = ASSETS_ROOT / ".thumbs"
 
 
+# What the reuse picker opens on: the handful you actually just worked with,
+# not a wall of tiles to scan. The picker's "show older" button asks for
+# MAX_REF_LIMIT instead.
+DEFAULT_REF_LIMIT = 10
+MAX_REF_LIMIT = 60
+
+
 @router.get("")
-def list_refs(kind: Annotated[str | None, Query()] = None):
+def list_refs(
+    kind: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_REF_LIMIT)] = DEFAULT_REF_LIMIT,
+):
     """Lists what's already in the shared asset store -- no separate
-    metadata store, this is the real files."""
-    files = []
+    metadata store, this is the real files. Newest first by mtime, which
+    resolve_existing_ref keeps meaning "last used", not just "last uploaded"
+    (save_asset is content-deduped, so re-picking a file never rewrites it)."""
+    files: list[dict] = []
     for path in ASSETS_ROOT.glob("*"):
         if not path.is_file():
             continue
@@ -52,7 +64,7 @@ def list_refs(kind: Annotated[str | None, Query()] = None):
             }
         )
     files.sort(key=lambda f: f["mtime"], reverse=True)
-    return files[:60]
+    return files[:limit]
 
 
 @router.get("/file")

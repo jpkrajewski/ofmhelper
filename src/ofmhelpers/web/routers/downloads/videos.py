@@ -62,7 +62,8 @@ def job_status(request: Request, job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    assets, failed_sources = [], []
+    assets: list[dict] = []
+    failed_sources: list[dict] = []
     if job.get("status") == "done":
         assets, failed_sources = flatten_grouped_results(job, "/download-videos/files")
 

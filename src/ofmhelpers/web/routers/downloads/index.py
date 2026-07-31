@@ -34,8 +34,8 @@ GROUPED_TASKS = {"download_videos", "download_images"}
 
 
 def _gallery_card(job: dict) -> dict:
-    assets = []
-    failed_sources = []
+    assets: list[dict] = []
+    failed_sources: list[dict] = []
     if job["status"] == "done":
         if job["task"] in GROUPED_TASKS:
             assets, failed_sources = flatten_grouped_results(

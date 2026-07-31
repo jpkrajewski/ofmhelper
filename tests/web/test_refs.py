@@ -165,3 +165,47 @@ def test_list_refs_still_returns_full_res_file_path(client, assets_dir):
 
     file_r = client.get(f"/refs/file?path={entry['path']}")
     assert file_r.content == original.read_bytes()
+
+
+def _write_refs(assets_dir: Path, count: int, ext: str = ".png") -> list[str]:
+    """`count` assets with strictly increasing mtimes, oldest first."""
+    names = []
+    for i in range(count):
+        path = assets_dir / f"hash{i:03d}__file{i}{ext}"
+        path.write_bytes(_png_bytes(size=(8, 8)))
+        os.utime(path, (1_700_000_000 + i, 1_700_000_000 + i))
+        names.append(path.name)
+    return names
+
+
+def test_list_refs_defaults_to_the_five_most_recent(client, assets_dir):
+    """The picker opens on the handful you actually just worked with -- a wall
+    of tiles buried the file you wanted."""
+    _write_refs(assets_dir, 12)
+
+    entries = client.get("/refs?kind=image").json()
+    assert len(entries) == refs_router.DEFAULT_REF_LIMIT
+    # newest first, derived from the limit itself so the two can't disagree
+    assert [e["name"] for e in entries] == [
+        f"file{i}.png" for i in range(11, 11 - refs_router.DEFAULT_REF_LIMIT, -1)
+    ]
+
+
+def test_list_refs_limit_reaches_the_older_ones(client, assets_dir):
+    """What the picker's "Show older" button asks for."""
+    _write_refs(assets_dir, 12)
+
+    entries = client.get(f"/refs?kind=image&limit={refs_router.MAX_REF_LIMIT}").json()
+    assert len(entries) == 12
+
+
+def test_list_refs_still_filters_by_kind(client, assets_dir):
+    _write_refs(assets_dir, 3)
+    (assets_dir / "hashaud__voice.mp3").write_bytes(b"id3")
+
+    assert [e["name"] for e in client.get("/refs?kind=audio").json()] == ["voice.mp3"]
+
+
+@pytest.mark.parametrize("limit", [0, -1, 61, 999])
+def test_list_refs_rejects_an_out_of_range_limit(client, assets_dir, limit):
+    assert client.get(f"/refs?limit={limit}").status_code == 422

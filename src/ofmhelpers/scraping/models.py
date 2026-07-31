@@ -19,7 +19,7 @@ class PostBase:
         raise NotImplementedError
 
     def is_valid(self) -> bool:
-        return self.username and self.url and self.views
+        return bool(self.username and self.url and self.views)
 
 
 @dataclass
@@ -60,7 +60,7 @@ class Reel(PostBase):
             ]
 
         return cls(
-            username=item.get("ownerUsername"),
+            username=item.get("ownerUsername") or "",
             url=item.get("url") or item.get("shortCode") or "",
             timestamp=ts,
             views=item.get("videoPlayCount") or item.get("playCount"),

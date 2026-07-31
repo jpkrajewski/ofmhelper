@@ -974,9 +974,34 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 }
 .source { margin: 0; color: var(--text-muted); font-size: var(--step--1); word-break: break-word; }
 .filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
+/* One pre-typed search per row: the query, then one button per platform
+   (replicate_review.html's wardrobe hunt). */
+.search-list { list-style: none; padding: 0; margin: 0; }
+.search-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2);
+    margin-bottom: var(--s-2);
+}
+.search-list .search-query {
+    flex: 1 1 100%;
+    font-size: var(--step--1);
+    color: var(--text-muted);
+    word-break: break-word;
+}
 .fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
 .fail-list li { margin-bottom: var(--s-2); }
 .fail-note { min-height: 0; color: var(--fail); border-color: var(--fail-border); background: var(--fail-wash); }
+/* What static/js/gallery-scroll.js watches for: spans the grid so it is only
+   reached once the whole current page has been scrolled past. */
+.gallery-sentinel {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--s-4);
+}
 
 /* ---------------------------------------------------------------------
    11. Ordered file-picker widget (static/js/file-picker.js)
@@ -1019,6 +1044,17 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
     background: #000;
 }
 .file-order-list li .thumb-audio { width: 220px; height: auto; }
+/* An <audio> player is ~220px wide and won't shrink, so on a narrow column
+   (every /generate fieldset) it ate the whole row and the filename beside it
+   ellipsised away to nothing. Give the name its own full-width line above the
+   player instead of competing with it. */
+.file-order-list li[data-kind="audio"] { flex-wrap: wrap; }
+.file-order-list li[data-kind="audio"] .item-name {
+    flex: 1 0 100%;
+    order: -1;
+    white-space: normal;
+    overflow: visible;
+}
 .thumb-preview {
     display: block;
     margin-top: var(--s-2);
@@ -1086,6 +1122,8 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
     text-overflow: ellipsis;
 }
 .ref-empty { grid-column: 1 / -1; }
+/* The browser's own "Show older" button: a full row, not one 88px tile cell. */
+.ref-browser > .ref-toggle { grid-column: 1 / -1; margin-top: 0; }
 
 /* ---------------------------------------------------------------------
    12. Prompt reference highlighting (static/js/prompt-highlight.js)
@@ -1204,11 +1242,14 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 }
 .generate-form-col button[type="submit"] { width: 100%; min-height: 48px; font-size: var(--step-0); }
 
-/* Even split, for a page whose right column is an editor rather than a
-   gallery (/replicate review): the prompt JSON needs as much width as the
-   source reel, not the leftover 1fr. */
+/* 30/70, for a page whose left column is a read-only summary and whose right
+   column is where the work happens (/replicate review): the source reel and the
+   analysis table read fine narrow, while the prompt editor, the pickers and the
+   generated results all want the width. Not the base rule's
+   minmax(380px, 460px) -- that pins the left column to a fixed band instead of
+   letting it shrink proportionally. */
 @media (min-width: 1080px) {
-    .generate-layout--even { grid-template-columns: 1fr 1fr; }
+    .generate-layout--split-30-70 { grid-template-columns: 3fr 7fr; }
 }
 
 /* Stacked sections inside a column -- without this the reel, the metadata

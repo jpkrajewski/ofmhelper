@@ -204,6 +204,13 @@ class ReelMachineSettings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-latest"
 
+    # The second, text-only pass (reel_machine/hunt.py): Gemini describes the
+    # reel, then this free model turns that description into hashtags, search
+    # phrases and outfit alternatives. Optional on purpose -- no key means the
+    # review page falls back to terms derived from the analysis itself.
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
+
 
 class InstagramStatsSettings(BaseSettings):
     """scraping/instagram_public.py + scraping/instagram_stats_job.py -- the

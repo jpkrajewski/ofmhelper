@@ -25,7 +25,9 @@ def get_client_with_most_credits(api_keys: list[str]) -> ApifyClient:
         logger.info(
             "apify key ...%s (%s): $%.2f / $%.2f ($%.2f left)",
             key[-8:],
-            user.email,
+            # Only the private-info shape carries an email, and the SDK
+            # types this as either -- it is a log line, not a lookup.
+            getattr(user, "email", "?"),
             used,
             limit,
             remaining,
@@ -44,4 +46,7 @@ def get_client_with_most_credits(api_keys: list[str]) -> ApifyClient:
 
 def run_actor(client: ApifyClient, actor_id: str, raw_input: dict) -> list:
     run = client.actor(actor_id).call(run_input=raw_input)
+    if run is None:
+        msg = f"Apify actor {actor_id} returned no run"
+        raise RuntimeError(msg)
     return list(client.dataset(run.default_dataset_id).iterate_items())

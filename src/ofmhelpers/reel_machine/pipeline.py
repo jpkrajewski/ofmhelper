@@ -17,10 +17,11 @@ error -- still raises, since there is nothing to show.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ofmhelpers.log import get_logger
+from ofmhelpers.reel_machine.hunt import HuntIdeas, suggest_hunt
 from ofmhelpers.reel_machine.intake import run_intake
 from ofmhelpers.reel_machine.llm.registry import get_provider
 from ofmhelpers.reel_machine.prompts import load_analysis_prompt
@@ -43,6 +44,10 @@ class AnalysisResult:
     raw: str
     prompt: ReelAnalysis | None = None
     error: str | None = None
+    # Second pass, best-effort (see hunt.py): what to search for next. Empty
+    # when there is no GROQ_API_KEY, when that call failed, or when the
+    # analysis itself didn't validate -- there is nothing to summarize then.
+    hunt: HuntIdeas = field(default_factory=HuntIdeas)
 
     @property
     def prompt_text(self) -> str:
@@ -67,8 +72,13 @@ def clamp_duration(seconds: float) -> int:
 
 
 def analyze(
-    source: str, work_dir: Path, llm_provider: str | None = None
+    source: str,
+    work_dir: Path,
+    llm_provider: str | None = None,
+    context: str = "",
 ) -> AnalysisResult:
+    """`context` is the operator's note about this one reel; it rides on the
+    end of the analysis prompt (see prompts.load_analysis_prompt)."""
     intake = run_intake(source, work_dir)
     provider = get_provider(llm_provider)
 
@@ -78,7 +88,7 @@ def analyze(
         provider.name,
         intake.duration,
     )
-    raw = provider.analyze_video(intake.video_path, load_analysis_prompt())
+    raw = provider.analyze_video(intake.video_path, load_analysis_prompt(context))
 
     result = AnalysisResult(
         video_path=intake.video_path,
@@ -91,4 +101,10 @@ def analyze(
     except AnalysisError as exc:
         result.error = str(exc)
         logger.warning("%s returned an unusable prompt: %s", provider.name, exc)
+        return result
+
+    # Gemini has said what the reel IS; the free text model turns that into
+    # what to go LOOK FOR. Best-effort by design (see hunt.py) -- the reel is
+    # already downloaded and analyzed by now.
+    result.hunt = suggest_hunt(result.prompt)
     return result

@@ -155,15 +155,19 @@ def add(
 ):
     if not name.strip():
         raise HTTPException(status_code=400, detail="Name is required")
-    has_picture = profile_picture is not None and profile_picture.filename
-    if has_picture:
+    picture = (
+        profile_picture
+        if profile_picture is not None and profile_picture.filename
+        else None
+    )
+    if picture is not None:
         # Reject an unusable picture before the row exists -- validating after
         # add_model leaves a pictureless orphan behind on the 400.
-        require_upload_kind(profile_picture.filename, IMAGE_KINDS)
+        require_upload_kind(picture.filename, IMAGE_KINDS)
 
     model = models_store.add_model(name.strip(), onlyfans_url.strip())
-    if has_picture:
-        path = _save_picture(model["id"], profile_picture)
+    if picture is not None:
+        path = _save_picture(model["id"], picture)
         models_store.set_profile_picture(model["id"], path, Path(path).name)
 
     return RedirectResponse(url="/models", status_code=303)

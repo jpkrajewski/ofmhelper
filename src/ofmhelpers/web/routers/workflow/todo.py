@@ -173,7 +173,8 @@ async def upload_asset(
 
     todo = todos.get_todo(todo_id)
     try:
-        _notify_discord_for_review(todo)
+        if todo is not None:
+            _notify_discord_for_review(todo)
     except Exception as exc:
         # The asset is already saved and attached at this point -- a failed
         # notification doesn't undo that (no other write path in this app

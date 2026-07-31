@@ -6,6 +6,22 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  # Type checking, deliberately file-scoped: pre-commit passes the staged
+  # paths, so mypy checks what you actually touched. A repo-wide gate would
+  # fail on ~30 findings in modules nobody is editing (mostly `x = []` needing
+  # an annotation and third-party stubs being stricter than the runtime), and
+  # a hook that is always red gets ignored. Run `uv run mypy src/ofmhelpers`
+  # by hand for the full picture.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+        exclude: ^(tests|alembic)/
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

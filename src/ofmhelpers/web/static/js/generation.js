@@ -59,6 +59,19 @@
         return source;
     }
 
+    // An <audio> element shows nothing that identifies the file, so a voice
+    // result was previously indistinguishable from every other voice result.
+    // Same node the server-rendered cards carry (see
+    // _generate_gallery_card.html / _asset_grid.html) so a fresh generation and
+    // a reloaded one look identical.
+    function buildFilenameLabel(name) {
+        const el = document.createElement("p");
+        el.className = "filename";
+        el.textContent = name || "";
+        el.title = name || "";
+        return el;
+    }
+
     function buildResultCard(kind, item, job, label) {
         const div = document.createElement("div");
         div.className = "result-item";
@@ -92,7 +105,13 @@
         dl.className = "download-btn";
         dl.textContent = "⬇ Download";
 
-        div.append(media, dl, buildRecreateButton(), buildSourceLabel(label));
+        div.append(
+            media,
+            buildFilenameLabel(item.name),
+            dl,
+            buildRecreateButton(),
+            buildSourceLabel(label)
+        );
         return div;
     }
 
@@ -304,15 +323,21 @@
 
     // Server-rendered cards for jobs still running at page load: resume
     // polling so they resolve inline instead of spinning forever.
+    // Idempotent, because it is also called on cards appended after load (see
+    // gallery-scroll.js): data-resumed marks the ones already being polled, so
+    // a second call can't start a duplicate poller for the same job.
     function resumePendingCards() {
-        document.querySelectorAll(".result-item[data-pending]").forEach((card) => {
-            const prefix = card.dataset.pollPrefix;
-            const jobId = card.dataset.jobId;
-            if (!prefix || !jobId) return;
-            const label =
-                (card.querySelector(".source") || {}).textContent?.trim() || prefix;
-            pollJob(card, prefix, jobId, label, card.dataset.pollKind || "image");
-        });
+        document
+            .querySelectorAll(".result-item[data-pending]:not([data-resumed])")
+            .forEach((card) => {
+                const prefix = card.dataset.pollPrefix;
+                const jobId = card.dataset.jobId;
+                if (!prefix || !jobId) return;
+                card.dataset.resumed = "1";
+                const label =
+                    (card.querySelector(".source") || {}).textContent?.trim() || prefix;
+                pollJob(card, prefix, jobId, label, card.dataset.pollKind || "image");
+            });
     }
 
     // Result assets are prioritised to kie.ai's own hosted URL (faster than
@@ -366,5 +391,9 @@
         wireDownloadButtons();
     });
 
-    window.Generation = { submit };
+    // resumePendingCards is exported for pages that add cards after load
+    // (gallery-scroll.js). wireDownloadButtons deliberately isn't: it is one
+    // delegated document listener, so appended cards are already covered and a
+    // second call would only double-bind it.
+    window.Generation = { submit, resumePendingCards };
 })();

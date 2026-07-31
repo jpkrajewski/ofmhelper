@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% import "_file_picker.html" as fp %}
-{% import "_asset_media.html" as am %}
 {% block content %}
 <div class="page-head">
     <h1>Generate AI Assets</h1>
@@ -209,24 +208,9 @@
 
 <div id="results-panel">
     <div class="generation-status"></div>
-    <div class="results">
-        {% for job in gallery %}
-        <div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"
-             data-params='{{ job.params_json }}'
-             {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}"{% endif %}>
-            {% if job.status == "done" and job.assets %}
-                {{ am.asset_media(job.assets[0]) }}
-                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" data-local-fallback-url="{{ job.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
-                <button type="button" class="recreate-btn">↻ Recreate</button>
-            {% elif job.status == "failed" %}
-                <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("generation failed", true)|truncate(80) }}</div>
-                <button type="button" class="recreate-btn">↻ Recreate</button>
-            {% else %}
-                <div class="result-file"><span class="spinner"></span> generating…</div>
-            {% endif %}
-            <p class="source">{{ job.task_label }}</p>
-        </div>
-        {% endfor %}
+    <div class="results" data-gallery-endpoint="/generate/gallery">
+        {% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
     </div>
 </div>
 </div>
@@ -334,5 +318,6 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
 </script>
 <script src="/static/js/file-picker.js"></script>
 <script src="/static/js/generation.js"></script>
+<script src="/static/js/gallery-scroll.js"></script>
 <script src="/static/js/prompt-highlight.js"></script>
 {% endblock %}

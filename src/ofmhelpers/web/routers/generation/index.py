@@ -9,8 +9,9 @@ generations across all of them that a click reloads back into the form.
 """
 
 import json
+from typing import Annotated
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.auth import get_kie_api_key
@@ -62,15 +63,42 @@ def _gallery_card(job: dict) -> dict:
     }
 
 
+def _gallery_page(offset: int) -> tuple[list[dict], int | None]:
+    """One page of gallery cards plus the offset of the next page, or None when
+    this was the last one. The absence of a next offset is what ends the
+    infinite scroll, so there is no separate "has_more" flag to keep in step."""
+    jobs = [j for j in list_jobs() if j["task"] in TASK_LABELS]
+    page = jobs[offset : offset + GALLERY_LIMIT]
+    next_offset = offset + GALLERY_LIMIT
+    return (
+        [_gallery_card(j) for j in page],
+        next_offset if next_offset < len(jobs) else None,
+    )
+
+
 @router.get("")
 def form(request: Request):
-    recent = [j for j in list_jobs() if j["task"] in TASK_LABELS][:GALLERY_LIMIT]
+    gallery, next_offset = _gallery_page(0)
     return templates.TemplateResponse(
         request,
         "generate_form.html",
         {
             "models": [m.value for m in SeedanceModel],
             "kie_api_key": get_kie_api_key(request),
-            "gallery": [_gallery_card(j) for j in recent],
+            "gallery": gallery,
+            "next_offset": next_offset,
         },
+    )
+
+
+@router.get("/gallery")
+def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
+    """The next page of gallery cards as a fragment gallery-scroll.js appends --
+    same partial the page's first page renders, so an appended card is
+    indistinguishable from a server-rendered one."""
+    gallery, next_offset = _gallery_page(offset)
+    return templates.TemplateResponse(
+        request,
+        "generate_gallery_fragment.html",
+        {"gallery": gallery, "next_offset": next_offset},
     )

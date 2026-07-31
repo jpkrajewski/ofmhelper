@@ -11,11 +11,11 @@ talking to.
 """
 
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class LLMProvider(Protocol):
-    name: str
+    name: ClassVar[str]
 
     def analyze_video(self, video_path: Path, prompt: str) -> str: ...
 

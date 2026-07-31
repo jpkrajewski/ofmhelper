@@ -17,9 +17,16 @@ def generate_reel_clone(
     duration: int = 15,
     resolution: str = "720p",
     model: str = "bytedance/seedance-2",
+    video_ref_paths: list[str] | None = None,
+    audio_ref_paths: list[str] | None = None,
 ) -> Path:
+    """Reference videos and audio are optional, and passed as `None` rather
+    than `[]` when unused: generate_video_seedance2 only puts a
+    reference_*_urls key in the payload for the lists that are non-empty."""
     client = KieAIClient.from_env(api_key=api_key)
     reference_image_urls = [client.upload_local_file(p) for p in character_ref_paths]
+    reference_video_urls = [client.upload_local_file(p) for p in video_ref_paths or []]
+    reference_audio_urls = [client.upload_local_file(p) for p in audio_ref_paths or []]
     return client.generate_video_seedance2(
         prompt=prompt,
         model=model,
@@ -28,4 +35,6 @@ def generate_reel_clone(
         duration=duration,
         generate_audio=True,
         reference_image_urls=reference_image_urls,
+        reference_video_urls=reference_video_urls or None,
+        reference_audio_urls=reference_audio_urls or None,
     )

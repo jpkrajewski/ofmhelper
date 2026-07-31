@@ -38,7 +38,9 @@ from ofmhelpers.config.settings import (
 class Settings:
     @property
     def session(self) -> SessionSettings:
-        return SessionSettings()
+        # session_secret has no default -- pydantic-settings reads it from the
+        # environment, which the type checker cannot see.
+        return SessionSettings()  # type: ignore[call-arg]
 
     @property
     def web(self) -> WebSettings:

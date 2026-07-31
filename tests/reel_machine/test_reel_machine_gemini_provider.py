@@ -12,8 +12,9 @@ from unittest import mock
 
 import pytest
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
+from ofmhelpers.reel_machine.llm import gemini_provider
 from ofmhelpers.reel_machine.llm.gemini_provider import GeminiProvider
 from ofmhelpers.reel_machine.schema import ReelAnalysis
 
@@ -98,3 +99,53 @@ def test_a_video_gemini_cannot_process_raises(client, tmp_path):
 
     with pytest.raises(RuntimeError, match="could not process"):
         GeminiProvider(api_key="k").analyze_video(video, "analyze this")
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    monkeypatch.setattr(
+        "ofmhelpers.reel_machine.llm.gemini_provider.time.sleep", lambda _: None
+    )
+
+
+def _busy(code=503):
+    return errors.APIError(
+        code,
+        {"error": {"code": code, "message": "high demand", "status": "UNAVAILABLE"}},
+    )
+
+
+def test_a_busy_model_is_retried_rather_than_failing_the_job(
+    client, tmp_path, no_sleep
+):
+    """503 UNAVAILABLE is Gemini saying "try again in a moment" -- failing the
+    intake there also throws away the download it took to get here."""
+    video = tmp_path / "reel.mp4"
+    video.write_bytes(b"fake video")
+    ok = client.models.generate_content.return_value
+    client.models.generate_content.side_effect = [_busy(), _busy(429), ok]
+
+    assert GeminiProvider(api_key="k").analyze_video(video, "go") == '{"ok": true}'
+    assert client.models.generate_content.call_count == 3
+    # The video is uploaded once: a retry re-asks about the ACTIVE file.
+    assert client.files.upload.call_count == 1
+
+
+def test_a_non_transient_error_is_not_retried(client, tmp_path, no_sleep):
+    video = tmp_path / "reel.mp4"
+    video.write_bytes(b"fake video")
+    client.models.generate_content.side_effect = _busy(400)
+
+    with pytest.raises(errors.APIError):
+        GeminiProvider(api_key="k").analyze_video(video, "go")
+    assert client.models.generate_content.call_count == 1
+
+
+def test_a_model_that_stays_busy_eventually_raises(client, tmp_path, no_sleep):
+    video = tmp_path / "reel.mp4"
+    video.write_bytes(b"fake video")
+    client.models.generate_content.side_effect = _busy()
+
+    with pytest.raises(errors.APIError):
+        GeminiProvider(api_key="k").analyze_video(video, "go")
+    assert client.models.generate_content.call_count == gemini_provider._MAX_ATTEMPTS

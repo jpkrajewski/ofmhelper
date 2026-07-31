@@ -256,6 +256,15 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
         raise HTTPException(
             status_code=400, detail=f"Reference file not found: {raw_path}"
         )
+    # Bump mtime so the reuse picker's "newest first" ordering means last
+    # *used*, not just last uploaded. save_asset is content-addressed, so
+    # re-picking an existing file writes nothing and it would otherwise sink
+    # below files you haven't touched in weeks. Best-effort: a read-only store
+    # is no reason to fail a generation that has everything it needs.
+    try:
+        resolved.touch()
+    except OSError:
+        logger.warning("could not bump mtime for %s", resolved, exc_info=True)
     return resolved
 
 
@@ -347,7 +356,8 @@ def grouped_job_status_payload(job: dict | None, files_prefix: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    assets, failed_sources = [], []
+    assets: list[dict] = []
+    failed_sources: list[dict] = []
     if job.get("status") == "done":
         assets, failed_sources = flatten_grouped_results(job, files_prefix)
 

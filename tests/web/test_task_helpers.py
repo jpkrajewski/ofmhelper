@@ -11,6 +11,8 @@ Covers the "don't store a duplicate file" logic in web/routers/task_helpers.py:
 
 import io
 import json
+import os
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -148,6 +150,37 @@ def test_resolve_existing_ref_rejects_missing_file(tmp_path):
         resolve_existing_ref(str(uploads / "nope.png"), uploads)
 
     assert exc_info.value.status_code == 400
+
+
+def test_resolve_existing_ref_bumps_mtime_so_reuse_counts_as_recent(tmp_path):
+    """The reuse picker opens on the newest few by mtime. save_asset is
+    content-deduped, so picking an existing file writes nothing -- without this
+    bump a file you use every day would sink below ones you never touch."""
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    existing = uploads / "hash__face.png"
+    existing.write_bytes(b"x")
+    os.utime(existing, (1_700_000_000, 1_700_000_000))
+
+    resolve_existing_ref(str(existing), uploads)
+
+    assert existing.stat().st_mtime > 1_700_000_000
+
+
+def test_resolve_existing_ref_survives_a_read_only_store(tmp_path, monkeypatch):
+    """The mtime bump is best-effort: a store we can't write to is no reason to
+    fail a generation that already has everything it needs."""
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    existing = uploads / "hash__face.png"
+    existing.write_bytes(b"x")
+
+    def _boom(self, *a, **kw):
+        raise PermissionError
+
+    monkeypatch.setattr(Path, "touch", _boom)
+
+    assert resolve_existing_ref(str(existing), uploads) == existing.resolve()
 
 
 # ---------------------------------------------------------------------------

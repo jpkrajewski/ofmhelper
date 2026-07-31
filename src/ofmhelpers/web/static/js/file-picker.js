@@ -84,6 +84,10 @@
         listEl.innerHTML = "";
         picker._items.forEach((item, idx) => {
             const li = document.createElement("li");
+            // Drives the per-kind row layout in app.css: an <audio> player has
+            // a wide intrinsic width, so on an audio row the filename gets its
+            // own line instead of being ellipsised down to nothing.
+            li.dataset.kind = kind;
             const name = item.kind === "new" ? item.file.name : item.name;
 
             const preview = buildPreview(kind, item);
@@ -133,14 +137,26 @@
         });
     }
 
+    // How many tiles the browser opens with, and how many "show older" asks
+    // for -- must stay <= the server's own MAX_REF_LIMIT (routers/refs.py),
+    // which is what actually enforces it.
+    const REF_PAGE = 5;
+    const REF_MAX = 60;
+
     // The "reuse an uploaded file" browser: a grid of preview tiles (image
     // thumbs / video first-frames / audio name tiles) instead of a plain
     // filename dropdown. Fetched fresh on every open so files uploaded since
     // page load show up too. Clicking a tile queues it as an "existing" item.
-    function loadRefBrowser(picker, browser) {
+    //
+    // Opens on the REF_PAGE most recently used or uploaded files of this kind
+    // (resolve_existing_ref bumps mtime on reuse, so the ordering follows what
+    // you've actually been working with) -- picking the file you just used is
+    // the overwhelmingly common case, and a wall of tiles buried it.
+    function loadRefBrowser(picker, browser, limit) {
         const kind = picker.dataset.kind;
+        const max = limit || REF_PAGE;
         browser.textContent = "loading…";
-        fetch(`/refs?kind=${kind}`)
+        fetch(`/refs?kind=${kind}&limit=${max}`)
             .then((r) => r.json())
             .then((files) => {
                 browser.innerHTML = "";
@@ -158,9 +174,10 @@
                     tile.title = f.name;
 
                     // Both images and videos poster through /refs/thumb: this
-                    // grid paints up to 60 tiles at once, and the old
-                    // <video preload="metadata"> tile made that one range
-                    // request per clip against multi-MB originals.
+                    // grid paints up to REF_MAX tiles at once once "show
+                    // older" is used, and the old <video preload="metadata">
+                    // tile made that one range request per clip against
+                    // multi-MB originals.
                     if (kind === "image" || kind === "video") {
                         const img = document.createElement("img");
                         img.src = `/refs/thumb?path=${encodeURIComponent(f.path)}&size=200`;
@@ -190,6 +207,20 @@
                     });
                     browser.appendChild(tile);
                 });
+
+                // A full page means there is probably more behind it. Reuses
+                // .ref-toggle rather than inventing a component -- same
+                // affordance, one row down.
+                if (files.length >= max && max < REF_MAX) {
+                    const more = document.createElement("button");
+                    more.type = "button";
+                    more.className = "ref-toggle";
+                    more.textContent = "Show older";
+                    more.addEventListener("click", () => {
+                        loadRefBrowser(picker, browser, REF_MAX);
+                    });
+                    browser.appendChild(more);
+                }
             })
             .catch(() => {
                 browser.textContent = "Could not load uploaded files.";

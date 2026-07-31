@@ -40,6 +40,8 @@
 Before finishing:
 
 - Run `pre-commit` on modified files (or `--all-files` for broader changes).
+  The `mypy` hook is file-scoped (it checks the files you staged), but the
+  tree is clean repo-wide — `uv run mypy` must stay at "no issues found".
 - Run `uv run pytest` after code changes.
 - Start dependencies first (dev overlay -- the base file publishes no DB port):
 

@@ -16,6 +16,7 @@ from ofmhelpers.reel_machine.schema import (
     REQUIRED_KEYS,
     AnalysisError,
     ReelAnalysis,
+    SceneEvent,
     parse_analysis,
     strip_code_fence,
 )
@@ -176,6 +177,8 @@ def test_elevenlabs_prompt_falls_back_to_the_bare_line():
                     "line": "hi",
                     "delivery": None,
                     "action": "waves",
+                    "pose": "arm raised mid-wave",
+                    "facial_expression": "grinning",
                 }
             ]
         )
@@ -188,3 +191,24 @@ def test_prompt_asks_for_every_key_the_schema_requires():
     here than in production."""
     for key in REQUIRED_KEYS:
         assert f'"{key}"' in DEFAULT_ANALYSIS_PROMPT
+
+
+def test_prompt_asks_for_every_scene_event_key_too():
+    """REQUIRED_KEYS only covers ReelAnalysis' own fields, so the nested
+    sections drift silently -- extra="forbid" then rejects a real answer for a
+    key the prompt never mentioned (or omits one the schema requires)."""
+    for key in SceneEvent.model_fields:
+        assert f'"{key}"' in DEFAULT_ANALYSIS_PROMPT
+
+
+def test_pose_and_expression_are_null_for_anyone_off_camera():
+    """Unlike `action`, these two are optional: the prompt asks for null when
+    the speaker is off camera or isn't the main subject, so a real answer has
+    them missing on most person_2 entries."""
+    payload = _valid_payload()
+    payload["scene_events"][0]["pose"] = None
+    del payload["scene_events"][0]["facial_expression"]
+
+    event = parse_analysis(json.dumps(payload)).scene_events[0]
+    assert event.pose is None
+    assert event.facial_expression is None
