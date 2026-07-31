@@ -11,10 +11,12 @@ Covers the "don't store a duplicate file" logic in web/routers/task_helpers.py:
 
 import io
 import json
+import os
 
 import pytest
 from fastapi import HTTPException, UploadFile
 
+from ofmhelpers.web import ref_usage
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     build_ordered_paths,
@@ -148,6 +150,37 @@ def test_resolve_existing_ref_rejects_missing_file(tmp_path):
         resolve_existing_ref(str(uploads / "nope.png"), uploads)
 
     assert exc_info.value.status_code == 400
+
+
+def test_resolve_existing_ref_does_not_write_to_the_store(tmp_path):
+    """It validates a client-supplied path and nothing else. "This file was
+    just picked" is recorded separately (web/ref_usage.py) -- mtime has to keep
+    meaning "uploaded" for the picker's two lists to differ."""
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    existing = uploads / "hash__face.png"
+    existing.write_bytes(b"x")
+    os.utime(existing, (1_700_000_000, 1_700_000_000))
+
+    assert resolve_existing_ref(str(existing), uploads) == existing.resolve()
+    assert existing.stat().st_mtime == 1_700_000_000
+
+
+def test_reusing_a_ref_records_it_as_used(tmp_path, monkeypatch):
+    """The manifest is the one place a resolve means the user picked a file,
+    so it is the one place that records it."""
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    existing = uploads / "hash__face.png"
+    existing.write_bytes(b"x")
+    recorded = []
+    monkeypatch.setattr(ref_usage, "record_use", recorded.append)
+
+    build_ordered_paths(
+        json.dumps([{"kind": "existing", "path": str(existing)}]), [], uploads
+    )
+
+    assert recorded == [existing.resolve()]
 
 
 # ---------------------------------------------------------------------------

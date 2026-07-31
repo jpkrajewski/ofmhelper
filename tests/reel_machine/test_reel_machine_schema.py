@@ -7,6 +7,7 @@ user instead of failing the job.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,10 @@ from ofmhelpers.reel_machine.prompts import DEFAULT_ANALYSIS_PROMPT
 from ofmhelpers.reel_machine.schema import (
     REQUIRED_KEYS,
     AnalysisError,
+    Person,
     ReelAnalysis,
+    SceneEvent,
+    Shot,
     parse_analysis,
     strip_code_fence,
 )
@@ -176,6 +180,8 @@ def test_elevenlabs_prompt_falls_back_to_the_bare_line():
                     "line": "hi",
                     "delivery": None,
                     "action": "waves",
+                    "pose": "arm raised mid-wave",
+                    "facial_expression": "grinning",
                 }
             ]
         )
@@ -188,3 +194,46 @@ def test_prompt_asks_for_every_key_the_schema_requires():
     here than in production."""
     for key in REQUIRED_KEYS:
         assert f'"{key}"' in DEFAULT_ANALYSIS_PROMPT
+
+
+def test_prompt_asks_for_every_scene_event_key_too():
+    """REQUIRED_KEYS only covers ReelAnalysis' own fields, so the nested
+    sections drift silently -- extra="forbid" then rejects a real answer for a
+    key the prompt never mentioned (or omits one the schema requires)."""
+    for key in SceneEvent.model_fields:
+        assert f'"{key}"' in DEFAULT_ANALYSIS_PROMPT
+
+
+def test_the_prompt_never_names_a_field_the_schema_does_not_have():
+    """The drift that got through the two tests above: prose in the prompt
+    instructing the model about `face_expression`, a field that does not
+    exist. Constrained decoding hides it; the instruction is still nonsense."""
+    known = {
+        *ReelAnalysis.model_fields,
+        *Person.model_fields,
+        *SceneEvent.model_fields,
+        *Shot.model_fields,
+    }
+    # snake_case words the prompt mentions that look like field names
+    mentioned = set(re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", DEFAULT_ANALYSIS_PROMPT))
+    unknown = {
+        word
+        for word in mentioned
+        # near-miss of a real field name -- e.g. face_expression vs
+        # facial_expression -- rather than an ordinary phrase like "no gaps"
+        if word not in known and any(word.endswith(f.split("_")[-1]) for f in known)
+    }
+    assert not unknown
+
+
+def test_pose_and_expression_are_null_for_anyone_off_camera():
+    """Unlike `action`, these two are optional: the prompt asks for null when
+    the speaker is off camera or isn't the main subject, so a real answer has
+    them missing on most person_2 entries."""
+    payload = _valid_payload()
+    payload["scene_events"][0]["pose"] = None
+    del payload["scene_events"][0]["facial_expression"]
+
+    event = parse_analysis(json.dumps(payload)).scene_events[0]
+    assert event.pose is None
+    assert event.facial_expression is None

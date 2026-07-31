@@ -131,7 +131,7 @@ class KieAIClient:
     def create_task(
         self, model: str, input_payload: dict, callback_url: str | None = None
     ) -> str:
-        body = {"model": model, "input": input_payload}
+        body: dict = {"model": model, "input": input_payload}
         if callback_url:
             body["callBackUrl"] = (
                 callback_url  # recommended for prod; skips polling entirely
@@ -419,7 +419,7 @@ class KieAIClient:
             )
 
     def resume_pending(self) -> list[dict]:
-        recovered = []
+        recovered: list[dict] = []
         if not self.TASK_LOG.exists():
             return recovered
         resolved = self._load_resolved()
@@ -450,7 +450,7 @@ class KieAIClient:
                 logger.warning("recovery %s: status check failed", tid, exc_info=True)
                 continue
 
-            if state == "success":
+            if state == "success" and isinstance(payload, list):
                 ext = (
                     "mp4"
                     if any(k in rec.get("model", "") for k in ("seedance", "kling"))

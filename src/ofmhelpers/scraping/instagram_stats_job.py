@@ -65,7 +65,9 @@ def _already_scheduled() -> bool:
     registry = ScheduledJobRegistry(queue=queue)
     for job_id in registry.get_job_ids():
         job = queue.fetch_job(job_id)
-        if job is not None and job.func_name.endswith("collect_all_instagram_stats"):
+        if job is not None and (job.func_name or "").endswith(
+            "collect_all_instagram_stats"
+        ):
             return True
     return False
 
@@ -86,7 +88,9 @@ def active_sweep_id() -> str | None:
     )
     for job_id in ids:
         job = queue.fetch_job(job_id)
-        if job is not None and job.func_name.endswith("collect_all_instagram_stats"):
+        if job is not None and (job.func_name or "").endswith(
+            "collect_all_instagram_stats"
+        ):
             return job_id
     return None
 

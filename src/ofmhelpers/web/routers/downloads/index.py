@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.routers.task_helpers import asset_card, flatten_grouped_results
-from ofmhelpers.web.stores.jobs import list_jobs
+from ofmhelpers.web.stores.jobs import list_jobs_page
 from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/download-assets", tags=["download-assets"])
@@ -34,8 +34,8 @@ GROUPED_TASKS = {"download_videos", "download_images"}
 
 
 def _gallery_card(job: dict) -> dict:
-    assets = []
-    failed_sources = []
+    assets: list[dict] = []
+    failed_sources: list[dict] = []
     if job["status"] == "done":
         if job["task"] in GROUPED_TASKS:
             assets, failed_sources = flatten_grouped_results(
@@ -63,7 +63,7 @@ def _gallery_card(job: dict) -> dict:
 
 @router.get("")
 def form(request: Request):
-    recent = [j for j in list_jobs() if j["task"] in TASK_LABELS][:GALLERY_LIMIT]
+    recent, _total = list_jobs_page(set(TASK_LABELS), 0, GALLERY_LIMIT)
     return templates.TemplateResponse(
         request,
         "download_assets_form.html",

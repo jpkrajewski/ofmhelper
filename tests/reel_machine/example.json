@@ -1,4 +1,6 @@
 {
+    "viral_factor": "A stranger-interview hook where the punchline lands in the last two seconds, so the clip is rewatched to catch it",
+    "context": "Downtown Las Vegas street interview at night; the subject is asked a flirty question and answers deadpan",
     "format": "9:16 vertical video, 11 seconds, casual smartphone street clip",
     "people": [
         {
@@ -27,42 +29,54 @@
             "speaker": "subject",
             "line": "Babe… can we eat at The D? It’s my favorite place to get stuffed.",
             "delivery": "playful, pleading tone",
-            "action": "Looks directly into camera lens in close-up"
+            "action": "Looks directly into camera lens in close-up",
+            "pose": "head tilted slightly, chin down, shoulders angled toward the lens",
+            "facial_expression": "wide pleading eyes, small hopeful smile"
         },
         {
             "timestamp": "0:02",
             "speaker": "person_2",
             "line": "Where, there?",
             "delivery": "curious off-camera voice",
-            "action": "Camera pans left to show background casino the D Las Vegas"
+            "action": "Camera pans left to show background casino the D Las Vegas",
+            "pose": null,
+            "facial_expression": null
         },
         {
             "timestamp": "0:03",
             "speaker": "subject",
             "line": "Yeah, the D. I love it.",
             "delivery": "enthusiastic, smiling",
-            "action": "Points finger toward casino behind her while holding bag strap"
+            "action": "Points finger toward casino behind her while holding bag strap",
+            "pose": "one arm raised pointing back over her shoulder, torso twisted, waist accentuated",
+            "facial_expression": "bright open smile, eyebrows raised"
         },
         {
             "timestamp": "0:05",
             "speaker": "person_2",
             "line": "The D?",
             "delivery": "questioning tone",
-            "action": "Camera whip-pans left brief moment to background and back"
+            "action": "Camera whip-pans left brief moment to background and back",
+            "pose": null,
+            "facial_expression": null
         },
         {
             "timestamp": "0:06",
             "speaker": "subject",
             "line": "Yeah. What’s so hard to understand? …Get it? Hard. And filling.",
             "delivery": "teasing, heavy double entendre, deadpan into a wicked smirk",
-            "action": "Looks into camera with deadpan expression, then breaks into a proud, naughty smirk, one eyebrow raised"
+            "action": "Looks into camera with deadpan expression, then breaks into a proud, naughty smirk, one eyebrow raised",
+            "pose": "squared up to the lens, weight on one hip, shoulders back",
+            "facial_expression": "flat deadpan stare that breaks into a smirk, one eyebrow raised"
         },
         {
             "timestamp": "0:10",
             "speaker": "person_2",
             "line": null,
             "delivery": null,
-            "action": "Scoffs off-camera as subject turns her back and walks away toward plaza"
+            "action": "Scoffs off-camera as subject turns her back and walks away toward plaza",
+            "pose": null,
+            "facial_expression": null
         }
     ],
     "style": "Raw casual iPhone TikTok footage. NOT cinematic. NOT stabilized. NOT influencer-style. Feels like a real person filmed this on their phone.",

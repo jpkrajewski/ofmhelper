@@ -28,7 +28,9 @@
         </div>
         <p class="picker-help">
             Login/cookies error on a link? Upload a fresh <code>cookies.txt</code> on the
-            <a href="/cookies">Upload Cookies</a> page first.
+            <a href="/cookies">Upload Cookies</a> page first. Still refusing to download?
+            Grab the file by hand from
+            <a href="https://snapreels.net/en" target="_blank" rel="noopener">snapreels.net</a>.
         </p>
     </fieldset>
 
@@ -41,7 +43,9 @@
         <p class="picker-help">
             Instagram posts, Twitter/X posts, Pinterest, TikTok photo posts, etc.
             Login/cookies error? Upload a fresh <code>cookies.txt</code> on the
-            <a href="/cookies">Upload Cookies</a> page first.
+            <a href="/cookies">Upload Cookies</a> page first. Still refusing to download?
+            Grab the file by hand from
+            <a href="https://snapreels.net/en" target="_blank" rel="noopener">snapreels.net</a>.
         </p>
     </fieldset>
 
@@ -75,6 +79,7 @@
                 {% if job.assets %}
                     {{ am.asset_media(job.assets[0]) }}
                     {% if job.assets[0].source %}<p class="source">{{ job.assets[0].source }}</p>{% endif %}
+                    <p class="filename">{{ job.assets[0].name }}</p>
                     <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" class="download-btn">⬇ Download</a>
                 {% endif %}
                 {% if job.failed_sources %}

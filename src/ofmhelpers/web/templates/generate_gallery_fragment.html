@@ -1,0 +1,6 @@
+{# One page of /generate gallery cards plus the next sentinel, fetched by
+   gallery-scroll.js. Same shape the page's own first page renders (see
+   generate_form.html), so appending this is indistinguishable from having
+   server-rendered it. Same in-place-swap idea as /models/stats-html. #}
+{% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
+{% include "_generate_gallery_sentinel.html" %}

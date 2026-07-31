@@ -42,29 +42,25 @@ class Person(_Section):
 class SceneEvent(_Section):
     timestamp: str
     speaker: str
-    # null on a silent moment -- ANALYSIS_PROMPT asks for the entry anyway,
-    # with `action` still filled in.
     line: str | None = None
     delivery: str | None = None
     action: str
+    pose: str | None = None
+    facial_expression: str | None = None
 
 
 class Shot(_Section):
     time: str
     action: str
     camera_behavior: str
-    # One timestamp ("0:03"), pointing at one scene_events entry -- not a
-    # digest of several. A weaker model answers this field with the whole
-    # dialogue ("0:00 - person_2: '...'; 0:01 - subject: '...'"), which is
-    # the tell that it collapsed the shot list into one summary shot instead
-    # of breaking the clip down. Rejecting it here sends the whole answer to
-    # the raw fallback rather than handing Seedance a one-shot timeline.
     scene_event_cue: (
         Annotated[str, StringConstraints(pattern=r"^\d+:\d{2}$")] | None
     ) = None
 
 
 class ReelAnalysis(_Section):
+    viral_factor: str
+    context: str
     format: str
     people: list[Person]
     environment: str
@@ -81,6 +77,19 @@ class ReelAnalysis(_Section):
     shots: list[Shot]
     end_behavior: str
     negative_prompt: str
+
+    @property
+    def subject(self) -> Person | None:
+        """The person the clone is *of*. Everyone else in `people` is a
+        cameraman, a passer-by or a friend off camera -- their wardrobe and
+        role are noise for anything that describes the model herself (the
+        hunts, the wardrobe searches). The prompt asks for the main subject
+        under the id "subject"; a model that named it something else still
+        puts her first."""
+        for person in self.people:
+            if person.id == "subject":
+                return person
+        return self.people[0] if self.people else None
 
     def elevenlabs_ready_prompt_from_subject(self, speaker: str = "subject") -> str:
         """Just what one person says, in ElevenLabs' bracket-cue form:

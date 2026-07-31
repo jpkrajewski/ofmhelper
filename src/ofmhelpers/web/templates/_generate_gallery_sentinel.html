@@ -1,0 +1,8 @@
+{# What gallery-scroll.js watches for. Rendered only while there is another
+   page to fetch, so its absence in a fragment response is what ends the scroll
+   -- no separate "has_more" flag to keep in step. Expects `next_offset`. #}
+{% if next_offset is not none %}
+<div class="gallery-sentinel" data-next-offset="{{ next_offset }}">
+    <span class="spinner"></span>
+</div>
+{% endif %}

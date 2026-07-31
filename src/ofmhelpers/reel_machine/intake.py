@@ -15,6 +15,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ofmhelpers.downloaders.cookies import get_cookiefile
 from ofmhelpers.downloaders.generic import DownloadConfig, download
 from ofmhelpers.log import get_logger
 
@@ -26,6 +27,38 @@ class IntakeResult:
     video_path: Path
     duration: float
     source_url: str | None = None
+
+
+def _instagram_hint() -> str:
+    """What to actually do about a refused Instagram download, which depends
+    on whether cookies were ever uploaded.
+
+    Instagram rejects most reel-info requests outright when logged out (a
+    yt-dlp "HTTP Error 400/404" / "Video info extraction failed" on an
+    Instagram URL almost always means this), and it refuses them again once
+    the logged-in account it does have is expired, rate-limited or flagged --
+    two very different fixes that the one old message lumped together."""
+    if get_cookiefile() is None:
+        return (
+            " Instagram blocks logged-out downloads for most reels -- export "
+            "your Instagram cookies (e.g. the 'Get cookies.txt LOCALLY' browser "
+            "extension, while logged into instagram.com) and upload the file at "
+            "/cookies, then try again. Use a burner account, not the model's own: "
+            "bulk reel fetching from a server IP is what gets an account flagged. "
+            "If the download still fails after that, save the reel via any "
+            "reel-downloader site and upload the .mp4 directly on the /replicate "
+            "form instead of pasting the link."
+        )
+    return (
+        " Cookies are uploaded, so Instagram refused a logged-IN request: that "
+        "account's session has expired, or the account is rate-limited/flagged. "
+        "Log into instagram.com as that (burner) account in a browser, check it "
+        "isn't showing a checkpoint/verification screen, re-export cookies.txt "
+        "and re-upload it at /cookies. Keeping the burner in normal human use "
+        "and spacing downloads out is what keeps it working. If it still fails, "
+        "save the reel via any reel-downloader site and upload the .mp4 directly "
+        "on the /replicate form instead of pasting the link."
+    )
 
 
 def fetch_source(url_or_path: str, out_dir: Path) -> Path:
@@ -43,23 +76,7 @@ def fetch_source(url_or_path: str, out_dir: Path) -> Path:
 
     result = download(url_or_path, DownloadConfig(output_dir=out_dir))
     if not result.success or not result.output_paths:
-        hint = ""
-        if "instagram.com" in url_or_path.lower():
-            # Instagram rejects most reel-info requests outright when
-            # logged out (this is what a yt-dlp "HTTP Error 400" /
-            # "Video info extraction failed" on an Instagram URL almost
-            # always means) -- this repo already has cookie support for
-            # exactly this (downloaders/cookies.py -> get_cookiefile(),
-            # picked up automatically by every yt-dlp call), it's just not
-            # configured yet.
-            hint = (
-                " Instagram blocks logged-out downloads for most reels -- export "
-                "your Instagram cookies (e.g. the 'Get cookies.txt LOCALLY' browser "
-                "extension, while logged into instagram.com) and upload the file at "
-                "/cookies, then try again. If the download still fails after that, "
-                "save the reel via any reel-downloader site and upload the .mp4 "
-                "directly on the /replicate form instead of pasting the link."
-            )
+        hint = _instagram_hint() if "instagram.com" in url_or_path.lower() else ""
         msg = f"Could not download {url_or_path}: {result.error}.{hint}"
         raise RuntimeError(msg)
     return result.output_paths[0]

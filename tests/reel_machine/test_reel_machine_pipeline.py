@@ -13,7 +13,10 @@ import pytest
 
 from ofmhelpers.reel_machine import pipeline
 from ofmhelpers.reel_machine.intake import IntakeResult
-from ofmhelpers.reel_machine.prompts import DEFAULT_ANALYSIS_PROMPT
+from ofmhelpers.reel_machine.prompts import (
+    DEFAULT_ANALYSIS_PROMPT,
+    DEFAULT_ANALYSIS_SYSTEM_PROMPT,
+)
 
 EXAMPLE = Path(__file__).parent / "example.json"
 
@@ -31,8 +34,8 @@ class FakeProvider:
         self.response = response
         self.calls: list[tuple] = []
 
-    def analyze_video(self, video_path, prompt):
-        self.calls.append((video_path, prompt))
+    def analyze_video(self, video_path, prompt, *, system_prompt=""):
+        self.calls.append((video_path, prompt, system_prompt))
         return self.response
 
 
@@ -57,12 +60,16 @@ def _run(video, response, duration=12.4):
 
 
 def test_sends_the_video_and_the_fixed_prompt(video, monkeypatch, tmp_path):
-    # Pinned at the built-in prompt: a real uploads/analysis_prompt.txt in the
-    # checkout must not change what this test is asserting.
+    # Pinned at the built-in prompts: a real uploads/*.txt in the checkout
+    # must not change what this test is asserting.
     monkeypatch.setenv("REEL_MACHINE_PROMPT_FILE", str(tmp_path / "none.txt"))
+    monkeypatch.setenv("REEL_MACHINE_SYSTEM_PROMPT_FILE", str(tmp_path / "none.txt"))
     provider, result = _run(video, _payload(environment="a lift lobby"))
 
-    assert provider.calls == [(video, DEFAULT_ANALYSIS_PROMPT)]
+    # Both prompts come from prompts.py, not from the provider.
+    assert provider.calls == [
+        (video, DEFAULT_ANALYSIS_PROMPT, DEFAULT_ANALYSIS_SYSTEM_PROMPT)
+    ]
     assert result.prompt.environment == "a lift lobby"
     assert result.error is None
     assert result.provider == "fake"

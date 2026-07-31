@@ -31,7 +31,7 @@ def send_webhook(content: str, embeds: list[dict] | None = None) -> None:
     if url is None:
         msg = "DISCORD_WEBHOOK_URL"
         raise KeyError(msg)
-    payload = {"content": content}
+    payload: dict = {"content": content}
     if embeds:
         payload["embeds"] = embeds
     resp = requests.post(url, json=payload, timeout=10)

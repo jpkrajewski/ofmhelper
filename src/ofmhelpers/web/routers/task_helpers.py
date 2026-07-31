@@ -23,6 +23,7 @@ from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ofmhelpers.log import get_logger
+from ofmhelpers.web import ref_usage
 
 logger = get_logger(__name__)
 # Single shared store for reference-asset uploads (Seedance/Kling/Nano Banana
@@ -247,7 +248,11 @@ def register_grouped_results(results: list[dict]) -> None:
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     """Validate a path the client claims points at a previously-uploaded
     file. Raises HTTPException(400) if it's outside allowed_root or
-    doesn't actually exist -- never trust a client-supplied path as-is."""
+    doesn't actually exist -- never trust a client-supplied path as-is.
+
+    Pure: it reads the store and never writes to it. "This file was just
+    picked" is recorded by the caller (`web/ref_usage.record_use`), which is
+    the only place that knows a resolve meant a real reuse."""
     allowed_root = allowed_root.resolve()
     resolved = Path(raw_path).resolve()
     if allowed_root != resolved and allowed_root not in resolved.parents:
@@ -278,7 +283,11 @@ def build_ordered_paths(
     paths: list[str] = []
     for entry in manifest:
         if entry.get("kind") == "existing":
-            paths.append(str(resolve_existing_ref(entry["path"], allowed_root)))
+            resolved = resolve_existing_ref(entry["path"], allowed_root)
+            # The one place a resolve means "the user picked this file", so
+            # the one place that records it (see routers/refs.py's ordering).
+            ref_usage.record_use(resolved)
+            paths.append(str(resolved))
         else:
             upload = next(new_files_iter, None)
             if upload is None or not upload.filename:
@@ -347,7 +356,8 @@ def grouped_job_status_payload(job: dict | None, files_prefix: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    assets, failed_sources = [], []
+    assets: list[dict] = []
+    failed_sources: list[dict] = []
     if job.get("status") == "done":
         assets, failed_sources = flatten_grouped_results(job, files_prefix)
 

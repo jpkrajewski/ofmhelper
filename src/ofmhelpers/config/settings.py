@@ -185,14 +185,22 @@ class ReelMachineSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # The analysis prompt is the one thing here that gets retuned by reading
-    # bad output and rewriting a sentence, so it lives in a file under the
-    # bind-mounted uploads/ dir rather than only in the image: edit it on the
-    # server and the next job uses it, no rebuild. Missing file = the frozen
-    # default in reel_machine/prompts.py.
+    # Every prompt gets retuned by reading bad output and rewriting a
+    # sentence, so each one lives in a file under the bind-mounted uploads/
+    # dir rather than only in the image: edit it on the server and the next
+    # job uses it, no rebuild. Missing file = the frozen default in
+    # reel_machine/prompts.py.
     prompt_file: str = Field(
         default="uploads/analysis_prompt.txt",
         validation_alias="REEL_MACHINE_PROMPT_FILE",
+    )
+    system_prompt_file: str = Field(
+        default="uploads/analysis_system_prompt.txt",
+        validation_alias="REEL_MACHINE_SYSTEM_PROMPT_FILE",
+    )
+    hunt_prompt_file: str = Field(
+        default="uploads/hunt_prompt.txt",
+        validation_alias="REEL_MACHINE_HUNT_PROMPT_FILE",
     )
 
     # "gemini" is the only provider -- see reel_machine/llm/registry.py. The
@@ -203,6 +211,17 @@ class ReelMachineSettings(BaseSettings):
     )
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-latest"
+
+    # The second, text-only pass (reel_machine/hunt.py): Gemini describes the
+    # reel, then this free model turns that description into topic slugs,
+    # search phrases and outfit alternatives. Optional on purpose -- no key
+    # means the review page falls back to terms derived from the analysis
+    # itself, so registry.get_text_provider() answers None rather than raising.
+    text_llm_provider: str = Field(
+        default="groq", validation_alias="REEL_MACHINE_TEXT_PROVIDER"
+    )
+    groq_api_key: str | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
 
 
 class InstagramStatsSettings(BaseSettings):

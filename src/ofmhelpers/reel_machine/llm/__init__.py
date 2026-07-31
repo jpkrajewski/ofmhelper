@@ -1,23 +1,39 @@
 """
-One capability, one method: hand a provider the reel and a prompt, get raw
-text back. Parsing/validating that text is `schema.parse_analysis`'s job,
-not the provider's -- so the provider stays a thin API call and the "is this
-actually a usable prompt" rule lives in exactly one place.
+Two capabilities, one method each: hand a provider the reel (or a block of
+text) and a prompt, get raw text back. Parsing/validating that text is the
+caller's job -- `schema.parse_analysis` for the video pass, `hunt.py` for the
+text one -- so a provider stays a thin API call and the "is this actually
+usable" rule lives in exactly one place per pass.
 
-There is one provider (`gemini_provider.GeminiProvider`). The Protocol stays
-because `registry.get_provider` is typed against a capability rather than a
-class, which is what keeps `pipeline.analyze` from knowing which API it is
-talking to.
+Two Protocols rather than one, because the two passes are not the same
+capability: `LLMProvider` needs an API that takes video (Gemini is the only
+free one that does), `TextLLMProvider` only needs chat completions, which is
+why the cheap second pass can run on a different vendor entirely. Both are
+resolved by name through `registry.py`, so `pipeline.analyze` and
+`hunt.suggest_hunt` never know which API they are talking to.
 """
 
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 class LLMProvider(Protocol):
-    name: str
+    """Pass 1: watch the reel, describe it as the Seedance prompt JSON."""
 
-    def analyze_video(self, video_path: Path, prompt: str) -> str: ...
+    name: ClassVar[str]
+
+    def analyze_video(
+        self, video_path: Path, prompt: str, *, system_prompt: str = ""
+    ) -> str: ...
 
 
-__all__ = ["LLMProvider"]
+class TextLLMProvider(Protocol):
+    """Pass 2: read pass 1's description, answer with JSON. No video, so this
+    is the capability every cheap free-tier text model has."""
+
+    name: ClassVar[str]
+
+    def complete_json(self, prompt: str) -> str: ...
+
+
+__all__ = ["LLMProvider", "TextLLMProvider"]

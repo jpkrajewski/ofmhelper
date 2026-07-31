@@ -74,6 +74,15 @@ migration changed everything under `stores/` without touching a router.
   jobs on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs
   them inline, exactly like the old BackgroundTasks, so TestClient still sees
   results immediately.
+- `ref_usage.py` — which shared reference files were last *picked*, in a Redis
+  sorted set on the RQ connection (same shared-state reasoning as
+  `ratelimit.py`). It exists so `refs.py` can show "last used" and "last
+  uploaded" as two different lists: reuse used to `touch()` the file, which
+  made mtime mean both at once and made a resolver quietly write to the asset
+  store. Not a Postgres table — this is picker ordering, not a noun the app
+  owns; losing it degrades the picker to "most recently uploaded". Redis
+  errors are swallowed: a broker that can't record a pick is no reason to fail
+  a generation that has every file it needs.
 - `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
   key, so an in-request poll timeout or a server restart mid-generation
@@ -95,7 +104,12 @@ call these and nothing below them.
   as `job["error"]`. Status transitions are atomic single UPDATEs. Result
   files live inside a job's `result` payload (JSONB) — there is no separate
   file-reference table. `list_jobs()` self-heals history when a result file
-  was deleted on disk.
+  was deleted on disk. Anything that renders only a page of jobs uses
+  `list_jobs_page(tasks, offset, limit) -> (page, total)` instead: the filter
+  and the slice run off the cached repository read and **only the page is
+  healed**, because healing stats every result file it is handed — doing that
+  for the whole history to paint 20 cards is what made a scroll tick cost more
+  than the page it returned.
 - `todos.py` — persisted VA task list (model name, link to replicate,
   comments). Durable across restarts — losing outstanding tasks would be a
   real problem, unlike losing job *history*.
@@ -131,7 +145,10 @@ packages never changes a URL.
 feature) is what makes every generation tool a thin file: `ASSETS_ROOT`
 (content-addressed shared upload store, deduped by sha256),
 `build_ordered_paths` (reconciles a JSON manifest of new+reused reference
-files — never re-uploads a file the client already has), `asset_card` /
+files — never re-uploads a file the client already has, and is the one place
+that calls `ref_usage.record_use`, since it is the one place a resolve means
+"the user picked this"; `resolve_existing_ref` itself only validates and never
+writes), `asset_card` /
 `job_status_payload` / `serve_job_file` / `job_inputs` (generic
 response-shaping every status/polling/download endpoint reuses verbatim).
 `flatten_grouped_results` / `grouped_job_status_payload` is the sibling
@@ -158,9 +175,18 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
 
 - `index.py` — the unified tool-picker page (`/generate`): one form whose
   fieldset switches between seedance/kling3/nanobanana/fake_ai, plus a
-  20-item cross-tool gallery with click-to-reuse. `TASK_LABELS`/
+  cross-tool gallery with click-to-reuse. `TASK_LABELS`/
   `FILES_PREFIX` here are the central registry — **add an entry here for any
   new job task name that should show up in this gallery.**
+  The gallery pages `gallery_limit` at a time: `GET /generate/gallery?offset=`
+  returns the next page as an HTML fragment for `static/js/gallery-scroll.js`
+  to append, and `_gallery_page` emits a next offset only while there is
+  another page — the absence of a `.gallery-sentinel` in a response is what
+  ends the scroll, so there is no `has_more` flag that could disagree with the
+  cards actually returned. Both the page and the fragment render each card
+  through `_generate_gallery_card.html`, so an appended card is
+  indistinguishable from a server-rendered one (the delegated Recreate and
+  Download handlers and the resumed poller all key off its attributes).
 - `seedance.py` / `kling.py` / `nbp.py` — Seedance 2.0 / Kling 3.0 / Nano
   Banana Pro generation via `KieAIClient`, following the standard tool shape.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
@@ -168,9 +194,54 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   without spending kie.ai credits or waiting on a real provider.
 - `replicate.py` — reel-cloning pipeline (`/replicate`), see
   `reel_machine/CLAUDE.md`. The form takes a reel URL or an uploaded file
-  and nothing else — no shape/look/gender/persona/provider fields; the model
+  plus an optional free-text **Context** note (appended to the end of the
+  analysis prompt, see `reel_machine/prompts.load_analysis_prompt`) — and
+  nothing else. No shape/look/gender/persona/provider fields; the model
   reads all of that off the video, and the provider is an env-var
-  deployment choice. Two job task types share this one router, dispatched by
+  deployment choice. The form page also lists the latest `INTAKE_LIST_LIMIT`
+  (20) `replicate_intake` jobs, flagging the done-but-didn't-validate ones so
+  they can be reopened and
+  fixed, and every row (plus a failed review page) links to
+  `/replicate?from=<job_id>` — the same form with that job's Context note
+  already typed in and a `reuse_job_id` hidden field. A rerun re-analyzes the
+  **file that job already downloaded** (`_downloaded_video`: the recorded
+  `video_path`, else a scan of its work dir, since a job that died in analysis
+  never recorded one) and only falls back to re-fetching the original link if
+  that file is gone — the links that are hard to download once are exactly the
+  ones that won't cooperate twice. The review page also renders
+  the two hunts the VA does by hand around the generation, both pre-typed off
+  the analysis by the shared `_searches(queries, engines)`:
+  `_outfit_searches` (Pinterest/Google Images) and `_reel_searches`
+  (Instagram/TikTok). Each takes the free model's second-pass ideas first
+  (`result["hunt"]`, see `reel_machine/hunt.py`) and falls back to terms
+  derived from the analysis itself (`environment` + the **main subject's**
+  wardrobe via `_subject`, mirroring `ReelAnalysis.subject`; `context` +
+  `viral_factor`) — every deployment does not have a `GROQ_API_KEY`, and jobs
+  from before this existed have no `hunt` at all, so the derived terms stay as
+  the floor. `_instagram_topic_links` turns `hunt.instagram_topics` into
+  `instagram.com/popular/<slug>` pages (`/popular/baseball-girl`); those only
+  ever come from the free model, since a topic slug can't be sliced out of
+  prose, so with no `hunt` there is no Instagram row at all. Bare
+  `instagram.com/popular/` is not linked — with no slug it is a generic
+  signed-out landing page. **Instagram's own keyword search and
+  `/explore/tags/` are deliberately not linked**: Instagram stopped serving
+  those logged out in 2024, so every one of them opened a login wall, which is
+  what made the Instagram side useless. Its reels are still publicly indexed,
+  so `_REEL_ENGINES` reaches them through a `site:instagram.com/reel/` Google
+  search instead. Outfit queries are prefixed with "girl"
+  (`_as_womens_outfit`) — a bare clothing description comes back as menswear
+  and flat-lays. Both blocks disappear when validation failed: no analysis, no
+  niche. The Stage 2 form's `script` is run through `_minify_prompt_json`
+  before it is stored or sent: a `<textarea>` submits its value with newlines
+  normalized to CRLF, so the pretty-printed JSON the review page shows used to
+  reach Seedance as a blob full of `\r\n`. It also drops every null at any
+  depth (`_drop_nulls`) — the analysis prompt asks for nulls as a signal to
+  itself ("line: null if no dialogue", "pose: null if off camera"), so a
+  correct answer still carries one on most `scene_events` entries, and an
+  absent key tells Seedance the same thing for free. Empty strings stay: those
+  are answers the model actually gave. Reference files are images, videos
+  **and** audio (`generate_video_seedance2` takes all three lists).
+  Two job task types share this one router, dispatched by
   `job["task"]`: `"replicate_intake"` (download + LLM analysis, rendered by
   `replicate_review.html`, which plays the source reel via
   `GET /replicate/video/{job_id}` next to the editable prompt JSON) and
@@ -239,7 +310,16 @@ files is admin-only by default.
 
 - `auth.py` — `/login`, `/logout`.
 - `refs.py` — serves/lists previously-uploaded reference files from
-  `ASSETS_ROOT` for the file-picker widget's "reuse" browser.
+  `ASSETS_ROOT` for the file-picker widget's "reuse" browser. `GET /refs` with
+  no `limit` returns **two short lists**: the `RECENT_USED_LIMIT` (5) files you
+  last *picked* (`web/ref_usage.py`), then the `RECENT_UPLOAD_LIMIT` (5) most
+  recently *uploaded* ones not already in it, each entry carrying `used_at`
+  (None for the second group) so the picker can label them. Those are two
+  genuinely different orderings: mtime means "uploaded" and nothing rewrites
+  it, so a file you use daily can't sink out of view and a fresh upload can't
+  be hidden by something you picked once. An explicit `?limit=N` (the "Show
+  older" button, capped at `MAX_REF_LIMIT` = 60) is plain newest-uploaded
+  first, no grouping.
   `write_image_thumb` is the shared Pillow thumbnailer (also used by the
   models router).
 - `task_helpers.py` — the shared plumbing described above.
@@ -252,7 +332,15 @@ role-aware nav — add a new top-level page's link in `base.html`'s
 `_file_picker.html` (multi-file ordered picker macro),
 `_kie_api_key_field.html`, `_asset_grid.html`/`_asset_media.html` (result
 rendering), `job_status.html` (the generic status/polling page every
-standard-shape tool reuses).
+standard-shape tool reuses),
+`_generate_gallery_card.html`/`_generate_gallery_sentinel.html` +
+`generate_gallery_fragment.html` (the paged `/generate` gallery — the card
+partial is shared by the page and the fragment so the two can't drift, and its
+JS twin is `generation.js`'s `buildResultCard`).
+Note `_asset_media.html` renders no filename of its own: `_asset_grid.html`
+adds one for every kind, so a template calling `asset_media()` directly has to
+add its own `<p class="filename">` — an `<audio>` element shows nothing
+identifying otherwise.
 
 **`static/css/app.css` is the whole design system** — tokens (colour,
 spacing, fluid type scale, motion) then base, layout, components. A page
@@ -292,3 +380,11 @@ itself out instead of sitting there looking signed in.
 `static/js/prompt-highlight.js` highlights `[Image1]`/`@audio1`-style
 reference markers in a prompt textarea (only relevant to tools that use
 that marker convention, e.g. `generation/index.py`'s unified form).
+`static/js/gallery-scroll.js` is the infinite scroll: an
+`IntersectionObserver` on `.gallery-sentinel[data-next-offset]` inside any
+`[data-gallery-endpoint]` container fetches the next page of cards as a
+fragment and swaps the sentinel for it. It calls
+`Generation.resumePendingCards()` afterwards (idempotent — `data-resumed`
+marks cards already being polled) so an appended still-running card resolves
+inline. `wireDownloadButtons` needs no such call: it is one delegated document
+listener, so appended cards are covered already.

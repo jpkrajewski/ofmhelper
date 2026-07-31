@@ -10,11 +10,14 @@ conftest.py points the app at a throwaway test database and truncates the
 tables between tests, so these never touch dev/prod data.
 """
 
+from pathlib import Path
+
 from ofmhelpers.web.db.repository import JobRepository
 from ofmhelpers.web.stores.jobs import (
     create_job,
     get_job,
     list_jobs,
+    list_jobs_page,
     log_event,
     run_job,
 )
@@ -133,3 +136,49 @@ def test_list_jobs_ignores_a_non_list_result():
 
     job = next(j for j in list_jobs() if j["id"] == job_id)
     assert job["result"] == "1AbCdEfGhIjKlMnOp"
+
+
+def test_list_jobs_page_filters_slices_and_reports_the_total():
+    """What the galleries render: one page of the tasks they show, plus how
+    many there are so they can tell whether another page exists."""
+    ids = [create_job("fake_ai", {"i": i}) for i in range(5)]
+    create_job("download_videos", {})  # a task this gallery doesn't show
+
+    page, total = list_jobs_page({"fake_ai"}, 0, 2)
+    assert total == 5
+    # newest first
+    assert [j["id"] for j in page] == [ids[4], ids[3]]
+
+    page, total = list_jobs_page({"fake_ai"}, 4, 2)
+    assert total == 5
+    assert [j["id"] for j in page] == [ids[0]]
+
+    assert list_jobs_page({"fake_ai"}, 99, 2) == ([], 5)
+
+
+def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch):
+    """The self-heal stats every result file it is handed. Doing that for the
+    whole history to render one page is what made every scroll tick cost more
+    than the page it returned."""
+    for i in range(4):
+        out = tmp_path / f"a{i}.png"
+        out.write_bytes(b"png")
+        run_job(
+            create_job("fake_ai", {}),
+            lambda p=out: [{"name": p.name, "path": str(p)}],
+            {},
+        )
+
+    checked = []
+    real_is_file = Path.is_file
+
+    def counting_is_file(self):
+        checked.append(self)
+        return real_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", counting_is_file)
+    page, total = list_jobs_page({"fake_ai"}, 0, 2)
+
+    assert total == 4
+    assert len(page) == 2
+    assert len(checked) == 2

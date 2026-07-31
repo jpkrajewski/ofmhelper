@@ -68,3 +68,37 @@ def test_run_intake_records_no_source_url_for_a_local_upload(tmp_path):
         mock.patch.object(intake, "probe_duration", return_value=5.0),
     ):
         assert intake.run_intake(str(upload), tmp_path).source_url is None
+
+
+def _failed_instagram_download(tmp_path):
+    with mock.patch.object(
+        intake,
+        "download",
+        return_value=mock.Mock(success=False, output_paths=[], error="HTTP Error 404"),
+    ):
+        try:
+            intake.fetch_source("https://instagram.com/reel/abc", tmp_path)
+        except RuntimeError as exc:
+            return str(exc)
+    msg = "expected the download to fail"
+    raise AssertionError(msg)
+
+
+def test_instagram_hint_says_upload_cookies_when_there_are_none(tmp_path):
+    with mock.patch.object(intake, "get_cookiefile", return_value=None):
+        message = _failed_instagram_download(tmp_path)
+
+    assert "export" in message
+    assert "/cookies" in message
+    assert "expired" not in message
+
+
+def test_instagram_hint_blames_the_session_when_cookies_are_already_uploaded(tmp_path):
+    """Same 404, opposite fix: uploading cookies again isn't the answer when
+    they are already there -- the burner's session is dead or flagged."""
+    with mock.patch.object(intake, "get_cookiefile", return_value="cookies.txt"):
+        message = _failed_instagram_download(tmp_path)
+
+    assert "expired" in message
+    assert "flagged" in message
+    assert "re-export" in message

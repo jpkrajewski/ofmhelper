@@ -110,7 +110,7 @@ def run(apply: bool) -> None:
             except Exception as exc:
                 print(f"[skip] {job['id']} ({task_id}): check failed: {exc}")
                 continue
-            if state == "success":
+            if state == "success" and isinstance(payload, list) and payload:
                 remote_url = payload[0]
                 break
 

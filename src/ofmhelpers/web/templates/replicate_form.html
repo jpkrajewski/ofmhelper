@@ -11,6 +11,24 @@
 
 <form id="replicate-intake-form" method="post" action="/replicate/intake"
       enctype="multipart/form-data" class="card todo-add-form">
+    {% if prefill %}
+    {# Rerun of a past intake: its context note is already in the box below and
+       the reel it downloaded is reused as-is, so a job that died in analysis
+       doesn't need the link (or the platform) to cooperate a second time. #}
+    <input type="hidden" name="reuse_job_id" value="{{ prefill.job_id }}">
+    <div class="notice">
+        Rerunning <code>{{ prefill.job_id }}</code>{% if prefill.error %} — it failed with:
+        <pre>{{ prefill.error }}</pre>{% endif %}
+        {% if prefill.video_name %}
+        Reusing the already-downloaded reel <strong>{{ prefill.video_name }}</strong> — leave both
+        fields below empty to analyze it again, or fill one in to replace it.
+        {% else %}
+        The downloaded file is gone, so <code>{{ prefill.source|truncate(60) }}</code> will be
+        downloaded again — upload the file below if the platform blocks it.
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="field">
         <label>Reel URL</label>
         <input type="url" name="source_url" placeholder="https://www.tiktok.com/... or a Reels/Shorts link">
@@ -21,9 +39,61 @@
         <input type="file" name="source_file" accept="video/*">
     </div>
 
+    <div class="field">
+        <label for="intake-context">Context (optional)</label>
+        <textarea name="context" id="intake-context" rows="3"
+                  placeholder="e.g. the girl is a gym influencer, the joke is about protein shakes, keep the cameraman male">{{ prefill.context if prefill else '' }}</textarea>
+        <p class="picker-help">
+            Appended to the end of the analysis prompt, so Gemini knows anything it
+            can't tell from watching the clip alone.
+        </p>
+    </div>
+
     <button type="submit" class="btn-primary">Analyze reel</button>
     <div class="generation-status"></div>
 </form>
+
+<h2 class="col-title">Past analyses <span class="picker-help">(latest {{ intake_limit }})</span></h2>
+{% if intakes %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">When</th>
+                <th scope="col">Source</th>
+                <th scope="col">Context</th>
+                <th scope="col">Status</th>
+                <th scope="col"><span class="sr-only">Review or rerun</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in intakes %}
+            <tr>
+                <td class="todo-added">{{ i.created_at_display }}</td>
+                <td title="{{ i.source }}">{{ i.source|truncate(60) }}</td>
+                <td title="{{ i.context }}">{{ i.context|truncate(40) or '—' }}</td>
+                <td>
+                    <span class="badge {{ 'badge-ok' if i.status == 'done' else 'badge-fail' if i.status == 'failed' else 'badge-neutral' }}"
+                          {% if i.error %}title="{{ i.error }}"{% endif %}>
+                        {{ i.status }}
+                    </span>
+                    {% if i.status == 'done' and not i.valid %}
+                    <span class="badge badge-warn" title="The model's answer didn't validate — fix the JSON on the review page">needs fixing</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/replicate/jobs/{{ i.id }}">open</a>
+                    ·
+                    <a href="/replicate?from={{ i.id }}">rerun</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No reels analyzed yet.</p>
+{% endif %}
 
 <script>
 document.getElementById('replicate-intake-form').addEventListener('submit', (e) => {
@@ -34,7 +104,9 @@ document.getElementById('replicate-intake-form').addEventListener('submit', (e) 
     const formData = new FormData(form);
     const file = formData.get('source_file');
 
-    if (!formData.get('source_url').trim() && !(file && file.size)) {
+    // A rerun carries its source in reuse_job_id (the reel is already on the
+    // server), so only a fresh intake has to name one.
+    if (!formData.get('reuse_job_id') && !formData.get('source_url').trim() && !(file && file.size)) {
         statusEl.textContent = 'Paste a reel URL or upload a file.';
         return;
     }
