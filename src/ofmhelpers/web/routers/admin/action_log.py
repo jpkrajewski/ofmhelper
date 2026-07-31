@@ -3,12 +3,14 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
-from ofmhelpers.web.auth import require_admin
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.stores.jobs import list_jobs
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(
-    prefix="/action-log", tags=["action-log"], dependencies=[Depends(require_admin)]
+    prefix="/action-log",
+    tags=["action-log"],
+    dependencies=[Depends(AuthMiddleware.require_admin)],
 )
 
 # Maps a job's "task" field to the URL prefix of its dedicated status page.
@@ -45,6 +47,6 @@ def dashboard(request: Request):
         ).strftime("%H:%M:%S")
 
     any_running = any(j["status"] in ("running", "queued") for j in jobs)
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request, "action_log.html", {"jobs": jobs, "any_running": any_running}
     )

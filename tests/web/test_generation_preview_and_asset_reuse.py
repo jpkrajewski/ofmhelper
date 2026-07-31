@@ -24,7 +24,7 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import refs as refs_router
 from ofmhelpers.web.routers.generation import kling as kling_router

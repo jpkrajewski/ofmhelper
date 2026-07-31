@@ -14,11 +14,11 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.auth import get_kie_api_key
+from ofmhelpers.web.api_keys import get_kie_api_key
 from ofmhelpers.web.routers.generation.seedance import SeedanceModel
 from ofmhelpers.web.routers.task_helpers import asset_card
 from ofmhelpers.web.stores.jobs import list_jobs_page
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
@@ -78,7 +78,7 @@ def _gallery_page(offset: int) -> tuple[list[dict], int | None]:
 @router.get("")
 def form(request: Request):
     gallery, next_offset = _gallery_page(0)
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "generate_form.html",
         {
@@ -96,7 +96,7 @@ def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
     same partial the page's first page renders, so an appended card is
     indistinguishable from a server-rendered one."""
     gallery, next_offset = _gallery_page(offset)
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "generate_gallery_fragment.html",
         {"gallery": gallery, "next_offset": next_offset},

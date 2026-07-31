@@ -3,28 +3,28 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    File,
+    Depends,
     Form,
     HTTPException,
     Query,
     Request,
-    UploadFile,
 )
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.cache import enqueue
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     asset_card,
-    build_ordered_paths,
     job_inputs,
     job_status_payload,
     register_generated_asset,
+    resolve_reference_uploads,
     serve_job_file,
 )
+from ofmhelpers.web.schemas import ReferenceUploads
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job, set_job_preview
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/seedance", tags=["seedance"])
@@ -105,39 +105,22 @@ async def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
+    # Declared before the defaulted fields because it has no default of its
+    # own -- the dependency builds it from the six reference_* form fields.
+    refs: Annotated[ReferenceUploads, Depends(ReferenceUploads.from_form)],
     model: Annotated[SeedanceModel, Form()] = SeedanceModel.standard,
     resolution: Annotated[str, Form()] = "720p",
     aspect_ratio: Annotated[str, Form()] = "16:9",
     duration: Annotated[int, Form()] = 10,
     generate_audio: Annotated[bool, Form()] = False,
-    reference_images: Annotated[list[UploadFile] | None, File()] = None,
-    reference_images_manifest: Annotated[str, Form()] = "[]",
-    reference_videos: Annotated[list[UploadFile] | None, File()] = None,
-    reference_videos_manifest: Annotated[str, Form()] = "[]",
-    reference_audio: Annotated[list[UploadFile] | None, File()] = None,
-    reference_audio_manifest: Annotated[str, Form()] = "[]",
 ):
-    if reference_audio is None:
-        reference_audio = []
-    if reference_videos is None:
-        reference_videos = []
-    if reference_images is None:
-        reference_images = []
     if not api_key.strip():
         raise HTTPException(status_code=400, detail="API key is required")
 
-    # reference_* are ordered, reusable multi-file lists -- these go through
-    # the manifest so previously-uploaded refs get reused by path instead of
-    # re-uploaded.
-    reference_image_paths = build_ordered_paths(
-        reference_images_manifest, reference_images, ASSETS_ROOT
-    )
-    reference_video_paths = build_ordered_paths(
-        reference_videos_manifest, reference_videos, ASSETS_ROOT
-    )
-    reference_audio_paths = build_ordered_paths(
-        reference_audio_manifest, reference_audio, ASSETS_ROOT
-    )
+    # The reference pickers post ordered, reusable multi-file lists -- these
+    # go through the manifest so previously-uploaded refs get reused by path
+    # instead of re-uploaded.
+    reference_paths = resolve_reference_uploads(refs)
 
     # api_key is intentionally excluded from the job's stored params -- it's
     # only ever passed straight through to the background task, never
@@ -155,12 +138,7 @@ async def run(
     # restore them as "existing" picker entries (with previews) later.
     job_id = create_job(
         "seedance",
-        {
-            **params,
-            "reference_images": reference_image_paths,
-            "reference_videos": reference_video_paths,
-            "reference_audio": reference_audio_paths,
-        },
+        {**params, **reference_paths},
         actor=request.session.get("role"),
     )
     enqueue(
@@ -171,9 +149,9 @@ async def run(
             "job_id": job_id,
             "api_key": api_key,
             **params,
-            "reference_image_paths": reference_image_paths,
-            "reference_video_paths": reference_video_paths,
-            "reference_audio_paths": reference_audio_paths,
+            "reference_image_paths": reference_paths["reference_images"],
+            "reference_video_paths": reference_paths["reference_videos"],
+            "reference_audio_paths": reference_paths["reference_audio"],
         },
     )
 
@@ -198,7 +176,7 @@ def job_status(request: Request, job_id: str):
             for idx, f in enumerate(job["result"])
         ]
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

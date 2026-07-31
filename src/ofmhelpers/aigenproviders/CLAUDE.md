@@ -20,13 +20,17 @@ dependency).
   (`generate_image_nbp`, `generate_video_seedance2`, `generate_video_kling3`)
   and crash/timeout recovery (`resume_pending`, used by `web/recovery.py`'s
   background sweeper). Also handles uploading local reference files
-  (`upload_local_file`) via `kaiai/upload_cache.py`. Note: the directory is
+  (`upload_local_file`), memoized in Redis (see below). Note: the directory is
   named `kaiai` (typo, kept for backwards compatibility with existing
   imports) — everything else (docs, env vars, tests) says "kie"/"kie.ai".
-- `kaiai/upload_cache.py` — `upload_cache`, a process-wide, thread-safe LRU
-  cache (`(api_key, path) -> hosted URL`) so the same local reference file
-  isn't re-uploaded to kie.ai on every generation. Not persisted to disk —
-  a restart just means the next upload re-populates it.
+- Upload memoization has no module of its own: `upload_local_file` reads and
+  writes `kieai:upload:<api_key>:<path>` through `ofmhelpers.cache`, so the
+  same local reference file isn't re-uploaded to kie.ai on every generation.
+  Keyed by API key as well as path because kie.ai namespaces uploads per
+  account. In Redis rather than in-process so the API and the worker share one
+  answer; TTL is `OFM_KIEAI_UPLOAD_CACHE_TTL_S`, and every hit is confirmed
+  live with a HEAD before it is trusted. Pure optimisation — a dead broker
+  just means the file is uploaded again.
 
 # Who calls this
 

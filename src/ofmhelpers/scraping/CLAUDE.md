@@ -9,11 +9,14 @@ then exporting the results to a formatted spreadsheet for review.
   configured Apify API key has the most remaining monthly credit;
   `run_actor(client, actor_id, raw_input)` runs an actor and returns its
   dataset items as a list.
-- `models.py` — `PostBase` (base dataclass: username, url, timestamp,
-  views/likes/comments, caption, duration, hashtags, `is_valid()`), `Reel`
-  and `TikTokVideo` (platform-specific subclasses with `from_apify(item)`
-  classmethods to normalize a raw Apify dataset item), `TikTokAuthor`
-  (nested author info for TikTok items).
+- `models/` — the post models, one file per platform, all Pydantic:
+  `post.py` holds `PostBase` (username, url, timestamp, views/likes/comments,
+  caption, duration, hashtags, `is_valid()`, and the shared
+  `as_utc_datetime`) plus `Reel`; `tiktok.py` holds `TikTokVideo` and
+  `TikTokAuthor` (nested author info). Each subclass owns its own
+  `from_apify(item)` / `from_raw(a)` classmethod — Apify's actors are
+  third-party and their key names drift, so the mapping belongs on the model
+  rather than in whatever called the actor. Import from the package.
 - `post_scorer.py` — `PostFilterProcessor`: filters low-performing reels out
   of an exported spreadsheet and ranks the rest by a weighted engagement
   score (views, like/comment rate, velocity — weights come from

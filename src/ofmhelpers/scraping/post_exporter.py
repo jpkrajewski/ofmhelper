@@ -81,9 +81,10 @@ class PostExcelExporter:
         try:
             wb.save(output_path)
             logger.info("saved -> %s", output_path)
-        except Exception as exc:
+        except Exception:
             all_posts = [post for _, posts in sheets for post in posts]
-            self._fallback_csv(all_posts, output_path, exc)
+            csv_path = self._fallback_csv(all_posts, output_path)
+            logger.exception("failed to save xlsx -- dumped to %s", csv_path)
 
     # ── internals ─────────────────────────────────────────────────────────────
 
@@ -115,8 +116,10 @@ class PostExcelExporter:
         for row_idx, post in enumerate(posts, start=2):
             try:
                 ws.append(self._post_row(post))
-            except Exception as exc:
-                logger.warning("skipped row %d (%s): %s", row_idx, post.username, exc)
+            except Exception:
+                logger.warning(
+                    "skipped row %d (%s)", row_idx, post.username, exc_info=True
+                )
                 continue
 
             fill = self.ALT_FILL if row_idx % 2 == 0 else None
@@ -137,12 +140,13 @@ class PostExcelExporter:
         ws.freeze_panes = "A2"
         ws.auto_filter.ref = ws.dimensions
 
-    def _fallback_csv(
-        self, posts: list[PostBase], xlsx_path: str, exc: Exception
-    ) -> None:
+    def _fallback_csv(self, posts: list[PostBase], xlsx_path: str) -> str:
+        """Dumps the same rows next to the .xlsx that couldn't be written, and
+        returns where they went. The caller logs it -- it is the one holding
+        the exception that made this necessary."""
         csv_path = xlsx_path.replace(".xlsx", ".csv")
         with Path(csv_path).open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(self.HEADER)
             writer.writerows(self._post_row(post) for post in posts)
-        logger.error("failed to save xlsx (%s) -- dumped to %s", exc, csv_path)
+        return csv_path

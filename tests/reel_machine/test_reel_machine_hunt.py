@@ -18,7 +18,7 @@ from unittest import mock
 import pytest
 
 from ofmhelpers.reel_machine import hunt
-from ofmhelpers.reel_machine.schema import ReelAnalysis
+from ofmhelpers.reel_machine.models import ReelAnalysis
 
 EXAMPLE = Path(__file__).parent / "example.json"
 

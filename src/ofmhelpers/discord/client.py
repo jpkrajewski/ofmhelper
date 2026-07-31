@@ -34,5 +34,5 @@ def send_webhook(content: str, embeds: list[dict] | None = None) -> None:
     payload: dict = {"content": content}
     if embeds:
         payload["embeds"] = embeds
-    resp = requests.post(url, json=payload, timeout=10)
+    resp = requests.post(url, json=payload, timeout=settings.discord.request_timeout_s)
     resp.raise_for_status()

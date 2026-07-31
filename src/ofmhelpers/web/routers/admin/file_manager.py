@@ -3,7 +3,7 @@ ofmhelpers/web/routers/admin/file_manager.py
 
 Browse, download, and delete files under uploads/ and downloads/. Admin-only
 -- a VA browsing to raw uploads/downloads and deleting things isn't part of
-their job, so the whole router is gated via require_admin instead of
+their job, so the whole router is gated via AuthMiddleware.require_admin instead of
 individual routes.
 """
 
@@ -15,11 +15,13 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.auth import require_admin
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(
-    prefix="/file-manager", tags=["file-manager"], dependencies=[Depends(require_admin)]
+    prefix="/file-manager",
+    tags=["file-manager"],
+    dependencies=[Depends(AuthMiddleware.require_admin)],
 )
 
 # Named roots the manager is allowed to browse -- everything else stays
@@ -28,7 +30,7 @@ router = APIRouter(
 # KieAIClient's out_dir); without it, finding/removing those files meant
 # shelling into the server instead of using this page.
 ROOTS = {
-    "uploads": Path("uploads").resolve(),
+    "uploads": Path(settings.infra.uploads_root).resolve(),
     "downloads": Path("downloads").resolve(),
     "kieai_out": Path(settings.kieai.out_dir).resolve(),
 }
@@ -97,7 +99,7 @@ def browse(request: Request, root: str = DEFAULT_ROOT, path: str = ""):
         p = Path(path)
         parent = str(p.parent).replace("\\", "/") if str(p.parent) != "." else ""
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "file_manager.html",
         {

@@ -3,11 +3,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.utils.metadata_cleaner import clean_metadata
-from ofmhelpers.web.queue import enqueue
-from ofmhelpers.web.routers import task_helpers
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
+    UPLOADS_ROOT,
     asset_card,
     job_status_payload,
     make_job_dir,
@@ -17,11 +17,11 @@ from ofmhelpers.web.routers.task_helpers import (
     serve_job_file,
 )
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/clean-images", tags=["clean-images"])
 
-UPLOAD_ROOT = Path("uploads") / "clean-images"
+UPLOAD_ROOT = UPLOADS_ROOT / "clean-images"
 
 
 def _run_clean(job_dir: str) -> list[dict]:
@@ -32,7 +32,7 @@ def _run_clean(job_dir: str) -> list[dict]:
     # directly reusable in the generation pickers -- cleaning an image is
     # usually the step right before generating with it.
     for p in files:
-        register_generated_asset(p, task_helpers.ASSETS_ROOT)
+        register_generated_asset(p)
     return [{"name": p.name, "path": str(p)} for p in files]
 
 
@@ -80,7 +80,7 @@ def job_status(request: Request, job_id: str):
             for idx, f in enumerate(job["result"])
         ]
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

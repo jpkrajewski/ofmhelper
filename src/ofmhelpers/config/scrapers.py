@@ -1,6 +1,7 @@
 import enum
 from collections.abc import Callable
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 
 class Scrapers(enum.StrEnum):
@@ -8,16 +9,18 @@ class Scrapers(enum.StrEnum):
     TIKTOK_PROFILES = "TIKTOK_PROFILES"
 
 
-@dataclass(frozen=True)
-class ContentRankingWeights:
+class ContentRankingWeights(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     views: float
     like_rate: float
     comment_rate: float
     velocity: float
 
 
-@dataclass(frozen=True)
-class ScraperConfig:
+class ScraperConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     views_threshold_default: int
     views_threshold_today: int
     content_ranking_weights: ContentRankingWeights

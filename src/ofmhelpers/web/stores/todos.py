@@ -13,48 +13,56 @@ atomic per-row updates instead of the old lock-free rewrite of the whole file.
 
 from __future__ import annotations
 
-from ofmhelpers.web.db.repository import TodoRepository
+from functools import lru_cache
 
-_repo = TodoRepository()
+from ofmhelpers.web.db.repositories import TodoRepository
+
+
+@lru_cache(maxsize=1)
+def _repository() -> TodoRepository:
+    """The process-wide todo repository, built on first use rather than at
+    import. Lazy because constructing it binds a Redis connection for its
+    cache, and at import time OFM_REDIS_URL may not be its final value yet."""
+    return TodoRepository()
 
 
 def list_todos() -> list[dict]:
     """Newest first."""
-    return _repo.list_all()
+    return _repository().list_all()
 
 
 def add_todo(model_name: str, url: str, comments: str, created_by: str | None) -> dict:
-    return _repo.add(model_name, url, comments, created_by)
+    return _repository().add(model_name, url, comments, created_by)
 
 
 def get_todo(todo_id: str) -> dict | None:
-    return _repo.get(todo_id)
+    return _repository().get(todo_id)
 
 
 def attach_asset(todo_id: str, asset_path: str, asset_name: str) -> bool:
     """VA uploads a ready asset for a task. A new asset resets any prior
     approval/rejection/upload -- those applied to the old file, not this
     one."""
-    return _repo.attach_asset(todo_id, asset_path, asset_name)
+    return _repository().attach_asset(todo_id, asset_path, asset_name)
 
 
 def approve_todo(todo_id: str) -> bool:
     """Admin approves the attached asset. Returns False if the todo doesn't
     exist or has no asset attached yet."""
-    return _repo.approve(todo_id)
+    return _repository().approve(todo_id)
 
 
 def reject_todo(todo_id: str, comment: str) -> bool:
     """Admin rejects the attached asset with a comment telling the VA what
     to fix. Returns False if the todo doesn't exist or has no asset attached
     yet."""
-    return _repo.reject(todo_id, comment)
+    return _repository().reject(todo_id, comment)
 
 
 def set_drive_upload_job(todo_id: str, job_id: str) -> bool:
     """Records which background job (see web/stores/jobs.py) is currently uploading
     this todo's asset to Drive, so the list page can show its live status."""
-    return _repo.set_drive_upload_job(todo_id, job_id)
+    return _repository().set_drive_upload_job(todo_id, job_id)
 
 
 def mark_uploaded(todo_id: str, asset_path: str, drive_file_id: str) -> bool:
@@ -63,7 +71,7 @@ def mark_uploaded(todo_id: str, asset_path: str, drive_file_id: str) -> bool:
     asset (attach_asset resets asset_path). Without this check, a slow
     upload of the old file could land after a replacement and incorrectly
     mark the new, never-uploaded asset as done."""
-    return _repo.mark_uploaded(todo_id, asset_path, drive_file_id)
+    return _repository().mark_uploaded(todo_id, asset_path, drive_file_id)
 
 
 def import_todos(entries: list[dict], created_by: str | None) -> int:
@@ -90,14 +98,14 @@ def import_todos(entries: list[dict], created_by: str | None) -> int:
         comments = str(entry.get("comments") or "").strip()
         validated.append({"model_name": model_name, "url": url, "comments": comments})
 
-    return _repo.import_many(validated, created_by)
+    return _repository().import_many(validated, created_by)
 
 
 def toggle_todo(todo_id: str) -> bool:
     """Flips checked/unchecked. Returns False if no such todo exists."""
-    return _repo.toggle(todo_id)
+    return _repository().toggle(todo_id)
 
 
 def delete_todo(todo_id: str) -> bool:
     """Returns False if no such todo exists."""
-    return _repo.delete(todo_id)
+    return _repository().delete(todo_id)

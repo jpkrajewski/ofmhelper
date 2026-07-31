@@ -20,6 +20,7 @@ from ofmhelpers.web.routers import task_helpers
 from ofmhelpers.web.routers.downloads import clean_image
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import videos as download_reels
+from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 def _png_bytes() -> bytes:
@@ -32,7 +33,7 @@ def _png_bytes() -> bytes:
 def assets_dir(tmp_path, monkeypatch):
     d = tmp_path / "assets"
     d.mkdir()
-    monkeypatch.setattr(task_helpers, "ASSETS_ROOT", d)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", d)
     return d
 
 

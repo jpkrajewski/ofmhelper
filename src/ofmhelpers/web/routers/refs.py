@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from PIL import Image
 
+from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.web import ref_usage
 from ofmhelpers.web.routers.task_helpers import (
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/refs", tags=["refs"])
 
 # A first frame is enough to recognise a clip in a ~100-200px tile, and
 # seeking costs nothing at position 0.
-_FFMPEG_TIMEOUT_S = 20
+_FFMPEG_TIMEOUT_S = settings.web.ffmpeg_timeout_s
 
 # Reuse-picker/inputs previews only ever need a small box (see .ref-tile /
 # .thumb-small CSS) -- serving the full original (multi-MB) just to paint
@@ -37,9 +38,9 @@ THUMBS_DIR = ASSETS_ROOT / ".thumbs"
 # then the handful you most recently added. Two short lists beat one long one
 # -- the file you want is nearly always in one of them. The picker's "show
 # older" button asks for an explicit ?limit= instead.
-RECENT_USED_LIMIT = 5
-RECENT_UPLOAD_LIMIT = 5
-MAX_REF_LIMIT = 60
+RECENT_USED_LIMIT = settings.web.recent_used_limit
+RECENT_UPLOAD_LIMIT = settings.web.recent_upload_limit
+MAX_REF_LIMIT = settings.web.max_ref_limit
 
 
 def _entry(path: Path, used_at: float | None = None) -> dict:

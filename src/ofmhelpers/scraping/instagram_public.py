@@ -66,12 +66,12 @@ handful of accounts.
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 import sys
 import unicodedata
-from dataclasses import asdict, dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
@@ -127,16 +127,22 @@ def _extract_count(pattern: re.Pattern, text: str) -> int | None:
     return parse_count(match.group(1), match.group(2))
 
 
-@dataclass
-class PostStats:
+class PostStats(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     url: str
     views: int | None
     likes: int | None
     comments: int | None
 
 
-@dataclass
-class ProfileStats:
+class ProfileStats(BaseModel):
+    """Crosses a process boundary: the scrape runs in a subprocess (see the
+    module docstring) and this is what it writes to stdout, so the model owns
+    both directions of that hop rather than a pair of hand-rolled dict walks."""
+
+    model_config = ConfigDict(extra="forbid")
+
     username: str
     followers: int | None
     posts: list[PostStats]
@@ -324,9 +330,11 @@ def _fetch_profile_stats_in_process(username: str, last_n_posts: int) -> Profile
                                 comments=comments,
                             )
                         )
-                    except Exception as exc:
+                    except Exception:
                         logger.warning(
-                            "instagram post scrape failed url=%s: %s", post_url, exc
+                            "instagram post scrape failed url=%s",
+                            post_url,
+                            exc_info=True,
                         )
                         posts.append(
                             PostStats(
@@ -338,7 +346,9 @@ def _fetch_profile_stats_in_process(username: str, last_n_posts: int) -> Profile
             finally:
                 browser.close()
     except Exception as exc:
-        logger.warning("instagram profile scrape failed username=%s: %s", username, exc)
+        logger.warning(
+            "instagram profile scrape failed username=%s", username, exc_info=True
+        )
         return ProfileStats(username=username, followers=None, posts=[], error=str(exc))
 
 
@@ -356,14 +366,7 @@ def _run_and_parse_subprocess(username: str, last_n_posts: int) -> ProfileStats:
         timeout=settings.instagram_stats.subprocess_timeout_s,
         check=True,
     )
-    payload = json.loads(result.stdout)
-    posts = [PostStats(**p) for p in payload["posts"]]
-    return ProfileStats(
-        username=payload["username"],
-        followers=payload["followers"],
-        posts=posts,
-        error=payload["error"],
-    )
+    return ProfileStats.model_validate_json(result.stdout)
 
 
 def fetch_profile_stats(username: str, last_n_posts: int | None = None) -> ProfileStats:
@@ -376,14 +379,19 @@ def fetch_profile_stats(username: str, last_n_posts: int | None = None) -> Profi
     try:
         return _run_and_parse_subprocess(username, last_n_posts)
     except subprocess.CalledProcessError as exc:
-        msg = f"scrape subprocess exited {exc.returncode}: {exc.stderr[-500:]}"
+        # The stderr tail is the only place the child's traceback survives, so
+        # it is logged as its own argument rather than folded into the message.
         logger.warning(
-            "instagram stats subprocess failed username=%s: %s", username, msg
+            "instagram stats subprocess failed username=%s stderr=%s",
+            username,
+            exc.stderr[-500:],
+            exc_info=True,
         )
+        msg = f"scrape subprocess exited {exc.returncode}: {exc.stderr[-500:]}"
         return ProfileStats(username=username, followers=None, posts=[], error=msg)
     except Exception as exc:
         logger.warning(
-            "instagram stats subprocess failed username=%s: %s", username, exc
+            "instagram stats subprocess failed username=%s", username, exc_info=True
         )
         return ProfileStats(username=username, followers=None, posts=[], error=str(exc))
 
@@ -398,4 +406,4 @@ if __name__ == "__main__":
         else settings.instagram_stats.last_n_posts
     )
     _stats = _fetch_profile_stats_in_process(_username, _last_n)
-    sys.stdout.write(json.dumps(asdict(_stats)))
+    sys.stdout.write(_stats.model_dump_json())

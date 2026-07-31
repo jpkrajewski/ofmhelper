@@ -1,7 +1,9 @@
 """
-Cache-aside layer for db/repository.py. One class, injected into each
-repository's constructor, so the caching policy lives in exactly one place
-instead of being copy-pasted per repository.
+Cache-aside layer for the repositories beside it. One class, injected into
+each repository's constructor, so the caching policy lives in exactly one
+place instead of being copy-pasted per repository. It sits in `repositories/`
+rather than one level up because a repository is its only caller -- nothing
+outside this package caches this way.
 
 Invalidation is a version counter per namespace (one per repository), not a
 Redis KEYS/SCAN delete: every write calls `bump()`, which does an atomic
@@ -15,6 +17,9 @@ import json
 from functools import wraps
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
+from ofmhelpers.cache import get_redis
+from ofmhelpers.config import settings
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -22,7 +27,7 @@ if TYPE_CHECKING:
 
 # Safety-net expiry in case a code path ever reads without writing through
 # this layer -- invalidation is driven by bump(), not by this TTL.
-_DEFAULT_TTL_S = 300
+_DEFAULT_TTL_S = settings.infra.cache_ttl_s
 
 T = TypeVar("T")
 
@@ -64,34 +69,6 @@ class RepositoryCache:
     def bump(self) -> None:
         """Invalidate every cached read for this namespace."""
         self._redis.incr(f"cache:{self._namespace}:v")
-
-
-class LazyRepositoryCache:
-    """Builds the real `RepositoryCache` on first use rather than at
-    construction. repository.py's default repositories are module-level
-    singletons built at import time -- binding a Redis connection right then
-    would capture whatever OFM_REDIS_URL happens to be set at import, before
-    a test fixture (or any other late env override) gets a chance to change
-    it. See db/session.py's `get_engine()` for the same lazy-binding
-    reasoning on the Postgres side."""
-
-    def __init__(self, namespace: str, ttl_s: int = _DEFAULT_TTL_S) -> None:
-        self._namespace = namespace
-        self._ttl_s = ttl_s
-        self._inner: RepositoryCache | None = None
-
-    def _ensure(self) -> RepositoryCache:
-        if self._inner is None:
-            from ofmhelpers.web.queue import get_redis
-
-            self._inner = RepositoryCache(get_redis(), self._namespace, self._ttl_s)
-        return self._inner
-
-    def get_or_set(self, method: str, args: tuple, loader: Callable[[], T]) -> T:
-        return self._ensure().get_or_set(method, args, loader)
-
-    def bump(self) -> None:
-        self._ensure().bump()
 
 
 class NullCache:
@@ -142,7 +119,7 @@ def invalidates_cache[T](method: Callable[..., T]) -> Callable[..., T]:
 
 
 class CachedRepository:
-    """Base class for repositories in repository.py: owns cache
+    """Base class for every repository in this package: owns cache
     construction so no subclass repeats the `cache or RepositoryCache(...)`
     boilerplate. Subclasses set `cache_namespace` and use the `@cached` /
     `@invalidates_cache` decorators above -- they never touch `self._cache`
@@ -154,11 +131,11 @@ class CachedRepository:
         if self.cache_namespace is None:
             msg = f"{type(self).__name__} must define cache_namespace"
             raise ValueError(msg)
-        # LazyRepositoryCache, not RepositoryCache(get_redis(), ...) directly:
-        # these repositories are module-level singletons built at import
-        # time, and binding a Redis connection then would capture whatever
-        # OFM_REDIS_URL happens to be set at import, before a test fixture
-        # (or any other late env override) gets a chance to change it.
-        self._cache: RepositoryCacheLike = cache or LazyRepositoryCache(
-            self.cache_namespace
+        # Binding the Redis connection here is safe because no repository is
+        # built at import any more -- each one comes from an lru_cache'd
+        # accessor in web/stores/, so construction happens on first use, by
+        # which point OFM_REDIS_URL is whatever the process (or a test
+        # fixture) finally set it to.
+        self._cache: RepositoryCacheLike = cache or RepositoryCache(
+            get_redis(), self.cache_namespace
         )

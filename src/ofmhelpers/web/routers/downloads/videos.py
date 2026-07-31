@@ -1,32 +1,29 @@
-from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.downloaders.generic import download_all
-from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     flatten_grouped_results,
     grouped_job_status_payload,
     register_grouped_results,
 )
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/download-videos", tags=["download-videos"])
 
 
 def _run_downloads(urls: list[str]) -> list[dict]:
-    """Runs in the background. Converts DownloadResult dataclasses to plain
-    dicts so they're safe to render in Jinja2 / store in the job dict.
-    asdict() alone isn't enough -- it leaves output_paths as Path objects,
-    which json.dumps can't serialize (jobs.py._save() persists every job)."""
+    """Runs in the background. Converts each DownloadResult to a plain dict
+    so it is safe to render in Jinja2 / store in the job dict. mode="json"
+    is what turns output_paths' Path objects into strings -- jobs.py persists
+    every job through json.dumps, which can't serialize a Path."""
     results = download_all(urls)
-    dicts = [asdict(r) for r in results]
-    for d in dicts:
-        d["output_paths"] = [str(p) for p in d["output_paths"]]
+    dicts = [r.model_dump(mode="json") for r in results]
     register_grouped_results(dicts)
     return dicts
 
@@ -67,7 +64,7 @@ def job_status(request: Request, job_id: str):
     if job.get("status") == "done":
         assets, failed_sources = flatten_grouped_results(job, "/download-videos/files")
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

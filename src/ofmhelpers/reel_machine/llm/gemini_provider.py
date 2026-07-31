@@ -29,14 +29,14 @@ from google.genai import types
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-from ofmhelpers.reel_machine.schema import ReelAnalysis
+from ofmhelpers.reel_machine.models import ReelAnalysis
 
 logger = get_logger(__name__)
 
 # Gemini requires an uploaded file to reach state == "ACTIVE" before it can
 # be referenced in a generate_content call.
-_VIDEO_ACTIVE_TIMEOUT_S = 120
-_VIDEO_ACTIVE_POLL_S = 2
+_VIDEO_ACTIVE_TIMEOUT_S = settings.reel_machine.gemini_video_active_timeout_s
+_VIDEO_ACTIVE_POLL_S = settings.reel_machine.gemini_poll_s
 
 # Gemini's free tier answers a busy model with 503 UNAVAILABLE ("high demand
 # ... usually temporary"), which is "ask again in a moment", not "this reel
@@ -49,8 +49,8 @@ _VIDEO_ACTIVE_POLL_S = 2
 # reruns the intake later via /replicate?from=<job_id>, which reuses the reel
 # already on disk.
 _RETRY_STATUS = frozenset({500, 502, 503, 504})
-_MAX_ATTEMPTS = 3
-_RETRY_BACKOFF_S = 2
+_MAX_ATTEMPTS = settings.reel_machine.gemini_max_attempts
+_RETRY_BACKOFF_S = settings.reel_machine.gemini_backoff_s
 
 
 class GeminiProvider:

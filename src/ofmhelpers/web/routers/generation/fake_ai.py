@@ -25,26 +25,25 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    File,
+    Depends,
     Form,
     HTTPException,
     Request,
-    UploadFile,
 )
 from PIL import Image, ImageDraw
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
-    ASSETS_ROOT,
     asset_card,
-    build_ordered_paths,
     job_inputs,
     job_status_payload,
+    resolve_reference_uploads,
     serve_job_file,
 )
+from ofmhelpers.web.schemas import ReferenceUploads
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/fake-ai", tags=["fake-ai"])
 
@@ -125,36 +124,17 @@ def _run_fake_ai(
 async def run(
     request: Request,
     prompt: Annotated[str, Form()],
+    refs: Annotated[ReferenceUploads, Depends(ReferenceUploads.from_form)],
     outcome: Annotated[str, Form()] = "success",  # "success" or "error"
     asset_type: Annotated[str, Form()] = "image",  # "image" or "video"
     delay: Annotated[int, Form()] = 2,
     error_message: Annotated[str, Form()] = "Simulated failure for testing",
-    reference_images: Annotated[list[UploadFile] | None, File()] = None,
-    reference_images_manifest: Annotated[str, Form()] = "[]",
-    reference_videos: Annotated[list[UploadFile] | None, File()] = None,
-    reference_videos_manifest: Annotated[str, Form()] = "[]",
-    reference_audio: Annotated[list[UploadFile] | None, File()] = None,
-    reference_audio_manifest: Annotated[str, Form()] = "[]",
 ):
     # These reference uploads don't feed into the fake generation at all --
     # this only exists so the upload/dedupe/reuse plumbing (the same
     # uploads/assets store seedance/kling3/nanobanana use) has a no-cost tool
     # to exercise.
-    if reference_audio is None:
-        reference_audio = []
-    if reference_videos is None:
-        reference_videos = []
-    if reference_images is None:
-        reference_images = []
-    reference_image_paths = build_ordered_paths(
-        reference_images_manifest, reference_images, ASSETS_ROOT
-    )
-    reference_video_paths = build_ordered_paths(
-        reference_videos_manifest, reference_videos, ASSETS_ROOT
-    )
-    reference_audio_paths = build_ordered_paths(
-        reference_audio_manifest, reference_audio, ASSETS_ROOT
-    )
+    reference_paths = resolve_reference_uploads(refs)
 
     params = {
         "prompt": prompt,
@@ -169,12 +149,7 @@ async def run(
     # gets the scalar params -- the refs never feed the fake generation.
     job_id = create_job(
         "fake_ai",
-        {
-            **params,
-            "reference_images": reference_image_paths,
-            "reference_videos": reference_video_paths,
-            "reference_audio": reference_audio_paths,
-        },
+        {**params, **reference_paths},
         actor=request.session.get("role"),
     )
     enqueue(run_job, job_id, _run_fake_ai, params)
@@ -195,7 +170,7 @@ def job_status(request: Request, job_id: str):
             for idx, f in enumerate(job["result"])
         ]
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

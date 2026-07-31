@@ -17,12 +17,11 @@ new plumbing.
 ```
 web/
   main.py            app assembly only — middleware, static, lifespan, loop over ROUTERS
-  auth.py            who you are: password check, session gate, require_admin
-  ratelimit.py       how often you may ask: login brake + write ceiling
-  queue.py           RQ handoff to the worker container
+  api_keys.py        provider API-key form pre-fills (kie.ai per role, ElevenLabs)
+  middleware/        one concern per file, each owning its own policy: auth, ratelimit
   recovery.py        background sweeper for orphaned kie.ai generations
-  schemas.py         Pydantic mirror of the persisted shapes
-  templates_config.py  the shared Jinja2Templates instance
+  schemas/           typed shapes: persistence.py (DB), generation.py (forms)
+  templates_config.py  get_templates(), the shared Jinja2Templates instance
   stores/            the app's nouns: jobs, todos, models, instagram_stats, approval_tokens
   db/                the only code that touches Postgres
   routers/           every HTTP route, grouped by feature (see routers/__init__.py)
@@ -47,10 +46,15 @@ migration changed everything under `stores/` without touching a router.
   applies middleware outside-in in *added* order, so the last
   `add_middleware` call runs first. A request passes SessionMiddleware ->
   WriteRateLimitMiddleware -> AuthMiddleware.
-- `auth.py` — single shared password per role (`APP_PASSWORD_ADMIN`/`_VA`
-  env vars), one `AuthMiddleware` that gates every request via a signed
-  session cookie. `PUBLIC_PATHS`/`PUBLIC_PREFIXES` allowlist unauthenticated
-  routes (keep this short — anything not listed is protected by default).
+- `middleware/auth.py` — **all of auth, on `AuthMiddleware` itself**: single
+  shared password per role (`APP_PASSWORD_ADMIN`/`_VA` env vars) via
+  `AuthMiddleware.check_password`, the per-request session-cookie gate in
+  `dispatch`, and `AuthMiddleware.require_admin` as the FastAPI dependency for
+  admin-only routers. There is no `web/auth.py` — one place to look for
+  anything auth-shaped. The allowlist (`settings.web.public_paths` /
+  `public_prefixes`, read by `AuthMiddleware.is_public`) and the role names
+  (`settings.web.role_admin` / `role_va`) are config, not literals — keep the
+  allowlist short, anything not listed is protected by default.
   An unauthenticated request gets one of two answers, decided by `is_fetch`:
   a page navigation gets the 303 to `/login?next=...`, a fetch/XHR gets
   `401 {"login_url": ...}`. That split exists because `fetch` follows a 303
@@ -58,25 +62,31 @@ migration changed everything under `stores/` without touching a router.
   HTML with status 200. Session lifetime is
   `settings.session.session_max_age_s` (config, not a literal), consumed by
   `SessionMiddleware`'s `max_age` and by `static/js/session.js`.
-  `get_kie_api_key(request)` pre-fills the kie.ai API key field based on
-  role. `require_admin` is a FastAPI dependency for admin-only routers.
-- `ratelimit.py` — fixed-window counters on the RQ Redis connection. Two
-  users: the login route counts **failed** attempts only (a correct password
-  clears the counter, so a real user is never locked out by their own
-  traffic), and `WriteRateLimitMiddleware` puts a blunt per-IP ceiling on
-  POST/PUT/PATCH/DELETE. Redis errors fail **open** — a dead broker already
+- `api_keys.py` — `get_kie_api_key(request)` (per-role pre-fill) and
+  `get_elevenlabs_api_key()` (one workspace key, role-blind). Deliberately not
+  in the middleware: they decide what a form field *starts out containing*,
+  not who may reach it, and they are optional by design — unset var means an
+  empty field the user pastes into.
+- `middleware/ratelimit.py` — fixed-window counters **and** their two
+  enforcement points, one file: the login route calls `login_blocked` /
+  `record_failed_login` / `clear_failed_logins` (only **failed** attempts are
+  counted, so a real user is never locked out by their own traffic), and
+  `WriteRateLimitMiddleware` puts a blunt per-IP ceiling on
+  POST/PUT/PATCH/DELETE. Counters live on `ofmhelpers.cache`'s Redis
+  connection. Redis errors fail **open** — a dead broker already
   takes the app down; turning it into a total login lockout would be worse.
   Client identity is `request.client.host`, which is only correct because
   the app publishes its port directly; behind a proxy uvicorn needs
   `--proxy-headers --forwarded-allow-ips`.
-- `queue.py` — the RQ queue (Redis) the API enqueues onto and the `worker`
-  container consumes, replacing FastAPI BackgroundTasks. `enqueue(...)` runs
-  jobs on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs
-  them inline, exactly like the old BackgroundTasks, so TestClient still sees
+- The RQ queue is **not** here: it and the single Redis connection live in
+  `ofmhelpers/cache/` (`queue.py`, `redis.py`), because the worker, the
+  scraping jobs and the kie.ai client need them too. `enqueue(...)` runs jobs
+  on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs them
+  inline, exactly like the old BackgroundTasks, so TestClient still sees
   results immediately.
 - `ref_usage.py` — which shared reference files were last *picked*, in a Redis
-  sorted set on the RQ connection (same shared-state reasoning as
-  `ratelimit.py`). It exists so `refs.py` can show "last used" and "last
+  sorted set on the shared Redis connection (same shared-state reasoning as
+  `middleware/ratelimit.py`). It exists so `refs.py` can show "last used" and "last
   uploaded" as two different lists: reuse used to `touch()` the file, which
   made mtime mean both at once and made a resolver quietly write to the asset
   store. Not a Postgres table — this is picker ordering, not a noun the app
@@ -87,10 +97,18 @@ migration changed everything under `stores/` without touching a router.
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
   key, so an in-request poll timeout or a server restart mid-generation
   still gets downloaded automatically.
-- `schemas.py` — Pydantic v2 models (`Job`/`Todo`/`ApprovalToken`), the typed
-  contract at the persistence boundary.
-- `templates_config.py` — the shared `Jinja2Templates` instance every router
-  imports.
+- `middleware/` — one concern per file, and a concern is *whole*: `auth.py`
+  (`AuthMiddleware` + the allowlist/password/role checks) and `ratelimit.py`
+  (`WriteRateLimitMiddleware` + the counters and the login brake). Order is
+  decided in `main.py`, and the package docstring records the resulting
+  request order.
+- `schemas/` — `persistence.py` holds the Pydantic v2 models
+  (`Job`/`Todo`/`ApprovalToken`) that are the typed contract at the
+  persistence boundary; `generation.py` holds `ReferenceUploads`, the
+  three-picker form shape seedance and fake_ai share (resolved to paths by
+  `routers/task_helpers.resolve_reference_uploads`). Import from the package.
+- `templates_config.py` — `get_templates()`, the shared `Jinja2Templates`
+  instance every router renders through (`lru_cache`d, built on first use).
 
 # `stores/` — the app's nouns
 
@@ -126,8 +144,11 @@ call these and nothing below them.
 # `db/` — the persistence layer (Postgres)
 
 `models.py` (SQLAlchemy tables), `session.py` (lazy engine/session from
-`settings.infra`), `repository.py` (**the only code that touches the DB**),
-`cache.py` (the cache-aside layer + `@cached`/`@invalidates_cache`),
+`settings.infra`), `repositories/` (**the only code that touches the DB**, one
+module per domain: jobs, todos, models, instagram_stats, approval_tokens —
+import the classes from the package),
+plus `cached_repository.py`, the cache-aside layer +
+`@cached`/`@invalidates_cache` every repository inherits),
 `backfill_remote_urls.py` (one-time, manually-run: re-derives kie.ai
 `remote_url` for old jobs that predate that field — `--apply` to write,
 dry-run by default). Schema changes are versioned with Alembic (`alembic/`
@@ -141,8 +162,11 @@ at the repo root).
 packages never changes a URL.
 
 **The shared "upload -> background job -> poll -> download" pattern**
-(`task_helpers.py`, at the `routers/` root because it belongs to no single
-feature) is what makes every generation tool a thin file: `ASSETS_ROOT`
+(`task_helpers/`, at the `routers/` root because it belongs to no single
+feature — `uploads.py` where files land, `manifests.py` new-vs-reused
+reconciliation, `responses.py` the status payloads, `serving.py` handing files
+back; import from the package, and note that `uploads.ASSETS_ROOT` is the one
+seam tests move) is what makes every generation tool a thin file: `ASSETS_ROOT`
 (content-addressed shared upload store, deduped by sha256),
 `build_ordered_paths` (reconciles a JSON manifest of new+reused reference
 files — never re-uploads a file the client already has, and is the one place
@@ -270,7 +294,7 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
 ## `admin/` — admin-only surfaces
 
 Every router here is gated at the router level with
-`dependencies=[Depends(require_admin)]`, so a new endpoint added to these
+`dependencies=[Depends(AuthMiddleware.require_admin)]`, so a new endpoint added to these
 files is admin-only by default.
 
 - `models.py` — the roster of models (name/picture/OnlyFans link + many
@@ -303,8 +327,8 @@ files is admin-only by default.
   the page; VAs see it and upload a "ready asset", which triggers a Discord
   notification carrying a magic-link approval button).
 - `approve.py` — public (no-login, outside `AuthMiddleware` via
-  `PUBLIC_PREFIXES`) magic-link approval endpoint for `todo.py`'s uploaded
-  assets. Read `web/auth.py`'s allowlist before adding anything here.
+  `settings.web.public_prefixes`) magic-link approval endpoint for `todo.py`'s
+  uploaded assets. Read that allowlist before adding anything here.
 
 ## At the `routers/` root
 
@@ -322,7 +346,7 @@ files is admin-only by default.
   first, no grouping.
   `write_image_thumb` is the shared Pillow thumbnailer (also used by the
   models router).
-- `task_helpers.py` — the shared plumbing described above.
+- `task_helpers/` — the shared plumbing described above.
 
 # `templates/` and `static/`
 

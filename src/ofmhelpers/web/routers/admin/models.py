@@ -4,7 +4,7 @@ ofmhelpers/web/routers/admin/models.py
 Admin-only roster of Models: name + profile picture + one OnlyFans link +
 many Instagram account links (each carrying optional owner/phone/SIM/
 password/email details) + many free-form contacts (type + value). Gated via
-require_admin like file_manager.py and action_log.py -- nobody but an admin
+AuthMiddleware.require_admin like file_manager.py and action_log.py -- nobody but an admin
 needs to touch this roster.
 """
 
@@ -25,32 +25,35 @@ from fastapi import (
 from fastapi.responses import FileResponse, RedirectResponse
 from PIL import Image
 
+from ofmhelpers.cache import enqueue, get_queue
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.scraping.instagram_stats_job import (
     active_sweep_id,
     collect_all_instagram_stats,
 )
-from ofmhelpers.web.auth import require_admin
-from ofmhelpers.web.queue import enqueue, get_queue
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.refs import write_image_thumb
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
+    UPLOADS_ROOT,
     media_response,
     require_upload_kind,
 )
 from ofmhelpers.web.stores import instagram_stats
 from ofmhelpers.web.stores import models as models_store
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 logger = get_logger(__name__)
 
 router = APIRouter(
-    prefix="/models", tags=["models"], dependencies=[Depends(require_admin)]
+    prefix="/models",
+    tags=["models"],
+    dependencies=[Depends(AuthMiddleware.require_admin)],
 )
 
 # Where profile pictures live, one subdirectory per model.
-PICTURE_ROOT = Path("uploads") / "model_pictures"
+PICTURE_ROOT = UPLOADS_ROOT / "model_pictures"
 
 
 def _save_picture(model_id: str, file: UploadFile) -> str:
@@ -70,7 +73,7 @@ def list_page(request: Request):
     models = models_store.list_models()
     account_ids = [a["id"] for m in models for a in m["instagram_accounts"]]
     stats = instagram_stats.get_stats_many(account_ids)
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request, "models_list.html", {"models": models, "instagram_stats": stats}
     )
 
@@ -135,7 +138,7 @@ def stats_html(request: Request):
     models = models_store.list_models()
     account_ids = [a["id"] for m in models for a in m["instagram_accounts"]]
     stats = instagram_stats.get_stats_many(account_ids)
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "models_stats_fragment.html",
         {"models": models, "instagram_stats": stats},
@@ -144,7 +147,7 @@ def stats_html(request: Request):
 
 @router.get("/new")
 def new_page(request: Request):
-    return templates.TemplateResponse(request, "models_new.html", {})
+    return get_templates().TemplateResponse(request, "models_new.html", {})
 
 
 @router.post("/add")
@@ -178,7 +181,9 @@ def edit_page(request: Request, model_id: str):
     model = models_store.get_model(model_id)
     if model is None:
         raise HTTPException(status_code=404, detail="Model not found")
-    return templates.TemplateResponse(request, "models_edit.html", {"model": model})
+    return get_templates().TemplateResponse(
+        request, "models_edit.html", {"model": model}
+    )
 
 
 @router.post("/{model_id}/update")

@@ -137,7 +137,7 @@ ignore-variadic-names = true
 ]
 # Lazy singletons that rebuild when the configured URL changes -- `global`
 # is inherent to the pattern.
-"src/ofmhelpers/web/queue.py" = ["PLW0603"]
+"src/ofmhelpers/cache/redis.py" = ["PLW0603"]
 "src/ofmhelpers/web/db/session.py" = ["PLW0603"]
 # Same: a once-per-process "already configured" flag.
 "src/ofmhelpers/log.py" = ["PLW0603"]

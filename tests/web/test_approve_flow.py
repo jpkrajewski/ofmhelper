@@ -20,14 +20,14 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.db import repository
+from ofmhelpers.web.db.repositories import approval_tokens as token_repository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.workflow import todo as todo_router
 from ofmhelpers.web.stores import todos
 
 
 class _FrozenClock:
-    """Stands in for the `time` module inside the repository so a test can
+    """Stands in for the `time` module inside the token repository so a test can
     push the token store's clock past the TTL."""
 
     def __init__(self, value: float):
@@ -184,7 +184,7 @@ def test_expired_link_is_rejected(client, anon_client, monkeypatch):
     path = approve_url.replace("https://test.example", "")
 
     # Jump the token store's clock far past the TTL so the link reads expired.
-    monkeypatch.setattr(repository, "time", _FrozenClock(time.time() + 10**9))
+    monkeypatch.setattr(token_repository, "time", _FrozenClock(time.time() + 10**9))
 
     r = anon_client.get(path, follow_redirects=False)
     assert r.status_code == 303

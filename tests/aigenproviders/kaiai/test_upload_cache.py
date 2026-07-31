@@ -1,7 +1,8 @@
 """
-Covers the in-memory "don't re-upload the same reference file to kie.ai
-every single time" cache: the standalone UploadCache LRU (upload_cache.py)
-on its own, and its integration into KieAIClient.upload_local_file.
+Covers the "don't re-upload the same reference file to kie.ai every single
+time" cache now that it lives in Redis (`ofmhelpers.cache`) instead of a
+per-process LRU: KieAIClient.upload_local_file reads/writes
+`kieai:upload:<api_key>:<path>`.
 
 Real logs showed the same reference images/videos/audio getting re-uploaded
 to kie.ai's tempfile host on every single generation, even when the exact
@@ -9,191 +10,20 @@ same local file (content-addressed in uploads/assets/) had already been
 uploaded moments earlier -- pure wasted bandwidth/time. This is the fix,
 and it's deliberately tested hard: a caching layer that silently serves a
 stale or cross-account URL is worse than no cache at all.
+
+Redis is flushed before every test by conftest's autouse `_clean_tables`, so
+no test can leak a cached URL into the next one.
 """
 
-import threading
 from unittest import mock
 
 import pytest
 import requests
+from redis.exceptions import RedisError
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
-from ofmhelpers.aigenproviders.kaiai.upload_cache import UploadCache, upload_cache
-
-# ======================================================================
-# UploadCache: the standalone LRU, no network involved
-# ======================================================================
-
-
-def test_get_on_empty_cache_returns_none():
-    cache = UploadCache()
-    assert cache.get("key", "/path/a.png") is None
-
-
-def test_put_then_get_roundtrips():
-    cache = UploadCache()
-    cache.put("key", "/path/a.png", "https://example.com/a.png")
-    assert cache.get("key", "/path/a.png") == "https://example.com/a.png"
-
-
-def test_get_is_scoped_by_api_key():
-    """Same local path, different API key -> must NOT hit. kie.ai's tempfile
-    host namespaces uploads per account; serving one account's URL for
-    another account's key would hand out a cross-account reference."""
-    cache = UploadCache()
-    cache.put("key-a", "/path/a.png", "https://example.com/a.png")
-    assert cache.get("key-b", "/path/a.png") is None
-
-
-def test_get_is_scoped_by_path():
-    cache = UploadCache()
-    cache.put("key", "/path/a.png", "https://example.com/a.png")
-    assert cache.get("key", "/path/b.png") is None
-
-
-def test_discard_removes_entry():
-    cache = UploadCache()
-    cache.put("key", "/path/a.png", "https://example.com/a.png")
-    cache.discard("key", "/path/a.png")
-    assert cache.get("key", "/path/a.png") is None
-
-
-def test_discard_missing_entry_is_a_noop():
-    cache = UploadCache()
-    cache.discard("key", "/path/nope.png")  # must not raise
-    assert len(cache) == 0
-
-
-def test_clear_empties_cache():
-    cache = UploadCache()
-    cache.put("key", "/path/a.png", "https://example.com/a.png")
-    cache.put("key", "/path/b.png", "https://example.com/b.png")
-    cache.clear()
-    assert len(cache) == 0
-    assert cache.get("key", "/path/a.png") is None
-
-
-def test_len_reflects_entry_count():
-    cache = UploadCache()
-    assert len(cache) == 0
-    cache.put("key", "/path/a.png", "u1")
-    assert len(cache) == 1
-    cache.put("key", "/path/b.png", "u2")
-    assert len(cache) == 2
-
-
-def test_overwriting_existing_key_does_not_grow_cache():
-    cache = UploadCache()
-    cache.put("key", "/path/a.png", "https://example.com/a-old.png")
-    cache.put("key", "/path/a.png", "https://example.com/a-new.png")
-    assert len(cache) == 1
-    assert cache.get("key", "/path/a.png") == "https://example.com/a-new.png"
-
-
-def test_eviction_when_over_capacity():
-    cache = UploadCache(max_entries=3)
-    cache.put("key", "/1", "u1")
-    cache.put("key", "/2", "u2")
-    cache.put("key", "/3", "u3")
-    cache.put("key", "/4", "u4")  # pushes cache over capacity
-
-    assert len(cache) == 3
-    assert cache.get("key", "/1") is None  # oldest, evicted
-    assert cache.get("key", "/2") == "u2"
-    assert cache.get("key", "/3") == "u3"
-    assert cache.get("key", "/4") == "u4"
-
-
-def test_get_refreshes_recency_preventing_eviction():
-    cache = UploadCache(max_entries=3)
-    cache.put("key", "/1", "u1")
-    cache.put("key", "/2", "u2")
-    cache.put("key", "/3", "u3")
-
-    cache.get("key", "/1")  # touch /1 -- now the most-recently-used
-
-    cache.put("key", "/4", "u4")  # must evict /2 (now the oldest), not /1
-
-    assert cache.get("key", "/1") == "u1"
-    assert cache.get("key", "/2") is None
-    assert cache.get("key", "/3") == "u3"
-    assert cache.get("key", "/4") == "u4"
-
-
-def test_put_also_refreshes_recency():
-    cache = UploadCache(max_entries=3)
-    cache.put("key", "/1", "u1")
-    cache.put("key", "/2", "u2")
-    cache.put("key", "/3", "u3")
-
-    cache.put("key", "/1", "u1-updated")  # re-put -- also most-recently-used
-
-    cache.put("key", "/4", "u4")  # must evict /2, not /1
-
-    assert cache.get("key", "/1") == "u1-updated"
-    assert cache.get("key", "/2") is None
-
-
-def test_max_entries_must_be_positive():
-    with pytest.raises(ValueError):
-        UploadCache(max_entries=0)
-    with pytest.raises(ValueError):
-        UploadCache(max_entries=-1)
-
-
-def test_default_capacity_is_100():
-    cache = UploadCache()
-    for i in range(150):
-        cache.put("key", f"/{i}", f"u{i}")
-    assert len(cache) == 100
-    assert cache.get("key", "/0") is None  # long since evicted
-    assert cache.get("key", "/149") == "u149"
-
-
-def test_module_level_singleton_is_capped_at_100():
-    """The shared instance every KieAIClient uses -- same capacity contract
-    as a fresh UploadCache."""
-    upload_cache.clear()
-    try:
-        for i in range(120):
-            upload_cache.put("key", f"/{i}", f"u{i}")
-        assert len(upload_cache) == 100
-    finally:
-        upload_cache.clear()
-
-
-def test_concurrent_puts_do_not_corrupt_the_cache():
-    """Best-effort concurrency check -- many threads hammering the same
-    cache must never leave it over capacity or raise."""
-    cache = UploadCache(max_entries=20)
-
-    def worker(n):
-        for i in range(50):
-            cache.put("key", f"/{n}-{i}", f"u{n}-{i}")
-            cache.get("key", f"/{n}-{i}")
-
-    threads = [threading.Thread(target=worker, args=(n,)) for n in range(8)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert len(cache) == 20
-
-
-# ======================================================================
-# KieAIClient.upload_local_file: cache wired into the real upload path
-# ======================================================================
-
-
-@pytest.fixture(autouse=True)
-def _clean_shared_cache():
-    """The module-level `upload_cache` is a process-wide singleton --
-    every test must start and end with it empty so tests can't leak
-    cached URLs into each other."""
-    upload_cache.clear()
-    yield
-    upload_cache.clear()
+from ofmhelpers.cache import get_redis, get_text
+from ofmhelpers.config import settings
 
 
 @pytest.fixture
@@ -212,6 +42,10 @@ def ref_file(tmp_path):
     p = tmp_path / "ref.png"
     p.write_bytes(b"fake image bytes")
     return p
+
+
+def _cached(api_key: str, path) -> str | None:
+    return get_text(f"kieai:upload:{api_key}:{path}")
 
 
 def _mock_post_response(url="https://tempfile.example/refs/ref.png", success=True):
@@ -234,7 +68,17 @@ def test_first_upload_hits_network_and_populates_cache(client, ref_file):
 
     assert url == "https://tempfile.example/x"
     assert mreq.post.call_count == 1
-    assert upload_cache.get("test-key", str(ref_file)) == "https://tempfile.example/x"
+    assert _cached("test-key", ref_file) == "https://tempfile.example/x"
+
+
+def test_cached_entry_carries_the_configured_ttl(client, ref_file):
+    """A dead entry must age out on its own -- nothing else expires it."""
+    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+        mreq.post.return_value = _mock_post_response()
+        client.upload_local_file(str(ref_file))
+
+    ttl = get_redis().ttl(f"kieai:upload:test-key:{ref_file}")
+    assert 0 < ttl <= settings.kieai.upload_cache_ttl_s
 
 
 def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
@@ -250,6 +94,27 @@ def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
     assert first == second == "https://tempfile.example/x"
     assert mreq.post.call_count == 1, "second call must not re-upload"
     assert mreq.head.call_count == 1
+
+
+def test_a_second_client_with_the_same_key_reuses_the_cached_upload(tmp_path, ref_file):
+    """The point of moving this to Redis: every KieAIClient instance, in this
+    process or in the worker, sees the same answer."""
+    kwargs = {
+        "task_log": tmp_path / "t.jsonl",
+        "completions_log": tmp_path / "c.jsonl",
+        "resolved_log": tmp_path / "r.jsonl",
+    }
+    first_client = KieAIClient(api_key="k", out_dir=tmp_path / "a", **kwargs)
+    second_client = KieAIClient(api_key="k", out_dir=tmp_path / "b", **kwargs)
+
+    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+        mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
+        mreq.head.return_value = _mock_head_response(200)
+        first = first_client.upload_local_file(str(ref_file))
+        second = second_client.upload_local_file(str(ref_file))
+
+    assert first == second == "https://tempfile.example/x"
+    assert mreq.post.call_count == 1
 
 
 def test_repeated_uploads_stay_cached_across_many_calls(client, ref_file):
@@ -273,7 +138,7 @@ def test_cache_hit_but_remote_gone_triggers_reupload(client, ref_file):
 
     assert second == "https://tempfile.example/new"
     assert mreq.post.call_count == 2, "a dead cached url must trigger a fresh upload"
-    assert upload_cache.get("test-key", str(ref_file)) == "https://tempfile.example/new"
+    assert _cached("test-key", ref_file) == "https://tempfile.example/new"
 
 
 def test_remote_check_network_error_triggers_reupload(client, ref_file):
@@ -298,7 +163,26 @@ def test_remote_check_network_error_triggers_reupload(client, ref_file):
     )
 
 
+def test_an_unreachable_broker_degrades_to_re_uploading(client, ref_file, monkeypatch):
+    """Pure optimisation: a dead Redis must cost an upload, not a failure."""
+    monkeypatch.setattr(
+        "ofmhelpers.cache.redis.get_redis",
+        mock.Mock(side_effect=RedisError("down")),
+    )
+
+    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+        mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
+        first = client.upload_local_file(str(ref_file))
+        second = client.upload_local_file(str(ref_file))
+
+    assert first == second == "https://tempfile.example/x"
+    assert mreq.post.call_count == 2
+
+
 def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
+    """kie.ai's tempfile host namespaces uploads per account; serving one
+    account's URL for another account's key would hand out a cross-account
+    reference."""
     client_a = KieAIClient(
         api_key="key-a",
         out_dir=tmp_path / "a",
@@ -335,7 +219,7 @@ def test_wrong_api_key_response_raises_and_never_populates_cache(client, ref_fil
         with pytest.raises(Exception, match="Wrong API Key"):
             client.upload_local_file(str(ref_file))
 
-    assert upload_cache.get("test-key", str(ref_file)) is None
+    assert _cached("test-key", ref_file) is None
 
 
 def test_http_error_on_upload_raises_and_never_populates_cache(client, ref_file):
@@ -347,7 +231,7 @@ def test_http_error_on_upload_raises_and_never_populates_cache(client, ref_file)
         with pytest.raises(requests.HTTPError):
             client.upload_local_file(str(ref_file))
 
-    assert upload_cache.get("test-key", str(ref_file)) is None
+    assert _cached("test-key", ref_file) is None
 
 
 def test_two_different_local_files_cache_independently(client, tmp_path):
@@ -366,8 +250,8 @@ def test_two_different_local_files_cache_independently(client, tmp_path):
 
     assert url_a != url_b
     assert mreq.post.call_count == 2
-    assert upload_cache.get("test-key", str(ref_a)) == "https://tempfile.example/a"
-    assert upload_cache.get("test-key", str(ref_b)) == "https://tempfile.example/b"
+    assert _cached("test-key", ref_a) == "https://tempfile.example/a"
+    assert _cached("test-key", ref_b) == "https://tempfile.example/b"
 
 
 def test_upload_path_argument_still_forwarded_on_a_fresh_upload(client, ref_file):

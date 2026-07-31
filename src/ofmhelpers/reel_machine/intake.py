@@ -12,18 +12,17 @@ file, so nothing renders the reel down to stills any more.
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.downloaders.cookies import get_cookiefile
 from ofmhelpers.downloaders.generic import DownloadConfig, download
-from ofmhelpers.log import get_logger
-
-logger = get_logger(__name__)
 
 
-@dataclass
-class IntakeResult:
+class IntakeResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     video_path: Path
     duration: float
     source_url: str | None = None

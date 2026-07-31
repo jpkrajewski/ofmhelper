@@ -13,7 +13,7 @@ Everything about the clone now comes out of the model's own reading of the
 reel, driven by `prompts.load_analysis_prompt()`.
 
 Pipeline order: `intake.py` (download + probe duration) -> `llm/` (one call:
-video + prompt -> raw text) -> `schema.py` (parse/validate that text) ->
+video + prompt -> raw text) -> `models/` (parse/validate that text) ->
 user edits the JSON in the browser -> `generation.py` (fires the real kie.ai
 Seedance 2 call). `pipeline.analyze()` wires the first three together and is
 the only entry point the web layer calls.
@@ -50,9 +50,12 @@ the only entry point the web layer calls.
   **end**: the prompt finishes with the JSON template's closing brace, so
   anything spliced in earlier reads as part of the shape being asked for. An
   empty context leaves the prompt byte-identical.
-- `schema.py` — the Pydantic models (`ReelAnalysis` + `Person`/`SceneEvent`/
-  `Shot`), `AnalysisError`, `strip_code_fence`, `parse_analysis(text) ->
-  ReelAnalysis`. `REQUIRED_KEYS` only covers `ReelAnalysis`' own fields, so the
+- `models/` — the module's data models, one file per concern: `analysis.py`
+  (`ReelAnalysis` + `Person`/`SceneEvent`/`Shot`, plus the parsing that owns
+  them: `ReelAnalysis.strip_code_fence` and `ReelAnalysis.from_llm_text(text)
+  -> ReelAnalysis`), `errors.py` (`AnalysisError`), `hunt.py` (`HuntIdeas`,
+  including the slug/dedupe cleaning of a second-pass answer via
+  `HuntIdeas.from_llm_json`). Import from the package. `REQUIRED_KEYS` only covers `ReelAnalysis`' own fields, so the
   nested sections need their own prompt/schema drift test (see
   `test_prompt_asks_for_every_scene_event_key_too`) — `extra="forbid"` turns a
   key the prompt stopped asking for into a rejected real answer.
@@ -123,7 +126,7 @@ the only entry point the web layer calls.
   AnalysisResult(video_path, duration, provider, raw, prompt, error)`, the
   entry point `web/routers/generation/replicate.py` calls: `run_intake` ->
   `provider.analyze_video(video, load_analysis_prompt(context),
-  system_prompt=load_analysis_system_prompt())` -> `parse_analysis` ->
+  system_prompt=load_analysis_system_prompt())` -> `ReelAnalysis.from_llm_text` ->
   `suggest_hunt`.
   Everything before validation still raises (a failed download or a missing
   API key leaves nothing to show), but **validation itself never fails the
@@ -148,7 +151,7 @@ the only entry point the web layer calls.
 Two capabilities, one method each: `analyze_video(video_path, prompt, *,
 system_prompt="") -> str` for the video pass and `complete_json(prompt) ->
 str` for the text one. A provider returns raw text and holds no prompt of its
-own; parsing/validating is the caller's job (`schema.py` for pass 1,
+own; parsing/validating is the caller's job (`models/analysis.py` for pass 1,
 `hunt.py` for pass 2), so a provider stays a thin API call and the "is this
 usable" rule lives in exactly one place per pass.
 
@@ -183,11 +186,11 @@ different vendor.
   load-bearing, not a default: this is transcription of what is on screen,
   and sampling variety is what makes the model paraphrase four camera beats
   into one summary shot.
-  Constrains decoding to `schema.ReelAnalysis` via
+  Constrains decoding to `models.ReelAnalysis` via
   **`response_json_schema`** — not `response_schema`, whose OpenAPI subset
   400s on the `additionalProperties: false` that `extra="forbid"` emits — so
   the model physically cannot return a fence, prose, a missing key or an
-  invented one. `parse_analysis` still runs on the result: a schema Google
+  invented one. `ReelAnalysis.from_llm_text` still runs on the result: a schema Google
   rejects, or a future provider without constrained decoding, must not
   quietly degrade into an unvalidated free-text answer. Defaults to the
   `gemini-flash-latest` ALIAS, not a pinned dated id -- Google documents the

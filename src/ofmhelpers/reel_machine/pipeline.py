@@ -6,7 +6,7 @@ JSON out.
 
 Three steps: download the reel (intake), send it plus
 `prompts.ANALYSIS_PROMPT` to the configured provider, validate what comes
-back (schema.parse_analysis).
+back (ReelAnalysis.from_llm_text).
 
 Only validation is allowed to not-fail: a response that doesn't match the
 schema still reaches the review page as the provider's raw text
@@ -17,30 +17,33 @@ error -- still raises, since there is nothing to show.
 """
 
 import json
-from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
+from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-from ofmhelpers.reel_machine.hunt import HuntIdeas, suggest_hunt
+from ofmhelpers.reel_machine.hunt import suggest_hunt
 from ofmhelpers.reel_machine.intake import run_intake
 from ofmhelpers.reel_machine.llm.registry import get_provider
+from ofmhelpers.reel_machine.models import AnalysisError, HuntIdeas, ReelAnalysis
 from ofmhelpers.reel_machine.prompts import (
     load_analysis_prompt,
     load_analysis_system_prompt,
 )
-from ofmhelpers.reel_machine.schema import AnalysisError, ReelAnalysis, parse_analysis
 
 logger = get_logger(__name__)
 
 # Seedance 2.0's supported duration range (see kaiai/client.py's
 # generate_video_seedance2) -- the source reel's own duration is clamped
 # into it rather than exposed as a manual field the user has to set.
-MIN_DURATION_S = 4
-MAX_DURATION_S = 15
+MIN_DURATION_S = settings.reel_machine.min_duration_s
+MAX_DURATION_S = settings.reel_machine.max_duration_s
 
 
-@dataclass
-class AnalysisResult:
+class AnalysisResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     video_path: Path
     duration: int
     provider: str
@@ -50,7 +53,7 @@ class AnalysisResult:
     # Second pass, best-effort (see hunt.py): what to search for next. Empty
     # when there is no GROQ_API_KEY, when that call failed, or when the
     # analysis itself didn't validate -- there is nothing to summarize then.
-    hunt: HuntIdeas = field(default_factory=HuntIdeas)
+    hunt: HuntIdeas = HuntIdeas()
 
     @property
     def prompt_text(self) -> str:
@@ -104,10 +107,10 @@ def analyze(
         raw=raw,
     )
     try:
-        result.prompt = parse_analysis(raw)
+        result.prompt = ReelAnalysis.from_llm_text(raw)
     except AnalysisError as exc:
         result.error = str(exc)
-        logger.warning("%s returned an unusable prompt: %s", provider.name, exc)
+        logger.warning("%s returned an unusable prompt", provider.name, exc_info=True)
         return result
 
     # Gemini has said what the reel IS; the free text model turns that into

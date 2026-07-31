@@ -21,8 +21,8 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 from fastapi.testclient import TestClient
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.auth import is_fetch
 from ofmhelpers.web.main import app
+from ofmhelpers.web.middleware import AuthMiddleware
 
 client = TestClient(app)
 
@@ -92,14 +92,21 @@ class _FakeRequest:
 
 def test_is_fetch_classification():
     """The navigation-vs-fetch discriminator, at the unit level."""
-    assert is_fetch(_FakeRequest({"sec-fetch-mode": "cors"})) is True
-    assert is_fetch(_FakeRequest({"sec-fetch-mode": "same-origin"})) is True
-    assert is_fetch(_FakeRequest({"sec-fetch-mode": "navigate"})) is False
+    assert AuthMiddleware.is_fetch(_FakeRequest({"sec-fetch-mode": "cors"})) is True
+    assert (
+        AuthMiddleware.is_fetch(_FakeRequest({"sec-fetch-mode": "same-origin"})) is True
+    )
+    assert (
+        AuthMiddleware.is_fetch(_FakeRequest({"sec-fetch-mode": "navigate"})) is False
+    )
     # No Sec-Fetch-* header: fall back to the older hints.
-    assert is_fetch(_FakeRequest({"x-requested-with": "XMLHttpRequest"})) is True
-    assert is_fetch(_FakeRequest({"accept": "application/json"})) is True
-    assert is_fetch(_FakeRequest({"accept": "text/html"})) is False
-    assert is_fetch(_FakeRequest({})) is False
+    assert (
+        AuthMiddleware.is_fetch(_FakeRequest({"x-requested-with": "XMLHttpRequest"}))
+        is True
+    )
+    assert AuthMiddleware.is_fetch(_FakeRequest({"accept": "application/json"})) is True
+    assert AuthMiddleware.is_fetch(_FakeRequest({"accept": "text/html"})) is False
+    assert AuthMiddleware.is_fetch(_FakeRequest({})) is False
 
 
 def test_session_max_age_is_configurable():

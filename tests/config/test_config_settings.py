@@ -71,6 +71,35 @@ ALL_ENV_VARS = [
     "GOOGLE_OAUTH_CLIENT_FILE",
     "GOOGLE_DRIVE_TOKEN_FILE",
     "GOOGLE_DRIVE_FOLDER_ID",
+    # ... and the ones that used to be literals in library code.
+    "OFM_UPLOADS_ROOT",
+    "OFM_CACHE_TTL_S",
+    "OFM_REFS_RECENT_USED_LIMIT",
+    "OFM_REFS_RECENT_UPLOAD_LIMIT",
+    "OFM_REFS_MAX_LIMIT",
+    "OFM_REF_USAGE_MAX_TRACKED",
+    "OFM_FFMPEG_TIMEOUT_S",
+    "OFM_INTAKE_LIST_LIMIT",
+    "OFM_KIEAI_JOBS_BASE",
+    "OFM_KIEAI_UPLOAD_BASE",
+    "OFM_KIEAI_UPLOAD_TIMEOUT_S",
+    "OFM_KIEAI_DOWNLOAD_TIMEOUT_S",
+    "OFM_KIEAI_REQUEST_TIMEOUT_S",
+    "OFM_KIEAI_REMOTE_CHECK_TIMEOUT_S",
+    "OFM_KIEAI_POLL_TIMEOUT_S",
+    "OFM_KIEAI_VIDEO_POLL_TIMEOUT_S",
+    "OFM_IMAGE_DOWNLOAD_TIMEOUT_S",
+    "DISCORD_REQUEST_TIMEOUT_S",
+    "GROQ_URL",
+    "GROQ_TIMEOUT_S",
+    "GROQ_TEMPERATURE",
+    "GEMINI_VIDEO_ACTIVE_TIMEOUT_S",
+    "GEMINI_POLL_S",
+    "GEMINI_MAX_ATTEMPTS",
+    "GEMINI_BACKOFF_S",
+    "REEL_MACHINE_MIN_DURATION_S",
+    "REEL_MACHINE_MAX_DURATION_S",
+    "REEL_MACHINE_HUNT_MAX_ITEMS",
 ]
 
 
@@ -159,7 +188,7 @@ def test_kieai_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.completions_log == "/app/kieai_out/completions.jsonl"
     assert s.resolved_log == "/app/kieai_out/resolved.jsonl"
     assert s.resume_max_age_s == 48 * 3600
-    assert s.upload_cache_max_entries == 100
+    assert s.upload_cache_ttl_s == 12 * 3600
     assert s.fake_ai_video_duration_seconds == 3
 
 
@@ -242,3 +271,54 @@ def test_no_stray_env_reads_outside_settings():
     assert not offenders, (
         f"os.getenv/os.environ found outside config/settings.py: {offenders}"
     )
+
+
+# ── Phase 3: values that used to be literals in library code ────────────────
+#
+# The point of each assertion below is that the *default* still equals what the
+# hardcoded literal was, so moving it into settings changed no behaviour for a
+# deployment that sets nothing.
+
+
+def test_kieai_endpoints_and_timeouts_default_to_the_previous_literals(clean_env):
+    s = KieAISettings(_env_file=None)
+    assert s.jobs_base == "https://api.kie.ai/api/v1/jobs"
+    assert s.upload_base == "https://kieai.redpandaai.co"
+    assert (s.upload_timeout_s, s.download_timeout_s) == (900, 60)
+    assert (s.request_timeout_s, s.remote_check_timeout_s) == (30, 10)
+    assert (s.poll_timeout_s, s.video_poll_timeout_s) == (1000, 1800)
+
+
+def test_reel_machine_provider_knobs_default_to_the_previous_literals(clean_env):
+    s = ReelMachineSettings(_env_file=None)
+    assert s.groq_url == "https://api.groq.com/openai/v1/chat/completions"
+    assert (s.groq_timeout_s, s.groq_temperature) == (20, 0.4)
+    assert (s.gemini_video_active_timeout_s, s.gemini_poll_s) == (120, 2)
+    assert (s.gemini_max_attempts, s.gemini_backoff_s) == (3, 2)
+    assert (s.min_duration_s, s.max_duration_s) == (4, 15)
+    assert s.hunt_max_items == 6
+
+
+def test_web_picker_and_intake_limits_default_to_the_previous_literals(clean_env):
+    s = WebSettings(_env_file=None)
+    assert (s.recent_used_limit, s.recent_upload_limit) == (5, 5)
+    assert (s.max_ref_limit, s.ref_usage_max_tracked) == (60, 200)
+    assert (s.ffmpeg_timeout_s, s.intake_list_limit) == (20, 20)
+
+
+def test_uploads_root_and_cache_ttl_default_to_the_previous_literals(clean_env):
+    s = InfraSettings(_env_file=None)
+    assert s.uploads_root == "uploads"
+    assert s.cache_ttl_s == 300
+
+
+def test_uploads_root_is_overridable(monkeypatch):
+    """Every per-tool upload dir derives from this one, so an override has to
+    reach all of them -- see routers/task_helpers.UPLOADS_ROOT."""
+    monkeypatch.setenv("OFM_UPLOADS_ROOT", "/data/uploads")
+    assert InfraSettings(_env_file=None).uploads_root == "/data/uploads"
+
+
+def test_discord_and_downloader_timeouts_default_to_the_previous_literals(clean_env):
+    assert DiscordSettings(_env_file=None).request_timeout_s == 10
+    assert DownloadersSettings(_env_file=None).image_download_timeout_s == 600

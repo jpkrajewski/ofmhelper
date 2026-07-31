@@ -8,21 +8,29 @@ over web/db/repository.py, the only DB-touching layer.
 
 from __future__ import annotations
 
-from ofmhelpers.web.db.repository import InstagramStatsRepository
+from functools import lru_cache
 
-_repo = InstagramStatsRepository()
+from ofmhelpers.web.db.repositories import InstagramStatsRepository
+
+
+@lru_cache(maxsize=1)
+def _repository() -> InstagramStatsRepository:
+    """The process-wide Instagram-stats repository, built on first use rather than at
+    import. Lazy because constructing it binds a Redis connection for its
+    cache, and at import time OFM_REDIS_URL may not be its final value yet."""
+    return InstagramStatsRepository()
 
 
 def save_stats(
     account_id: str, followers: int | None, posts: list[dict], error: str | None
 ) -> dict:
-    return _repo.upsert(account_id, followers, posts, error)
+    return _repository().upsert(account_id, followers, posts, error)
 
 
 def get_stats(account_id: str) -> dict | None:
-    return _repo.get(account_id)
+    return _repository().get(account_id)
 
 
 def get_stats_many(account_ids: list[str]) -> dict[str, dict]:
     """Keyed by account_id; accounts never scraped yet are simply absent."""
-    return _repo.get_many(tuple(account_ids))
+    return _repository().get_many(tuple(account_ids))

@@ -11,8 +11,8 @@ from fastapi import (
 )
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.cache import enqueue
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     asset_card,
@@ -23,7 +23,7 @@ from ofmhelpers.web.routers.task_helpers import (
     serve_job_file,
 )
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job, set_job_preview
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/kling3", tags=["kling3"])
@@ -135,7 +135,7 @@ def job_status(request: Request, job_id: str):
             for idx, f in enumerate(job["result"])
         ]
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

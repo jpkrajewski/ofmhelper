@@ -15,7 +15,7 @@ from unittest import mock
 import pytest
 
 from ofmhelpers.web.db.backfill_remote_urls import extract_task_id, run
-from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.stores.jobs import get_job
 
 TASK_ID = "5a458500123456789abcdef012345678"

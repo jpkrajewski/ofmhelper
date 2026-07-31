@@ -43,16 +43,18 @@ Before finishing:
 
 ## Architecture
 - Layering: `DB -> Repository (cached) -> Service`. Services never touch DB directly.
-- Config: one settings module per app module, not one global settings file.
-- Caching: goes through a per-domain cache service (e.g. `UserCacheService`, owned by/paired with its repository) — never bare helper functions, never inline cache calls in a repository or service.
-- Middleware: lives in `middleware/`, one concern per file — all cross-cutting logic (auth, logging, error handling, etc.) separated there, not scattered inline.
-- No file-level global instances (no `client = SomeClass()` at module scope) and no `global`. Shared instances go through a singleton (DI container / `lru_cache`-backed accessor / explicit singleton pattern) — not module-level globals.
+- Config: one settings **group** per app module, all in `config/settings.py` behind the single `ofmhelpers.config.settings` import point. Each group constructs fresh on access, so it is a lazy global, not a cached one. (Deliberately not one settings module per app module: the groups are small, and one import point is what keeps the worker and the API reading identical values.)
+- Caching: one generic cache-aside layer — `CachedRepository` + the `@cached` / `@invalidates_cache` decorators in `web/db/repositories/cached_repository.py`, namespaced per repository. Repositories and services never make inline cache calls and never touch `self._cache`. (Deliberately not a per-domain cache service per repository: that would be five near-identical classes enforcing the same rule this one already enforces.)
+- Middleware: lives in `middleware/`, one concern per file — all cross-cutting logic (auth, logging, error handling, etc.) separated there, not scattered inline. A middleware owns the policy it enforces: `middleware/auth.py` holds the allowlist/password/role checks, `middleware/ratelimit.py` holds the counters. Route-level helpers that belong to the same concern (`login_blocked`, `require_admin`) live there too, so a concern is one file, not two.
+- No file-level global instances (no `client = SomeClass()` at module scope) and no `global`. Shared instances go through a singleton (DI container / `lru_cache`-backed accessor / explicit singleton pattern) — not module-level globals. Two exceptions, both URL-keyed lazy globals that must rebuild when their URL changes between tests: `web/db/session.py`'s engine and `cache/redis.py`'s Redis connection. Framework idiom (`app = FastAPI(...)`, `router = APIRouter(...)`) is not a global instance in this sense.
+
+- Redis: exactly one connection in the repo, `cache/redis.py`'s `get_redis()`. Everything Redis-backed (RQ queue, repository cache-aside, rate-limit counters, reference-file usage, kie.ai upload cache) goes through it — never `Redis.from_url` anywhere else.
 
 ## Libraries & Stdlib
 - Don't reinvent the wheel: use stdlib before hand-rolling anything.
 - If a proven library/API solves it, use it — state briefly why over hand-rolling.
 
 ## Data Models
-- Route schemas go in a separate `schemas/` folder.
+- Route schemas go in a separate `schemas/` folder — but only where a shape is actually shared. A form whose field names are contract with one template (kling's `images`, nbp's `image_input`, replicate's `character_*`) stays declared in its own router; a schema per route buys nothing.
 - Modules with many data models get a `models/` folder.
 - Always Pydantic. No custom parsing functions — parsing/validation/simple transforms belong on the model (validators/computed fields), not standalone functions. Separation of concerns: model owns data shape, service owns logic.

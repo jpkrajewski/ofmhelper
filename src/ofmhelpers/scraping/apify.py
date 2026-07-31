@@ -14,8 +14,8 @@ def get_client_with_most_credits(api_keys: list[str]) -> ApifyClient:
             client = ApifyClient(token=key)
             user = client.user().get()
             limits = client.user().limits()
-        except Exception as exc:
-            logger.warning("apify key ...%s: %s", key[-8:], exc)
+        except Exception:
+            logger.warning("apify key ...%s unusable", key[-8:], exc_info=True)
             continue
 
         limit = limits.limits.max_monthly_usage_usd

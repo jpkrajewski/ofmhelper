@@ -17,6 +17,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, RedirectResponse
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config.scrapers import SCRAPRES_REGISTRY, Scrapers
 from ofmhelpers.scraping.apify import get_client_with_most_credits, run_actor
 from ofmhelpers.scraping.models import PostBase, Reel, TikTokVideo
@@ -24,14 +25,17 @@ from ofmhelpers.scraping.post_exporter import PostExcelExporter
 from ofmhelpers.scraping.post_scorer import PostFilterProcessor
 from ofmhelpers.utils.profile_loader import normalize_profiles_names
 from ofmhelpers.utils.sheets_to_columns import sheets_columns_to_keys
-from ofmhelpers.web.queue import enqueue
-from ofmhelpers.web.routers.task_helpers import asset_card, safe_filename
+from ofmhelpers.web.routers.task_helpers import (
+    UPLOADS_ROOT,
+    asset_card,
+    safe_filename,
+)
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/helpers/scraper", tags=["scraper"])
 
-UPLOAD_ROOT = Path("uploads") / "scraper"
+UPLOAD_ROOT = UPLOADS_ROOT / "scraper"
 
 # Maps each scraper to the post model used to parse its Apify output.
 ODT: dict[Scrapers, type[PostBase]] = {
@@ -77,7 +81,7 @@ def _run_scrape(
 
 @router.get("")
 def form(request: Request):
-    return templates.TemplateResponse(request, "scraper_form.html", {})
+    return get_templates().TemplateResponse(request, "scraper_form.html", {})
 
 
 @router.post("/run")
@@ -130,7 +134,7 @@ async def run(
 def job_status(request: Request, job_id: str):
     job = get_job(job_id)
     if job is None:
-        return templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             request, "scraper_form.html", {}, status_code=404
         )
 
@@ -141,7 +145,7 @@ def job_status(request: Request, job_id: str):
             for idx, f in enumerate(job["result"])
         ]
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {
