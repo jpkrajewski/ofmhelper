@@ -23,6 +23,7 @@ from fastapi import HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ofmhelpers.log import get_logger
+from ofmhelpers.web import ref_usage
 
 logger = get_logger(__name__)
 # Single shared store for reference-asset uploads (Seedance/Kling/Nano Banana
@@ -247,7 +248,11 @@ def register_grouped_results(results: list[dict]) -> None:
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     """Validate a path the client claims points at a previously-uploaded
     file. Raises HTTPException(400) if it's outside allowed_root or
-    doesn't actually exist -- never trust a client-supplied path as-is."""
+    doesn't actually exist -- never trust a client-supplied path as-is.
+
+    Pure: it reads the store and never writes to it. "This file was just
+    picked" is recorded by the caller (`web/ref_usage.record_use`), which is
+    the only place that knows a resolve meant a real reuse."""
     allowed_root = allowed_root.resolve()
     resolved = Path(raw_path).resolve()
     if allowed_root != resolved and allowed_root not in resolved.parents:
@@ -256,15 +261,6 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
         raise HTTPException(
             status_code=400, detail=f"Reference file not found: {raw_path}"
         )
-    # Bump mtime so the reuse picker's "newest first" ordering means last
-    # *used*, not just last uploaded. save_asset is content-addressed, so
-    # re-picking an existing file writes nothing and it would otherwise sink
-    # below files you haven't touched in weeks. Best-effort: a read-only store
-    # is no reason to fail a generation that has everything it needs.
-    try:
-        resolved.touch()
-    except OSError:
-        logger.warning("could not bump mtime for %s", resolved, exc_info=True)
     return resolved
 
 
@@ -287,7 +283,11 @@ def build_ordered_paths(
     paths: list[str] = []
     for entry in manifest:
         if entry.get("kind") == "existing":
-            paths.append(str(resolve_existing_ref(entry["path"], allowed_root)))
+            resolved = resolve_existing_ref(entry["path"], allowed_root)
+            # The one place a resolve means "the user picked this file", so
+            # the one place that records it (see routers/refs.py's ordering).
+            ref_usage.record_use(resolved)
+            paths.append(str(resolved))
         else:
             upload = next(new_files_iter, None)
             if upload is None or not upload.filename:

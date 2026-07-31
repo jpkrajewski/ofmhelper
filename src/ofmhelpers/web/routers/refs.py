@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from PIL import Image
 
 from ofmhelpers.log import get_logger
+from ofmhelpers.web import ref_usage
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     classify_kind,
@@ -33,38 +34,70 @@ THUMBS_DIR = ASSETS_ROOT / ".thumbs"
 
 
 # What the reuse picker opens on: the handful you actually just worked with,
-# not a wall of tiles to scan. The picker's "show older" button asks for
-# MAX_REF_LIMIT instead.
-DEFAULT_REF_LIMIT = 10
+# then the handful you most recently added. Two short lists beat one long one
+# -- the file you want is nearly always in one of them. The picker's "show
+# older" button asks for an explicit ?limit= instead.
+RECENT_USED_LIMIT = 5
+RECENT_UPLOAD_LIMIT = 5
 MAX_REF_LIMIT = 60
+
+
+def _entry(path: Path, used_at: float | None = None) -> dict:
+    return {
+        "path": str(path),
+        "name": strip_asset_hash_prefix(path.name),
+        "kind": classify_kind(path.name),
+        "mtime": path.stat().st_mtime,
+        # None = "never picked, just uploaded". The picker groups on this.
+        "used_at": used_at,
+    }
+
+
+def _stored_files(kind: str | None) -> list[Path]:
+    """Every file in the shared asset store, optionally of one kind -- no
+    separate metadata store, this is the real files."""
+    return [
+        path
+        for path in ASSETS_ROOT.glob("*")
+        if path.is_file() and (not kind or classify_kind(path.name) == kind)
+    ]
 
 
 @router.get("")
 def list_refs(
     kind: Annotated[str | None, Query()] = None,
-    limit: Annotated[int, Query(ge=1, le=MAX_REF_LIMIT)] = DEFAULT_REF_LIMIT,
+    limit: Annotated[int | None, Query(ge=1, le=MAX_REF_LIMIT)] = None,
 ):
-    """Lists what's already in the shared asset store -- no separate
-    metadata store, this is the real files. Newest first by mtime, which
-    resolve_existing_ref keeps meaning "last used", not just "last uploaded"
-    (save_asset is content-deduped, so re-picking a file never rewrites it)."""
-    files: list[dict] = []
-    for path in ASSETS_ROOT.glob("*"):
-        if not path.is_file():
-            continue
-        file_kind = classify_kind(path.name)
-        if kind and file_kind != kind:
-            continue
-        files.append(
-            {
-                "path": str(path),
-                "name": strip_asset_hash_prefix(path.name),
-                "kind": file_kind,
-                "mtime": path.stat().st_mtime,
-            }
+    """The reuse picker's list.
+
+    Default: the `RECENT_USED_LIMIT` files you last *picked* (web/ref_usage.py,
+    written by task_helpers.build_ordered_paths), then the
+    `RECENT_UPLOAD_LIMIT` most recently *uploaded* ones that aren't already in
+    that list. Those are two different orderings on purpose -- mtime means
+    "uploaded" and nothing rewrites it, since save_asset is content-deduped and
+    resolving a reused path no longer touches the file.
+
+    An explicit `?limit=` is the "show older" path: newest-uploaded first, no
+    usage grouping."""
+    if limit is not None:
+        newest = sorted(
+            _stored_files(kind), key=lambda p: p.stat().st_mtime, reverse=True
         )
-    files.sort(key=lambda f: f["mtime"], reverse=True)
-    return files[:limit]
+        return [_entry(p) for p in newest[:limit]]
+
+    stored = {str(p): p for p in _stored_files(kind)}
+    used: list[dict] = []
+    for raw, used_at in ref_usage.recent(MAX_REF_LIMIT):
+        # A used file can have been deleted through the file manager since,
+        # or be of another kind than this picker wants.
+        path = stored.pop(raw, None)
+        if path is not None:
+            used.append(_entry(path, used_at))
+        if len(used) == RECENT_USED_LIMIT:
+            break
+
+    uploaded = sorted(stored.values(), key=lambda p: p.stat().st_mtime, reverse=True)
+    return used + [_entry(p) for p in uploaded[:RECENT_UPLOAD_LIMIT]]
 
 
 @router.get("/file")

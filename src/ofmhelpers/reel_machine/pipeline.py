@@ -24,7 +24,10 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.reel_machine.hunt import HuntIdeas, suggest_hunt
 from ofmhelpers.reel_machine.intake import run_intake
 from ofmhelpers.reel_machine.llm.registry import get_provider
-from ofmhelpers.reel_machine.prompts import load_analysis_prompt
+from ofmhelpers.reel_machine.prompts import (
+    load_analysis_prompt,
+    load_analysis_system_prompt,
+)
 from ofmhelpers.reel_machine.schema import AnalysisError, ReelAnalysis, parse_analysis
 
 logger = get_logger(__name__)
@@ -88,7 +91,11 @@ def analyze(
         provider.name,
         intake.duration,
     )
-    raw = provider.analyze_video(intake.video_path, load_analysis_prompt(context))
+    raw = provider.analyze_video(
+        intake.video_path,
+        load_analysis_prompt(context),
+        system_prompt=load_analysis_system_prompt(),
+    )
 
     result = AnalysisResult(
         video_path=intake.video_path,

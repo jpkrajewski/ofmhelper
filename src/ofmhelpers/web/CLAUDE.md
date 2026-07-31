@@ -74,6 +74,15 @@ migration changed everything under `stores/` without touching a router.
   jobs on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs
   them inline, exactly like the old BackgroundTasks, so TestClient still sees
   results immediately.
+- `ref_usage.py` — which shared reference files were last *picked*, in a Redis
+  sorted set on the RQ connection (same shared-state reasoning as
+  `ratelimit.py`). It exists so `refs.py` can show "last used" and "last
+  uploaded" as two different lists: reuse used to `touch()` the file, which
+  made mtime mean both at once and made a resolver quietly write to the asset
+  store. Not a Postgres table — this is picker ordering, not a noun the app
+  owns; losing it degrades the picker to "most recently uploaded". Redis
+  errors are swallowed: a broker that can't record a pick is no reason to fail
+  a generation that has every file it needs.
 - `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
   key, so an in-request poll timeout or a server restart mid-generation
@@ -95,7 +104,12 @@ call these and nothing below them.
   as `job["error"]`. Status transitions are atomic single UPDATEs. Result
   files live inside a job's `result` payload (JSONB) — there is no separate
   file-reference table. `list_jobs()` self-heals history when a result file
-  was deleted on disk.
+  was deleted on disk. Anything that renders only a page of jobs uses
+  `list_jobs_page(tasks, offset, limit) -> (page, total)` instead: the filter
+  and the slice run off the cached repository read and **only the page is
+  healed**, because healing stats every result file it is handed — doing that
+  for the whole history to paint 20 cards is what made a scroll tick cost more
+  than the page it returned.
 - `todos.py` — persisted VA task list (model name, link to replicate,
   comments). Durable across restarts — losing outstanding tasks would be a
   real problem, unlike losing job *history*.
@@ -131,7 +145,10 @@ packages never changes a URL.
 feature) is what makes every generation tool a thin file: `ASSETS_ROOT`
 (content-addressed shared upload store, deduped by sha256),
 `build_ordered_paths` (reconciles a JSON manifest of new+reused reference
-files — never re-uploads a file the client already has), `asset_card` /
+files — never re-uploads a file the client already has, and is the one place
+that calls `ref_usage.record_use`, since it is the one place a resolve means
+"the user picked this"; `resolve_existing_ref` itself only validates and never
+writes), `asset_card` /
 `job_status_payload` / `serve_job_file` / `job_inputs` (generic
 response-shaping every status/polling/download endpoint reuses verbatim).
 `flatten_grouped_results` / `grouped_job_status_payload` is the sibling
@@ -181,8 +198,9 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   analysis prompt, see `reel_machine/prompts.load_analysis_prompt`) — and
   nothing else. No shape/look/gender/persona/provider fields; the model
   reads all of that off the video, and the provider is an env-var
-  deployment choice. The form page also lists every past `replicate_intake`
-  job, flagging the done-but-didn't-validate ones so they can be reopened and
+  deployment choice. The form page also lists the latest `INTAKE_LIST_LIMIT`
+  (20) `replicate_intake` jobs, flagging the done-but-didn't-validate ones so
+  they can be reopened and
   fixed, and every row (plus a failed review page) links to
   `/replicate?from=<job_id>` — the same form with that job's Context note
   already typed in and a `reuse_job_id` hidden field. A rerun re-analyzes the
@@ -292,14 +310,16 @@ files is admin-only by default.
 
 - `auth.py` — `/login`, `/logout`.
 - `refs.py` — serves/lists previously-uploaded reference files from
-  `ASSETS_ROOT` for the file-picker widget's "reuse" browser. `GET /refs`
-  returns the `DEFAULT_REF_LIMIT` (5) newest of a kind, capped at
-  `MAX_REF_LIMIT` (60) — the picker opens on the handful you were just working
-  with and its "Show older" button asks for the rest. "Newest" is mtime, and
-  `task_helpers.resolve_existing_ref` bumps it on every reuse, so the ordering
-  follows what you actually use: `save_asset` is content-addressed, so picking
-  an existing file writes nothing and a file used daily would otherwise sink
-  below ones never touched since upload.
+  `ASSETS_ROOT` for the file-picker widget's "reuse" browser. `GET /refs` with
+  no `limit` returns **two short lists**: the `RECENT_USED_LIMIT` (5) files you
+  last *picked* (`web/ref_usage.py`), then the `RECENT_UPLOAD_LIMIT` (5) most
+  recently *uploaded* ones not already in it, each entry carrying `used_at`
+  (None for the second group) so the picker can label them. Those are two
+  genuinely different orderings: mtime means "uploaded" and nothing rewrites
+  it, so a file you use daily can't sink out of view and a fresh upload can't
+  be hidden by something you picked once. An explicit `?limit=N` (the "Show
+  older" button, capped at `MAX_REF_LIMIT` = 60) is plain newest-uploaded
+  first, no grouping.
   `write_image_thumb` is the shared Pillow thumbnailer (also used by the
   models router).
 - `task_helpers.py` — the shared plumbing described above.

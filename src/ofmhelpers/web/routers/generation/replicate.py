@@ -25,7 +25,7 @@ import json
 import mimetypes
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import quote_plus
 
 from fastapi import (
@@ -54,7 +54,13 @@ from ofmhelpers.web.routers.task_helpers import (
     save_upload,
     serve_job_file,
 )
-from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs, run_job
+from ofmhelpers.web.stores.jobs import (
+    create_job,
+    get_job,
+    list_jobs,
+    list_jobs_page,
+    run_job,
+)
 from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/replicate", tags=["replicate"])
@@ -62,6 +68,10 @@ router = APIRouter(prefix="/replicate", tags=["replicate"])
 # Where a job's downloaded reel lives -- separate from ASSETS_ROOT
 # (uploads/assets), which is only for reusable reference files.
 INTAKE_ROOT = Path("uploads") / "replicate_intake"
+
+# How many past analyses the form page lists. Enough to find the one you were
+# working on this week; the review page's own rerun link reaches the rest.
+INTAKE_LIST_LIMIT = 20
 
 
 def _latest_child_job(source_job_id: str, task: str) -> dict | None:
@@ -146,6 +156,21 @@ _MAX_QUERY_CHARS = 120
 _MIN_QUERY_CHARS = 3
 
 
+def _shorten(text: str) -> str:
+    """Collapse whitespace and cut to _MAX_QUERY_CHARS on a word boundary --
+    the analysis' `context` is a sentence, and half a word at the end of a
+    search query is just noise the engine has to guess at."""
+    words = text.split()
+    query = ""
+    for word in words:
+        candidate = f"{query} {word}".strip()
+        if len(candidate) > _MAX_QUERY_CHARS:
+            break
+        query = candidate
+    # A single word longer than the limit still has to be cut somewhere.
+    return query or " ".join(words)[:_MAX_QUERY_CHARS]
+
+
 def _searches(queries: list[str], engines: tuple[tuple[str, str], ...]) -> list[dict]:
     """Each usable query paired with one link per engine. Blank, too-short and
     duplicate queries drop out, so a half-filled analysis yields fewer rows
@@ -153,7 +178,7 @@ def _searches(queries: list[str], engines: tuple[tuple[str, str], ...]) -> list[
     searches = []
     seen = set()
     for raw in queries:
-        query = " ".join(raw.split())[:_MAX_QUERY_CHARS].strip()
+        query = _shorten(raw)
         if len(query) < _MIN_QUERY_CHARS or query.lower() in seen:
             continue
         seen.add(query.lower())
@@ -266,7 +291,7 @@ def _run_replicate_intake(source: str, work_dir: str, context: str = "") -> dict
     }
 
 
-def _drop_nulls(value):
+def _drop_nulls(value: Any) -> Any:
     """Strip every null out of the prompt, at any depth.
 
     The analysis prompt asks for nulls as a deliberate signal to *itself* --
@@ -341,11 +366,16 @@ def _intake_row(job: dict) -> dict:
 
 @router.get("")
 def form(request: Request, from_job: Annotated[str, Query(alias="from")] = ""):
-    intakes = [_intake_row(j) for j in list_jobs() if j["task"] == "replicate_intake"]
+    jobs, _total = list_jobs_page({"replicate_intake"}, 0, INTAKE_LIST_LIMIT)
+    intakes = [_intake_row(j) for j in jobs]
     return templates.TemplateResponse(
         request,
         "replicate_form.html",
-        {"intakes": intakes, "prefill": _prefill(from_job) if from_job else None},
+        {
+            "intakes": intakes,
+            "intake_limit": INTAKE_LIST_LIMIT,
+            "prefill": _prefill(from_job) if from_job else None,
+        },
     )
 
 

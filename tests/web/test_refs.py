@@ -178,25 +178,69 @@ def _write_refs(assets_dir: Path, count: int, ext: str = ".png") -> list[str]:
     return names
 
 
-def test_list_refs_defaults_to_the_five_most_recent(client, assets_dir):
-    """The picker opens on the handful you actually just worked with -- a wall
-    of tiles buried the file you wanted."""
-    _write_refs(assets_dir, 12)
+def test_list_refs_opens_on_last_used_then_last_uploaded(
+    client, assets_dir, monkeypatch
+):
+    """The picker opens on the handful you actually just worked with, then the
+    handful you last added -- a wall of tiles buried the file you wanted.
+
+    The two lists are different orderings on purpose: mtime is "uploaded" and
+    nothing rewrites it, so a file you use daily can't sink out of view and a
+    file you just uploaded can't be hidden by one you used once."""
+    names = _write_refs(assets_dir, 12)
+    used = [str(assets_dir / names[0]), str(assets_dir / names[3])]
+    monkeypatch.setattr(
+        refs_router.ref_usage,
+        "recent",
+        lambda _limit: [(used[0], 20.0), (used[1], 10.0)],
+    )
 
     entries = client.get("/refs?kind=image").json()
-    assert len(entries) == refs_router.DEFAULT_REF_LIMIT
-    # newest first, derived from the limit itself so the two can't disagree
+
+    # used first (newest use first), then the newest uploads that aren't in it
     assert [e["name"] for e in entries] == [
-        f"file{i}.png" for i in range(11, 11 - refs_router.DEFAULT_REF_LIMIT, -1)
+        "file0.png",
+        "file3.png",
+        "file11.png",
+        "file10.png",
+        "file9.png",
+        "file8.png",
+        "file7.png",
     ]
+    assert [e["used_at"] for e in entries[:2]] == [20.0, 10.0]
+    assert all(e["used_at"] is None for e in entries[2:])
+
+
+def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
+    client, assets_dir, monkeypatch
+):
+    """A used file can be deleted through the file manager, and one picker's
+    usage record is another picker's wrong kind."""
+    _write_refs(assets_dir, 3)
+    (assets_dir / "hashaud__voice.mp3").write_bytes(b"id3")
+    monkeypatch.setattr(
+        refs_router.ref_usage,
+        "recent",
+        lambda _limit: [
+            (str(assets_dir / "gone.png"), 30.0),
+            (str(assets_dir / "hashaud__voice.mp3"), 20.0),
+        ],
+    )
+
+    entries = client.get("/refs?kind=image").json()
+
+    assert all(e["used_at"] is None for e in entries)
+    assert [e["name"] for e in entries] == ["file2.png", "file1.png", "file0.png"]
 
 
 def test_list_refs_limit_reaches_the_older_ones(client, assets_dir):
-    """What the picker's "Show older" button asks for."""
+    """What the picker's "Show older" button asks for: newest-uploaded first,
+    no usage grouping."""
     _write_refs(assets_dir, 12)
 
     entries = client.get(f"/refs?kind=image&limit={refs_router.MAX_REF_LIMIT}").json()
     assert len(entries) == 12
+    assert [e["name"] for e in entries] == [f"file{i}.png" for i in range(11, -1, -1)]
 
 
 def test_list_refs_still_filters_by_kind(client, assets_dir):

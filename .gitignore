@@ -22,3 +22,4 @@ deploy.local.env
 /out/
 /secrets/
 /cookies/
+backlog.txt

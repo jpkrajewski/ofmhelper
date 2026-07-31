@@ -137,10 +137,10 @@
         });
     }
 
-    // How many tiles the browser opens with, and how many "show older" asks
-    // for -- must stay <= the server's own MAX_REF_LIMIT (routers/refs.py),
-    // which is what actually enforces it.
-    const REF_PAGE = 5;
+    // How many tiles "show older" asks for -- must stay <= the server's own
+    // MAX_REF_LIMIT (routers/refs.py), which is what actually enforces it.
+    // The default open takes no limit at all: the server decides that split
+    // (5 last used + 5 last uploaded).
     const REF_MAX = 60;
 
     // The "reuse an uploaded file" browser: a grid of preview tiles (image
@@ -148,15 +148,14 @@
     // filename dropdown. Fetched fresh on every open so files uploaded since
     // page load show up too. Clicking a tile queues it as an "existing" item.
     //
-    // Opens on the REF_PAGE most recently used or uploaded files of this kind
-    // (resolve_existing_ref bumps mtime on reuse, so the ordering follows what
-    // you've actually been working with) -- picking the file you just used is
+    // Opens on the files you last picked, then the ones you last uploaded
+    // (`used_at` marks which is which) -- picking the file you just used is
     // the overwhelmingly common case, and a wall of tiles buried it.
     function loadRefBrowser(picker, browser, limit) {
         const kind = picker.dataset.kind;
-        const max = limit || REF_PAGE;
+        const query = limit ? `/refs?kind=${kind}&limit=${limit}` : `/refs?kind=${kind}`;
         browser.textContent = "loading…";
-        fetch(`/refs?kind=${kind}&limit=${max}`)
+        fetch(query)
             .then((r) => r.json())
             .then((files) => {
                 browser.innerHTML = "";
@@ -167,15 +166,38 @@
                     browser.appendChild(empty);
                     return;
                 }
+                let group = null;
                 files.forEach((f) => {
-                    const tile = document.createElement("button");
-                    tile.type = "button";
-                    tile.className = "ref-tile";
+                    // One label per group, emitted when the group changes --
+                    // the server already returns used-first, so this needs no
+                    // sorting of its own.
+                    const inUsed = f.used_at !== null && f.used_at !== undefined;
+                    if (!limit && group !== inUsed) {
+                        group = inUsed;
+                        const label = document.createElement("span");
+                        label.className = "ref-group-label";
+                        label.textContent = inUsed
+                            ? "Recently used"
+                            : "Recently uploaded";
+                        browser.appendChild(label);
+                    }
+
+                    // An audio tile carries a real <audio controls>, and that
+                    // cannot live inside a <button>: nesting interactive
+                    // content in a button is invalid HTML, and the browser
+                    // hands the button every click -- press play and you'd
+                    // queue the file instead of hearing it. So an audio tile
+                    // is a plain div holding the player plus its own add
+                    // button; an image/video tile stays one button.
+                    const isAudio = kind === "audio";
+                    const tile = document.createElement(isAudio ? "div" : "button");
+                    if (!isAudio) tile.type = "button";
+                    tile.className = isAudio ? "ref-tile ref-tile--audio" : "ref-tile";
                     tile.title = f.name;
 
-                    // Both images and videos poster through /refs/thumb: this
-                    // grid paints up to REF_MAX tiles at once once "show
-                    // older" is used, and the old <video preload="metadata">
+                    // Both images and videos poster through /refs/thumb: once
+                    // "show older" is used this grid paints up to REF_MAX
+                    // tiles at once, and the old <video preload="metadata">
                     // tile made that one range request per clip against
                     // multi-MB originals.
                     if (kind === "image" || kind === "video") {
@@ -184,18 +206,33 @@
                         img.loading = "lazy";
                         img.alt = f.name;
                         tile.appendChild(img);
+                    } else if (isAudio) {
+                        // preload="none" for the same reason videos poster
+                        // through a thumb: this grid can paint REF_MAX tiles,
+                        // and nothing should be fetched until you press play.
+                        const aud = document.createElement("audio");
+                        aud.className = "ref-tile-audio";
+                        aud.src = `/refs/file?path=${encodeURIComponent(f.path)}`;
+                        aud.controls = true;
+                        aud.preload = "none";
+                        tile.appendChild(aud);
                     } else {
                         const icon = document.createElement("div");
                         icon.className = "ref-tile-icon";
                         icon.textContent = "🎵";
                         tile.appendChild(icon);
                     }
-                    const name = document.createElement("span");
+                    // On an audio tile the name IS the add button (the tile
+                    // itself can't be one); everywhere else the whole tile
+                    // adds, as before.
+                    const name = document.createElement(isAudio ? "button" : "span");
+                    if (isAudio) name.type = "button";
                     name.className = "ref-tile-name";
                     name.textContent = f.name;
                     tile.appendChild(name);
 
-                    tile.addEventListener("click", () => {
+                    const addTarget = isAudio ? name : tile;
+                    addTarget.addEventListener("click", () => {
                         picker._items.push({
                             kind: "existing",
                             path: f.path,
@@ -208,10 +245,10 @@
                     browser.appendChild(tile);
                 });
 
-                // A full page means there is probably more behind it. Reuses
-                // .ref-toggle rather than inventing a component -- same
-                // affordance, one row down.
-                if (files.length >= max && max < REF_MAX) {
+                // The default view is deliberately short, so there is always
+                // "older" to reach for. Reuses .ref-toggle rather than
+                // inventing a component -- same affordance, one row down.
+                if (!limit) {
                     const more = document.createElement("button");
                     more.type = "button";
                     more.className = "ref-toggle";

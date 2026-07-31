@@ -17,7 +17,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.web.auth import get_kie_api_key
 from ofmhelpers.web.routers.generation.seedance import SeedanceModel
 from ofmhelpers.web.routers.task_helpers import asset_card
-from ofmhelpers.web.stores.jobs import list_jobs
+from ofmhelpers.web.stores.jobs import list_jobs_page
 from ofmhelpers.web.templates_config import templates
 
 router = APIRouter(prefix="/generate", tags=["generate"])
@@ -67,12 +67,11 @@ def _gallery_page(offset: int) -> tuple[list[dict], int | None]:
     """One page of gallery cards plus the offset of the next page, or None when
     this was the last one. The absence of a next offset is what ends the
     infinite scroll, so there is no separate "has_more" flag to keep in step."""
-    jobs = [j for j in list_jobs() if j["task"] in TASK_LABELS]
-    page = jobs[offset : offset + GALLERY_LIMIT]
+    page, total = list_jobs_page(set(TASK_LABELS), offset, GALLERY_LIMIT)
     next_offset = offset + GALLERY_LIMIT
     return (
         [_gallery_card(j) for j in page],
-        next_offset if next_offset < len(jobs) else None,
+        next_offset if next_offset < total else None,
     )
 
 

@@ -102,13 +102,33 @@ def _result_matches_files(result: list[dict]) -> list[dict]:
 
 
 def list_jobs() -> list[dict]:
-    """Newest first. Self-heals history when a result file was deleted on disk
-    (through the file manager, or by hand on the server): drops just the
-    missing file(s) from a job's result, or the whole job if nothing in it
-    still exists, so a removed file's gallery card disappears instead of
-    turning into a dead link. The healed state is written back to Postgres."""
+    """Every job, newest first, self-healed (see `_heal`). Use
+    `list_jobs_page` for anything that only renders a page of them: healing
+    stats every result file of every job, which is wasted on the ones the
+    caller is about to slice off."""
+    return _heal(_repo.list_all())
+
+
+def list_jobs_page(tasks: set[str], offset: int, limit: int) -> tuple[list[dict], int]:
+    """One page of the jobs whose task is in `tasks`, newest first, plus how
+    many there are in total (before the slice, so the caller can tell whether
+    another page exists).
+
+    Only the page is self-healed: the filter and the slice run off the cached
+    repository read, so rendering 20 cards costs 20 jobs' worth of disk checks
+    instead of the whole history's."""
+    matching = [job for job in _repo.list_all() if job["task"] in tasks]
+    return _heal(matching[offset : offset + limit]), len(matching)
+
+
+def _heal(jobs: list[dict]) -> list[dict]:
+    """Self-heals history when a result file was deleted on disk (through the
+    file manager, or by hand on the server): drops just the missing file(s)
+    from a job's result, or the whole job if nothing in it still exists, so a
+    removed file's gallery card disappears instead of turning into a dead
+    link. The healed state is written back to Postgres."""
     surviving: list[dict] = []
-    for job in _repo.list_all():
+    for job in jobs:
         result = job.get("result")
         # Not every job's result is a list of file dicts -- e.g. a still-
         # running job (result None) or todo_drive_upload (a plain Drive file

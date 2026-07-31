@@ -12,6 +12,7 @@ os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import json
+import re
 from pathlib import Path
 from unittest import mock
 
@@ -22,6 +23,7 @@ from ofmhelpers.reel_machine.hunt import HuntIdeas
 from ofmhelpers.reel_machine.pipeline import AnalysisResult
 from ofmhelpers.reel_machine.schema import ReelAnalysis
 from ofmhelpers.web.main import app
+from ofmhelpers.web.routers.generation import replicate as replicate_router
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
@@ -954,3 +956,41 @@ def test_outfit_searches_ignore_everyone_but_the_main_subject(client, tmp_path):
     html = client.get(f"/replicate/jobs/{job_id}").text
     assert "not+visible" not in html
     assert "Yellow-and-green halter crop top" in html  # the subject's own
+
+
+def test_a_long_query_is_cut_on_a_word_boundary(client, tmp_path):
+    """The analysis' `context` is a sentence; half a word at the end of a
+    search query is just noise the engine has to guess at."""
+    long_context = "a girl films herself " + "wandering through a neon arcade " * 6
+    analysis = _analysis(tmp_path)
+    analysis.prompt.context = long_context
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=analysis,
+    ):
+        job_id = client.post(
+            "/replicate/intake", data={"source_url": "https://example.com/reel"}
+        ).json()["job_id"]
+
+    html = client.get(f"/replicate/jobs/{job_id}").text
+    [query] = re.findall(r"tiktok\.com/search\?q=(a\+girl\+films[^\"&]*)", html)
+    assert len(query.replace("+", " ")) <= replicate_router._MAX_QUERY_CHARS
+    # a whole word, not "neon+arca"
+    assert query.split("+")[-1] in long_context.split()
+
+
+def test_the_past_analyses_list_is_capped(client, tmp_path, monkeypatch):
+    """One row per reel ever analyzed grows without limit; the review page's
+    own rerun link reaches anything older."""
+    monkeypatch.setattr(replicate_router, "INTAKE_LIST_LIMIT", 3)
+    with mock.patch(
+        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        return_value=_analysis(tmp_path),
+    ):
+        for _ in range(5):
+            client.post(
+                "/replicate/intake", data={"source_url": "https://example.com/reel"}
+            )
+
+    html = client.get("/replicate").text
+    assert html.count('href="/replicate?from=') == 3
