@@ -1,5 +1,5 @@
 """
-web/ratelimit.py: the failed-login brake on /login (two shared passwords, no
+web/middleware/ratelimit.py: the failed-login brake on /login (two shared passwords, no
 per-user lockout, so this is the only thing bounding a guessing attack) and
 the blunt per-IP ceiling on mutating requests.
 
@@ -96,8 +96,8 @@ def test_write_ceiling_returns_429_and_leaves_reads_alone(limited, monkeypatch):
 def test_a_failed_expire_cannot_lock_an_ip_out_forever(limited, monkeypatch):
     """INCR landing while EXPIRE fails must not leave a TTL-less counter: that
     key would never expire and the IP could never log in again."""
-    from ofmhelpers.web import ratelimit
-    from ofmhelpers.web.queue import get_redis
+    from ofmhelpers.cache import get_redis
+    from ofmhelpers.web.middleware import ratelimit
 
     key = ratelimit._key(ratelimit._LOGIN_BUCKET, "testclient")
     real_expire = get_redis().expire

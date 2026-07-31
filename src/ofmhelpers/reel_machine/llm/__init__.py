@@ -1,7 +1,7 @@
 """
 Two capabilities, one method each: hand a provider the reel (or a block of
 text) and a prompt, get raw text back. Parsing/validating that text is the
-caller's job -- `schema.parse_analysis` for the video pass, `hunt.py` for the
+caller's job -- `ReelAnalysis.from_llm_text` for the video pass, `hunt.py` for the
 text one -- so a provider stays a thin API call and the "is this actually
 usable" rule lives in exactly one place per pass.
 

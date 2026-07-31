@@ -13,18 +13,20 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from ofmhelpers.web.auth import require_admin
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.stores import models as models_store
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(
-    prefix="/competition", tags=["competition"], dependencies=[Depends(require_admin)]
+    prefix="/competition",
+    tags=["competition"],
+    dependencies=[Depends(AuthMiddleware.require_admin)],
 )
 
 
 @router.get("")
 def list_page(request: Request):
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request, "competition.html", {"models": models_store.list_models()}
     )
 

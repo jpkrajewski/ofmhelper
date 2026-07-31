@@ -5,5 +5,5 @@ taps from Discord to approve that asset and kick off the Drive upload).
 
 These two are one flow split across an authenticated and a public surface --
 approve.py is deliberately outside AuthMiddleware, so read web/auth.py's
-PUBLIC_PREFIXES before adding anything to it.
+settings.web.public_prefixes before adding anything to it.
 """

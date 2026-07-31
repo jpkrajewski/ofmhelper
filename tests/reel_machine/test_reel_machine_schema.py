@@ -1,5 +1,5 @@
 """
-schema.parse_analysis is the only gate between raw model output and a prompt
+ReelAnalysis.from_llm_text is the only gate between raw model output and a prompt
 we hand to Seedance, so the failure modes it has to catch are worth pinning
 down: fenced JSON, prose around the JSON, half-filled objects, and wrong
 types. Every failure has to carry the raw text -- the caller shows it to the
@@ -12,17 +12,15 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.reel_machine.prompts import DEFAULT_ANALYSIS_PROMPT
-from ofmhelpers.reel_machine.schema import (
+from ofmhelpers.reel_machine.models import (
     REQUIRED_KEYS,
     AnalysisError,
     Person,
     ReelAnalysis,
     SceneEvent,
     Shot,
-    parse_analysis,
-    strip_code_fence,
 )
+from ofmhelpers.reel_machine.prompts import DEFAULT_ANALYSIS_PROMPT
 
 EXAMPLE = Path(__file__).parent / "example.json"
 
@@ -34,7 +32,9 @@ def _valid_payload(**overrides) -> dict:
 
 
 def test_parses_a_complete_response():
-    data = parse_analysis(json.dumps(_valid_payload(environment="a lift lobby")))
+    data = ReelAnalysis.from_llm_text(
+        json.dumps(_valid_payload(environment="a lift lobby"))
+    )
     assert data.environment == "a lift lobby"
     assert data.scene_events[0].speaker == "subject"
 
@@ -43,7 +43,7 @@ def test_parses_a_real_gemini_response():
     """example.json is verbatim output from a real Gemini run on a real reel.
     The edited payloads above only prove the validator's rules; this proves
     the rules match what the model actually returns."""
-    data = parse_analysis(EXAMPLE.read_text(encoding="utf-8"))
+    data = ReelAnalysis.from_llm_text(EXAMPLE.read_text(encoding="utf-8"))
 
     assert data.people[0].id == "subject"
     # The prompt asks for silent moments as line/delivery null with the action
@@ -61,32 +61,32 @@ def test_rejects_keys_the_prompt_never_asked_for():
     payload = _valid_payload()
     payload["people"][0]["accent"] = "latino woman accent"
     with pytest.raises(AnalysisError, match="people.0.accent"):
-        parse_analysis(json.dumps(payload))
+        ReelAnalysis.from_llm_text(json.dumps(payload))
 
 
 def test_strips_a_markdown_fence_the_prompt_asked_the_model_not_to_add():
     raw = "```json\n" + json.dumps(_valid_payload(format="x")) + "\n```"
-    assert parse_analysis(raw).format == "x"
+    assert ReelAnalysis.from_llm_text(raw).format == "x"
 
 
 def test_strips_prose_around_the_json():
     raw = "Here is the JSON:\n" + json.dumps(_valid_payload(style="x")) + "\nEnjoy!"
-    assert parse_analysis(raw).style == "x"
+    assert ReelAnalysis.from_llm_text(raw).style == "x"
 
 
 def test_strip_code_fence_leaves_bare_json_alone():
     raw = json.dumps({"a": 1})
-    assert strip_code_fence(raw) == raw
+    assert ReelAnalysis.strip_code_fence(raw) == raw
 
 
 def test_rejects_non_json():
     with pytest.raises(AnalysisError, match="valid JSON"):
-        parse_analysis("I can't analyze that video, sorry.")
+        ReelAnalysis.from_llm_text("I can't analyze that video, sorry.")
 
 
 def test_rejects_a_json_array():
     with pytest.raises(AnalysisError, match="expected a JSON object"):
-        parse_analysis("[1, 2, 3]")
+        ReelAnalysis.from_llm_text("[1, 2, 3]")
 
 
 def test_rejects_a_response_missing_keys():
@@ -94,21 +94,23 @@ def test_rejects_a_response_missing_keys():
     del payload["scene_events"]
     del payload["negative_prompt"]
     with pytest.raises(AnalysisError, match="doesn't match") as exc:
-        parse_analysis(json.dumps(payload))
+        ReelAnalysis.from_llm_text(json.dumps(payload))
     assert "scene_events" in str(exc.value)
     assert "negative_prompt" in str(exc.value)
 
 
 def test_rejects_a_scalar_where_a_list_was_asked_for():
     with pytest.raises(AnalysisError, match="scene_events"):
-        parse_analysis(json.dumps(_valid_payload(scene_events="0:00 she talks")))
+        ReelAnalysis.from_llm_text(
+            json.dumps(_valid_payload(scene_events="0:00 she talks"))
+        )
 
 
 def test_rejects_a_malformed_nested_entry():
     payload = _valid_payload()
     del payload["shots"][0]["camera_behavior"]
     with pytest.raises(AnalysisError, match=r"shots\.0\.camera_behavior"):
-        parse_analysis(json.dumps(payload))
+        ReelAnalysis.from_llm_text(json.dumps(payload))
 
 
 def test_rejects_a_shot_cue_that_digests_several_scene_events():
@@ -121,15 +123,20 @@ def test_rejects_a_shot_cue_that_digests_several_scene_events():
         "0:00 - person_2: 'Here, your frappuccino's ready.'; 0:01 - subject: 'Thanks.'"
     )
     with pytest.raises(AnalysisError, match=r"shots\.0\.scene_event_cue"):
-        parse_analysis(json.dumps(payload))
+        ReelAnalysis.from_llm_text(json.dumps(payload))
 
 
 def test_accepts_a_bare_timestamp_cue_or_none():
     payload = _valid_payload()
     payload["shots"][0]["scene_event_cue"] = None
-    assert parse_analysis(json.dumps(payload)).shots[0].scene_event_cue is None
     assert (
-        parse_analysis(json.dumps(_valid_payload())).shots[1].scene_event_cue == "0:02"
+        ReelAnalysis.from_llm_text(json.dumps(payload)).shots[0].scene_event_cue is None
+    )
+    assert (
+        ReelAnalysis.from_llm_text(json.dumps(_valid_payload()))
+        .shots[1]
+        .scene_event_cue
+        == "0:02"
     )
 
 
@@ -137,7 +144,7 @@ def test_validation_is_strict_about_types():
     """No "3" -> 3 coercion: a wrong type means the model answered wrong, and
     the caller shows the raw text rather than a half-guessed prompt."""
     with pytest.raises(AnalysisError, match="atmosphere"):
-        parse_analysis(json.dumps(_valid_payload(atmosphere=7)))
+        ReelAnalysis.from_llm_text(json.dumps(_valid_payload(atmosphere=7)))
 
 
 def test_every_error_carries_the_raw_response():
@@ -145,12 +152,12 @@ def test_every_error_carries_the_raw_response():
     is back to a dead job."""
     raw = "sorry, I can't help with that"
     with pytest.raises(AnalysisError) as exc:
-        parse_analysis(raw)
+        ReelAnalysis.from_llm_text(raw)
     assert exc.value.raw == raw
 
 
 def test_elevenlabs_prompt_is_only_the_subject_speaking():
-    data = parse_analysis(EXAMPLE.read_text(encoding="utf-8"))
+    data = ReelAnalysis.from_llm_text(EXAMPLE.read_text(encoding="utf-8"))
     speech = data.elevenlabs_ready_prompt_from_subject()
 
     assert speech.startswith("[playful, pleading tone] Babe")
@@ -162,7 +169,7 @@ def test_elevenlabs_prompt_is_only_the_subject_speaking():
 
 
 def test_elevenlabs_prompt_can_read_another_speaker():
-    data = parse_analysis(EXAMPLE.read_text(encoding="utf-8"))
+    data = ReelAnalysis.from_llm_text(EXAMPLE.read_text(encoding="utf-8"))
     assert (
         data.elevenlabs_ready_prompt_from_subject("person_2")
         == "[curious off-camera voice] Where, there? [pause] "
@@ -234,6 +241,6 @@ def test_pose_and_expression_are_null_for_anyone_off_camera():
     payload["scene_events"][0]["pose"] = None
     del payload["scene_events"][0]["facial_expression"]
 
-    event = parse_analysis(json.dumps(payload)).scene_events[0]
+    event = ReelAnalysis.from_llm_text(json.dumps(payload)).scene_events[0]
     assert event.pose is None
     assert event.facial_expression is None

@@ -24,25 +24,26 @@ from fastapi import (
 )
 from fastapi.responses import RedirectResponse, Response
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.discord.client import send_webhook
 from ofmhelpers.gdrive.client import upload_file as gdrive_upload_file
-from ofmhelpers.web.auth import ROLE_ADMIN, require_admin
-from ofmhelpers.web.queue import enqueue
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_VIDEO_KINDS,
+    UPLOADS_ROOT,
     classify_kind,
     media_response,
     require_upload_kind,
 )
 from ofmhelpers.web.stores import approval_tokens, todos
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/todo", tags=["todo"])
 
 # Where VA-uploaded "ready asset" files live, one subdirectory per todo.
-ASSET_ROOT = Path("uploads") / "todo_assets"
+ASSET_ROOT = UPLOADS_ROOT / "todo_assets"
 
 
 def _decorate_asset(t: dict) -> dict:
@@ -73,12 +74,12 @@ def form(request: Request):
         )
         _decorate_asset(t)
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "todo_form.html",
         {
             "todos": items,
-            "is_admin": request.session.get("role") == ROLE_ADMIN,
+            "is_admin": request.session.get("role") == settings.web.role_admin,
         },
     )
 
@@ -90,7 +91,7 @@ def add(
     url: Annotated[str, Form()],
     comments: Annotated[str, Form()] = "",
 ):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     if not model_name.strip() or not url.strip():
         raise HTTPException(status_code=400, detail="Model name and URL are required")
 
@@ -102,7 +103,7 @@ def add(
 
 @router.get("/export")
 def export(request: Request):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     body = json.dumps(todos.list_todos(), indent=2)
     return Response(
         content=body,
@@ -113,7 +114,7 @@ def export(request: Request):
 
 @router.post("/import")
 async def import_(request: Request, file: Annotated[UploadFile, File()]):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     raw = await file.read()
     try:
         entries = json.loads(raw)
@@ -134,7 +135,7 @@ async def import_(request: Request, file: Annotated[UploadFile, File()]):
 
 @router.post("/{todo_id}/toggle")
 def toggle(request: Request, todo_id: str):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     if not todos.toggle_todo(todo_id):
         raise HTTPException(status_code=404, detail="Todo not found")
     return RedirectResponse(url="/todo", status_code=303)
@@ -142,7 +143,7 @@ def toggle(request: Request, todo_id: str):
 
 @router.post("/{todo_id}/delete")
 def delete(request: Request, todo_id: str):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     if not todos.delete_todo(todo_id):
         raise HTTPException(status_code=404, detail="Todo not found")
     return RedirectResponse(url="/todo", status_code=303)
@@ -249,19 +250,19 @@ def asset_cell(request: Request, todo_id: str):
         raise HTTPException(status_code=404, detail="Todo not found")
     _decorate_asset(todo)
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "_todo_asset_cell.html",
         {
             "t": todo,
-            "is_admin": request.session.get("role") == ROLE_ADMIN,
+            "is_admin": request.session.get("role") == settings.web.role_admin,
         },
     )
 
 
 @router.post("/{todo_id}/approve")
 def approve(request: Request, todo_id: str):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     if not todos.approve_todo(todo_id):
         raise HTTPException(
             status_code=404, detail="Todo not found or has no asset attached"
@@ -271,7 +272,7 @@ def approve(request: Request, todo_id: str):
 
 @router.post("/{todo_id}/reject")
 def reject(request: Request, todo_id: str, comment: Annotated[str, Form()]):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     if not comment.strip():
         raise HTTPException(status_code=400, detail="A comment is required")
     if not todos.reject_todo(todo_id, comment.strip()):
@@ -282,7 +283,7 @@ def reject(request: Request, todo_id: str, comment: Annotated[str, Form()]):
 
 
 def _upload_to_drive(todo_id: str, asset_path: str) -> str:
-    """Runs in the background on the RQ worker (see web/queue.py) -- a Drive
+    """Runs in the background on the RQ worker (see cache/queue.py) -- a Drive
     upload is a network call with no bound on how long it takes (large video =
     long upload), so doing it inline would tie up the request, and the browser
     tab, for however long that takes. run_job (see web/stores/jobs.py) records
@@ -295,7 +296,7 @@ def _upload_to_drive(todo_id: str, asset_path: str) -> str:
 
 @router.post("/{todo_id}/upload-drive")
 def upload_drive(request: Request, todo_id: str):
-    require_admin(request)
+    AuthMiddleware.require_admin(request)
     todo = todos.get_todo(todo_id)
     if todo is None:
         raise HTTPException(status_code=404, detail="Todo not found")

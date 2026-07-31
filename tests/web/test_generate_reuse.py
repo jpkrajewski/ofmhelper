@@ -26,7 +26,7 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
 from ofmhelpers.web.stores.jobs import create_job, get_job

@@ -1,12 +1,11 @@
-from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.downloaders.images import download_all
-from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import (
     flatten_grouped_results,
     grouped_job_status_payload,
@@ -14,18 +13,16 @@ from ofmhelpers.web.routers.task_helpers import (
     register_grouped_results,
 )
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/download-images", tags=["download-images"])
 
 
 def _run_downloads(urls: list[str]) -> list[dict]:
-    """asdict() leaves output_paths as Path objects -- stringify them so the
-    result is safe for json.dumps (jobs.py._save() persists every job)."""
+    """mode="json" turns output_paths' Path objects into strings, which is
+    what makes the result safe for json.dumps (jobs.py persists every job)."""
     results = download_all(urls)
-    dicts = [asdict(r) for r in results]
-    for d in dicts:
-        d["output_paths"] = [str(p) for p in d["output_paths"]]
+    dicts = [r.model_dump(mode="json") for r in results]
     register_grouped_results(dicts)
     return dicts
 
@@ -62,7 +59,7 @@ def job_status(request: Request, job_id: str):
     if job.get("status") == "done":
         assets, failed_sources = flatten_grouped_results(job, "/download-images/files")
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

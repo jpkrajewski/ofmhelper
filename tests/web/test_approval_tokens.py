@@ -7,7 +7,7 @@ needed. Expiry is exercised by swapping the repository's clock forward.
 
 import time
 
-from ofmhelpers.web.db import repository
+from ofmhelpers.web.db.repositories import approval_tokens as token_repository
 from ofmhelpers.web.stores import approval_tokens
 
 
@@ -57,7 +57,7 @@ def test_consume_expired_token(monkeypatch):
     token = approval_tokens.create_token("todo1", "/path/to/asset.png")
 
     # Simulate time passing well beyond the TTL.
-    monkeypatch.setattr(repository, "time", _FrozenClock(time.time() + 10**9))
+    monkeypatch.setattr(token_repository, "time", _FrozenClock(time.time() + 10**9))
 
     assert approval_tokens.consume(token, "/path/to/asset.png") == "expired"
 
@@ -75,7 +75,7 @@ def test_consume_stale_when_asset_path_changed():
 def test_expired_tokens_are_pruned_on_save(monkeypatch):
     old_token = approval_tokens.create_token("todo1", "/path/a.png")
 
-    monkeypatch.setattr(repository, "time", _FrozenClock(time.time() + 10**9))
+    monkeypatch.setattr(token_repository, "time", _FrozenClock(time.time() + 10**9))
 
     # Any create triggers a purge of expired entries.
     approval_tokens.create_token("todo2", "/path/b.png")

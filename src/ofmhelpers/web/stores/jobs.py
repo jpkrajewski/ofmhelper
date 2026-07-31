@@ -20,11 +20,18 @@ list, or a bare id string) -- there is no separate file-reference table.
 from __future__ import annotations
 
 import traceback
+from functools import lru_cache
 from pathlib import Path
 
-from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.db.repositories import JobRepository
 
-_repo = JobRepository()
+
+@lru_cache(maxsize=1)
+def _repository() -> JobRepository:
+    """The process-wide job repository, built on first use rather than at
+    import. Lazy because constructing it binds a Redis connection for its
+    cache, and at import time OFM_REDIS_URL may not be its final value yet."""
+    return JobRepository()
 
 
 def load_jobs() -> None:
@@ -37,14 +44,14 @@ def load_jobs() -> None:
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
     """actor is the logged-in role ("admin" / "va") -- recorded so the Action
     log can show who ran what."""
-    return _repo.create(task_name, params, actor=actor, status="running")
+    return _repository().create(task_name, params, actor=actor, status="running")
 
 
 def log_event(task_name: str, actor: str | None) -> str:
     """For instantaneous audit events (login/logout) rather than background
     work -- recorded straight into the Action log already "done", no
     background task involved."""
-    return _repo.create(task_name, {}, actor=actor, status="done")
+    return _repository().create(task_name, {}, actor=actor, status="done")
 
 
 def run_job(job_id: str, fn, kwargs: dict):
@@ -54,18 +61,20 @@ def run_job(job_id: str, fn, kwargs: dict):
     when this runs in a separate worker."""
     try:
         result = fn(**kwargs)
-        _repo.update_status(job_id, "done", result=result)
+        _repository().update_status(job_id, "done", result=result)
     except Exception as exc:
         # The status pages show this directly to whoever is running the job --
         # a raw traceback isn't useful to them, just the exception's own
         # message (e.g. "Wrong API Key"). Full detail still goes to the
         # server's stdout/logs for whoever's actually debugging it.
-        _repo.update_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
+        _repository().update_status(
+            job_id, "failed", error=str(exc) or exc.__class__.__name__
+        )
         traceback.print_exc()
 
 
 def get_job(job_id: str) -> dict | None:
-    return _repo.get(job_id)
+    return _repository().get(job_id)
 
 
 def set_job_preview(job_id: str, preview: dict) -> None:
@@ -74,7 +83,7 @@ def set_job_preview(job_id: str, preview: dict) -> None:
     ready. job_status_payload only serves this while status is "running" --
     once the job finishes (done or failed) the real `result`/`error` takes
     over and this is simply never read again."""
-    _repo.set_preview(job_id, preview)
+    _repository().set_preview(job_id, preview)
 
 
 def _result_matches_files(result: list[dict]) -> list[dict]:
@@ -106,7 +115,7 @@ def list_jobs() -> list[dict]:
     `list_jobs_page` for anything that only renders a page of them: healing
     stats every result file of every job, which is wasted on the ones the
     caller is about to slice off."""
-    return _heal(_repo.list_all())
+    return _heal(_repository().list_all())
 
 
 def list_jobs_page(tasks: set[str], offset: int, limit: int) -> tuple[list[dict], int]:
@@ -117,7 +126,7 @@ def list_jobs_page(tasks: set[str], offset: int, limit: int) -> tuple[list[dict]
     Only the page is self-healed: the filter and the slice run off the cached
     repository read, so rendering 20 cards costs 20 jobs' worth of disk checks
     instead of the whole history's."""
-    matching = [job for job in _repo.list_all() if job["task"] in tasks]
+    matching = [job for job in _repository().list_all() if job["task"] in tasks]
     return _heal(matching[offset : offset + limit]), len(matching)
 
 
@@ -148,9 +157,9 @@ def _heal(jobs: list[dict]) -> list[dict]:
             surviving.append(job)
         elif kept:
             job["result"] = kept
-            _repo.update_result(job["id"], kept)
+            _repository().update_result(job["id"], kept)
             surviving.append(job)
         else:
             # Nothing of this job still exists on disk -- drop it entirely.
-            _repo.delete(job["id"])
+            _repository().delete(job["id"])
     return surviving

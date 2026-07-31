@@ -21,14 +21,11 @@ from typing import ClassVar
 import requests
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
 
-logger = get_logger(__name__)
-
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-_TIMEOUT_S = 20
+GROQ_URL = settings.reel_machine.groq_url
+_TIMEOUT_S = settings.reel_machine.groq_timeout_s
 # Warm, but not creative: this pass names a niche, it doesn't write.
-_TEMPERATURE = 0.4
+_TEMPERATURE = settings.reel_machine.groq_temperature
 
 
 class GroqProvider:

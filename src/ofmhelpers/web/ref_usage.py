@@ -1,6 +1,6 @@
 """
 When each shared reference file was last *used*, on the Redis connection the
-RQ queue already owns (web/queue.py) -- shared state, so the ordering holds
+RQ queue already owns (ofmhelpers.cache) -- shared state, so the ordering holds
 across every uvicorn worker.
 
 This exists so the picker can show two genuinely different lists (routers/
@@ -24,8 +24,9 @@ from typing import TYPE_CHECKING, Any
 
 from redis.exceptions import RedisError
 
+from ofmhelpers.cache import get_redis
+from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.queue import get_redis
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,7 +36,7 @@ logger = get_logger(__name__)
 _KEY = "refs:used"
 # Bounded so a long-lived deployment doesn't grow one key forever. The picker
 # asks for a handful; anything past this is older than "recently used" means.
-_MAX_TRACKED = 200
+_MAX_TRACKED = settings.web.ref_usage_max_tracked
 
 
 def record_use(path: Path) -> None:

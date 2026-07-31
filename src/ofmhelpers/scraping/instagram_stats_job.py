@@ -30,8 +30,8 @@ thread existed in the parent worker process.
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
@@ -42,7 +42,12 @@ from ofmhelpers.web.stores import models as models_store
 
 logger = get_logger(__name__)
 
-_normalizer = InstagramNormalizer()
+
+@lru_cache(maxsize=1)
+def _normalizer() -> InstagramNormalizer:
+    """Stateless URL -> username normalizer; built once rather than per
+    account, and via an accessor rather than at import."""
+    return InstagramNormalizer()
 
 
 def _next_sweep_time_utc() -> datetime:
@@ -59,7 +64,7 @@ def _next_sweep_time_utc() -> datetime:
 def _already_scheduled() -> bool:
     from rq.registry import ScheduledJobRegistry
 
-    from ofmhelpers.web.queue import get_queue
+    from ofmhelpers.cache import get_queue
 
     queue = get_queue()
     registry = ScheduledJobRegistry(queue=queue)
@@ -80,7 +85,7 @@ def active_sweep_id() -> str | None:
     live sweep instead of starting a second one."""
     from rq.registry import StartedJobRegistry
 
-    from ofmhelpers.web.queue import get_queue
+    from ofmhelpers.cache import get_queue
 
     queue = get_queue()
     ids = list(queue.get_job_ids()) + list(
@@ -100,7 +105,7 @@ def ensure_scheduled() -> None:
     RQ's ScheduledJobRegistry. Call at worker boot (see worker.py) and
     again at the end of every sweep, so the chain keeps extending itself
     one day at a time."""
-    from ofmhelpers.web.queue import get_queue
+    from ofmhelpers.cache import get_queue
 
     if _already_scheduled():
         return
@@ -119,20 +124,19 @@ def collect_all_instagram_stats() -> None:
 
     for account_id, url in accounts:
         try:
-            username = _normalizer.normalize(url)
+            username = _normalizer().normalize(url)
             stats = fetch_profile_stats(username)
             instagram_stats.save_stats(
                 account_id,
                 followers=stats.followers,
-                posts=[asdict(p) for p in stats.posts],
+                posts=[p.model_dump() for p in stats.posts],
                 error=stats.error,
             )
         except Exception as exc:
             logger.warning(
-                "instagram stats sweep failed account_id=%s url=%s: %s",
+                "instagram stats sweep failed account_id=%s url=%s",
                 account_id,
                 url,
-                exc,
                 exc_info=True,
             )
             instagram_stats.save_stats(

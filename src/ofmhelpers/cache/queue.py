@@ -5,34 +5,21 @@ running a job in-process, a route does `enqueue(run_job, job_id, fn, kwargs)`
 and returns immediately; a separate worker process runs it, writing status to
 Postgres (see web/stores/jobs.py) that the API can then read back.
 
-Connection + queue are built lazily from settings.infra (never at import), for
-the same reason the DB engine is: the worker and the API must bind to whatever
-OFM_REDIS_URL is set at runtime, and tests point it at a test broker. Cached
-per URL so production reuses one connection pool.
+It lives beside `redis.py` because that is what it is built on -- the queue is
+the durable half of what this app keeps in Redis, the caches are the
+throwaway half.
 """
 
 from __future__ import annotations
 
-from redis import Redis
 from rq import Queue
 
+from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 
 # The queue name both the API (enqueue) and the worker (rq worker-pool, which
 # defaults to this queue) agree on.
 QUEUE_NAME = "default"
-
-_redis: Redis | None = None
-_redis_url: str | None = None
-
-
-def get_redis() -> Redis:
-    global _redis, _redis_url
-    url = settings.infra.redis_url
-    if _redis is None or url != _redis_url:
-        _redis = Redis.from_url(url)
-        _redis_url = url
-    return _redis
 
 
 def get_queue() -> Queue:

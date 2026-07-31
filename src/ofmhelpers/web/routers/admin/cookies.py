@@ -13,17 +13,19 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.auth import require_admin
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(
-    prefix="/cookies", tags=["admin"], dependencies=[Depends(require_admin)]
+    prefix="/cookies",
+    tags=["admin"],
+    dependencies=[Depends(AuthMiddleware.require_admin)],
 )
 
 
 @router.get("")
 def form(request: Request, uploaded: bool = False):
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request, "cookies_form.html", {"uploaded": uploaded}
     )
 

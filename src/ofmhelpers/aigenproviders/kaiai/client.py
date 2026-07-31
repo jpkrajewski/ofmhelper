@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 import requests
 
-from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
+from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 
@@ -33,16 +33,18 @@ class KieAIClient:
     def __init__(
         self,
         api_key: str,
-        jobs_base: str = "https://api.kie.ai/api/v1/jobs",
-        upload_base: str = "https://kieai.redpandaai.co",
+        jobs_base: str | None = None,
+        upload_base: str | None = None,
         out_dir: str | pathlib.Path = "./out",
         task_log: str | pathlib.Path = "./tasks.jsonl",
         completions_log: str | pathlib.Path = "./completions.jsonl",
         resolved_log: str | pathlib.Path = "./resolved.jsonl",
     ) -> None:
         self.api_key = api_key
-        self.JOBS_BASE = jobs_base
-        self.UPLOAD_BASE = upload_base
+        # Read here rather than as a default expression: a default is bound at
+        # import, which would capture the env before a test override lands.
+        self.JOBS_BASE = jobs_base or settings.kieai.jobs_base
+        self.UPLOAD_BASE = upload_base or settings.kieai.upload_base
         self.HEADERS = {"Authorization": f"Bearer {self.api_key}"}
 
         self.OUT_DIR = pathlib.Path(out_dir)
@@ -79,19 +81,33 @@ class KieAIClient:
     # go through this first.
     #
     # Reference files get reused across many generations (the /generate
-    # reuse pickers exist specifically for this), so this checks
-    # upload_cache before re-uploading the same bytes to kie.ai yet again --
-    # a cache hit is still confirmed live (kie.ai's tempfile host doesn't
-    # guarantee to keep files forever) before being trusted.
+    # reuse pickers exist specifically for this), so an already-uploaded URL
+    # is cached in Redis before re-uploading the same bytes to kie.ai yet
+    # again -- a cache hit is still confirmed live (kie.ai's tempfile host
+    # doesn't guarantee to keep files forever) before being trusted.
+    #
+    # Keyed by (api_key, local path), not path alone: kie.ai namespaces
+    # uploads per account (the "kieai/<account-id>/refs/..." segment in every
+    # downloadUrl), so a URL uploaded under one API key is not guaranteed
+    # valid -- or even the right file -- under a different key, and this app
+    # hands out two (admin/VA) that reference the same local files.
+    #
+    # In Redis rather than in-process so the API, the worker and every uvicorn
+    # worker share one answer. Pure optimisation: a broker outage reports a
+    # miss and the file is simply re-uploaded.
     # ------------------------------------------------------------------
+    def _upload_cache_key(self, path: str) -> str:
+        return f"kieai:upload:{self.api_key}:{path}"
+
     def upload_local_file(self, path: str, upload_path: str = "refs") -> str:
-        cached_url = upload_cache.get(self.api_key, path)
+        cache_key = self._upload_cache_key(path)
+        cached_url = get_text(cache_key)
         if cached_url is not None:
             if self._remote_file_exists(cached_url):
                 logger.info("upload cache hit for %s -> %s", path, cached_url)
                 return cached_url
             logger.info("cached url for %s no longer resolves, re-uploading", path)
-            upload_cache.discard(self.api_key, path)
+            delete_text(cache_key)
 
         logger.info("upload starting: %s", path)
         with pathlib.Path(path).open("rb") as fh:
@@ -100,7 +116,7 @@ class KieAIClient:
                 headers=self.HEADERS,
                 files={"file": fh},
                 data={"uploadPath": upload_path, "fileName": pathlib.Path(path).name},
-                timeout=900,
+                timeout=settings.kieai.upload_timeout_s,
             )
         r.raise_for_status()
         if not r.json().get("success"):
@@ -109,7 +125,7 @@ class KieAIClient:
 
         url = r.json()["data"]["downloadUrl"]
         logger.info("upload done: %s -> %s", path, url)
-        upload_cache.put(self.api_key, path, url)
+        set_text(cache_key, url, settings.kieai.upload_cache_ttl_s)
         return url
 
     def _remote_file_exists(self, url: str) -> bool:
@@ -118,7 +134,11 @@ class KieAIClient:
         there" so the caller falls back to a fresh upload rather than
         risking a broken reference being handed to kie.ai."""
         try:
-            r = requests.head(url, timeout=10, allow_redirects=True)
+            r = requests.head(
+                url,
+                timeout=settings.kieai.remote_check_timeout_s,
+                allow_redirects=True,
+            )
         except requests.RequestException:
             return False
         else:
@@ -137,7 +157,10 @@ class KieAIClient:
                 callback_url  # recommended for prod; skips polling entirely
             )
         r = requests.post(
-            f"{self.JOBS_BASE}/createTask", headers=self.HEADERS, json=body, timeout=30
+            f"{self.JOBS_BASE}/createTask",
+            headers=self.HEADERS,
+            json=body,
+            timeout=settings.kieai.request_timeout_s,
         )
         r.raise_for_status()
         data = r.json()
@@ -151,19 +174,22 @@ class KieAIClient:
     def poll_task(
         self,
         task_id: str,
-        timeout_s: int = 1000,
+        timeout_s: int | None = None,
         interval: float = 2.5,
         max_interval: float = 20.0,
     ) -> list[str]:
         """Poll recordInfo with exponential backoff until success/fail.
-        kie.ai caps sane polling at 10-15 min; 900s = 15 min default."""
+        kie.ai caps sane polling at 10-15 min."""
+        timeout_s = (
+            timeout_s if timeout_s is not None else settings.kieai.poll_timeout_s
+        )
         deadline = time.time() + timeout_s
         while time.time() < deadline:
             r = requests.get(
                 f"{self.JOBS_BASE}/recordInfo",
                 headers=self.HEADERS,
                 params={"taskId": task_id},
-                timeout=30,
+                timeout=settings.kieai.request_timeout_s,
             )
             r.raise_for_status()
             d = r.json()["data"]
@@ -212,7 +238,7 @@ class KieAIClient:
             f"{self.JOBS_BASE}/recordInfo",
             headers=self.HEADERS,
             params={"taskId": task_id},
-            timeout=30,
+            timeout=settings.kieai.request_timeout_s,
         )
         r.raise_for_status()
         body = r.json()
@@ -238,7 +264,9 @@ class KieAIClient:
             # today, so this is normally just "{task_id}.{ext}".
             suffix = f"_{i}" if len(urls) > 1 else ""
             out = self.OUT_DIR / f"{task_id}{suffix}.{ext}"
-            with requests.get(url, stream=True, timeout=60) as r:
+            with requests.get(
+                url, stream=True, timeout=settings.kieai.download_timeout_s
+            ) as r:
                 r.raise_for_status()
                 with pathlib.Path(out).open("wb") as f:
                     f.writelines(r.iter_content(1 << 16))
@@ -335,7 +363,7 @@ class KieAIClient:
                 payload["reference_audio_urls"] = reference_audio_urls
 
         task_id = self.create_task(model, payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=1800)
+        urls = self.poll_task(task_id, timeout_s=settings.kieai.video_poll_timeout_s)
         if on_result_urls:
             on_result_urls(urls)
         return self.download_urls(urls, task_id, "mp4")[0]
@@ -385,7 +413,7 @@ class KieAIClient:
             payload["kling_elements"] = kling_elements
 
         task_id = self.create_task("kling-3.0/video", payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=1800)
+        urls = self.poll_task(task_id, timeout_s=settings.kieai.video_poll_timeout_s)
         if on_result_urls:
             on_result_urls(urls)
         return self.download_urls(urls, task_id, "mp4")[0]

@@ -14,12 +14,11 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
-from ofmhelpers.web.auth import AuthMiddleware
-from ofmhelpers.web.ratelimit import WriteRateLimitMiddleware
+from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
 from ofmhelpers.web.recovery import recovery_loop
 from ofmhelpers.web.routers import ROUTERS
 from ofmhelpers.web.stores.jobs import load_jobs
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 # Before anything else in the process logs: uvicorn imports this module to
 # find `app`, so this runs ahead of the first request and ahead of uvicorn's
@@ -49,10 +48,8 @@ app = FastAPI(title="Global Ascend LLC — Content Ops", lifespan=lifespan)
 
 # --- Middleware -------------------------------------------------------
 # Starlette applies middleware outside-in in the order added, so the LAST
-# .add_middleware() call ends up outermost / runs first. Reading bottom-up,
-# a request therefore passes: SessionMiddleware (reads/signs the cookie) ->
-# WriteRateLimitMiddleware (drops a flood before any auth work) ->
-# AuthMiddleware (gates everything not on the public allowlist).
+# .add_middleware() call ends up outermost / runs first -- this block reads
+# bottom-up. See web/middleware/__init__.py for the resulting request order.
 _session_settings = settings.session
 app.add_middleware(AuthMiddleware)
 app.add_middleware(WriteRateLimitMiddleware)
@@ -76,7 +73,7 @@ for router in ROUTERS:
 
 @app.get("/")
 def root(request: Request):
-    return templates.TemplateResponse(request, "home.html", {})
+    return get_templates().TemplateResponse(request, "home.html", {})
 
 
 @app.get("/health")

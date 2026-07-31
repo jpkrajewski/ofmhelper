@@ -1,8 +1,11 @@
 """
 Centralized scalar configuration (pydantic-settings). Single source of
 truth for every env-var name/type/default in this app. Business/domain
-data (SHAPES, LOOKS, GENDERS, TASK_LABELS, SCRAPRES_REGISTRY, PUBLIC_PATHS,
-ROLE_ADMIN/VA, etc.) is NOT here -- see each owning module.
+data (SHAPES, LOOKS, GENDERS, TASK_LABELS, SCRAPRES_REGISTRY, etc.) is NOT
+here -- see each owning module. The auth role names and the unauthenticated
+path allowlist are the exception: they are deployment knobs (a reverse proxy
+or a new public magic-link surface changes the allowlist), so they live in
+WebSettings.
 
 Grouped by subsystem rather than one flat class, and consumed via
 `ofmhelpers.config.settings` (see config/__init__.py) whose group
@@ -36,14 +39,34 @@ class SessionSettings(BaseSettings):
 
 
 class WebSettings(BaseSettings):
-    """auth.py, recovery.py, jobs.py, todos.py, approval_tokens.py,
-    routers/workflow/todo.py, routers/workflow/approve.py, routers/generation/index.py,
-    routers/downloads/index.py."""
+    """middleware/auth.py, api_keys.py, recovery.py, jobs.py, todos.py,
+    approval_tokens.py, routers/workflow/todo.py, routers/workflow/approve.py,
+    routers/generation/index.py, routers/downloads/index.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_password_admin: str | None = None
     app_password_va: str | None = None
+
+    # The two roles the shared passwords resolve to -- every role check in the
+    # app compares against these instead of a hand-typed literal (a typo'd
+    # literal silently fails a role check instead of erroring).
+    role_admin: str = Field(default="admin", validation_alias="OFM_ROLE_ADMIN")
+    role_va: str = Field(default="va", validation_alias="OFM_ROLE_VA")
+
+    # Paths reachable without being logged in. Keep both lists short and
+    # explicit -- anything not listed is protected, which is the safe default
+    # direction for an allowlist.
+    #   /login, /health           -- the way in, and the deploy health probe
+    #   /static/                  -- css/js/images
+    #   /approve/                 -- magic-link asset approval, see
+    #                                routers/workflow/approve.py
+    public_paths: set[str] = Field(
+        default={"/login", "/health"}, validation_alias="OFM_PUBLIC_PATHS"
+    )
+    public_prefixes: tuple[str, ...] = Field(
+        default=("/static/", "/approve/"), validation_alias="OFM_PUBLIC_PREFIXES"
+    )
     kie_ai_api_key_admin: str | None = None
     kie_ai_api_key_va: str | None = None
     # One key for both roles, unlike kie.ai: ElevenLabs billing is per
@@ -71,7 +94,7 @@ class WebSettings(BaseSettings):
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
 
-    # Rate limiting (web/ratelimit.py). The kill switch exists for the test
+    # Rate limiting (web/middleware/ratelimit.py). The kill switch exists for the test
     # suite, which fires hundreds of POSTs from one client host -- leave it on
     # everywhere else.
     rate_limit_enabled: bool = Field(
@@ -94,6 +117,27 @@ class WebSettings(BaseSettings):
     write_rate_limit_window_s: int = Field(
         default=60, validation_alias="OFM_WRITE_RATE_LIMIT_WINDOW_S"
     )
+
+    # The reference-file picker (routers/refs.py). `GET /refs` with no limit
+    # answers two short lists -- last picked, then newest uploaded -- and the
+    # "Show older" button asks for an explicit limit, capped at max_ref_limit.
+    recent_used_limit: int = Field(
+        default=5, validation_alias="OFM_REFS_RECENT_USED_LIMIT"
+    )
+    recent_upload_limit: int = Field(
+        default=5, validation_alias="OFM_REFS_RECENT_UPLOAD_LIMIT"
+    )
+    max_ref_limit: int = Field(default=60, validation_alias="OFM_REFS_MAX_LIMIT")
+    # How many "recently picked" files web/ref_usage.py keeps in its Redis
+    # sorted set. Only the first recent_used_limit are ever shown; the rest is
+    # headroom so a file doesn't drop out the moment it stops being top-5.
+    ref_usage_max_tracked: int = Field(
+        default=200, validation_alias="OFM_REF_USAGE_MAX_TRACKED"
+    )
+    # Bounds the ffprobe/ffmpeg call behind a video reference thumbnail.
+    ffmpeg_timeout_s: int = Field(default=20, validation_alias="OFM_FFMPEG_TIMEOUT_S")
+    # How many past intakes the /replicate form lists for rerun.
+    intake_list_limit: int = Field(default=20, validation_alias="OFM_INTAKE_LIST_LIMIT")
 
 
 class InfraSettings(BaseSettings):
@@ -125,9 +169,19 @@ class InfraSettings(BaseSettings):
     # concurrently; read by ofmhelpers/worker.py, the worker entrypoint.
     rq_workers: int = Field(default=10, validation_alias="OFM_RQ_WORKERS")
 
+    # Everything the app writes on behalf of a user lives under one root:
+    # uploads/assets (the shared reference store), plus a subdir per tool.
+    # Bind-mounted in both compose files, so a container swap keeps it.
+    uploads_root: str = Field(default="uploads", validation_alias="OFM_UPLOADS_ROOT")
+    # TTL on the repository cache-aside reads, see
+    # web/db/repositories/cached_repository.py. Short: it
+    # absorbs the read burst a page render makes, it is not a write-through
+    # cache, and every write bumps its namespace anyway.
+    cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")
+
 
 class KieAISettings(BaseSettings):
-    """aigenproviders/kaiai/client.py, upload_cache.py, routers/generation/fake_ai.py,
+    """aigenproviders/kaiai/client.py, routers/generation/fake_ai.py,
     routers/admin/file_manager.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -147,11 +201,51 @@ class KieAISettings(BaseSettings):
     resume_max_age_s: int = Field(
         default=48 * 3600, validation_alias="OFM_KIEAI_RESUME_MAX_AGE_S"
     )
-    upload_cache_max_entries: int = Field(
-        default=100, validation_alias="OFM_KIEAI_UPLOAD_CACHE_MAX_ENTRIES"
+    # How long a "this local file is already hosted at that URL" entry is kept
+    # in Redis (see client.upload_local_file). Well under kie.ai's own tempfile
+    # retention, and every hit is confirmed live before it is trusted anyway,
+    # so this only bounds how long a dead entry can keep costing one HEAD.
+    upload_cache_ttl_s: int = Field(
+        default=12 * 3600, validation_alias="OFM_KIEAI_UPLOAD_CACHE_TTL_S"
     )
     fake_ai_video_duration_seconds: int = Field(
         default=3, validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS"
+    )
+
+    jobs_base: str = Field(
+        default="https://api.kie.ai/api/v1/jobs", validation_alias="OFM_KIEAI_JOBS_BASE"
+    )
+    # A different host from the API: kie.ai serves uploads off its own CDN.
+    upload_base: str = Field(
+        default="https://kieai.redpandaai.co", validation_alias="OFM_KIEAI_UPLOAD_BASE"
+    )
+
+    # HTTP timeouts, split by what the call actually waits on: an upload
+    # streams a whole reference file, a download streams a result, and the
+    # task-queue calls are small JSON round trips.
+    upload_timeout_s: int = Field(
+        default=900, validation_alias="OFM_KIEAI_UPLOAD_TIMEOUT_S"
+    )
+    download_timeout_s: int = Field(
+        default=60, validation_alias="OFM_KIEAI_DOWNLOAD_TIMEOUT_S"
+    )
+    request_timeout_s: int = Field(
+        default=30, validation_alias="OFM_KIEAI_REQUEST_TIMEOUT_S"
+    )
+    # The best-effort HEAD behind the upload cache: it fails closed into a
+    # re-upload, so waiting on it is never worth much.
+    remote_check_timeout_s: int = Field(
+        default=10, validation_alias="OFM_KIEAI_REMOTE_CHECK_TIMEOUT_S"
+    )
+    # How long an in-request poll waits before handing the task to the
+    # recovery sweeper. kie.ai caps sane polling at 10-15 min.
+    poll_timeout_s: int = Field(
+        default=1000, validation_alias="OFM_KIEAI_POLL_TIMEOUT_S"
+    )
+    # Video takes materially longer than an image, so the two generation
+    # wrappers wait different amounts before deferring to the sweeper.
+    video_poll_timeout_s: int = Field(
+        default=1800, validation_alias="OFM_KIEAI_VIDEO_POLL_TIMEOUT_S"
     )
 
 
@@ -167,6 +261,10 @@ class DownloadersSettings(BaseSettings):
     cookies_from_browser: str | None = Field(
         default=None, validation_alias="OFM_COOKIES_FROM_BROWSER"
     )
+    # Bounds one gallery-dl run, which may pull a whole Instagram post set.
+    image_download_timeout_s: int = Field(
+        default=600, validation_alias="OFM_IMAGE_DOWNLOAD_TIMEOUT_S"
+    )
 
 
 class DiscordSettings(BaseSettings):
@@ -177,6 +275,9 @@ class DiscordSettings(BaseSettings):
 
     webhook_url: str | None = Field(
         default=None, validation_alias="DISCORD_WEBHOOK_URL"
+    )
+    request_timeout_s: int = Field(
+        default=10, validation_alias="DISCORD_REQUEST_TIMEOUT_S"
     )
 
 
@@ -222,6 +323,40 @@ class ReelMachineSettings(BaseSettings):
     )
     groq_api_key: str | None = None
     groq_model: str = "llama-3.3-70b-versatile"
+    groq_url: str = Field(
+        default="https://api.groq.com/openai/v1/chat/completions",
+        validation_alias="GROQ_URL",
+    )
+    # No retry on this pass (the caller has its own fallback), so the timeout
+    # is the whole budget. Warm but not creative: it names a niche, it doesn't
+    # write.
+    groq_timeout_s: int = Field(default=20, validation_alias="GROQ_TIMEOUT_S")
+    groq_temperature: float = Field(default=0.4, validation_alias="GROQ_TEMPERATURE")
+    # How many items the second pass may return per list.
+    hunt_max_items: int = Field(
+        default=6, validation_alias="REEL_MACHINE_HUNT_MAX_ITEMS"
+    )
+
+    # Gemini uploads the video and polls for state == "ACTIVE" before asking
+    # anything about it; a slow or failed upload raises rather than silently
+    # downgrading to stills.
+    gemini_video_active_timeout_s: int = Field(
+        default=120, validation_alias="GEMINI_VIDEO_ACTIVE_TIMEOUT_S"
+    )
+    gemini_poll_s: int = Field(default=2, validation_alias="GEMINI_POLL_S")
+    # Retries only the generate call, and only on a transient status -- ~6s
+    # worst case, because this runs inside an RQ worker slot.
+    gemini_max_attempts: int = Field(default=3, validation_alias="GEMINI_MAX_ATTEMPTS")
+    gemini_backoff_s: int = Field(default=2, validation_alias="GEMINI_BACKOFF_S")
+
+    # Seedance 2.0's supported clip length; the clone is clamped into it
+    # (reel_machine/pipeline.clamp_duration).
+    min_duration_s: int = Field(
+        default=4, validation_alias="REEL_MACHINE_MIN_DURATION_S"
+    )
+    max_duration_s: int = Field(
+        default=15, validation_alias="REEL_MACHINE_MAX_DURATION_S"
+    )
 
 
 class InstagramStatsSettings(BaseSettings):

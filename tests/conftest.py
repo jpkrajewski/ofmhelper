@@ -87,8 +87,8 @@ def _clean_tables():
     flushes the test Redis db: repository.py caches reads there, and a
     cached list/get from a previous test would otherwise survive the
     TRUNCATE above until its TTL expired."""
+    from ofmhelpers.cache import get_redis
     from ofmhelpers.web.db.session import get_engine
-    from ofmhelpers.web.queue import get_redis
 
     with get_engine().begin() as conn:
         conn.execute(

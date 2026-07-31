@@ -12,7 +12,7 @@ tables between tests, so these never touch dev/prod data.
 
 from pathlib import Path
 
-from ofmhelpers.web.db.repository import JobRepository
+from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.stores.jobs import (
     create_job,
     get_job,

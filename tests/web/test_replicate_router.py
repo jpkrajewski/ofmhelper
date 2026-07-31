@@ -19,11 +19,11 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.reel_machine.hunt import HuntIdeas
+from ofmhelpers.reel_machine.models import HuntIdeas, ReelAnalysis
 from ofmhelpers.reel_machine.pipeline import AnalysisResult
-from ofmhelpers.reel_machine.schema import ReelAnalysis
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import replicate as replicate_router
+from ofmhelpers.web.routers.generation.replicate import search as replicate_search
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
@@ -79,7 +79,7 @@ def test_form_page_has_the_source_inputs_and_context_only(client):
 
 def test_intake_context_reaches_the_pipeline_and_is_stored(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ) as analyze:
         r = client.post(
@@ -97,7 +97,7 @@ def test_intake_context_reaches_the_pipeline_and_is_stored(client, tmp_path):
 
 def test_intake_without_context_passes_an_empty_string(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ) as analyze:
         client.post(
@@ -109,7 +109,7 @@ def test_intake_without_context_passes_an_empty_string(client, tmp_path):
 
 def test_form_page_lists_past_analyses_and_links_to_them(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -127,7 +127,7 @@ def test_form_page_flags_an_analysis_that_needs_fixing(client, tmp_path):
     """A done intake whose response failed validation still opens -- the list
     has to say so rather than showing a plain green "done"."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_unvalidated_analysis(tmp_path),
     ):
         client.post("/replicate/intake", data={"source_url": "https://example.com/bad"})
@@ -144,7 +144,7 @@ def test_intake_stores_the_validated_prompt_and_the_text_sent_to_seedance(
     client, tmp_path
 ):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         r = client.post(
@@ -165,7 +165,7 @@ def test_intake_stores_the_validated_prompt_and_the_text_sent_to_seedance(
 
 def test_review_page_plays_the_source_video_and_shows_editable_json(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path, environment="a rooftop at golden hour"),
     ):
         job_id = client.post(
@@ -187,7 +187,7 @@ def test_review_page_sends_the_subjects_speech_to_elevenlabs(client, tmp_path):
     """The speech box is a real ElevenLabs form, not a readonly preview --
     the point of the page is picking assets and generating the voice."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -208,7 +208,7 @@ def test_review_page_sends_the_subjects_speech_to_elevenlabs(client, tmp_path):
 def test_elevenlabs_key_is_prefilled_from_the_env(client, tmp_path, monkeypatch):
     monkeypatch.setenv("ELEVENLABS_API_KEY", "el-key-123")
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -221,7 +221,7 @@ def test_elevenlabs_key_is_prefilled_from_the_env(client, tmp_path, monkeypatch)
 
 def test_source_video_endpoint_streams_the_downloaded_reel(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -242,7 +242,7 @@ def test_intake_job_failure_is_surfaced_on_the_review_page(client):
     """Everything before validation (download, API key, provider error) still
     fails the job -- the message has to reach the review page."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         side_effect=RuntimeError("could not download the reel"),
     ):
         job_id = client.post(
@@ -257,7 +257,7 @@ def test_an_unvalidated_response_reaches_the_review_page_as_raw_text(client, tmp
     """A model answer that doesn't match the schema is shown verbatim, not
     thrown away: the job succeeds and the VA edits what came back."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_unvalidated_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -284,7 +284,7 @@ def test_generate_creates_a_replicate_job(client, tmp_path):
     fake_video.write_bytes(b"fake video bytes")
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ):
         r = client.post(
@@ -309,7 +309,7 @@ def test_generate_job_status_page_reuses_job_status_html(client, tmp_path):
     fake_video.write_bytes(b"fake video bytes")
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ):
         job_id = client.post(
@@ -330,7 +330,7 @@ def test_replicate_registered_in_generate_gallery():
 
 def test_jobs_status_json_dispatches_by_task(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         intake_job_id = client.post(
@@ -358,7 +358,7 @@ def test_generate_minifies_the_prompt_json_it_sends(client, tmp_path):
     )
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ) as clone:
         job_id = client.post(
@@ -393,7 +393,7 @@ def test_generate_drops_nulls_from_the_prompt_json(client, tmp_path):
     )
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ) as clone:
         client.post(
@@ -416,7 +416,7 @@ def test_generate_keeps_an_empty_string_which_is_a_real_answer(client, tmp_path)
     fake_video.write_bytes(b"x")
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ) as clone:
         client.post(
@@ -440,7 +440,7 @@ def test_generate_keeps_non_json_text_but_normalizes_its_newlines(client, tmp_pa
     fake_video.write_bytes(b"x")
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ) as clone:
         client.post(
@@ -456,7 +456,7 @@ def test_generate_passes_video_and_audio_references(client, tmp_path):
     fake_video.write_bytes(b"x")
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ) as clone:
         job_id = client.post(
@@ -490,7 +490,7 @@ def test_generate_sends_no_video_or_audio_references_when_none_were_picked(
     fake_video.write_bytes(b"x")
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ) as clone:
         client.post(
@@ -504,7 +504,7 @@ def test_generate_sends_no_video_or_audio_references_when_none_were_picked(
 
 def test_review_page_offers_video_and_audio_reference_pickers(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -524,7 +524,7 @@ def test_failed_analysis_still_renders_the_summary_cells_and_voice_step(
     pastes a corrected prompt -- the cells it writes into have to exist, and
     the voice step has to be reachable even though there is no typed speech."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_unvalidated_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -541,7 +541,7 @@ def test_json_prompt_and_api_key_are_collapsed_behind_details(client, tmp_path):
     """The redesign hides the JSON wall and the API key behind <details> --
     collapsed by default so the page reads as a summary, not a JSON dump."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -560,7 +560,7 @@ def test_analysis_summary_exposes_data_fields_for_the_live_json_sync(client, tmp
     """The Analysis table's cells carry data-field="..." so the page's inline
     script can keep them in sync with hand-edits to the JSON textarea."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path, environment="a rooftop at golden hour"),
     ):
         job_id = client.post(
@@ -624,7 +624,7 @@ def test_generate_links_back_to_its_source_job_and_survives_a_reload(client, tmp
     show up after a plain page reload -- it used to only exist in a
     client-side generation.js card and vanished on refresh."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         intake_job_id = client.post(
@@ -634,7 +634,7 @@ def test_generate_links_back_to_its_source_job_and_survives_a_reload(client, tmp
     fake_video = tmp_path / "clone.mp4"
     fake_video.write_bytes(b"fake video bytes")
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.generation.generate_reel_clone",
+        "ofmhelpers.web.routers.generation.replicate.tasks.generation.generate_reel_clone",
         return_value=fake_video,
     ):
         client.post(
@@ -656,7 +656,7 @@ def test_voice_generation_links_back_and_survives_a_reload(client, tmp_path):
     """Same as the video case, for the inline ElevenLabs step this session
     added -- this is the exact bug that was manually caught and fixed."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         intake_job_id = client.post(
@@ -686,7 +686,7 @@ def test_voice_generation_links_back_and_survives_a_reload(client, tmp_path):
 
 def test_review_page_resumes_a_still_running_voice_job_on_reload(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         intake_job_id = client.post(
@@ -707,7 +707,7 @@ def test_review_page_resumes_a_still_running_voice_job_on_reload(client, tmp_pat
 
 def test_review_page_shows_a_failed_child_job_inline(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         intake_job_id = client.post(
@@ -727,7 +727,7 @@ def test_rerun_prefills_the_context_and_reuses_the_downloaded_reel(client, tmp_p
     """A failed analysis shouldn't cost the VA the context note or the
     download -- /replicate?from=<job> comes back with both."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -746,7 +746,7 @@ def test_rerun_prefills_the_context_and_reuses_the_downloaded_reel(client, tmp_p
 
 def test_rerun_analyzes_the_already_downloaded_file_not_the_link(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         first = client.post(
@@ -755,7 +755,7 @@ def test_rerun_analyzes_the_already_downloaded_file_not_the_link(client, tmp_pat
         ).json()["job_id"]
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ) as analyze:
         rerun = client.post(
@@ -772,7 +772,7 @@ def test_rerun_analyzes_the_already_downloaded_file_not_the_link(client, tmp_pat
 
 def test_rerun_falls_back_to_the_original_link_when_the_file_is_gone(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         first = client.post(
@@ -784,7 +784,7 @@ def test_rerun_falls_back_to_the_original_link_when_the_file_is_gone(client, tmp
     (tmp_path / "reference.mp4").unlink()
 
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=second,
     ) as analyze:
         client.post("/replicate/intake", data={"reuse_job_id": first})
@@ -799,7 +799,7 @@ def test_rerun_of_an_unknown_job_still_needs_a_source(client):
 
 def test_past_analyses_list_links_to_a_rerun(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -813,7 +813,7 @@ def test_review_page_offers_outfit_searches_built_from_the_analysis(client, tmp_
     """The wardrobe step (find an outfit in the reel's niche) is a manual
     hunt -- the page pre-types the search off the analysis' own environment."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path, environment="a golf course at sunset"),
     ):
         job_id = client.post(
@@ -834,7 +834,7 @@ def test_review_page_offers_outfit_searches_built_from_the_analysis(client, tmp_
 def test_an_unvalidated_analysis_has_no_outfit_searches(client, tmp_path):
     """Nothing to build a query from until the JSON parses."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_unvalidated_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -849,7 +849,7 @@ def test_review_page_offers_similar_reel_searches_and_the_trending_page(
 ):
     """The next reel to clone is found the same manual way the outfit is."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path, environment="a golf course at sunset"),
     ):
         job_id = client.post(
@@ -867,7 +867,7 @@ def test_review_page_offers_similar_reel_searches_and_the_trending_page(
 
 def test_an_unvalidated_analysis_has_no_reel_searches_either(client, tmp_path):
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_unvalidated_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -889,7 +889,7 @@ def test_review_page_uses_the_free_models_tags_and_queries(client, tmp_path):
     """Gemini says what the reel is; the second (free) model turns that into
     hashtags and phrases people actually search."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis_with_hunt(
             tmp_path,
             instagram_topics=["starbucks-girl", "starbucks-skit"],
@@ -927,7 +927,7 @@ def test_the_derived_searches_survive_when_the_free_model_said_nothing(
     """No GROQ_API_KEY (or a failed call) leaves the analysis-derived terms as
     the floor -- the page never comes back empty."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis_with_hunt(tmp_path),
     ):
         job_id = client.post(
@@ -946,7 +946,7 @@ def test_outfit_searches_ignore_everyone_but_the_main_subject(client, tmp_path):
     """example.json's second person is the cameraman, wardrobe "not visible" --
     searching Pinterest for that is how the block filled up with junk."""
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         job_id = client.post(
@@ -965,7 +965,7 @@ def test_a_long_query_is_cut_on_a_word_boundary(client, tmp_path):
     analysis = _analysis(tmp_path)
     analysis.prompt.context = long_context
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=analysis,
     ):
         job_id = client.post(
@@ -974,7 +974,7 @@ def test_a_long_query_is_cut_on_a_word_boundary(client, tmp_path):
 
     html = client.get(f"/replicate/jobs/{job_id}").text
     [query] = re.findall(r"tiktok\.com/search\?q=(a\+girl\+films[^\"&]*)", html)
-    assert len(query.replace("+", " ")) <= replicate_router._MAX_QUERY_CHARS
+    assert len(query.replace("+", " ")) <= replicate_search._MAX_QUERY_CHARS
     # a whole word, not "neon+arca"
     assert query.split("+")[-1] in long_context.split()
 
@@ -984,7 +984,7 @@ def test_the_past_analyses_list_is_capped(client, tmp_path, monkeypatch):
     own rerun link reaches anything older."""
     monkeypatch.setattr(replicate_router, "INTAKE_LIST_LIMIT", 3)
     with mock.patch(
-        "ofmhelpers.web.routers.generation.replicate.pipeline.analyze",
+        "ofmhelpers.web.routers.generation.replicate.tasks.pipeline.analyze",
         return_value=_analysis(tmp_path),
     ):
         for _ in range(5):

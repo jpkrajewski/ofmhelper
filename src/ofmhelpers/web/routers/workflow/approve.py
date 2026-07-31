@@ -3,7 +3,8 @@ ofmhelpers/web/routers/workflow/approve.py
 
 Public (no-login) magic-link approval flow -- see web/stores/approval_tokens.py.
 Deliberately outside AuthMiddleware (registered in web/auth.py's
-PUBLIC_PREFIXES): the whole point is a reviewer can tap a Discord link on
+settings.web.public_prefixes): the whole point is a reviewer can tap a
+Discord link on
 their phone, with no session cookie, and have it approve the asset and kick
 off the Drive upload in one shot. Security comes from the token itself
 (unguessable, single-use, expiring) rather than a login.
@@ -15,13 +16,13 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.web.queue import enqueue
 from ofmhelpers.web.routers.task_helpers import media_response
 from ofmhelpers.web.routers.workflow.todo import _upload_to_drive
 from ofmhelpers.web.stores import approval_tokens, todos
 from ofmhelpers.web.stores.jobs import create_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/approve", tags=["approve"])
 
@@ -36,7 +37,7 @@ _FAILURE_MESSAGES = {
 
 @router.get("/result")
 def result(request: Request, status: str = "error", reason: str = ""):
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "approve_result.html",
         {

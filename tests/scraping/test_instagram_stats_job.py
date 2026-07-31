@@ -29,7 +29,7 @@ def _fake_queue(pending_func_names, scheduled, queued_func_names=()):
 
 
 def _patch_queue(monkeypatch, queue):
-    monkeypatch.setattr("ofmhelpers.web.queue.get_queue", lambda: queue)
+    monkeypatch.setattr("ofmhelpers.cache.get_queue", lambda: queue)
     monkeypatch.setattr(
         "rq.registry.ScheduledJobRegistry",
         lambda queue: SimpleNamespace(get_job_ids=lambda: queue._ids),

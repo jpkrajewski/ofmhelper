@@ -6,15 +6,19 @@ from elevenlabs.client import ElevenLabs
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from ofmhelpers.web.auth import get_elevenlabs_api_key
-from ofmhelpers.web.queue import enqueue
-from ofmhelpers.web.routers.task_helpers import asset_card, job_status_payload
+from ofmhelpers.cache import enqueue
+from ofmhelpers.web.api_keys import get_elevenlabs_api_key
+from ofmhelpers.web.routers.task_helpers import (
+    UPLOADS_ROOT,
+    asset_card,
+    job_status_payload,
+)
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import templates
+from ofmhelpers.web.templates_config import get_templates
 
 router = APIRouter(prefix="/helpers/elevenlabs", tags=["elevenlabs"])
 
-OUTPUT_ROOT = Path("uploads") / "elevenlabs-out"
+OUTPUT_ROOT = UPLOADS_ROOT / "elevenlabs-out"
 
 VOICES = {
     "Belu": "xqn9Hx2XbhMayvjlX5YD",
@@ -54,7 +58,7 @@ def _run_tts(
 
 @router.get("")
 def form(request: Request):
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "elevenlabs_form.html",
         {"voices": list(VOICES.keys()), "elevenlabs_api_key": get_elevenlabs_api_key()},
@@ -117,7 +121,7 @@ def job_status_json(job_id: str):
 def job_status(request: Request, job_id: str):
     job = get_job(job_id)
     if job is None:
-        return templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             request, "elevenlabs_form.html", {}, status_code=404
         )
 
@@ -128,7 +132,7 @@ def job_status(request: Request, job_id: str):
             for idx, f in enumerate(job["result"])
         ]
 
-    return templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "job_status.html",
         {

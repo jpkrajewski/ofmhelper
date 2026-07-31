@@ -16,7 +16,7 @@ from google.genai import errors, types
 
 from ofmhelpers.reel_machine.llm import gemini_provider
 from ofmhelpers.reel_machine.llm.gemini_provider import GeminiProvider
-from ofmhelpers.reel_machine.schema import ReelAnalysis
+from ofmhelpers.reel_machine.models import ReelAnalysis
 
 
 @pytest.fixture

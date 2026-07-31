@@ -6,11 +6,12 @@ Add one entry here whenever a new helper router is created --
 everything else (nav, index page, jobs dashboard) is generic.
 """
 
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True)
-class HelperEntry:
+class HelperEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     slug: str  # URL prefix under /helpers, e.g. "radio-comms"
     name: str  # Display name
     description: str  # One-line blurb for the index page

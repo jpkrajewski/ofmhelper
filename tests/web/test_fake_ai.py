@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
+from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.stores.jobs import get_job
 
 
@@ -127,7 +128,7 @@ def test_reference_upload_dedupes_into_the_shared_assets_store(
     # job's own generated PNG would land alongside the refs and confuse the
     # "only stored once" count below.
     assets_dir = tmp_path / "assets"
-    monkeypatch.setattr(fake_ai_router, "ASSETS_ROOT", assets_dir)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", assets_dir)
     monkeypatch.setattr(fake_ai_router, "OUT_DIR", tmp_path / "out")
 
     files = {
@@ -158,7 +159,7 @@ def test_uploaded_ref_paths_are_stored_in_job_params_for_click_to_reuse(
     those paths must actually be recorded there, keyed by the form's picker
     field name."""
     assets_dir = tmp_path / "assets"
-    monkeypatch.setattr(fake_ai_router, "ASSETS_ROOT", assets_dir)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", assets_dir)
     monkeypatch.setattr(fake_ai_router, "OUT_DIR", tmp_path / "out")
 
     files = {"reference_images": ("ref.png", io.BytesIO(b"ref bytes"), "image/png")}
@@ -186,7 +187,7 @@ def test_restored_existing_ref_round_trips_without_reupload(
     an "existing" manifest entry with the path from a past job's params. The
     server must resolve it to the same file -- no new copy on disk."""
     assets_dir = tmp_path / "assets"
-    monkeypatch.setattr(fake_ai_router, "ASSETS_ROOT", assets_dir)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", assets_dir)
     monkeypatch.setattr(fake_ai_router, "OUT_DIR", tmp_path / "out")
 
     files = {"reference_images": ("ref.png", io.BytesIO(b"ref bytes"), "image/png")}

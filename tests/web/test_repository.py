@@ -7,15 +7,15 @@ updates must never leave a torn/half-written row.
 
 import threading
 
-from ofmhelpers.web.db.cache import RepositoryCache
-from ofmhelpers.web.db.repository import (
+from ofmhelpers.cache import get_redis
+from ofmhelpers.web.db.repositories import (
     ApprovalTokenRepository,
     InstagramStatsRepository,
     JobRepository,
     ModelRepository,
     TodoRepository,
 )
-from ofmhelpers.web.queue import get_redis
+from ofmhelpers.web.db.repositories.cached_repository import RepositoryCache
 
 
 def test_job_create_get_round_trip():

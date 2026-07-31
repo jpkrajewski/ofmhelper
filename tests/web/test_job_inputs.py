@@ -21,7 +21,6 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from ofmhelpers.aigenproviders.kaiai.upload_cache import upload_cache
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import videos as download_reels_router
 from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
@@ -34,13 +33,6 @@ def _png_bytes() -> bytes:
     buf = io.BytesIO()
     Image.new("RGB", (300, 300), color="red").save(buf, format="PNG")
     return buf.getvalue()
-
-
-@pytest.fixture(autouse=True)
-def _clean_upload_cache():
-    upload_cache.clear()
-    yield
-    upload_cache.clear()
 
 
 @pytest.fixture

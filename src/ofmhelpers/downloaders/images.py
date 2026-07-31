@@ -2,49 +2,52 @@ from __future__ import annotations
 
 import subprocess
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
+from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
 
 
-@dataclass
-class ImageDownloadConfig:
+class ImageDownloadConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     output_dir: Path = Path("downloads")
     # {id} doesn't exist for every extractor and silently becomes "None",
     # causing filename collisions across different posts (gallery-dl then
     # skips "already downloaded" files). post_shortcode is Instagram's real
     # unique identifier; num disambiguates multiple images in one post.
     filename_template: str = "{category}_{post_shortcode}_{num}.{extension}"
-    extra_args: list[str] = field(default_factory=list)
+    extra_args: list[str] = []
+
+    def gallery_dl_cmd(self, url: str) -> list[str]:
+        cmd = [
+            "gallery-dl",
+            "-D",
+            str(self.output_dir),
+            "-f",
+            self.filename_template,
+            "--no-mtime",
+            "--no-skip",  # overwrite existing files instead of silently skipping them
+        ]
+
+        cookiefile = get_cookiefile()
+        if cookiefile:
+            cmd += ["--cookies", cookiefile]
+
+        cmd += self.extra_args
+        cmd.append(url)
+        return cmd
 
 
-@dataclass
-class ImageDownloadResult:
+class ImageDownloadResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     url: str
     success: bool
-    output_paths: list[Path] = field(default_factory=list)
+    output_paths: list[Path] = []
     error: str | None = None
-
-
-def build_gallery_dl_cmd(url: str, config: ImageDownloadConfig) -> list[str]:
-    cmd = [
-        "gallery-dl",
-        "-D",
-        str(config.output_dir),
-        "-f",
-        config.filename_template,
-        "--no-mtime",
-        "--no-skip",  # overwrite existing files instead of silently skipping them
-    ]
-
-    cookiefile = get_cookiefile()
-    if cookiefile:
-        cmd += ["--cookies", cookiefile]
-
-    cmd += config.extra_args
-    cmd.append(url)
-    return cmd
 
 
 def download(
@@ -58,11 +61,15 @@ def download(
     }
     start_time = time.time()
 
-    cmd = build_gallery_dl_cmd(url, config)
+    cmd = config.gallery_dl_cmd(url)
 
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, check=False, timeout=600
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=settings.downloaders.image_download_timeout_s,
         )
     except subprocess.TimeoutExpired:
         return ImageDownloadResult(url=url, success=False, error="Download timed out")

@@ -1,5 +1,5 @@
 """
-Integration test for the RQ queue + worker (web/queue.py + run_job): enqueue a
+Integration test for the RQ queue + worker (cache/queue.py + run_job): enqueue a
 job, run a real worker against the test Redis, and assert the job transitions
 through Postgres exactly as the API would observe it -- the durability the old
 in-process BackgroundTasks never had.
@@ -15,7 +15,7 @@ import pytest
 import worker_tasks
 from rq import SimpleWorker
 
-from ofmhelpers.web.queue import get_queue, get_redis
+from ofmhelpers.cache import get_queue, get_redis
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
