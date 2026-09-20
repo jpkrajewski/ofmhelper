@@ -49,7 +49,10 @@ services:
     container_name: ofmhelpers
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Loopback only: nginx on the host terminates :80 and proxies here, so
+      # the app itself is never reachable from the internet. Docker publishes
+      # straight into iptables and would otherwise sail past ufw.
+      - "127.0.0.1:8000:8000"
     environment: *app-environment
     env_file:
       - .env
