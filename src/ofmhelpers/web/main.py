@@ -72,6 +72,11 @@ for router in ROUTERS:
 
 
 @app.get("/")
+def apply(request: Request):
+    return get_templates().TemplateResponse(request, "reachmodel.html", {})
+
+
+@app.get("/home")
 def root(request: Request):
     return get_templates().TemplateResponse(request, "home.html", {})
 

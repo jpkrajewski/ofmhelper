@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Applications — Global Ascend LLC{% endblock %}
+{% block content %}
+<div class="page-head">
+    <h1>Applications</h1>
+    <p class="lead">Everything submitted through the public landing-page form, newest first.</p>
+</div>
+
+{% if not applications %}
+<p class="empty-state">No applications yet.</p>
+{% else %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Received</th>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Phone</th>
+                <th scope="col">Telegram</th>
+                <th scope="col">Instagram</th>
+                <th scope="col">Monthly revenue</th>
+                <th scope="col">Experience</th>
+                <th scope="col">Goals</th>
+                <th scope="col"><span class="sr-only">Delete</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in applications %}
+            <tr>
+                <td class="todo-added">{{ a.created_at_display }}</td>
+                <td>{{ a.first_name }} {{ a.last_name }}</td>
+                <td><a href="mailto:{{ a.email }}">{{ a.email }}</a></td>
+                <td>{% if a.phone %}<a href="tel:{{ a.phone }}">{{ a.phone }}</a>{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td>{% if a.telegram_handle %}<a href="https://t.me/{{ a.telegram_handle | trim('@') }}" target="_blank" rel="noopener">{{ a.telegram_handle }}</a>{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td>{% if a.instagram_handle %}{{ a.instagram_handle }}{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td>{% if a.monthly_revenue %}{{ a.monthly_revenue }}{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td>{% if a.experience_level %}{{ a.experience_level }}{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td>{% if a.goals %}{{ a.goals }}{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td>
+                    <form method="post" action="/applications/{{ a.id }}/delete">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

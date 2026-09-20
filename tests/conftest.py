@@ -93,8 +93,8 @@ def _clean_tables():
     with get_engine().begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE jobs, todos, approval_tokens, models, instagram_accounts "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE jobs, todos, approval_tokens, models, "
+                "instagram_accounts, applications RESTART IDENTITY CASCADE"
             )
         )
     get_redis().flushdb()
