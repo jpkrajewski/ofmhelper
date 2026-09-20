@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ascend Global</title>
+<style>
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .rm-carousel-track { animation: none !important; }
+  }
+  * { box-sizing: border-box; }
+
+  @keyframes rm-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  .rm-carousel-track {
+    animation: rm-scroll linear infinite;
+    animation-duration: 30s;
+  }
+  .rm-carousel:hover .rm-carousel-track {
+    animation-play-state: paused;
+  }
+  /* Each item keeps its own aspect ratio (set inline) at a shared height, so a
+     portrait screenshot, a landscape one and a wide strip all show in full
+     instead of being cropped to one fixed box. */
+  .rm-carousel-item {
+    flex: 0 0 auto;
+    height: 340px;
+    max-width: 560px;
+    background: #141414;
+    border: 1px solid #242424;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .rm-carousel-item > img,
+  .rm-carousel-item > video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  @media (max-width: 480px) {
+    .rm-carousel-item { height: 260px; }
+  }
+  img { max-width: 100%; height: auto; }
+
+  @media (max-width: 768px) {
+    .rm-nav-links { display: none !important; }
+    .rm-nav-actions a[href="https://t.me/ascendonboard"] { display: none !important; }
+    .rm-hero-stats { gap: 32px !important; }
+    .rm-grid-2 { grid-template-columns: 1fr !important; }
+    .rm-flex-2 { flex-direction: column !important; }
+    .rm-grid-3 { grid-template-columns: 1fr !important; }
+    .rm-form-2col { grid-template-columns: 1fr !important; }
+    .rm-proof-stats { gap: 40px !important; }
+  }
+
+  @media (max-width: 480px) {
+    header { padding: 14px 5% !important; }
+    section { padding-left: 6% !important; padding-right: 6% !important; }
+    .rm-hero { padding-top: 70px !important; padding-bottom: 60px !important; }
+    .rm-hero h1 { font-size: 34px !important; }
+    .rm-hero p { font-size: 16px !important; }
+    .rm-hero-stats { gap: 24px !important; margin-bottom: 32px !important; }
+    .rm-hero-stats > div > div:first-child { font-size: 26px !important; }
+    .rm-cta-row { flex-direction: column !important; align-items: stretch !important; }
+    .rm-cta-row a { text-align: center !important; }
+    h2 { font-size: 26px !important; }
+    .rm-mentorship-cta { padding: 26px !important; grid-template-columns: 1fr !important; }
+    .rm-mentorship-cta h3 { font-size: 20px !important; }
+    .rm-pricing-card { padding: 26px !important; }
+    .rm-proof-stats { gap: 28px !important; flex-wrap: wrap !important; justify-content: center !important; }
+    .rm-form-card { padding: 24px !important; }
+    .rm-team-grid { grid-template-columns: 1fr !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background:#0a0a0a; color:#f5f5f5; font-family:'Helvetica Neue', Arial, sans-serif; line-height:1.5; overflow-x:hidden;">
+
+<!-- NAV -->
+<header style="position:sticky; top:0; z-index:100; display:flex; align-items:center; justify-content:space-between; padding:18px 5%; background:rgba(10,10,10,0.85); backdrop-filter:blur(10px); border-bottom:1px solid #1f1f1f;">
+  <div style="display:flex; align-items:center; gap:10px; font-weight:700; font-size:18px; letter-spacing:0.5px;">
+    <div style="width:34px; height:34px; border-radius:6px; background:linear-gradient(135deg,#5b9bd5,#2f5faa); display:flex; align-items:center; justify-content:center; font-size:14px; color:#0a0a0a;">A</div>
+    Ascend Global
+  </div>
+  <nav class="rm-nav-links" style="display:flex; gap:32px; font-size:14px; color:#b5b5b5;">
+    <a href="#blueprint" style="color:#b5b5b5; text-decoration:none;">The Blueprint</a>
+    <a href="#proof" style="color:#b5b5b5; text-decoration:none;">Proof</a>
+    <a href="#agency-results" style="color:#b5b5b5; text-decoration:none;">Agency Results</a>
+    <a href="#pricing" style="color:#b5b5b5; text-decoration:none;">Pricing</a>
+  </nav>
+  <div class="rm-nav-actions" style="display:flex; align-items:center; gap:20px; font-size:14px;">
+    <a href="https://t.me/ascendonboard" style="color:#b5b5b5; text-decoration:none;">Contact</a>
+    <a href="#apply" style="background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:10px 22px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap;">Apply</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<section id="blueprint" class="rm-hero" style="position:relative; overflow:hidden; padding:120px 5% 100px; text-align:center; background:radial-gradient(ellipse at 50% 0%, #0d1a2b 0%, #0a0a0a 60%);">
+  <div style="max-width:800px; margin:0 auto;">
+    <div style="font-size:13px; letter-spacing:2px; color:#5b9bd5; margin-bottom:20px;">Ascend Global's Proven System</div>
+    <h1 style="font-size:clamp(34px,8vw,64px); font-weight:800; margin:0 0 20px; line-height:1.08;">
+      Ascend Global's <span style="color:#4a90e2;">$10M</span> Blueprint
+    </h1>
+    <p style="font-size:19px; color:#a8a8a8; max-width:600px; margin:0 auto 40px;">
+      The exact system behind $10M+ in creator revenue. No guessing. No theories. Just proven results.
+    </p>
+
+    <div class="rm-hero-stats" style="display:flex; justify-content:center; gap:60px; margin-bottom:44px; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:34px; font-weight:800; color:#4a90e2;">$10M+</div>
+        <div style="font-size:13px; color:#8a8a8a;">Revenue Generated</div>
+      </div>
+      <div>
+        <div style="font-size:34px; font-weight:800; color:#4a90e2;">50+</div>
+        <div style="font-size:13px; color:#8a8a8a;">6-Figure Creators</div>
+      </div>
+    </div>
+
+    <div class="rm-cta-row" style="display:flex; justify-content:center; gap:16px; flex-wrap:wrap;">
+      <a href="#apply" style="background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:15px 32px; border-radius:4px; font-weight:700; text-decoration:none; font-size:15px;">Start Your Transformation</a>
+      <a href="#proof" style="border:1px solid #3a3a3a; color:#f5f5f5; padding:15px 32px; border-radius:4px; font-weight:600; text-decoration:none; font-size:15px;">See How It Works</a>
+    </div>
+  </div>
+</section>
+
+<!-- ANALYTICS -->
+<section style="padding:90px 5%; background:#0e0e0e;">
+  <div style="text-align:center; max-width:700px; margin:0 auto 60px;">
+    <div style="font-size:13px; letter-spacing:2px; color:#5b9bd5; margin-bottom:16px;">Real Analytics. Real Results.</div>
+    <h2 style="font-size:clamp(28px,4vw,42px); font-weight:800; margin:0 0 16px;">The Engagement You'll Generate</h2>
+    <p style="color:#9a9a9a; font-size:16px;">These aren't projections or estimates. This is the actual engagement data from our own accounts and client results. Your potential is unlimited.</p>
+  </div>
+
+  <div class="rm-grid-3" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:24px; max-width:1100px; margin:0 auto 50px;">
+    <div style="background:#161616; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <div style="font-size:12px; color:#7a7a7a; margin-bottom:6px;">Instagram · Monthly Views</div>
+      <div style="font-size:30px; font-weight:800; color:#4a90e2;">20M+</div>
+      <div style="font-size:13px; color:#8a8a8a; margin-top:6px;">85.6% Non-Followers Reached</div>
+    </div>
+    <div style="background:#161616; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <div style="font-size:12px; color:#7a7a7a; margin-bottom:6px;">Instagram · Accounts Reached</div>
+      <div style="font-size:30px; font-weight:800; color:#4a90e2;">5M+</div>
+      <div style="font-size:13px; color:#8a8a8a; margin-top:6px;">40.9% growth rate</div>
+    </div>
+    <div style="background:#161616; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <div style="font-size:12px; color:#7a7a7a; margin-bottom:6px;">Instagram · Profile Visits</div>
+      <div style="font-size:30px; font-weight:800; color:#4a90e2;">161K</div>
+      <div style="font-size:13px; color:#8a8a8a; margin-top:6px;">High intent traffic</div>
+    </div>
+  </div>
+
+  <div class="rm-grid-2" style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:40px; max-width:1100px; margin:0 auto; ">
+    <div style="background:#141414; border:1px solid #242424; border-radius:12px; padding:20px; color:#6a6a6a; font-size:13px; min-height:280px; display:flex; align-items:center; justify-content:center;">
+      <video src="{{ url_for('static', path='media/videos/results2-web.mp4') }}"
+       autoplay muted loop playsinline preload="metadata"
+       style="width:100%; max-width:720px; border-radius:10px; display:block; margin:0 auto;"></video>
+    </div>
+    <div>
+      <div class="rm-flex-2" style="display:flex; gap:20px; margin-bottom:24px;">
+        <div style="flex:1; background:#161616; border:1px solid #242424; border-radius:10px; padding:20px;">
+          <div style="font-size:24px; font-weight:800; color:#4a90e2;">2.2M</div>
+          <div style="font-size:12px; color:#8a8a8a;">Views · Elite Results</div>
+        </div>
+        <div style="flex:1; background:#161616; border:1px solid #242424; border-radius:10px; padding:20px;">
+          <div style="font-size:24px; font-weight:800; color:#4a90e2;">1.5M+</div>
+          <div style="font-size:12px; color:#8a8a8a;">Accounts Reached · Monthly</div>
+        </div>
+      </div>
+      <div style="background:#161616; border:1px solid #242424; border-radius:10px; padding:20px; margin-bottom:30px;">
+        <div style="font-size:24px; font-weight:800; color:#4a90e2;">182K+</div>
+        <div style="font-size:12px; color:#8a8a8a;">Followers · TikTok Growth</div>
+      </div>
+      <div style="border-top:1px solid #242424; padding-top:26px;">
+        <h3 style="margin:0 0 8px; font-size:20px;">Want These Results?</h3>
+        <p style="color:#9a9a9a; font-size:14px; margin:0 0 18px;">Message us directly to learn how we can help you achieve similar growth.</p>
+        <div style="display:flex; gap:14px;">
+          <a href="https://t.me/ascendonboard" style="background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:12px 24px; border-radius:4px; font-weight:700; text-decoration:none; font-size:14px;">Contact Us</a>
+          <a href="#pricing" style="border:1px solid #3a3a3a; color:#f5f5f5; padding:12px 24px; border-radius:4px; font-weight:600; text-decoration:none; font-size:14px;">View Plans</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AGENCY RESULTS -->
+<section id="agency-results" style="padding:90px 5%; background:#0a0a0a; border-bottom:1px solid #1c1c1c;">
+  <div style="text-align:center; max-width:700px; margin:0 auto 60px;">
+    <div style="font-size:13px; letter-spacing:2px; color:#5b9bd5; margin-bottom:16px;">Agency Results</div>
+    <h2 style="font-size:clamp(28px,4vw,42px); font-weight:800; margin:0 0 16px;">What Happens When We Run Your Account</h2>
+    <p style="color:#9a9a9a; font-size:16px;">Every creator we onboard gets the same machine behind them: daily content, paid-grade editing, full-funnel distribution and a chat team that converts the traffic.</p>
+  </div>
+
+  <div class="rm-grid-2" style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:40px; max-width:1100px; margin:0 auto 50px;">
+    <div style="background:#141414; border:1px solid #242424; border-radius:12px; padding:20px; display:flex;  justify-content:center; min-height:280px;">
+      <video src="{{ url_for('static', path='media/videos/results1-web.mp4') }}"
+       autoplay muted loop playsinline preload="metadata"
+       style="width:100%; max-width:360px; border-radius:10px; display:block; margin:0 auto;"></video>
+    </div>
+    <div>
+      <div class="rm-flex-2" style="display:flex; gap:20px; margin-bottom:20px;">
+        <div style="flex:1; background:#161616; border:1px solid #242424; border-radius:10px; padding:20px;">
+          <div style="font-size:24px; font-weight:800; color:#4a90e2;">60 Days</div>
+          <div style="font-size:12px; color:#8a8a8a;">Average time to first $10K month</div>
+        </div>
+        <div style="flex:1; background:#161616; border:1px solid #242424; border-radius:10px; padding:20px;">
+          <div style="font-size:24px; font-weight:800; color:#4a90e2;">50+</div>
+          <div style="font-size:12px; color:#8a8a8a;">Creators scaled by our team</div>
+        </div>
+      </div>
+
+      <div style="background:#161616; border:1px solid #242424; border-radius:10px; padding:22px; margin-bottom:26px;">
+        <div style="display:flex; gap:12px; margin-bottom:14px;">
+          <div style="color:#4a90e2; font-weight:800; font-size:14px;">01</div>
+          <div style="font-size:14px; color:#c8c8c8;">Tailored content plan — a posting strategy built per platform for Instagram, TikTok, X, Reddit and Snapchat, scaled with AI marketing.</div>
+        </div>
+        <div style="display:flex; gap:12px; margin-bottom:14px;">
+          <div style="color:#4a90e2; font-weight:800; font-size:14px;">02</div>
+          <div style="font-size:14px; color:#c8c8c8;">Account security — verification and unban services, plus active leak protection so your paid content stays paid.</div>
+        </div>
+        <div style="display:flex; gap:12px;">
+          <div style="color:#4a90e2; font-weight:800; font-size:14px;">03</div>
+          <div style="font-size:14px; color:#c8c8c8;">Chatting that converts — a trained team working your funnel 24/7, always in your voice and inside your personal boundaries.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #242424; padding-top:24px;">
+        <h3 style="margin:0 0 8px; font-size:20px;">Want This Running On Your Account?</h3>
+        <p style="color:#9a9a9a; font-size:14px; margin:0 0 18px;">We take on a limited number of creators each month so every account gets the full team. Apply and we will come back within 24 hours.</p>
+        <div style="display:flex; gap:14px; flex-wrap:wrap;">
+          <a href="#apply" style="background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:12px 24px; border-radius:4px; font-weight:700; text-decoration:none; font-size:14px;">Apply Now</a>
+          <a href="https://t.me/ascendonboard" style="border:1px solid #3a3a3a; color:#f5f5f5; padding:12px 24px; border-radius:4px; font-weight:600; text-decoration:none; font-size:14px;">Talk To Us On Telegram</a>
+        </div>
+        <div style="color:#6a6a6a; font-size:12px; margin-top:14px;">Commission based. No upfront cost, no lock-in.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MENTORSHIP -->
+<section style="padding:90px 5%; background:#0a0a0a;">
+  <div style="text-align:center; max-width:700px; margin:0 auto 60px;">
+    <div style="font-size:13px; letter-spacing:2px; color:#5b9bd5; margin-bottom:16px;">Exclusive Access</div>
+    <h2 style="font-size:clamp(28px,4vw,42px); font-weight:800; margin:0 0 16px;">1-on-1 Elite Mentorship</h2>
+    <p style="color:#9a9a9a; font-size:16px;">Get direct access to the Ascend Global founders and the highest-earning models in the industry. The secrets that created $10M+ in revenue are about to be yours.</p>
+  </div>
+
+  <div class="rm-grid-3" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; max-width:1100px; margin:0 auto 60px;">
+    <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <h3 style="margin:0 0 10px; font-size:18px;">Million-Dollar Mindset</h3>
+      <p style="color:#9a9a9a; font-size:14px; margin:0 0 16px;">The exact psychological framework used by $1M+ creators to think and operate at elite levels.</p>
+      <div style="font-size:12px; color:#5b9bd5;">Top Secret Intel</div>
+    </div>
+    <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <h3 style="margin:0 0 10px; font-size:18px;">Advanced Revenue Streams</h3>
+      <p style="color:#9a9a9a; font-size:14px; margin:0 0 16px;">Secret monetization methods that only the top 0.01% know about — never shared publicly.</p>
+      <div style="font-size:12px; color:#5b9bd5;">Top Secret Intel</div>
+    </div>
+    <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <h3 style="margin:0 0 10px; font-size:18px;">Insider Platform Secrets</h3>
+      <p style="color:#9a9a9a; font-size:14px; margin:0 0 16px;">Behind-the-scenes platform algorithms and loopholes that maximize your visibility and earnings.</p>
+      <div style="font-size:12px; color:#5b9bd5;">Top Secret Intel</div>
+    </div>
+    <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:28px;">
+      <h3 style="margin:0 0 10px; font-size:18px;">Organic Viral Strategies</h3>
+      <p style="color:#9a9a9a; font-size:14px; margin:0 0 16px;">The exact hooks, formats and posting patterns behind our 20M+ view months — zero ad spend, repeatable on any account.</p>
+      <div style="font-size:12px; color:#5b9bd5;">Top Secret Intel</div>
+    </div>
+  </div>
+
+  <div class="rm-mentorship-cta rm-grid-2" style="max-width:1100px; margin:0 auto; background:linear-gradient(135deg,#0d1a2b,#141414); border:1px solid #1f3a5f; border-radius:14px; padding:44px; display:grid; grid-template-columns:1.3fr 1fr; gap:40px; align-items:center;">
+    <div>
+      <h3 style="margin:0 0 14px; font-size:24px;">Personal Access to Our Founders &amp; Elite Models</h3>
+      <p style="color:#a8a8a8; font-size:15px; margin:0;">This isn't just account management. You get direct mentorship from our founders and exclusive sessions with models earning $100K+ monthly. Learn the insider strategies, psychological tactics, and revenue secrets that have never been shared publicly.</p>
+    </div>
+    <div>
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+        <div style="width:8px; height:8px; border-radius:50%; background:#4a90e2;"></div>
+        <div>
+          <div style="font-weight:700; font-size:14px;">Weekly Calls</div>
+          <div style="color:#8a8a8a; font-size:13px;">Direct 1-on-1 strategy sessions</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:26px;">
+        <div style="width:8px; height:8px; border-radius:50%; background:#4a90e2;"></div>
+        <div>
+          <div style="font-weight:700; font-size:14px;">Elite Network</div>
+          <div style="color:#8a8a8a; font-size:13px;">Access to top-earning creators</div>
+        </div>
+      </div>
+      <a href="#apply" style="display:block; text-align:center; background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:14px; border-radius:4px; font-weight:700; text-decoration:none;">Unlock Elite Access</a>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing" style="padding:90px 5%; background:#0e0e0e; text-align:center;">
+  <h2 style="font-size:clamp(28px,4vw,42px); font-weight:800; margin:0 0 12px;">Choose Your Path to Dominance</h2>
+  <p style="color:#9a9a9a; font-size:16px; margin:0 0 50px;">One destination: the top 0.1%.</p>
+
+  <div class="rm-pricing-card" style="max-width:420px; margin:0 auto; position:relative; background:#141414; border:2px solid #4a90e2; border-radius:14px; padding:40px; text-align:left;">
+    <div style="position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:#4a90e2; color:#0a0a0a; font-size:11px; font-weight:700; letter-spacing:1px; padding:5px 14px; border-radius:20px;">Recommended</div>
+    <h3 style="margin:10px 0 6px; font-size:22px;">Partnership</h3>
+    <p style="color:#9a9a9a; font-size:14px; margin:0 0 20px;">The classic partnership model for creators ready to scale aggressively.</p>
+    <div style="font-size:32px; font-weight:800; color:#4a90e2; margin-bottom:4px;">Commission</div>
+    <div style="color:#8a8a8a; font-size:13px; margin-bottom:26px;">No upfront fees. We only win when you win.</div>
+    <ul style="list-style:none; padding:0; margin:0 0 30px; color:#d0d0d0; font-size:14px;">
+      <li style="padding:9px 0; border-top:1px solid #242424;">✓ The Full $10M Blueprint</li>
+      <li style="padding:9px 0; border-top:1px solid #242424;">✓ 24/7 Human-Led Chatter Engine</li>
+      <li style="padding:9px 0; border-top:1px solid #242424;">✓ Full Account Management</li>
+      <li style="padding:9px 0; border-top:1px solid #242424;">✓ Weekly Performance Reports</li>
+      <li style="padding:9px 0; border-top:1px solid #242424;">✓ Dedicated Account Manager</li>
+    </ul>
+    <a href="#apply" style="display:block; text-align:center; background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:14px; border-radius:4px; font-weight:700; text-decoration:none;">Apply for Partnership</a>
+  </div>
+</section>
+
+<!-- TEAM -->
+<section style="padding:90px 5%; background:#0a0a0a;">
+  <div style="text-align:center; max-width:700px; margin:0 auto 60px;">
+    <div style="font-size:13px; letter-spacing:2px; color:#5b9bd5; margin-bottom:16px;">Meet Our Team</div>
+    <h2 style="font-size:clamp(26px,4vw,38px); font-weight:800; margin:0 0 16px;">A US-Based Team Dedicated to Your Revenue</h2>
+    <p style="color:#9a9a9a; font-size:16px;">A highly organized, US-based team of professionals dedicated to maximizing your OnlyFans revenue.</p>
+  </div>
+
+  <div class="rm-team-grid" style="max-width:1100px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:50px; align-items:stretch;">
+    <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:28px; display:flex; flex-direction:column;">
+      <h3 style="margin:0 0 14px; font-size:20px;">Professional Chatter Team</h3>
+      <p style="color:#a8a8a8; font-size:14px; margin:0 0 20px;">Our elite team operates from a dedicated US office, not remote freelancers. Each team member is trained in our proven conversion methods and your unique brand voice.</p>
+      <div style="color:#d0d0d0; font-size:14px; margin-bottom:8px;">• Highly trained conversation specialists</div>
+      <div style="color:#d0d0d0; font-size:14px; margin-bottom:8px;">• Master your brand voice and personality</div>
+      <div style="color:#d0d0d0; font-size:14px;">• Proven scripts that convert fans to revenue</div>
+    </div>
+    <div style="display:grid; grid-template-rows:repeat(3,1fr); gap:18px;">
+      <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:22px;">
+        <div style="font-weight:700; font-size:15px; margin-bottom:6px;">24/7 Availability</div>
+        <div style="color:#8a8a8a; font-size:13px;">Your dedicated team operates around the clock across multiple time zones</div>
+      </div>
+      <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:22px;">
+        <div style="font-weight:700; font-size:15px; margin-bottom:6px;">Direct Communication</div>
+        <div style="color:#8a8a8a; font-size:13px;">Personal access to your account manager and our founders via Telegram</div>
+      </div>
+      <div style="background:#141414; border:1px solid #242424; border-radius:10px; padding:22px;">
+        <div style="font-weight:700; font-size:15px; margin-bottom:6px;">Professional Operations</div>
+        <div style="color:#8a8a8a; font-size:13px;">US-based office with structured processes and proven methodologies</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROOF -->
+<section id="proof" style="padding:90px 5%; background:#0e0e0e; text-align:center;">
+  <h2 style="font-size:clamp(28px,4vw,42px); font-weight:800; margin:0 0 50px;">The Proof is in the Numbers</h2>
+  <div class="rm-proof-stats" style="display:flex; justify-content:center; gap:80px; margin-bottom:70px;">
+    <div>
+      <div style="font-size:40px; font-weight:800; color:#4a90e2;">$10M+</div>
+      <div style="color:#8a8a8a; font-size:14px;">Total Revenue Generated</div>
+    </div>
+    <div>
+      <div style="font-size:40px; font-weight:800; color:#4a90e2;">50+</div>
+      <div style="color:#8a8a8a; font-size:14px;">6-Figure Creators</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:22px; margin:0 0 30px;">Real Results from Our Creators</h3>
+
+  <!--
+    CAROUSEL — add as many pictures as you want.
+    Just add or remove <div class="rm-carousel-item"><img src="..." alt="..."></div> entries below.
+    The script automatically duplicates whatever is here to create a seamless, continuous loop
+    and adjusts speed to the number of images — no other changes needed.
+  -->
+  <div class="rm-carousel" style="overflow:hidden; width:100%; max-width:1100px; margin:0 auto 60px; -webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent); mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);">
+    <div id="resultsTrack" class="rm-carousel-track" style="display:flex; gap:20px; width:max-content;">
+      <div class="rm-carousel-item" style="aspect-ratio:1280/879;">
+        <img src="{{ url_for('static', path='media/images/image_results_1.jpg') }}" alt="Client result screenshot 1">
+      </div>
+      <div class="rm-carousel-item" style="aspect-ratio:1046/1280;">
+        <img src="{{ url_for('static', path='media/images/image_results_2.jpg') }}" alt="Client result screenshot 2">
+      </div>
+      <div class="rm-carousel-item" style="aspect-ratio:1280/393;">
+        <img src="{{ url_for('static', path='media/images/image_results_3.jpg') }}" alt="Client result screenshot 3">
+      </div>
+      <div class="rm-carousel-item" style="aspect-ratio:1280/801;">
+        <img src="{{ url_for('static', path='media/images/image_results_4.jpg') }}" alt="Client result screenshot 4">
+      </div>
+      <div class="rm-carousel-item" style="aspect-ratio:592/1280;">
+        <img src="{{ url_for('static', path='media/images/image_results_5.jpg') }}" alt="Client result screenshot 5">
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:22px; margin:0 0 10px;">Ready to Join Them?</h3>
+  <p style="color:#9a9a9a; font-size:15px; margin:0 0 24px;">Contact us directly on Telegram to discuss your goals.</p>
+  <a href="https://t.me/ascendonboard" style="background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; padding:15px 32px; border-radius:4px; font-weight:700; text-decoration:none; font-size:15px;">Message Us Now</a>
+</section>
+
+<!-- APPLICATION FORM -->
+<section id="apply" style="padding:90px 5%; background:#0a0a0a;">
+  <div style="text-align:center; max-width:640px; margin:0 auto 50px;">
+    <h2 style="font-size:clamp(26px,4vw,38px); font-weight:800; margin:0 0 14px;">Ready to Dominate?</h2>
+    <p style="color:#9a9a9a; font-size:16px;">Apply to work with Ascend Global and join the elite creators generating life-changing revenue. Fill out the form below to get started.</p>
+  </div>
+
+  <form class="rm-form-card" method="post" action="/apply" style="max-width:640px; margin:0 auto; background:#141414; border:1px solid #242424; border-radius:14px; padding:40px;">
+    <div style="font-size:13px; color:#5b9bd5; margin-bottom:18px; font-weight:700;">1. Personal Information</div>
+    <div class="rm-form-2col" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:26px;">
+      <input type="text" name="first_name" required placeholder="First name" style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+      <input type="text" name="last_name" required placeholder="Last name" style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+      <input type="email" name="email" required placeholder="Email address" style="grid-column:1 / -1; background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+    </div>
+
+    <div style="font-size:13px; color:#5b9bd5; margin-bottom:18px; font-weight:700;">2. How We Reach You</div>
+    <div class="rm-form-2col" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:8px;">
+      <input type="tel" name="phone" placeholder="Phone number" style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+      <input type="text" name="telegram_handle" placeholder="Telegram handle (@you)" style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+    </div>
+    <div style="color:#7a7a7a; font-size:12px; margin-bottom:22px;">Give at least one — phone or Telegram. 💬 Get an answer ASAP</div>
+
+    <div style="font-size:13px; color:#5b9bd5; margin-bottom:18px; font-weight:700;">3. Your Social Handles</div>
+    <div style="margin-bottom:26px;">
+      <input type="text" name="instagram_handle" placeholder="Instagram handle" style="width:100%; box-sizing:border-box; background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+    </div>
+
+    <div style="font-size:13px; color:#5b9bd5; margin-bottom:18px; font-weight:700;">4. Current Status</div>
+    <div class="rm-form-2col" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:26px;">
+      <select name="monthly_revenue" style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+        <option value="">Current Monthly Revenue</option>
+        <option>$0 - $1,000</option>
+        <option>$1,000 - $5,000</option>
+        <option>$5,000 - $10,000</option>
+        <option>$10,000 - $25,000</option>
+        <option>$25,000 - $50,000</option>
+        <option>$50,000+</option>
+      </select>
+      <select name="experience_level" style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; width:100%;">
+        <option value="">Experience Level</option>
+        <option>Just Starting Out</option>
+        <option>Some Experience</option>
+        <option>Very Experienced</option>
+      </select>
+    </div>
+
+    <div style="font-size:13px; color:#5b9bd5; margin-bottom:18px; font-weight:700;">5. Your Goals</div>
+    <textarea name="goals" placeholder="Tell us about your goals — what does success look like for you in the next 6-12 months?" rows="4" style="width:100%; resize:vertical; background:#0e0e0e; border:1px solid #2a2a2a; border-radius:6px; padding:13px; color:#f5f5f5; font-size:16px; font-family:inherit; margin-bottom:16px;"></textarea>
+    <div style="background:#0e0e0e; border:1px solid #2a2a2a; border-radius:8px; padding:18px; margin-bottom:28px;">
+      <div style="font-weight:700; font-size:14px; margin-bottom:6px;">Partnership Model: Commission Split (No upfront cost)</div>
+      <div style="color:#9a9a9a; font-size:13px;">Our team operates on a commission basis, aligning their success directly with yours. No hidden fees or upfront costs.</div>
+    </div>
+
+    <button type="submit" style="width:100%; background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; border:none; padding:16px; border-radius:6px; font-weight:700; font-size:15px; cursor:pointer;">Submit Application</button>
+    <div style="text-align:center; color:#6a6a6a; font-size:12px; margin-top:16px;">By submitting this form, you agree to be contacted by our team regarding your application. We typically respond within 24 hours.</div>
+  </form>
+</section>
+
+{% if request.query_params.get("applied") %}
+<!-- THANK-YOU MODAL -- rendered only right after a successful POST /apply
+     (routers/apply.py redirects to /?applied=1). The script below strips the
+     query param, so a refresh or a shared link never reopens it. -->
+<div id="rm-thanks" role="dialog" aria-modal="true" aria-labelledby="rm-thanks-title"
+     style="position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(5,5,5,0.78); backdrop-filter:blur(6px);">
+  <div style="max-width:440px; width:100%; background:#141414; border:1px solid #1f3a5f; border-radius:14px; padding:36px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+    <div style="width:56px; height:56px; margin:0 auto 20px; border-radius:50%; background:linear-gradient(135deg,#4a90e2,#2f5faa); display:flex; align-items:center; justify-content:center; font-size:26px; color:#0a0a0a;">✓</div>
+    <h3 id="rm-thanks-title" style="margin:0 0 12px; font-size:22px;">Thank you!</h3>
+    <p style="color:#a8a8a8; font-size:15px; margin:0 0 26px;">
+      Your application is in. We'll contact you as soon as possible — typically within 24 hours.
+    </p>
+    <button type="button" id="rm-thanks-close"
+            style="width:100%; background:linear-gradient(135deg,#4a90e2,#2f5faa); color:#0a0a0a; border:none; padding:14px; border-radius:6px; font-weight:700; font-size:15px; cursor:pointer;">Close</button>
+  </div>
+</div>
+{% endif %}
+
+<!-- FOOTER -->
+<footer style="padding:50px 5% 30px; background:#050505; border-top:1px solid #1f1f1f; text-align:center;">
+  <div style="display:flex; align-items:center; justify-content:center; gap:10px; font-weight:700; font-size:17px; margin-bottom:10px;">
+    <div style="width:30px; height:30px; border-radius:6px; background:linear-gradient(135deg,#5b9bd5,#2f5faa); display:flex; align-items:center; justify-content:center; font-size:13px; color:#0a0a0a;">A</div>
+    Ascend Global
+  </div>
+  <div style="color:#8a8a8a; font-size:14px; margin-bottom:20px;">The $10M OnlyFans Playbook</div>
+  <div style="display:flex; justify-content:center; gap:24px; font-size:14px; margin-bottom:24px;">
+    <a href="https://t.me/ascendonboard" style="color:#8a8a8a; text-decoration:none;">Telegram</a>
+  </div>
+  <div style="color:#5a5a5a; font-size:12px;">© 2026 Ascend Global. All Rights Reserved. Results are not guaranteed. Success depends on your effort and commitment.</div>
+</footer>
+
+<script>
+  // "Phone OR Telegram" is the one rule HTML validation cannot express, and
+  // the server answers a violation with a raw 422 -- so say it in the browser
+  // first. The server check in routers/apply.py stays the real gate.
+  // Thank-you modal: close on button, backdrop or Escape, and drop the
+  // ?applied=1 marker from the URL so a refresh doesn't show it again.
+  (function () {
+    var modal = document.getElementById('rm-thanks');
+    if (!modal) return;
+
+    var previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    function close() {
+      modal.remove();
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeydown);
+      history.replaceState(null, '', location.pathname + '#apply');
+    }
+
+    function onKeydown(event) {
+      if (event.key === 'Escape') close();
+    }
+
+    document.getElementById('rm-thanks-close').addEventListener('click', close);
+    modal.addEventListener('click', function (event) {
+      if (event.target === modal) close();
+    });
+    document.addEventListener('keydown', onKeydown);
+    document.getElementById('rm-thanks-close').focus();
+  })();
+
+  (function () {
+    var form = document.querySelector('form[action="/apply"]');
+    if (!form) return;
+
+    var phone = form.querySelector('[name="phone"]');
+    var telegram = form.querySelector('[name="telegram_handle"]');
+
+    function validateContact() {
+      var missing = !phone.value.trim() && !telegram.value.trim();
+      phone.setCustomValidity(missing ? 'Give a phone number or a Telegram handle.' : '');
+    }
+
+    phone.addEventListener('input', validateContact);
+    telegram.addEventListener('input', validateContact);
+    form.addEventListener('submit', function (event) {
+      validateContact();
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        form.reportValidity();
+      }
+    });
+  })();
+
+  (function () {
+    var track = document.getElementById('resultsTrack');
+    if (!track) return;
+
+    // Duplicate every item once so the strip can loop seamlessly at -50%,
+    // no matter how many images are placed in the carousel above.
+    var originalItems = Array.prototype.slice.call(track.children);
+    originalItems.forEach(function (item) {
+      var clone = item.cloneNode(true);
+      clone.setAttribute('aria-hidden', 'true');
+      track.appendChild(clone);
+    });
+
+    // Set a consistent scroll speed regardless of how many images there are.
+    function calibrateSpeed() {
+      var singleSetWidth = track.scrollWidth / 2;
+      var pxPerSecond = 60;
+      var duration = Math.max(singleSetWidth / pxPerSecond, 10);
+      track.style.animationDuration = duration + 's';
+    }
+
+    if (document.readyState === 'complete') {
+      calibrateSpeed();
+    } else {
+      window.addEventListener('load', calibrateSpeed);
+    }
+    // Images may load after 'load' fires in some cases; recheck shortly after.
+    setTimeout(calibrateSpeed, 300);
+    window.addEventListener('resize', calibrateSpeed);
+  })();
+</script>
+
+</body>
+</html>

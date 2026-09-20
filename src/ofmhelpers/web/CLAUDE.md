@@ -140,6 +140,9 @@ call these and nothing below them.
   accounts, contacts, competitor profiles).
 - `instagram_stats.py` — the follower/last-N-reels numbers the `/models`
   page shows, written by `scraping.instagram_stats_job`.
+- `applications.py` — submissions of the public `/` landing-page form
+  (`routers/apply.py` writes, `routers/admin/applications.py` reads).
+  Write-once rows: a lead is never edited, only read or deleted.
 
 # `db/` — the persistence layer (Postgres)
 
@@ -317,6 +320,9 @@ files is admin-only by default.
   (`TASK_STATUS_PREFIX` maps a job's task name to its status-page URL prefix
   — add an entry for any new task type, same idea as `generation/index.py`'s
   registry but repo-wide).
+- `applications.py` — `/applications`: the CRM table of every public
+  landing-page application (`stores/applications.py`), newest first, read +
+  delete only.
 - `cookies.py` — upload endpoint for `cookies/cookies.txt`
   (`downloaders.cookies`).
 
@@ -333,6 +339,11 @@ files is admin-only by default.
 ## At the `routers/` root
 
 - `auth.py` — `/login`, `/logout`.
+- `apply.py` — `POST /apply`, the only public *write* in the app: the
+  application form on the `/` landing page (`templates/reachmodel.html`).
+  Public via `settings.web.public_paths`, still capped per IP by
+  `WriteRateLimitMiddleware`. Post/Redirect/Get back to `/?applied=1`, so a
+  refresh cannot submit twice.
 - `refs.py` — serves/lists previously-uploaded reference files from
   `ASSETS_ROOT` for the file-picker widget's "reuse" browser. `GET /refs` with
   no `limit` returns **two short lists**: the `RECENT_USED_LIMIT` (5) files you

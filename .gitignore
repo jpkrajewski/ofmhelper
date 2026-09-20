@@ -23,3 +23,10 @@ deploy.local.env
 /secrets/
 /cookies/
 backlog.txt
+
+# Raw source media for the landing page. The web transcodes next to them
+# (*-web.mp4) are what the page loads and what ships in the image; these
+# originals are kept locally only -- results1.mp4 alone is 182MB, over
+# GitHub's 100MB per-file limit.
+/src/ofmhelpers/web/static/media/videos/results1.mp4
+/src/ofmhelpers/web/static/media/videos/*.MOV

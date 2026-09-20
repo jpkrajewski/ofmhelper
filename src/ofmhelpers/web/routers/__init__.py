@@ -12,17 +12,18 @@ Every HTTP route in the app, grouped by what it is *for*:
   manager, action log, cookie upload.
 - `workflow/`   -- the VA todo list and its public magic-link approval flow.
 
-Three modules sit at this level because they belong to no single feature:
-`auth` (login/logout), `refs` (the shared reference-file browser every
-generation form uses), and `task_helpers` (the upload/job/serve plumbing
-those routers are built out of).
+Four modules sit at this level because they belong to no single feature:
+`auth` (login/logout), `apply` (the public landing-page application form's
+POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
+reference-file browser every generation form uses), and `task_helpers` (the
+upload/job/serve plumbing those routers are built out of).
 
 `ROUTERS` below is the single registration list -- `web/main.py` loops over
 it, so **adding a page means one import and one entry here**, and main.py is
 never touched.
 """
 
-from ofmhelpers.web.routers import auth, refs
+from ofmhelpers.web.routers import apply, auth, refs
 from ofmhelpers.web.routers.admin import (
     action_log,
     competition,
@@ -30,6 +31,7 @@ from ofmhelpers.web.routers.admin import (
     file_manager,
     models,
 )
+from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.downloads import clean_image
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
@@ -45,6 +47,7 @@ from ofmhelpers.web.routers.workflow import approve, todo
 # reads like the directory listing.
 ROUTERS = [
     auth.router,
+    apply.router,
     refs.router,
     # generation/
     generation_index.router,
@@ -65,6 +68,7 @@ ROUTERS = [
     scraper.router,
     # admin/
     models.router,
+    admin_applications.router,
     competition.router,
     file_manager.router,
     action_log.router,

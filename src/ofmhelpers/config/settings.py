@@ -61,8 +61,12 @@ class WebSettings(BaseSettings):
     #   /static/                  -- css/js/images
     #   /approve/                 -- magic-link asset approval, see
     #                                routers/workflow/approve.py
+    #   /apply                    -- the landing page's application form POST,
+    #                                see routers/apply.py (rate-limited, not
+    #                                unguarded)
     public_paths: set[str] = Field(
-        default={"/login", "/health"}, validation_alias="OFM_PUBLIC_PATHS"
+        default={"/login", "/health", "/home", "/", "/apply"},
+        validation_alias="OFM_PUBLIC_PATHS",
     )
     public_prefixes: tuple[str, ...] = Field(
         default=("/static/", "/approve/"), validation_alias="OFM_PUBLIC_PREFIXES"

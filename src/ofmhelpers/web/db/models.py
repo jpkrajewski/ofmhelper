@@ -177,6 +177,30 @@ class InstagramStatsRow(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class ApplicationRow(Base):
+    """One submission of the public `/` landing-page application form
+    (templates/reachmodel.html). Write-once from the outside world, read-only
+    in the CRM page -- there is nothing to update, so no status column."""
+
+    __tablename__ = "applications"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    first_name: Mapped[str] = mapped_column(Text, nullable=False)
+    last_name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    # Two optional columns, but the form requires at least one of them -- see
+    # routers/apply.ApplicationForm: a lead we cannot message back is useless.
+    phone: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    telegram_handle: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    instagram_handle: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    monthly_revenue: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    experience_level: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    goals: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (Index("ix_applications_created_at", "created_at"),)
+
+
 class ApprovalTokenRow(Base):
     __tablename__ = "approval_tokens"
 

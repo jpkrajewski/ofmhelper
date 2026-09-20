@@ -16,8 +16,9 @@ from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
 
+# "/" is the public ReachModels landing page (with the application form), not
+# an internal page -- see settings.web.public_paths.
 PROTECTED_PAGES = [
-    "/",
     "/generate",
     "/download-assets",
     "/helpers",
@@ -46,10 +47,11 @@ def test_app_starts_and_stops_cleanly():
         assert r.json() == {"status": "ok"}
 
 
-def test_health_and_login_are_public():
+def test_health_login_and_landing_page_are_public():
     client = TestClient(app)
     assert client.get("/health").status_code == 200
     assert client.get("/login").status_code == 200
+    assert client.get("/").status_code == 200
 
 
 @pytest.mark.parametrize("path", PROTECTED_PAGES)
