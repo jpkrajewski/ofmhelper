@@ -17,7 +17,8 @@ dependency).
   the kie.ai Market API (`https://api.kie.ai/api/v1/jobs`). Handles the full
   async task lifecycle: `create_task` -> `poll_task`/`check_task` ->
   `download_urls`, plus per-model convenience wrappers
-  (`generate_image_nbp`, `generate_video_seedance2`, `generate_video_kling3`)
+  (`generate_image_nbp`, `generate_video_seedance2`, `generate_video_kling3`,
+  `generate_video_wan3`)
   and crash/timeout recovery (`resume_pending`, used by `web/recovery.py`'s
   background sweeper). Also handles uploading local reference files
   (`upload_local_file`), memoized in Redis (see below). Note: the directory is
@@ -34,7 +35,8 @@ dependency).
 
 # Who calls this
 
-`web/routers/generation/seedance.py`, `kling.py`, `nbp.py`, `fake_ai.py`, and
+`web/routers/generation/seedance.py`, `kling.py`, `wan.py`, `nbp.py`,
+`fake_ai.py`, and
 `reel_machine/generation.py` all construct a `KieAIClient.from_env(api_key=...)`
 and call one of its `generate_*` methods. `web/recovery.py`'s background
 sweeper calls `resume_pending()` every few minutes across every configured API

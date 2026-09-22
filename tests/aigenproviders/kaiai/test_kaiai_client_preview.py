@@ -2,7 +2,8 @@
 Covers KieAIClient's on_result_urls hook: kie.ai's hosted result is already
 live the moment poll_task reports success, well before download_urls has
 pulled it down locally. The per-model wrappers (generate_image_nbp,
-generate_video_seedance2, generate_video_kling3) must call this callback
+generate_video_seedance2, generate_video_kling3, generate_video_wan3) must
+call this callback
 right after the poll succeeds and before starting the download, so a caller
 (the web app) can show the hosted URL immediately instead of blocking on the
 download. All network calls are stubbed -- see test_recovery.py for the same
@@ -89,5 +90,19 @@ def test_generate_video_seedance2_calls_on_result_urls_before_downloading(
         calls.append(("on_result_urls", urls))
 
     client.generate_video_seedance2(prompt="p", on_result_urls=on_result_urls)
+
+    assert [c[0] for c in calls] == ["on_result_urls", "download_urls"]
+
+
+def test_generate_video_wan3_calls_on_result_urls_before_downloading(
+    client, monkeypatch
+):
+    calls = []
+    _stub_lifecycle(client, monkeypatch, ["https://cdn.kie.ai/clip.mp4"], calls)
+
+    def on_result_urls(urls):
+        calls.append(("on_result_urls", urls))
+
+    client.generate_video_wan3(prompt="p", on_result_urls=on_result_urls)
 
     assert [c[0] for c in calls] == ["on_result_urls", "download_urls"]
