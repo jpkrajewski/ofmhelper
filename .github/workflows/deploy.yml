@@ -77,7 +77,19 @@ jobs:
           else
             echo "::warning::OFM_DEPLOY_KNOWN_HOSTS not set -- trusting the \
             host key on first use. Add it (ssh-keyscan <host>) to pin it."
-            ssh-keyscan -H "$hostname" >> ~/.ssh/known_hosts 2>/dev/null
+            # Never `|| true` here: an empty known_hosts makes every later ssh
+            # fail with an unrelated host-key error. A keyscan that returns
+            # nothing means the server is unreachable -- which is exactly what
+            # happened when the old box went dark on 2026-09-20 and the job
+            # died on a bare `exit 1` with no explanation.
+            ssh-keyscan -H "$hostname" > ~/.ssh/known_hosts 2>/dev/null || true
+            if [ ! -s ~/.ssh/known_hosts ]; then
+              echo "::error::ssh-keyscan got no host key from '$hostname' -- \
+              the server is unreachable on port 22 (dead host? wrong \
+              OFM_DEPLOY_HOST? firewall?). Check the host, then set \
+              OFM_DEPLOY_KNOWN_HOSTS to pin its key."
+              exit 1
+            fi
           fi
           chmod 600 ~/.ssh/known_hosts
 
@@ -193,8 +205,12 @@ jobs:
             echo "== last 100 log lines =="
             $compose logs --tail=100 ofmhelpers worker
           '
+          # Delivered as a file for the same reason as the deploy step: piping
+          # into `bash -s` lets the first stdin-reading command swallow the
+          # rest of the script.
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
-            bash -s -- "$DIR" <<< "$remote_script" || true
+            "cat > /tmp/ofm-report.sh && bash /tmp/ofm-report.sh '$DIR'; \
+             rm -f /tmp/ofm-report.sh" <<< "$remote_script" || true
 
       - name: Clean up SSH key
         if: always()
