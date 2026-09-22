@@ -59,4 +59,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Production default: no --reload. The reloader belongs to a dev box with
 # ./src bind-mounted (docker-compose.dev.yml overrides this command); in
 # production it only ever meant "serve half-deployed code".
-CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --forwarded-allow-ips: nginx sets X-Forwarded-Proto/For, but uvicorn only
+# trusts them from 127.0.0.1 by default and the proxy reaches us as the Docker
+# bridge gateway. Without this, url_for() builds http:// links on an https page
+# (mixed content) and every client collapses into one rate-limit bucket.
+CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
