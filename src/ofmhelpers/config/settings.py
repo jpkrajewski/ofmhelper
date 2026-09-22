@@ -438,3 +438,71 @@ class GDriveSettings(BaseSettings):
     folder_id: str | None = Field(
         default=None, validation_alias="GOOGLE_DRIVE_FOLDER_ID"
     )
+
+
+class LeadHuntSettings(BaseSettings):
+    """scraping/lead_hunt.py + scraping/aggregators.py -- the Instagram
+    creator-lead hunt (hashtag discovery -> profile enrich -> OnlyFans
+    filter).
+
+    Every field is something the operator retunes between runs (which
+    hashtags cost how much, how small an account still counts as a lead,
+    how patient the aggregator fetch is), so all of it is env-driven: no
+    rebuild to widen a follower band or swap an Apify actor version."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Comma-separated, same shape as the /helpers/scraper form's textarea.
+    # Kept as a plain string rather than list[str]: pydantic-settings parses a
+    # complex-typed field as JSON before any validator runs, which would make
+    # `a,b` an error instead of two keys. `api_keys` does the split.
+    apify_api_keys: str = Field(default="", validation_alias="OFM_APIFY_API_KEYS")
+
+    # The band a lead has to fall in. The ceiling is the whole point of the
+    # hunt (sub-10k accounts are the ones worth approaching); the floor is 0 by
+    # default so it is a no-op until someone gets tired of 50-follower spam.
+    max_followers: int = Field(
+        default=10_000, validation_alias="OFM_LEADS_MAX_FOLLOWERS"
+    )
+    min_followers: int = Field(default=0, validation_alias="OFM_LEADS_MIN_FOLLOWERS")
+
+    hashtag_actor_id: str = Field(
+        default="apify/instagram-hashtag-scraper",
+        validation_alias="OFM_LEADS_HASHTAG_ACTOR_ID",
+    )
+    profile_actor_id: str = Field(
+        default="apify/instagram-profile-scraper",
+        validation_alias="OFM_LEADS_PROFILE_ACTOR_ID",
+    )
+    # Posts pulled per hashtag. This is the credit dial: one post is one
+    # candidate username before dedup, and dedup is brutal on a niche tag.
+    posts_per_hashtag: int = Field(
+        default=100, validation_alias="OFM_LEADS_POSTS_PER_HASHTAG"
+    )
+    # The profile actor is billed per username, so a run is capped rather than
+    # allowed to follow a viral hashtag into thousands of profiles.
+    max_profiles_per_run: int = Field(
+        default=1000, validation_alias="OFM_LEADS_MAX_PROFILES_PER_RUN"
+    )
+
+    # Fetching a link-aggregator page (linktr.ee et al) to confirm the
+    # OnlyFans link behind it. Short timeout and a hard read cap: this runs
+    # once per candidate, and one slow or enormous page must not stall a run.
+    aggregator_timeout_s: float = Field(
+        default=10.0, validation_alias="OFM_LEADS_AGGREGATOR_TIMEOUT_S"
+    )
+    aggregator_max_bytes: int = Field(
+        default=500_000, validation_alias="OFM_LEADS_AGGREGATOR_MAX_BYTES"
+    )
+    # Pause between aggregator fetches. These are small third-party sites, not
+    # an API -- a run walks them politely rather than in a tight loop.
+    aggregator_delay_s: float = Field(
+        default=0.5, validation_alias="OFM_LEADS_AGGREGATOR_DELAY_S"
+    )
+    resolve_aggregators: bool = Field(
+        default=True, validation_alias="OFM_LEADS_RESOLVE_AGGREGATORS"
+    )
+
+    @property
+    def api_keys(self) -> list[str]:
+        return [k.strip() for k in self.apify_api_keys.split(",") if k.strip()]

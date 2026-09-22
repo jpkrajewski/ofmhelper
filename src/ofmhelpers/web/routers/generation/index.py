@@ -1,11 +1,11 @@
 """
 ofmhelpers/web/routers/generation/index.py
 
-Unified Higgsfield-style page for Seedance 2.0 / Kling 3.0 / Nano Banana Pro
-(plus the Fake AI Model testing tool): one prompt+settings form (a tool
-picker switches which fieldset is active) posting straight to each tool's
-existing /run endpoint, and a non-blocking gallery of the last 20
-generations across all of them that a click reloads back into the form.
+Unified Higgsfield-style page for Seedance 2.0 / Kling 3.0 / Wan 3.0 / Nano
+Banana Pro (plus the Fake AI Model testing tool): one prompt+settings form (a
+tool picker switches which fieldset is active) posting straight to each tool's
+existing /run endpoint, and a non-blocking gallery of the last 20 generations
+across all of them that a click reloads back into the form.
 """
 
 import json
@@ -27,6 +27,7 @@ GALLERY_LIMIT = settings.web.gallery_limit
 TASK_LABELS = {
     "seedance": "Seedance 2.0",
     "kling3": "Kling 3.0",
+    "wan3": "Wan 3.0",
     "nanobanana": "Nano Banana Pro",
     "fake_ai": "Fake AI Model",
     "replicate": "Replicate (Reel Clone)",
@@ -34,6 +35,7 @@ TASK_LABELS = {
 FILES_PREFIX = {
     "seedance": "/seedance/files",
     "kling3": "/kling3/files",
+    "wan3": "/wan3/files",
     "nanobanana": "/nanobanana/files",
     "fake_ai": "/fake-ai/files",
     "replicate": "/replicate/files",

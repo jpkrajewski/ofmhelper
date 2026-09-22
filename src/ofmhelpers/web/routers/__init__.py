@@ -36,7 +36,14 @@ from ofmhelpers.web.routers.downloads import clean_image
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import videos as download_videos
-from ofmhelpers.web.routers.generation import fake_ai, kling, nbp, replicate, seedance
+from ofmhelpers.web.routers.generation import (
+    fake_ai,
+    kling,
+    nbp,
+    replicate,
+    seedance,
+    wan,
+)
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.helpers import elevenlabs, radio_comms, scraper
 from ofmhelpers.web.routers.helpers import index as helpers_index
@@ -53,6 +60,7 @@ ROUTERS = [
     generation_index.router,
     seedance.router,
     kling.router,
+    wan.router,
     nbp.router,
     fake_ai.router,
     replicate.router,

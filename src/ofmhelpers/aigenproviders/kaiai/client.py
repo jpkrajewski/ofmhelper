@@ -419,6 +419,68 @@ class KieAIClient:
         return self.download_urls(urls, task_id, "mp4")[0]
 
     # ------------------------------------------------------------------
+    # Wan 3.0 - video generation
+    # model = "wan/3-0-video". Alibaba's omni-reference model: the same call
+    # takes first/last frames OR a mix of reference images/videos/audio, and
+    # they are mutually exclusive per kie.ai's docs -- this picks one group
+    # or the other, like Seedance above. Resolutions are upper-case here
+    # ("1080P"), unlike every other video model in this file.
+    # ------------------------------------------------------------------
+    WAN3_RESOLUTIONS = ("480P", "720P", "1080P")
+
+    def generate_video_wan3(
+        self,
+        prompt: str,
+        resolution: str = "1080P",
+        aspect_ratio: str = "adaptive",
+        duration: int = 5,
+        audio: bool = True,
+        first_frame_url: str | None = None,
+        last_frame_url: str | None = None,
+        reference_image_urls: list[str] | None = None,
+        reference_video_urls: list[str] | None = None,
+        reference_audio_urls: list[str] | None = None,
+        seed: int | None = None,
+        callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
+    ) -> pathlib.Path:
+        if resolution not in self.WAN3_RESOLUTIONS:
+            msg = (
+                f"Unsupported resolution {resolution!r}; "
+                f"expected one of {self.WAN3_RESOLUTIONS}"
+            )
+            raise ValueError(msg)
+
+        payload: dict = {
+            "prompt": prompt,
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "duration": duration,
+            "audio": audio,
+            "nsfw_checker": False,
+        }
+        if seed is not None:
+            payload["seed"] = seed
+
+        if first_frame_url:
+            payload["first_frame_url"] = first_frame_url
+            if last_frame_url:
+                payload["last_frame_url"] = last_frame_url
+        elif reference_image_urls or reference_video_urls or reference_audio_urls:
+            if reference_image_urls:
+                payload["reference_image_urls"] = reference_image_urls
+            if reference_video_urls:
+                payload["reference_video_urls"] = reference_video_urls
+            if reference_audio_urls:
+                payload["reference_audio_urls"] = reference_audio_urls
+
+        task_id = self.create_task("wan/3-0-video", payload, callback_url)
+        urls = self.poll_task(task_id, timeout_s=settings.kieai.video_poll_timeout_s)
+        if on_result_urls:
+            on_result_urls(urls)
+        return self.download_urls(urls, task_id, "mp4")[0]
+
+    # ------------------------------------------------------------------
     # Crash/timeout recovery - safe to re-run any time; the web app's
     # background sweeper calls this every few minutes. Sweeps tasks.jsonl
     # for anything created but never downloaded (poll timed out, server
@@ -481,7 +543,9 @@ class KieAIClient:
             if state == "success" and isinstance(payload, list):
                 ext = (
                     "mp4"
-                    if any(k in rec.get("model", "") for k in ("seedance", "kling"))
+                    if any(
+                        k in rec.get("model", "") for k in ("seedance", "kling", "wan")
+                    )
                     else "png"
                 )
                 try:

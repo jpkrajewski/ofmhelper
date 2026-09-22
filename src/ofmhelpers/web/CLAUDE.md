@@ -201,7 +201,7 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
 ## `generation/` — the AI tools
 
 - `index.py` — the unified tool-picker page (`/generate`): one form whose
-  fieldset switches between seedance/kling3/nanobanana/fake_ai, plus a
+  fieldset switches between seedance/kling3/wan3/nanobanana/fake_ai, plus a
   cross-tool gallery with click-to-reuse. `TASK_LABELS`/
   `FILES_PREFIX` here are the central registry — **add an entry here for any
   new job task name that should show up in this gallery.**
@@ -214,8 +214,9 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   through `_generate_gallery_card.html`, so an appended card is
   indistinguishable from a server-rendered one (the delegated Recreate and
   Download handlers and the resumed poller all key off its attributes).
-- `seedance.py` / `kling.py` / `nbp.py` — Seedance 2.0 / Kling 3.0 / Nano
-  Banana Pro generation via `KieAIClient`, following the standard tool shape.
+- `seedance.py` / `kling.py` / `wan.py` / `nbp.py` — Seedance 2.0 / Kling 3.0 /
+  Wan 3.0 / Nano Banana Pro generation via `KieAIClient`, following the standard
+  tool shape.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.

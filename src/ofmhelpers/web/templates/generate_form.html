@@ -18,6 +18,7 @@
         <select id="tool-select">
             <option value="seedance" data-action="/seedance/run" data-prefix="/seedance" data-result-kind="video">Seedance 2.0 (video)</option>
             <option value="kling3" data-action="/kling3/run" data-prefix="/kling3" data-result-kind="video">Kling 3.0 (video)</option>
+            <option value="wan3" data-action="/wan3/run" data-prefix="/wan3" data-result-kind="video">Wan 3.0 (video)</option>
             <option value="nanobanana" data-action="/nanobanana/run" data-prefix="/nanobanana" data-result-kind="image">Nano Banana Pro (image)</option>
             <option value="fake_ai" data-action="/fake-ai/run" data-prefix="/fake-ai" data-result-kind="image">🧪 Fake AI Model (testing)</option>
         </select>
@@ -111,6 +112,49 @@
 
         {{ fp.file_picker('images', 'image', 'Reference images (optional)',
             'Optional — used for image-to-video. Leave empty for text-to-video only.') }}
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="wan3" disabled style="display:none">
+        <legend>Wan 3.0 settings</legend>
+
+        <div class="field">
+            <label>Resolution</label>
+            <select name="resolution">
+                <option value="480P">480P</option>
+                <option value="720P">720P</option>
+                <option value="1080P" selected>1080P</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Aspect ratio</label>
+            <select name="aspect_ratio">
+                <option value="adaptive" selected>Adaptive</option>
+                <option value="16:9">16:9</option>
+                <option value="4:3">4:3</option>
+                <option value="1:1">1:1</option>
+                <option value="3:4">3:4</option>
+                <option value="9:16">9:16</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Duration (seconds, 2-30)</label>
+            <input type="number" name="duration" value="5" min="2" max="30">
+        </div>
+
+        <label class="check-field">
+            <input type="checkbox" name="audio" value="true" checked>
+            Generate audio
+        </label>
+
+        <p class="picker-help">
+            References are omni-modal — images, clips and audio can be mixed in
+            one run. Up to 10 images, 5 videos (1-15s each), 5 audio files.
+        </p>
+        {{ fp.file_picker('reference_images', 'image', 'Reference images (optional)') }}
+        {{ fp.file_picker('reference_videos', 'video', 'Reference videos (optional)') }}
+        {{ fp.file_picker('reference_audio', 'audio', 'Reference audio (optional)') }}
     </fieldset>
 
     <fieldset class="tool-fields" data-tool="nanobanana" disabled style="display:none">

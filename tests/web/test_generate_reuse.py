@@ -1,7 +1,7 @@
 """
 Verifies the /generate page's "click a past generation to reload its
 settings" feature will actually find a matching field for every parameter
-each tool stores -- for all four tools (seedance, kling3, nanobanana,
+each tool stores -- for all five tools (seedance, kling3, wan3, nanobanana,
 fake_ai). This mirrors exactly what the click handler in generate_form.html
 does at runtime: for every key in a job's stored params (except "prompt",
 which maps to the shared textarea), a scalar value looks up `[name="{key}"]`
@@ -90,6 +90,16 @@ def _submit_kling3(client):
     return r.json()["job_id"]
 
 
+def _submit_wan3(client):
+    with mock.patch("ofmhelpers.web.routers.generation.wan.KieAIClient") as MockClient:
+        MockClient.from_env.return_value.generate_video_wan3.side_effect = (
+            _with_remote_url("/tmp/fake.mp4", "https://cdn.kie.ai/out/fake.mp4")
+        )
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+            r = client.post("/wan3/run", data={"api_key": "k", "prompt": "p"})
+    return r.json()["job_id"]
+
+
 def _submit_nanobanana(client):
     with mock.patch("ofmhelpers.web.routers.generation.nbp.KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_nbp.side_effect = (
@@ -115,12 +125,15 @@ def _submit_fake_ai(client, tmp_path, monkeypatch):
 SUBMITTERS = {
     "seedance": lambda client, tmp_path, monkeypatch: _submit_seedance(client),
     "kling3": lambda client, tmp_path, monkeypatch: _submit_kling3(client),
+    "wan3": lambda client, tmp_path, monkeypatch: _submit_wan3(client),
     "nanobanana": lambda client, tmp_path, monkeypatch: _submit_nanobanana(client),
     "fake_ai": _submit_fake_ai,
 }
 
 
-@pytest.mark.parametrize("task", ["seedance", "kling3", "nanobanana", "fake_ai"])
+@pytest.mark.parametrize(
+    "task", ["seedance", "kling3", "wan3", "nanobanana", "fake_ai"]
+)
 def test_every_stored_param_has_a_matching_form_field(
     client, task, tmp_path, monkeypatch
 ):

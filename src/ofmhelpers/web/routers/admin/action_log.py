@@ -26,6 +26,7 @@ TASK_STATUS_PREFIX = {
     "scraper": "/helpers/scraper",
     "nanobanana": "/nanobanana",
     "kling3": "/kling3",
+    "wan3": "/wan3",
     "fake_ai": "/fake-ai",
     "replicate_intake": "/replicate",
     "replicate": "/replicate",
