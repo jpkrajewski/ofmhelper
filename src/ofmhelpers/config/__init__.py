@@ -28,6 +28,7 @@ from ofmhelpers.config.settings import (
     InfraSettings,
     InstagramStatsSettings,
     KieAISettings,
+    LeadHuntSettings,
     LoggingSettings,
     ReelMachineSettings,
     SessionSettings,
@@ -73,6 +74,10 @@ class Settings:
     @property
     def instagram_stats(self) -> InstagramStatsSettings:
         return InstagramStatsSettings()
+
+    @property
+    def lead_hunt(self) -> LeadHuntSettings:
+        return LeadHuntSettings()
 
     @property
     def logging(self) -> LoggingSettings:
