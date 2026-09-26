@@ -5,6 +5,25 @@ from collections.abc import Callable
 
 import requests
 
+from ofmhelpers.aigenproviders.kaiai.types import (
+    ADAPTIVE_ASPECT_RATIO,
+    IMAGE_EXT,
+    SEEDREAM5_MODELS,
+    VIDEO_EXT,
+    VIDEO_MODELS,
+    ImageBackground,
+    ImageResolution,
+    KieModel,
+    Kling3Mode,
+    MinimaxH3Resolution,
+    Seedance2Model,
+    SeedanceResolution,
+    Seedream5Quality,
+    Seedream5Variant,
+    Seedream45Quality,
+    SeedreamOutputFormat,
+    Wan3Resolution,
+)
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
@@ -274,17 +293,73 @@ class KieAIClient:
         return saved
 
     # ------------------------------------------------------------------
-    # Nano Banana Pro - image generation
-    # model = "nano-banana-pro", resolution uses image tiers (1K/2K/4K),
-    # NOT the 480p/720p/1080p used by video models.
+    # Per-model wrappers. Each one only builds its payload; the shared
+    # create -> poll -> preview -> download tail is _generate. The
+    # on_result_urls hook fires as soon as kie.ai's hosted result is live, so
+    # a caller (the web app) can show it without blocking on the download.
     # ------------------------------------------------------------------
+    def _generate(
+        self,
+        model: KieModel,
+        payload: dict,
+        callback_url: str | None,
+        on_result_urls: Callable[[list[str]], None] | None,
+        ext: str = IMAGE_EXT,
+    ) -> pathlib.Path:
+        task_id = self.create_task(model, payload, callback_url)
+        if model in VIDEO_MODELS:
+            urls = self.poll_task(
+                task_id, timeout_s=settings.kieai.video_poll_timeout_s
+            )
+        else:
+            urls = self.poll_task(task_id)
+        if on_result_urls:
+            on_result_urls(urls)
+        return self.download_urls(urls, task_id, ext)[0]
+
+    @staticmethod
+    def _reference_inputs(
+        reference_image_urls: list[str] | None,
+        reference_video_urls: list[str] | None,
+        reference_audio_urls: list[str] | None,
+    ) -> dict:
+        """The reference_* keys that are non-empty -- kie.ai rejects empty lists."""
+        refs = {
+            "reference_image_urls": reference_image_urls,
+            "reference_video_urls": reference_video_urls,
+            "reference_audio_urls": reference_audio_urls,
+        }
+        return {k: v for k, v in refs.items() if v}
+
+    @classmethod
+    def _frame_or_reference_inputs(
+        cls,
+        first_frame_url: str | None,
+        last_frame_url: str | None,
+        reference_image_urls: list[str] | None,
+        reference_video_urls: list[str] | None,
+        reference_audio_urls: list[str] | None,
+    ) -> dict:
+        """First/last frame and reference_* lists are mutually exclusive on
+        the omni-reference models (Seedance, Wan) -- frames win."""
+        if first_frame_url:
+            frames = {"first_frame_url": first_frame_url}
+            if last_frame_url:
+                frames["last_frame_url"] = last_frame_url
+            return frames
+        return cls._reference_inputs(
+            reference_image_urls, reference_video_urls, reference_audio_urls
+        )
+
+    # Nano Banana Pro - resolution uses image tiers (1K/2K/4K), NOT the
+    # 480p/720p/1080p used by video models.
     def generate_image_nbp(
         self,
         prompt: str,
         image_input: list[str] | None = None,
         aspect_ratio: str = "1:1",
-        resolution: str = "1K",
-        output_format: str = "png",
+        resolution: str = ImageResolution.K1,
+        output_format: str = IMAGE_EXT,
         callback_url: str | None = None,
         on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
@@ -292,37 +367,140 @@ class KieAIClient:
             "prompt": prompt,
             "image_input": image_input or [],
             "aspect_ratio": aspect_ratio,
-            "resolution": resolution,
+            "resolution": ImageResolution(resolution),
             "output_format": output_format,
         }
-        task_id = self.create_task("nano-banana-pro", payload, callback_url)
-        urls = self.poll_task(task_id)
-        # kie.ai's hosted result is already live at this point -- the caller
-        # (the web app) uses this to show it immediately instead of blocking
-        # on the download below.
-        if on_result_urls:
-            on_result_urls(urls)
-        return self.download_urls(urls, task_id, output_format)[0]
+        return self._generate(
+            KieModel.NANO_BANANA_PRO,
+            payload,
+            callback_url,
+            on_result_urls,
+            output_format,
+        )
 
-    # ------------------------------------------------------------------
-    # Seedance 2.0 - video generation
-    # model defaults to "bytedance/seedance-2" but any Seedance 2 variant
-    # ("bytedance/seedance-2", "bytedance/seedance-2-fast",
-    # "bytedance/seedance-2-mini") can be passed in. First/last-frame and
-    # multimodal reference are mutually exclusive per kie.ai's docs -- this
-    # picks one or the other.
-    # ------------------------------------------------------------------
-    SEEDANCE2_MODELS = (
-        "bytedance/seedance-2",
-        "bytedance/seedance-2-fast",
-        "bytedance/seedance-2-mini",
-    )
+    # Seedream 4.5 - text-to-image, or the edit model when image_urls are
+    # given. Takes no output_format.
+    def generate_image_seedream45(
+        self,
+        prompt: str,
+        image_urls: list[str] | None = None,
+        aspect_ratio: str = "1:1",
+        quality: str = Seedream45Quality.BASIC,
+        callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
+    ) -> pathlib.Path:
+        payload: dict = {
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "quality": Seedream45Quality(quality),
+            "nsfw_checker": False,
+        }
+        model = KieModel.SEEDREAM_4_5_TEXT
+        if image_urls:
+            payload["image_urls"] = image_urls
+            model = KieModel.SEEDREAM_4_5_EDIT
+        return self._generate(model, payload, callback_url, on_result_urls)
 
+    # Seedream 5.0 - Lite or Pro, each text-to-image or image-to-image by
+    # whether image_urls are given. "ultra" quality exists on Lite only.
+    def generate_image_seedream5(
+        self,
+        prompt: str,
+        variant: str = Seedream5Variant.PRO,
+        image_urls: list[str] | None = None,
+        aspect_ratio: str = "1:1",
+        quality: str = Seedream5Quality.BASIC,
+        output_format: str = SeedreamOutputFormat.PNG,
+        callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
+    ) -> pathlib.Path:
+        tier = Seedream5Variant(variant)
+        level = Seedream5Quality(quality)
+        if level == Seedream5Quality.ULTRA and tier != Seedream5Variant.LITE:
+            msg = f"Seedream 5.0 {tier} has no 'ultra' quality (Lite only)"
+            raise ValueError(msg)
+
+        fmt = SeedreamOutputFormat(output_format)
+        payload: dict = {
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "quality": level,
+            "output_format": fmt,
+            "nsfw_checker": False,
+        }
+        text_model, image_model = SEEDREAM5_MODELS[tier]
+        model = text_model
+        if image_urls:
+            payload["image_urls"] = image_urls
+            model = image_model
+        return self._generate(model, payload, callback_url, on_result_urls, fmt)
+
+    # GPT Image 2.5 Flare (ChatGPT image) - image-to-image only: at least one
+    # input image is required. kie.ai renders the 27:16 / 16:27 / 9:8 / 8:9
+    # aspect ratios at 1K only.
+    def generate_image_gpt25_flare(
+        self,
+        prompt: str,
+        input_urls: list[str],
+        aspect_ratio: str = "auto",
+        resolution: str = ImageResolution.K1,
+        background: str = ImageBackground.AUTO,
+        callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
+    ) -> pathlib.Path:
+        if not input_urls:
+            msg = "GPT Image 2.5 Flare is image-to-image: input_urls is required"
+            raise ValueError(msg)
+        payload = {
+            "prompt": prompt,
+            "input_urls": input_urls,
+            "aspect_ratio": aspect_ratio,
+            "resolution": ImageResolution(resolution),
+            "background": ImageBackground(background),
+        }
+        return self._generate(
+            KieModel.GPT_IMAGE_2_5_FLARE_IMAGE, payload, callback_url, on_result_urls
+        )
+
+    @classmethod
+    def _seedance_payload(
+        cls,
+        prompt: str,
+        resolution: str,
+        aspect_ratio: str,
+        duration: int,
+        generate_audio: bool,
+        first_frame_url: str | None,
+        last_frame_url: str | None,
+        reference_image_urls: list[str] | None,
+        reference_video_urls: list[str] | None,
+        reference_audio_urls: list[str] | None,
+    ) -> dict:
+        """Seedance 2.0 and 2.5 take the same input shape."""
+        return {
+            "prompt": prompt,
+            "resolution": SeedanceResolution(resolution),
+            "aspect_ratio": aspect_ratio,
+            "duration": duration,
+            "generate_audio": generate_audio,
+            "web_search": False,
+            "return_last_frame": False,
+            "nsfw_checker": False,
+            **cls._frame_or_reference_inputs(
+                first_frame_url,
+                last_frame_url,
+                reference_image_urls,
+                reference_video_urls,
+                reference_audio_urls,
+            ),
+        }
+
+    # Seedance 2.0 - standard / fast / mini tiers.
     def generate_video_seedance2(
         self,
         prompt: str,
-        model: str = "bytedance/seedance-2",
-        resolution: str = "720p",
+        model: str = Seedance2Model.STANDARD,
+        resolution: str = SeedanceResolution.P720,
         aspect_ratio: str = "16:9",
         duration: int = 10,
         generate_audio: bool = True,
@@ -334,55 +512,67 @@ class KieAIClient:
         callback_url: str | None = None,
         on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
-        if model not in self.SEEDANCE2_MODELS:
-            msg = (
-                f"Unsupported model {model!r}; expected one of {self.SEEDANCE2_MODELS}"
-            )
-            raise ValueError(msg)
+        payload = self._seedance_payload(
+            prompt,
+            resolution,
+            aspect_ratio,
+            duration,
+            generate_audio,
+            first_frame_url,
+            last_frame_url,
+            reference_image_urls,
+            reference_video_urls,
+            reference_audio_urls,
+        )
+        return self._generate(
+            KieModel(Seedance2Model(model)),
+            payload,
+            callback_url,
+            on_result_urls,
+            VIDEO_EXT,
+        )
 
-        payload = {
-            "prompt": prompt,
-            "resolution": resolution,
-            "aspect_ratio": aspect_ratio,
-            "duration": duration,
-            "generate_audio": generate_audio,
-            "web_search": False,
-            "return_last_frame": False,
-            "nsfw_checker": False,
-        }
-        if first_frame_url:
-            payload["first_frame_url"] = first_frame_url
-            if last_frame_url:
-                payload["last_frame_url"] = last_frame_url
-        elif reference_image_urls or reference_video_urls or reference_audio_urls:
-            if reference_image_urls:
-                payload["reference_image_urls"] = reference_image_urls
-            if reference_video_urls:
-                payload["reference_video_urls"] = reference_video_urls
-            if reference_audio_urls:
-                payload["reference_audio_urls"] = reference_audio_urls
+    # Seedance 2.5 - 4-30s (or -1 for model-picked), adaptive aspect ratio.
+    def generate_video_seedance25(
+        self,
+        prompt: str,
+        resolution: str = SeedanceResolution.P720,
+        aspect_ratio: str = ADAPTIVE_ASPECT_RATIO,
+        duration: int = 5,
+        generate_audio: bool = True,
+        first_frame_url: str | None = None,
+        last_frame_url: str | None = None,
+        reference_image_urls: list[str] | None = None,
+        reference_video_urls: list[str] | None = None,
+        reference_audio_urls: list[str] | None = None,
+        callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
+    ) -> pathlib.Path:
+        payload = self._seedance_payload(
+            prompt,
+            resolution,
+            aspect_ratio,
+            duration,
+            generate_audio,
+            first_frame_url,
+            last_frame_url,
+            reference_image_urls,
+            reference_video_urls,
+            reference_audio_urls,
+        )
+        return self._generate(
+            KieModel.SEEDANCE_2_5, payload, callback_url, on_result_urls, VIDEO_EXT
+        )
 
-        task_id = self.create_task(model, payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=settings.kieai.video_poll_timeout_s)
-        if on_result_urls:
-            on_result_urls(urls)
-        return self.download_urls(urls, task_id, "mp4")[0]
-
-    # ------------------------------------------------------------------
-    # Kling 3.0 - video generation
-    # model = "kling-3.0/video". Unlike Seedance, Kling 3.0 takes a plain
-    # list of reference image_urls (not first/last frame split), plus
-    # optional multi-shot storyboarding (multi_prompt) and @element_name
-    # references resolved via kling_elements. duration is capped at 15s
-    # total across all shots per kie.ai's docs.
-    # ------------------------------------------------------------------
-    KLING3_MODES = ("std", "pro", "4K")
-
+    # Kling 3.0 - a plain list of reference image_urls (no first/last frame
+    # split), plus optional multi-shot storyboarding (multi_prompt) and
+    # @element_name references resolved via kling_elements. duration is
+    # capped at 15s total across all shots per kie.ai's docs.
     def generate_video_kling3(
         self,
         prompt: str | None = None,
         image_urls: list[str] | None = None,
-        mode: str = "pro",
+        mode: str = Kling3Mode.PRO,
         aspect_ratio: str = "16:9",
         duration: str = "5",
         sound: bool = True,
@@ -392,12 +582,8 @@ class KieAIClient:
         callback_url: str | None = None,
         on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
-        if mode not in self.KLING3_MODES:
-            msg = f"Unsupported mode {mode!r}; expected one of {self.KLING3_MODES}"
-            raise ValueError(msg)
-
         payload: dict = {
-            "mode": mode,
+            "mode": Kling3Mode(mode),
             "aspect_ratio": aspect_ratio,
             "duration": duration,
             "sound": sound,
@@ -411,28 +597,17 @@ class KieAIClient:
             payload["multi_prompt"] = multi_prompt
         if kling_elements:
             payload["kling_elements"] = kling_elements
+        return self._generate(
+            KieModel.KLING_3, payload, callback_url, on_result_urls, VIDEO_EXT
+        )
 
-        task_id = self.create_task("kling-3.0/video", payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=settings.kieai.video_poll_timeout_s)
-        if on_result_urls:
-            on_result_urls(urls)
-        return self.download_urls(urls, task_id, "mp4")[0]
-
-    # ------------------------------------------------------------------
-    # Wan 3.0 - video generation
-    # model = "wan/3-0-video". Alibaba's omni-reference model: the same call
-    # takes first/last frames OR a mix of reference images/videos/audio, and
-    # they are mutually exclusive per kie.ai's docs -- this picks one group
-    # or the other, like Seedance above. Resolutions are upper-case here
-    # ("1080P"), unlike every other video model in this file.
-    # ------------------------------------------------------------------
-    WAN3_RESOLUTIONS = ("480P", "720P", "1080P")
-
+    # Wan 3.0 - Alibaba's omni-reference model: first/last frames OR a mix of
+    # reference images/videos/audio. Resolutions are upper-case ("1080P").
     def generate_video_wan3(
         self,
         prompt: str,
-        resolution: str = "1080P",
-        aspect_ratio: str = "adaptive",
+        resolution: str = Wan3Resolution.P1080,
+        aspect_ratio: str = ADAPTIVE_ASPECT_RATIO,
         duration: int = 5,
         audio: bool = True,
         first_frame_url: str | None = None,
@@ -444,41 +619,69 @@ class KieAIClient:
         callback_url: str | None = None,
         on_result_urls: Callable[[list[str]], None] | None = None,
     ) -> pathlib.Path:
-        if resolution not in self.WAN3_RESOLUTIONS:
-            msg = (
-                f"Unsupported resolution {resolution!r}; "
-                f"expected one of {self.WAN3_RESOLUTIONS}"
-            )
-            raise ValueError(msg)
-
         payload: dict = {
             "prompt": prompt,
-            "resolution": resolution,
+            "resolution": Wan3Resolution(resolution),
             "aspect_ratio": aspect_ratio,
             "duration": duration,
             "audio": audio,
             "nsfw_checker": False,
+            **self._frame_or_reference_inputs(
+                first_frame_url,
+                last_frame_url,
+                reference_image_urls,
+                reference_video_urls,
+                reference_audio_urls,
+            ),
         }
         if seed is not None:
             payload["seed"] = seed
+        return self._generate(
+            KieModel.WAN_3, payload, callback_url, on_result_urls, VIDEO_EXT
+        )
 
-        if first_frame_url:
-            payload["first_frame_url"] = first_frame_url
-            if last_frame_url:
-                payload["last_frame_url"] = last_frame_url
-        elif reference_image_urls or reference_video_urls or reference_audio_urls:
-            if reference_image_urls:
-                payload["reference_image_urls"] = reference_image_urls
-            if reference_video_urls:
-                payload["reference_video_urls"] = reference_video_urls
-            if reference_audio_urls:
-                payload["reference_audio_urls"] = reference_audio_urls
-
-        task_id = self.create_task("wan/3-0-video", payload, callback_url)
-        urls = self.poll_task(task_id, timeout_s=settings.kieai.video_poll_timeout_s)
-        if on_result_urls:
-            on_result_urls(urls)
-        return self.download_urls(urls, task_id, "mp4")[0]
+    # MiniMax H3 - three kie.ai models picked by input: a frame ->
+    # image-to-video (takes no aspect_ratio), reference_* lists ->
+    # reference-to-video, neither -> text-to-video (rejects "adaptive").
+    def generate_video_minimax_h3(
+        self,
+        prompt: str,
+        resolution: str = MinimaxH3Resolution.K2,
+        aspect_ratio: str = "16:9",
+        duration: int = 6,
+        first_frame_url: str | None = None,
+        last_frame_url: str | None = None,
+        reference_image_urls: list[str] | None = None,
+        reference_video_urls: list[str] | None = None,
+        reference_audio_urls: list[str] | None = None,
+        callback_url: str | None = None,
+        on_result_urls: Callable[[list[str]], None] | None = None,
+    ) -> pathlib.Path:
+        payload: dict = {
+            "prompt": prompt,
+            "resolution": MinimaxH3Resolution(resolution),
+            "duration": duration,
+        }
+        references = self._reference_inputs(
+            reference_image_urls, reference_video_urls, reference_audio_urls
+        )
+        if first_frame_url or last_frame_url:
+            model = KieModel.MINIMAX_H3_IMAGE
+            frames = {
+                "first_frame_url": first_frame_url,
+                "last_frame_url": last_frame_url,
+            }
+            payload.update({k: v for k, v in frames.items() if v})
+        elif references:
+            model = KieModel.MINIMAX_H3_REFERENCE
+            payload.update(references, aspect_ratio=aspect_ratio)
+        elif aspect_ratio == ADAPTIVE_ASPECT_RATIO:
+            msg = "MiniMax H3 text-to-video needs a fixed aspect_ratio, not adaptive"
+            raise ValueError(msg)
+        else:
+            model = KieModel.MINIMAX_H3_TEXT
+            payload["aspect_ratio"] = aspect_ratio
+        return self._generate(model, payload, callback_url, on_result_urls, VIDEO_EXT)
 
     # ------------------------------------------------------------------
     # Crash/timeout recovery - safe to re-run any time; the web app's
@@ -541,13 +744,7 @@ class KieAIClient:
                 continue
 
             if state == "success" and isinstance(payload, list):
-                ext = (
-                    "mp4"
-                    if any(
-                        k in rec.get("model", "") for k in ("seedance", "kling", "wan")
-                    )
-                    else "png"
-                )
+                ext = VIDEO_EXT if rec.get("model") in VIDEO_MODELS else IMAGE_EXT
                 try:
                     self.download_urls(payload, tid, ext)
                 except Exception:  # leave pending, next sweep retries

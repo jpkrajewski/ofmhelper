@@ -1,8 +1,9 @@
 """
 ofmhelpers/web/routers/generation/index.py
 
-Unified Higgsfield-style page for Seedance 2.0 / Kling 3.0 / Wan 3.0 / Nano
-Banana Pro (plus the Fake AI Model testing tool): one prompt+settings form (a
+Unified Higgsfield-style page for Seedance 2.0 / Seedance 2.5 / Kling 3.0 /
+Wan 3.0 / MiniMax H3 / Nano Banana Pro / Seedream 4.5 / Seedream 5.0 / GPT
+Image 2.5 Flare (plus the Fake AI Model testing tool): one prompt+settings form (a
 tool picker switches which fieldset is active) posting straight to each tool's
 existing /run endpoint, and a non-blocking gallery of the last 20 generations
 across all of them that a click reloads back into the form.
@@ -13,9 +14,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
+from ofmhelpers.aigenproviders.kaiai.types import Seedance2Model
 from ofmhelpers.config import settings
 from ofmhelpers.web.api_keys import get_kie_api_key
-from ofmhelpers.web.routers.generation.seedance import SeedanceModel
 from ofmhelpers.web.routers.task_helpers import asset_card
 from ofmhelpers.web.stores.jobs import list_jobs_page
 from ofmhelpers.web.templates_config import get_templates
@@ -26,17 +27,27 @@ GALLERY_LIMIT = settings.web.gallery_limit
 
 TASK_LABELS = {
     "seedance": "Seedance 2.0",
+    "seedance25": "Seedance 2.5",
     "kling3": "Kling 3.0",
     "wan3": "Wan 3.0",
+    "minimax_h3": "MiniMax H3",
     "nanobanana": "Nano Banana Pro",
+    "seedream45": "Seedream 4.5",
+    "seedream5": "Seedream 5.0",
+    "gpt_image": "GPT Image 2.5 Flare",
     "fake_ai": "Fake AI Model",
     "replicate": "Replicate (Reel Clone)",
 }
 FILES_PREFIX = {
     "seedance": "/seedance/files",
+    "seedance25": "/seedance25/files",
     "kling3": "/kling3/files",
     "wan3": "/wan3/files",
+    "minimax_h3": "/minimax-h3/files",
     "nanobanana": "/nanobanana/files",
+    "seedream45": "/seedream45/files",
+    "seedream5": "/seedream5/files",
+    "gpt_image": "/gpt-image/files",
     "fake_ai": "/fake-ai/files",
     "replicate": "/replicate/files",
 }
@@ -84,7 +95,7 @@ def form(request: Request):
         request,
         "generate_form.html",
         {
-            "models": [m.value for m in SeedanceModel],
+            "models": [m.value for m in Seedance2Model],
             "kie_api_key": get_kie_api_key(request),
             "gallery": gallery,
             "next_offset": next_offset,

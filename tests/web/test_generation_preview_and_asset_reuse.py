@@ -45,7 +45,7 @@ NBP_KWARGS = {
     "aspect_ratio": "1:1",
     "resolution": "1K",
     "output_format": "png",
-    "image_input_paths": [],
+    "image_input": [],
 }
 
 KLING_KWARGS = {
@@ -55,7 +55,7 @@ KLING_KWARGS = {
     "aspect_ratio": "16:9",
     "duration": "5",
     "sound": True,
-    "image_paths": [],
+    "images": [],
 }
 
 

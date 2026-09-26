@@ -1,9 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
-from ofmhelpers.aigenproviders.kaiai.types import IMAGE_EXT, ImageResolution
+from ofmhelpers.aigenproviders.kaiai.types import ImageBackground, ImageResolution
 from ofmhelpers.web.routers.generation.kie_jobs import (
     add_job_routes,
     require_api_key,
@@ -12,30 +12,30 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
 )
 from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, build_ordered_paths
 
-router = APIRouter(prefix="/nanobanana", tags=["nanobanana"])
+router = APIRouter(prefix="/gpt-image", tags=["gpt_image"])
 
 
-def _run_nanobanana(
+def _run_gpt_image(
     job_id: str,
     api_key: str,
     prompt: str,
     aspect_ratio: str,
     resolution: str,
-    output_format: str,
-    image_input: list[str],
+    background: str,
+    input_urls: list[str],
 ) -> list[dict]:
     client = KieAIClient.from_env(api_key=api_key)
-    image_input_urls = [client.upload_local_file(p) for p in image_input]
+    uploaded = [client.upload_local_file(p) for p in input_urls]
     return run_kie_generation(
         job_id,
         "image",
         ASSETS_ROOT,
-        lambda on_result_urls: client.generate_image_nbp(
+        lambda on_result_urls: client.generate_image_gpt25_flare(
             prompt=prompt,
-            image_input=image_input_urls,
+            input_urls=uploaded,
             aspect_ratio=aspect_ratio,
             resolution=resolution,
-            output_format=output_format,
+            background=background,
             on_result_urls=on_result_urls,
         ),
     )
@@ -46,30 +46,32 @@ async def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
-    aspect_ratio: Annotated[str, Form()] = "1:1",
+    aspect_ratio: Annotated[str, Form()] = "auto",
     resolution: Annotated[ImageResolution, Form()] = ImageResolution.K1,
-    output_format: Annotated[str, Form()] = IMAGE_EXT,
-    image_input: Annotated[list[UploadFile] | None, File()] = None,
-    image_input_manifest: Annotated[str, Form()] = "[]",
+    background: Annotated[ImageBackground, Form()] = ImageBackground.AUTO,
+    input_urls: Annotated[list[UploadFile] | None, File()] = None,
+    input_urls_manifest: Annotated[str, Form()] = "[]",
 ):
     require_api_key(api_key)
     params = {
         "prompt": prompt,
         "aspect_ratio": aspect_ratio,
         "resolution": resolution.value,
-        "output_format": output_format,
+        "background": background.value,
     }
-    image_paths = build_ordered_paths(
-        image_input_manifest, image_input or [], ASSETS_ROOT
+    input_paths = build_ordered_paths(
+        input_urls_manifest, input_urls or [], ASSETS_ROOT
     )
+    if not input_paths:
+        raise HTTPException(status_code=400, detail="Add at least one input image")
     return start_kie_job(
         request,
-        "nanobanana",
-        _run_nanobanana,
+        "gpt_image",
+        _run_gpt_image,
         api_key,
         params,
-        {"image_input": image_paths},
+        {"input_urls": input_paths},
     )
 
 
-add_job_routes(router, "Nano Banana Pro", "image")
+add_job_routes(router, "GPT Image 2.5 Flare", "image")

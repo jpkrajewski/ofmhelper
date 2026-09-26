@@ -1,8 +1,8 @@
 """
 Verifies the /generate page's "click a past generation to reload its
 settings" feature will actually find a matching field for every parameter
-each tool stores -- for all five tools (seedance, kling3, wan3, nanobanana,
-fake_ai). This mirrors exactly what the click handler in generate_form.html
+each tool stores -- for every tool in SUBMITTERS. This mirrors exactly what
+the click handler in generate_form.html
 does at runtime: for every key in a job's stored params (except "prompt",
 which maps to the shared textarea), a scalar value looks up `[name="{key}"]`
 inside that tool's `<fieldset data-tool="...">` block, and a list value
@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
+from ofmhelpers.web.routers.generation import gpt_image as gpt_image_router
 from ofmhelpers.web.stores.jobs import create_job, get_job
 
 
@@ -110,6 +111,46 @@ def _submit_nanobanana(client):
     return r.json()["job_id"]
 
 
+def _submit_kie(client, module, method, path, ext):
+    with mock.patch(
+        f"ofmhelpers.web.routers.generation.{module}.KieAIClient"
+    ) as MockClient:
+        getattr(
+            MockClient.from_env.return_value, method
+        ).side_effect = _with_remote_url(
+            f"/tmp/fake.{ext}", f"https://cdn.kie.ai/out/fake.{ext}"
+        )
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+            r = client.post(path, data={"api_key": "k", "prompt": "p"})
+    return r.json()["job_id"]
+
+
+def _submit_gpt_image(client, tmp_path, monkeypatch):
+    """Image-to-image only, so the run needs one input image -- saved into a
+    throwaway asset store rather than the real one."""
+    monkeypatch.setattr(gpt_image_router, "ASSETS_ROOT", tmp_path)
+    with mock.patch.object(gpt_image_router, "KieAIClient") as MockClient:
+        MockClient.from_env.return_value.generate_image_gpt25_flare.side_effect = (
+            _with_remote_url("/tmp/fake.png", "https://cdn.kie.ai/out/fake.png")
+        )
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+            r = client.post(
+                "/gpt-image/run",
+                data={
+                    "api_key": "k",
+                    "prompt": "p",
+                    "input_urls_manifest": '[{"kind": "new"}]',
+                },
+                files={"input_urls": ("in.png", b"png bytes", "image/png")},
+            )
+    return r.json()["job_id"]
+
+
+def test_gpt_image_rejects_a_run_without_an_input_image(client):
+    r = client.post("/gpt-image/run", data={"api_key": "k", "prompt": "p"})
+    assert r.status_code == 400
+
+
 def _submit_fake_ai(client, tmp_path, monkeypatch):
     # Fake AI Model actually runs for real (nothing to mock) -- redirect its
     # output away from the real OFM_KIEAI_OUT_DIR default so this test can't
@@ -127,13 +168,24 @@ SUBMITTERS = {
     "kling3": lambda client, tmp_path, monkeypatch: _submit_kling3(client),
     "wan3": lambda client, tmp_path, monkeypatch: _submit_wan3(client),
     "nanobanana": lambda client, tmp_path, monkeypatch: _submit_nanobanana(client),
+    "minimax_h3": lambda client, tmp_path, monkeypatch: _submit_kie(
+        client, "minimax", "generate_video_minimax_h3", "/minimax-h3/run", "mp4"
+    ),
+    "seedance25": lambda client, tmp_path, monkeypatch: _submit_kie(
+        client, "seedance25", "generate_video_seedance25", "/seedance25/run", "mp4"
+    ),
+    "seedream45": lambda client, tmp_path, monkeypatch: _submit_kie(
+        client, "seedream45", "generate_image_seedream45", "/seedream45/run", "png"
+    ),
+    "seedream5": lambda client, tmp_path, monkeypatch: _submit_kie(
+        client, "seedream5", "generate_image_seedream5", "/seedream5/run", "png"
+    ),
+    "gpt_image": _submit_gpt_image,
     "fake_ai": _submit_fake_ai,
 }
 
 
-@pytest.mark.parametrize(
-    "task", ["seedance", "kling3", "wan3", "nanobanana", "fake_ai"]
-)
+@pytest.mark.parametrize("task", SUBMITTERS)
 def test_every_stored_param_has_a_matching_form_field(
     client, task, tmp_path, monkeypatch
 ):

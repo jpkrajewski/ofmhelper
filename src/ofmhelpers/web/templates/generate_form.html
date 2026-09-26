@@ -17,9 +17,14 @@
         <label>Tool</label>
         <select id="tool-select">
             <option value="seedance" data-action="/seedance/run" data-prefix="/seedance" data-result-kind="video">Seedance 2.0 (video)</option>
+            <option value="seedance25" data-action="/seedance25/run" data-prefix="/seedance25" data-result-kind="video">Seedance 2.5 (video)</option>
             <option value="kling3" data-action="/kling3/run" data-prefix="/kling3" data-result-kind="video">Kling 3.0 (video)</option>
             <option value="wan3" data-action="/wan3/run" data-prefix="/wan3" data-result-kind="video">Wan 3.0 (video)</option>
+            <option value="minimax_h3" data-action="/minimax-h3/run" data-prefix="/minimax-h3" data-result-kind="video">MiniMax H3 (video)</option>
             <option value="nanobanana" data-action="/nanobanana/run" data-prefix="/nanobanana" data-result-kind="image">Nano Banana Pro (image)</option>
+            <option value="seedream5" data-action="/seedream5/run" data-prefix="/seedream5" data-result-kind="image">Seedream 5.0 (image)</option>
+            <option value="seedream45" data-action="/seedream45/run" data-prefix="/seedream45" data-result-kind="image">Seedream 4.5 (image)</option>
+            <option value="gpt_image" data-action="/gpt-image/run" data-prefix="/gpt-image" data-result-kind="image">GPT Image 2.5 Flare (image)</option>
             <option value="fake_ai" data-action="/fake-ai/run" data-prefix="/fake-ai" data-result-kind="image">🧪 Fake AI Model (testing)</option>
         </select>
     </div>
@@ -67,6 +72,46 @@
         <div class="field">
             <label>Duration (seconds)</label>
             <input type="number" name="duration" value="10" min="1" max="60">
+        </div>
+
+        <label class="check-field">
+            <input type="checkbox" name="generate_audio" value="true" checked>
+            Generate audio
+        </label>
+
+        {{ fp.file_picker('reference_images', 'image', 'Reference images (optional)') }}
+        {{ fp.file_picker('reference_videos', 'video', 'Reference videos (optional)') }}
+        {{ fp.file_picker('reference_audio', 'audio', 'Reference audio (optional)') }}
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="seedance25" disabled style="display:none">
+        <legend>Seedance 2.5 settings</legend>
+
+        <div class="field">
+            <label>Resolution</label>
+            <select name="resolution">
+                <option value="480p">480p</option>
+                <option value="720p" selected>720p</option>
+                <option value="1080p">1080p</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Aspect ratio</label>
+            <select name="aspect_ratio">
+                <option value="adaptive" selected>Adaptive</option>
+                <option value="1:1">1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="21:9">21:9</option>
+                <option value="3:4">3:4</option>
+                <option value="4:3">4:3</option>
+                <option value="9:16">9:16</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Duration (seconds, 4-30)</label>
+            <input type="number" name="duration" value="5" min="4" max="30">
         </div>
 
         <label class="check-field">
@@ -157,6 +202,44 @@
         {{ fp.file_picker('reference_audio', 'audio', 'Reference audio (optional)') }}
     </fieldset>
 
+    <fieldset class="tool-fields" data-tool="minimax_h3" disabled style="display:none">
+        <legend>MiniMax H3 settings</legend>
+
+        <div class="field">
+            <label>Resolution</label>
+            <select name="resolution">
+                <option value="768P">768P</option>
+                <option value="2K" selected>2K</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Aspect ratio</label>
+            <select name="aspect_ratio">
+                <option value="adaptive">Adaptive (needs references)</option>
+                <option value="16:9" selected>16:9</option>
+                <option value="21:9">21:9</option>
+                <option value="4:3">4:3</option>
+                <option value="1:1">1:1</option>
+                <option value="3:4">3:4</option>
+                <option value="9:16">9:16</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Duration (seconds, 4-15)</label>
+            <input type="number" name="duration" value="6" min="4" max="15">
+        </div>
+
+        <p class="picker-help">
+            No references = text-to-video. Up to 9 images, 3 videos and 3 audio
+            files (2-15s each, 15s total per kind).
+        </p>
+        {{ fp.file_picker('reference_images', 'image', 'Reference images (optional)') }}
+        {{ fp.file_picker('reference_videos', 'video', 'Reference videos (optional)') }}
+        {{ fp.file_picker('reference_audio', 'audio', 'Reference audio (optional)') }}
+    </fieldset>
+
     <fieldset class="tool-fields" data-tool="nanobanana" disabled style="display:none">
         <legend>Nano Banana Pro settings</legend>
 
@@ -191,6 +274,125 @@
 
         {{ fp.file_picker('image_input', 'image', 'Reference images (optional)',
             'Browsers sort multi-file pickers alphabetically, not by click order — so files are added one at a time and you control the order with ↑ / ↓.') }}
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="seedream45" disabled style="display:none">
+        <legend>Seedream 4.5 settings</legend>
+
+        <div class="field">
+            <label>Aspect ratio</label>
+            <select name="aspect_ratio">
+                <option value="1:1" selected>1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                <option value="21:9">21:9</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Quality</label>
+            <select name="quality">
+                <option value="basic" selected>Basic (2K)</option>
+                <option value="high">High (4K)</option>
+            </select>
+        </div>
+
+        {{ fp.file_picker('image_urls', 'image', 'Reference images (optional)',
+            'Optional — switches to image editing. Up to 14.') }}
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="seedream5" disabled style="display:none">
+        <legend>Seedream 5.0 settings</legend>
+
+        <div class="field">
+            <label>Variant</label>
+            <select name="variant">
+                <option value="pro" selected>Pro</option>
+                <option value="lite">Lite</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Aspect ratio</label>
+            <select name="aspect_ratio">
+                <option value="1:1" selected>1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                <option value="21:9">21:9</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Quality</label>
+            <select name="quality">
+                <option value="basic" selected>Basic (Pro 1K / Lite 2K)</option>
+                <option value="high">High (Pro 2K / Lite 3K)</option>
+                <option value="ultra">Ultra (Lite only, 4K)</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Output format</label>
+            <select name="output_format">
+                <option value="png" selected>png</option>
+                <option value="jpeg">jpeg</option>
+            </select>
+        </div>
+
+        {{ fp.file_picker('image_urls', 'image', 'Reference images (optional)',
+            'Optional — switches to image-to-image. Up to 14 on Lite, 10 on Pro.') }}
+    </fieldset>
+
+    <fieldset class="tool-fields" data-tool="gpt_image" disabled style="display:none">
+        <legend>GPT Image 2.5 Flare settings</legend>
+
+        <div class="field">
+            <label>Aspect ratio</label>
+            <select name="aspect_ratio">
+                <option value="auto" selected>Auto</option>
+                <option value="1:1">1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                <option value="21:9">21:9</option>
+                <option value="27:16">27:16 (1K only)</option>
+                <option value="16:27">16:27 (1K only)</option>
+                <option value="9:8">9:8 (1K only)</option>
+                <option value="8:9">8:9 (1K only)</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Resolution</label>
+            <select name="resolution">
+                <option value="1K" selected>1K</option>
+                <option value="2K">2K</option>
+                <option value="4K">4K</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Background</label>
+            <select name="background">
+                <option value="auto" selected>Auto</option>
+                <option value="opaque">Opaque</option>
+                <option value="transparent">Transparent</option>
+            </select>
+        </div>
+
+        {{ fp.file_picker('input_urls', 'image', 'Input images (required)',
+            'Image-to-image: at least one, up to 16.') }}
     </fieldset>
 
     <fieldset class="tool-fields" data-tool="fake_ai" disabled style="display:none">

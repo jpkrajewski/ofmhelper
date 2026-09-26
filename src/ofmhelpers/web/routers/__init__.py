@@ -38,10 +38,15 @@ from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import videos as download_videos
 from ofmhelpers.web.routers.generation import (
     fake_ai,
+    gpt_image,
     kling,
+    minimax,
     nbp,
     replicate,
     seedance,
+    seedance25,
+    seedream5,
+    seedream45,
     wan,
 )
 from ofmhelpers.web.routers.generation import index as generation_index
@@ -59,9 +64,14 @@ ROUTERS = [
     # generation/
     generation_index.router,
     seedance.router,
+    seedance25.router,
     kling.router,
     wan.router,
+    minimax.router,
     nbp.router,
+    seedream45.router,
+    seedream5.router,
+    gpt_image.router,
     fake_ai.router,
     replicate.router,
     # downloads/
