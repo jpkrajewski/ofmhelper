@@ -85,5 +85,5 @@ def test_references_are_sent_when_no_frame_is_given(client, sent):
 def test_lowercase_resolution_is_rejected(client, sent):
     """kie.ai spells Wan's tiers 480P/720P/1080P -- every other video model in
     this client uses the lower-case form, so a copy-paste is the likely bug."""
-    with pytest.raises(ValueError, match="Unsupported resolution"):
+    with pytest.raises(ValueError, match="not a valid Wan3Resolution"):
         client.generate_video_wan3(prompt="p", resolution="1080p")

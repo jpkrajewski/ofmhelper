@@ -201,7 +201,8 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
 ## `generation/` — the AI tools
 
 - `index.py` — the unified tool-picker page (`/generate`): one form whose
-  fieldset switches between seedance/kling3/wan3/nanobanana/fake_ai, plus a
+  fieldset switches between seedance/seedance25/kling3/wan3/minimax_h3/nanobanana/
+  seedream45/seedream5/gpt_image/fake_ai, plus a
   cross-tool gallery with click-to-reuse. `TASK_LABELS`/
   `FILES_PREFIX` here are the central registry — **add an entry here for any
   new job task name that should show up in this gallery.**
@@ -214,9 +215,14 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   through `_generate_gallery_card.html`, so an appended card is
   indistinguishable from a server-rendered one (the delegated Recreate and
   Download handlers and the resumed poller all key off its attributes).
-- `seedance.py` / `kling.py` / `wan.py` / `nbp.py` — Seedance 2.0 / Kling 3.0 /
-  Wan 3.0 / Nano Banana Pro generation via `KieAIClient`, following the standard
-  tool shape.
+- One module per kie.ai model — `seedance.py` (2.0) / `seedance25.py` /
+  `kling.py` / `wan.py` / `minimax.py` / `nbp.py` / `seedream45.py` /
+  `seedream5.py` / `gpt_image.py` — each only its `/run` form and the
+  `KieAIClient.generate_*` call it wraps. Everything they share lives once in
+  `kie_jobs.py`: `start_kie_job` (create + enqueue), `run_kie_generation`
+  (preview, remote-only fallback, asset registration), `upload_references`,
+  and `add_job_routes` (the three GET endpoints). Allowed values come from
+  `aigenproviders/kaiai/types.py`, typed on the form so a bad value is a 422.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
