@@ -89,8 +89,8 @@ def set_job_preview(job_id: str, preview: dict) -> None:
 def _result_matches_files(result: list[dict]) -> list[dict]:
     """Filters one job's result down to entries whose file(s) still exist on
     disk. Handles both shapes a job's "result" list comes in:
-    - flat, one file per entry: {"name", "path"}  (seedance/kling3/
-      nanobanana/fake_ai/clean_images/elevenlabs/radio_comms/scraper)
+    - flat, one file per entry: {"name", "path"}  (the generation tools,
+      fake_ai, clean_images)
     - grouped by source URL: {"url", "success", "output_paths": [...]}
       (download_images/download_videos)
     """

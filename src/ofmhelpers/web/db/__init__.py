@@ -1,6 +1,6 @@
 """
-Persistence layer for the web app's three durable stores (jobs, todos,
-approval tokens), backed by Postgres.
+Persistence layer for the web app's durable stores (jobs, landing-page
+applications), backed by Postgres.
 
 - models.py     -- SQLAlchemy ORM tables (the schema Alembic manages)
 - session.py    -- lazy engine + sessionmaker built from settings.infra

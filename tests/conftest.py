@@ -6,12 +6,9 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
 from ofmhelpers.config.settings import (
-    DiscordSettings,
     DownloadersSettings,
-    GDriveSettings,
     InfraSettings,
     KieAISettings,
-    ReelMachineSettings,
     SessionSettings,
     WebSettings,
 )
@@ -106,9 +103,6 @@ _SETTINGS_CLASSES = (
     InfraSettings,
     KieAISettings,
     DownloadersSettings,
-    DiscordSettings,
-    ReelMachineSettings,
-    GDriveSettings,
 )
 
 

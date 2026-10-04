@@ -4,7 +4,7 @@
    One stylesheet, organised as tokens -> base -> layout -> components ->
    page-specific. Everything a page needs should already be a component
    here; a <style> block inside a template means this file is missing a
-   component (that is how the old duplicated .root-btn/.helper-list/
+   component (that is how the old duplicated .root-btn/
    .model-card styles drifted into five different looks).
 
    Mobile-first: unprefixed rules are the phone layout, `min-width` media
@@ -461,12 +461,10 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
    6. Buttons
    --------------------------------------------------------------------- */
 /* One button object. `.btn` is the base; the legacy per-page class names
-   (.model-btn, .todo-io-btn, .root-btn, .login-btn, .download-btn,
+   (.root-btn, .login-btn, .download-btn,
    .recreate-btn, .ref-toggle) are aliased onto it further down instead of
    each re-declaring padding/border/hover from scratch. */
 .btn,
-.model-btn,
-.todo-io-btn,
 .root-btn,
 button {
     display: inline-flex;
@@ -493,8 +491,6 @@ button {
         box-shadow var(--dur) var(--ease);
 }
 .btn:hover,
-.model-btn:hover,
-.todo-io-btn:hover,
 .root-btn:hover,
 button:hover {
     background: var(--surface-3);
@@ -502,7 +498,6 @@ button:hover {
     color: var(--text);
 }
 .btn:active,
-.model-btn:active,
 button:active { transform: translateY(1px); }
 .btn:disabled,
 button:disabled,
@@ -535,16 +530,12 @@ button:disabled,
 
 /* Outlined accent: secondary actions that still need to read as actions. */
 .btn-outline,
-.todo-io-btn,
-.model-refresh-btn,
 .recreate-btn {
     background: transparent;
     border: 1px solid var(--accent-ring);
     color: var(--accent-soft);
 }
 .btn-outline:hover,
-.todo-io-btn:hover,
-.model-refresh-btn:hover,
 .recreate-btn:hover {
     background: var(--accent-wash);
     border-color: var(--accent);
@@ -552,16 +543,12 @@ button:disabled,
 }
 
 /* Destructive */
-.btn-danger,
-.model-delete-btn,
-.todo-delete-btn {
+.btn-danger {
     background: transparent;
     border-color: var(--border);
     color: var(--fail);
 }
-.btn-danger:hover,
-.model-delete-btn:hover,
-.todo-delete-btn:hover {
+.btn-danger:hover {
     background: var(--fail-wash);
     border-color: var(--fail);
     color: var(--fail);
@@ -760,10 +747,6 @@ legend {
     color: var(--accent-soft);
 }
 
-/* Vertical stack of labelled fields (models edit, competition add form). */
-.stack { display: flex; flex-direction: column; gap: var(--s-4); }
-.stack-sm { display: flex; flex-direction: column; gap: var(--s-2); }
-
 /* ---------------------------------------------------------------------
    8. Cards, panels, badges
    --------------------------------------------------------------------- */
@@ -866,7 +849,7 @@ legend {
 /* ---------------------------------------------------------------------
    9. Tables
    --------------------------------------------------------------------- */
-/* Tables are the app's densest surface (todo, models, action log, file
+/* Tables are the app's densest surface (action log, applications, file
    manager). On a phone they scroll horizontally inside .table-wrap
    instead of squashing -- the alternative, reflowing every table to
    cards, would break the column alignment these pages are read for. */
@@ -949,15 +932,6 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
     box-shadow: var(--shadow-lg);
 }
 .result-audio { width: 100%; }
-/* Full-width media that is content, not a gallery thumbnail (contact
-   sheets) -- no hover zoom, it is already as large as the column. */
-.media-full {
-    display: block;
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: #000;
-}
 .result-file {
     display: flex;
     align-items: center;
@@ -974,22 +948,6 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 }
 .source { margin: 0; color: var(--text-muted); font-size: var(--step--1); word-break: break-word; }
 .filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
-/* One pre-typed search per row: the query, then one button per platform
-   (replicate_review.html's wardrobe hunt). */
-.search-list { list-style: none; padding: 0; margin: 0; }
-.search-list li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-2);
-    margin-bottom: var(--s-2);
-}
-.search-list .search-query {
-    flex: 1 1 100%;
-    font-size: var(--step--1);
-    color: var(--text-muted);
-    word-break: break-word;
-}
 .fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
 .fail-list li { margin-bottom: var(--s-2); }
 .fail-note { min-height: 0; color: var(--fail); border-color: var(--fail-border); background: var(--fail-wash); }
@@ -1259,7 +1217,7 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------------------------------------------------------------------
-   14. Two-column tool pages (/generate, /download-assets, /replicate)
+   14. Two-column tool pages (/generate, /download-assets)
    --------------------------------------------------------------------- */
 .generate-layout {
     display: grid;
@@ -1282,24 +1240,6 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
     }
 }
 .generate-form-col button[type="submit"] { width: 100%; min-height: 48px; font-size: var(--step-0); }
-
-/* 30/70, for a page whose left column is a read-only summary and whose right
-   column is where the work happens (/replicate review): the source reel and the
-   analysis table read fine narrow, while the prompt editor, the pickers and the
-   generated results all want the width. Not the base rule's
-   minmax(380px, 460px) -- that pins the left column to a fixed band instead of
-   letting it shrink proportionally. */
-@media (min-width: 1080px) {
-    .generate-layout--split-30-70 { grid-template-columns: 3fr 7fr; }
-}
-
-/* Stacked sections inside a column -- without this the reel, the metadata
-   table and the speech box run together with no breathing room. */
-.review-block { margin-bottom: var(--s-7); }
-.review-block:last-child { margin-bottom: 0; }
-.review-block > .media-full { margin-bottom: var(--s-4); }
-.review-block .inputs-table { margin-bottom: var(--s-4); }
-.review-block .field:last-of-type { margin-bottom: var(--s-4); }
 
 /* Job "Inputs" section (prompt/settings/reference files a job ran with). */
 .job-inputs { margin-bottom: var(--s-6); }
@@ -1332,96 +1272,10 @@ summary { cursor: pointer; font-weight: 600; }
 summary:hover { color: var(--accent-soft); }
 
 /* ---------------------------------------------------------------------
-   15. Todo page
+   15. Shared page bits (cookies form, action log, applications, file manager)
    --------------------------------------------------------------------- */
 .todo-add-form { max-width: 640px; margin-bottom: var(--s-6); }
-.todo-io-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-3);
-    margin-top: var(--s-6);
-    padding-top: var(--s-5);
-    border-top: 1px solid var(--border);
-}
-.todo-io-btn { min-height: 38px; }
-.todo-file-input { max-width: 240px; font-size: var(--step--1); }
-.todo-import-form { display: flex; align-items: center; gap: var(--s-2); margin: 0; }
-.todo-table { table-layout: fixed; }
-.todo-table th, .todo-table td { padding: var(--s-4); }
-.todo-table .todo-comments {
-    white-space: pre-wrap;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    color: var(--text-muted);
-}
-.todo-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.todo-reject-col { color: var(--warn); font-size: var(--step--1); word-break: break-word; }
 .todo-added { color: var(--text-muted); font-size: var(--step--1); white-space: nowrap; }
-tr.todo-done td { opacity: 0.5; }
-tr.todo-done td.todo-comments,
-tr.todo-done .todo-link,
-tr.todo-done td:nth-child(2) { text-decoration: line-through; }
-.todo-toggle-form, .todo-delete-form { margin: 0; display: inline; }
-.todo-checkbox {
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--accent-soft);
-    font-size: 20px;
-    line-height: 1;
-}
-.todo-checkbox:hover { background: none; border: 0; color: var(--accent-strong); }
-.todo-checkbox-readonly { font-size: 20px; color: var(--text-muted); }
-.todo-delete-btn { min-height: 32px; padding: 0 var(--s-3); }
-
-/* Asset column: the same card look every other asset preview uses, just
-   contained (a table cell is much tighter than the open grid) and
-   height-capped so a portrait video can't blow out the row. */
-.todo-asset { min-width: 280px; text-align: center; }
-.todo-asset-card {
-    width: 260px;
-    margin: 0 auto;
-    padding: var(--s-3);
-    text-align: left;
-}
-.todo-asset-card .result-video,
-.todo-asset-card .result-image { max-height: 260px; object-fit: contain; }
-.todo-asset-status {
-    margin-top: var(--s-3);
-    padding-top: var(--s-3);
-    border-top: 1px solid var(--border-soft);
-    font-size: var(--step--1);
-}
-.todo-drive-uploaded { display: block; margin-bottom: var(--s-2); color: var(--ok); }
-.todo-approved { color: var(--text-muted); }
-.todo-uploading { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--text-muted); }
-.todo-upload-error { margin: 0 0 var(--s-2); color: var(--fail); font-size: var(--step--1); word-break: break-word; }
-.todo-asset-status form { margin: 0; }
-.todo-asset-status .todo-io-btn { width: 100%; }
-.todo-review-actions { display: flex; gap: var(--s-2); }
-.todo-review-actions form, .todo-review-actions .todo-reject-toggle { flex: 1; }
-.todo-reject-btn { color: var(--warn); border-color: rgba(251, 191, 36, 0.45); }
-.todo-reject-btn:hover { background: var(--warn-wash); border-color: var(--warn); color: var(--warn); }
-.todo-reject-form { display: none; flex-direction: column; gap: var(--s-2); margin-top: var(--s-2); }
-.todo-reject-form.open { display: flex; margin-top: var(--s-4); }
-.todo-reject-textarea { min-height: 68px; }
-/* Stacked, full-width: a long filename next to the button truncates. */
-.todo-asset-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-2);
-    width: 260px;
-    margin: var(--s-3) auto 0;
-    text-align: left;
-}
-.todo-asset-form .todo-file-input { width: 100%; max-width: none; }
-.todo-asset-form .todo-io-btn { width: 100%; }
-
-/* ---------------------------------------------------------------------
-   16. Models + Competition pages
-   --------------------------------------------------------------------- */
 .model-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -1431,162 +1285,12 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
 }
 .model-toolbar form { margin: 0; }
 .model-toolbar-note { max-width: 46ch; color: var(--text-muted); font-size: var(--step--1); }
-.model-refresh-status { font-size: var(--step--1); color: var(--text-muted); }
-.model-refresh-status.is-done { color: var(--ok); }
-.model-refresh-status.is-error { color: var(--fail); }
-
-.model-thumb, .model-thumb-large {
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-}
-.model-thumb-large { width: 96px; height: 96px; }
-.model-thumb-empty {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-faint);
-    font-size: 22px;
-}
-.model-name { font-size: var(--step-1); font-weight: 700; }
-.model-contacts {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-top: var(--s-2);
-    font-size: var(--step--1);
-    font-weight: 400;
-    color: var(--text-muted);
-}
-.model-contact b { color: var(--text); font-weight: 600; }
-.model-link { font-weight: 600; word-break: break-word; }
-
-.model-ig-links { display: flex; flex-direction: column; gap: var(--s-4); }
-.model-ig-account {
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-2);
-    padding: var(--s-3) var(--s-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface-2);
-}
-.model-ig-stats { color: var(--text-muted); }
-.model-ig-followers { font-size: var(--step-0); font-weight: 700; color: var(--text); }
-.model-ig-stats-error { margin-left: var(--s-2); color: var(--fail); }
-/* A table nested in a cell: no full-width, no top margin, tighter cells. */
-.model-ig-posts { width: auto; margin: var(--s-2) 0 0; border-radius: var(--radius-sm); }
-.model-ig-posts th, .model-ig-posts td {
-    padding: 5px var(--s-3);
-    font-size: var(--step--1);
-    text-align: right;
-    white-space: nowrap;
-}
-.model-ig-posts td { font-variant-numeric: tabular-nums; }
-.model-ig-posts th:first-child, .model-ig-posts td:first-child { text-align: left; }
-
 .model-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: stretch; }
 .model-actions form { display: flex; margin: 0; }
-.model-actions .model-btn { width: 100%; }
-
-/* Models edit page */
-.model-edit-picture { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; }
-.model-edit-picture-form { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin: 0; }
-.model-edit-form { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-4); margin-top: var(--s-5); }
-.model-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-.model-field > span { color: var(--text-muted); font-size: var(--step--1); font-weight: 600; }
-.model-count {
-    padding: 1px var(--s-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    font-size: var(--step--1);
-    font-weight: 500;
-    color: var(--text-muted);
-}
-.model-edit-accounts { list-style: none; margin: 0; padding: 0; }
-.model-edit-accounts li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-2);
-    padding: var(--s-3) 0;
-    border-bottom: 1px solid var(--border-soft);
-}
-.model-edit-accounts li:last-child { border-bottom: 0; }
-.model-edit-accounts form { margin: 0; }
-.model-edit-account-form { display: flex; flex: 1; flex-wrap: wrap; gap: var(--s-2); min-width: 240px; }
-.model-edit-account-form input { flex: 1; min-width: 0; }
-/* The URL is the account's identity -- own row above the credentials. */
-.model-account-url { flex-basis: 100%; }
-.model-account-details {
-    display: grid;
-    gap: var(--s-2);
-    width: 100%;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-}
-.model-account-details .model-field > span { font-size: 12px; }
-.model-account-actions { width: 100%; }
-
-/* Competition page */
-.comp-list { display: flex; flex-direction: column; gap: var(--s-2); }
-.comp-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s-3);
-    padding: var(--s-2) var(--s-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-}
-.comp-row form { margin: 0; }
-.comp-actions { margin-top: var(--s-3); }
-.comp-add { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-2); margin: var(--s-3) 0 0; }
-.comp-add textarea { flex: 1; min-width: 200px; min-height: 64px; }
-
-/* Modal used by the models/competition "open all tabs" popup hint. */
-.modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-    padding: var(--s-4);
-    background: rgba(4, 4, 8, 0.72);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-}
-.modal.open { display: flex; animation: fade-in var(--dur) var(--ease); }
-.modal-box {
-    max-width: 440px;
-    padding: var(--s-6);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--surface);
-    box-shadow: var(--shadow-lg);
-}
-.modal-box h3 { margin-top: 0; }
-.modal-box p { color: var(--text-muted); }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------------------------------------------------------------------
-   17. Helpers index
-   --------------------------------------------------------------------- */
-.helper-list {
-    display: grid;
-    gap: var(--s-4);
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
-/* ---------------------------------------------------------------------
-   18. Footer
+   16. Footer
    --------------------------------------------------------------------- */
 .site-footer {
     margin-top: var(--s-8);
@@ -1616,7 +1320,7 @@ tr.todo-done td:nth-child(2) { text-decoration: line-through; }
 .footer-links a:hover { color: var(--accent-soft); }
 
 /* ---------------------------------------------------------------------
-   19. Login / standalone card screens
+   17. Login / standalone card screens
    --------------------------------------------------------------------- */
 .login-screen {
     display: flex;

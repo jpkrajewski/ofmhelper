@@ -33,7 +33,7 @@ jobs and the kie.ai client all need it, and none of them are the web app.
 # Who calls this
 
 `enqueue` — every router that starts a background job (see `web/CLAUDE.md`'s
-job pattern) plus `scraping/instagram_stats_job.py`. `get_redis` — the
+job pattern). `get_redis` — the
 repository cache-aside layer, the rate-limit counters, `web/ref_usage.py`.
 `get_text`/`set_text`/`delete_text` — `aigenproviders/kaiai/client.py`'s
 upload memo, currently the only pure-optimisation cache.

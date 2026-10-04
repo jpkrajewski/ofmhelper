@@ -1,7 +1,6 @@
 """
-Pydantic v2 models for the three durable stores that back the web app:
-jobs (web/stores/jobs.py), todos (web/stores/todos.py) and approval tokens
-(web/stores/approval_tokens.py). These are the typed contract at the persistence
+Pydantic v2 models for the job store that backs the web app
+(web/stores/jobs.py). These are the typed contract at the persistence
 boundary -- one source of truth for the shapes that used to live only as
 ad-hoc dicts in JSON files.
 
@@ -48,42 +47,3 @@ class Job(BaseModel):
     error: str | None = None
     created_at: float
     preview: dict[str, Any] | None = None
-
-
-class Todo(BaseModel):
-    """A VA task-list row. Defaults match todos.add_todo, so a partial record
-    (e.g. one written by import_todos, which omits the asset/approval fields)
-    validates too."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    model_name: str
-    url: str
-    comments: str = ""
-    checked: bool = False
-    created_at: float
-    created_by: str | None = None
-    asset_path: str | None = None
-    asset_name: str | None = None
-    approved: bool = False
-    rejected: bool = False
-    reject_comment: str | None = None
-    drive_file_id: str | None = None
-    drive_uploaded_at: float | None = None
-    drive_upload_job_id: str | None = None
-
-
-class ApprovalToken(BaseModel):
-    """A single-use magic-link approval token (routers/workflow/approve.py). Snapshots
-    the asset_path it was issued for so a later asset swap is caught as
-    'stale' rather than approving the wrong file."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    token: str
-    todo_id: str
-    asset_path: str
-    created_at: float
-    expires_at: float
-    used_at: float | None = None

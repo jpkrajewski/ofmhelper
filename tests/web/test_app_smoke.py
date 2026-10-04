@@ -21,10 +21,7 @@ from ofmhelpers.web.main import app
 PROTECTED_PAGES = [
     "/generate",
     "/download-assets",
-    "/helpers",
-    "/helpers/elevenlabs",
-    "/helpers/scraper",
-    "/helpers/radio-comms",
+    "/character-sheet",
     "/file-manager",
     "/action-log",
     "/cookies",
@@ -34,6 +31,15 @@ ADMIN_ONLY_PAGES = [
     "/file-manager",
     "/action-log",
 ]
+
+
+@pytest.mark.parametrize(
+    "path", ["/todo", "/helpers", "/models", "/competition", "/replicate", "/approve/x"]
+)
+def test_removed_pages_are_gone(path):
+    client = TestClient(app)
+    client.post("/login", data={"password": "test-admin", "next": "/"})
+    assert client.get(path).status_code == 404
 
 
 def test_app_starts_and_stops_cleanly():

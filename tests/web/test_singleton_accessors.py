@@ -9,11 +9,10 @@ lazy-wrapper class to work around.
 """
 
 from ofmhelpers.web.db.repositories import cached_repository as cache_module
-from ofmhelpers.web.stores import approval_tokens, instagram_stats, jobs, todos
-from ofmhelpers.web.stores import models as models_store
+from ofmhelpers.web.stores import applications, jobs
 from ofmhelpers.web.templates_config import get_templates
 
-STORES = (jobs, todos, models_store, approval_tokens, instagram_stats)
+STORES = (jobs, applications)
 
 
 def test_every_store_hands_out_one_repository():

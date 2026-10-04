@@ -8,13 +8,7 @@ updates must never leave a torn/half-written row.
 import threading
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.web.db.repositories import (
-    ApprovalTokenRepository,
-    InstagramStatsRepository,
-    JobRepository,
-    ModelRepository,
-    TodoRepository,
-)
+from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.db.repositories.cached_repository import RepositoryCache
 
 
@@ -68,121 +62,6 @@ def test_update_status_failure_path_records_error_not_result():
     assert job["status"] == "failed"
     assert job["error"] == "Wrong API Key"
     assert job["result"] is None
-
-
-def test_todo_repo_round_trip_and_asset_reset():
-    repo = TodoRepository()
-    todo = repo.add("Model A", "https://a", "notes", "admin")
-
-    # Attaching an asset then a second asset resets prior approval/upload.
-    repo.attach_asset(todo["id"], "/p1.png", "p1.png")
-    assert repo.approve(todo["id"]) is True
-    repo.attach_asset(todo["id"], "/p2.png", "p2.png")
-
-    stored = repo.get(todo["id"])
-    assert stored["asset_path"] == "/p2.png"
-    assert stored["approved"] is False  # reset by the new asset
-
-
-def test_model_repo_round_trip_with_instagram_accounts():
-    repo = ModelRepository()
-    model = repo.add("Model A", "https://onlyfans.com/a")
-
-    account = repo.add_instagram_account(model["id"], "https://instagram.com/a")
-    assert account is not None
-
-    stored = repo.get(model["id"])
-    assert stored["name"] == "Model A"
-    assert len(stored["instagram_accounts"]) == 1
-    assert stored["instagram_accounts"][0]["url"] == "https://instagram.com/a"
-
-    assert repo.update_instagram_account(account["id"], "https://instagram.com/a2")
-    stored = repo.get(model["id"])
-    assert stored["instagram_accounts"][0]["url"] == "https://instagram.com/a2"
-
-    assert repo.delete_instagram_account(account["id"])
-    stored = repo.get(model["id"])
-    assert stored["instagram_accounts"] == []
-
-
-def test_model_add_instagram_accounts_bulk():
-    repo = ModelRepository()
-    model = repo.add("Model A", "")
-
-    added = repo.add_instagram_accounts_bulk(
-        model["id"], ["https://instagram.com/a", "https://instagram.com/b"]
-    )
-    assert len(added) == 2
-
-    stored = repo.get(model["id"])
-    urls = {a["url"] for a in stored["instagram_accounts"]}
-    assert urls == {"https://instagram.com/a", "https://instagram.com/b"}
-
-
-def test_instagram_stats_upsert_round_trip_and_overwrite():
-    model_repo = ModelRepository()
-    stats_repo = InstagramStatsRepository()
-    model = model_repo.add("Model A", "")
-    account = model_repo.add_instagram_account(model["id"], "https://instagram.com/a")
-
-    posts = [
-        {"url": "https://instagram.com/p/1", "views": 100, "likes": 10, "shares": None}
-    ]
-    stats_repo.upsert(account["id"], followers=1000, posts=posts, error=None)
-
-    stored = stats_repo.get(account["id"])
-    assert stored["followers"] == 1000
-    assert stored["posts"] == posts
-    assert stored["error"] is None
-
-    # A second scrape overwrites rather than accumulating history.
-    stats_repo.upsert(account["id"], followers=1100, posts=[], error="rate limited")
-    stored = stats_repo.get(account["id"])
-    assert stored["followers"] == 1100
-    assert stored["posts"] == []
-    assert stored["error"] == "rate limited"
-
-
-def test_instagram_stats_get_many():
-    model_repo = ModelRepository()
-    stats_repo = InstagramStatsRepository()
-    model = model_repo.add("Model A", "")
-    a1 = model_repo.add_instagram_account(model["id"], "https://instagram.com/a")
-    a2 = model_repo.add_instagram_account(model["id"], "https://instagram.com/b")
-    stats_repo.upsert(a1["id"], followers=1, posts=[], error=None)
-
-    many = stats_repo.get_many((a1["id"], a2["id"]))
-    assert set(many) == {a1["id"]}
-
-
-def test_model_add_instagram_accounts_bulk_returns_none_for_unknown_model():
-    repo = ModelRepository()
-    assert repo.add_instagram_accounts_bulk("doesnotexist", ["https://a"]) is None
-
-
-def test_model_add_instagram_account_returns_none_for_unknown_model():
-    repo = ModelRepository()
-    assert repo.add_instagram_account("doesnotexist", "https://a") is None
-
-
-def test_model_delete_cascades_to_instagram_accounts():
-    repo = ModelRepository()
-    model = repo.add("Model A", "")
-    repo.add_instagram_account(model["id"], "https://instagram.com/a")
-
-    assert repo.delete(model["id"]) is True
-    assert repo.get(model["id"]) is None
-
-
-def test_approval_token_consume_is_single_use():
-    repo = ApprovalTokenRepository()
-    token = repo.create("todo1", "/asset.png", ttl_seconds=3600)
-
-    assert repo.consume(token, "/asset.png") == "ok"
-    assert repo.consume(token, "/asset.png") == "used"
-    # A mismatched asset path is rejected as stale, not approved.
-    other = repo.create("todo2", "/asset2.png", ttl_seconds=3600)
-    assert repo.consume(other, "/different.png") == "stale"
 
 
 def test_job_get_is_served_from_cache_until_a_write_invalidates_it():

@@ -23,7 +23,10 @@ dependency).
   `generate_video_minimax_h3`). A wrapper only builds its payload; the shared
   create -> poll -> preview -> download tail is `_generate`. Plus crash/timeout recovery (`resume_pending`, used by `web/recovery.py`'s
   background sweeper). Also handles uploading local reference files
-  (`upload_local_file`), memoized in Redis (see below). Note: the directory is
+  (`upload_local_file`), memoized in Redis (see below). An image reference over
+  `OFM_KIEAI_REF_IMAGE_MAX_BYTES` / `_MAX_SIDE` is uploaded as a shrunk JPEG
+  copy (`_fit_for_upload`, `utils/image_fit.py`) under `OUT_DIR/fitted/`;
+  the original is never modified. Note: the directory is
   named `kaiai` (typo, kept for backwards compatibility with existing
   imports) — everything else (docs, env vars, tests) says "kie"/"kie.ai".
 - `kaiai/types.py` — every kie.ai model id (`KieModel`), the video-model set
@@ -44,8 +47,7 @@ dependency).
 
 The kie.ai modules in `web/routers/generation/` (`seedance.py`,
 `seedance25.py`, `kling.py`, `wan.py`, `minimax.py`, `nbp.py`, `seedream45.py`,
-`seedream5.py`, `gpt_image.py`), `fake_ai.py`, and
-`reel_machine/generation.py` all construct a `KieAIClient.from_env(api_key=...)`
+`seedream5.py`, `gpt_image.py`) all construct a `KieAIClient.from_env(api_key=...)`
 and call one of its `generate_*` methods. `web/recovery.py`'s background
 sweeper calls `resume_pending()` every few minutes across every configured API
 key. Never build a second HTTP client for a model kie.ai already exposes —

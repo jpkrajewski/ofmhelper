@@ -1,22 +1,17 @@
 # Module purpose
 
-Static configuration shared across the scraping pipeline: which scrapers
-exist, their Apify actor input shapes, and how their ranked results are
-weighted.
+The app's configuration: every env var is read here and nowhere else.
 
 # Module files
 
-- `scrapers.py` — `Scrapers` (StrEnum of scraper identifiers:
-  `INSTAGRAM_PROFILES`, `TIKTOK_PROFILES`); `ContentRankingWeights` /
-  `ScraperConfig` dataclasses; `prepare_raw_input_instagram_reel_scraper` /
-  `prepare_raw_input_tiktok_reel_scraper` (build the raw dict payload for
-  each platform's Apify actor); `SCRAPRES_REGISTRY` (dict mapping each
-  `Scrapers` value to its actor id / config — note the "SCRAPRES" typo, kept
-  for backwards compatibility with existing imports).
+- `settings.py` — one `BaseSettings` group per app module (`SessionSettings`,
+  `WebSettings`, `InfraSettings`, `KieAISettings`, `DownloadersSettings`,
+  `LoggingSettings`, `LeadHuntSettings`).
+- `__init__.py` — the single import point, `from ofmhelpers.config import
+  settings`. Each group property constructs its class fresh on access (a lazy
+  global, not a cached one) so a test's `monkeypatch.setenv` is seen by the
+  very next call.
 
 # Who calls this
 
-`web/routers/helpers/scraper.py` imports `SCRAPRES_REGISTRY` and `Scrapers` to drive
-the scraper picker; `scraping/apify.py` (actor input building);
-`utils/sheets_to_columns.py` (reads the `Scrapers` enum to map spreadsheet
-columns to scrapers); `scraping/post_scorer.py` (ranking weights).
+Everything that needs a setting, via `settings.<group>.<field>`.

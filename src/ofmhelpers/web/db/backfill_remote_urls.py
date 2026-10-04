@@ -39,7 +39,7 @@ from ofmhelpers.web.db.session import session_scope
 # Tasks whose result shape is a flat [{"name", "path"}, ...] list produced by
 # a KieAIClient generate_* call -- the only ones that ever had a remote_url to
 # lose. Excludes fake_ai (never touches kie.ai) and the grouped download-*/
-# clean-image/elevenlabs/radio-comms/scraper/replicate tasks (never had one).
+# clean-image tasks (never had one).
 KIEAI_TASKS = ("seedance", "kling3", "nanobanana")
 
 # download_urls() names local files "{taskId}.{ext}" or "{taskId}_{i}.{ext}"

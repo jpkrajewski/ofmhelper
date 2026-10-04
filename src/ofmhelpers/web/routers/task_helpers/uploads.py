@@ -16,6 +16,7 @@ from fastapi import HTTPException, UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils.heic import HEIC_EXTENSIONS, heic_to_jpeg
 
 logger = get_logger(__name__)
 
@@ -94,6 +95,22 @@ def require_upload_kind(name: str | None, allowed: frozenset[str]) -> str:
     return safe
 
 
+def convert_heic_upload(upload: UploadFile) -> UploadFile:
+    """An iPhone HEIC/HEIF upload, swapped for its JPEG conversion; any other
+    upload unchanged. Runs before require_upload_kind, so HEIC is accepted
+    without ever reaching disk or the extension allowlist as HEIC."""
+    name = upload.filename or ""
+    path = Path(name.replace("\\", "/"))
+    if path.suffix.lower() not in HEIC_EXTENSIONS:
+        return upload
+    try:
+        jpeg = heic_to_jpeg(upload.file)
+    except ValueError:
+        logger.warning("could not decode HEIC upload %s", name, exc_info=True)
+        raise HTTPException(status_code=400, detail="Unreadable HEIC image") from None
+    return UploadFile(file=jpeg, filename=path.with_suffix(".jpg").name)
+
+
 def strip_asset_hash_prefix(filename: str) -> str:
     """Strip the "{sha256}__" content-hash prefix save_asset() stores files
     under -- the hash is only there to dedupe/avoid collisions on disk;
@@ -142,8 +159,9 @@ def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
     glob instead of hashing every file already on disk; the original name is
     kept after the prefix purely for display (see refs.py)."""
     # Before the temp file, so a rejected name doesn't leave one behind.
-    # Audio is allowed here (unlike the todo/model uploads): this store backs
-    # the reference-audio inputs of the generation tools.
+    # Audio is allowed here: this store backs the reference-audio inputs of
+    # the generation tools.
+    upload = convert_heic_upload(upload)
     stored_name = require_upload_kind(upload.filename, MEDIA_KINDS)
     # Resolved here, not as a parameter default: a default binds at import,
     # which would pin the store to whatever OFM_UPLOADS_ROOT said then.

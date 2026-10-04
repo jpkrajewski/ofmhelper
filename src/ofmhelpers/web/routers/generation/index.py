@@ -36,7 +36,6 @@ TASK_LABELS = {
     "seedream5": "Seedream 5.0",
     "gpt_image": "GPT Image 2.5 Flare",
     "fake_ai": "Fake AI Model",
-    "replicate": "Replicate (Reel Clone)",
 }
 FILES_PREFIX = {
     "seedance": "/seedance/files",
@@ -49,7 +48,6 @@ FILES_PREFIX = {
     "seedream5": "/seedream5/files",
     "gpt_image": "/gpt-image/files",
     "fake_ai": "/fake-ai/files",
-    "replicate": "/replicate/files",
 }
 
 
