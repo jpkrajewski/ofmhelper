@@ -17,14 +17,10 @@
     {% set is_admin = request.session.get("role") == "admin" %}
     {% set nav_items = [
         ("/generate", "Generate AI Assets"),
-        ("/replicate", "Replicate"),
         ("/download-assets", "Download Assets"),
-        ("/todo", "Todo"),
-        ("/helpers", "Helpers"),
+        ("/character-sheet", "Character Sheet"),
     ] + ([
-        ("/models", "Models"),
         ("/applications", "Applications"),
-        ("/competition", "Competition"),
         ("/file-manager", "File Manager"),
         ("/action-log", "Action log"),
     ] if is_admin else []) %}
@@ -74,11 +70,8 @@
             <nav class="footer-links" aria-label="Footer">
                 <a href="/generate">Generate</a>
                 <a href="/download-assets">Download</a>
-                <a href="/todo">Todo</a>
-                <a href="/helpers">Helpers</a>
+                <a href="/character-sheet">Character Sheet</a>
                 {% if is_admin %}
-                <a href="/models">Models</a>
-                <a href="/competition">Competition</a>
                 <a href="/file-manager">File Manager</a>
                 <a href="/action-log">Action log</a>
                 {% endif %}

@@ -6,18 +6,15 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
 from ofmhelpers.config.settings import (
-    DiscordSettings,
     DownloadersSettings,
-    GDriveSettings,
     InfraSettings,
     KieAISettings,
-    ReelMachineSettings,
     SessionSettings,
     WebSettings,
 )
 
-# The three durable stores (jobs, todos, approval tokens) are Postgres-backed
-# now, so the test suite needs a running Postgres. Bring one up first with:
+# The durable stores (jobs, applications) are Postgres-backed now, so the
+# test suite needs a running Postgres. Bring one up first with:
 #     docker compose up -d postgres redis
 # Tests run against a SEPARATE database (ofmhelpers_test) so they never touch
 # dev/prod data, and every table is truncated between tests for isolation.
@@ -82,21 +79,20 @@ def _test_database():
 
 @pytest.fixture(autouse=True)
 def _clean_tables():
-    """Truncate the three stores before each test so nothing leaks between
-    tests -- the DB equivalent of the old per-test temp JSON files. Also
-    flushes the test Redis db: repository.py caches reads there, and a
-    cached list/get from a previous test would otherwise survive the
+    """Truncate every mapped table before each test so nothing leaks between
+    tests -- the DB equivalent of the old per-test temp JSON files. The list
+    comes from the ORM metadata, so it matches what create_all built: a
+    hardcoded list kept naming retired tables that a fresh CI database never
+    has. Also flushes the test Redis db: repository.py caches reads there, and
+    a cached list/get from a previous test would otherwise survive the
     TRUNCATE above until its TTL expired."""
     from ofmhelpers.cache import get_redis
+    from ofmhelpers.web.db.models import Base
     from ofmhelpers.web.db.session import get_engine
 
+    tables = ", ".join(Base.metadata.tables)
     with get_engine().begin() as conn:
-        conn.execute(
-            text(
-                "TRUNCATE jobs, todos, approval_tokens, models, "
-                "instagram_accounts, applications RESTART IDENTITY CASCADE"
-            )
-        )
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     get_redis().flushdb()
 
 
@@ -106,9 +102,6 @@ _SETTINGS_CLASSES = (
     InfraSettings,
     KieAISettings,
     DownloadersSettings,
-    DiscordSettings,
-    ReelMachineSettings,
-    GDriveSettings,
 )
 
 

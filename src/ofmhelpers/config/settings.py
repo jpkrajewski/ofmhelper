@@ -39,8 +39,7 @@ class SessionSettings(BaseSettings):
 
 
 class WebSettings(BaseSettings):
-    """middleware/auth.py, api_keys.py, recovery.py, jobs.py, todos.py,
-    approval_tokens.py, routers/workflow/todo.py, routers/workflow/approve.py,
+    """middleware/auth.py, api_keys.py, recovery.py, jobs.py,
     routers/generation/index.py, routers/downloads/index.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -59,8 +58,6 @@ class WebSettings(BaseSettings):
     # direction for an allowlist.
     #   /login, /health           -- the way in, and the deploy health probe
     #   /static/                  -- css/js/images
-    #   /approve/                 -- magic-link asset approval, see
-    #                                routers/workflow/approve.py
     #   /apply                    -- the landing page's application form POST,
     #                                see routers/apply.py (rate-limited, not
     #                                unguarded)
@@ -69,34 +66,25 @@ class WebSettings(BaseSettings):
         validation_alias="OFM_PUBLIC_PATHS",
     )
     public_prefixes: tuple[str, ...] = Field(
-        default=("/static/", "/approve/"), validation_alias="OFM_PUBLIC_PREFIXES"
+        default=("/static/",), validation_alias="OFM_PUBLIC_PREFIXES"
     )
     kie_ai_api_key_admin: str | None = None
     kie_ai_api_key_va: str | None = None
-    # One key for both roles, unlike kie.ai: ElevenLabs billing is per
-    # workspace here, so there is nothing to split per role.
-    elevenlabs_api_key: str | None = None
-    app_base_url: str | None = None
 
     jobs_file: str = Field(
         default="uploads/jobs.json", validation_alias="OFM_JOBS_FILE"
-    )
-    todo_file: str = Field(
-        default="uploads/todos.json", validation_alias="OFM_TODO_FILE"
-    )
-    approval_tokens_file: str = Field(
-        default="uploads/approval_tokens.json",
-        validation_alias="OFM_APPROVAL_TOKENS_FILE",
     )
 
     max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(
         default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
     )
-    approval_token_ttl_seconds: int = Field(
-        default=3 * 24 * 3600, validation_alias="OFM_APPROVAL_TOKEN_TTL_SECONDS"
-    )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
+    # Panels per character sheet. The sheet is decoded whole in the worker's
+    # memory, so this is what keeps one upload from exhausting it.
+    character_sheet_max_images: int = Field(
+        default=10, validation_alias="OFM_CHARACTER_SHEET_MAX_IMAGES"
+    )
 
     # Rate limiting (web/middleware/ratelimit.py). The kill switch exists for the test
     # suite, which fires hundreds of POSTs from one client host -- leave it on
@@ -140,13 +128,11 @@ class WebSettings(BaseSettings):
     )
     # Bounds the ffprobe/ffmpeg call behind a video reference thumbnail.
     ffmpeg_timeout_s: int = Field(default=20, validation_alias="OFM_FFMPEG_TIMEOUT_S")
-    # How many past intakes the /replicate form lists for rerun.
-    intake_list_limit: int = Field(default=20, validation_alias="OFM_INTAKE_LIST_LIMIT")
 
 
 class InfraSettings(BaseSettings):
     """Backing services shared by the API and the RQ worker: Postgres (the
-    durable job/todo/token store) and Redis (the RQ broker). Kept in one
+    durable job/application store) and Redis (the RQ broker). Kept in one
     class so the worker process and the API read the exact same connection
     strings. Defaults point at the docker-compose service names, so a plain
     `docker compose up` wires everything with no extra env; override both for
@@ -212,6 +198,15 @@ class KieAISettings(BaseSettings):
     upload_cache_ttl_s: int = Field(
         default=12 * 3600, validation_alias="OFM_KIEAI_UPLOAD_CACHE_TTL_S"
     )
+    # Reference images over either limit are shrunk to a JPEG before upload
+    # (client._fit_for_upload). Wan 3.0 documents 20MB / 8000px per side;
+    # bytes are halved for the models whose limit is undocumented.
+    ref_image_max_bytes: int = Field(
+        default=10 * 1024 * 1024, validation_alias="OFM_KIEAI_REF_IMAGE_MAX_BYTES"
+    )
+    ref_image_max_side: int = Field(
+        default=8000, validation_alias="OFM_KIEAI_REF_IMAGE_MAX_SIDE"
+    )
     fake_ai_video_duration_seconds: int = Field(
         default=3, validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS"
     )
@@ -271,139 +266,6 @@ class DownloadersSettings(BaseSettings):
     )
 
 
-class DiscordSettings(BaseSettings):
-    """discord/client.py. Constructed fresh, every call, inside
-    send_webhook() -- see tests/test_discord_client.py."""
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    webhook_url: str | None = Field(
-        default=None, validation_alias="DISCORD_WEBHOOK_URL"
-    )
-    request_timeout_s: int = Field(
-        default=10, validation_alias="DISCORD_REQUEST_TIMEOUT_S"
-    )
-
-
-class ReelMachineSettings(BaseSettings):
-    """reel_machine/llm/*.py -- which model watches the reel, and its key."""
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    # Every prompt gets retuned by reading bad output and rewriting a
-    # sentence, so each one lives in a file under the bind-mounted uploads/
-    # dir rather than only in the image: edit it on the server and the next
-    # job uses it, no rebuild. Missing file = the frozen default in
-    # reel_machine/prompts.py.
-    prompt_file: str = Field(
-        default="uploads/analysis_prompt.txt",
-        validation_alias="REEL_MACHINE_PROMPT_FILE",
-    )
-    system_prompt_file: str = Field(
-        default="uploads/analysis_system_prompt.txt",
-        validation_alias="REEL_MACHINE_SYSTEM_PROMPT_FILE",
-    )
-    hunt_prompt_file: str = Field(
-        default="uploads/hunt_prompt.txt",
-        validation_alias="REEL_MACHINE_HUNT_PROMPT_FILE",
-    )
-
-    # "gemini" is the only provider -- see reel_machine/llm/registry.py. The
-    # field stays because an unknown name has to raise rather than silently
-    # run something nobody picked.
-    llm_provider: str = Field(
-        default="gemini", validation_alias="REEL_MACHINE_LLM_PROVIDER"
-    )
-    gemini_api_key: str | None = None
-    gemini_model: str = "gemini-flash-latest"
-
-    # The second, text-only pass (reel_machine/hunt.py): Gemini describes the
-    # reel, then this free model turns that description into topic slugs,
-    # search phrases and outfit alternatives. Optional on purpose -- no key
-    # means the review page falls back to terms derived from the analysis
-    # itself, so registry.get_text_provider() answers None rather than raising.
-    text_llm_provider: str = Field(
-        default="groq", validation_alias="REEL_MACHINE_TEXT_PROVIDER"
-    )
-    groq_api_key: str | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
-    groq_url: str = Field(
-        default="https://api.groq.com/openai/v1/chat/completions",
-        validation_alias="GROQ_URL",
-    )
-    # No retry on this pass (the caller has its own fallback), so the timeout
-    # is the whole budget. Warm but not creative: it names a niche, it doesn't
-    # write.
-    groq_timeout_s: int = Field(default=20, validation_alias="GROQ_TIMEOUT_S")
-    groq_temperature: float = Field(default=0.4, validation_alias="GROQ_TEMPERATURE")
-    # How many items the second pass may return per list.
-    hunt_max_items: int = Field(
-        default=6, validation_alias="REEL_MACHINE_HUNT_MAX_ITEMS"
-    )
-
-    # Gemini uploads the video and polls for state == "ACTIVE" before asking
-    # anything about it; a slow or failed upload raises rather than silently
-    # downgrading to stills.
-    gemini_video_active_timeout_s: int = Field(
-        default=120, validation_alias="GEMINI_VIDEO_ACTIVE_TIMEOUT_S"
-    )
-    gemini_poll_s: int = Field(default=2, validation_alias="GEMINI_POLL_S")
-    # Retries only the generate call, and only on a transient status -- ~6s
-    # worst case, because this runs inside an RQ worker slot.
-    gemini_max_attempts: int = Field(default=3, validation_alias="GEMINI_MAX_ATTEMPTS")
-    gemini_backoff_s: int = Field(default=2, validation_alias="GEMINI_BACKOFF_S")
-
-    # Seedance 2.0's supported clip length; the clone is clamped into it
-    # (reel_machine/pipeline.clamp_duration).
-    min_duration_s: int = Field(
-        default=4, validation_alias="REEL_MACHINE_MIN_DURATION_S"
-    )
-    max_duration_s: int = Field(
-        default=15, validation_alias="REEL_MACHINE_MAX_DURATION_S"
-    )
-
-
-class InstagramStatsSettings(BaseSettings):
-    """scraping/instagram_public.py + scraping/instagram_stats_job.py -- the
-    free, no-login Playwright scrape behind the /models page's follower and
-    last-N-reels numbers.
-
-    Every field here is a knob that has to be retuned when Instagram changes
-    (page render speed, how aggressively it soft-blocks scrapers), which is
-    exactly the case for an env var: retune on the server without a rebuild.
-    Selectors and regexes are NOT here -- those are code, not configuration."""
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    last_n_posts: int = Field(default=3, validation_alias="OFM_IG_STATS_LAST_N_POSTS")
-    # The scrape runs as a subprocess (see instagram_public.py's docstring);
-    # this bounds the whole per-account scrape, not one page load.
-    subprocess_timeout_s: int = Field(
-        default=120, validation_alias="OFM_IG_STATS_SUBPROCESS_TIMEOUT_S"
-    )
-    nav_timeout_ms: int = Field(
-        default=30_000, validation_alias="OFM_IG_STATS_NAV_TIMEOUT_MS"
-    )
-    # Instagram client-renders the profile header and the reels grid after
-    # domcontentloaded, so every goto is followed by a fixed settle wait.
-    render_wait_ms: int = Field(
-        default=3000, validation_alias="OFM_IG_STATS_RENDER_WAIT_MS"
-    )
-    reel_render_wait_ms: int = Field(
-        default=2000, validation_alias="OFM_IG_STATS_REEL_RENDER_WAIT_MS"
-    )
-    # One extra wait before giving up on an empty grid -- hydration is
-    # timing-sensitive (cookie banner, first-load jank).
-    grid_retry_wait_ms: int = Field(
-        default=4000, validation_alias="OFM_IG_STATS_GRID_RETRY_WAIT_MS"
-    )
-    # Hour (UTC) the nightly sweep runs at; the sweep re-queues its own next
-    # run, so a change takes effect from the run after next.
-    sweep_hour_utc: int = Field(
-        default=0, validation_alias="OFM_IG_STATS_SWEEP_HOUR_UTC"
-    )
-
-
 class LoggingSettings(BaseSettings):
     """Read once per process by ofmhelpers.logging.configure_logging(), which
     every entrypoint (web/main.py, the RQ worker, alembic/env.py) calls before
@@ -421,25 +283,6 @@ class LoggingSettings(BaseSettings):
     access_log: bool = Field(default=True, validation_alias="OFM_LOG_ACCESS")
 
 
-class GDriveSettings(BaseSettings):
-    """gdrive/authorize.py, gdrive/client.py. Constructed fresh, every
-    call -- see tests/test_gdrive_client.py / test_gdrive_authorize.py."""
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    oauth_client_file: str = Field(
-        default="secrets/google-oauth-client.json",
-        validation_alias="GOOGLE_OAUTH_CLIENT_FILE",
-    )
-    token_file: str = Field(
-        default="secrets/google-drive-token.json",
-        validation_alias="GOOGLE_DRIVE_TOKEN_FILE",
-    )
-    folder_id: str | None = Field(
-        default=None, validation_alias="GOOGLE_DRIVE_FOLDER_ID"
-    )
-
-
 class LeadHuntSettings(BaseSettings):
     """scraping/lead_hunt.py + scraping/aggregators.py -- the Instagram
     creator-lead hunt (hashtag discovery -> profile enrich -> OnlyFans
@@ -452,7 +295,7 @@ class LeadHuntSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Comma-separated, same shape as the /helpers/scraper form's textarea.
+    # Comma-separated.
     # Kept as a plain string rather than list[str]: pydantic-settings parses a
     # complex-typed field as JSON before any validator runs, which would make
     # `a,b` an error instead of two keys. `api_keys` does the split.

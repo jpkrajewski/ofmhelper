@@ -27,6 +27,7 @@ from ofmhelpers.aigenproviders.kaiai.types import (
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils.image_fit import fit_image, fits
 
 logger = get_logger(__name__)
 
@@ -48,6 +49,12 @@ class KieAIClient:
     # kie.ai signals success in a JSON body field, not the HTTP status.
     _HTTP_ERROR = 400
     _API_OK = 200
+
+    # Reference images _fit_for_upload may re-encode (GIF is left alone: a
+    # JPEG copy would drop its animation).
+    FITTABLE_IMAGE_SUFFIXES = frozenset(
+        {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
+    )
 
     def __init__(
         self,
@@ -128,13 +135,14 @@ class KieAIClient:
             logger.info("cached url for %s no longer resolves, re-uploading", path)
             delete_text(cache_key)
 
-        logger.info("upload starting: %s", path)
-        with pathlib.Path(path).open("rb") as fh:
+        upload_file = self._fit_for_upload(pathlib.Path(path))
+        logger.info("upload starting: %s", upload_file)
+        with upload_file.open("rb") as fh:
             r = requests.post(
                 f"{self.UPLOAD_BASE}/api/file-stream-upload",
                 headers=self.HEADERS,
                 files={"file": fh},
-                data={"uploadPath": upload_path, "fileName": pathlib.Path(path).name},
+                data={"uploadPath": upload_path, "fileName": upload_file.name},
                 timeout=settings.kieai.upload_timeout_s,
             )
         r.raise_for_status()
@@ -146,6 +154,24 @@ class KieAIClient:
         logger.info("upload done: %s -> %s", path, url)
         set_text(cache_key, url, settings.kieai.upload_cache_ttl_s)
         return url
+
+    def _fit_for_upload(self, path: pathlib.Path) -> pathlib.Path:
+        """`path`, or a shrunk JPEG copy of it when it is an image over
+        kie.ai's reference limits -- an oversized reference is otherwise a 422
+        from createTask ("file size exceeds limit") after the upload already
+        succeeded. The original stays untouched (a character sheet is kept
+        lossless), and the copy is reused on the next upload of the same file."""
+        limits = settings.kieai
+        if path.suffix.lower() not in self.FITTABLE_IMAGE_SUFFIXES or fits(
+            path, limits.ref_image_max_bytes, limits.ref_image_max_side
+        ):
+            return path
+        dest = self.OUT_DIR / "fitted" / f"{path.stem}.jpg"
+        if not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            fit_image(path, dest, limits.ref_image_max_bytes, limits.ref_image_max_side)
+            logger.info("shrunk oversized reference %s -> %s", path, dest)
+        return dest
 
     def _remote_file_exists(self, url: str) -> bool:
         """Best-effort existence check for a previously-uploaded file's

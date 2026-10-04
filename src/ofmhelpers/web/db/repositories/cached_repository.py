@@ -40,7 +40,7 @@ class RepositoryCacheLike(Protocol):
 
 class RepositoryCache:
     """Cache-aside wrapper around one Redis connection, namespaced per
-    repository (e.g. "job", "todo", "model", "approval_token")."""
+    repository (e.g. "job", "application")."""
 
     def __init__(
         self, redis: Redis, namespace: str, ttl_s: int = _DEFAULT_TTL_S

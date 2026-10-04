@@ -1,7 +1,7 @@
 """What a generation form posts.
 
 The three reference-file pickers (images, videos, audio) are the one shape the
-generation routers genuinely share -- seedance, fake_ai and replicate all take
+generation routers genuinely share -- seedance, wan, minimax and fake_ai all take
 the same six fields, and each used to repeat the same six-line parameter block
 plus the same three `x or []` lines. kling and nbp take a single, differently
 *named* list each (`images`, `image_input`), and those names are contract with

@@ -19,6 +19,7 @@ from unittest import mock
 
 import pytest
 import requests
+from PIL import Image
 from redis.exceptions import RedisError
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
@@ -40,7 +41,7 @@ def client(tmp_path):
 @pytest.fixture
 def ref_file(tmp_path):
     p = tmp_path / "ref.png"
-    p.write_bytes(b"fake image bytes")
+    Image.new("RGB", (8, 8)).save(p)
     return p
 
 
@@ -236,9 +237,9 @@ def test_http_error_on_upload_raises_and_never_populates_cache(client, ref_file)
 
 def test_two_different_local_files_cache_independently(client, tmp_path):
     ref_a = tmp_path / "a.png"
-    ref_a.write_bytes(b"a")
+    Image.new("RGB", (8, 8), "red").save(ref_a)
     ref_b = tmp_path / "b.png"
-    ref_b.write_bytes(b"b")
+    Image.new("RGB", (8, 8), "blue").save(ref_b)
 
     with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
         mreq.post.side_effect = [

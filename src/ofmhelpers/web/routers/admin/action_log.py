@@ -20,11 +20,9 @@ TASK_STATUS_PREFIX = {
     "download_videos": "/download-videos",
     "download_images": "/download-images",
     "clean_images": "/clean-images",
+    "character_sheet": "/character-sheet",
     "seedance": "/seedance",
     "seedance25": "/seedance25",
-    "elevenlabs": "/helpers/elevenlabs",
-    "radio_comms": "/helpers/radio-comms",
-    "scraper": "/helpers/scraper",
     "nanobanana": "/nanobanana",
     "kling3": "/kling3",
     "wan3": "/wan3",
@@ -33,8 +31,6 @@ TASK_STATUS_PREFIX = {
     "seedream5": "/seedream5",
     "gpt_image": "/gpt-image",
     "fake_ai": "/fake-ai",
-    "replicate_intake": "/replicate",
-    "replicate": "/replicate",
 }
 
 

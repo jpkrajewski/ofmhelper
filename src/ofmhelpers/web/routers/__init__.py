@@ -1,16 +1,14 @@
 """
 Every HTTP route in the app, grouped by what it is *for*:
 
-- `generation/` -- the AI generation tools (seedance, kling, nano banana pro,
-  the no-cost fake_ai stand-in, the reel-cloning replicate pipeline) plus the
-  unified picker page that fronts them.
+- `generation/` -- the AI generation tools (one module per kie.ai model, plus
+  the no-cost fake_ai stand-in) and the unified picker page that fronts them.
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
   metadata cleaner, and their picker page.
-- `helpers/`    -- the small standalone tools on /helpers (ElevenLabs TTS,
-  radio-comms FX, the scraper) plus the index that lists them.
-- `admin/`      -- admin-only surfaces: the model roster, competition, file
+- `image_tools/` -- local image edits with no external service (character
+  sheet).
+- `admin/`      -- admin-only surfaces: landing-page applications, file
   manager, action log, cookie upload.
-- `workflow/`   -- the VA todo list and its public magic-link approval flow.
 
 Four modules sit at this level because they belong to no single feature:
 `auth` (login/logout), `apply` (the public landing-page application form's
@@ -24,13 +22,7 @@ never touched.
 """
 
 from ofmhelpers.web.routers import apply, auth, refs
-from ofmhelpers.web.routers.admin import (
-    action_log,
-    competition,
-    cookies,
-    file_manager,
-    models,
-)
+from ofmhelpers.web.routers.admin import action_log, cookies, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.downloads import clean_image
 from ofmhelpers.web.routers.downloads import images as download_images
@@ -42,7 +34,6 @@ from ofmhelpers.web.routers.generation import (
     kling,
     minimax,
     nbp,
-    replicate,
     seedance,
     seedance25,
     seedream5,
@@ -50,9 +41,7 @@ from ofmhelpers.web.routers.generation import (
     wan,
 )
 from ofmhelpers.web.routers.generation import index as generation_index
-from ofmhelpers.web.routers.helpers import elevenlabs, radio_comms, scraper
-from ofmhelpers.web.routers.helpers import index as helpers_index
-from ofmhelpers.web.routers.workflow import approve, todo
+from ofmhelpers.web.routers.image_tools import character_sheet
 
 # Order is presentational only -- FastAPI matches on path and no two routers
 # share a prefix -- so it follows the package grouping above and this list
@@ -73,25 +62,16 @@ ROUTERS = [
     seedream5.router,
     gpt_image.router,
     fake_ai.router,
-    replicate.router,
     # downloads/
     downloads_index.router,
     download_videos.router,
     download_images.router,
     clean_image.router,
-    # helpers/
-    helpers_index.router,
-    elevenlabs.router,
-    radio_comms.router,
-    scraper.router,
+    # image_tools/
+    character_sheet.router,
     # admin/
-    models.router,
     admin_applications.router,
-    competition.router,
     file_manager.router,
     action_log.router,
     cookies.router,
-    # workflow/
-    todo.router,
-    approve.router,
 ]

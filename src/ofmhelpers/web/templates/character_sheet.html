@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "_asset_media.html" as am %}
+{% block content %}
+<div class="page-head">
+    <h1>Character Sheet</h1>
+</div>
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<h2 class="col-title">Combine</h2>
+
+<form id="character-sheet-form" method="post" action="/character-sheet/run" enctype="multipart/form-data"
+      data-prefix="/character-sheet" data-result-kind="image" data-tool-label="Character sheet">
+    <div class="field">
+        <label for="character-sheet-files">Images (2–{{ max_images }}), left to right in the order picked</label>
+        <input type="file" id="character-sheet-files" name="files" multiple accept="image/*,.heic,.heif" required>
+    </div>
+    <button type="submit" class="btn-primary">Combine</button>
+    <p class="form-hint">
+        Placed side by side with no gap, every image scaled to the tallest one's
+        height. Comes back as a lossless PNG, also added to the reuse picker on
+        Generate.
+    </p>
+</form>
+</div>
+
+<div class="generate-gallery-col">
+<h2 class="col-title">Results</h2>
+
+<div id="results-panel">
+    <div class="generation-status"></div>
+    <div class="results">
+        {% for job in gallery %}
+        <div class="result-item" data-job-id="{{ job.job_id }}"
+             {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="/character-sheet"{% endif %}>
+            {% if job.status == "done" and job.assets %}
+                {{ am.asset_media(job.assets[0]) }}
+                <p class="filename">{{ job.assets[0].name }}</p>
+                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" class="download-btn">⬇ Download</a>
+            {% elif job.status == "failed" %}
+                <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
+            {% elif job.status == "done" %}
+                <div class="result-file">no output</div>
+            {% else %}
+                <div class="result-file"><span class="spinner"></span> working…</div>
+            {% endif %}
+            <p class="source">Character sheet · {{ job.panels }} images</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+</div>
+</div>
+
+<script src="/static/js/generation.js"></script>
+{% endblock %}

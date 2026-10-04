@@ -9,6 +9,7 @@ from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     UPLOADS_ROOT,
     asset_card,
+    convert_heic_upload,
     job_status_payload,
     make_job_dir,
     register_generated_asset,
@@ -43,7 +44,7 @@ async def run(
 ):
     if files is None:
         files = []
-    files = [f for f in files if f.filename]
+    files = [convert_heic_upload(f) for f in files if f.filename]
     if not files:
         raise HTTPException(status_code=400, detail="At least one image is required")
 

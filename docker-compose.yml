@@ -24,8 +24,7 @@ x-app-environment: &app-environment
   - OFM_KIEAI_OUT_DIR=/app/kieai_out
   - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
   - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
-  - GOOGLE_DRIVE_TOKEN_FILE=/app/secrets/google-drive-token.json
-  # Postgres (durable job/todo/token store) and Redis (RQ broker). The code
+  # Postgres (durable job/application store) and Redis (RQ broker). The code
   # defaults these to the service names, but we set them explicitly so the same
   # file documents the wiring on any host.
   - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers
@@ -39,9 +38,6 @@ x-app-volumes: &app-volumes
   - ./uploads:/app/uploads
   - ./downloads:/app/downloads
   - ./kieai_out:/app/kieai_out
-  - ./secrets:/app/secrets   # writable -- the Drive OAuth token file rewrites
-                              # itself on every refresh (see gdrive/client.py);
-                              # read-only broke that
 
 services:
   ofmhelpers:

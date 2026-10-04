@@ -52,7 +52,6 @@ def test_allowlist_and_roles_come_from_settings():
 def test_api_key_prefills_are_not_in_the_auth_module():
     """They decide what a form field starts out containing, not who may reach
     it -- so they live in web/api_keys.py."""
-    from ofmhelpers.web.api_keys import get_elevenlabs_api_key, get_kie_api_key
+    from ofmhelpers.web.api_keys import get_kie_api_key
 
     assert get_kie_api_key.__module__ == "ofmhelpers.web.api_keys"
-    assert get_elevenlabs_api_key.__module__ == "ofmhelpers.web.api_keys"

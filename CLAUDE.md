@@ -55,6 +55,6 @@ Before finishing:
 - If a proven library/API solves it, use it — state briefly why over hand-rolling.
 
 ## Data Models
-- Route schemas go in a separate `schemas/` folder — but only where a shape is actually shared. A form whose field names are contract with one template (kling's `images`, nbp's `image_input`, replicate's `character_*`) stays declared in its own router; a schema per route buys nothing.
+- Route schemas go in a separate `schemas/` folder — but only where a shape is actually shared. A form whose field names are contract with one template (kling's `images`, nbp's `image_input`, seedream's `image_urls`) stays declared in its own router; a schema per route buys nothing.
 - Modules with many data models get a `models/` folder.
 - Always Pydantic. No custom parsing functions — parsing/validation/simple transforms belong on the model (validators/computed fields), not standalone functions. Separation of concerns: model owns data shape, service owns logic.

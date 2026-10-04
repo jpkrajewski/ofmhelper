@@ -24,11 +24,34 @@ config.set_main_option("sqlalchemy.url", settings.infra.database_url)
 
 target_metadata = Base.metadata
 
+# Tables whose feature was removed but whose data is kept on purpose. They
+# are no longer in Base.metadata, so without this autogenerate would emit a
+# DROP for each of them.
+RETIRED_TABLES = frozenset(
+    {
+        "todos",
+        "approval_tokens",
+        "models",
+        "instagram_accounts",
+        "model_contacts",
+        "competitor_profiles",
+        "instagram_stats",
+    }
+)
+
+
+def include_object(obj, name, type_, _reflected, _compare_to):
+    table = (
+        name if type_ == "table" else getattr(getattr(obj, "table", None), "name", None)
+    )
+    return table not in RETIRED_TABLES
+
 
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
@@ -47,6 +70,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            include_object=include_object,
             compare_type=True,
         )
         with context.begin_transaction():

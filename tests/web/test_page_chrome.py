@@ -26,7 +26,7 @@ def client():
 
 
 def test_every_page_ships_the_responsive_accessible_chrome(client):
-    html = client.get("/todo").text
+    html = client.get("/generate").text
 
     assert '<html lang="en">' in html
     assert 'name="viewport"' in html
@@ -36,11 +36,11 @@ def test_every_page_ships_the_responsive_accessible_chrome(client):
 
 
 def test_active_nav_item_is_marked_for_assistive_tech(client):
-    html = client.get("/models").text
+    html = client.get("/action-log").text
 
-    # Exactly one link is current, and it is the Models one.
+    # Exactly one link is current, and it is the Action log one.
     assert html.count('aria-current="page"') == 1
-    assert re.search(r'<a href="/models"\s+aria-current="page"', html)
+    assert re.search(r'<a href="/action-log"\s+aria-current="page"', html)
 
 
 def test_login_page_is_standalone_but_still_responsive():

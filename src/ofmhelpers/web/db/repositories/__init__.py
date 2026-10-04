@@ -23,17 +23,6 @@ by domain and a domain may grow a second module.
 """
 
 from ofmhelpers.web.db.repositories.applications import ApplicationRepository
-from ofmhelpers.web.db.repositories.approval_tokens import ApprovalTokenRepository
-from ofmhelpers.web.db.repositories.instagram_stats import InstagramStatsRepository
 from ofmhelpers.web.db.repositories.jobs import JobRepository
-from ofmhelpers.web.db.repositories.models import ModelRepository
-from ofmhelpers.web.db.repositories.todos import TodoRepository
 
-__all__ = [
-    "ApplicationRepository",
-    "ApprovalTokenRepository",
-    "InstagramStatsRepository",
-    "JobRepository",
-    "ModelRepository",
-    "TodoRepository",
-]
+__all__ = ["ApplicationRepository", "JobRepository"]

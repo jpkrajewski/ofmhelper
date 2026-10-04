@@ -1,13 +1,7 @@
 """Writes qualified leads to a formatted .xlsx for manual outreach.
 
-Its own exporter rather than a widened PostExcelExporter: that one's header,
-row shape and link column are the post grid the scraper/ranker pipeline
-feeds it, and a lead sheet shares none of those columns. Two small writers
-beat one that branches on which caller it has.
-
-Same fallback contract as PostExcelExporter: a sheet that cannot be saved
-is dumped to .csv next to it rather than lost, because the run that
-produced it cost Apify credits.
+A sheet that cannot be saved is dumped to .csv next to it rather than lost,
+because the run that produced it cost Apify credits.
 """
 
 from __future__ import annotations

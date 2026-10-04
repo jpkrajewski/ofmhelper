@@ -11,13 +11,9 @@ import pytest
 from pydantic import ValidationError
 
 from ofmhelpers.config.settings import (
-    DiscordSettings,
     DownloadersSettings,
-    GDriveSettings,
     InfraSettings,
-    InstagramStatsSettings,
     KieAISettings,
-    ReelMachineSettings,
     SessionSettings,
     WebSettings,
 )
@@ -29,25 +25,14 @@ ALL_ENV_VARS = [
     "APP_PASSWORD_VA",
     "KIE_AI_API_KEY_ADMIN",
     "KIE_AI_API_KEY_VA",
-    "APP_BASE_URL",
     "OFM_JOBS_FILE",
-    "OFM_TODO_FILE",
-    "OFM_APPROVAL_TOKENS_FILE",
     "OFM_JOBS_MAX_ENTRIES",
     "OFM_RECOVERY_SWEEP_INTERVAL_S",
-    "OFM_APPROVAL_TOKEN_TTL_SECONDS",
     "OFM_GALLERY_LIMIT",
     "OFM_DATABASE_URL",
     "OFM_REDIS_URL",
     "OFM_RQ_JOB_TIMEOUT_S",
     "OFM_RQ_ASYNC",
-    "OFM_IG_STATS_LAST_N_POSTS",
-    "OFM_IG_STATS_SUBPROCESS_TIMEOUT_S",
-    "OFM_IG_STATS_NAV_TIMEOUT_MS",
-    "OFM_IG_STATS_RENDER_WAIT_MS",
-    "OFM_IG_STATS_REEL_RENDER_WAIT_MS",
-    "OFM_IG_STATS_GRID_RETRY_WAIT_MS",
-    "OFM_IG_STATS_SWEEP_HOUR_UTC",
     "OFM_KIEAI_OUT_DIR",
     "OFM_KIEAI_TASK_LOG",
     "OFM_KIEAI_COMPLETIONS_LOG",
@@ -58,19 +43,8 @@ ALL_ENV_VARS = [
     "OFM_COOKIES_FILE",
     "BGUTIL_POT_PROVIDER_URL",
     "OFM_COOKIES_FROM_BROWSER",
-    "DISCORD_WEBHOOK_URL",
-    "REEL_MACHINE_LLM_PROVIDER",
-    "REEL_MACHINE_PROMPT_FILE",
-    "GROQ_API_KEY",
-    "GROQ_VISION_MODEL",
-    "GEMINI_API_KEY",
-    "GEMINI_MODEL",
     "HF_TOKEN",
     "HUGGINGFACE_TOKEN",
-    "OFM_REEL_MACHINE_BEAT_GAP_S",
-    "GOOGLE_OAUTH_CLIENT_FILE",
-    "GOOGLE_DRIVE_TOKEN_FILE",
-    "GOOGLE_DRIVE_FOLDER_ID",
     # ... and the ones that used to be literals in library code.
     "OFM_UPLOADS_ROOT",
     "OFM_CACHE_TTL_S",
@@ -79,7 +53,6 @@ ALL_ENV_VARS = [
     "OFM_REFS_MAX_LIMIT",
     "OFM_REF_USAGE_MAX_TRACKED",
     "OFM_FFMPEG_TIMEOUT_S",
-    "OFM_INTAKE_LIST_LIMIT",
     "OFM_KIEAI_JOBS_BASE",
     "OFM_KIEAI_UPLOAD_BASE",
     "OFM_KIEAI_UPLOAD_TIMEOUT_S",
@@ -89,17 +62,8 @@ ALL_ENV_VARS = [
     "OFM_KIEAI_POLL_TIMEOUT_S",
     "OFM_KIEAI_VIDEO_POLL_TIMEOUT_S",
     "OFM_IMAGE_DOWNLOAD_TIMEOUT_S",
-    "DISCORD_REQUEST_TIMEOUT_S",
     "GROQ_URL",
     "GROQ_TIMEOUT_S",
-    "GROQ_TEMPERATURE",
-    "GEMINI_VIDEO_ACTIVE_TIMEOUT_S",
-    "GEMINI_POLL_S",
-    "GEMINI_MAX_ATTEMPTS",
-    "GEMINI_BACKOFF_S",
-    "REEL_MACHINE_MIN_DURATION_S",
-    "REEL_MACHINE_MAX_DURATION_S",
-    "REEL_MACHINE_HUNT_MAX_ITEMS",
 ]
 
 
@@ -133,11 +97,9 @@ def test_session_settings_wrong_type_raises(monkeypatch):
 
 def test_web_settings_instantiates_with_sample_env(monkeypatch):
     monkeypatch.setenv("APP_PASSWORD_ADMIN", "admin-pw")
-    monkeypatch.setenv("APP_BASE_URL", "https://example.com")
     monkeypatch.setenv("OFM_GALLERY_LIMIT", "42")
     s = WebSettings(_env_file=None)
     assert s.app_password_admin == "admin-pw"
-    assert s.app_base_url == "https://example.com"
     assert s.gallery_limit == 42
 
 
@@ -153,13 +115,9 @@ def test_web_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.app_password_va is None
     assert s.kie_ai_api_key_admin is None
     assert s.kie_ai_api_key_va is None
-    assert s.app_base_url is None
     assert s.jobs_file == "uploads/jobs.json"
-    assert s.todo_file == "uploads/todos.json"
-    assert s.approval_tokens_file == "uploads/approval_tokens.json"
     assert s.max_jobs == 500
     assert s.recovery_sweep_interval_s == 300
-    assert s.approval_token_ttl_seconds == 3 * 24 * 3600
     assert s.gallery_limit == 20
 
 
@@ -197,49 +155,6 @@ def test_downloaders_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.cookies_file == "cookies/cookies.txt"
     assert s.bgutil_pot_provider_url is None
     assert s.cookies_from_browser is None
-
-
-def test_discord_settings_defaults_match_pre_refactor_values(clean_env):
-    s = DiscordSettings(_env_file=None)
-    assert s.webhook_url is None
-
-
-def test_reel_machine_settings_defaults_to_gemini(clean_env):
-    """Gemini is the only provider: the free API that takes the actual video
-    rather than stills -- see reel_machine/llm/registry.py."""
-    s = ReelMachineSettings(_env_file=None)
-    assert s.llm_provider == "gemini"
-    assert s.gemini_api_key is None
-    assert s.gemini_model == "gemini-flash-latest"
-    assert s.prompt_file == "uploads/analysis_prompt.txt"
-
-
-def test_instagram_stats_settings_defaults_match_the_tuned_live_values(clean_env):
-    """These are the waits/timeouts the live scrape was actually tuned to --
-    a silent change here means empty grids or half-scraped accounts."""
-    s = InstagramStatsSettings(_env_file=None)
-    assert s.last_n_posts == 3
-    assert s.subprocess_timeout_s == 120
-    assert s.nav_timeout_ms == 30_000
-    assert s.render_wait_ms == 3000
-    assert s.reel_render_wait_ms == 2000
-    assert s.grid_retry_wait_ms == 4000
-    assert s.sweep_hour_utc == 0
-
-
-def test_instagram_stats_settings_env_overrides(monkeypatch):
-    monkeypatch.setenv("OFM_IG_STATS_LAST_N_POSTS", "5")
-    monkeypatch.setenv("OFM_IG_STATS_SWEEP_HOUR_UTC", "3")
-    s = InstagramStatsSettings(_env_file=None)
-    assert s.last_n_posts == 5
-    assert s.sweep_hour_utc == 3
-
-
-def test_gdrive_settings_defaults_match_pre_refactor_values(clean_env):
-    s = GDriveSettings(_env_file=None)
-    assert s.oauth_client_file == "secrets/google-oauth-client.json"
-    assert s.token_file == "secrets/google-drive-token.json"
-    assert s.folder_id is None
 
 
 def test_env_file_override(tmp_path):
@@ -289,21 +204,11 @@ def test_kieai_endpoints_and_timeouts_default_to_the_previous_literals(clean_env
     assert (s.poll_timeout_s, s.video_poll_timeout_s) == (1000, 1800)
 
 
-def test_reel_machine_provider_knobs_default_to_the_previous_literals(clean_env):
-    s = ReelMachineSettings(_env_file=None)
-    assert s.groq_url == "https://api.groq.com/openai/v1/chat/completions"
-    assert (s.groq_timeout_s, s.groq_temperature) == (20, 0.4)
-    assert (s.gemini_video_active_timeout_s, s.gemini_poll_s) == (120, 2)
-    assert (s.gemini_max_attempts, s.gemini_backoff_s) == (3, 2)
-    assert (s.min_duration_s, s.max_duration_s) == (4, 15)
-    assert s.hunt_max_items == 6
-
-
-def test_web_picker_and_intake_limits_default_to_the_previous_literals(clean_env):
+def test_web_picker_limits_default_to_the_previous_literals(clean_env):
     s = WebSettings(_env_file=None)
     assert (s.recent_used_limit, s.recent_upload_limit) == (5, 5)
     assert (s.max_ref_limit, s.ref_usage_max_tracked) == (60, 200)
-    assert (s.ffmpeg_timeout_s, s.intake_list_limit) == (20, 20)
+    assert s.ffmpeg_timeout_s == 20
 
 
 def test_uploads_root_and_cache_ttl_default_to_the_previous_literals(clean_env):
@@ -319,6 +224,5 @@ def test_uploads_root_is_overridable(monkeypatch):
     assert InfraSettings(_env_file=None).uploads_root == "/data/uploads"
 
 
-def test_discord_and_downloader_timeouts_default_to_the_previous_literals(clean_env):
-    assert DiscordSettings(_env_file=None).request_timeout_s == 10
+def test_downloader_timeout_defaults_to_the_previous_literal(clean_env):
     assert DownloadersSettings(_env_file=None).image_download_timeout_s == 600

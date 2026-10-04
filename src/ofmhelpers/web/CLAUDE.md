@@ -1,9 +1,9 @@
 # Module purpose
 
 The FastAPI web app ("Global Ascend LLC — Content Ops"): a single-password,
-two-role (admin/VA) internal tool for AI content generation (Seedance,
-Kling, Nano Banana Pro, reel cloning), media downloading/cleaning, scraping,
-a VA todo list with Discord/Drive approval handoff, and file management. No
+two-role (admin/VA) internal tool for AI content generation (the kie.ai
+models), media downloading/cleaning, the landing-page application CRM, and
+file management. No
 SPA framework — Jinja2 server-rendered templates + a small shared vanilla-JS
 layer for background-job polling.
 
@@ -17,12 +17,12 @@ new plumbing.
 ```
 web/
   main.py            app assembly only — middleware, static, lifespan, loop over ROUTERS
-  api_keys.py        provider API-key form pre-fills (kie.ai per role, ElevenLabs)
+  api_keys.py        provider API-key form pre-fills (kie.ai per role)
   middleware/        one concern per file, each owning its own policy: auth, ratelimit
   recovery.py        background sweeper for orphaned kie.ai generations
   schemas/           typed shapes: persistence.py (DB), generation.py (forms)
   templates_config.py  get_templates(), the shared Jinja2Templates instance
-  stores/            the app's nouns: jobs, todos, models, instagram_stats, approval_tokens
+  stores/            the app's nouns: jobs, applications
   db/                the only code that touches Postgres
   routers/           every HTTP route, grouped by feature (see routers/__init__.py)
   templates/ static/ server-rendered pages and the design system
@@ -62,9 +62,8 @@ migration changed everything under `stores/` without touching a router.
   HTML with status 200. Session lifetime is
   `settings.session.session_max_age_s` (config, not a literal), consumed by
   `SessionMiddleware`'s `max_age` and by `static/js/session.js`.
-- `api_keys.py` — `get_kie_api_key(request)` (per-role pre-fill) and
-  `get_elevenlabs_api_key()` (one workspace key, role-blind). Deliberately not
-  in the middleware: they decide what a form field *starts out containing*,
+- `api_keys.py` — `get_kie_api_key(request)` (per-role pre-fill). Deliberately
+  not in the middleware: it decides what a form field *starts out containing*,
   not who may reach it, and they are optional by design — unset var means an
   empty field the user pastes into.
 - `middleware/ratelimit.py` — fixed-window counters **and** their two
@@ -79,8 +78,8 @@ migration changed everything under `stores/` without touching a router.
   the app publishes its port directly; behind a proxy uvicorn needs
   `--proxy-headers --forwarded-allow-ips`.
 - The RQ queue is **not** here: it and the single Redis connection live in
-  `ofmhelpers/cache/` (`queue.py`, `redis.py`), because the worker, the
-  scraping jobs and the kie.ai client need them too. `enqueue(...)` runs jobs
+  `ofmhelpers/cache/` (`queue.py`, `redis.py`), because the worker and the
+  kie.ai client need them too. `enqueue(...)` runs jobs
   on the worker in prod; in the test suite (`OFM_RQ_ASYNC=false`) it runs them
   inline, exactly like the old BackgroundTasks, so TestClient still sees
   results immediately.
@@ -103,9 +102,9 @@ migration changed everything under `stores/` without touching a router.
   decided in `main.py`, and the package docstring records the resulting
   request order.
 - `schemas/` — `persistence.py` holds the Pydantic v2 models
-  (`Job`/`Todo`/`ApprovalToken`) that are the typed contract at the
+  (`Job`) that are the typed contract at the
   persistence boundary; `generation.py` holds `ReferenceUploads`, the
-  three-picker form shape seedance and fake_ai share (resolved to paths by
+  three-picker form shape seedance, wan, minimax and fake_ai share (resolved to paths by
   `routers/task_helpers.resolve_reference_uploads`). Import from the package.
 - `templates_config.py` — `get_templates()`, the shared `Jinja2Templates`
   instance every router renders through (`lru_cache`d, built on first use).
@@ -128,18 +127,6 @@ call these and nothing below them.
   healed**, because healing stats every result file it is handed — doing that
   for the whole history to paint 20 cards is what made a scroll tick cost more
   than the page it returned.
-- `todos.py` — persisted VA task list (model name, link to replicate,
-  comments). Durable across restarts — losing outstanding tasks would be a
-  real problem, unlike losing job *history*.
-- `approval_tokens.py` — single-use "magic link" tokens (no login needed)
-  for approving a VA-uploaded asset, used by `routers/workflow/approve.py`.
-  Snapshots the asset path it was issued for; `consume()` reports "stale"
-  rather than approving the wrong file if the asset was replaced after the
-  link went out.
-- `models.py` — the model roster (name/picture/OnlyFans link, Instagram
-  accounts, contacts, competitor profiles).
-- `instagram_stats.py` — the follower/last-N-reels numbers the `/models`
-  page shows, written by `scraping.instagram_stats_job`.
 - `applications.py` — submissions of the public `/` landing-page form
   (`routers/apply.py` writes, `routers/admin/applications.py` reads).
   Write-once rows: a lead is never edited, only read or deleted.
@@ -148,14 +135,17 @@ call these and nothing below them.
 
 `models.py` (SQLAlchemy tables), `session.py` (lazy engine/session from
 `settings.infra`), `repositories/` (**the only code that touches the DB**, one
-module per domain: jobs, todos, models, instagram_stats, approval_tokens —
-import the classes from the package),
+module per domain: jobs, applications — import the classes from the
+package),
 plus `cached_repository.py`, the cache-aside layer +
 `@cached`/`@invalidates_cache` every repository inherits),
 `backfill_remote_urls.py` (one-time, manually-run: re-derives kie.ai
 `remote_url` for old jobs that predate that field — `--apply` to write,
 dry-run by default). Schema changes are versioned with Alembic (`alembic/`
-at the repo root).
+at the repo root). The todo / model-roster / Instagram-stats / competitor /
+approval-token tables are still in Postgres with their data but no longer
+mapped (those features were removed); `alembic/env.py`'s `RETIRED_TABLES`
+keeps autogenerate from ever proposing to drop them.
 
 # `routers/` — grouped by feature
 
@@ -190,8 +180,7 @@ upload directory) and `require_upload_kind` (extension allowlist), plus
 our own origin.
 
 **Standard tool router shape** (every module in `generation/` follows it):
-`POST /<prefix>/run` (or `/intake` + `/generate` for a two-stage flow like
-replicate) creates a job and backgrounds the real work, returning
+`POST /<prefix>/run` creates a job and backgrounds the real work, returning
 `{"job_id": ...}` immediately; `GET /<prefix>/jobs/{id}` renders
 `templates/job_status.html`; `GET /<prefix>/jobs/{id}/status` returns the
 JSON polling payload; `GET /<prefix>/files/{id}/{index}` streams the result
@@ -226,61 +215,6 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
-- `replicate.py` — reel-cloning pipeline (`/replicate`), see
-  `reel_machine/CLAUDE.md`. The form takes a reel URL or an uploaded file
-  plus an optional free-text **Context** note (appended to the end of the
-  analysis prompt, see `reel_machine/prompts.load_analysis_prompt`) — and
-  nothing else. No shape/look/gender/persona/provider fields; the model
-  reads all of that off the video, and the provider is an env-var
-  deployment choice. The form page also lists the latest `INTAKE_LIST_LIMIT`
-  (20) `replicate_intake` jobs, flagging the done-but-didn't-validate ones so
-  they can be reopened and
-  fixed, and every row (plus a failed review page) links to
-  `/replicate?from=<job_id>` — the same form with that job's Context note
-  already typed in and a `reuse_job_id` hidden field. A rerun re-analyzes the
-  **file that job already downloaded** (`_downloaded_video`: the recorded
-  `video_path`, else a scan of its work dir, since a job that died in analysis
-  never recorded one) and only falls back to re-fetching the original link if
-  that file is gone — the links that are hard to download once are exactly the
-  ones that won't cooperate twice. The review page also renders
-  the two hunts the VA does by hand around the generation, both pre-typed off
-  the analysis by the shared `_searches(queries, engines)`:
-  `_outfit_searches` (Pinterest/Google Images) and `_reel_searches`
-  (Instagram/TikTok). Each takes the free model's second-pass ideas first
-  (`result["hunt"]`, see `reel_machine/hunt.py`) and falls back to terms
-  derived from the analysis itself (`environment` + the **main subject's**
-  wardrobe via `_subject`, mirroring `ReelAnalysis.subject`; `context` +
-  `viral_factor`) — every deployment does not have a `GROQ_API_KEY`, and jobs
-  from before this existed have no `hunt` at all, so the derived terms stay as
-  the floor. `_instagram_topic_links` turns `hunt.instagram_topics` into
-  `instagram.com/popular/<slug>` pages (`/popular/baseball-girl`); those only
-  ever come from the free model, since a topic slug can't be sliced out of
-  prose, so with no `hunt` there is no Instagram row at all. Bare
-  `instagram.com/popular/` is not linked — with no slug it is a generic
-  signed-out landing page. **Instagram's own keyword search and
-  `/explore/tags/` are deliberately not linked**: Instagram stopped serving
-  those logged out in 2024, so every one of them opened a login wall, which is
-  what made the Instagram side useless. Its reels are still publicly indexed,
-  so `_REEL_ENGINES` reaches them through a `site:instagram.com/reel/` Google
-  search instead. Outfit queries are prefixed with "girl"
-  (`_as_womens_outfit`) — a bare clothing description comes back as menswear
-  and flat-lays. Both blocks disappear when validation failed: no analysis, no
-  niche. The Stage 2 form's `script` is run through `_minify_prompt_json`
-  before it is stored or sent: a `<textarea>` submits its value with newlines
-  normalized to CRLF, so the pretty-printed JSON the review page shows used to
-  reach Seedance as a blob full of `\r\n`. It also drops every null at any
-  depth (`_drop_nulls`) — the analysis prompt asks for nulls as a signal to
-  itself ("line: null if no dialogue", "pose: null if off camera"), so a
-  correct answer still carries one on most `scene_events` entries, and an
-  absent key tells Seedance the same thing for free. Empty strings stay: those
-  are answers the model actually gave. Reference files are images, videos
-  **and** audio (`generate_video_seedance2` takes all three lists).
-  Two job task types share this one router, dispatched by
-  `job["task"]`: `"replicate_intake"` (download + LLM analysis, rendered by
-  `replicate_review.html`, which plays the source reel via
-  `GET /replicate/video/{job_id}` next to the editable prompt JSON) and
-  `"replicate"` (the final Seedance generation, rendered by the standard
-  `job_status.html`).
 
 ## `downloads/` — pulling media in
 
@@ -291,15 +225,13 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   result shape.
 - `clean_image.py` — strips image metadata (`utils.metadata_cleaner`).
 
-## `helpers/` — the standalone tools on `/helpers`
+## `image_tools/` — local image edits
 
-- `registry.py` — `HELPERS: list[HelperEntry]`. Add one entry for a new
-  helper; `index.py` renders the page generically.
-- `index.py` — the `/helpers` index.
-- `elevenlabs.py` (prefix `/helpers/elevenlabs`) — ElevenLabs TTS.
-- `radio_comms.py` — radio-comms audio FX (`utils.radio_comms_fx`).
-- `scraper.py` — Instagram/TikTok scraper pipeline (`config.scrapers`,
-  `scraping.*`), exports/filters spreadsheets.
+- `character_sheet.py` — `/character-sheet`, its own page + gallery: 2 to
+  `settings.web.character_sheet_max_images` uploads stitched side by side
+  (`utils.character_sheet`) into one lossless PNG, registered in the asset
+  store. Uploads are saved as `NN_<name>` so upload order survives and iOS's
+  identical `image.jpg` names cannot overwrite each other.
 
 ## `admin/` — admin-only surfaces
 
@@ -307,20 +239,6 @@ Every router here is gated at the router level with
 `dependencies=[Depends(AuthMiddleware.require_admin)]`, so a new endpoint added to these
 files is admin-only by default.
 
-- `models.py` — the roster of models (name/picture/OnlyFans link + many
-  Instagram accounts, each with optional owner/phone/SIM/password/email
-  details, + free-form contacts), plus the Instagram stats shown inline on
-  `/models`: `POST /models/refresh-stats` enqueues
-  `scraping.instagram_stats_job.collect_all_instagram_stats` and answers
-  `{"job_id": ...}`; the page polls `GET /models/refresh-stats/{job_id}` and
-  swaps in `GET /models/stats-html` without reloading. Profile pictures are
-  served as cached webp thumbs (`GET /models/{id}/picture/thumb?size=`) —
-  never the original upload, which is whatever multi-MB file came off a
-  phone.
-- `competition.py` — `/competition`: one row per model and a column of
-  competing Instagram profile links to scroll daily, add/delete only. Reads
-  the same roster store and reuses `_models_style.html`, so it can't drift
-  from the Models page's look.
 - `file_manager.py` — browse/download/delete under `uploads/`/`downloads/`/
   `kieai_out/`. `_safe_path` resolves and refuses to leave the chosen root.
 - `action_log.py` — audit log of every job across every task type
@@ -332,16 +250,6 @@ files is admin-only by default.
   delete only.
 - `cookies.py` — upload endpoint for `cookies/cookies.txt`
   (`downloaders.cookies`).
-
-## `workflow/` — the VA task loop
-
-- `todo.py` — admin-managed VA task list (add/toggle/delete/export/import
-  admin-only, enforced server-side per route because both roles can reach
-  the page; VAs see it and upload a "ready asset", which triggers a Discord
-  notification carrying a magic-link approval button).
-- `approve.py` — public (no-login, outside `AuthMiddleware` via
-  `settings.web.public_prefixes`) magic-link approval endpoint for `todo.py`'s
-  uploaded assets. Read that allowlist before adding anything here.
 
 ## At the `routers/` root
 
@@ -362,8 +270,7 @@ files is admin-only by default.
   be hidden by something you picked once. An explicit `?limit=N` (the "Show
   older" button, capped at `MAX_REF_LIMIT` = 60) is plain newest-uploaded
   first, no grouping.
-  `write_image_thumb` is the shared Pillow thumbnailer (also used by the
-  models router).
+  `write_image_thumb` is the Pillow thumbnailer behind the picker previews.
 - `task_helpers/` — the shared plumbing described above.
 
 # `templates/` and `static/`
@@ -390,8 +297,8 @@ template should reach for the existing components instead of a `<style>`
 block: `.page-head` + `.lead` (page title), `.card`/`.card-grid`,
 `.link-card`, `.btn` + `.btn-primary`/`-outline`/`-danger`/`-ghost`,
 `.field`, `.table-wrap` (tables scroll instead of squashing on a phone),
-`.badge`, `.notice`, `.empty-state`, `.results`/`.result-item`, `.modal`.
-The legacy per-page names (`.model-btn`, `.todo-io-btn`, `.root-btn`,
+`.badge`, `.notice`, `.empty-state`, `.results`/`.result-item`.
+The legacy per-page names (`.root-btn`,
 `.download-btn`, …) are aliased onto `.btn` rather than re-declared, so
 buttons cannot drift apart again. A new `<style>` block in a template means
 this file is missing a component — add it there. Class names the JS builds
@@ -414,7 +321,7 @@ manifest reuse pattern in `task_helpers.build_ordered_paths`.
 other script** and wraps `window.fetch` once, globally: any `401` carrying a
 `login_url` shows a brief "Session expired" overlay and redirects the tab to
 `/login?next=...`. That's why no individual call site needs 401 handling —
-`generation.js`'s poller, `todo_form.html`, `replicate_form.html` and
+`generation.js`'s poller and
 `file-picker.js` all inherit it. It also arms a wall-clock (not
 `setTimeout`-duration, so a suspended laptop still expires correctly) idle
 timer from `base.html`'s `data-session-max-age`, so an untouched tab logs

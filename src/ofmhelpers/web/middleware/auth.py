@@ -102,7 +102,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Use as a router-level `dependencies=[Depends(AuthMiddleware.require_admin)]`
         for whole pages VAs shouldn't reach at all (file-manager, action-log).
         For routes where VAs can view but only admins can mutate, check role
-        inline per-route instead -- see routers/workflow/todo.py.
+        inline per-route instead.
         """
         if request.session.get("role") != settings.web.role_admin:
             raise HTTPException(status_code=403, detail="Admins only")

@@ -5,7 +5,7 @@ What the public landing page's application form (templates/reachmodel.html)
 collected: one row per submission, written by routers/apply.py and read by the
 admin CRM page (routers/admin/applications.py).
 
-Durable like todos, not like job history: a lost application is a lost lead.
+Durable, unlike job history: a lost application is a lost lead.
 """
 
 from __future__ import annotations
