@@ -21,6 +21,7 @@ TASK_STATUS_PREFIX = {
     "download_images": "/download-images",
     "clean_images": "/clean-images",
     "character_sheet": "/character-sheet",
+    "uniqify": "/uniqify",
     "seedance": "/seedance",
     "seedance25": "/seedance25",
     "nanobanana": "/nanobanana",

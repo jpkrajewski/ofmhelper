@@ -18,8 +18,9 @@
     {% set nav_items = [
         ("/generate", "Generate AI Assets"),
         ("/download-assets", "Download Assets"),
-        ("/character-sheet", "Character Sheet"),
+        ("/uniqify", "Uniqify"),
     ] + ([
+        ("/character-sheet", "Character Sheet"),
         ("/applications", "Applications"),
         ("/file-manager", "File Manager"),
         ("/action-log", "Action log"),
@@ -70,8 +71,10 @@
             <nav class="footer-links" aria-label="Footer">
                 <a href="/generate">Generate</a>
                 <a href="/download-assets">Download</a>
-                <a href="/character-sheet">Character Sheet</a>
+                <a href="/uniqify">Uniqify</a>
                 {% if is_admin %}
+                <a href="/character-sheet">Character Sheet</a>
+                <a href="/applications">Applications</a>
                 <a href="/file-manager">File Manager</a>
                 <a href="/action-log">Action log</a>
                 {% endif %}

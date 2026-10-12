@@ -10,7 +10,7 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     run_kie_generation,
     start_kie_job,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, build_ordered_paths
+from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
 
 router = APIRouter(prefix="/nanobanana", tags=["nanobanana"])
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/nanobanana", tags=["nanobanana"])
 def _run_nanobanana(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     aspect_ratio: str,
     resolution: str,
@@ -29,7 +30,7 @@ def _run_nanobanana(
     return run_kie_generation(
         job_id,
         "image",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_image_nbp(
             prompt=prompt,
             image_input=image_input_urls,
@@ -60,7 +61,7 @@ async def run(
         "output_format": output_format,
     }
     image_paths = build_ordered_paths(
-        image_input_manifest, image_input or [], ASSETS_ROOT
+        image_input_manifest, image_input or [], assets_root_for(request)
     )
     return start_kie_job(
         request,

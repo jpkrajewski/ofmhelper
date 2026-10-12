@@ -17,6 +17,7 @@ from fastapi import APIRouter, Query, Request
 from ofmhelpers.aigenproviders.kaiai.types import Seedance2Model
 from ofmhelpers.config import settings
 from ofmhelpers.web.api_keys import get_kie_api_key
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import asset_card
 from ofmhelpers.web.stores.jobs import list_jobs_page
 from ofmhelpers.web.templates_config import get_templates
@@ -74,11 +75,14 @@ def _gallery_card(job: dict) -> dict:
     }
 
 
-def _gallery_page(offset: int) -> tuple[list[dict], int | None]:
-    """One page of gallery cards plus the offset of the next page, or None when
-    this was the last one. The absence of a next offset is what ends the
-    infinite scroll, so there is no separate "has_more" flag to keep in step."""
-    page, total = list_jobs_page(set(TASK_LABELS), offset, GALLERY_LIMIT)
+def _gallery_page(request: Request, offset: int) -> tuple[list[dict], int | None]:
+    """One page of gallery cards (only the session's own, for a VA) plus the
+    offset of the next page, or None when this was the last one. The absence of
+    a next offset is what ends the infinite scroll, so there is no separate
+    "has_more" flag to keep in step."""
+    page, total = list_jobs_page(
+        set(TASK_LABELS), offset, GALLERY_LIMIT, AuthMiddleware.visible_actor(request)
+    )
     next_offset = offset + GALLERY_LIMIT
     return (
         [_gallery_card(j) for j in page],
@@ -88,7 +92,7 @@ def _gallery_page(offset: int) -> tuple[list[dict], int | None]:
 
 @router.get("")
 def form(request: Request):
-    gallery, next_offset = _gallery_page(0)
+    gallery, next_offset = _gallery_page(request, 0)
     return get_templates().TemplateResponse(
         request,
         "generate_form.html",
@@ -106,7 +110,7 @@ def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
     """The next page of gallery cards as a fragment gallery-scroll.js appends --
     same partial the page's first page renders, so an appended card is
     indistinguishable from a server-rendered one."""
-    gallery, next_offset = _gallery_page(offset)
+    gallery, next_offset = _gallery_page(request, offset)
     return get_templates().TemplateResponse(
         request,
         "generate_gallery_fragment.html",

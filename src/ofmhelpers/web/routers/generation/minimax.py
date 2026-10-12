@@ -11,7 +11,10 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     start_kie_job,
     upload_references,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, resolve_reference_uploads
+from ofmhelpers.web.routers.task_helpers import (
+    assets_root_for,
+    resolve_reference_uploads,
+)
 from ofmhelpers.web.schemas import ReferenceUploads
 
 router = APIRouter(prefix="/minimax-h3", tags=["minimax_h3"])
@@ -20,6 +23,7 @@ router = APIRouter(prefix="/minimax-h3", tags=["minimax_h3"])
 def _run_minimax_h3(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     resolution: str,
     aspect_ratio: str,
@@ -35,7 +39,7 @@ def _run_minimax_h3(
     return run_kie_generation(
         job_id,
         "video",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_video_minimax_h3(
             prompt=prompt,
             resolution=resolution,
@@ -70,7 +74,7 @@ async def run(
         _run_minimax_h3,
         api_key,
         params,
-        resolve_reference_uploads(refs),
+        resolve_reference_uploads(refs, assets_root_for(request)),
     )
 
 

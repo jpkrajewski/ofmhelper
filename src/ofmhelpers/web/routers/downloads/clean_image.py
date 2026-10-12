@@ -5,10 +5,12 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.utils.metadata_cleaner import clean_metadata
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     UPLOADS_ROOT,
     asset_card,
+    assets_root_for,
     convert_heic_upload,
     job_status_payload,
     make_job_dir,
@@ -25,15 +27,15 @@ router = APIRouter(prefix="/clean-images", tags=["clean-images"])
 UPLOAD_ROOT = UPLOADS_ROOT / "clean-images"
 
 
-def _run_clean(job_dir: str) -> list[dict]:
+def _run_clean(job_dir: str, assets_root: str) -> list[dict]:
     directory = Path(job_dir)
     clean_metadata(directory)
     files = sorted(p for p in directory.iterdir() if p.is_file())
-    # Adopt the stripped copies into the shared asset store so they're
-    # directly reusable in the generation pickers -- cleaning an image is
-    # usually the step right before generating with it.
+    # Adopt the stripped copies into the requester's part of the asset store
+    # so they're directly reusable in the generation pickers -- cleaning an
+    # image is usually the step right before generating with it.
     for p in files:
-        register_generated_asset(p)
+        register_generated_asset(p, Path(assets_root))
     return [{"name": p.name, "path": str(p)} for p in files]
 
 
@@ -63,14 +65,19 @@ async def run(
         {"dir": str(job_dir), "files": saved_names},
         actor=request.session.get("role"),
     )
-    enqueue(run_job, job_id, _run_clean, {"job_dir": str(job_dir)})
+    enqueue(
+        run_job,
+        job_id,
+        _run_clean,
+        {"job_dir": str(job_dir), "assets_root": str(assets_root_for(request))},
+    )
 
     return {"job_id": job_id}
 
 
 @router.get("/jobs/{job_id}")
 def job_status(request: Request, job_id: str):
-    job = get_job(job_id)
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -96,11 +103,12 @@ def job_status(request: Request, job_id: str):
 
 
 @router.get("/jobs/{job_id}/status")
-def job_status_json(job_id: str):
-    return job_status_payload(get_job(job_id), "/clean-images/files")
+def job_status_json(request: Request, job_id: str):
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
+    return job_status_payload(job, "/clean-images/files")
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int, dl: int = 0):
-    job = get_job(job_id)
+def download_file(request: Request, job_id: str, index: int, dl: int = 0):
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
     return serve_job_file(job, index, as_attachment=bool(dl))

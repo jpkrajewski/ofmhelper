@@ -11,8 +11,8 @@ the kie.ai upload memo in `aigenproviders/kaiai/client.py` — calls
 `get_redis()`. Never `Redis.from_url` anywhere else: one URL, one pool, one
 seam a test points at a test broker.
 
-Top-level rather than under `web/` because the worker process, the scraping
-jobs and the kie.ai client all need it, and none of them are the web app.
+Top-level rather than under `web/` because the worker process
+and the kie.ai client both need it, and neither is the web app.
 
 # Module files
 

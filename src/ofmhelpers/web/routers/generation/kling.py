@@ -10,7 +10,7 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     run_kie_generation,
     start_kie_job,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, build_ordered_paths
+from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
 
 router = APIRouter(prefix="/kling3", tags=["kling3"])
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/kling3", tags=["kling3"])
 def _run_kling3(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     mode: str,
     aspect_ratio: str,
@@ -30,7 +31,7 @@ def _run_kling3(
     return run_kie_generation(
         job_id,
         "video",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_video_kling3(
             prompt=prompt,
             image_urls=image_urls or None,
@@ -64,7 +65,9 @@ async def run(
         "duration": duration,
         "sound": sound,
     }
-    image_paths = build_ordered_paths(images_manifest, images or [], ASSETS_ROOT)
+    image_paths = build_ordered_paths(
+        images_manifest, images or [], assets_root_for(request)
+    )
     return start_kie_job(
         request, "kling3", _run_kling3, api_key, params, {"images": image_paths}
     )

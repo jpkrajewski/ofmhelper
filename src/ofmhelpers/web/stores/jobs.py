@@ -73,8 +73,14 @@ def run_job(job_id: str, fn, kwargs: dict):
         traceback.print_exc()
 
 
-def get_job(job_id: str) -> dict | None:
-    return _repository().get(job_id)
+def get_job(job_id: str, actor: str | None = None) -> dict | None:
+    """The job, or None if it doesn't exist -- or, when `actor` is given, if
+    someone else ran it (see AuthMiddleware.visible_actor). None is "no
+    restriction": the worker and an admin session pass nothing."""
+    job = _repository().get(job_id)
+    if job is None or (actor is not None and job["actor"] != actor):
+        return None
+    return job
 
 
 def set_job_preview(job_id: str, preview: dict) -> None:
@@ -118,15 +124,22 @@ def list_jobs() -> list[dict]:
     return _heal(_repository().list_all())
 
 
-def list_jobs_page(tasks: set[str], offset: int, limit: int) -> tuple[list[dict], int]:
-    """One page of the jobs whose task is in `tasks`, newest first, plus how
+def list_jobs_page(
+    tasks: set[str], offset: int, limit: int, actor: str | None = None
+) -> tuple[list[dict], int]:
+    """One page of the jobs whose task is in `tasks` (and, when `actor` is
+    given, that it ran -- same meaning as get_job's), newest first, plus how
     many there are in total (before the slice, so the caller can tell whether
     another page exists).
 
     Only the page is self-healed: the filter and the slice run off the cached
     repository read, so rendering 20 cards costs 20 jobs' worth of disk checks
     instead of the whole history's."""
-    matching = [job for job in _repository().list_all() if job["task"] in tasks]
+    matching = [
+        job
+        for job in _repository().list_all()
+        if job["task"] in tasks and (actor is None or job["actor"] == actor)
+    ]
     return _heal(matching[offset : offset + limit]), len(matching)
 
 

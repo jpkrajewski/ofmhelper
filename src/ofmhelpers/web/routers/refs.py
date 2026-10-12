@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from PIL import Image
 
@@ -13,6 +13,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.web import ref_usage
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
+    assets_root_for,
     classify_kind,
     media_response,
     strip_asset_hash_prefix,
@@ -54,18 +55,34 @@ def _entry(path: Path, used_at: float | None = None) -> dict:
     }
 
 
-def _stored_files(kind: str | None) -> list[Path]:
-    """Every file in the shared asset store, optionally of one kind -- no
-    separate metadata store, this is the real files."""
+def _stored_files(root: Path, kind: str | None) -> list[Path]:
+    """Every file under `root` (the session's part of the asset store -- for
+    an admin that includes the VA folder), optionally of one kind, minus the
+    thumbnail cache. No separate metadata store, this is the real files."""
     return [
         path
-        for path in ASSETS_ROOT.glob("*")
-        if path.is_file() and (not kind or classify_kind(path.name) == kind)
+        for path in root.rglob("*")
+        if path.is_file()
+        and THUMBS_DIR not in path.parents
+        and (not kind or classify_kind(path.name) == kind)
     ]
+
+
+def _require_visible(request: Request, path: str) -> Path:
+    """A client-supplied path, refused unless it is a file inside the
+    session's part of the asset store -- a VA can't fetch an admin file by
+    guessing its path."""
+    file_path = Path(path)
+    if assets_root_for(request).resolve() not in file_path.resolve().parents:
+        raise HTTPException(status_code=403, detail="Invalid path")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return file_path
 
 
 @router.get("")
 def list_refs(
+    request: Request,
     kind: Annotated[str | None, Query()] = None,
     limit: Annotated[int | None, Query(ge=1, le=MAX_REF_LIMIT)] = None,
 ):
@@ -80,13 +97,14 @@ def list_refs(
 
     An explicit `?limit=` is the "show older" path: newest-uploaded first, no
     usage grouping."""
+    root = assets_root_for(request)
     if limit is not None:
         newest = sorted(
-            _stored_files(kind), key=lambda p: p.stat().st_mtime, reverse=True
+            _stored_files(root, kind), key=lambda p: p.stat().st_mtime, reverse=True
         )
         return [_entry(p) for p in newest[:limit]]
 
-    stored = {str(p): p for p in _stored_files(kind)}
+    stored = {str(p): p for p in _stored_files(root, kind)}
     used: list[dict] = []
     for raw, used_at in ref_usage.recent(MAX_REF_LIMIT):
         # A used file can have been deleted through the file manager since,
@@ -102,13 +120,8 @@ def list_refs(
 
 
 @router.get("/file")
-def get_ref_file(path: Annotated[str, Query()]):
-    file_path = Path(path)
-    # keep this scoped to the shared asset store
-    if ASSETS_ROOT.resolve() not in file_path.resolve().parents:
-        raise HTTPException(status_code=403, detail="Invalid path")
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+def get_ref_file(request: Request, path: Annotated[str, Query()]):
+    file_path = _require_visible(request, path)
     # Display name (hash prefix stripped) decides the type, and non-media is
     # forced to a download -- see media_response.
     return media_response(file_path, strip_asset_hash_prefix(file_path.name))
@@ -172,17 +185,15 @@ def _write_video_thumb(source: Path, dest: Path, size: int) -> None:
 
 @router.get("/thumb")
 def get_ref_thumb(
-    path: Annotated[str, Query()], size: Annotated[int, Query(ge=16, le=1024)] = 200
+    request: Request,
+    path: Annotated[str, Query()],
+    size: Annotated[int, Query(ge=16, le=1024)] = 200,
 ):
     """Small cached preview for the reuse-picker/inputs grids -- never the
     original (see THUMBS_DIR comment). Images thumbnail through Pillow, videos
     through an ffmpeg first-frame grab; audio has no visual frame to show and
     still gets an icon client-side."""
-    file_path = Path(path)
-    if ASSETS_ROOT.resolve() not in file_path.resolve().parents:
-        raise HTTPException(status_code=403, detail="Invalid path")
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+    file_path = _require_visible(request, path)
 
     kind = classify_kind(file_path.name)
     if kind not in ("image", "video"):

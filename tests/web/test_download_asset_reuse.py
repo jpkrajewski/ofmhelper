@@ -53,7 +53,7 @@ def test_downloaded_videos_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
         ],
     )
 
-    download_reels._run_downloads(["https://example.com/x"])
+    download_reels._run_downloads(["https://example.com/x"], str(assets_dir))
 
     assert "reel.mp4" in _stored_names(assets_dir)
 
@@ -70,7 +70,7 @@ def test_downloaded_images_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
         ],
     )
 
-    download_images._run_downloads(["https://example.com/y"])
+    download_images._run_downloads(["https://example.com/y"], str(assets_dir))
 
     assert "shot.png" in _stored_names(assets_dir)
 
@@ -81,7 +81,7 @@ def test_cleaned_images_land_in_the_asset_store(tmp_path, assets_dir, monkeypatc
     (job_dir / "cleaned.png").write_bytes(_png_bytes())
     monkeypatch.setattr(clean_image, "clean_metadata", lambda d: None)
 
-    result = clean_image._run_clean(str(job_dir))
+    result = clean_image._run_clean(str(job_dir), str(assets_dir))
 
     assert [f["name"] for f in result] == ["cleaned.png"]
     assert "cleaned.png" in _stored_names(assets_dir)
@@ -104,7 +104,7 @@ def test_a_missing_output_path_does_not_fail_the_job(tmp_path, assets_dir):
     """register_grouped_results is bookkeeping after the real work finished --
     a vanished file must not turn a successful download into a failure."""
     task_helpers.register_grouped_results(
-        [{"output_paths": [str(tmp_path / "never-written.mp4")]}]
+        [{"output_paths": [str(tmp_path / "never-written.mp4")]}], assets_dir
     )
 
     assert list(assets_dir.glob("*")) == []

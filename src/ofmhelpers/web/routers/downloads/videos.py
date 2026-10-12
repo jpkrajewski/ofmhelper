@@ -6,7 +6,9 @@ from fastapi.responses import FileResponse
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.downloaders.generic import download_all
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
+    assets_root_for,
     flatten_grouped_results,
     grouped_job_status_payload,
     register_grouped_results,
@@ -17,14 +19,14 @@ from ofmhelpers.web.templates_config import get_templates
 router = APIRouter(prefix="/download-videos", tags=["download-videos"])
 
 
-def _run_downloads(urls: list[str]) -> list[dict]:
+def _run_downloads(urls: list[str], assets_root: str) -> list[dict]:
     """Runs in the background. Converts each DownloadResult to a plain dict
     so it is safe to render in Jinja2 / store in the job dict. mode="json"
     is what turns output_paths' Path objects into strings -- jobs.py persists
     every job through json.dumps, which can't serialize a Path."""
     results = download_all(urls)
     dicts = [r.model_dump(mode="json") for r in results]
-    register_grouped_results(dicts)
+    register_grouped_results(dicts, Path(assets_root))
     return dicts
 
 
@@ -48,14 +50,19 @@ def run(request: Request, urls: Annotated[str, Form()]):
     job_id = create_job(
         "download_videos", {"urls": url_list}, actor=request.session.get("role")
     )
-    enqueue(run_job, job_id, _run_downloads, {"urls": url_list})
+    enqueue(
+        run_job,
+        job_id,
+        _run_downloads,
+        {"urls": url_list, "assets_root": str(assets_root_for(request))},
+    )
 
     return {"job_id": job_id}
 
 
 @router.get("/jobs/{job_id}")
 def job_status(request: Request, job_id: str):
-    job = get_job(job_id)
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -80,15 +87,16 @@ def job_status(request: Request, job_id: str):
 
 
 @router.get("/jobs/{job_id}/status")
-def job_status_json(job_id: str):
-    return grouped_job_status_payload(get_job(job_id), "/download-videos/files")
+def job_status_json(request: Request, job_id: str):
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
+    return grouped_job_status_payload(job, "/download-videos/files")
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int, dl: int = 0):
+def download_file(request: Request, job_id: str, index: int, dl: int = 0):
     """Streams a completed download to the browser -- inline for previews,
     Content-Disposition: attachment when ?dl=1."""
-    job = get_job(job_id)
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
     if job is None or job.get("status") != "done":
         raise HTTPException(status_code=404, detail="Job not found or not finished")
 

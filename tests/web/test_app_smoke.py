@@ -22,12 +22,15 @@ PROTECTED_PAGES = [
     "/generate",
     "/download-assets",
     "/character-sheet",
+    "/uniqify",
     "/file-manager",
     "/action-log",
     "/cookies",
 ]
 
 ADMIN_ONLY_PAGES = [
+    "/character-sheet",
+    "/applications",
     "/file-manager",
     "/action-log",
 ]

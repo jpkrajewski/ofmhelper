@@ -21,6 +21,7 @@ from PIL import Image
 
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import refs as refs_router
+from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 def _png_bytes(size=(300, 300)) -> bytes:
@@ -62,7 +63,7 @@ def client():
 def assets_dir(tmp_path, monkeypatch):
     d = tmp_path / "assets"
     d.mkdir()
-    monkeypatch.setattr(refs_router, "ASSETS_ROOT", d)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", d)
     monkeypatch.setattr(refs_router, "THUMBS_DIR", d / ".thumbs")
     return d
 

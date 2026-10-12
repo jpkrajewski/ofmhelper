@@ -20,6 +20,8 @@ TASK_HELPERS = (
     "IMAGE_EXTS",
     "UPLOADS_ROOT",
     "VIDEO_EXTS",
+    "VIDEO_KINDS",
+    "assets_root_for",
     "IMAGE_KINDS",
     "IMAGE_VIDEO_KINDS",
     "MEDIA_KINDS",

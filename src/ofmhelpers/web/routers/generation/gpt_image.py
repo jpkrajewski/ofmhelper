@@ -10,7 +10,7 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     run_kie_generation,
     start_kie_job,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, build_ordered_paths
+from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
 
 router = APIRouter(prefix="/gpt-image", tags=["gpt_image"])
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/gpt-image", tags=["gpt_image"])
 def _run_gpt_image(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     aspect_ratio: str,
     resolution: str,
@@ -29,7 +30,7 @@ def _run_gpt_image(
     return run_kie_generation(
         job_id,
         "image",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_image_gpt25_flare(
             prompt=prompt,
             input_urls=uploaded,
@@ -60,7 +61,7 @@ async def run(
         "background": background.value,
     }
     input_paths = build_ordered_paths(
-        input_urls_manifest, input_urls or [], ASSETS_ROOT
+        input_urls_manifest, input_urls or [], assets_root_for(request)
     )
     if not input_paths:
         raise HTTPException(status_code=400, detail="Add at least one input image")

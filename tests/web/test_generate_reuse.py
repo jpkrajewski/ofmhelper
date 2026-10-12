@@ -30,6 +30,7 @@ from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import fake_ai as fake_ai_router
 from ofmhelpers.web.routers.generation import gpt_image as gpt_image_router
+from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.stores.jobs import create_job, get_job
 
 
@@ -128,7 +129,7 @@ def _submit_kie(client, module, method, path, ext):
 def _submit_gpt_image(client, tmp_path, monkeypatch):
     """Image-to-image only, so the run needs one input image -- saved into a
     throwaway asset store rather than the real one."""
-    monkeypatch.setattr(gpt_image_router, "ASSETS_ROOT", tmp_path)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path)
     with mock.patch.object(gpt_image_router, "KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_gpt25_flare.side_effect = (
             _with_remote_url("/tmp/fake.png", "https://cdn.kie.ai/out/fake.png")

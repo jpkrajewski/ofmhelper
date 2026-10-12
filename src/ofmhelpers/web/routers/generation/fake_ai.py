@@ -34,8 +34,10 @@ from PIL import Image, ImageDraw
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
+    assets_root_for,
     job_inputs,
     job_status_payload,
     resolve_reference_uploads,
@@ -134,7 +136,7 @@ async def run(
     # this only exists so the upload/dedupe/reuse plumbing (the same
     # uploads/assets store seedance/kling3/nanobanana use) has a no-cost tool
     # to exercise.
-    reference_paths = resolve_reference_uploads(refs)
+    reference_paths = resolve_reference_uploads(refs, assets_root_for(request))
 
     params = {
         "prompt": prompt,
@@ -159,7 +161,7 @@ async def run(
 
 @router.get("/jobs/{job_id}")
 def job_status(request: Request, job_id: str):
-    job = get_job(job_id)
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -186,11 +188,12 @@ def job_status(request: Request, job_id: str):
 
 
 @router.get("/jobs/{job_id}/status")
-def job_status_json(job_id: str):
-    return job_status_payload(get_job(job_id), "/fake-ai/files")
+def job_status_json(request: Request, job_id: str):
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
+    return job_status_payload(job, "/fake-ai/files")
 
 
 @router.get("/files/{job_id}/{index}")
-def download_file(job_id: str, index: int):
-    job = get_job(job_id)
+def download_file(request: Request, job_id: str, index: int):
+    job = get_job(job_id, AuthMiddleware.visible_actor(request))
     return serve_job_file(job, index)

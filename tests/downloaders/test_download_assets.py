@@ -59,7 +59,7 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
     out_file = tmp_path / "clip.mp4"
     out_file.write_bytes(b"fake video")
 
-    def fake_downloads(urls):
+    def fake_downloads(urls, assets_root):
         return [
             {
                 "url": urls[0],
@@ -122,7 +122,9 @@ def test_empty_submissions_rejected_cleanly(client):
 
 
 def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
-    monkeypatch.setattr(download_reels_router, "_run_downloads", lambda urls: [])
+    monkeypatch.setattr(
+        download_reels_router, "_run_downloads", lambda urls, assets_root: []
+    )
 
     # admin runs one
     r = client.post("/download-videos/run", data={"urls": "https://a.example/1"})
@@ -172,7 +174,9 @@ def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
 
     monkeypatch.setattr(download_reels_router, "download_all", fake_download_all)
 
-    result = download_reels_router._run_downloads(["https://a.example/1"])
+    result = download_reels_router._run_downloads(
+        ["https://a.example/1"], str(tmp_path / "assets")
+    )
 
     assert result[0]["output_paths"] == [str(out_file)]
     json.dumps(result)  # must not raise
@@ -187,7 +191,9 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
 
     monkeypatch.setattr(download_images_router, "download_all", fake_download_all)
 
-    result = download_images_router._run_downloads(["https://a.example/1"])
+    result = download_images_router._run_downloads(
+        ["https://a.example/1"], str(tmp_path / "assets")
+    )
 
     assert result[0]["output_paths"] == [str(out_file)]
     json.dumps(result)  # must not raise

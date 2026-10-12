@@ -11,7 +11,10 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     start_kie_job,
     upload_references,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, resolve_reference_uploads
+from ofmhelpers.web.routers.task_helpers import (
+    assets_root_for,
+    resolve_reference_uploads,
+)
 from ofmhelpers.web.schemas import ReferenceUploads
 
 router = APIRouter(prefix="/wan3", tags=["wan3"])
@@ -20,6 +23,7 @@ router = APIRouter(prefix="/wan3", tags=["wan3"])
 def _run_wan3(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     resolution: str,
     aspect_ratio: str,
@@ -36,7 +40,7 @@ def _run_wan3(
     return run_kie_generation(
         job_id,
         "video",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_video_wan3(
             prompt=prompt,
             resolution=resolution,
@@ -69,7 +73,12 @@ async def run(
         "audio": audio,
     }
     return start_kie_job(
-        request, "wan3", _run_wan3, api_key, params, resolve_reference_uploads(refs)
+        request,
+        "wan3",
+        _run_wan3,
+        api_key,
+        params,
+        resolve_reference_uploads(refs, assets_root_for(request)),
     )
 
 

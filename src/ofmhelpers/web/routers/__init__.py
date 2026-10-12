@@ -6,7 +6,8 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
   metadata cleaner, and their picker page.
 - `image_tools/` -- local image edits with no external service (character
-  sheet).
+  sheet, admin only).
+- `video_tools/` -- local video edits with no external service (uniqify).
 - `admin/`      -- admin-only surfaces: landing-page applications, file
   manager, action log, cookie upload.
 
@@ -42,6 +43,7 @@ from ofmhelpers.web.routers.generation import (
 )
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.image_tools import character_sheet
+from ofmhelpers.web.routers.video_tools import uniqify
 
 # Order is presentational only -- FastAPI matches on path and no two routers
 # share a prefix -- so it follows the package grouping above and this list
@@ -69,6 +71,8 @@ ROUTERS = [
     clean_image.router,
     # image_tools/
     character_sheet.router,
+    # video_tools/
+    uniqify.router,
     # admin/
     admin_applications.router,
     file_manager.router,
