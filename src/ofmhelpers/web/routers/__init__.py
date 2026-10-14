@@ -30,6 +30,7 @@ from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import videos as download_videos
 from ofmhelpers.web.routers.generation import (
+    clone,
     fake_ai,
     gpt_image,
     kling,
@@ -64,6 +65,7 @@ ROUTERS = [
     seedream5.router,
     gpt_image.router,
     fake_ai.router,
+    clone.router,
     # downloads/
     downloads_index.router,
     download_videos.router,

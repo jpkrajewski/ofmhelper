@@ -18,6 +18,8 @@ video uniqify.
   from a `Strength` preset; `MetadataMode` strip or phone-style device tags.
   Port of the standalone `captions/` tool (its "keep original EXIF" mode
   needed exiftool, which the image lacks, so it was not ported).
+- `video_probe.py` — `duration_s(path, timeout_s)`: container length via
+  ffprobe; raises rather than guessing.
 
 # Who calls this
 
@@ -25,4 +27,5 @@ video uniqify.
 `web/routers/task_helpers/uploads.py` `convert_heic_upload` (heic), applied
 in `save_asset` and the clean-images/character-sheet routes;
 `web/routers/image_tools/character_sheet.py` (character_sheet);
-`web/routers/video_tools/uniqify.py` (uniqify).
+`web/routers/video_tools/uniqify.py` (uniqify);
+`web/routers/generation/clone.py` (video_probe).
