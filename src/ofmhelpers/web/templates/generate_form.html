@@ -562,8 +562,8 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
     form.scrollIntoView({ behavior: 'smooth' });
 });
 </script>
-<script src="/static/js/file-picker.js"></script>
-<script src="/static/js/generation.js"></script>
-<script src="/static/js/gallery-scroll.js"></script>
-<script src="/static/js/prompt-highlight.js"></script>
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+<script src="{{ static_url('js/generation.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 {% endblock %}
