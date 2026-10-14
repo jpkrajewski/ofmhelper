@@ -1,17 +1,19 @@
 """
 /character-sheet: upload several shots of one character (typically 9:16),
-get them back as one lossless PNG, side by side in upload order.
+get them back as one lossless PNG, side by side in upload order. Admin only;
+its sheets land in the admin part of the asset store.
 """
 
 import shutil
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.utils.character_sheet import combine_side_by_side
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     UPLOADS_ROOT,
@@ -26,7 +28,11 @@ from ofmhelpers.web.routers.task_helpers import (
 from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
 from ofmhelpers.web.templates_config import get_templates
 
-router = APIRouter(prefix="/character-sheet", tags=["character-sheet"])
+router = APIRouter(
+    prefix="/character-sheet",
+    tags=["character-sheet"],
+    dependencies=[Depends(AuthMiddleware.require_admin)],
+)
 
 UPLOAD_ROOT = UPLOADS_ROOT / "character-sheet"
 

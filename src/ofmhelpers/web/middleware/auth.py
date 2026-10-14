@@ -106,3 +106,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """
         if request.session.get("role") != settings.web.role_admin:
             raise HTTPException(status_code=403, detail="Admins only")
+
+    @staticmethod
+    def visible_actor(request: Request) -> str | None:
+        """Whose jobs this session may see: None (everyone's) for an admin, the
+        session's own role otherwise -- a VA never sees what an admin ran.
+
+        A session somehow missing its role is narrowed to the VA's view, never
+        widened to everyone's."""
+        s = settings.web
+        role = request.session.get("role")
+        if role == s.role_admin:
+            return None
+        return role or s.role_va

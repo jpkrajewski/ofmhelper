@@ -12,7 +12,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
@@ -32,6 +32,22 @@ UPLOADS_ROOT = Path(settings.infra.uploads_root)
 # uploaded twice (even under a different name, even through a different
 # tool's form) is only ever stored once. See save_asset().
 ASSETS_ROOT = UPLOADS_ROOT / "assets"
+
+
+def assets_root_for(request: Request) -> Path:
+    """The part of the asset store this session writes into and reads from.
+
+    An admin keeps the store root, which also holds every VA file (the VA
+    folder sits inside it); a VA gets only its own folder, so nothing an admin
+    uploads or generates ever reaches a VA's reuse picker. Anything that isn't
+    the admin role -- a missing one included -- gets the VA folder, never the
+    whole store. Reads ASSETS_ROOT at call time: it is the seam tests move.
+
+    Request-side only: a worker job is handed the resolved path as a kwarg."""
+    s = settings.web
+    if request.session.get("role") == s.role_admin:
+        return ASSETS_ROOT
+    return ASSETS_ROOT / s.role_va
 
 
 # Keep in step with utils/metadata_cleaner.SUPPORTED_EXTENSIONS: anything the
@@ -59,6 +75,9 @@ def classify_kind(name: str) -> str:
 
 
 IMAGE_KINDS = frozenset({"image"})
+
+
+VIDEO_KINDS = frozenset({"video"})
 
 
 IMAGE_VIDEO_KINDS = frozenset({"image", "video"})
@@ -236,17 +255,15 @@ def register_generated_asset(
         return dest
 
 
-def register_grouped_results(results: list[dict]) -> None:
-    """Adopt every output file of a grouped download job into the shared asset
-    store, so downloaded reels/images show up in the "reuse an uploaded ..."
-    picker instead of forcing a download-then-reupload round trip.
+def register_grouped_results(results: list[dict], assets_root: Path) -> None:
+    """Adopt every output file of a grouped download job into `assets_root`
+    (the requester's part of the store, see `assets_root_for`), so downloaded
+    reels/images show up in the "reuse an uploaded ..." picker instead of
+    forcing a download-then-reupload round trip.
 
     Mutates nothing the caller depends on: register_generated_asset() dedupes
     by content hash and is already best-effort, so a file that fails to link
-    just doesn't appear in the picker.
-
-    Reads ASSETS_ROOT at call time rather than taking it as a defaulted
-    argument, so the destination stays overridable per-test."""
+    just doesn't appear in the picker."""
     for result in results:
         for raw in result.get("output_paths", []):
-            register_generated_asset(Path(raw), ASSETS_ROOT)
+            register_generated_asset(Path(raw), assets_root)

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+    <h1>Uniqify</h1>
+</div>
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<h2 class="col-title">Render copies</h2>
+
+<form id="uniqify-form" method="post" action="/uniqify/run" enctype="multipart/form-data"
+      data-prefix="/uniqify" data-result-kind="other" data-tool-label="Uniqify">
+    <div class="field">
+        <label for="uniqify-file">Source video</label>
+        <input type="file" id="uniqify-file" name="file" accept="video/*" required>
+    </div>
+    <div class="field">
+        <label for="uniqify-output-name">Output name</label>
+        <input type="text" id="uniqify-output-name" name="output_name" placeholder="(source file name)">
+    </div>
+    <div class="field">
+        <label for="uniqify-strength">Strength</label>
+        <select id="uniqify-strength" name="strength">
+            {% for s in strengths %}
+            <option value="{{ s.value }}" {% if s.value == "hard" %}selected{% endif %}>{{ s.value|capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="field">
+        <label for="uniqify-copies">Copies (1–{{ max_copies }})</label>
+        <input type="number" id="uniqify-copies" name="copies" value="5" min="1" max="{{ max_copies }}" required>
+    </div>
+    <div class="field">
+        <label for="uniqify-trim">Random head trim, up to (s)</label>
+        <input type="number" id="uniqify-trim" name="trim_secs" value="0.1" min="0" max="{{ max_trim }}" step="0.1">
+    </div>
+    <div class="field">
+        <label for="uniqify-mirror">Mirror chance (%)</label>
+        <input type="number" id="uniqify-mirror" name="mirror_pct" value="0" min="0" max="100" step="10">
+    </div>
+    <div class="field">
+        <label for="uniqify-metadata">Metadata</label>
+        <select id="uniqify-metadata" name="metadata">
+            {% for m in metadata_modes %}
+            <option value="{{ m.value }}">{{ m.value|capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn-primary">Start</button>
+    <p class="form-hint">
+        Every copy gets its own small speed, zoom, colour, grain, trim and
+        mirror changes. Comes back as one zip of H.264 MP4s, at most 720 px
+        wide. Strip removes
+        all metadata; Device writes phone-style tags with a recent date.
+    </p>
+</form>
+</div>
+
+<div class="generate-gallery-col">
+<h2 class="col-title">Results</h2>
+
+<div id="results-panel">
+    <div class="generation-status"></div>
+    <div class="results">
+        {% for job in gallery %}
+            {% if job.status == "done" and job.assets %}
+                {% with assets=job.assets %}{% include "_asset_grid.html" %}{% endwith %}
+            {% else %}
+            <div class="result-item" data-job-id="{{ job.job_id }}"
+                 {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="/uniqify"{% endif %}>
+                {% if job.status == "failed" %}
+                    <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
+                {% elif job.status == "done" %}
+                    <div class="result-file">no output</div>
+                {% else %}
+                    <div class="result-file"><span class="spinner"></span> working…</div>
+                {% endif %}
+                <p class="source">Uniqify · {{ job.params.copies }} copies</p>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+</div>
+</div>
+
+<script src="/static/js/generation.js"></script>
+{% endblock %}

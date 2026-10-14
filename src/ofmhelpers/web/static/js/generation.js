@@ -77,6 +77,21 @@
         div.className = "result-item";
         attachJobData(div, job);
 
+        // Not media (a zip): no preview element, just the name -- same as
+        // _asset_media.html's fallback, so it matches a reloaded card.
+        if (kind !== "video" && kind !== "audio" && kind !== "image") {
+            const file = document.createElement("div");
+            file.className = "result-file";
+            file.textContent = `📄 ${item.name}`;
+            const dl = document.createElement("a");
+            dl.href = item.download_url;
+            dl.download = item.name;
+            dl.className = "download-btn";
+            dl.textContent = "⬇ Download";
+            div.append(file, buildFilenameLabel(item.name), dl, buildSourceLabel(label));
+            return div;
+        }
+
         const tag = kind === "video" ? "video" : kind === "audio" ? "audio" : "img";
         const media = document.createElement(tag);
         media.src = item.view_url;

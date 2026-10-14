@@ -31,7 +31,7 @@ def png_bytes(size=(9, 16)) -> bytes:
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-va", "next": "/"})
+    c.post("/login", data={"password": "test-admin", "next": "/"})
     return c
 
 

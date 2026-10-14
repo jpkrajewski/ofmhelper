@@ -14,8 +14,10 @@ from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.types import IMAGE_EXT, VIDEO_EXT
 from ofmhelpers.cache import enqueue
 from ofmhelpers.log import get_logger
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
+    assets_root_for,
     job_inputs,
     job_status_payload,
     register_generated_asset,
@@ -53,13 +55,21 @@ def start_kie_job(
     `refs` is keyed by the form's picker field names: stored under those keys,
     /generate's click-to-reuse restores them as "existing" picker entries, and
     `run_fn` takes them as kwargs of the same names. api_key goes to the worker
-    only -- never into the stored params the status page reads."""
+    only -- never into the stored params the status page reads, and so does
+    `assets_root`, where `run_fn` registers its output (the requester's part
+    of the asset store)."""
     job_id = create_job(task, {**params, **refs}, actor=request.session.get("role"))
     enqueue(
         run_job,
         job_id,
         run_fn,
-        {"job_id": job_id, "api_key": api_key, **params, **refs},
+        {
+            "job_id": job_id,
+            "api_key": api_key,
+            "assets_root": str(assets_root_for(request)),
+            **params,
+            **refs,
+        },
     )
     return {"job_id": job_id}
 
@@ -87,7 +97,7 @@ def upload_references(
 def run_kie_generation(
     job_id: str,
     kind: str,
-    assets_root: Path,
+    assets_root: str,
     generate: Callable[[OnResultUrls], Path],
 ) -> list[dict]:
     """Run one generation and shape it as a job result.
@@ -114,7 +124,7 @@ def run_kie_generation(
         name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or _FALLBACK_NAME[kind]
         return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
 
-    register_generated_asset(out_path, assets_root)
+    register_generated_asset(out_path, Path(assets_root))
     return [
         {"name": out_path.name, "path": str(out_path), "remote_url": remote_urls[0]}
     ]
@@ -127,7 +137,7 @@ def add_job_routes(router: APIRouter, title: str, kind: str) -> None:
 
     @router.get("/jobs/{job_id}")
     def job_status(request: Request, job_id: str):
-        job = get_job(job_id)
+        job = get_job(job_id, AuthMiddleware.visible_actor(request))
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -158,9 +168,13 @@ def add_job_routes(router: APIRouter, title: str, kind: str) -> None:
         )
 
     @router.get("/jobs/{job_id}/status")
-    def job_status_json(job_id: str):
-        return job_status_payload(get_job(job_id), files_prefix)
+    def job_status_json(request: Request, job_id: str):
+        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        return job_status_payload(job, files_prefix)
 
     @router.get("/files/{job_id}/{index}")
-    def download_file(job_id: str, index: int, dl: Annotated[int, Query()] = 0):
-        return serve_job_file(get_job(job_id), index, as_attachment=bool(dl))
+    def download_file(
+        request: Request, job_id: str, index: int, dl: Annotated[int, Query()] = 0
+    ):
+        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        return serve_job_file(job, index, as_attachment=bool(dl))

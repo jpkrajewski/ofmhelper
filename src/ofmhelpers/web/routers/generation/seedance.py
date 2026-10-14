@@ -11,7 +11,10 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     start_kie_job,
     upload_references,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, resolve_reference_uploads
+from ofmhelpers.web.routers.task_helpers import (
+    assets_root_for,
+    resolve_reference_uploads,
+)
 from ofmhelpers.web.schemas import ReferenceUploads
 
 router = APIRouter(prefix="/seedance", tags=["seedance"])
@@ -20,6 +23,7 @@ router = APIRouter(prefix="/seedance", tags=["seedance"])
 def _run_seedance(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     model: str,
     resolution: str,
@@ -37,7 +41,7 @@ def _run_seedance(
     return run_kie_generation(
         job_id,
         "video",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_video_seedance2(
             prompt=prompt,
             model=model,
@@ -80,7 +84,7 @@ async def run(
         _run_seedance,
         api_key,
         params,
-        resolve_reference_uploads(refs),
+        resolve_reference_uploads(refs, assets_root_for(request)),
     )
 
 

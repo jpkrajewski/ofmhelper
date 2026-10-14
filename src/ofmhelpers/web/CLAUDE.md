@@ -49,8 +49,12 @@ migration changed everything under `stores/` without touching a router.
 - `middleware/auth.py` — **all of auth, on `AuthMiddleware` itself**: single
   shared password per role (`APP_PASSWORD_ADMIN`/`_VA` env vars) via
   `AuthMiddleware.check_password`, the per-request session-cookie gate in
-  `dispatch`, and `AuthMiddleware.require_admin` as the FastAPI dependency for
-  admin-only routers. There is no `web/auth.py` — one place to look for
+  `dispatch`, `AuthMiddleware.require_admin` as the FastAPI dependency for
+  admin-only routers, and `AuthMiddleware.visible_actor` — the VA/admin
+  separation for jobs: None (everyone's) for an admin, the session's own role
+  otherwise. Every job status/poll/file endpoint passes it to
+  `get_job(job_id, actor)` and every gallery to `list_jobs_page(..., actor)`,
+  so a VA never sees, polls or downloads an admin's job (it 404s). There is no `web/auth.py` — one place to look for
   anything auth-shaped. The allowlist (`settings.web.public_paths` /
   `public_prefixes`, read by `AuthMiddleware.is_public`) and the role names
   (`settings.web.role_admin` / `role_va`) are config, not literals — keep the
@@ -122,7 +126,7 @@ call these and nothing below them.
   files live inside a job's `result` payload (JSONB) — there is no separate
   file-reference table. `list_jobs()` self-heals history when a result file
   was deleted on disk. Anything that renders only a page of jobs uses
-  `list_jobs_page(tasks, offset, limit) -> (page, total)` instead: the filter
+  `list_jobs_page(tasks, offset, limit, actor) -> (page, total)` instead: the filter
   and the slice run off the cached repository read and **only the page is
   healed**, because healing stats every result file it is handed — doing that
   for the whole history to paint 20 cards is what made a scroll tick cost more
@@ -160,7 +164,11 @@ feature — `uploads.py` where files land, `manifests.py` new-vs-reused
 reconciliation, `responses.py` the status payloads, `serving.py` handing files
 back; import from the package, and note that `uploads.ASSETS_ROOT` is the one
 seam tests move) is what makes every generation tool a thin file: `ASSETS_ROOT`
-(content-addressed shared upload store, deduped by sha256),
+(content-addressed upload store, deduped by sha256 — split per role by
+`assets_root_for(request)`: an admin owns the root, which also contains the
+`va/` folder; a VA reads and writes only `va/`. Request-side code passes
+`assets_root_for(request)`; a worker job gets the resolved path as an
+`assets_root` kwarg, since it has no session),
 `build_ordered_paths` (reconciles a JSON manifest of new+reused reference
 files — never re-uploads a file the client already has, and is the one place
 that calls `ref_usage.record_use`, since it is the one place a resolve means
@@ -227,11 +235,22 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
 
 ## `image_tools/` — local image edits
 
-- `character_sheet.py` — `/character-sheet`, its own page + gallery: 2 to
+- `character_sheet.py` — `/character-sheet` (admin only, router-level
+  `require_admin`), its own page + gallery: 2 to
   `settings.web.character_sheet_max_images` uploads stitched side by side
   (`utils.character_sheet`) into one lossless PNG, registered in the asset
   store. Uploads are saved as `NN_<name>` so upload order survives and iOS's
   identical `image.jpg` names cannot overwrite each other.
+
+## `video_tools/` — local video edits
+
+- `uniqify.py` — `/uniqify`, both roles, own page + gallery: one uploaded
+  video re-encoded into 1..`settings.web.uniqify_max_copies` variants
+  (`utils.uniqify`), named `<output name>_001.mp4`…, sequentially on one
+  worker job, then bundled into `<output name>.zip` (stored, not deflated)
+  and the loose copies deleted — the zip is the job's only result. Not added
+  to the asset store. `generation.js` renders a non-media result like the zip
+  as a file card, matching `_asset_media.html`'s fallback.
 
 ## `admin/` — admin-only surfaces
 
@@ -259,8 +278,10 @@ files is admin-only by default.
   Public via `settings.web.public_paths`, still capped per IP by
   `WriteRateLimitMiddleware`. Post/Redirect/Get back to `/?applied=1`, so a
   refresh cannot submit twice.
-- `refs.py` — serves/lists previously-uploaded reference files from
-  `ASSETS_ROOT` for the file-picker widget's "reuse" browser. `GET /refs` with
+- `refs.py` — serves/lists previously-uploaded reference files from the
+  session's part of the asset store (`assets_root_for`) for the file-picker
+  widget's "reuse" browser; `/refs/file` and `/refs/thumb` 403 a path outside
+  it. `GET /refs` with
   no `limit` returns **two short lists**: the `RECENT_USED_LIMIT` (5) files you
   last *picked* (`web/ref_usage.py`), then the `RECENT_UPLOAD_LIMIT` (5) most
   recently *uploaded* ones not already in it, each entry carrying `used_at`

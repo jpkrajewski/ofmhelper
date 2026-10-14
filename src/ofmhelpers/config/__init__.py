@@ -24,7 +24,6 @@ from ofmhelpers.config.settings import (
     DownloadersSettings,
     InfraSettings,
     KieAISettings,
-    LeadHuntSettings,
     LoggingSettings,
     SessionSettings,
     WebSettings,
@@ -53,10 +52,6 @@ class Settings:
     @property
     def downloaders(self) -> DownloadersSettings:
         return DownloadersSettings()
-
-    @property
-    def lead_hunt(self) -> LeadHuntSettings:
-        return LeadHuntSettings()
 
     @property
     def logging(self) -> LoggingSettings:

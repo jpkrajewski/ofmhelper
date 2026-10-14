@@ -10,7 +10,7 @@ from ofmhelpers.web.routers.generation.kie_jobs import (
     run_kie_generation,
     start_kie_job,
 )
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, build_ordered_paths
+from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
 
 router = APIRouter(prefix="/seedream45", tags=["seedream45"])
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/seedream45", tags=["seedream45"])
 def _run_seedream45(
     job_id: str,
     api_key: str,
+    assets_root: str,
     prompt: str,
     aspect_ratio: str,
     quality: str,
@@ -28,7 +29,7 @@ def _run_seedream45(
     return run_kie_generation(
         job_id,
         "image",
-        ASSETS_ROOT,
+        assets_root,
         lambda on_result_urls: client.generate_image_seedream45(
             prompt=prompt,
             image_urls=uploaded,
@@ -52,7 +53,7 @@ async def run(
     require_api_key(api_key)
     params = {"prompt": prompt, "aspect_ratio": aspect_ratio, "quality": quality.value}
     image_paths = build_ordered_paths(
-        image_urls_manifest, image_urls or [], ASSETS_ROOT
+        image_urls_manifest, image_urls or [], assets_root_for(request)
     )
     return start_kie_job(
         request,

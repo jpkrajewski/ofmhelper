@@ -26,9 +26,9 @@ from fastapi.testclient import TestClient
 
 from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import refs as refs_router
 from ofmhelpers.web.routers.generation import kling as kling_router
 from ofmhelpers.web.routers.generation import nbp as nbp_router
+from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
@@ -68,7 +68,6 @@ def test_nanobanana_output_registers_into_the_shared_assets_store(
     tmp_path, monkeypatch
 ):
     assets_dir = tmp_path / "assets"
-    monkeypatch.setattr(nbp_router, "ASSETS_ROOT", assets_dir)
 
     out = tmp_path / "out" / "abc123.png"
     out.parent.mkdir()
@@ -82,7 +81,9 @@ def test_nanobanana_output_registers_into_the_shared_assets_store(
 
     with mock.patch.object(nbp_router, "KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
-        result = nbp_router._run_nanobanana(job_id=job_id, **NBP_KWARGS)
+        result = nbp_router._run_nanobanana(
+            job_id=job_id, assets_root=str(assets_dir), **NBP_KWARGS
+        )
 
     assert result == [
         {
@@ -100,8 +101,7 @@ def test_generated_asset_shows_up_in_the_reuse_picker_immediately(
     client, tmp_path, monkeypatch
 ):
     assets_dir = tmp_path / "assets"
-    monkeypatch.setattr(nbp_router, "ASSETS_ROOT", assets_dir)
-    monkeypatch.setattr(refs_router, "ASSETS_ROOT", assets_dir)
+    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", assets_dir)
 
     out = tmp_path / "out" / "fresh.png"
     out.parent.mkdir()
@@ -115,7 +115,9 @@ def test_generated_asset_shows_up_in_the_reuse_picker_immediately(
 
     with mock.patch.object(nbp_router, "KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
-        nbp_router._run_nanobanana(job_id=job_id, **NBP_KWARGS)
+        nbp_router._run_nanobanana(
+            job_id=job_id, assets_root=str(assets_dir), **NBP_KWARGS
+        )
 
     names = [f["name"] for f in client.get("/refs?kind=image").json()]
     assert "fresh.png" in names
@@ -138,7 +140,9 @@ def test_nanobanana_publishes_a_preview_as_soon_as_the_poll_succeeds(tmp_path):
 
     with mock.patch.object(nbp_router, "KieAIClient") as MockClient:
         MockClient.from_env.return_value.generate_image_nbp.side_effect = fake_generate
-        nbp_router._run_nanobanana(job_id=job_id, **NBP_KWARGS)
+        nbp_router._run_nanobanana(
+            job_id=job_id, assets_root=str(tmp_path / "assets"), **NBP_KWARGS
+        )
 
     assert get_job(job_id)["preview"] == {
         "remote_url": "https://cdn.kie.ai/out/abc.png",
@@ -146,7 +150,9 @@ def test_nanobanana_publishes_a_preview_as_soon_as_the_poll_succeeds(tmp_path):
     }
 
 
-def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only():
+def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only(
+    tmp_path,
+):
     """The generation itself succeeded (kie.ai returned a real result URL) --
     only the local copy failed. The job must still finish "done", serving
     that remote_url, never "failed"."""
@@ -162,7 +168,7 @@ def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only():
         run_job(
             job_id,
             nbp_router._run_nanobanana,
-            {"job_id": job_id, **NBP_KWARGS},
+            {"job_id": job_id, "assets_root": str(tmp_path), **NBP_KWARGS},
         )
 
     assert get_job(job_id)["status"] == "done"
@@ -175,7 +181,7 @@ def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only():
     ]
 
 
-def test_nanobanana_failure_before_any_result_url_still_fails_the_job():
+def test_nanobanana_failure_before_any_result_url_still_fails_the_job(tmp_path):
     """No hosted result was ever obtained (e.g. a bad API key) -- this is a
     real failure and must still be reported as one."""
     job_id = create_job("nanobanana", {"prompt": "p"})
@@ -184,13 +190,17 @@ def test_nanobanana_failure_before_any_result_url_still_fails_the_job():
         MockClient.from_env.return_value.generate_image_nbp.side_effect = RuntimeError(
             "Wrong API Key"
         )
-        run_job(job_id, nbp_router._run_nanobanana, {"job_id": job_id, **NBP_KWARGS})
+        run_job(
+            job_id,
+            nbp_router._run_nanobanana,
+            {"job_id": job_id, "assets_root": str(tmp_path), **NBP_KWARGS},
+        )
 
     assert get_job(job_id)["status"] == "failed"
     assert get_job(job_id)["error"] == "Wrong API Key"
 
 
-def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only():
+def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only(tmp_path):
     job_id = create_job("kling3", {"prompt": "p"})
 
     def fake_generate(**kwargs):
@@ -202,7 +212,11 @@ def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only():
         MockClient.from_env.return_value.generate_video_kling3.side_effect = (
             fake_generate
         )
-        run_job(job_id, kling_router._run_kling3, {"job_id": job_id, **KLING_KWARGS})
+        run_job(
+            job_id,
+            kling_router._run_kling3,
+            {"job_id": job_id, "assets_root": str(tmp_path), **KLING_KWARGS},
+        )
 
     assert get_job(job_id)["status"] == "done"
     assert get_job(job_id)["result"] == [
