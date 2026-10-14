@@ -221,12 +221,16 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   and `add_job_routes` (the three GET endpoints). Allowed values come from
   `aigenproviders/kaiai/types.py`, typed on the form so a bad value is a 422.
 - `clone.py` — `/clone`, both roles, own page: one subject image + N videos
-  -> N ordinary `wan3` jobs (wan's `_run_wan3`, same params `/wan3/run`
-  stores), so they also show in `/generate` and reuse works; job/status/file
-  URLs stay `/wan3/...`. Each job's duration is its video's length
-  (`utils.video_probe`), rounded and clamped to Wan 3.0's 2–30 s. Returns
-  `{"job_ids": [...]}`; `static/js/clone.js` reloads so the server renders
-  the pending cards.
+  (two file pickers, so reuse/Recreate never re-uploads) -> one batch of
+  `clone` jobs, each a plain Wan 3.0 run (wan's `_run_wan3`) whose duration
+  is its video's length (`utils.video_probe`, rounded, clamped 2–30 s). Every
+  video is probed before any job is queued, and `clone_max_videos` caps a
+  batch, so a bad submit spends nothing. Jobs share `clone_batch` +
+  `clone_index` params; `clone_batches.py` regroups them for the page
+  (`CloneBatch`/`CloneCard`, one hue per batch). `/run` answers with the new
+  batch rendered through `_clone_batch.html` (the page's own partial), which
+  `static/js/clone.js` inserts in place -- no reload -- with XHR upload
+  progress. Not in `/generate`'s gallery.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
@@ -306,7 +310,8 @@ files is admin-only by default.
 Server-rendered Jinja2, extending `base.html` (sticky glass header +
 role-aware nav — add a new top-level page's link in `base.html`'s
 `nav_items` list; it also feeds the footer). Shared partials:
-`_file_picker.html` (multi-file ordered picker macro),
+`_file_picker.html` (multi-file ordered picker macro; `max=` caps it, newest
+winning, `multiple=` lets the dialog pick several at once),
 `_kie_api_key_field.html`, `_asset_grid.html`/`_asset_media.html` (result
 rendering), `job_status.html` (the generic status/polling page every
 standard-shape tool reuses),

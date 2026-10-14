@@ -1,0 +1,44 @@
+{# One /clone batch: the subject image + settings as a header, then a card per
+   video. Rendered by the page for every recent batch and by POST /clone/run
+   for the one just submitted, so a fresh batch and a reloaded one are
+   identical. Cards carry the same data attributes as a /generate gallery
+   card, so generation.js resumes, polls and rebuilds them unchanged. #}
+{% import "_asset_media.html" as am %}
+<section class="clone-batch" style="--batch-hue: {{ batch.hue }}" data-batch="{{ batch.id }}"
+         data-params='{{ batch.recreate_json }}'>
+    <header class="clone-batch-head">
+        <img class="clone-batch-thumb" alt="Subject image" loading="lazy"
+             src="/refs/thumb?path={{ batch.image|urlencode }}&size=150">
+        <div class="clone-batch-meta">
+            <p class="clone-batch-title">
+                {{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }} · {{ batch.resolution }}
+                · <time data-ts="{{ batch.created_at }}"></time>
+            </p>
+            <p class="clone-batch-prompt" title="{{ batch.prompt }}">{{ batch.prompt }}</p>
+        </div>
+        <button type="button" class="btn-outline batch-recreate-btn">↻ Recreate batch</button>
+    </header>
+    <div class="results">
+        {% for card in batch.cards %}
+        <div class="result-item" data-job-id="{{ card.job_id }}" data-task="clone"
+             data-params='{{ card.params_json }}'
+             {% if card.status not in ("done", "failed") %}data-pending data-poll-prefix="/clone" data-poll-kind="video"{% endif %}>
+            {% if card.status == "done" and card.assets %}
+                {{ am.asset_media(card.assets[0]) }}
+                <p class="filename">{{ card.assets[0].name }}</p>
+                <a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].name }}"
+                   data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
+                <button type="button" class="recreate-btn">↻ Recreate</button>
+            {% elif card.status == "failed" %}
+                <div class="result-file" title="{{ card.error }}">⚠ {{ card.error|default("generation failed", true)|truncate(80) }}</div>
+                <button type="button" class="recreate-btn">↻ Recreate</button>
+            {% elif card.status == "done" %}
+                <div class="result-file">no output</div>
+            {% else %}
+                <div class="result-file"><span class="spinner"></span> generating…</div>
+            {% endif %}
+            <p class="source">from {{ card.video_name }} · {{ card.params.duration }}s</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
