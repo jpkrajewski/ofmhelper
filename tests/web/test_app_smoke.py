@@ -23,6 +23,7 @@ PROTECTED_PAGES = [
     "/download-assets",
     "/character-sheet",
     "/uniqify",
+    "/clone",
     "/file-manager",
     "/action-log",
     "/cookies",

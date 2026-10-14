@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+    <h1>Clone</h1>
+</div>
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<h2 class="col-title">Wan 3.0 — one image, many videos</h2>
+
+<form id="clone-form" method="post" action="/clone/run" enctype="multipart/form-data">
+    {% include "_kie_api_key_field.html" %}
+    <div class="field">
+        <label for="clone-image">Subject image (@Image1)</label>
+        <input type="file" id="clone-image" name="image" accept="image/*" required>
+    </div>
+    <div class="field">
+        <label for="clone-videos">Videos (@Video1) — one generation each</label>
+        <input type="file" id="clone-videos" name="videos" accept="video/*" multiple required>
+    </div>
+    <div class="field">
+        <label for="clone-prompt">Prompt</label>
+        <textarea id="clone-prompt" name="prompt" rows="3" required>{{ default_prompt }}</textarea>
+    </div>
+    <div class="field">
+        <label for="clone-resolution">Resolution</label>
+        <select id="clone-resolution" name="resolution">
+            {% for r in resolutions %}
+            <option value="{{ r.value }}" {% if r.value == "1080P" %}selected{% endif %}>{{ r.value }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <label class="check-field">
+        <input type="checkbox" name="audio" value="true" checked>
+        Generate audio
+    </label>
+    <button type="submit" class="btn-primary">Start</button>
+    <div class="generation-status"></div>
+    <p class="form-hint">
+        Each video gets its own Wan 3.0 run with the image, its duration set
+        to the video's length (2–30 s). Results also show up in Generate.
+    </p>
+</form>
+</div>
+
+<div class="generate-gallery-col">
+<h2 class="col-title">Results</h2>
+
+<div id="results-panel">
+    <div class="results">
+        {% for job in gallery %}
+            {% if job.status == "done" and job.assets %}
+                {% with assets=job.assets %}{% include "_asset_grid.html" %}{% endwith %}
+            {% else %}
+            <div class="result-item" data-job-id="{{ job.job_id }}"
+                 {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="/wan3" data-poll-kind="video"{% endif %}>
+                {% if job.status == "failed" %}
+                    <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
+                {% elif job.status == "done" %}
+                    <div class="result-file">no output</div>
+                {% else %}
+                    <div class="result-file"><span class="spinner"></span> working…</div>
+                {% endif %}
+                <p class="source">Wan 3.0 · {{ job.params.duration }}s</p>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+</div>
+</div>
+
+<script src="/static/js/generation.js"></script>
+<script src="/static/js/clone.js"></script>
+{% endblock %}

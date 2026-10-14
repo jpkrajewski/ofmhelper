@@ -17,6 +17,7 @@
     {% set is_admin = request.session.get("role") == "admin" %}
     {% set nav_items = [
         ("/generate", "Generate AI Assets"),
+        ("/clone", "Clone"),
         ("/download-assets", "Download Assets"),
         ("/uniqify", "Uniqify"),
     ] + ([
@@ -70,6 +71,7 @@
             </div>
             <nav class="footer-links" aria-label="Footer">
                 <a href="/generate">Generate</a>
+                <a href="/clone">Clone</a>
                 <a href="/download-assets">Download</a>
                 <a href="/uniqify">Uniqify</a>
                 {% if is_admin %}

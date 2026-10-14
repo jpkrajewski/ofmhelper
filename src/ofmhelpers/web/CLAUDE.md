@@ -220,6 +220,13 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   (preview, remote-only fallback, asset registration), `upload_references`,
   and `add_job_routes` (the three GET endpoints). Allowed values come from
   `aigenproviders/kaiai/types.py`, typed on the form so a bad value is a 422.
+- `clone.py` — `/clone`, both roles, own page: one subject image + N videos
+  -> N ordinary `wan3` jobs (wan's `_run_wan3`, same params `/wan3/run`
+  stores), so they also show in `/generate` and reuse works; job/status/file
+  URLs stay `/wan3/...`. Each job's duration is its video's length
+  (`utils.video_probe`), rounded and clamped to Wan 3.0's 2–30 s. Returns
+  `{"job_ids": [...]}`; `static/js/clone.js` reloads so the server renders
+  the pending cards.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
