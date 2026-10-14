@@ -112,6 +112,10 @@ migration changed everything under `stores/` without touching a router.
   `routers/task_helpers.resolve_reference_uploads`). Import from the package.
 - `templates_config.py` — `get_templates()`, the shared `Jinja2Templates`
   instance every router renders through (`lru_cache`d, built on first use).
+  Also the `static_url('js/x.js')` template global: **every CSS/JS link goes
+  through it** (`/static/...?v=<content hash>`). nginx caches `/static` for a
+  week, so a bare `/static/...` link keeps serving the pre-deploy file -- an
+  old clone.js posting to the new /clone/run is exactly how that broke.
 
 # `stores/` — the app's nouns
 

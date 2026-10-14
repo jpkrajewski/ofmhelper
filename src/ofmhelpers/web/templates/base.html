@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>{% block title %}Global Ascend LLC — Content Ops{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
     <!-- Before every other script: it wraps fetch() so an expired session
          redirects to /login instead of failing opaquely. -->
-    <script src="/static/js/session.js"></script>
-    <script src="/static/js/nav.js" defer></script>
+    <script src="{{ static_url('js/session.js') }}"></script>
+    <script src="{{ static_url('js/nav.js') }}" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
