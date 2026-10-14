@@ -136,6 +136,13 @@ class WebSettings(BaseSettings):
     uniqify_encode_timeout_s: int = Field(
         default=600, validation_alias="OFM_UNIQIFY_ENCODE_TIMEOUT_S"
     )
+    # /clone (routers/generation/clone.py): videos per submit -- each one is a
+    # paid Wan 3.0 run, so this caps what one mis-click can spend -- and how
+    # many recent clone jobs the page groups into batches.
+    clone_max_videos: int = Field(default=20, validation_alias="OFM_CLONE_MAX_VIDEOS")
+    clone_gallery_limit: int = Field(
+        default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
+    )
 
 
 class InfraSettings(BaseSettings):

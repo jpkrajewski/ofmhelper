@@ -1271,6 +1271,43 @@ details {
 summary { cursor: pointer; font-weight: 600; }
 summary:hover { color: var(--accent-soft); }
 
+/* /clone batches (templates/_clone_batch.html): one panel per submit, its
+   colour from --batch-hue (set per batch by the server), so the runs of one
+   submit read as a group at a glance and keep that colour across reloads. */
+.clone-batch {
+    --batch-color: hsl(var(--batch-hue, 260) 85% 68%);
+    margin-bottom: var(--s-5);
+    padding: var(--s-4);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--batch-color);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+}
+.clone-batch .results { margin-top: var(--s-3); }
+.clone-batch .result-item { border-top: 2px solid var(--batch-color); }
+.clone-batch-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.clone-batch-thumb {
+    width: 56px;
+    height: 56px;
+    flex: none;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--batch-color);
+    background: #000;
+}
+.clone-batch-meta { flex: 1 1 160px; min-width: 0; }
+.clone-batch-title { margin: 0; font-weight: 700; font-size: var(--step--1); }
+.clone-batch-prompt {
+    margin: var(--s-1) 0 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.clone-batch-uploading { --batch-color: var(--border-strong); }
+.clone-batch-uploading progress { width: 100%; margin-top: var(--s-2); accent-color: var(--accent); }
+
 /* ---------------------------------------------------------------------
    15. Shared page bits (cookies form, action log, applications, file manager)
    --------------------------------------------------------------------- */

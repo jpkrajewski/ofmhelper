@@ -27,6 +27,7 @@ TASK_STATUS_PREFIX = {
     "nanobanana": "/nanobanana",
     "kling3": "/kling3",
     "wan3": "/wan3",
+    "clone": "/clone",
     "minimax_h3": "/minimax-h3",
     "seedream45": "/seedream45",
     "seedream5": "/seedream5",

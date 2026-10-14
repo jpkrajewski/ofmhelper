@@ -130,7 +130,13 @@ def run_kie_generation(
     ]
 
 
-def add_job_routes(router: APIRouter, title: str, kind: str) -> None:
+def add_job_routes(
+    router: APIRouter,
+    title: str,
+    kind: str,
+    back_url: str = "/generate",
+    back_label: str = "generate another",
+) -> None:
     """Register the status page, polling payload and file download under the
     router's own prefix -- the three GET endpoints of the standard tool shape."""
     files_prefix = f"{router.prefix}/files"
@@ -162,8 +168,8 @@ def add_job_routes(router: APIRouter, title: str, kind: str) -> None:
                 "job_inputs": job_inputs(job),
                 "title": title,
                 "pending_message": _PENDING_MESSAGE[kind],
-                "back_url": "/generate",
-                "back_label": "generate another",
+                "back_url": back_url,
+                "back_label": back_label,
             },
         )
 

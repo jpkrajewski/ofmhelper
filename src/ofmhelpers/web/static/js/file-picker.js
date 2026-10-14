@@ -79,6 +79,12 @@
     }
 
     function renderList(picker) {
+        // data-max caps the list wherever items came from (file input, paste,
+        // reuse browser, restore): the newest ones win, so picking a second
+        // file into a one-file slot replaces the first instead of erroring
+        // at submit.
+        const max = Number(picker.dataset.max || 0);
+        if (max && picker._items.length > max) picker._items = picker._items.slice(-max);
         const kind = picker.dataset.kind;
         const listEl = picker.querySelector(".file-order-list");
         listEl.innerHTML = "";
