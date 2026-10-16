@@ -176,6 +176,7 @@
         prompt.dispatchEvent(new Event("input", { bubbles: true }));
         if (params.resolution) form.querySelector('[name="resolution"]').value = params.resolution;
         form.querySelector('[name="audio"]').checked = !!params.audio;
+        form.querySelector('[name="capcut"]').checked = !!params.capcut;
         setStatus(form.querySelector(".generation-status"), message, false);
         form.scrollIntoView({ behavior: "smooth" });
     }

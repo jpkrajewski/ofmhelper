@@ -127,7 +127,7 @@ def test_infra_settings_defaults_point_at_compose_service_names(clean_env):
         "postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers"
     )
     assert s.redis_url == "redis://redis:6379/0"
-    assert s.rq_job_timeout_s == 1800
+    assert s.rq_job_timeout_s == 2700
     assert s.rq_async is True
 
 

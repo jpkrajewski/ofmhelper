@@ -5,6 +5,11 @@ submitted as one batch and shown grouped on the page (`clone_batches.py`).
 Each run's duration is its source video's length, clamped to what Wan 3.0
 takes. Every video is probed before any job is queued, so a bad file fails the
 whole submit up front instead of after some runs were already paid for.
+
+With `capcut` on (the default), each generated video is then re-edited and
+re-encoded as a CapCut export (`utils.capcut`) and that copy is the job's
+result; kie.ai's hosted original is dropped from it so view/download serve
+the CapCut copy.
 """
 
 import subprocess
@@ -16,6 +21,8 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from ofmhelpers.aigenproviders.kaiai.types import ADAPTIVE_ASPECT_RATIO, Wan3Resolution
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
+from ofmhelpers.utils.capcut import DEFAULT_PRESET, apply_preset
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.api_keys import get_kie_api_key
 from ofmhelpers.web.middleware import AuthMiddleware
@@ -33,9 +40,12 @@ from ofmhelpers.web.routers.task_helpers import (
     assets_root_for,
     build_ordered_paths,
     classify_kind,
+    register_generated_asset,
 )
 from ofmhelpers.web.stores.jobs import get_job, list_jobs_page
 from ofmhelpers.web.templates_config import get_templates
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/clone", tags=["clone"])
 
@@ -55,11 +65,38 @@ def wan3_duration(seconds: float) -> int:
     return min(max(round(seconds), MIN_DURATION_S), MAX_DURATION_S)
 
 
-def _run_clone(clone_batch: str, clone_index: int, **wan3_kwargs: Any) -> list[dict]:
+def _run_clone(
+    clone_batch: str, clone_index: int, capcut: bool = False, **wan3_kwargs: Any
+) -> list[dict]:
     """The batch keys are stored on the job for grouping only; the generation
-    itself is a plain Wan 3.0 run."""
+    itself is a plain Wan 3.0 run. `capcut` defaults off so jobs queued before
+    the option existed run as they always did."""
     del clone_batch, clone_index
-    return _run_wan3(**wan3_kwargs)
+    results = _run_wan3(**wan3_kwargs)
+    if not capcut:
+        return results
+    return [_capcut_result(r, Path(wan3_kwargs["assets_root"])) for r in results]
+
+
+def _capcut_result(result: dict, assets_root: Path) -> dict:
+    """The CapCut copy of one generated video, next to the original and
+    registered as a reusable asset like it. A remote-only result (the local
+    download failed) has nothing to re-encode and is kept as it is, and so
+    is the original when the encode fails: the generation was paid for and
+    is already on disk, so a post-processing error must not lose it."""
+    if result["path"] is None:
+        return result
+    src = Path(result["path"])
+    dst = src.with_name(f"{src.stem}_capcut.mp4")
+    try:
+        apply_preset(src, dst, DEFAULT_PRESET, settings.web.clone_capcut_timeout_s)
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+        logger.warning(
+            "capcut encode failed, keeping the original %s", src, exc_info=True
+        )
+        return result
+    register_generated_asset(dst, assets_root)
+    return {"name": dst.name, "path": str(dst), "remote_url": None}
 
 
 def _video_duration(path: str) -> int:
@@ -110,6 +147,7 @@ def run(
     prompt: Annotated[str, Form(min_length=1)] = DEFAULT_PROMPT,
     resolution: Annotated[Wan3Resolution, Form()] = DEFAULT_RESOLUTION,
     audio: Annotated[bool, Form()] = False,
+    capcut: Annotated[bool, Form()] = False,
     image: Annotated[list[UploadFile] | None, File()] = None,
     image_manifest: Annotated[str, Form()] = "[]",
     videos: Annotated[list[UploadFile] | None, File()] = None,
@@ -146,6 +184,7 @@ def run(
                 "aspect_ratio": ADAPTIVE_ASPECT_RATIO,
                 "duration": duration,
                 "audio": audio,
+                "capcut": capcut,
                 "clone_batch": batch_id,
                 "clone_index": index,
             },

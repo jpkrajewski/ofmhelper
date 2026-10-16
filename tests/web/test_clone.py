@@ -257,3 +257,66 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
         assert payload["reference_video_urls"][0].endswith(f"{name}.mp4")
     statuses = [get_job(j)["status"] for j in r.json()["job_ids"]]
     assert statuses == ["done", "done"]
+
+
+def test_page_has_capcut_on_by_default(client):
+    assert '<input type="checkbox" name="capcut" value="true" checked>' in (
+        client.get("/clone").text
+    )
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_capcut_choice_is_stored_and_recreated(client):
+    on = get_job(_post(client, ["a.mp4"], {"capcut": "true"}).json()["job_ids"][0])
+    off = get_job(_post(client, ["a.mp4"]).json()["job_ids"][0])
+
+    assert on["params"]["capcut"] is True
+    assert off["params"]["capcut"] is False
+    [batch] = group_batches([on], page_full=False)
+    assert json.loads(batch.recreate_json)["capcut"] is True
+
+
+def test_capcut_off_returns_the_generation_untouched(monkeypatch):
+    result = [{"name": "v.mp4", "path": "/x/v.mp4", "remote_url": "https://r/v"}]
+    monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
+
+    assert clone._run_clone("b", 0, capcut=False, assets_root="/x") == result
+
+
+def test_capcut_keeps_a_remote_only_result(monkeypatch):
+    result = [{"name": "v.mp4", "path": None, "remote_url": "https://r/v"}]
+    monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
+
+    assert clone._run_clone("b", 0, capcut=True, assets_root="/x") == result
+
+
+@needs_ffmpeg
+def test_capcut_on_serves_the_capcut_copy(tmp_path, monkeypatch):
+    src = _clip(tmp_path / "gen.mp4", 2)
+    monkeypatch.setattr(
+        clone,
+        "_run_wan3",
+        lambda **_k: [{"name": src.name, "path": str(src), "remote_url": "https://r"}],
+    )
+    assets = tmp_path / "assets"
+
+    [result] = clone._run_clone("b", 0, capcut=True, assets_root=str(assets))
+
+    out = Path(result["path"])
+    assert result == {"name": "gen_capcut.mp4", "path": str(out), "remote_url": None}
+    assert out.exists()
+    assert src.exists()  # the original stays, and stays registered elsewhere
+    assert [p.name.split("__", 1)[1] for p in assets.iterdir()] == [out.name]
+
+
+def test_capcut_failure_keeps_the_generated_video(monkeypatch):
+    result = [{"name": "v.mp4", "path": "/x/v.mp4", "remote_url": "https://r/v"}]
+    monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
+
+    def broken(*_a, **_k):
+        msg = "ffmpeg failed: boom"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(clone, "apply_preset", broken)
+
+    assert clone._run_clone("b", 0, capcut=True, assets_root="/x") == result
