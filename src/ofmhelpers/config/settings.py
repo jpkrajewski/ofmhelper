@@ -140,6 +140,10 @@ class WebSettings(BaseSettings):
     # paid Wan 3.0 run, so this caps what one mis-click can spend -- and how
     # many recent clone jobs the page groups into batches.
     clone_max_videos: int = Field(default=20, validation_alias="OFM_CLONE_MAX_VIDEOS")
+    # Bound on the CapCut re-encode (utils/capcut.py) of one generated clone.
+    clone_capcut_timeout_s: int = Field(
+        default=600, validation_alias="OFM_CLONE_CAPCUT_TIMEOUT_S"
+    )
     clone_gallery_limit: int = Field(
         default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
     )
@@ -162,9 +166,11 @@ class InfraSettings(BaseSettings):
     redis_url: str = Field(
         default="redis://redis:6379/0", validation_alias="OFM_REDIS_URL"
     )
-    # Generation jobs poll kie.ai for up to ~15 min, far past RQ's 180s default
-    # job timeout -- give the worker plenty of headroom before it kills a job.
-    rq_job_timeout_s: int = Field(default=1800, validation_alias="OFM_RQ_JOB_TIMEOUT_S")
+    # A video generation job waits up to video_poll_timeout_s (30 min) on kie.ai
+    # alone, then downloads, and /clone may CapCut re-encode it (up to
+    # clone_capcut_timeout_s) -- far past RQ's 180s default. 45 min covers all
+    # of it, so a slow-but-finished generation is never killed mid-way.
+    rq_job_timeout_s: int = Field(default=2700, validation_alias="OFM_RQ_JOB_TIMEOUT_S")
     # When False, enqueue() runs the job inline in the calling process instead
     # of handing it to the worker -- RQ's built-in synchronous mode. Prod runs
     # async (True); the test suite forces it False so TestClient sees the same

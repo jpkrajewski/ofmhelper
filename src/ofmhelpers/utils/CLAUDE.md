@@ -18,6 +18,24 @@ video uniqify.
   from a `Strength` preset; `MetadataMode` strip or phone-style device tags.
   Port of the standalone `captions/` tool (its "keep original EXIF" mode
   needed exiftool, which the image lacks, so it was not ported).
+- `capcut.py` — `apply_preset(src, dst, preset, timeout_s, seed)`: one
+  ffprobe + one ffmpeg pass. CapCut sliders (scale/move_down/exposure/
+  contrast/sharpen/particles) mapped to ffmpeg filters on a fixed linear
+  scale (approximate, CapCut is closed), plus speed % and head/tail trims,
+  plus a random per-run jitter in uniqify's MEDIUM ranges (saturation/
+  contrast/brightness/zoom/grain/volume; own copy, no uniqify import).
+  Slider scales calibrated against one real CapCut export of the same clip
+  (tone within ~2 levels, matching sharpness and grain without the jitter).
+  Filter order matters: grain goes in before `exposure`, whose float-RGB
+  output `noise` would turn into colour static. Output matches a CapCut 4K
+  desktop export: H.264 Main `avc1` level 5.1, short side 2160, 59.94 fps
+  ~28-33 Mb/s no B-frames bt709, AAC 44.1 kHz stereo 192k, CapCut's
+  container tags in CapCut's order (`bitrate=55000000`,
+  `encoder=Lavf61.1.100` written under a placeholder key, renamed in
+  place), no stream `encoder`, no encoder version strings in the video
+  (x264 SEI dropped) or audio (bitexact AAC) data, source tags (incl. AI
+  labels) dropped. `DEFAULT_PRESET` = scale 110, move_down 2, exposure -3,
+  contrast 5, sharpen 15, particles 10, speed +3%, trim 0.3 s each end.
 - `video_probe.py` — `duration_s(path, timeout_s)`: container length via
   ffprobe; raises rather than guessing.
 
@@ -28,4 +46,4 @@ video uniqify.
 in `save_asset` and the clean-images/character-sheet routes;
 `web/routers/image_tools/character_sheet.py` (character_sheet);
 `web/routers/video_tools/uniqify.py` (uniqify);
-`web/routers/generation/clone.py` (video_probe).
+`web/routers/generation/clone.py` (video_probe, capcut).

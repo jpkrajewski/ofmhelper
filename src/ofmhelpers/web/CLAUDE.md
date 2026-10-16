@@ -234,7 +234,13 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   (`CloneBatch`/`CloneCard`, one hue per batch). `/run` answers with the new
   batch rendered through `_clone_batch.html` (the page's own partial), which
   `static/js/clone.js` inserts in place -- no reload -- with XHR upload
-  progress. Not in `/generate`'s gallery.
+  progress. Not in `/generate`'s gallery. The "CapCut edit + export"
+  checkbox (`capcut`, on by default in the form; a job without the param
+  runs without it) re-encodes each generated video through
+  `utils.capcut.DEFAULT_PRESET` on the worker; the `_capcut.mp4` copy
+  becomes the result with `remote_url` dropped, so view/download serve it
+  rather than kie.ai's original (which stays on disk and in the asset
+  store). A remote-only result (local download failed) is left as is.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
