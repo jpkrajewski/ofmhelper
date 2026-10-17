@@ -1,0 +1,4 @@
+{# 8491586 -> "8.5M", 135385 -> "135k": view and follower counts on /reels. #}
+{% macro short_count(n) -%}
+    {%- if n >= 1000000 %}{{ (n / 1000000)|round(1) }}M{% elif n >= 1000 %}{{ (n / 1000)|round|int }}k{% else %}{{ n }}{% endif -%}
+{%- endmacro %}

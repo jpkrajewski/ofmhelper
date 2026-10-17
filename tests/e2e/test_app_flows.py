@@ -11,7 +11,7 @@ from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
-VA_PAGES = ["/generate", "/clone", "/download-assets", "/uniqify"]
+VA_PAGES = ["/generate", "/clone", "/reels", "/download-assets", "/uniqify"]
 ADMIN_ONLY_PAGES = ["/character-sheet", "/applications", "/file-manager", "/action-log"]
 
 # A generation is polled with backoff; a fake one takes ~1 s plus the poll.
@@ -136,3 +136,85 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
 
     assert va.js_errors == []
     assert coworker.js_errors == []
+
+
+# Live Instagram: public profiles that each have at least one reel past 5x
+# their followers and at most 15 s long.
+VIRAL_PROFILES = ["sheep_love33", "https://www.instagram.com/brookslockvip/"]
+SCAN_TIMEOUT_MS = 120_000
+
+
+def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
+    va: Session, subject_images: list[Path]
+):
+    va.goto("/reels")
+    va.page.fill("#reels-profiles", "\n".join(VIRAL_PROFILES))
+    va.page.click('#reels-form button[type="submit"]')
+
+    status = va.page.locator("#reels-form .generation-status")
+    expect(status).to_contain_text("Added", timeout=SCAN_TIMEOUT_MS)
+    # A first scan runs on the worker; the page reloads itself once it is done.
+    expect(va.page.locator(".reels-watch-item[data-pending]")).to_have_count(
+        0, timeout=SCAN_TIMEOUT_MS
+    )
+    for username in ("sheep_love33", "brookslockvip"):
+        expect(
+            va.page.locator(f'.reels-watch-item[data-username="{username}"]')
+        ).to_have_count(1)
+    cards = va.page.locator(".reel-card[data-video-url]")
+    assert cards.count() >= len(VIRAL_PROFILES)
+    # One feed, most viewed first, across profiles.
+    views = va.page.locator(".reel-card").evaluate_all(
+        "cs => cs.map(c => Number(c.dataset.views))"
+    )
+    assert views == sorted(views, reverse=True)
+    # Only lazy thumbnails until a hover.
+    expect(va.page.locator("#reels-feed video")).to_have_count(0)
+
+    # Hovering creates the video and plays it straight from Instagram's CDN.
+    first = cards.first
+    first.hover()
+    va.page.wait_for_function(
+        "v => v.currentTime > 0 && !v.paused",
+        arg=first.locator("video").element_handle(timeout=SCAN_TIMEOUT_MS),
+        timeout=SCAN_TIMEOUT_MS,
+    )
+
+    # A click anywhere on a card picks it.
+    picked = [cards.nth(i) for i in range(len(VIRAL_PROFILES))]
+    for card in picked:
+        card.click()
+    expect(picked[0]).to_have_attribute("aria-pressed", "true")
+    clone_btn = va.page.locator("#reels-clone")
+    expect(clone_btn).to_have_text(f"Clone selected ({len(picked)})")
+
+    # The list and the picks survive a reload.
+    va.page.reload()
+    for username in ("sheep_love33", "brookslockvip"):
+        expect(
+            va.page.locator(f'.reels-watch-item[data-username="{username}"]')
+        ).to_have_count(1)
+    expect(clone_btn).to_have_text(f"Clone selected ({len(picked)})")
+
+    with va.page.expect_navigation(
+        url=re.compile(r"/clone\?video="), timeout=SCAN_TIMEOUT_MS
+    ):
+        va.page.click("#reels-clone")
+
+    videos = va.page.locator('.file-picker[data-field="videos"] li')
+    expect(videos).to_have_count(len(picked))
+    va.page.fill("#kie-api-key", "e2e-wrong-key")
+    va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
+        [str(p) for p in subject_images]
+    )
+    with va.page.expect_response(lambda r: r.url.endswith("/clone/run")) as run:
+        va.page.click('#clone-form button[type="submit"]')
+    body = run.value.json()
+    assert len(body["job_ids"]) == len(picked)
+    batch_id = re.search(r'data-batch="([^"]+)"', body["html"]).group(1)
+
+    batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
+    failed = va.page.locator(f"{batch} .result-file", has_text="Wrong API Key")
+    expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
+
+    assert va.js_errors == []

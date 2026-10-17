@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 
 from ofmhelpers.aigenproviders.kaiai.types import (
     ADAPTIVE_ASPECT_RATIO,
@@ -45,6 +45,7 @@ from ofmhelpers.web.routers.task_helpers import (
     classify_kind,
     job_assets,
     register_generated_asset,
+    resolve_existing_ref,
     strip_asset_hash_prefix,
 )
 from ofmhelpers.web.schemas import CloneBatch, CloneCard, CloneQueued, Job, ResultFile
@@ -137,8 +138,24 @@ def _card(job: Job) -> CloneCard:
     )
 
 
+def _prefill_videos(request: Request, paths: list[str]) -> list[str]:
+    """The `?video=` paths /reels hands over, kept only where they are a
+    video in this session's part of the store; a stale link just opens
+    with fewer videos picked."""
+    assets_root = assets_root_for(request)
+    kept: list[str] = []
+    for path in paths:
+        try:
+            resolved = resolve_existing_ref(path, assets_root)
+        except HTTPException:
+            continue
+        if classify_kind(resolved.name) == "video":
+            kept.append(str(resolved))
+    return kept
+
+
 @router.get("")
-def form(request: Request):
+def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
     return render(
         request,
         "clone.html",
@@ -150,6 +167,7 @@ def form(request: Request):
         max_videos=settings.web.clone_max_videos,
         max_images=settings.web.clone_max_images,
         live_poll_s=settings.web.gallery_live_poll_s,
+        prefill_videos=_prefill_videos(request, video or []),
     )
 
 

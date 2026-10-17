@@ -24,6 +24,7 @@ PROTECTED_PAGES = [
     "/character-sheet",
     "/uniqify",
     "/clone",
+    "/reels",
     "/file-manager",
     "/action-log",
     "/cookies",

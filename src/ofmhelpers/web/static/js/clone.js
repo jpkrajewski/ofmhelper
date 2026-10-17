@@ -10,6 +10,9 @@
  * Recreate: on a batch header it restores the images, every video and the
  * settings; on a single result, the images and just that video. Files come
  * back as "existing" picker entries, so nothing is uploaded again.
+ *
+ * Prefill: /reels sends the picked reels here as ?video= paths, which the
+ * server checks and hands over in data-prefill-videos.
  */
 (function () {
     function setStatus(statusEl, message, isError) {
@@ -187,6 +190,18 @@
         form.scrollIntoView({ behavior: "smooth" });
     }
 
+    function initPrefill(form) {
+        const videos = JSON.parse(form.dataset.prefillVideos || "[]");
+        if (!videos.length) return;
+        window.FilePicker.setExisting("videos", videos);
+        const n = videos.length;
+        setStatus(
+            form.querySelector(".generation-status"),
+            `Loaded ${n} reel${n === 1 ? "" : "s"}. Add your images, then Start.`,
+            false
+        );
+    }
+
     function initRecreate(form) {
         document.getElementById("clone-batches").addEventListener("click", (e) => {
             const batchBtn = e.target.closest(".batch-recreate-btn");
@@ -210,5 +225,6 @@
         batches.addEventListener("live-gallery:update", () => formatTimes(batches));
         initSubmit(form);
         initRecreate(form);
+        initPrefill(form);
     });
 })();

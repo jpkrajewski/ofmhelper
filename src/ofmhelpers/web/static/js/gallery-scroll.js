@@ -46,7 +46,10 @@
             loading = true;
             observer.unobserve(sentinel);
 
-            fetch(`${endpoint}?offset=${encodeURIComponent(sentinel.dataset.nextOffset)}`)
+            // The endpoint may carry its own query (a filter): add to it.
+            const url = new URL(endpoint, window.location.origin);
+            url.searchParams.set("offset", sentinel.dataset.nextOffset);
+            fetch(url)
                 .then((r) => {
                     if (!r.ok) throw new Error("could not load more");
                     return r.text();
@@ -60,6 +63,7 @@
                     sentinel.replaceWith(...holder.childNodes);
                     loading = false;
                     if (window.Generation) window.Generation.resumePendingCards();
+                    container.dispatchEvent(new CustomEvent("gallery-scroll:append"));
                     watch();
                 })
                 .catch(() => {

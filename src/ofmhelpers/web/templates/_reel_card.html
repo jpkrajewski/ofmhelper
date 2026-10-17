@@ -1,0 +1,34 @@
+{# One reel in the /reels feed (`item`: schemas.FeedItem), rendered by the
+   page and by every GET /reels/feed page. Carries what "Clone selected"
+   posts back (data-code, data-video-url). Only a lazy thumbnail loads up
+   front; static/js/reels.js creates the <video> on first hover, so a feed of
+   hundreds costs nothing until you look. Border + ratio pill are its view
+   tier (data-tier, instagram.models.VIEW_TIERS). #}
+{% import "_reel_counts.html" as rc %}
+{% set reel = item.reel %}
+{% if reel.video_url %}
+<div class="result-item reel-card" role="button" tabindex="0" aria-pressed="false"
+     data-username="{{ item.username }}" data-code="{{ reel.code }}" data-video-url="{{ reel.video_url }}"
+     data-views="{{ reel.views }}" data-tier="{{ reel.tier or '' }}">
+{% else %}
+{# Instagram shows this one to logged-in viewers only and no working login
+   was at hand: listed, but nothing to play or clone. #}
+<div class="result-item reel-card reel-locked" aria-disabled="true"
+     title="Instagram hides this reel from logged-out visitors — upload fresh cookies at /cookies"
+     data-username="{{ item.username }}" data-code="{{ reel.code }}"
+     data-views="{{ reel.views }}" data-tier="{{ reel.tier or '' }}">
+    <span class="reel-lock" aria-hidden="true">🔒 login only</span>
+{% endif %}
+    <div class="reel-media">
+        <img class="reel-thumb" src="{{ reel.thumbnail_url }}" alt="Reel {{ reel.code }}" loading="lazy" decoding="async">
+    </div>
+    <p class="reel-meta">
+        <span class="reel-views">{{ rc.short_count(reel.views) }}</span>
+        <span class="reel-ratio">{{ reel.ratio|round(1) }}× followers</span>
+    </p>
+    <p class="reel-meta reel-sub">
+        <a href="{{ reel.url }}" target="_blank" rel="noopener">@{{ item.username }}</a>
+        {% if reel.duration_s is not none %}· {{ reel.duration_s|round(1) }} s{% endif %}
+        · <time data-ts="{{ reel.taken_at }}"></time>
+    </p>
+</div>

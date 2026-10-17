@@ -1,0 +1,28 @@
+{# One watched profile in /reels' watch list (`watched`:
+   schemas.WatchedProfile; `groups`: every group, for the dropdown that
+   moves it; `top_profile`: the most viewed of the list, which gets the
+   legendary border): name, two-week views, feed reels, followers, the last
+   scan's error if it failed, ✕ to stop watching. data-pending while its
+   first scan runs -- what static/js/reels.js polls on. #}
+{% import "_reel_counts.html" as rc %}
+<li class="reels-watch-item" data-username="{{ watched.username }}"
+    {% if watched.pending %}data-pending{% endif %}
+    {% if watched.username == top_profile %}data-tier="legendary" title="Most views in the last two weeks"{% endif %}>
+    <a href="https://www.instagram.com/{{ watched.username }}/" target="_blank" rel="noopener">@{{ watched.username }}</a>
+    <span class="reels-watch-meta">
+        {%- if watched.pending -%}
+        <span class="spinner"></span> scanning…
+        {%- elif watched.result -%}
+        <strong class="reels-watch-views" title="Views of every reel posted in the last {{ watched.result.window_days|round|int }} days">{{ rc.short_count(watched.views_total) }} views</strong>
+        · {{ watched.reel_count }} reels · {{ rc.short_count(watched.result.profile.followers) }} followers
+        {%- endif -%}
+    </span>
+    {% if watched.error %}<span class="reels-watch-error" title="{{ watched.error }}">⚠</span>{% endif %}
+    <select class="reels-row-group" aria-label="Group of @{{ watched.username }}">
+        <option value="" {% if not watched.group %}selected{% endif %}>No group</option>
+        {% for g in groups %}
+        <option value="{{ g }}" {% if g == watched.group %}selected{% endif %}>{{ g }}</option>
+        {% endfor %}
+    </select>
+    <button type="button" class="btn-ghost reels-unwatch" aria-label="Stop watching @{{ watched.username }}">✕</button>
+</li>
