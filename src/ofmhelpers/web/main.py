@@ -18,7 +18,7 @@ from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
 from ofmhelpers.web.recovery import recovery_loop
 from ofmhelpers.web.routers import ROUTERS
 from ofmhelpers.web.stores.jobs import load_jobs
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.templates_config import render
 
 # Before anything else in the process logs: uvicorn imports this module to
 # find `app`, so this runs ahead of the first request and ahead of uvicorn's
@@ -73,12 +73,12 @@ for router in ROUTERS:
 
 @app.get("/")
 def apply(request: Request):
-    return get_templates().TemplateResponse(request, "reachmodel.html", {})
+    return render(request, "reachmodel.html")
 
 
 @app.get("/home")
 def root(request: Request):
-    return get_templates().TemplateResponse(request, "home.html", {})
+    return render(request, "home.html")
 
 
 @app.get("/health")

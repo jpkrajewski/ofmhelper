@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.types import MinimaxH3Resolution
 from ofmhelpers.web.routers.generation.kie_jobs import (
-    add_job_routes,
+    add_kie_job_routes,
     require_api_key,
     run_kie_generation,
     start_kie_job,
@@ -15,7 +15,7 @@ from ofmhelpers.web.routers.task_helpers import (
     assets_root_for,
     resolve_reference_uploads,
 )
-from ofmhelpers.web.schemas import ReferenceUploads
+from ofmhelpers.web.schemas import ReferenceUploads, ResultFile
 
 router = APIRouter(prefix="/minimax-h3", tags=["minimax_h3"])
 
@@ -31,7 +31,7 @@ def _run_minimax_h3(
     reference_images: list[str],
     reference_videos: list[str],
     reference_audio: list[str],
-) -> list[dict]:
+) -> list[ResultFile]:
     client = KieAIClient.from_env(api_key=api_key)
     refs = upload_references(
         client, reference_images, reference_videos, reference_audio
@@ -52,7 +52,7 @@ def _run_minimax_h3(
 
 
 @router.post("/run")
-async def run(
+def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
@@ -78,4 +78,4 @@ async def run(
     )
 
 
-add_job_routes(router, "MiniMax H3", "video")
+add_kie_job_routes(router, "MiniMax H3", "video")

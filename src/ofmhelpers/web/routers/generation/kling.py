@@ -5,12 +5,13 @@ from fastapi import APIRouter, File, Form, Request, UploadFile
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.types import Kling3Mode
 from ofmhelpers.web.routers.generation.kie_jobs import (
-    add_job_routes,
+    add_kie_job_routes,
     require_api_key,
     run_kie_generation,
     start_kie_job,
 )
 from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
+from ofmhelpers.web.schemas import ResultFile
 
 router = APIRouter(prefix="/kling3", tags=["kling3"])
 
@@ -25,7 +26,7 @@ def _run_kling3(
     duration: str,
     sound: bool,
     images: list[str],
-) -> list[dict]:
+) -> list[ResultFile]:
     client = KieAIClient.from_env(api_key=api_key)
     image_urls = [client.upload_local_file(p) for p in images]
     return run_kie_generation(
@@ -46,7 +47,7 @@ def _run_kling3(
 
 
 @router.post("/run")
-async def run(
+def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
@@ -73,4 +74,4 @@ async def run(
     )
 
 
-add_job_routes(router, "Kling 3.0", "video")
+add_kie_job_routes(router, "Kling 3.0", "video")

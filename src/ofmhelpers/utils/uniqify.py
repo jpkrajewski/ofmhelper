@@ -10,12 +10,12 @@ aac 192k 44.1 kHz stereo, +faststart).
 import datetime
 import json
 import random
-import shutil
-import subprocess
 from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel
+
+from ofmhelpers.utils.ffmpeg import binary, run
 
 _CRF = 23
 _FPS = 30
@@ -184,31 +184,10 @@ class VariantParams(BaseModel):
         return af
 
 
-def _binary(name: str) -> str:
-    path = shutil.which(name)
-    if path is None:
-        msg = f"{name} not available"
-        raise FileNotFoundError(msg)
-    return path
-
-
-def _run(args: list[str], timeout_s: int) -> str:
-    """Run ffmpeg/ffprobe; a failure raises with ffmpeg's own last lines --
-    that is what the job's error shows, not the whole argv."""
-    try:
-        return subprocess.run(
-            args, check=True, capture_output=True, text=True, timeout=timeout_s
-        ).stdout
-    except subprocess.CalledProcessError as exc:
-        tail = " / ".join((exc.stderr or "").strip().splitlines()[-3:])
-        msg = f"{Path(args[0]).name} failed: {tail or exc.returncode}"
-        raise RuntimeError(msg) from exc
-
-
 def has_audio(src: Path, timeout_s: int) -> bool:
-    out = _run(
+    out = run(
         [
-            _binary("ffprobe"),
+            binary("ffprobe"),
             "-v",
             "error",
             "-select_streams",
@@ -257,7 +236,7 @@ def encode_variant(
     rng: random.Random,
     timeout_s: int,
 ) -> None:
-    args = [_binary("ffmpeg"), "-y", "-loglevel", "error"]
+    args = [binary("ffmpeg"), "-y", "-loglevel", "error"]
     if params.trim_head > 0:
         args += ["-ss", str(params.trim_head)]
     args += ["-i", str(src), "-r", str(_FPS), "-vf", params.video_filter()]
@@ -298,7 +277,7 @@ def encode_variant(
     else:
         args += ["-movflags", "+faststart"]
     args.append(str(dst))
-    _run(args, timeout_s)
+    run(args, timeout_s)
 
 
 def generate_variants(

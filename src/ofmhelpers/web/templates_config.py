@@ -1,7 +1,10 @@
 import hashlib
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
+from fastapi import Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from ofmhelpers.config import settings
@@ -49,3 +52,19 @@ def get_templates() -> Jinja2Templates:
     )
     templates.env.globals["static_url"] = static_url
     return templates
+
+
+def render(
+    request: Request, name: str, status_code: int = 200, **context: Any
+) -> HTMLResponse:
+    """Render template `name` as the response, with `context` as its values:
+    `render(request, "uniqify.html", gallery=cards, max_copies=50)`."""
+    return get_templates().TemplateResponse(
+        request, name, context, status_code=status_code
+    )
+
+
+def render_partial(name: str, **context: Any) -> str:
+    """Render template `name` to a string -- a partial a route hands back
+    inside JSON for the page to insert (see /clone/run)."""
+    return get_templates().get_template(name).render(**context)

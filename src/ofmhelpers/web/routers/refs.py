@@ -1,6 +1,9 @@
+import heapq
+import os
 import shutil
 import subprocess
 import tempfile
+from operator import itemgetter
 from pathlib import Path
 from typing import Annotated
 
@@ -18,6 +21,7 @@ from ofmhelpers.web.routers.task_helpers import (
     media_response,
     strip_asset_hash_prefix,
 )
+from ofmhelpers.web.schemas import RefEntry
 
 logger = get_logger(__name__)
 
@@ -44,28 +48,35 @@ RECENT_UPLOAD_LIMIT = settings.web.recent_upload_limit
 MAX_REF_LIMIT = settings.web.max_ref_limit
 
 
-def _entry(path: Path, used_at: float | None = None) -> dict:
-    return {
-        "path": str(path),
-        "name": strip_asset_hash_prefix(path.name),
-        "kind": classify_kind(path.name),
-        "mtime": path.stat().st_mtime,
-        # None = "never picked, just uploaded". The picker groups on this.
-        "used_at": used_at,
-    }
+def _entry(path: str, mtime: float, used_at: float | None = None) -> RefEntry:
+    name = Path(path).name
+    return RefEntry(
+        path=path,
+        name=strip_asset_hash_prefix(name),
+        kind=classify_kind(name),
+        mtime=mtime,
+        used_at=used_at,
+    )
 
 
-def _stored_files(root: Path, kind: str | None) -> list[Path]:
+def _stored_files(root: Path, kind: str | None) -> dict[str, float]:
     """Every file under `root` (the session's part of the asset store -- for
     an admin that includes the VA folder), optionally of one kind, minus the
-    thumbnail cache. No separate metadata store, this is the real files."""
-    return [
-        path
-        for path in root.rglob("*")
-        if path.is_file()
-        and THUMBS_DIR not in path.parents
-        and (not kind or classify_kind(path.name) == kind)
-    ]
+    thumbnail cache, as path -> mtime. No separate metadata store, this is the
+    real files: one walk, one stat per file, and the thumbnail cache (one
+    file per source per size) is never descended into."""
+    found: dict[str, float] = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if Path(dirpath, d) != THUMBS_DIR]
+        for name in filenames:
+            if kind and classify_kind(name) != kind:
+                continue
+            path = Path(dirpath, name)
+            try:
+                found[str(path)] = path.stat().st_mtime
+            except OSError:
+                continue  # deleted mid-walk, or a dangling link
+    return found
 
 
 def _require_visible(request: Request, path: str) -> Path:
@@ -97,26 +108,23 @@ def list_refs(
 
     An explicit `?limit=` is the "show older" path: newest-uploaded first, no
     usage grouping."""
-    root = assets_root_for(request)
+    stored = _stored_files(assets_root_for(request), kind)
     if limit is not None:
-        newest = sorted(
-            _stored_files(root, kind), key=lambda p: p.stat().st_mtime, reverse=True
-        )
-        return [_entry(p) for p in newest[:limit]]
+        newest = heapq.nlargest(limit, stored.items(), key=itemgetter(1))
+        return [_entry(path, mtime) for path, mtime in newest]
 
-    stored = {str(p): p for p in _stored_files(root, kind)}
-    used: list[dict] = []
+    used: list[RefEntry] = []
     for raw, used_at in ref_usage.recent(MAX_REF_LIMIT):
         # A used file can have been deleted through the file manager since,
         # or be of another kind than this picker wants.
-        path = stored.pop(raw, None)
-        if path is not None:
-            used.append(_entry(path, used_at))
+        mtime = stored.pop(raw, None)
+        if mtime is not None:
+            used.append(_entry(raw, mtime, used_at))
         if len(used) == RECENT_USED_LIMIT:
             break
 
-    uploaded = sorted(stored.values(), key=lambda p: p.stat().st_mtime, reverse=True)
-    return used + [_entry(p) for p in uploaded[:RECENT_UPLOAD_LIMIT]]
+    uploaded = heapq.nlargest(RECENT_UPLOAD_LIMIT, stored.items(), key=itemgetter(1))
+    return used + [_entry(path, mtime) for path, mtime in uploaded]
 
 
 @router.get("/file")

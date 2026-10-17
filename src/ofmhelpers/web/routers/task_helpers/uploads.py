@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request, UploadFile
 
 from ofmhelpers.config import settings
+from ofmhelpers.downloaders.models import DownloadResult
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.heic import HEIC_EXTENSIONS, heic_to_jpeg
 
@@ -78,9 +79,6 @@ IMAGE_KINDS = frozenset({"image"})
 
 
 VIDEO_KINDS = frozenset({"video"})
-
-
-IMAGE_VIDEO_KINDS = frozenset({"image", "video"})
 
 
 MEDIA_KINDS = frozenset({"image", "video", "audio"})
@@ -255,7 +253,7 @@ def register_generated_asset(
         return dest
 
 
-def register_grouped_results(results: list[dict], assets_root: Path) -> None:
+def register_grouped_results(results: list[DownloadResult], assets_root: Path) -> None:
     """Adopt every output file of a grouped download job into `assets_root`
     (the requester's part of the store, see `assets_root_for`), so downloaded
     reels/images show up in the "reuse an uploaded ..." picker instead of
@@ -265,5 +263,5 @@ def register_grouped_results(results: list[dict], assets_root: Path) -> None:
     by content hash and is already best-effort, so a file that fails to link
     just doesn't appear in the picker."""
     for result in results:
-        for raw in result.get("output_paths", []):
-            register_generated_asset(Path(raw), assets_root)
+        for path in result.output_paths:
+            register_generated_asset(path, assets_root)

@@ -2,43 +2,26 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import FileResponse
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.downloaders.generic import download_all
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.downloaders.models import DownloadResult
 from ofmhelpers.web.routers.task_helpers import (
+    add_job_routes,
     assets_root_for,
-    flatten_grouped_results,
-    grouped_job_status_payload,
     register_grouped_results,
 )
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.schemas import JobQueued
+from ofmhelpers.web.stores.jobs import create_job, run_job
 
 router = APIRouter(prefix="/download-videos", tags=["download-videos"])
 
 
-def _run_downloads(urls: list[str], assets_root: str) -> list[dict]:
-    """Runs in the background. Converts each DownloadResult to a plain dict
-    so it is safe to render in Jinja2 / store in the job dict. mode="json"
-    is what turns output_paths' Path objects into strings -- jobs.py persists
-    every job through json.dumps, which can't serialize a Path."""
+def _run_downloads(urls: list[str], assets_root: str) -> list[DownloadResult]:
+    """Runs in the background; run_job stores the results as JSON."""
     results = download_all(urls)
-    dicts = [r.model_dump(mode="json") for r in results]
-    register_grouped_results(dicts, Path(assets_root))
-    return dicts
-
-
-def _flatten_paths(job: dict) -> list[Path]:
-    """Every output file across every URL in a job, in a stable order.
-    The position in this list IS the file's download index -- this is what
-    makes the download link safe: the browser never sends a raw filesystem
-    path, only a number we look up against data the job already owns."""
-    paths: list[Path] = []
-    for r in job.get("result") or []:
-        paths.extend(Path(p) for p in r.get("output_paths", []))
-    return paths
+    register_grouped_results(results, Path(assets_root))
+    return results
 
 
 @router.post("/run")
@@ -57,59 +40,13 @@ def run(request: Request, urls: Annotated[str, Form()]):
         {"urls": url_list, "assets_root": str(assets_root_for(request))},
     )
 
-    return {"job_id": job_id}
+    return JobQueued(job_id=job_id)
 
 
-@router.get("/jobs/{job_id}")
-def job_status(request: Request, job_id: str):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    assets: list[dict] = []
-    failed_sources: list[dict] = []
-    if job.get("status") == "done":
-        assets, failed_sources = flatten_grouped_results(job, "/download-videos/files")
-
-    return get_templates().TemplateResponse(
-        request,
-        "job_status.html",
-        {
-            "job": job,
-            "assets": assets,
-            "failed_sources": failed_sources,
-            "title": "Download videos",
-            "pending_message": f"Downloading {len(job['params']['urls'])} url(s)…",
-            "back_url": "/download-assets",
-            "back_label": "download more",
-        },
-    )
-
-
-@router.get("/jobs/{job_id}/status")
-def job_status_json(request: Request, job_id: str):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    return grouped_job_status_payload(job, "/download-videos/files")
-
-
-@router.get("/files/{job_id}/{index}")
-def download_file(request: Request, job_id: str, index: int, dl: int = 0):
-    """Streams a completed download to the browser -- inline for previews,
-    Content-Disposition: attachment when ?dl=1."""
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    if job is None or job.get("status") != "done":
-        raise HTTPException(status_code=404, detail="Job not found or not finished")
-
-    paths = _flatten_paths(job)
-    if index < 0 or index >= len(paths):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    path = paths[index]
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="File no longer exists on server")
-
-    if dl:
-        return FileResponse(
-            path, filename=path.name, media_type="application/octet-stream"
-        )
-    return FileResponse(path, media_type="video/mp4")
+add_job_routes(
+    router,
+    "Download videos",
+    lambda job: f"Downloading {len(job.params['urls'])} url(s)…",
+    back_url="/download-assets",
+    back_label="download more",
+)

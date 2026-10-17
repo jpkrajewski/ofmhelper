@@ -9,12 +9,13 @@ from ofmhelpers.aigenproviders.kaiai.types import (
     SeedreamOutputFormat,
 )
 from ofmhelpers.web.routers.generation.kie_jobs import (
-    add_job_routes,
+    add_kie_job_routes,
     require_api_key,
     run_kie_generation,
     start_kie_job,
 )
 from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
+from ofmhelpers.web.schemas import ResultFile
 
 router = APIRouter(prefix="/seedream5", tags=["seedream5"])
 
@@ -29,7 +30,7 @@ def _run_seedream5(
     quality: str,
     output_format: str,
     image_urls: list[str],
-) -> list[dict]:
+) -> list[ResultFile]:
     client = KieAIClient.from_env(api_key=api_key)
     uploaded = [client.upload_local_file(p) for p in image_urls]
     return run_kie_generation(
@@ -49,7 +50,7 @@ def _run_seedream5(
 
 
 @router.post("/run")
-async def run(
+def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
@@ -81,4 +82,4 @@ async def run(
     )
 
 
-add_job_routes(router, "Seedream 5.0", "image")
+add_kie_job_routes(router, "Seedream 5.0", "image")

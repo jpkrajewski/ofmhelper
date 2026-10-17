@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
+from ofmhelpers.downloaders.models import DownloadResult
 
 
 class ImageDownloadConfig(BaseModel):
@@ -41,18 +42,7 @@ class ImageDownloadConfig(BaseModel):
         return cmd
 
 
-class ImageDownloadResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    url: str
-    success: bool
-    output_paths: list[Path] = []
-    error: str | None = None
-
-
-def download(
-    url: str, config: ImageDownloadConfig | None = None
-) -> ImageDownloadResult:
+def download(url: str, config: ImageDownloadConfig | None = None) -> DownloadResult:
     config = config or ImageDownloadConfig()
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -72,9 +62,9 @@ def download(
             timeout=settings.downloaders.image_download_timeout_s,
         )
     except subprocess.TimeoutExpired:
-        return ImageDownloadResult(url=url, success=False, error="Download timed out")
+        return DownloadResult(url=url, success=False, error="Download timed out")
     except FileNotFoundError:
-        return ImageDownloadResult(
+        return DownloadResult(
             url=url,
             success=False,
             error="gallery-dl not installed. Run: pip install gallery-dl",
@@ -94,18 +84,18 @@ def download(
     changed_files.sort(key=lambda p: p.stat().st_mtime)
 
     if not changed_files:
-        return ImageDownloadResult(
+        return DownloadResult(
             url=url,
             success=False,
             error=result.stderr.strip()
             or "gallery-dl finished but no files were written",
         )
 
-    return ImageDownloadResult(url=url, success=True, output_paths=changed_files)
+    return DownloadResult(url=url, success=True, output_paths=changed_files)
 
 
 def download_all(
     urls: list[str], config: ImageDownloadConfig | None = None
-) -> list[ImageDownloadResult]:
+) -> list[DownloadResult]:
     config = config or ImageDownloadConfig()
     return [download(url, config) for url in urls]

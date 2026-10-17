@@ -37,6 +37,8 @@ dependencies = [
 dev = [
     "httpx2>=2.9.1",
     "mypy>=2.3.0",
+    # Browser for tests/e2e (uv run playwright install chromium).
+    "playwright>=1.64.0",
     "pre-commit>=4.6.1",
     "ruff>=0.16.0",
 ]
@@ -140,3 +142,11 @@ ban-relative-imports = "all"
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: drives a live app in a real browser (tests/e2e); run with -m e2e",
+]
+# The e2e suite needs the whole stack up and a browser installed, so a plain
+# `uv run pytest` leaves it out. A later -m on the command line wins.
+addopts = "-m 'not e2e'"

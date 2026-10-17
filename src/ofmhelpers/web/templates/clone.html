@@ -7,11 +7,11 @@
 
 <div class="generate-layout">
 <div class="generate-form-col">
-<h2 class="col-title">Wan 3.0 — one image, many videos</h2>
+<h2 class="col-title">Wan 3.0 — one subject, many videos</h2>
 
-<form id="clone-form" action="/clone/run" data-max-videos="{{ max_videos }}" novalidate>
+<form id="clone-form" action="/clone/run" data-max-videos="{{ max_videos }}" data-max-images="{{ max_images }}" novalidate>
     {% include "_kie_api_key_field.html" %}
-    {{ fp.file_picker('image', 'image', 'Subject image (@Image1)', 'One image: the subject put into every video. Picking another replaces it.', max=1) }}
+    {{ fp.file_picker('image', 'image', 'Subject images (@Image1, @Image2…)', 'Up to ' ~ max_images ~ ' photos of the same person (different angles help likeness). Every run gets all of them.', max=max_images, multiple=true) }}
     {{ fp.file_picker('videos', 'video', 'Videos (@Video1)', 'Up to ' ~ max_videos ~ ' videos. Each one is its own Wan 3.0 run, as long as the video (2–30 s).', multiple=true) }}
     <div class="field">
         <label for="clone-prompt">Prompt</label>
@@ -37,8 +37,8 @@
     <div class="generation-status" role="status" aria-live="polite"></div>
     <p class="form-hint">
         Runs are grouped by submit, one colour per batch. ↻ Recreate on a
-        batch loads its image, every video and its settings; on a single
-        result, just that video. Reused files are not uploaded again.
+        batch loads its images, every video and its settings; on a single
+        result, the images and just that video. Reused files are not uploaded again.
     </p>
 </form>
 </div>
@@ -47,7 +47,8 @@
 <h2 class="col-title">Batches</h2>
 
 <div id="results-panel">
-    <div id="clone-batches">
+    <div id="clone-batches" data-live-endpoint="/clone/batches" data-live-key="batch"
+         data-live-interval="{{ live_poll_s }}" data-live-empty="clone-empty">
         {% for batch in batches %}{% include "_clone_batch.html" %}{% endfor %}
     </div>
     <p class="empty-state" id="clone-empty" {% if batches %}hidden{% endif %}>
@@ -61,4 +62,5 @@
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 <script src="{{ static_url('js/clone.js') }}"></script>
+<script src="{{ static_url('js/live-gallery.js') }}"></script>
 {% endblock %}

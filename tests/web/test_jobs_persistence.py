@@ -27,10 +27,10 @@ def test_create_job_persists_immediately():
     job_id = create_job("seedance", {"prompt": "a cat"}, actor="admin")
 
     job = get_job(job_id)
-    assert job["task"] == "seedance"
-    assert job["params"] == {"prompt": "a cat"}
-    assert job["status"] == "running"
-    assert job["actor"] == "admin"
+    assert job.task == "seedance"
+    assert job.params == {"prompt": "a cat"}
+    assert job.status == "running"
+    assert job.actor == "admin"
 
 
 def test_run_job_success_persists_result():
@@ -38,8 +38,8 @@ def test_run_job_success_persists_result():
     run_job(job_id, lambda: [{"name": "out.mp4", "path": "/tmp/out.mp4"}], {})
 
     job = get_job(job_id)
-    assert job["status"] == "done"
-    assert job["result"] == [{"name": "out.mp4", "path": "/tmp/out.mp4"}]
+    assert job.status == "done"
+    assert job.result == [{"name": "out.mp4", "path": "/tmp/out.mp4"}]
 
 
 def test_run_job_failure_persists_error():
@@ -52,8 +52,8 @@ def test_run_job_failure_persists_error():
     run_job(job_id, boom, {})
 
     job = get_job(job_id)
-    assert job["status"] == "failed"
-    assert job["error"] == "Wrong API Key"
+    assert job.status == "failed"
+    assert job.error == "Wrong API Key"
 
 
 def test_jobs_survive_a_simulated_restart():
@@ -78,18 +78,18 @@ def test_list_jobs_drops_a_job_whose_flat_result_file_was_deleted(tmp_path):
     job_id = create_job("seedance", {})
     run_job(job_id, lambda: [{"name": "gen.mp4", "path": str(out_file)}], {})
 
-    assert any(j["id"] == job_id for j in list_jobs())
+    assert any(j.id == job_id for j in list_jobs())
 
     out_file.unlink()  # e.g. deleted through the file manager
 
-    assert not any(j["id"] == job_id for j in list_jobs())
+    assert not any(j.id == job_id for j in list_jobs())
     assert get_job(job_id) is None
 
 
 def test_list_jobs_keeps_a_job_still_running_even_with_no_result_yet():
     job_id = create_job("seedance", {})  # still "running", result is None
 
-    assert any(j["id"] == job_id for j in list_jobs())
+    assert any(j.id == job_id for j in list_jobs())
 
 
 def test_list_jobs_partially_prunes_a_grouped_result(tmp_path):
@@ -114,15 +114,15 @@ def test_list_jobs_partially_prunes_a_grouped_result(tmp_path):
         {},
     )
 
-    job = next(j for j in list_jobs() if j["id"] == job_id)
-    urls = {r["url"] for r in job["result"]}
+    job = next(j for j in list_jobs() if j.id == job_id)
+    urls = {r["url"] for r in job.result}
     assert urls == {"a", "c"}  # "b" had nothing left to show, "c" was a failure
 
 
 def test_log_event_is_never_pruned_it_has_no_result():
     job_id = log_event("login", actor="admin")
 
-    assert any(j["id"] == job_id for j in list_jobs())
+    assert any(j.id == job_id for j in list_jobs())
 
 
 def test_list_jobs_ignores_a_non_list_result():
@@ -134,8 +134,8 @@ def test_list_jobs_ignores_a_non_list_result():
     job_id = create_job("todo_drive_upload", {"todo_id": "abc"})
     run_job(job_id, lambda: "1AbCdEfGhIjKlMnOp", {})
 
-    job = next(j for j in list_jobs() if j["id"] == job_id)
-    assert job["result"] == "1AbCdEfGhIjKlMnOp"
+    job = next(j for j in list_jobs() if j.id == job_id)
+    assert job.result == "1AbCdEfGhIjKlMnOp"
 
 
 def test_list_jobs_page_filters_slices_and_reports_the_total():
@@ -147,11 +147,11 @@ def test_list_jobs_page_filters_slices_and_reports_the_total():
     page, total = list_jobs_page({"fake_ai"}, 0, 2)
     assert total == 5
     # newest first
-    assert [j["id"] for j in page] == [ids[4], ids[3]]
+    assert [j.id for j in page] == [ids[4], ids[3]]
 
     page, total = list_jobs_page({"fake_ai"}, 4, 2)
     assert total == 5
-    assert [j["id"] for j in page] == [ids[0]]
+    assert [j.id for j in page] == [ids[0]]
 
     assert list_jobs_page({"fake_ai"}, 99, 2) == ([], 5)
 
@@ -182,3 +182,24 @@ def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch
     assert total == 4
     assert len(page) == 2
     assert len(checked) == 2
+
+
+def test_list_jobs_page_filters_and_pages_in_sql():
+    """A gallery page is one SQL page: only the asked tasks/actor, newest
+    first, with the total before slicing."""
+    from ofmhelpers.web.stores.jobs import create_job, list_jobs_page
+
+    va = [create_job("wan3", {"i": i}, actor="va") for i in range(3)]
+    create_job("wan3", {}, actor="admin")
+    create_job("uniqify", {}, actor="va")
+
+    page, total = list_jobs_page({"wan3", "kling3"}, 0, 2, actor="va")
+    rest, _ = list_jobs_page({"wan3"}, 2, 2, actor="va")
+    assert total == 3
+    # Pages don't overlap and cover exactly the VA's wan3 jobs, newest first
+    # (compared on created_at: create_job can tie on a coarse clock).
+    pages = page + rest
+    assert sorted(j.id for j in pages) == sorted(va)
+    stamps = [j.created_at for j in pages]
+    assert stamps == sorted(stamps, reverse=True)
+    assert list_jobs_page({"wan3"}, 0, 10, actor=None)[1] == 4

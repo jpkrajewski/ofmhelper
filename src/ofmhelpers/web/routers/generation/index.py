@@ -9,7 +9,6 @@ existing /run endpoint, and a non-blocking gallery of the last 20 generations
 across all of them that a click reloads back into the form.
 """
 
-import json
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -18,74 +17,30 @@ from ofmhelpers.aigenproviders.kaiai.types import Seedance2Model
 from ofmhelpers.config import settings
 from ofmhelpers.web.api_keys import get_kie_api_key
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.task_helpers import asset_card
+from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
+from ofmhelpers.web.schemas import TaskCard
 from ofmhelpers.web.stores.jobs import list_jobs_page
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
 GALLERY_LIMIT = settings.web.gallery_limit
 
-TASK_LABELS = {
-    "seedance": "Seedance 2.0",
-    "seedance25": "Seedance 2.5",
-    "kling3": "Kling 3.0",
-    "wan3": "Wan 3.0",
-    "minimax_h3": "MiniMax H3",
-    "nanobanana": "Nano Banana Pro",
-    "seedream45": "Seedream 4.5",
-    "seedream5": "Seedream 5.0",
-    "gpt_image": "GPT Image 2.5 Flare",
-    "fake_ai": "Fake AI Model",
-}
-FILES_PREFIX = {
-    "seedance": "/seedance/files",
-    "seedance25": "/seedance25/files",
-    "kling3": "/kling3/files",
-    "wan3": "/wan3/files",
-    "minimax_h3": "/minimax-h3/files",
-    "nanobanana": "/nanobanana/files",
-    "seedream45": "/seedream45/files",
-    "seedream5": "/seedream5/files",
-    "gpt_image": "/gpt-image/files",
-    "fake_ai": "/fake-ai/files",
-}
 
-
-def _gallery_card(job: dict) -> dict:
-    assets = []
-    if job["status"] == "done":
-        prefix = f"{FILES_PREFIX[job['task']]}/{job['id']}"
-        assets = [
-            asset_card(f["name"], idx, prefix, remote_url=f.get("remote_url"))
-            for idx, f in enumerate(job.get("result") or [])
-        ]
-    return {
-        "job_id": job["id"],
-        "task": job["task"],
-        "task_label": TASK_LABELS[job["task"]],
-        "status": job["status"],
-        "error": job.get("error"),
-        "params_json": json.dumps(job["params"]),
-        # "/fake-ai/files" -> "/fake-ai": the router prefix generation.js
-        # polls (/jobs/{id}/status) to resume still-running cards after a
-        # page load.
-        "poll_prefix": FILES_PREFIX[job["task"]].rsplit("/files", 1)[0],
-        "assets": assets,
-    }
-
-
-def _gallery_page(request: Request, offset: int) -> tuple[list[dict], int | None]:
+def _gallery_page(request: Request, offset: int) -> tuple[list[TaskCard], int | None]:
     """One page of gallery cards (only the session's own, for a VA) plus the
     offset of the next page, or None when this was the last one. The absence of
     a next offset is what ends the infinite scroll, so there is no separate
     "has_more" flag to keep in step."""
     page, total = list_jobs_page(
-        set(TASK_LABELS), offset, GALLERY_LIMIT, AuthMiddleware.visible_actor(request)
+        set(GENERATE_TOOLS),
+        offset,
+        GALLERY_LIMIT,
+        AuthMiddleware.visible_actor(request),
     )
     next_offset = offset + GALLERY_LIMIT
     return (
-        [_gallery_card(j) for j in page],
+        [task_card(j) for j in page],
         next_offset if next_offset < total else None,
     )
 
@@ -93,15 +48,14 @@ def _gallery_page(request: Request, offset: int) -> tuple[list[dict], int | None
 @router.get("")
 def form(request: Request):
     gallery, next_offset = _gallery_page(request, 0)
-    return get_templates().TemplateResponse(
+    return render(
         request,
         "generate_form.html",
-        {
-            "models": [m.value for m in Seedance2Model],
-            "kie_api_key": get_kie_api_key(request),
-            "gallery": gallery,
-            "next_offset": next_offset,
-        },
+        models=[m.value for m in Seedance2Model],
+        kie_api_key=get_kie_api_key(request),
+        gallery=gallery,
+        next_offset=next_offset,
+        live_poll_s=settings.web.gallery_live_poll_s,
     )
 
 
@@ -111,8 +65,19 @@ def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
     same partial the page's first page renders, so an appended card is
     indistinguishable from a server-rendered one."""
     gallery, next_offset = _gallery_page(request, offset)
-    return get_templates().TemplateResponse(
+    return render(
         request,
         "generate_gallery_fragment.html",
-        {"gallery": gallery, "next_offset": next_offset},
+        gallery=gallery,
+        next_offset=next_offset,
+    )
+
+
+@router.get("/gallery/latest")
+def gallery_latest(request: Request):
+    """The newest page of cards, no sentinel: what live-gallery.js polls to
+    prepend runs started in other sessions."""
+    gallery, _ = _gallery_page(request, 0)
+    return render(
+        request, "generate_gallery_fragment.html", gallery=gallery, next_offset=None
     )

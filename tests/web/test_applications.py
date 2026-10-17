@@ -13,6 +13,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
+from ofmhelpers.web.db.repositories import ApplicationRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.stores import applications as applications_store
 
@@ -52,7 +53,7 @@ def test_anonymous_submit_stores_every_field():
 
     stored = applications_store.list_applications()[0]
     for key, value in FORM.items():
-        assert stored[key] == value
+        assert getattr(stored, key) == value
 
 
 def test_thank_you_modal_only_shows_after_a_submission():
@@ -92,10 +93,10 @@ def test_optional_fields_may_be_blank():
     assert r.status_code == 303
 
     stored = applications_store.list_applications()[0]
-    assert stored["telegram_handle"] == ""
-    assert stored["instagram_handle"] == ""
-    assert stored["monthly_revenue"] == ""
-    assert stored["goals"] == ""
+    assert stored.telegram_handle == ""
+    assert stored.instagram_handle == ""
+    assert stored.monthly_revenue == ""
+    assert stored.goals == ""
 
 
 def test_phone_or_telegram_is_required_but_either_one_suffices():
@@ -111,8 +112,8 @@ def test_phone_or_telegram_is_required_but_either_one_suffices():
         == 303
     )
     stored = applications_store.list_applications()[0]
-    assert stored["telegram_handle"] == "@grace"
-    assert stored["phone"] == ""
+    assert stored.telegram_handle == "@grace"
+    assert stored.phone == ""
 
 
 def test_crm_page_lists_submissions_and_deletes(client):
@@ -125,7 +126,7 @@ def test_crm_page_lists_submissions_and_deletes(client):
     assert "https://t.me/ada" in html
     assert "Scale to six figures." in html
 
-    application_id = applications_store.list_applications()[0]["id"]
+    application_id = applications_store.list_applications()[0].id
     r = client.post(f"/applications/{application_id}/delete", follow_redirects=False)
     assert r.status_code == 303
     assert applications_store.list_applications() == []
@@ -140,3 +141,16 @@ def test_crm_page_is_admin_only(va_client):
     anon = TestClient(app).get("/applications", follow_redirects=False)
     assert anon.status_code == 303
     assert anon.headers["location"].startswith("/login")
+
+
+def test_crm_page_lists_a_lead_stored_before_the_contact_rule(client):
+    """Regression: the stored lead was validated with the form's rules, so one
+    accepted before "phone or Telegram" existed 500ed the whole CRM page."""
+    ApplicationRepository().add(
+        {"first_name": "Old", "last_name": "Lead", "email": "old@example.com"}
+    )
+
+    r = client.get("/applications")
+
+    assert r.status_code == 200
+    assert "old@example.com" in r.text

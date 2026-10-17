@@ -16,7 +16,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.schemas import DirEntry, FileEntry
+from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/file-manager",
@@ -65,27 +66,24 @@ def _human_size(num_bytes: int) -> str:
     return f"{size:.1f} TB"
 
 
-def _list_entries(root_name: str, rel_dir: str):
+def _list_entries(
+    root_name: str, rel_dir: str
+) -> tuple[list[DirEntry], list[FileEntry]]:
     """Returns (dirs, files) for a given relative directory under the chosen root."""
     root = _get_root(root_name)
     directory = _safe_path(root_name, rel_dir)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    dirs, files = [], []
+    dirs: list[DirEntry] = []
+    files: list[FileEntry] = []
     for entry in sorted(directory.iterdir()):
         rel = str(entry.relative_to(root)).replace("\\", "/")
         if entry.is_dir():
-            dirs.append({"name": entry.name, "rel_path": rel})
+            dirs.append(DirEntry(name=entry.name, rel_path=rel))
         else:
-            stat = entry.stat()
-            files.append(
-                {
-                    "name": entry.name,
-                    "rel_path": rel,
-                    "size": _human_size(stat.st_size),
-                }
-            )
+            size = _human_size(entry.stat().st_size)
+            files.append(FileEntry(name=entry.name, rel_path=rel, size=size))
     return dirs, files
 
 
@@ -99,17 +97,15 @@ def browse(request: Request, root: str = DEFAULT_ROOT, path: str = ""):
         p = Path(path)
         parent = str(p.parent).replace("\\", "/") if str(p.parent) != "." else ""
 
-    return get_templates().TemplateResponse(
+    return render(
         request,
         "file_manager.html",
-        {
-            "roots": list(ROOTS.keys()),
-            "current_root": root,
-            "current_path": path,
-            "parent": parent,
-            "dirs": dirs,
-            "files": files,
-        },
+        roots=list(ROOTS.keys()),
+        current_root=root,
+        current_path=path,
+        parent=parent,
+        dirs=dirs,
+        files=files,
     )
 
 

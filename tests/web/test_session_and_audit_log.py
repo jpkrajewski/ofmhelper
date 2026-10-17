@@ -40,19 +40,19 @@ def test_va_login_is_recorded_with_va_actor(client_factory):
     client = client_factory()
     client.post("/login", data={"password": "test-va", "next": "/"})
 
-    login_events = [j for j in list_jobs() if j["task"] == "login"]
-    latest = max(login_events, key=lambda j: j["created_at"])
-    assert latest["actor"] == "va"
+    login_events = [j for j in list_jobs() if j.task == "login"]
+    latest = max(login_events, key=lambda j: j.created_at)
+    assert latest.actor == "va"
 
 
 def test_failed_login_does_not_record_a_login_event(client_factory):
     client = client_factory()
-    before = len([j for j in list_jobs() if j["task"] == "login"])
+    before = len([j for j in list_jobs() if j.task == "login"])
 
     r = client.post("/login", data={"password": "totally-wrong", "next": "/"})
     assert r.status_code == 401
 
-    after = len([j for j in list_jobs() if j["task"] == "login"])
+    after = len([j for j in list_jobs() if j.task == "login"])
     assert after == before, "a failed login attempt must not be logged as a login"
 
 
@@ -88,10 +88,10 @@ def test_logout_is_recorded_with_the_actor_that_was_logged_in(client_factory):
     r = client.post("/logout", follow_redirects=False)
     assert r.status_code == 303
 
-    logout_events = [j for j in list_jobs() if j["task"] == "logout"]
+    logout_events = [j for j in list_jobs() if j.task == "logout"]
     assert logout_events, "no logout event was recorded"
-    latest = max(logout_events, key=lambda j: j["created_at"])
-    assert latest["actor"] == "va", (
+    latest = max(logout_events, key=lambda j: j.created_at)
+    assert latest.actor == "va", (
         "logout must capture the actor before the session is cleared"
     )
 
@@ -104,13 +104,13 @@ def test_logout_while_unauthenticated_is_blocked_before_logging_anything(
     the logout handler (and its log_event call) never even runs. Confirms
     that path doesn't spuriously record a logout with no one attached to it."""
     client = client_factory()
-    before = len([j for j in list_jobs() if j["task"] == "logout"])
+    before = len([j for j in list_jobs() if j.task == "logout"])
 
     r = client.post("/logout", follow_redirects=False)
 
     assert r.status_code == 303
     assert r.headers["location"].startswith("/login")
-    after = len([j for j in list_jobs() if j["task"] == "logout"])
+    after = len([j for j in list_jobs() if j.task == "logout"])
     assert after == before, "an unauthenticated /logout must not reach log_event at all"
 
 

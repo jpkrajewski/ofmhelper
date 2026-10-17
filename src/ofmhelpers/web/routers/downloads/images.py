@@ -2,38 +2,26 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import FileResponse
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.downloaders.images import download_all
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.downloaders.models import DownloadResult
 from ofmhelpers.web.routers.task_helpers import (
+    add_job_routes,
     assets_root_for,
-    flatten_grouped_results,
-    grouped_job_status_payload,
-    media_response,
     register_grouped_results,
 )
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.schemas import JobQueued
+from ofmhelpers.web.stores.jobs import create_job, run_job
 
 router = APIRouter(prefix="/download-images", tags=["download-images"])
 
 
-def _run_downloads(urls: list[str], assets_root: str) -> list[dict]:
-    """mode="json" turns output_paths' Path objects into strings, which is
-    what makes the result safe for json.dumps (jobs.py persists every job)."""
+def _run_downloads(urls: list[str], assets_root: str) -> list[DownloadResult]:
+    """Runs in the background; run_job stores the results as JSON."""
     results = download_all(urls)
-    dicts = [r.model_dump(mode="json") for r in results]
-    register_grouped_results(dicts, Path(assets_root))
-    return dicts
-
-
-def _flatten_paths(job: dict) -> list[Path]:
-    paths: list[Path] = []
-    for r in job.get("result") or []:
-        paths.extend(Path(p) for p in r.get("output_paths", []))
-    return paths
+    register_grouped_results(results, Path(assets_root))
+    return results
 
 
 @router.post("/run")
@@ -52,61 +40,13 @@ def run(request: Request, urls: Annotated[str, Form()]):
         {"urls": url_list, "assets_root": str(assets_root_for(request))},
     )
 
-    return {"job_id": job_id}
+    return JobQueued(job_id=job_id)
 
 
-@router.get("/jobs/{job_id}")
-def job_status(request: Request, job_id: str):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    assets: list[dict] = []
-    failed_sources: list[dict] = []
-    if job.get("status") == "done":
-        assets, failed_sources = flatten_grouped_results(job, "/download-images/files")
-
-    return get_templates().TemplateResponse(
-        request,
-        "job_status.html",
-        {
-            "job": job,
-            "assets": assets,
-            "failed_sources": failed_sources,
-            "title": "Download images",
-            "pending_message": f"Downloading {len(job['params']['urls'])} url(s)…",
-            "back_url": "/download-assets",
-            "back_label": "download more",
-        },
-    )
-
-
-@router.get("/jobs/{job_id}/status")
-def job_status_json(request: Request, job_id: str):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    return grouped_job_status_payload(job, "/download-images/files")
-
-
-@router.get("/files/{job_id}/{index}")
-def download_file(request: Request, job_id: str, index: int, dl: int = 0):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    if job is None or job.get("status") != "done":
-        raise HTTPException(status_code=404, detail="Job not found or not finished")
-
-    paths = _flatten_paths(job)
-    if index < 0 or index >= len(paths):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    path = paths[index]
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="File no longer exists on server")
-
-    if dl:
-        return FileResponse(
-            path, filename=path.name, media_type="application/octet-stream"
-        )
-
-    # Filename comes off a remote URL, so the same rule as an upload applies:
-    # anything not image/video/audio comes back as a download, never as a
-    # page in our origin. See media_response.
-    return media_response(path)
+add_job_routes(
+    router,
+    "Download images",
+    lambda job: f"Downloading {len(job.params['urls'])} url(s)…",
+    back_url="/download-assets",
+    back_label="download more",
+)

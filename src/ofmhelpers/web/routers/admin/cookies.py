@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/cookies",
@@ -25,9 +25,7 @@ router = APIRouter(
 
 @router.get("")
 def form(request: Request, uploaded: bool = False):
-    return get_templates().TemplateResponse(
-        request, "cookies_form.html", {"uploaded": uploaded}
-    )
+    return render(request, "cookies_form.html", uploaded=uploaded)
 
 
 @router.post("")

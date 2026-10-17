@@ -7,8 +7,8 @@
  * cards like any other. XHR rather than fetch only for upload progress:
  * several videos can take a while to send.
  *
- * Recreate: on a batch header it restores the image, every video and the
- * settings; on a single result, the image and just that video. Files come
+ * Recreate: on a batch header it restores the images, every video and the
+ * settings; on a single result, the images and just that video. Files come
  * back as "existing" picker entries, so nothing is uploaded again.
  */
 (function () {
@@ -45,9 +45,12 @@
     // What the server would reject anyway, caught before any upload starts.
     function validate(form, formData) {
         const maxVideos = Number(form.dataset.maxVideos);
+        const maxImages = Number(form.dataset.maxImages);
         const videos = manifestCount(formData, "videos");
+        const images = manifestCount(formData, "image");
         if (!String(formData.get("api_key") || "").trim()) return "Enter the kie.ai API key.";
-        if (manifestCount(formData, "image") !== 1) return "Pick one subject image.";
+        if (images < 1) return "Pick at least one subject image.";
+        if (images > maxImages) return `Pick at most ${maxImages} subject images.`;
         if (videos < 1) return "Pick at least one video.";
         if (videos > maxVideos) {
             return `Pick at most ${maxVideos} videos (${videos} picked) — each one is a paid run.`;
@@ -148,10 +151,13 @@
                 const holder = document.createElement("div");
                 holder.innerHTML = data.html;
                 const batch = holder.firstElementChild;
+                // live-gallery.js may have drawn this batch already (maybe
+                // partial) while the request was still in flight.
+                batches.querySelector(`[data-batch="${batch.dataset.batch}"]`)?.remove();
                 pending.replaceWith(batch);
                 formatTimes(batch);
                 window.Generation.resumePendingCards();
-                // The image usually stays for the next batch; the videos don't.
+                // The images usually stay for the next batch; the videos don't.
                 window.FilePicker.clearPicker(
                     form.querySelector('.file-picker[data-field="videos"]')
                 );
@@ -200,6 +206,8 @@
     document.addEventListener("DOMContentLoaded", () => {
         const form = document.getElementById("clone-form");
         formatTimes(document);
+        const batches = document.getElementById("clone-batches");
+        batches.addEventListener("live-gallery:update", () => formatTimes(batches));
         initSubmit(form);
         initRecreate(form);
     });

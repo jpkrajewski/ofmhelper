@@ -27,25 +27,19 @@ from fastapi import (
     APIRouter,
     Depends,
     Form,
-    HTTPException,
     Request,
 )
 from PIL import Image, ImageDraw
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
-    asset_card,
+    add_job_routes,
     assets_root_for,
-    job_inputs,
-    job_status_payload,
     resolve_reference_uploads,
-    serve_job_file,
 )
-from ofmhelpers.web.schemas import ReferenceUploads
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.schemas import JobQueued, ReferenceUploads, ResultFile
+from ofmhelpers.web.stores.jobs import create_job, run_job
 
 router = APIRouter(prefix="/fake-ai", tags=["fake-ai"])
 
@@ -69,7 +63,7 @@ def _build_frame(prompt: str) -> Image.Image:
 
 def _run_fake_ai(
     prompt: str, outcome: str, asset_type: str, delay: int, error_message: str
-) -> list[dict]:
+) -> list[ResultFile]:
     if delay > 0:
         time.sleep(delay)
 
@@ -119,11 +113,11 @@ def _run_fake_ai(
         out_path = OUT_DIR / f"{uuid.uuid4().hex[:8]}.png"
         frame.save(out_path)
 
-    return [{"name": out_path.name, "path": str(out_path)}]
+    return [ResultFile(name=out_path.name, path=str(out_path))]
 
 
 @router.post("/run")
-async def run(
+def run(
     request: Request,
     prompt: Annotated[str, Form()],
     refs: Annotated[ReferenceUploads, Depends(ReferenceUploads.from_form)],
@@ -156,44 +150,14 @@ async def run(
     )
     enqueue(run_job, job_id, _run_fake_ai, params)
 
-    return {"job_id": job_id}
+    return JobQueued(job_id=job_id)
 
 
-@router.get("/jobs/{job_id}")
-def job_status(request: Request, job_id: str):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    assets = []
-    if job.get("status") == "done":
-        assets = [
-            asset_card(f["name"], idx, f"/fake-ai/files/{job_id}")
-            for idx, f in enumerate(job["result"])
-        ]
-
-    return get_templates().TemplateResponse(
-        request,
-        "job_status.html",
-        {
-            "job": job,
-            "assets": assets,
-            "job_inputs": job_inputs(job),
-            "title": "Fake AI Model",
-            "pending_message": "Simulating a generation…",
-            "back_url": "/generate",
-            "back_label": "generate another",
-        },
-    )
-
-
-@router.get("/jobs/{job_id}/status")
-def job_status_json(request: Request, job_id: str):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    return job_status_payload(job, "/fake-ai/files")
-
-
-@router.get("/files/{job_id}/{index}")
-def download_file(request: Request, job_id: str, index: int):
-    job = get_job(job_id, AuthMiddleware.visible_actor(request))
-    return serve_job_file(job, index)
+add_job_routes(
+    router,
+    "Fake AI Model",
+    lambda _job: "Simulating a generation…",
+    back_url="/generate",
+    back_label="generate another",
+    show_inputs=True,
+)

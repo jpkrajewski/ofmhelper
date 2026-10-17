@@ -39,13 +39,13 @@ def test_enqueued_job_runs_in_a_worker_and_finishes_in_postgres():
     get_queue().enqueue(run_job, job_id, worker_tasks.make_result, {"name": "out.mp4"})
 
     # Not run yet -- still queued, so Postgres still shows it running.
-    assert get_job(job_id)["status"] == "running"
+    assert get_job(job_id).status == "running"
 
     _drain_queue()
 
     job = get_job(job_id)
-    assert job["status"] == "done"
-    assert job["result"] == [{"name": "out.mp4", "path": None}]
+    assert job.status == "done"
+    assert job.result == [{"name": "out.mp4", "path": None}]
 
 
 def test_worker_marks_a_raising_job_failed_never_stuck_running():
@@ -55,5 +55,5 @@ def test_worker_marks_a_raising_job_failed_never_stuck_running():
     _drain_queue()
 
     job = get_job(job_id)
-    assert job["status"] == "failed"
-    assert job["error"] == "Wrong API Key"
+    assert job.status == "failed"
+    assert job.error == "Wrong API Key"

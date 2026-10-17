@@ -49,8 +49,8 @@ def test_success_image_writes_into_the_shared_kieai_out_dir(
     )
     job = get_job(r.json()["job_id"])
 
-    assert job["status"] == "done"
-    out_path = Path(job["result"][0]["path"])
+    assert job.status == "done"
+    out_path = Path(job.result[0]["path"])
     assert out_path.parent == tmp_path
     assert out_path.is_file()
 
@@ -67,8 +67,8 @@ def test_error_outcome_fails_with_the_exact_message_typed_in(client):
     )
     job = get_job(r.json()["job_id"])
 
-    assert job["status"] == "failed"
-    assert job["error"] == "boom, on purpose"  # not a raw traceback
+    assert job.status == "failed"
+    assert job.error == "boom, on purpose"  # not a raw traceback
 
 
 def test_video_outcome_shells_out_to_ffmpeg(client, tmp_path, monkeypatch):
@@ -89,8 +89,8 @@ def test_video_outcome_shells_out_to_ffmpeg(client, tmp_path, monkeypatch):
         )
         job = get_job(r.json()["job_id"])
 
-    assert job["status"] == "done"
-    assert job["result"][0]["name"].endswith(".mp4")
+    assert job.status == "done"
+    assert job.result[0]["name"].endswith(".mp4")
     assert mock_run.called
     assert mock_run.call_args[0][0][0] == "ffmpeg"
     # the intermediate PNG frame ffmpeg reads from is cleaned up afterward
@@ -117,8 +117,8 @@ def test_video_outcome_without_ffmpeg_installed_fails_cleanly(
         )
         job = get_job(r.json()["job_id"])
 
-    assert job["status"] == "failed"
-    assert "ffmpeg" in job["error"]
+    assert job.status == "failed"
+    assert "ffmpeg" in job.error
 
 
 def test_reference_upload_dedupes_into_the_shared_assets_store(
@@ -170,7 +170,7 @@ def test_uploaded_ref_paths_are_stored_in_job_params_for_click_to_reuse(
         "reference_images_manifest": '[{"kind": "new"}]',
     }
     r = client.post("/fake-ai/run", data=data, files=files)
-    params = get_job(r.json()["job_id"])["params"]
+    params = get_job(r.json()["job_id"]).params
 
     assert len(params["reference_images"]) == 1
     stored_path = Path(params["reference_images"][0])
@@ -198,7 +198,7 @@ def test_restored_existing_ref_round_trips_without_reupload(
         "reference_images_manifest": '[{"kind": "new"}]',
     }
     r = client.post("/fake-ai/run", data=data, files=files)
-    original_path = get_job(r.json()["job_id"])["params"]["reference_images"][0]
+    original_path = get_job(r.json()["job_id"]).params["reference_images"][0]
 
     # Resubmit referencing the stored path -- no file attached this time.
     data2 = {
@@ -210,7 +210,7 @@ def test_restored_existing_ref_round_trips_without_reupload(
         ),
     }
     r2 = client.post("/fake-ai/run", data=data2)
-    params2 = get_job(r2.json()["job_id"])["params"]
+    params2 = get_job(r2.json()["job_id"]).params
 
     assert params2["reference_images"] == [original_path]
     assert len(list(assets_dir.iterdir())) == 1, "reuse must not create a second copy"

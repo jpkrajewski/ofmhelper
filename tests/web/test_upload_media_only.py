@@ -22,11 +22,14 @@ from fastapi.testclient import TestClient
 
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import (
-    IMAGE_VIDEO_KINDS,
+    IMAGE_KINDS,
     MEDIA_KINDS,
+    VIDEO_KINDS,
     media_response,
     require_upload_kind,
 )
+
+IMAGE_AND_VIDEO = IMAGE_KINDS | VIDEO_KINDS
 
 
 @pytest.fixture
@@ -38,7 +41,7 @@ def va_client():
 
 @pytest.mark.parametrize("name", ["clip.mp4", "shot.PNG", "photo.jpeg", "reel.mov"])
 def test_media_names_pass(name):
-    assert require_upload_kind(name, IMAGE_VIDEO_KINDS) == name
+    assert require_upload_kind(name, IMAGE_AND_VIDEO) == name
 
 
 @pytest.mark.parametrize(
@@ -47,7 +50,7 @@ def test_media_names_pass(name):
 )
 def test_non_image_video_names_are_rejected(name):
     with pytest.raises(HTTPException) as exc:
-        require_upload_kind(name, IMAGE_VIDEO_KINDS)
+        require_upload_kind(name, IMAGE_AND_VIDEO)
     assert exc.value.status_code == 400
 
 

@@ -85,7 +85,7 @@
             file.textContent = `📄 ${item.name}`;
             const dl = document.createElement("a");
             dl.href = item.download_url;
-            dl.download = item.name;
+            dl.download = item.download_name || item.name;
             dl.className = "download-btn";
             dl.textContent = "⬇ Download";
             div.append(file, buildFilenameLabel(item.name), dl, buildSourceLabel(label));
@@ -115,7 +115,7 @@
 
         const dl = document.createElement("a");
         dl.href = item.download_url;
-        dl.download = item.name;
+        dl.download = item.download_name || item.name;
         dl.dataset.localFallbackUrl = item.local_fallback_url || "";
         dl.className = "download-btn";
         dl.textContent = "⬇ Download";
@@ -315,6 +315,14 @@
                 if (!r.ok) {
                     throw new Error(data.detail || "Request failed.");
                 }
+                // live-gallery.js may have drawn this job already, from
+                // the server, while the request was still in flight.
+                if (gallery.querySelector(`[data-job-id="${data.job_id}"]`)) {
+                    card.remove();
+                    return;
+                }
+                // Tagged so live-gallery.js knows this job is on the page.
+                card.dataset.jobId = data.job_id;
                 pollJob(card, prefix, data.job_id, label, resultKind);
             })
             .catch((err) => {

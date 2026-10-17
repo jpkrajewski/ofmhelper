@@ -13,6 +13,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from ofmhelpers.web.db.repositories import ApplicationRepository
+from ofmhelpers.web.schemas import Application, ApplicationForm
 
 
 @lru_cache(maxsize=1)
@@ -22,15 +23,13 @@ def _repository() -> ApplicationRepository:
     return ApplicationRepository()
 
 
-def list_applications() -> list[dict]:
+def list_applications() -> list[Application]:
     """Newest first."""
-    return _repository().list_all()
+    return [Application.model_validate(row) for row in _repository().list_all()]
 
 
-def add_application(fields: dict) -> dict:
-    """`fields` is an already-validated submission -- see
-    routers/apply.ApplicationForm."""
-    return _repository().add(fields)
+def add_application(form: ApplicationForm) -> Application:
+    return Application.model_validate(_repository().add(form.model_dump()))
 
 
 def delete_application(application_id: str) -> bool:

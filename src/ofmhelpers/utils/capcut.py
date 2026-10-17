@@ -28,11 +28,11 @@ import datetime
 import json
 import mmap
 import random
-import shutil
-import subprocess
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from ofmhelpers.utils.ffmpeg import binary, run
 
 Range = tuple[float, float]
 
@@ -231,30 +231,10 @@ _COMPRESSOR_NAME_OFFSET = 42
 _COMPRESSOR_NAME_LEN = 32
 
 
-def _binary(name: str) -> str:
-    path = shutil.which(name)
-    if path is None:
-        msg = f"{name} not available"
-        raise FileNotFoundError(msg)
-    return path
-
-
-def _run(args: list[str], timeout_s: int) -> str:
-    """Run ffmpeg/ffprobe; a failure raises with the tool's own last lines."""
-    try:
-        return subprocess.run(
-            args, check=True, capture_output=True, text=True, timeout=timeout_s
-        ).stdout
-    except subprocess.CalledProcessError as exc:
-        tail = " / ".join((exc.stderr or "").strip().splitlines()[-3:])
-        msg = f"{Path(args[0]).name} failed: {tail or exc.returncode}"
-        raise RuntimeError(msg) from exc
-
-
 def probe(src: Path, timeout_s: int) -> SourceInfo:
-    out = _run(
+    out = run(
         [
-            _binary("ffprobe"),
+            binary("ffprobe"),
             "-v",
             "error",
             "-show_entries",
@@ -360,9 +340,9 @@ def apply_preset(
         msg = f"{src.name} is {info.duration:.2f}s, shorter than the trims"
         raise ValueError(msg)
     jitter = Jitter.sample(random.Random(seed))  # noqa: S311 - not cryptography
-    _run(
+    run(
         [
-            _binary("ffmpeg"),
+            binary("ffmpeg"),
             "-y",
             "-loglevel",
             "error",

@@ -13,7 +13,7 @@ from ofmhelpers.web.middleware.ratelimit import (
     record_failed_login,
 )
 from ofmhelpers.web.stores.jobs import log_event
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)
 
@@ -24,9 +24,7 @@ router = APIRouter(tags=["auth"])
 def login_form(request: Request, next_url: Annotated[str, Query(alias="next")] = "/"):
     if request.session.get("authenticated"):
         return RedirectResponse(url=next_url, status_code=303)
-    return get_templates().TemplateResponse(
-        request, "login.html", {"next": next_url, "error": None}
-    )
+    return render(request, "login.html", next=next_url, error=None)
 
 
 @router.post("/login")
@@ -37,13 +35,11 @@ def login_submit(
 ):
     if login_blocked(request):
         logger.warning("login rate limit hit from %s", client_id(request))
-        return get_templates().TemplateResponse(
+        return render(
             request,
             "login.html",
-            {
-                "next": next_url,
-                "error": "Too many failed attempts. Try again later.",
-            },
+            next=next_url,
+            error="Too many failed attempts. Try again later.",
             status_code=429,
         )
 
@@ -53,10 +49,11 @@ def login_submit(
         # guessing, and the only brake on how fast they can.
         record_failed_login(request)
         logger.warning("failed login attempt from %s", client_id(request))
-        return get_templates().TemplateResponse(
+        return render(
             request,
             "login.html",
-            {"next": next_url, "error": "Wrong password"},
+            next=next_url,
+            error="Wrong password",
             status_code=401,
         )
 
