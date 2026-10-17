@@ -1450,7 +1450,57 @@ summary:hover { color: var(--accent-soft); }
    the watch list in the form column, and one flat feed of every profile's
    reels -- each a card picked by clicking anywhere on it (aria-pressed, set
    by static/js/reels.js) that plays on hover. */
-.reels-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+/* Feed filters: one panel, a label column and a chip column, so the three
+   rows line up and share one rhythm. On a phone the label sits above its
+   chips. */
+.reels-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--s-2) var(--s-4);
+    align-items: start;
+    margin: var(--s-3) 0 var(--s-4);
+    padding: var(--s-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+.reels-filter-label {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+@media (min-width: 720px) {
+    .reels-filters { grid-template-columns: max-content 1fr; }
+    /* One chip tall, so a label sits level with its first row of chips. */
+    .reels-filter-label { line-height: 32px; }
+}
+
+/* Selection bar: pinned to the bottom of the reels column while you scroll
+   and pick, so Download / Clone always sit next to what was picked. */
+.reels-selection {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    margin-top: var(--s-4);
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+.reels-selection-count {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    font-weight: 600;
+}
+.reels-selection button { flex: none; min-width: 7rem; }
 /* Group picker: the dropdown and its "+ New group" / "Create" button on one
    line; the new-name row sits right under it. */
 .reels-group-pick { display: flex; gap: var(--s-2); align-items: stretch; }
@@ -1460,12 +1510,19 @@ summary:hover { color: var(--accent-soft); }
 .reels-group-pick + .reels-group-pick { margin-top: var(--s-2); }
 .reels-group-pick[hidden] { display: none; }
 
-/* The watch list: its own panel, a search box on top, rows that scroll. */
+/* The watch list: its own panel, a search box on top, rows that scroll.
+   Every row is the same card with the same three lines (name line, stats,
+   group dropdown), so nothing wraps differently from row to row. Every
+   card carries a 2px border; a leader only recolours it, so outlined rows
+   never grow, shift or overlap their neighbours. */
 .reels-watch-title { margin-top: var(--s-6); }
 .reels-watch-search { margin-bottom: var(--s-3); }
 .reels-watch-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
     margin: 0;
-    padding: var(--s-1);
+    padding: var(--s-2);
     list-style: none;
     max-height: 60vh;
     overflow-y: auto;
@@ -1477,148 +1534,82 @@ summary:hover { color: var(--accent-soft); }
 .reels-watch-list:empty { display: none; }
 
 .reels-watch-item {
-    box-sizing: border-box;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    display: grid;
     gap: var(--s-2);
-    width: 100%;
     min-width: 0;
-    padding: var(--s-3, 12px);
+    padding: var(--s-3);
+    border: 2px solid var(--border-soft);
     border-radius: var(--radius-sm);
-}
-
-.reels-watch-item + .reels-watch-item {
-    border-top: 1px solid var(--border-soft);
-}
-
-.reels-watch-item:hover {
     background: var(--surface-2);
 }
+.reels-watch-item[hidden] { display: none; }
 
-.reels-watch-item[hidden] {
-    display: none;
-}
-
-/* Keep the profile link visible and accessible. */
-.reels-watch-item > a {
-    display: block;
-    position: relative;
-    flex: 1 1 100%;
-    order: -2;
-    min-width: 0;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    white-space: normal;
-    text-overflow: clip;
-    overflow: visible;
-    font-weight: 600;
-    line-height: 1.5;
-    padding: 2px 0;
-}
-
-/* Metadata wraps instead of pushing content outside the row. */
-.reels-watch-meta {
+.reels-row-head {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 4px 8px;
-    flex: 1 1 180px;
+    gap: var(--s-2);
     min-width: 0;
-    color: var(--text-muted);
-    white-space: normal;
-    overflow-wrap: anywhere;
-    font-size: 0.75rem;
-    line-height: 1.6;
 }
-
-.reels-watch-views {
-    color: var(--text);
-    font-weight: 700;
-}
-
-.reels-watch-error {
-    flex: 0 0 auto;
-    color: var(--fail);
-    cursor: help;
-}
-
-/* Group selector stays within the available width. */
-.reels-row-group {
-    flex: 0 1 160px;
+.reels-row-name {
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
 }
-
-/* Remove button never gets pushed out of bounds. */
-.reels-unwatch {
-    flex: 0 0 auto;
-    margin-inline-start: auto;
-}
-
-/* Legendary gold effect preserved. */
-.reels-watch-item[data-tier="legendary"] {
-    border: 2px solid transparent;
-    background:
-        linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
-        linear-gradient(
-            110deg,
-            #8a6100,
-            #ffd84d,
-            #fff4c2,
-            #ffd84d,
-            #8a6100,
-            #ffd84d,
-            #fff4c2
-        ) border-box;
-    background-size: 100% 100%, 300% 100%;
-    animation:
-        reel-gold-shine 3s linear infinite,
-        reel-gold-glow 2s ease-in-out infinite alternate;
-}
-
-.reels-watch-item[data-tier="legendary"] + .reels-watch-item,
-.reels-watch-item + .reels-watch-item[data-tier="legendary"] {
-    border-top-color: transparent;
-}
-
-.reels-watch-item[data-tier="legendary"] .reels-watch-views {
-    color: #ffd84d;
-}
-
-@media (max-width: 480px) {
-    .reels-watch-item {
-        gap: 8px;
-        padding: 12px;
-    }
-
-    .reels-row-group {
-        flex: 1 1 100%;
-        width: 100%;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .reels-watch-item[data-tier="legendary"] {
-        animation: none;
-    }
-}
-
-/* Row controls: small, quiet, the arrow kept clear of the text. */
-/* Row controls: full-size click targets (36px tall), arrow clear of text. */
-.reels-row-group {
+.reels-leader {
     flex: none;
-    width: 9rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+    background: rgba(249, 115, 22, 0.18);
+    color: #f97316;
+}
+.reels-watch-error { flex: none; color: var(--fail); cursor: help; }
+.reels-watch-item .reels-unwatch {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+}
+
+.reels-watch-meta {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+.reels-watch-views { color: var(--text); font-weight: 700; }
+
+.reels-row-group {
+    width: 100%;
     min-height: 36px;
     padding: 6px 28px 6px var(--s-3);
     font-size: var(--step--1);
     background-position: calc(100% - 16px) center, calc(100% - 10px) center;
 }
-.reels-watch-item .reels-unwatch {
-    flex: none;
-    min-width: 36px;
-    min-height: 36px;
-    padding: 0;
+
+/* Leaders: most views gold, most feed reels orange. */
+.reels-watch-item[data-tier="legendary"] {
+    border-color: #ffd84d;
+    animation: reel-gold-glow 2s ease-in-out infinite alternate;
+}
+.reels-watch-item[data-tier="legendary"] .reels-watch-views { color: #ffd84d; }
+.reels-watch-item[data-tier="legendary"] .reels-leader {
+    background: rgba(255, 200, 40, 0.18);
+    color: #ffd84d;
+}
+.reels-watch-item[data-tier="epic"] {
+    border-color: #f97316;
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reels-watch-item[data-tier="legendary"] { animation: none; }
 }
 /* Compact: three reels a row at every width. */
 .reels-feed { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-2); }
@@ -1728,20 +1719,18 @@ summary:hover { color: var(--accent-soft); }
 .reels-feed .gallery-sentinel { grid-column: 1 / -1; }
 /* Feed filters: a row of group chips, the rank chips under it. Chips are
    full-size click targets; a rank chip wears its tier colour. */
-.reels-filter { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-3); }
-.reels-ranks { margin-bottom: var(--s-5); }
+.reels-filter { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .reels-filter a {
     display: inline-flex;
     align-items: center;
-    min-height: 36px;
-    padding: 0 var(--s-4);
+    min-height: 32px;
+    padding: 0 var(--s-3);
     border: 1px solid var(--border);
     border-radius: 999px;
     color: var(--text-muted);
     font-size: var(--step--1);
     font-weight: 600;
     text-decoration: none;
-    text-transform: capitalize;
 }
 .reels-filter a:hover { border-color: var(--border-strong); color: var(--text); }
 .reels-filter a[aria-current="page"] { border-color: var(--accent); color: var(--text); background: var(--accent-wash); }

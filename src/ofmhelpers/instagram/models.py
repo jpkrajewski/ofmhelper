@@ -30,6 +30,9 @@ _DASH_DURATION = re.compile(
 _ID_EPOCH_S = 1314220021.721
 _ID_TIME_SHIFT = 23
 
+# A reel's shortcode is its media id written in base 64 over this alphabet.
+_SHORTCODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
 # Where a reel's mp4 may be fetched from. The page hands these URLs back to
 # "Clone selected", so anything else is refused rather than fetched.
 CDN_HOST_SUFFIXES = (".cdninstagram.com", ".fbcdn.net")
@@ -324,6 +327,14 @@ class Reel(BaseModel):
     followers: int
     thumbnail_url: str
     video_url: str | None
+
+    @property
+    def pk(self) -> str:
+        """Its media id, decoded from the shortcode."""
+        pk = 0
+        for char in self.code:
+            pk = pk * 64 + _SHORTCODE_ALPHABET.index(char)
+        return str(pk)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

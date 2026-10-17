@@ -5,7 +5,9 @@ from ofmhelpers.instagram.client import (
     InstagramClient,
     InstagramError,
     InstagramRateLimitedError,
+    InstagramUnavailableError,
     ProfileNotFoundError,
+    ProfilePrivateError,
 )
 from ofmhelpers.instagram.models import (
     VIEW_TIERS,
@@ -21,8 +23,10 @@ __all__ = [
     "InstagramClient",
     "InstagramError",
     "InstagramRateLimitedError",
+    "InstagramUnavailableError",
     "ProfileHandle",
     "ProfileNotFoundError",
+    "ProfilePrivateError",
     "ProfileReels",
     "Reel",
     "ReelDownload",

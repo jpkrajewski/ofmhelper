@@ -1,3 +1,3 @@
 {# The /reels watch list rows: the page's own and what GET /reels/watchlist
    answers while static/js/reels.js polls first scans. #}
-{% for watched in profiles %}{% include "_reels_watch_item.html" %}{% endfor %}
+{% for watched in board.rows %}{% include "_reels_watch_item.html" %}{% endfor %}

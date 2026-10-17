@@ -101,9 +101,22 @@ migration changed everything under `stores/` without touching a router.
   whose scan is older than `rescan_interval_s` (12 h) and queues **one**
   worker job scanning them sequentially (parallel logged-out calls just get
   429s). Claims expire after `rescan_claim_ttl_s`, so a job killed by a
-  deploy is retried. A rate limit (`InstagramRateLimitedError`) ends the
-  batch without recording anything for the rest, so they stay due and the
-  next sweep after the claim expires retries them. Also what
+  deploy is retried. Each profile is tried on up to 1 + `proxy_retries`
+  proxies (jittered pause between tries; each call also retries drops,
+  timeouts and 5xx itself, `http_retries` with backoff + jitter). Rate
+  limit, 5xx, any network error and "not found" all move it to the next
+  proxy; a proxy failing at the transport level (ProxyError, TLS, connect
+  timeout) leaves the job's `_ProxyPool`, direct once none is left.
+  **A profile with a good scan is never removed by a later one** -- "not
+  found" is also what a proxy IP Instagram has flagged gets for a real
+  account (that auto-drop deleted ~36 real profiles on 2026-10-17); the
+  failure is recorded on the row and its reels stay. A **just-added**
+  profile (no result yet) is dropped instead when its first scan finds it
+  private, or not found on every try *and* the cookies.txt login's
+  profile page (`InstagramClient.exists_logged_in`, `pageID`
+  httpErrorPage) agrees -- verified 34/34 on 2026-10-17; reels.js reports
+  the ones not added. Only every try rate-limited ends the batch (the
+  rest stay due). Also what
   `POST /reels/watch` calls for new profiles.
 - `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
@@ -275,8 +288,10 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   `watched_profiles.group_name`; a group made with "+ New group" before any
   profile is in it lives in `profile_groups`, `POST /reels/groups`; a row's
   dropdown moves a profile, `POST /reels/group/{username}`), rows
-  `_reels_watch_item.html`, most feed reels first
-  (`WatchedProfile.by_reels`), and **one flat feed** of their latest
+  `_reels_watch_item.html`, ordered by `schemas.Leaderboard` for the
+  filtered group: the most window views first (gold, "#1 most views"), the
+  most feed reels second (orange, "#2 most viral reels"), the rest most feed
+  reels first (`WatchedProfile.by_reels`), and **one flat feed** of their latest
   scans (`schemas.FeedItem.of`, cards `_reel_card.html`), most viewed first,
   filtered by `?group=` and `?rank=` (a `VIEW_TIERS` name: exactly that
   rank; common 50k, uncommon 100k, rare 200k, epic 500k, legendary 1M+), paged
@@ -296,7 +311,9 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   so they survive paging, group switches and reloads. Nothing is downloaded
   until `POST /reels/clone`, which saves the picked reels into the asset
   store and answers `/clone?video=...` — `clone.py` validates those against
-  the session's store and pre-fills the videos picker. See
+  the session's store and pre-fills the videos picker. `POST /reels/download`
+  (Download selected) fetches the same picks and answers the mp4 itself for
+  one, a stored zip for several; nothing enters the asset store. See
   `instagram/CLAUDE.md` for how Instagram is reached and why.
 
 ## `image_tools/` — local image edits

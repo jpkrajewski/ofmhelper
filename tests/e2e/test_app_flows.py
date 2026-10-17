@@ -1,8 +1,10 @@
 """End to end, in a real browser against a running stack (see conftest.py):
-log in, open every page, make a fake asset and download it, and run a clone
-batch with a wrong kie.ai key so nothing is spent."""
+log in, open every page, make a fake asset and download it, run a clone
+batch with a wrong kie.ai key so nothing is spent, click through every /reels
+filter and download three reels."""
 
 import re
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -185,8 +187,9 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     for card in picked:
         card.click()
     expect(picked[0]).to_have_attribute("aria-pressed", "true")
-    clone_btn = va.page.locator("#reels-clone")
-    expect(clone_btn).to_have_text(f"Clone selected ({len(picked)})")
+    picked_count = va.page.locator("#reels-picked-count")
+    expect(picked_count).to_have_text(f"{len(picked)} reels selected")
+    expect(va.page.locator("#reels-clone")).to_be_enabled()
 
     # The list and the picks survive a reload.
     va.page.reload()
@@ -194,7 +197,7 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
         expect(
             va.page.locator(f'.reels-watch-item[data-username="{username}"]')
         ).to_have_count(1)
-    expect(clone_btn).to_have_text(f"Clone selected ({len(picked)})")
+    expect(picked_count).to_have_text(f"{len(picked)} reels selected")
 
     with va.page.expect_navigation(
         url=re.compile(r"/clone\?video="), timeout=SCAN_TIMEOUT_MS
@@ -218,3 +221,73 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
 
     assert va.js_errors == []
+
+
+def _add_viral_profiles(session: Session) -> None:
+    """VIRAL_PROFILES on the watch list and scanned (a no-op once they are)."""
+    session.goto("/reels")
+    session.page.fill("#reels-profiles", "\n".join(VIRAL_PROFILES))
+    session.page.click('#reels-form button[type="submit"]')
+    expect(session.page.locator("#reels-form .generation-status")).to_contain_text(
+        "Added", timeout=SCAN_TIMEOUT_MS
+    )
+    expect(session.page.locator(".reels-watch-item[data-pending]")).to_have_count(
+        0, timeout=SCAN_TIMEOUT_MS
+    )
+
+
+def test_every_reels_filter_chip_narrows_the_feed(va: Session):
+    _add_viral_profiles(va)
+    for label in ("reels-filter-group", "reels-filter-rank", "reels-filter-reach"):
+        va.goto("/reels")
+        chips = va.page.locator(f'nav[aria-labelledby="{label}"] a')
+        hrefs = [chips.nth(i).get_attribute("href") for i in range(chips.count())]
+        assert len(hrefs) >= 2, label
+        for i, href in enumerate(hrefs):
+            va.goto("/reels")
+            with va.page.expect_navigation():
+                va.page.locator(f'nav[aria-labelledby="{label}"] a').nth(i).click()
+            chip = va.page.locator(f'nav[aria-labelledby="{label}"] a').nth(i)
+            expect(chip).to_have_attribute("aria-current", "page")
+            # Every card left is one the chip's filter keeps.
+            query = dict(re.findall(r"(\w+)=([^&]+)", href))
+            cards = va.page.locator(".reel-card")
+            if "rank" in query:
+                tiers = cards.evaluate_all("cs => cs.map(c => c.dataset.tier)")
+                assert set(tiers) <= {query["rank"]}, href
+            if "ratio" in query:
+                ratios = cards.evaluate_all(
+                    "cs => cs.map(c => Number(c.dataset.ratio))"
+                )
+                assert all(r >= int(query["ratio"]) for r in ratios), href
+            if not cards.count():
+                expect(va.page.locator("#reels-empty")).to_be_visible()
+    assert va.js_errors == []
+
+
+def test_three_picked_reels_download_as_one_zip(va: Session, tmp_path: Path):
+    _add_viral_profiles(va)
+    va.goto("/reels")
+    cards = va.page.locator(".reel-card[data-video-url]")
+    assert cards.count() >= 3, "needs three playable reels on the watch list"
+    codes = [cards.nth(i).get_attribute("data-code") for i in range(3)]
+    for i in range(3):
+        cards.nth(i).click()
+    expect(va.page.locator("#reels-picked-count")).to_have_text("3 reels selected")
+
+    with va.page.expect_download(timeout=SCAN_TIMEOUT_MS) as download:
+        va.page.click("#reels-download")
+    archive = tmp_path / download.value.suggested_filename
+    download.value.save_as(archive)
+    with zipfile.ZipFile(archive) as zf:
+        assert sorted(zf.namelist()) == sorted(f"{c}.mp4" for c in codes)
+        assert all(info.file_size > 0 for info in zf.infolist())
+    expect(va.page.locator("#reels-clone-status")).to_contain_text("Downloaded 3 reels")
+
+    # Clean up after ourselves: the download, and the picks.
+    archive.unlink()
+    download.value.delete()
+    assert not archive.exists()
+    for i in range(3):
+        cards.nth(i).click()
+    expect(va.page.locator("#reels-picked-count")).to_have_text("No reels selected")

@@ -70,3 +70,7 @@ def record_scan(
     _repository().record_scan(
         username, result.model_dump(mode="json") if result else None, error
     )
+
+
+def replace_result(username: str, result: ProfileReels) -> None:
+    _repository().replace_result(username, result.model_dump(mode="json"))
