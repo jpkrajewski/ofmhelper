@@ -1475,35 +1475,135 @@ summary:hover { color: var(--accent-soft); }
     font-size: var(--step--1);
 }
 .reels-watch-list:empty { display: none; }
+
 .reels-watch-item {
+    box-sizing: border-box;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--s-2);
-    padding: var(--s-2) var(--s-2);
+    width: 100%;
+    min-width: 0;
+    padding: var(--s-3, 12px);
     border-radius: var(--radius-sm);
 }
-.reels-watch-item + .reels-watch-item { border-top: 1px solid var(--border-soft); }
-.reels-watch-item:hover { background: var(--surface-2); }
-.reels-watch-item[hidden] { display: none; }
-.reels-watch-views { color: var(--text); font-weight: 700; }
-/* The most viewed account of the list: the reels' legendary gold, shining. */
+
+.reels-watch-item + .reels-watch-item {
+    border-top: 1px solid var(--border-soft);
+}
+
+.reels-watch-item:hover {
+    background: var(--surface-2);
+}
+
+.reels-watch-item[hidden] {
+    display: none;
+}
+
+/* Keep the profile link visible and accessible. */
+.reels-watch-item > a {
+    display: block;
+    position: relative;
+    flex: 1 1 100%;
+    order: -2;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-overflow: clip;
+    overflow: visible;
+    font-weight: 600;
+    line-height: 1.5;
+    padding: 2px 0;
+}
+
+/* Metadata wraps instead of pushing content outside the row. */
+.reels-watch-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    flex: 1 1 180px;
+    min-width: 0;
+    color: var(--text-muted);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+.reels-watch-views {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.reels-watch-error {
+    flex: 0 0 auto;
+    color: var(--fail);
+    cursor: help;
+}
+
+/* Group selector stays within the available width. */
+.reels-row-group {
+    flex: 0 1 160px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Remove button never gets pushed out of bounds. */
+.reels-unwatch {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+}
+
+/* Legendary gold effect preserved. */
 .reels-watch-item[data-tier="legendary"] {
     border: 2px solid transparent;
     background:
         linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
-        linear-gradient(110deg, #8a6100, #ffd84d, #fff4c2, #ffd84d, #8a6100, #ffd84d, #fff4c2) border-box;
+        linear-gradient(
+            110deg,
+            #8a6100,
+            #ffd84d,
+            #fff4c2,
+            #ffd84d,
+            #8a6100,
+            #ffd84d,
+            #fff4c2
+        ) border-box;
     background-size: 100% 100%, 300% 100%;
-    animation: reel-gold-shine 3s linear infinite, reel-gold-glow 2s ease-in-out infinite alternate;
+    animation:
+        reel-gold-shine 3s linear infinite,
+        reel-gold-glow 2s ease-in-out infinite alternate;
 }
+
 .reels-watch-item[data-tier="legendary"] + .reels-watch-item,
-.reels-watch-item + .reels-watch-item[data-tier="legendary"] { border-top-color: transparent; }
-.reels-watch-item[data-tier="legendary"] .reels-watch-views { color: #ffd84d; }
-@media (prefers-reduced-motion: reduce) {
-    .reels-watch-item[data-tier="legendary"] { animation: none; }
+.reels-watch-item + .reels-watch-item[data-tier="legendary"] {
+    border-top-color: transparent;
 }
-.reels-watch-item > a { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.reels-watch-meta { color: var(--text-muted); white-space: nowrap; font-size: 0.75rem; }
-.reels-watch-error { color: var(--fail); cursor: help; }
+
+.reels-watch-item[data-tier="legendary"] .reels-watch-views {
+    color: #ffd84d;
+}
+
+@media (max-width: 480px) {
+    .reels-watch-item {
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .reels-row-group {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reels-watch-item[data-tier="legendary"] {
+        animation: none;
+    }
+}
+
 /* Row controls: small, quiet, the arrow kept clear of the text. */
 /* Row controls: full-size click targets (36px tall), arrow clear of text. */
 .reels-row-group {
