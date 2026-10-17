@@ -67,8 +67,8 @@ def test_the_same_body_lands_identically_on_seedance_and_fake_ai(client):
     ).json()["job_id"]
     fake = client.post("/fake-ai/run", data=form({}), files=body()).json()["job_id"]
 
-    seedance_refs = get_job(seedance)["params"]["reference_images"]
-    fake_refs = get_job(fake)["params"]["reference_images"]
+    seedance_refs = get_job(seedance).params["reference_images"]
+    fake_refs = get_job(fake).params["reference_images"]
     assert len(seedance_refs) == 1
     # Same bytes, same content-addressed asset -- and both routers key the
     # stored param by the picker's field name, which is what click-to-reuse
@@ -90,4 +90,4 @@ def test_a_malformed_manifest_falls_back_to_treating_every_upload_as_new(client)
             )
         },
     ).json()["job_id"]
-    assert len(get_job(job_id)["params"]["reference_images"]) == 1
+    assert len(get_job(job_id).params["reference_images"]) == 1

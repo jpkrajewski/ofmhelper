@@ -38,6 +38,10 @@ video uniqify.
   contrast 5, sharpen 15, particles 10, speed +3%, trim 0.3 s each end.
 - `video_probe.py` — `duration_s(path, timeout_s)`: container length via
   ffprobe; raises rather than guessing.
+- `ffmpeg.py` — `binary(name)` / `run(args, timeout_s)`: the one ffmpeg/
+  ffprobe runner (missing binary is `FileNotFoundError`, a failure a
+  `RuntimeError` carrying the tool's last 3 stderr lines). `capcut.py`,
+  `uniqify.py` and `video_probe.py` all go through it.
 
 # Who calls this
 

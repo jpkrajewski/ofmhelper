@@ -5,12 +5,13 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.types import ImageBackground, ImageResolution
 from ofmhelpers.web.routers.generation.kie_jobs import (
-    add_job_routes,
+    add_kie_job_routes,
     require_api_key,
     run_kie_generation,
     start_kie_job,
 )
 from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
+from ofmhelpers.web.schemas import ResultFile
 
 router = APIRouter(prefix="/gpt-image", tags=["gpt_image"])
 
@@ -24,7 +25,7 @@ def _run_gpt_image(
     resolution: str,
     background: str,
     input_urls: list[str],
-) -> list[dict]:
+) -> list[ResultFile]:
     client = KieAIClient.from_env(api_key=api_key)
     uploaded = [client.upload_local_file(p) for p in input_urls]
     return run_kie_generation(
@@ -43,7 +44,7 @@ def _run_gpt_image(
 
 
 @router.post("/run")
-async def run(
+def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
@@ -75,4 +76,4 @@ async def run(
     )
 
 
-add_job_routes(router, "GPT Image 2.5 Flare", "image")
+add_kie_job_routes(router, "GPT Image 2.5 Flare", "image")

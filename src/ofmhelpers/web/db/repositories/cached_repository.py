@@ -71,17 +71,6 @@ class RepositoryCache:
         self._redis.incr(f"cache:{self._namespace}:v")
 
 
-class NullCache:
-    """No-op cache -- reads always miss, bump() is a no-op. Inject this to
-    disable caching (e.g. a test that needs to see writes with no Redis)."""
-
-    def get_or_set(self, method: str, args: tuple, loader: Callable[[], T]) -> T:  # noqa: ARG002
-        return loader()
-
-    def bump(self) -> None:
-        pass
-
-
 def _cache_key_args(args: tuple, kwargs: dict) -> tuple:
     if not kwargs:
         return args

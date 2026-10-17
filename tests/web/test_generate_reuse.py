@@ -191,7 +191,7 @@ def test_every_stored_param_has_a_matching_form_field(
     client, task, tmp_path, monkeypatch
 ):
     job_id = SUBMITTERS[task](client, tmp_path, monkeypatch)
-    params = get_job(job_id)["params"]
+    params = get_job(job_id).params
 
     html = client.get("/generate").text
     field_names = _fieldset_field_names(html, task)
@@ -280,7 +280,7 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client, tmp_p
             "reference_audio": [],
         },
     )
-    assert get_job(job_id)["status"] == "running"
+    assert get_job(job_id).status == "running"
 
     html = client.get("/generate").text
     card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.DOTALL)

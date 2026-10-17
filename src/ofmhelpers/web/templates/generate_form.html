@@ -454,7 +454,9 @@
 
 <div id="results-panel">
     <div class="generation-status"></div>
-    <div class="results" data-gallery-endpoint="/generate/gallery">
+    <div class="results" data-gallery-endpoint="/generate/gallery"
+         data-live-endpoint="/generate/gallery/latest" data-live-key="jobId"
+         data-live-interval="{{ live_poll_s }}">
         {% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}
     </div>
@@ -510,14 +512,20 @@ document.getElementById('tool-select').addEventListener('change', (e) => {
     form.dataset.prefix = option.dataset.prefix;
     form.dataset.resultKind = option.dataset.resultKind;
 
+    // Picked files follow the switch (images to images, ...) instead of
+    // having to be picked again for the new model.
+    const previous = document.querySelector('.tool-fields:not([disabled])');
+    const next = document.querySelector(`.tool-fields[data-tool="${option.value}"]`);
+    if (previous && next && window.FilePicker) window.FilePicker.carryOver(previous, next);
+
     document.querySelectorAll('.tool-fields').forEach((fieldset) => {
         const active = fieldset.dataset.tool === option.value;
         fieldset.disabled = !active;
         fieldset.style.display = active ? '' : 'none';
         if (!active && window.FilePicker) {
             // Drop any files queued for a tool the user is navigating away
-            // from -- otherwise they'd still get attached to the next
-            // submission even though their picker is no longer visible.
+            // from (carried over above where the new tool takes them) --
+            // a hidden picker must never hold files nobody can see.
             fieldset.querySelectorAll('.file-picker').forEach((picker) => {
                 window.FilePicker.clearPicker(picker);
             });
@@ -565,5 +573,6 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
 <script src="{{ static_url('js/file-picker.js') }}"></script>
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/live-gallery.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 {% endblock %}

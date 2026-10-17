@@ -29,6 +29,7 @@ from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import kling as kling_router
 from ofmhelpers.web.routers.generation import nbp as nbp_router
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
+from ofmhelpers.web.schemas import JobPreview, ResultFile
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
@@ -86,11 +87,11 @@ def test_nanobanana_output_registers_into_the_shared_assets_store(
         )
 
     assert result == [
-        {
-            "name": "abc123.png",
-            "path": str(out),
-            "remote_url": "https://cdn.kie.ai/out/abc123.png",
-        }
+        ResultFile(
+            name="abc123.png",
+            path=str(out),
+            remote_url="https://cdn.kie.ai/out/abc123.png",
+        )
     ]
     saved = list(assets_dir.iterdir())
     assert len(saved) == 1
@@ -144,7 +145,7 @@ def test_nanobanana_publishes_a_preview_as_soon_as_the_poll_succeeds(tmp_path):
             job_id=job_id, assets_root=str(tmp_path / "assets"), **NBP_KWARGS
         )
 
-    assert get_job(job_id)["preview"] == {
+    assert get_job(job_id).preview.model_dump() == {
         "remote_url": "https://cdn.kie.ai/out/abc.png",
         "kind": "image",
     }
@@ -171,8 +172,8 @@ def test_nanobanana_download_failure_keeps_the_job_done_with_remote_url_only(
             {"job_id": job_id, "assets_root": str(tmp_path), **NBP_KWARGS},
         )
 
-    assert get_job(job_id)["status"] == "done"
-    assert get_job(job_id)["result"] == [
+    assert get_job(job_id).status == "done"
+    assert get_job(job_id).result == [
         {
             "name": "xyz.png",
             "path": None,
@@ -196,8 +197,8 @@ def test_nanobanana_failure_before_any_result_url_still_fails_the_job(tmp_path):
             {"job_id": job_id, "assets_root": str(tmp_path), **NBP_KWARGS},
         )
 
-    assert get_job(job_id)["status"] == "failed"
-    assert get_job(job_id)["error"] == "Wrong API Key"
+    assert get_job(job_id).status == "failed"
+    assert get_job(job_id).error == "Wrong API Key"
 
 
 def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only(tmp_path):
@@ -218,8 +219,8 @@ def test_kling3_download_failure_keeps_the_job_done_with_remote_url_only(tmp_pat
             {"job_id": job_id, "assets_root": str(tmp_path), **KLING_KWARGS},
         )
 
-    assert get_job(job_id)["status"] == "done"
-    assert get_job(job_id)["result"] == [
+    assert get_job(job_id).status == "done"
+    assert get_job(job_id).result == [
         {
             "name": "clip.mp4",
             "path": None,
@@ -233,10 +234,12 @@ def test_job_status_json_surfaces_preview_only_while_running(tmp_path):
     from ofmhelpers.web.routers.task_helpers import job_status_payload
     from ofmhelpers.web.stores.jobs import set_job_preview
 
-    set_job_preview(job_id, {"remote_url": "https://cdn.kie.ai/x.png", "kind": "image"})
+    set_job_preview(
+        job_id, JobPreview(remote_url="https://cdn.kie.ai/x.png", kind="image")
+    )
 
     running_payload = job_status_payload(get_job(job_id), "/nanobanana/files")
-    assert running_payload["preview"] == {
+    assert running_payload.preview.model_dump() == {
         "remote_url": "https://cdn.kie.ai/x.png",
         "kind": "image",
     }
@@ -246,4 +249,4 @@ def test_job_status_json_surfaces_preview_only_while_running(tmp_path):
         job_id, "done", result=[{"name": "x.png", "path": str(tmp_path / "x.png")}]
     )
     done_payload = job_status_payload(get_job(job_id), "/nanobanana/files")
-    assert "preview" not in done_payload
+    assert done_payload.preview is None

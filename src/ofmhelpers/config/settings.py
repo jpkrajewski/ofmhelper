@@ -71,15 +71,27 @@ class WebSettings(BaseSettings):
     kie_ai_api_key_admin: str | None = None
     kie_ai_api_key_va: str | None = None
 
-    jobs_file: str = Field(
-        default="uploads/jobs.json", validation_alias="OFM_JOBS_FILE"
-    )
-
     max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(
         default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
+    # How often /generate and /clone ask for the newest jobs (live-gallery.js),
+    # so a coworker's run shows up without a reload.
+    gallery_live_poll_s: int = Field(
+        default=5, ge=1, validation_alias="OFM_GALLERY_LIVE_POLL_S"
+    )
+    # Downloaded results are saved camera-roll style -- prefix + 4 random
+    # digits (IMG_4821.png, VID_0193.mp4) -- not under the generator's name.
+    image_download_prefix: str = Field(
+        default="IMG_", validation_alias="OFM_IMAGE_DOWNLOAD_PREFIX"
+    )
+    video_download_prefix: str = Field(
+        default="VID_", validation_alias="OFM_VIDEO_DOWNLOAD_PREFIX"
+    )
+    download_name_digits: int = Field(
+        default=4, ge=1, validation_alias="OFM_DOWNLOAD_NAME_DIGITS"
+    )
     # Panels per character sheet. The sheet is decoded whole in the worker's
     # memory, so this is what keeps one upload from exhausting it.
     character_sheet_max_images: int = Field(
@@ -133,6 +145,10 @@ class WebSettings(BaseSettings):
     uniqify_max_copies: int = Field(
         default=50, validation_alias="OFM_UNIQIFY_MAX_COPIES"
     )
+    # Longest random head-trim /uniqify offers, in seconds.
+    uniqify_max_trim_s: float = Field(
+        default=5.0, gt=0, validation_alias="OFM_UNIQIFY_MAX_TRIM_S"
+    )
     uniqify_encode_timeout_s: int = Field(
         default=600, validation_alias="OFM_UNIQIFY_ENCODE_TIMEOUT_S"
     )
@@ -140,6 +156,20 @@ class WebSettings(BaseSettings):
     # paid Wan 3.0 run, so this caps what one mis-click can spend -- and how
     # many recent clone jobs the page groups into batches.
     clone_max_videos: int = Field(default=20, validation_alias="OFM_CLONE_MAX_VIDEOS")
+    # Subject photos per clone batch (same person, different angles), all
+    # sent to every run. Wan 3.0 takes at most 10 reference images.
+    clone_max_images: int = Field(
+        default=10, ge=1, le=10, validation_alias="OFM_CLONE_MAX_IMAGES"
+    )
+    # The /clone form's starting prompt.
+    clone_default_prompt: str = Field(
+        default="Replace the subject in @Video1 with subject from @Image1",
+        validation_alias="OFM_CLONE_DEFAULT_PROMPT",
+    )
+    # ffprobe length checks /clone/run runs at once (one per picked video).
+    clone_probe_workers: int = Field(
+        default=8, ge=1, validation_alias="OFM_CLONE_PROBE_WORKERS"
+    )
     # Bound on the CapCut re-encode (utils/capcut.py) of one generated clone.
     clone_capcut_timeout_s: int = Field(
         default=600, validation_alias="OFM_CLONE_CAPCUT_TIMEOUT_S"

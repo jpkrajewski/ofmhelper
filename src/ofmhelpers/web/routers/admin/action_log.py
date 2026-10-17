@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.routers.registry import TOOLS
+from ofmhelpers.web.schemas import ActionLogEntry, Job
 from ofmhelpers.web.stores.jobs import list_jobs
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/action-log",
@@ -13,44 +15,29 @@ router = APIRouter(
     dependencies=[Depends(AuthMiddleware.require_admin)],
 )
 
-# Maps a job's "task" field to the URL prefix of its dedicated status page.
-# Add one line here whenever you add a new task type -- everything else
-# on this page is generic.
-TASK_STATUS_PREFIX = {
-    "download_videos": "/download-videos",
-    "download_images": "/download-images",
-    "clean_images": "/clean-images",
-    "character_sheet": "/character-sheet",
-    "uniqify": "/uniqify",
-    "seedance": "/seedance",
-    "seedance25": "/seedance25",
-    "nanobanana": "/nanobanana",
-    "kling3": "/kling3",
-    "wan3": "/wan3",
-    "clone": "/clone",
-    "minimax_h3": "/minimax-h3",
-    "seedream45": "/seedream45",
-    "seedream5": "/seedream5",
-    "gpt_image": "/gpt-image",
-    "fake_ai": "/fake-ai",
-}
+
+def _status_url(job: Job) -> str | None:
+    """The job's status page, or None for a task with no tool: login/logout
+    events, and old jobs of a tool since removed."""
+    tool = TOOLS.get(job.task)
+    return f"{tool.prefix}/jobs/{job.id}" if tool else None
 
 
-def _status_url(job: dict) -> str | None:
-    prefix = TASK_STATUS_PREFIX.get(job["task"])
-    return f"{prefix}/jobs/{job['id']}" if prefix else None
+def _entry(job: Job) -> ActionLogEntry:
+    return ActionLogEntry(
+        task=job.task,
+        actor=job.actor,
+        status=job.status,
+        params=job.params,
+        status_url=_status_url(job),
+        created_at_display=datetime.fromtimestamp(job.created_at, UTC).strftime(
+            "%H:%M:%S"
+        ),
+    )
 
 
 @router.get("", response_class=HTMLResponse)
 def dashboard(request: Request):
-    jobs = list_jobs()
-    for job in jobs:
-        job["status_url"] = _status_url(job)
-        job["created_at_display"] = datetime.fromtimestamp(
-            job["created_at"], UTC
-        ).strftime("%H:%M:%S")
-
-    any_running = any(j["status"] in ("running", "queued") for j in jobs)
-    return get_templates().TemplateResponse(
-        request, "action_log.html", {"jobs": jobs, "any_running": any_running}
-    )
+    jobs = [_entry(job) for job in list_jobs()]
+    any_running = any(j.status in ("running", "queued") for j in jobs)
+    return render(request, "action_log.html", jobs=jobs, any_running=any_running)

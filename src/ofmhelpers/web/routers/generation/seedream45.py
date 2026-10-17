@@ -5,12 +5,13 @@ from fastapi import APIRouter, File, Form, Request, UploadFile
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.types import Seedream45Quality
 from ofmhelpers.web.routers.generation.kie_jobs import (
-    add_job_routes,
+    add_kie_job_routes,
     require_api_key,
     run_kie_generation,
     start_kie_job,
 )
 from ofmhelpers.web.routers.task_helpers import assets_root_for, build_ordered_paths
+from ofmhelpers.web.schemas import ResultFile
 
 router = APIRouter(prefix="/seedream45", tags=["seedream45"])
 
@@ -23,7 +24,7 @@ def _run_seedream45(
     aspect_ratio: str,
     quality: str,
     image_urls: list[str],
-) -> list[dict]:
+) -> list[ResultFile]:
     client = KieAIClient.from_env(api_key=api_key)
     uploaded = [client.upload_local_file(p) for p in image_urls]
     return run_kie_generation(
@@ -41,7 +42,7 @@ def _run_seedream45(
 
 
 @router.post("/run")
-async def run(
+def run(
     request: Request,
     api_key: Annotated[str, Form()],
     prompt: Annotated[str, Form()],
@@ -65,4 +66,4 @@ async def run(
     )
 
 
-add_job_routes(router, "Seedream 4.5", "image")
+add_kie_job_routes(router, "Seedream 4.5", "image")

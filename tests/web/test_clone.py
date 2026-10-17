@@ -1,4 +1,4 @@
-"""/clone: one image + N videos -> one batch of Wan 3.0 runs, grouped on the page."""
+"""/clone: subject images + N videos -> one batch of Wan 3.0 runs, grouped on the page."""
 
 import os
 
@@ -18,8 +18,8 @@ from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
-from ofmhelpers.web.routers.generation.clone_batches import group_batches
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
+from ofmhelpers.web.schemas import CloneBatch, Job, ResultFile
 from ofmhelpers.web.stores.jobs import get_job, list_jobs
 
 needs_ffmpeg = pytest.mark.skipif(
@@ -76,7 +76,7 @@ def test_page_defaults(client):
     html = client.get("/clone").text
     assert clone.DEFAULT_PROMPT in html
     assert '<option value="720P" selected>' in html
-    assert 'data-field="image" data-kind="image" data-max="1"' in html
+    assert 'data-field="image" data-kind="image" data-max="10"' in html
     assert 'class="file-add-input" multiple' in html
 
 
@@ -86,11 +86,11 @@ def test_run_queues_one_batch_in_picked_order(client):
 
     assert r.status_code == 200
     jobs = [get_job(j) for j in r.json()["job_ids"]]
-    assert {j["task"] for j in jobs} == {"clone"}
-    assert len({j["params"]["clone_batch"] for j in jobs}) == 1
-    assert [j["params"]["clone_index"] for j in jobs] == [0, 1]
-    assert [j["params"]["duration"] for j in jobs] == [4, 3]
-    assert {j["params"]["resolution"] for j in jobs} == {"720P"}
+    assert {j.task for j in jobs} == {"clone"}
+    assert len({j.params["clone_batch"] for j in jobs}) == 1
+    assert [j.params["clone_index"] for j in jobs] == [0, 1]
+    assert [j.params["duration"] for j in jobs] == [4, 3]
+    assert {j.params["resolution"] for j in jobs} == {"720P"}
     html = r.json()["html"]
     assert html.count('class="result-item"') == 2
     assert html.index("from b.mp4") < html.index("from a.mp4")
@@ -98,10 +98,31 @@ def test_run_queues_one_batch_in_picked_order(client):
 
 
 @pytest.mark.usefixtures("fake_runs")
+def test_batches_fragment_shows_another_sessions_batch(client, tmp_path):
+    """What live-gallery.js polls: a coworker's batch appears without a reload,
+    and the VA scope still holds (an admin's batch never reaches a VA)."""
+    coworker = TestClient(app)
+    coworker.post("/login", data={"password": "test-va", "next": "/"})
+    batch = get_job(_post(coworker, ["a.mp4"]).json()["job_ids"][0]).params[
+        "clone_batch"
+    ]
+    admin = TestClient(app)
+    admin.post("/login", data={"password": "test-admin", "next": "/"})
+    admin_batch = get_job(_post(admin, ["b.mp4"]).json()["job_ids"][0]).params[
+        "clone_batch"
+    ]
+
+    html = client.get("/clone/batches").text
+    assert f'data-batch="{batch}"' in html
+    assert f'data-batch="{admin_batch}"' not in html
+    assert 'data-live-endpoint="/clone/batches"' in client.get("/clone").text
+
+
+@pytest.mark.usefixtures("fake_runs")
 def test_recreate_resubmits_the_same_files_without_uploading(client):
     first = get_job(_post(client, ["a.mp4", "b.mp4"]).json()["job_ids"][0])
-    image = first["params"]["reference_images"]
-    video = first["params"]["reference_videos"]
+    image = first.params["reference_images"]
+    video = first.params["reference_videos"]
 
     r = client.post(
         "/clone/run",
@@ -114,7 +135,7 @@ def test_recreate_resubmits_the_same_files_without_uploading(client):
 
     assert r.status_code == 200
     [job_id] = r.json()["job_ids"]
-    params = get_job(job_id)["params"]
+    params = get_job(job_id).params
     assert params["reference_images"] == image
     assert params["reference_videos"] == video
 
@@ -124,7 +145,7 @@ def test_recreate_resubmits_the_same_files_without_uploading(client):
     ("videos", "data", "detail"),
     [
         ([], {}, "Pick between 1 and"),
-        (["a.mp4"], {"image_manifest": "[]"}, "exactly one subject image"),
+        (["a.mp4"], {"image_manifest": "[]"}, "Pick between 1 and 10 subject images"),
         (["a.mp4"], {"api_key": " "}, "API key is required"),
     ],
 )
@@ -132,6 +153,40 @@ def test_run_rejects_a_bad_batch(client, videos, data, detail):
     r = _post(client, videos, data)
     assert r.status_code == 400
     assert detail in r.json()["detail"]
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_every_run_gets_all_the_subject_images(client):
+    files = [
+        ("image", (name, name.encode(), "image/png"))
+        for name in ("front.png", "side.png")
+    ] + [("videos", (n, n.encode(), "video/mp4")) for n in ("a.mp4", "b.mp4")]
+    r = client.post(
+        "/clone/run",
+        data={"api_key": "k", "image_manifest": _new(2), "videos_manifest": _new(2)},
+        files=files,
+    )
+
+    assert r.status_code == 200
+    jobs = [get_job(j) for j in r.json()["job_ids"]]
+    images = jobs[0].params["reference_images"]
+    assert [Path(p).name.split("__", 1)[1] for p in images] == ["front.png", "side.png"]
+    assert all(j.params["reference_images"] == images for j in jobs)
+    assert "2 images" in r.json()["html"]
+    assert json.dumps(images) in _batches(jobs, page_full=False)[0].recreate_json
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_run_caps_subject_images(client, monkeypatch):
+    monkeypatch.setenv("OFM_CLONE_MAX_IMAGES", "1")
+    files = [("image", (n, n.encode(), "image/png")) for n in ("x.png", "y.png")]
+    files.append(("videos", ("a.mp4", b"a", "video/mp4")))
+    r = client.post(
+        "/clone/run",
+        data={"api_key": "k", "image_manifest": _new(2), "videos_manifest": NEW},
+        files=files,
+    )
+    assert r.status_code == 400
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -155,12 +210,17 @@ def test_one_unreadable_video_queues_nothing(client, monkeypatch):
     assert len(list_jobs()) == before
 
 
+def _batches(jobs, page_full):
+    return CloneBatch.group([clone._card(j) for j in jobs], page_full=page_full)
+
+
 def _job(job_id, batch, index, created_at):
-    return {
-        "id": job_id,
-        "status": "running",
-        "created_at": created_at,
-        "params": {
+    return Job(
+        id=job_id,
+        task="clone",
+        status="running",
+        created_at=created_at,
+        params={
             "clone_batch": batch,
             "clone_index": index,
             "prompt": "p",
@@ -170,7 +230,7 @@ def _job(job_id, batch, index, created_at):
             "reference_images": ["/a/img.png"],
             "reference_videos": [f"/a/{job_id}.mp4"],
         },
-    }
+    )
 
 
 def test_batches_group_newest_first_and_drop_a_cut_off_tail():
@@ -181,15 +241,15 @@ def test_batches_group_newest_first_and_drop_a_cut_off_tail():
         _job("x1", "old", 1, 1.0),
     ]
 
-    [new, old] = group_batches(jobs, page_full=False)
+    [new, old] = _batches(jobs, page_full=False)
     assert [c.job_id for c in new.cards] == ["y1", "y2"]
     assert json.loads(new.recreate_json)["reference_videos"] == [
         "/a/y1.mp4",
         "/a/y2.mp4",
     ]
-    assert new.hue == group_batches(jobs, page_full=False)[0].hue
+    assert new.hue == _batches(jobs, page_full=False)[0].hue
     assert old.id == "old"
-    assert [b.id for b in group_batches(jobs, page_full=True)] == ["new"]
+    assert [b.id for b in _batches(jobs, page_full=True)] == ["new"]
 
 
 def _clip(dest: Path, seconds: int) -> Path:
@@ -255,7 +315,7 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
         assert payload["resolution"] == "720P"
         assert payload["reference_image_urls"][0].endswith("face.png")
         assert payload["reference_video_urls"][0].endswith(f"{name}.mp4")
-    statuses = [get_job(j)["status"] for j in r.json()["job_ids"]]
+    statuses = [get_job(j).status for j in r.json()["job_ids"]]
     assert statuses == ["done", "done"]
 
 
@@ -270,21 +330,21 @@ def test_capcut_choice_is_stored_and_recreated(client):
     on = get_job(_post(client, ["a.mp4"], {"capcut": "true"}).json()["job_ids"][0])
     off = get_job(_post(client, ["a.mp4"]).json()["job_ids"][0])
 
-    assert on["params"]["capcut"] is True
-    assert off["params"]["capcut"] is False
-    [batch] = group_batches([on], page_full=False)
+    assert on.params["capcut"] is True
+    assert off.params["capcut"] is False
+    [batch] = _batches([on], page_full=False)
     assert json.loads(batch.recreate_json)["capcut"] is True
 
 
 def test_capcut_off_returns_the_generation_untouched(monkeypatch):
-    result = [{"name": "v.mp4", "path": "/x/v.mp4", "remote_url": "https://r/v"}]
+    result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
     monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
 
     assert clone._run_clone("b", 0, capcut=False, assets_root="/x") == result
 
 
 def test_capcut_keeps_a_remote_only_result(monkeypatch):
-    result = [{"name": "v.mp4", "path": None, "remote_url": "https://r/v"}]
+    result = [ResultFile(name="v.mp4", path=None, remote_url="https://r/v")]
     monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
 
     assert clone._run_clone("b", 0, capcut=True, assets_root="/x") == result
@@ -296,21 +356,21 @@ def test_capcut_on_serves_the_capcut_copy(tmp_path, monkeypatch):
     monkeypatch.setattr(
         clone,
         "_run_wan3",
-        lambda **_k: [{"name": src.name, "path": str(src), "remote_url": "https://r"}],
+        lambda **_k: [ResultFile(name=src.name, path=str(src), remote_url="https://r")],
     )
     assets = tmp_path / "assets"
 
     [result] = clone._run_clone("b", 0, capcut=True, assets_root=str(assets))
 
-    out = Path(result["path"])
-    assert result == {"name": "gen_capcut.mp4", "path": str(out), "remote_url": None}
+    out = Path(result.path)
+    assert result == ResultFile(name="gen_capcut.mp4", path=str(out), remote_url=None)
     assert out.exists()
     assert src.exists()  # the original stays, and stays registered elsewhere
     assert [p.name.split("__", 1)[1] for p in assets.iterdir()] == [out.name]
 
 
 def test_capcut_failure_keeps_the_generated_video(monkeypatch):
-    result = [{"name": "v.mp4", "path": "/x/v.mp4", "remote_url": "https://r/v"}]
+    result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
     monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
 
     def broken(*_a, **_k):

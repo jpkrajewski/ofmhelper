@@ -26,6 +26,7 @@ from ofmhelpers.web.routers.task_helpers import (
     save_upload,
     serve_job_file,
 )
+from ofmhelpers.web.schemas import Job
 
 
 def make_upload(name: str, content: bytes = b"hello") -> UploadFile:
@@ -245,8 +246,8 @@ def test_asset_card_with_remote_url_points_view_and_download_at_it():
         "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
     )
 
-    assert card["view_url"] == "https://cdn.kie.ai/x.mp4"
-    assert card["download_url"] == "https://cdn.kie.ai/x.mp4"
+    assert card.view_url == "https://cdn.kie.ai/x.mp4"
+    assert card.download_url == "https://cdn.kie.ai/x.mp4"
 
 
 def test_asset_card_prefers_remote_url_even_when_a_local_path_also_exists():
@@ -257,16 +258,19 @@ def test_asset_card_prefers_remote_url_even_when_a_local_path_also_exists():
         "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
     )
 
-    assert card["view_url"] == "https://cdn.kie.ai/x.mp4"
-    assert card["download_url"] == "https://cdn.kie.ai/x.mp4"
-    assert card["view_url"] != "/kling3/files/abc123/0"
+    assert card.view_url == "https://cdn.kie.ai/x.mp4"
+    assert card.download_url == "https://cdn.kie.ai/x.mp4"
+    assert card.view_url != "/kling3/files/abc123/0"
 
 
 def test_serve_job_file_404s_for_a_result_with_no_local_path():
-    job = {
-        "status": "done",
-        "result": [{"name": "x.png", "path": None, "remote_url": "https://cdn/x.png"}],
-    }
+    job = Job(
+        id="j1",
+        task="nanobanana",
+        created_at=0.0,
+        status="done",
+        result=[{"name": "x.png", "path": None, "remote_url": "https://cdn/x.png"}],
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         serve_job_file(job, 0)

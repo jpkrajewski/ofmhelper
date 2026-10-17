@@ -72,3 +72,13 @@ def test_no_stale_paste_hint_text(client):
     users to do something the feature doesn't actually require."""
     html = client.get("/generate").text
     assert "Click here" not in html
+
+
+def test_switching_tools_carries_picked_files_over(client):
+    """Regression: changing model wiped every picked/uploaded file. The switch
+    hands each picker's files to the new tool's picker of the same kind
+    (FilePicker.carryOver) before clearing the tool being left."""
+    html = client.get("/generate").text
+    carry = html.index("window.FilePicker.carryOver(previous, next)")
+    clear = html.index("window.FilePicker.clearPicker(picker)")
+    assert carry < clear

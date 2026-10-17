@@ -1,30 +1,25 @@
 """The plumbing every kie.ai generation router shares, written once.
 
 A kie.ai tool module is then just its `/run` form, the payload it hands to one
-`KieAIClient.generate_*` method, and a call to `add_job_routes`.
+`KieAIClient.generate_*` method, and a call to `add_kie_job_routes`.
 """
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.aigenproviders.kaiai.types import IMAGE_EXT, VIDEO_EXT
 from ofmhelpers.cache import enqueue
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
-    asset_card,
+    add_job_routes,
     assets_root_for,
-    job_inputs,
-    job_status_payload,
     register_generated_asset,
-    serve_job_file,
 )
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job, set_job_preview
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.schemas import JobPreview, JobQueued, ResultFile
+from ofmhelpers.web.stores.jobs import create_job, run_job, set_job_preview
 
 logger = get_logger(__name__)
 
@@ -45,11 +40,11 @@ def require_api_key(api_key: str) -> None:
 def start_kie_job(
     request: Request,
     task: str,
-    run_fn: Callable[..., list[dict]],
+    run_fn: Callable[..., list[ResultFile]],
     api_key: str,
     params: dict,
     refs: dict[str, list[str]],
-) -> dict:
+) -> JobQueued:
     """Create the job and queue `run_fn` for the worker.
 
     `refs` is keyed by the form's picker field names: stored under those keys,
@@ -71,7 +66,7 @@ def start_kie_job(
             **refs,
         },
     )
-    return {"job_id": job_id}
+    return JobQueued(job_id=job_id)
 
 
 def upload_references(
@@ -99,7 +94,7 @@ def run_kie_generation(
     kind: str,
     assets_root: str,
     generate: Callable[[OnResultUrls], Path],
-) -> list[dict]:
+) -> list[ResultFile]:
     """Run one generation and shape it as a job result.
 
     kie.ai's hosted result is published as the job preview the moment the poll
@@ -109,7 +104,7 @@ def run_kie_generation(
 
     def on_result_urls(urls: list[str]) -> None:
         remote_urls.extend(urls)
-        set_job_preview(job_id, {"remote_url": urls[0], "kind": kind})
+        set_job_preview(job_id, JobPreview(remote_url=urls[0], kind=kind))
 
     try:
         out_path = generate(on_result_urls)
@@ -122,65 +117,29 @@ def run_kie_generation(
             exc_info=True,
         )
         name = remote_urls[0].rsplit("/", 1)[-1].split("?")[0] or _FALLBACK_NAME[kind]
-        return [{"name": name, "path": None, "remote_url": remote_urls[0]}]
+        return [ResultFile(name=name, path=None, remote_url=remote_urls[0])]
 
     register_generated_asset(out_path, Path(assets_root))
     return [
-        {"name": out_path.name, "path": str(out_path), "remote_url": remote_urls[0]}
+        ResultFile(name=out_path.name, path=str(out_path), remote_url=remote_urls[0])
     ]
 
 
-def add_job_routes(
+def add_kie_job_routes(
     router: APIRouter,
     title: str,
     kind: str,
     back_url: str = "/generate",
     back_label: str = "generate another",
 ) -> None:
-    """Register the status page, polling payload and file download under the
-    router's own prefix -- the three GET endpoints of the standard tool shape."""
-    files_prefix = f"{router.prefix}/files"
-
-    @router.get("/jobs/{job_id}")
-    def job_status(request: Request, job_id: str):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
-        if job is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-
-        assets = []
-        if job.get("status") == "done":
-            assets = [
-                asset_card(
-                    f["name"],
-                    idx,
-                    f"{files_prefix}/{job_id}",
-                    remote_url=f.get("remote_url"),
-                )
-                for idx, f in enumerate(job["result"])
-            ]
-
-        return get_templates().TemplateResponse(
-            request,
-            "job_status.html",
-            {
-                "job": job,
-                "assets": assets,
-                "job_inputs": job_inputs(job),
-                "title": title,
-                "pending_message": _PENDING_MESSAGE[kind],
-                "back_url": back_url,
-                "back_label": back_label,
-            },
-        )
-
-    @router.get("/jobs/{job_id}/status")
-    def job_status_json(request: Request, job_id: str):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
-        return job_status_payload(job, files_prefix)
-
-    @router.get("/files/{job_id}/{index}")
-    def download_file(
-        request: Request, job_id: str, index: int, dl: Annotated[int, Query()] = 0
-    ):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
-        return serve_job_file(job, index, as_attachment=bool(dl))
+    """The standard job routes (`task_helpers.add_job_routes`), worded for a
+    kie.ai image or video generation and showing the job's inputs."""
+    message = _PENDING_MESSAGE[kind]
+    add_job_routes(
+        router,
+        title,
+        lambda _job: message,
+        back_url=back_url,
+        back_label=back_label,
+        show_inputs=True,
+    )

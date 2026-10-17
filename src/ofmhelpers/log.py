@@ -37,8 +37,7 @@ Who calls configure_logging():
     `rq worker-pool` forks children that never ran the parent's setup.
 Deliberately NOT alembic (`alembic/env.py` does its own `fileConfig()` from
 alembic.ini -- that's alembic's convention and it's a one-shot deploy step)
-or `web/db/backfill_remote_urls.py` (an operator CLI whose stdout is its
-output; see its module docstring).
+or an operator CLI whose stdout is its output.
 """
 
 from __future__ import annotations

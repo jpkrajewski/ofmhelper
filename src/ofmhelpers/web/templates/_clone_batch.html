@@ -1,4 +1,4 @@
-{# One /clone batch: the subject image + settings as a header, then a card per
+{# One /clone batch: the subject images + settings as a header, then a card per
    video. Rendered by the page for every recent batch and by POST /clone/run
    for the one just submitted, so a fresh batch and a reloaded one are
    identical. Cards carry the same data attributes as a /generate gallery
@@ -8,10 +8,11 @@
          data-params='{{ batch.recreate_json }}'>
     <header class="clone-batch-head">
         <img class="clone-batch-thumb" alt="Subject image" loading="lazy"
-             src="/refs/thumb?path={{ batch.image|urlencode }}&size=150">
+             src="/refs/thumb?path={{ batch.images[0]|urlencode }}&size=150">
         <div class="clone-batch-meta">
             <p class="clone-batch-title">
-                {{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }} · {{ batch.resolution }}
+                {{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }}
+                {%- if batch.images|length > 1 %} · {{ batch.images|length }} images{% endif %} · {{ batch.resolution }}
                 · <time data-ts="{{ batch.created_at }}"></time>
             </p>
             <p class="clone-batch-prompt" title="{{ batch.prompt }}">{{ batch.prompt }}</p>
@@ -26,7 +27,7 @@
             {% if card.status == "done" and card.assets %}
                 {{ am.asset_media(card.assets[0]) }}
                 <p class="filename">{{ card.assets[0].name }}</p>
-                <a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].name }}"
+                <a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].download_name }}"
                    data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
                 <button type="button" class="recreate-btn">↻ Recreate</button>
             {% elif card.status == "failed" %}

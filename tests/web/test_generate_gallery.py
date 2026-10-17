@@ -129,3 +129,16 @@ def test_gallery_cards_show_the_asset_filename(client, tmp_path):
 def test_gallery_limit_still_comes_from_config(small_pages):
     """small_pages patched the module constant, not the setting behind it."""
     assert settings.web.gallery_limit == 20
+
+
+def test_latest_is_the_newest_page_without_a_sentinel(client, gallery_jobs):
+    """What live-gallery.js polls: the newest cards, so a run started in another
+    session shows up; no sentinel, since prepending one would restart the
+    infinite scroll from the top."""
+    html = client.get("/generate/gallery/latest").text
+    assert _card_ids(html) == _card_ids(client.get("/generate").text)
+    assert gallery_jobs[-1] in _card_ids(html)
+    assert _sentinel_offset(html) is None
+    assert (
+        'data-live-endpoint="/generate/gallery/latest"' in client.get("/generate").text
+    )

@@ -80,7 +80,7 @@
                     {{ am.asset_media(job.assets[0]) }}
                     {% if job.assets[0].source %}<p class="source">{{ job.assets[0].source }}</p>{% endif %}
                     <p class="filename">{{ job.assets[0].name }}</p>
-                    <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" class="download-btn">⬇ Download</a>
+                    <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].download_name }}" class="download-btn">⬇ Download</a>
                 {% endif %}
                 {% if job.failed_sources %}
                     <div class="result-file fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">

@@ -109,7 +109,12 @@ migration changed everything under `stores/` without touching a router.
   (`Job`) that are the typed contract at the
   persistence boundary; `generation.py` holds `ReferenceUploads`, the
   three-picker form shape seedance, wan, minimax and fake_ai share (resolved to paths by
-  `routers/task_helpers.resolve_reference_uploads`). Import from the package.
+  `routers/task_helpers.resolve_reference_uploads`); `gallery.py` holds the
+  gallery card every tool page renders per job (`JobCard`, `TaskCard` for
+  the mixed-tool galleries, `CloneCard`/`CloneBatch` for /clone, whose
+  `CloneBatch.group` regroups a page of cards into submits). Data only: the
+  asset cards come in built by `task_helpers.job_assets`. Import from the
+  package.
 - `templates_config.py` — `get_templates()`, the shared `Jinja2Templates`
   instance every router renders through (`lru_cache`d, built on first use).
   Also the `static_url('js/x.js')` template global: **every CSS/JS link goes
@@ -131,8 +136,8 @@ call these and nothing below them.
   file-reference table. `list_jobs()` self-heals history when a result file
   was deleted on disk. Anything that renders only a page of jobs uses
   `list_jobs_page(tasks, offset, limit, actor) -> (page, total)` instead: the filter
-  and the slice run off the cached repository read and **only the page is
-  healed**, because healing stats every result file it is handed — doing that
+  and the slice run in SQL (`JobRepository.list_page`, cached) and **only the
+  page is healed**, because healing stats every result file it is handed — doing that
   for the whole history to paint 20 cards is what made a scroll tick cost more
   than the page it returned.
 - `applications.py` — submissions of the public `/` landing-page form
@@ -146,10 +151,7 @@ call these and nothing below them.
 module per domain: jobs, applications — import the classes from the
 package),
 plus `cached_repository.py`, the cache-aside layer +
-`@cached`/`@invalidates_cache` every repository inherits),
-`backfill_remote_urls.py` (one-time, manually-run: re-derives kie.ai
-`remote_url` for old jobs that predate that field — `--apply` to write,
-dry-run by default). Schema changes are versioned with Alembic (`alembic/`
+`@cached`/`@invalidates_cache` every repository inherits). Schema changes are versioned with Alembic (`alembic/`
 at the repo root). The todo / model-roster / Instagram-stats / competitor /
 approval-token tables are still in Postgres with their data but no longer
 mapped (those features were removed); `alembic/env.py`'s `RETIRED_TABLES`
@@ -178,11 +180,14 @@ files — never re-uploads a file the client already has, and is the one place
 that calls `ref_usage.record_use`, since it is the one place a resolve means
 "the user picked this"; `resolve_existing_ref` itself only validates and never
 writes), `asset_card` /
-`job_status_payload` / `serve_job_file` / `job_inputs` (generic
-response-shaping every status/polling/download endpoint reuses verbatim).
-`flatten_grouped_results` / `grouped_job_status_payload` is the sibling
-pattern for tools whose result is grouped by source URL (the two
-`downloads/` tools) rather than one-file-per-job.
+`job_assets` / `job_status_payload` / `serve_job_file` / `job_inputs`
+(generic response-shaping every status/polling/download endpoint reuses
+verbatim). `job_assets` and `serve_job_file` handle both result shapes --
+one entry per file, or grouped by source URL (the two `downloads/` tools) --
+and number a grouped job's files the same way, so a card's index always
+serves the file it shows. `add_job_routes` (`routes.py`) registers the three
+GET endpoints of a job (status page, polling payload, file download) under a
+router's prefix; every tool router calls it instead of writing them.
 
 It also owns the two upload-safety primitives every upload route must use:
 `safe_filename` (basename only — a multipart `filename` of
@@ -197,15 +202,16 @@ our own origin.
 `templates/job_status.html`; `GET /<prefix>/jobs/{id}/status` returns the
 JSON polling payload; `GET /<prefix>/files/{id}/{index}` streams the result
 file. Adding a generation backend = write `_run_<tool>(...)` calling that
-backend + these five endpoints wired to `task_helpers`, nothing else.
+backend + its `/run` + one `add_kie_job_routes` call, nothing else.
 
 ## `generation/` — the AI tools
 
 - `index.py` — the unified tool-picker page (`/generate`): one form whose
   fieldset switches between seedance/seedance25/kling3/wan3/minimax_h3/nanobanana/
   seedream45/seedream5/gpt_image/fake_ai, plus a
-  cross-tool gallery with click-to-reuse. `TASK_LABELS`/
-  `FILES_PREFIX` here are the central registry — **add an entry here for any
+  cross-tool gallery with click-to-reuse. `TOOLS` (task -> label + the
+  tool's router, whose prefix gives the file and poll URLs) is the central
+  registry — **add an entry here for any
   new job task name that should show up in this gallery.**
   The gallery pages `gallery_limit` at a time: `GET /generate/gallery?offset=`
   returns the next page as an HTML fragment for `static/js/gallery-scroll.js`
@@ -222,16 +228,18 @@ backend + these five endpoints wired to `task_helpers`, nothing else.
   `KieAIClient.generate_*` call it wraps. Everything they share lives once in
   `kie_jobs.py`: `start_kie_job` (create + enqueue), `run_kie_generation`
   (preview, remote-only fallback, asset registration), `upload_references`,
-  and `add_job_routes` (the three GET endpoints). Allowed values come from
+  and `add_kie_job_routes` (`task_helpers.add_job_routes` worded for a
+  generation, with its inputs shown). Allowed values come from
   `aigenproviders/kaiai/types.py`, typed on the form so a bad value is a 422.
-- `clone.py` — `/clone`, both roles, own page: one subject image + N videos
+- `clone.py` — `/clone`, both roles, own page: 1..`clone_max_images` subject
+  images (same person, sent to every run) + N videos
   (two file pickers, so reuse/Recreate never re-uploads) -> one batch of
   `clone` jobs, each a plain Wan 3.0 run (wan's `_run_wan3`) whose duration
   is its video's length (`utils.video_probe`, rounded, clamped 2–30 s). Every
   video is probed before any job is queued, and `clone_max_videos` caps a
   batch, so a bad submit spends nothing. Jobs share `clone_batch` +
-  `clone_index` params; `clone_batches.py` regroups them for the page
-  (`CloneBatch`/`CloneCard`, one hue per batch). `/run` answers with the new
+  `clone_index` params; `schemas.CloneBatch.group` regroups them for the
+  page (one hue per batch). `/run` answers with the new
   batch rendered through `_clone_batch.html` (the page's own partial), which
   `static/js/clone.js` inserts in place -- no reload -- with XHR upload
   progress. Not in `/generate`'s gallery. The "CapCut edit + export"
@@ -380,3 +388,9 @@ fragment and swaps the sentinel for it. It calls
 marks cards already being polled) so an appended still-running card resolves
 inline. `wireDownloadButtons` needs no such call: it is one delegated document
 listener, so appended cards are covered already.
+`static/js/live-gallery.js` keeps `/generate` and `/clone` in sync across
+sessions: a `[data-live-endpoint]` container polls every
+`gallery_live_poll_s` (`/generate/gallery/latest`, `/clone/batches` — the
+pages' own partials) and prepends items it lacks, keyed by `data-live-key`
+(`jobId` / `batch`). Paused while the tab is hidden. Own submits dedupe
+against it in `generation.js` / `clone.js`.

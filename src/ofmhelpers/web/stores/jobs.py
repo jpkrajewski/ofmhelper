@@ -22,8 +22,12 @@ from __future__ import annotations
 import traceback
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
 
 from ofmhelpers.web.db.repositories import JobRepository
+from ofmhelpers.web.schemas import Job, JobPreview, ResultFile
 
 
 @lru_cache(maxsize=1)
@@ -61,7 +65,7 @@ def run_job(job_id: str, fn, kwargs: dict):
     when this runs in a separate worker."""
     try:
         result = fn(**kwargs)
-        _repository().update_status(job_id, "done", result=result)
+        _repository().update_status(job_id, "done", result=_stored(result))
     except Exception as exc:
         # The status pages show this directly to whoever is running the job --
         # a raw traceback isn't useful to them, just the exception's own
@@ -73,106 +77,108 @@ def run_job(job_id: str, fn, kwargs: dict):
         traceback.print_exc()
 
 
-def get_job(job_id: str, actor: str | None = None) -> dict | None:
+def _stored(result: Any) -> Any:
+    """A run function's return value as the JSON the result column holds:
+    its models (`ResultFile`, `DownloadResult`) dumped, anything else as is."""
+    if not isinstance(result, list):
+        return result
+    return [_stored_entry(item) for item in result]
+
+
+def _stored_entry(item: Any) -> Any:
+    if isinstance(item, ResultFile):
+        return item.to_result()
+    if isinstance(item, BaseModel):
+        return item.model_dump(mode="json")
+    return item
+
+
+def get_job(job_id: str, actor: str | None = None) -> Job | None:
     """The job, or None if it doesn't exist -- or, when `actor` is given, if
     someone else ran it (see AuthMiddleware.visible_actor). None is "no
     restriction": the worker and an admin session pass nothing."""
-    job = _repository().get(job_id)
-    if job is None or (actor is not None and job["actor"] != actor):
+    row = _repository().get(job_id)
+    if row is None or (actor is not None and row["actor"] != actor):
         return None
-    return job
+    return Job.model_validate(row)
 
 
-def set_job_preview(job_id: str, preview: dict) -> None:
+def set_job_preview(job_id: str, preview: JobPreview) -> None:
     """Lets a still-running generation job publish an interim, already-usable
     result (a hosted remote_url) before its final local-file `result` is
     ready. job_status_payload only serves this while status is "running" --
     once the job finishes (done or failed) the real `result`/`error` takes
     over and this is simply never read again."""
-    _repository().set_preview(job_id, preview)
+    _repository().set_preview(job_id, preview.model_dump())
 
 
-def _result_matches_files(result: list[dict]) -> list[dict]:
-    """Filters one job's result down to entries whose file(s) still exist on
-    disk. Handles both shapes a job's "result" list comes in:
-    - flat, one file per entry: {"name", "path"}  (the generation tools,
-      fake_ai, clean_images)
-    - grouped by source URL: {"url", "success", "output_paths": [...]}
-      (download_images/download_videos)
-    """
-    if "path" in result[0]:
-        # A path of None means the local download never finished and this
-        # entry only ever lived as a remote_url (see job_status_payload) --
-        # there's no local file to go stale, so it's never pruned.
-        return [f for f in result if f["path"] is None or Path(f["path"]).is_file()]
-
-    kept = []
-    for entry in result:
-        live = [p for p in entry.get("output_paths", []) if Path(p).is_file()]
-        if live:
-            kept.append({**entry, "output_paths": live})
-        elif not entry.get("success"):
-            kept.append(entry)  # a failed entry never had a file to lose
-    return kept
-
-
-def list_jobs() -> list[dict]:
+def list_jobs() -> list[Job]:
     """Every job, newest first, self-healed (see `_heal`). Use
     `list_jobs_page` for anything that only renders a page of them: healing
     stats every result file of every job, which is wasted on the ones the
     caller is about to slice off."""
-    return _heal(_repository().list_all())
+    return _heal([Job.model_validate(row) for row in _repository().list_all()])
 
 
 def list_jobs_page(
     tasks: set[str], offset: int, limit: int, actor: str | None = None
-) -> tuple[list[dict], int]:
+) -> tuple[list[Job], int]:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that it ran -- same meaning as get_job's), newest first, plus how
     many there are in total (before the slice, so the caller can tell whether
     another page exists).
 
-    Only the page is self-healed: the filter and the slice run off the cached
-    repository read, so rendering 20 cards costs 20 jobs' worth of disk checks
-    instead of the whole history's."""
-    matching = [
-        job
-        for job in _repository().list_all()
-        if job["task"] in tasks and (actor is None or job["actor"] == actor)
-    ]
-    return _heal(matching[offset : offset + limit]), len(matching)
+    Filtered and sliced in SQL (`JobRepository.list_page`), and only the page
+    is self-healed, so rendering 20 cards costs 20 jobs' worth of rows and
+    disk checks instead of the whole history's."""
+    page = _repository().list_page(tuple(sorted(tasks)), actor, offset, limit)
+    jobs = [Job.model_validate(row) for row in page["jobs"]]
+    return _heal(jobs), page["total"]
 
 
-def _heal(jobs: list[dict]) -> list[dict]:
+def _heal(jobs: list[Job]) -> list[Job]:
     """Self-heals history when a result file was deleted on disk (through the
     file manager, or by hand on the server): drops just the missing file(s)
     from a job's result, or the whole job if nothing in it still exists, so a
     removed file's gallery card disappears instead of turning into a dead
-    link. The healed state is written back to Postgres."""
-    surviving: list[dict] = []
+    link. The healed state is written back to Postgres. Jobs without a file
+    result (still running, failed, an audit event) pass through untouched."""
+    surviving: list[Job] = []
     for job in jobs:
-        result = job.get("result")
-        # Not every job's result is a list of file dicts -- e.g. a still-
-        # running job (result None) or todo_drive_upload (a plain Drive file
-        # ID string). Only the generator/downloader jobs produce the shapes
-        # _result_matches_files understands; leave anything else untouched.
-        if (
-            job.get("status") != "done"
-            or not result
-            or not isinstance(result, list)
-            or not isinstance(result[0], dict)
-        ):
+        if job.status != "done" or not (job.result_files() or job.is_grouped):
             surviving.append(job)
             continue
 
-        kept = _result_matches_files(result)
-        if kept == result:
+        kept = _live_entries(job)
+        if kept == job.result:
             surviving.append(job)
         elif kept:
-            job["result"] = kept
-            _repository().update_result(job["id"], kept)
+            job.result = kept
+            _repository().update_result(job.id, kept)
             surviving.append(job)
         else:
             # Nothing of this job still exists on disk -- drop it entirely.
-            _repository().delete(job["id"])
+            _repository().delete(job.id)
     return surviving
+
+
+def _live_entries(job: Job) -> list[dict]:
+    """The job's stored result minus whatever no longer exists on disk."""
+    if not job.is_grouped:
+        # A path of None means the local download never finished and this
+        # entry only ever lived as a remote_url -- there's no local file to go
+        # stale, so it's never pruned.
+        return [
+            f.to_result()
+            for f in job.result_files()
+            if f.path is None or Path(f.path).is_file()
+        ]
+
+    kept = []
+    for entry in job.download_results():
+        live = [p for p in entry.output_paths if p.is_file()]
+        if live:
+            kept.append(entry.model_copy(update={"output_paths": live}))
+        elif not entry.success:
+            kept.append(entry)  # a failed entry never had a file to lose
+    return [e.model_dump(mode="json") for e in kept]

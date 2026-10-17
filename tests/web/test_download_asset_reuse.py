@@ -83,7 +83,7 @@ def test_cleaned_images_land_in_the_asset_store(tmp_path, assets_dir, monkeypatc
 
     result = clean_image._run_clean(str(job_dir), str(assets_dir))
 
-    assert [f["name"] for f in result] == ["cleaned.png"]
+    assert [f.name for f in result] == ["cleaned.png"]
     assert "cleaned.png" in _stored_names(assets_dir)
 
 
@@ -103,8 +103,10 @@ def test_registering_the_same_content_twice_dedupes(tmp_path, assets_dir):
 def test_a_missing_output_path_does_not_fail_the_job(tmp_path, assets_dir):
     """register_grouped_results is bookkeeping after the real work finished --
     a vanished file must not turn a successful download into a failure."""
+    vanished = tmp_path / "never-written.mp4"
     task_helpers.register_grouped_results(
-        [{"output_paths": [str(tmp_path / "never-written.mp4")]}], assets_dir
+        [DownloadResult(url="https://x/reel", success=True, output_paths=[vanished])],
+        assets_dir,
     )
 
     assert list(assets_dir.glob("*")) == []

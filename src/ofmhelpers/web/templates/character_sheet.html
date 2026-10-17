@@ -36,7 +36,7 @@
             {% if job.status == "done" and job.assets %}
                 {{ am.asset_media(job.assets[0]) }}
                 <p class="filename">{{ job.assets[0].name }}</p>
-                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].name }}" class="download-btn">⬇ Download</a>
+                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].download_name }}" class="download-btn">⬇ Download</a>
             {% elif job.status == "failed" %}
                 <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
             {% elif job.status == "done" %}
@@ -44,7 +44,7 @@
             {% else %}
                 <div class="result-file"><span class="spinner"></span> working…</div>
             {% endif %}
-            <p class="source">Character sheet · {{ job.panels }} images</p>
+            <p class="source">Character sheet · {{ job.params.files|length }} images</p>
         </div>
         {% endfor %}
     </div>

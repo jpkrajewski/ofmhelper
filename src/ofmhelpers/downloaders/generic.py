@@ -7,9 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
+from ofmhelpers.downloaders.models import (
+    DownloadResult,
+    ExtractorArgs,
+    YtDlpInfo,
+    YtDlpOptions,
+)
 
 
-def _default_extra_ydl_opts() -> dict:
+def _default_extractor_args() -> ExtractorArgs:
     """Points yt-dlp's bgutil PO-token plugin at the pot-provider container
     over the Docker network, if BGUTIL_POT_PROVIDER_URL is set. Without this,
     the plugin defaults to 127.0.0.1:4416, which inside Docker means "this
@@ -17,7 +23,7 @@ def _default_extra_ydl_opts() -> dict:
     pot_url = settings.downloaders.bgutil_pot_provider_url
     if not pot_url:
         return {}
-    return {"extractor_args": {"youtubepot-bgutilhttp": {"base_url": [pot_url]}}}
+    return {"youtubepot-bgutilhttp": {"base_url": [pot_url]}}
 
 
 class DownloadConfig(BaseModel):
@@ -60,43 +66,33 @@ class DownloadConfig(BaseModel):
     # https://github.com/yt-dlp/yt-dlp/issues/12482
     youtube_player_clients: list[str] | None = None
 
-    extra_ydl_opts: dict = Field(default_factory=_default_extra_ydl_opts)
+    # Extra per-extractor arguments, merged over youtube_player_clients'.
+    extractor_args: ExtractorArgs = Field(default_factory=_default_extractor_args)
 
-    def ydl_opts(self) -> dict:
+    def ydl_opts(self) -> YtDlpOptions:
         """The yt-dlp options this config means. A method, not a computed
         field: it reads the uploaded cookies.txt off disk, which can change
         between two downloads sharing one config."""
-        opts: dict = {
-            "format": self.format,
-            "merge_output_format": self.merge_output_format,
-            "outtmpl": str(self.output_dir / self.filename_template),
-            "writethumbnail": self.write_thumbnail,
-            "quiet": True,
-            "no_warnings": False,
-            "noplaylist": not self.download_playlist,
-            "remote_components": {"ejs:github"},
-        }
-
         cookiefile = get_cookiefile()
-        if cookiefile:
-            opts["cookiefile"] = cookiefile
-        elif self.cookies_from_browser:
-            opts["cookiesfrombrowser"] = (self.cookies_from_browser, None, None, None)
-
+        browser = (
+            None
+            if cookiefile or not self.cookies_from_browser
+            else (self.cookies_from_browser, None, None, None)
+        )
+        extractor_args: ExtractorArgs = {}
         if self.youtube_player_clients:
-            opts.setdefault("extractor_args", {})["youtube"] = {
-                "player_client": self.youtube_player_clients
-            }
-
-        # Merge extra_ydl_opts' extractor_args instead of clobbering whatever
-        # was set above (e.g. youtube_player_clients).
-        extra = dict(self.extra_ydl_opts)
-        extra_extractor_args = extra.pop("extractor_args", {})
-        if extra_extractor_args:
-            opts.setdefault("extractor_args", {}).update(extra_extractor_args)
-        opts.update(extra)
-
-        return opts
+            extractor_args["youtube"] = {"player_client": self.youtube_player_clients}
+        extractor_args.update(self.extractor_args)
+        return YtDlpOptions(
+            format=self.format,
+            merge_output_format=self.merge_output_format,
+            outtmpl=str(self.output_dir / self.filename_template),
+            writethumbnail=self.write_thumbnail,
+            noplaylist=not self.download_playlist,
+            cookiefile=cookiefile,
+            cookiesfrombrowser=browser,
+            extractor_args=extractor_args,
+        )
 
     def ffmpeg_cmd(self, src: Path, dst: Path) -> list[str]:
         return [
@@ -118,15 +114,6 @@ class DownloadConfig(BaseModel):
             self.audio_bitrate,
             str(dst),
         ]
-
-
-class DownloadResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    url: str
-    success: bool
-    output_paths: list[Path] = []
-    error: str | None = None
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
@@ -177,27 +164,6 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
     return tmp_dst
 
 
-def _extract_output_paths(info: dict) -> list[Path]:
-    """Pull the real output filepath(s) straight from yt-dlp's info dict.
-    This is what yt-dlp itself considers the final file after any merging
-    or postprocessing -- far more reliable than parsing log text, which
-    doesn't always emit the same line for every extractor/format."""
-    entries = info.get("entries") if info.get("_type") == "playlist" else [info]
-    paths: list[Path] = []
-    for entry in entries or []:
-        if not entry:
-            continue
-        requested = entry.get("requested_downloads") or []
-        if requested:
-            for rd in requested:
-                fp = rd.get("filepath") or rd.get("_filename")
-                if fp:
-                    paths.append(Path(fp))
-        elif entry.get("filepath"):
-            paths.append(Path(entry["filepath"]))
-    return paths
-
-
 def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
     """Download a single URL. TikTok URLs get re-encoded to H.264; everything else doesn't."""
     config = config or DownloadConfig()
@@ -212,13 +178,13 @@ def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
         )
 
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    opts = config.ydl_opts()
+    opts = config.ydl_opts().to_ydl()
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
-        paths = _extract_output_paths(info)
+        paths = YtDlpInfo.model_validate(info).output_paths()
         if not paths:
             return DownloadResult(
                 url=url,

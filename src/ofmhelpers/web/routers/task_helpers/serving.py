@@ -10,10 +10,12 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
+from ofmhelpers.web.routers.task_helpers.download_names import download_name
 from ofmhelpers.web.routers.task_helpers.uploads import (
     MEDIA_KINDS,
     classify_kind,
 )
+from ofmhelpers.web.schemas import Job
 
 
 def media_response(path: Path, filename: str | None = None) -> FileResponse:
@@ -41,7 +43,7 @@ def media_response(path: Path, filename: str | None = None) -> FileResponse:
 
 
 def serve_job_file(
-    job: dict | None,
+    job: Job | None,
     index: int,
     as_attachment: bool = True,
 ) -> FileResponse:
@@ -52,14 +54,20 @@ def serve_job_file(
     Inline serving goes through media_response, so a job whose output is not
     image/video/audio comes back as a download instead of as a page in our
     own origin (see media_response)."""
-    if job is None or job.get("status") != "done":
+    if job is None or job.status != "done":
         raise HTTPException(status_code=404, detail="Job not found or not finished")
 
-    files = job.get("result") or []
-    if index < 0 or index >= len(files):
+    # Same order job_assets numbers the files in: across every group for a
+    # grouped download job, one entry per file otherwise.
+    paths = (
+        [str(p) for r in job.download_results() for p in r.output_paths]
+        if job.is_grouped
+        else [f.path for f in job.result_files()]
+    )
+    if index < 0 or index >= len(paths):
         raise HTTPException(status_code=404, detail="File not found")
 
-    raw_path = files[index].get("path")
+    raw_path = paths[index]
     if raw_path is None:
         # Local download never completed -- this asset only ever existed as
         # a remote_url (see job_status_payload), which the client already
@@ -73,7 +81,9 @@ def serve_job_file(
 
     if as_attachment:
         return FileResponse(
-            path, filename=path.name, media_type="application/octet-stream"
+            path,
+            filename=download_name(path.name),
+            media_type="application/octet-stream",
         )
 
     return media_response(path)

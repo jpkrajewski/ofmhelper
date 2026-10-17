@@ -20,11 +20,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.downloaders.generic import DownloadResult
-from ofmhelpers.downloaders.images import ImageDownloadResult
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import clean_image as clean_image_router
 from ofmhelpers.web.routers.downloads import images as download_images_router
 from ofmhelpers.web.routers.downloads import videos as download_reels_router
+from ofmhelpers.web.stores import jobs as jobs_store
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
@@ -129,14 +129,14 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     # admin runs one
     r = client.post("/download-videos/run", data={"urls": "https://a.example/1"})
     admin_job = r.json()["job_id"]
-    assert get_job(admin_job)["actor"] == "admin"
+    assert get_job(admin_job).actor == "admin"
 
     # va runs one
     va_client = TestClient(app)
     va_client.post("/login", data={"password": "test-va", "next": "/"})
     r = va_client.post("/download-videos/run", data={"urls": "https://a.example/2"})
     va_job = r.json()["job_id"]
-    assert get_job(va_job)["actor"] == "va"
+    assert get_job(va_job).actor == "va"
 
     html = client.get("/action-log").text
     assert "Action log" in html
@@ -150,7 +150,7 @@ def test_still_running_card_carries_poll_attributes_on_page_reload(client):
     the server-rendered card needs data-pending + data-poll-prefix so
     generation.js resumes polling it instead of requiring a manual refresh."""
     job_id = create_job("download_videos", {"urls": ["https://a.example/1"]})
-    assert get_job(job_id)["status"] == "running"
+    assert get_job(job_id).status == "running"
 
     html = client.get("/download-assets").text
     card = re.search(rf'data-job-id="{job_id}"(.*?)>', html, re.DOTALL)
@@ -178,8 +178,9 @@ def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
         ["https://a.example/1"], str(tmp_path / "assets")
     )
 
-    assert result[0]["output_paths"] == [str(out_file)]
-    json.dumps(result)  # must not raise
+    stored = jobs_store._stored(result)  # what run_job writes to the DB
+    assert stored[0]["output_paths"] == [str(out_file)]
+    json.dumps(stored)  # must not raise
 
 
 def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
@@ -187,7 +188,7 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
     out_file.write_bytes(b"fake image")
 
     def fake_download_all(urls):
-        return [ImageDownloadResult(url=urls[0], success=True, output_paths=[out_file])]
+        return [DownloadResult(url=urls[0], success=True, output_paths=[out_file])]
 
     monkeypatch.setattr(download_images_router, "download_all", fake_download_all)
 
@@ -195,8 +196,9 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
         ["https://a.example/1"], str(tmp_path / "assets")
     )
 
-    assert result[0]["output_paths"] == [str(out_file)]
-    json.dumps(result)  # must not raise
+    stored = jobs_store._stored(result)  # what run_job writes to the DB
+    assert stored[0]["output_paths"] == [str(out_file)]
+    json.dumps(stored)  # must not raise
 
 
 def test_a_bad_job_result_cannot_break_future_jobs():
@@ -210,8 +212,8 @@ def test_a_bad_job_result_cannot_break_future_jobs():
     # A raw Path is not JSON-serializable, so writing it fails -- but only for
     # this job; run_job records it as failed rather than crashing.
     run_job(poisoned_job, lambda: [{"path": Path("/tmp/gone.mp4")}], {})
-    assert get_job(poisoned_job)["status"] == "failed"
+    assert get_job(poisoned_job).status == "failed"
 
     # An unrelated job created afterwards must still persist successfully.
     next_job = create_job("nanobanana", {"prompt": "a cat"})
-    assert get_job(next_job)["task"] == "nanobanana"
+    assert get_job(next_job).task == "nanobanana"

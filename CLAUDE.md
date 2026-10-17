@@ -31,6 +31,7 @@ Before finishing:
 - `pre-commit` on modified files (`--all-files` for broader changes). `mypy` hook is file-scoped, but repo-wide `uv run mypy` must stay at "no issues found".
 - `uv run pytest` after code changes.
 - Start deps first: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis`
+- After changing a page, a template, static JS or a job flow: `uv run pytest -m e2e` (real browser against the running stack -- bring it all up with the same compose pair, `... up -d`, and `... restart worker` after worker code changes; `uv run playwright install chromium` once). Plain `uv run pytest` skips it.
 - If checks can't be run, explain why.
 - Add a small test for every code change.
 
@@ -38,7 +39,7 @@ Before finishing:
 - `logger = get_logger(__name__)` from `ofmhelpers.log`, module scope. Never `print()` in library code, never `logging.basicConfig()`, never add a handler/level outside an entrypoint.
 - Lazy args: `logger.info("uploaded %s", path)` — not f-strings.
 - In `except` blocks: `exc_info=True` or `logger.exception` — never interpolate the exception into the message.
-- Only entrypoints (`web/main.py`, `worker.py`) call `configure_logging()`. Operator CLIs that exist to print a report (e.g. `web/db/backfill_remote_urls.py`) keep using `print()` on purpose.
+- Only entrypoints (`web/main.py`, `worker.py`) call `configure_logging()`. Operator CLIs that exist to print a report keep using `print()` on purpose.
 - Tune via `OFM_LOG_LEVEL` / `OFM_LOG_FORMAT=json` / `OFM_LOG_ACCESS`.
 
 ## Architecture

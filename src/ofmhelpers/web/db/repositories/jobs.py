@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import ColumnElement, delete, func, select, update
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.db.models import (
@@ -106,7 +106,7 @@ class JobRepository(CachedRepository):
             s.execute(update(JobRow).where(JobRow.id == job_id).values(**values))
 
     @invalidates_cache
-    def set_preview(self, job_id: str, preview: dict) -> None:
+    def set_preview(self, job_id: str, preview: dict[str, Any]) -> None:
         # UPDATE on a missing id touches 0 rows -- same no-op the old
         # set_job_preview did when the job wasn't found.
         with session_scope() as s:
@@ -132,3 +132,32 @@ class JobRepository(CachedRepository):
                 .all()
             )
             return [_job_to_dict(r) for r in rows]
+
+    @cached
+    def list_page(
+        self, tasks: tuple[str, ...], actor: str | None, offset: int, limit: int
+    ) -> dict:
+        """One page of the jobs whose task is in `tasks` (and that `actor` ran,
+        unless None), newest first, plus how many match in total. Filtered and
+        sliced in SQL: a gallery page loads its 20 rows, not the history.
+        `tasks` is a tuple so the cache key is stable -- callers sort it."""
+        where: list[ColumnElement[bool]] = [JobRow.task.in_(tasks)]
+        if actor is not None:
+            where.append(JobRow.actor == actor)
+        with session_scope() as s:
+            rows = (
+                s.execute(
+                    select(JobRow)
+                    .where(*where)
+                    .order_by(JobRow.created_at.desc())
+                    .offset(offset)
+                    .limit(limit)
+                )
+                .scalars()
+                .all()
+            )
+            total = s.execute(select(func.count()).select_from(JobRow).where(*where))
+            return {
+                "jobs": [_job_to_dict(r) for r in rows],
+                "total": total.scalar_one(),
+            }

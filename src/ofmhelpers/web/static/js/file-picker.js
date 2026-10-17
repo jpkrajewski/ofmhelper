@@ -405,10 +405,23 @@
         renderList(picker);
     }
 
+    // Hand one tool's queued files to the tool being switched to, by kind:
+    // each picker's items go to the destination's picker of the same kind
+    // (whatever its field name), so changing model on /generate keeps what
+    // was picked. A kind the destination has no picker for is not carried.
+    function carryOver(fromRoot, toRoot) {
+        fromRoot.querySelectorAll(".file-picker").forEach((src) => {
+            const dst = toRoot.querySelector(`.file-picker[data-kind="${src.dataset.kind}"]`);
+            if (!dst || dst === src || !src._items || !dst._items) return;
+            dst._items = [...src._items];
+            renderList(dst);
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll(".file-picker").forEach(initPicker);
         initPreviewInputs();
     });
 
-    window.FilePicker = { collectFormData, clearPicker, setExisting };
+    window.FilePicker = { collectFormData, clearPicker, setExisting, carryOver };
 })();

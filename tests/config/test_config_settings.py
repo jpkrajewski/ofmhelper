@@ -25,7 +25,6 @@ ALL_ENV_VARS = [
     "APP_PASSWORD_VA",
     "KIE_AI_API_KEY_ADMIN",
     "KIE_AI_API_KEY_VA",
-    "OFM_JOBS_FILE",
     "OFM_JOBS_MAX_ENTRIES",
     "OFM_RECOVERY_SWEEP_INTERVAL_S",
     "OFM_GALLERY_LIMIT",
@@ -115,7 +114,6 @@ def test_web_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.app_password_va is None
     assert s.kie_ai_api_key_admin is None
     assert s.kie_ai_api_key_va is None
-    assert s.jobs_file == "uploads/jobs.json"
     assert s.max_jobs == 500
     assert s.recovery_sweep_interval_s == 300
     assert s.gallery_limit == 20

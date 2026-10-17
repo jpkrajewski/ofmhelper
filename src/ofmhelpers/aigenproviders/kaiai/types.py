@@ -69,6 +69,11 @@ class Kling3Mode(StrEnum):
     K4 = "4K"
 
 
+# Wan 3.0's accepted duration range, in whole seconds.
+WAN3_MIN_DURATION_S = 2
+WAN3_MAX_DURATION_S = 30
+
+
 class Wan3Resolution(StrEnum):
     P480 = "480P"
     P720 = "720P"

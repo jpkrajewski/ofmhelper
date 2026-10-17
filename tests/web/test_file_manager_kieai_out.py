@@ -53,7 +53,7 @@ def test_deleting_a_file_through_the_manager_removes_its_job_from_the_gallery(
 
     job_id = create_job("seedance", {})
     run_job(job_id, lambda: [{"name": "gen.mp4", "path": str(out_file)}], {})
-    assert any(j["id"] == job_id for j in list_jobs())
+    assert any(j.id == job_id for j in list_jobs())
 
     r = client.post(
         "/file-manager/delete",
@@ -62,4 +62,4 @@ def test_deleting_a_file_through_the_manager_removes_its_job_from_the_gallery(
     )
     assert r.status_code == 303
 
-    assert not any(j["id"] == job_id for j in list_jobs())
+    assert not any(j.id == job_id for j in list_jobs())

@@ -6,14 +6,12 @@ landing page, newest first, with everything the applicant typed. Read and
 delete only -- the rows are written by routers/apply.py and never edited.
 """
 
-from datetime import UTC, datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.stores import applications as applications_store
-from ofmhelpers.web.templates_config import get_templates
+from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/applications",
@@ -24,17 +22,10 @@ router = APIRouter(
 
 @router.get("")
 def list_page(request: Request):
-    rows = [
-        {
-            **a,
-            "created_at_display": datetime.fromtimestamp(a["created_at"], UTC).strftime(
-                "%Y-%m-%d %H:%M UTC"
-            ),
-        }
-        for a in applications_store.list_applications()
-    ]
-    return get_templates().TemplateResponse(
-        request, "applications.html", {"applications": rows}
+    return render(
+        request,
+        "applications.html",
+        applications=applications_store.list_applications(),
     )
 
 

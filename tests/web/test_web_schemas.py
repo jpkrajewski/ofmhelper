@@ -50,7 +50,7 @@ def test_job_accepts_every_result_shape_used_today(result):
 
 def test_job_preserves_optional_preview_payload():
     job = Job.model_validate(_job_dict(preview={"remote_url": "https://x/y.mp4"}))
-    assert job.preview == {"remote_url": "https://x/y.mp4"}
+    assert job.preview.remote_url == "https://x/y.mp4"
 
 
 def test_job_rejects_unknown_status_enum():
