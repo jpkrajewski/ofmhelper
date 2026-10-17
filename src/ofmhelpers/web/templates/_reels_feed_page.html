@@ -1,0 +1,5 @@
+{# One page of the /reels feed: the page's first page and every page
+   GET /reels/feed answers for gallery-scroll.js, so an appended card is
+   identical to a server-rendered one. #}
+{% for item in feed %}{% include "_reel_card.html" %}{% endfor %}
+{% include "_generate_gallery_sentinel.html" %}

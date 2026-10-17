@@ -1445,3 +1445,210 @@ summary:hover { color: var(--accent-soft); }
 }
 .session-expired-title { margin-bottom: var(--s-2); font-size: var(--step-1); font-weight: 800; }
 .session-expired-card p { margin: 0; color: var(--text-muted); font-size: var(--step--1); line-height: 1.5; }
+
+/* /reels (templates/reels.html, _reel_card.html, _reels_watch_item.html):
+   the watch list in the form column, and one flat feed of every profile's
+   reels -- each a card picked by clicking anywhere on it (aria-pressed, set
+   by static/js/reels.js) that plays on hover. */
+.reels-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+/* Group picker: the dropdown and its "+ New group" / "Create" button on one
+   line; the new-name row sits right under it. */
+.reels-group-pick { display: flex; gap: var(--s-2); align-items: stretch; }
+.reels-group-pick > select,
+.reels-group-pick > input { flex: 1 1 auto; min-width: 0; }
+.reels-group-pick > button { flex: none; white-space: nowrap; }
+.reels-group-pick + .reels-group-pick { margin-top: var(--s-2); }
+.reels-group-pick[hidden] { display: none; }
+
+/* The watch list: its own panel, a search box on top, rows that scroll. */
+.reels-watch-title { margin-top: var(--s-6); }
+.reels-watch-search { margin-bottom: var(--s-3); }
+.reels-watch-list {
+    margin: 0;
+    padding: var(--s-1);
+    list-style: none;
+    max-height: 60vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: var(--step--1);
+}
+.reels-watch-list:empty { display: none; }
+.reels-watch-item {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: var(--s-2) var(--s-2);
+    border-radius: var(--radius-sm);
+}
+.reels-watch-item + .reels-watch-item { border-top: 1px solid var(--border-soft); }
+.reels-watch-item:hover { background: var(--surface-2); }
+.reels-watch-item[hidden] { display: none; }
+.reels-watch-views { color: var(--text); font-weight: 700; }
+/* The most viewed account of the list: the reels' legendary gold, shining. */
+.reels-watch-item[data-tier="legendary"] {
+    border: 2px solid transparent;
+    background:
+        linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+        linear-gradient(110deg, #8a6100, #ffd84d, #fff4c2, #ffd84d, #8a6100, #ffd84d, #fff4c2) border-box;
+    background-size: 100% 100%, 300% 100%;
+    animation: reel-gold-shine 3s linear infinite, reel-gold-glow 2s ease-in-out infinite alternate;
+}
+.reels-watch-item[data-tier="legendary"] + .reels-watch-item,
+.reels-watch-item + .reels-watch-item[data-tier="legendary"] { border-top-color: transparent; }
+.reels-watch-item[data-tier="legendary"] .reels-watch-views { color: #ffd84d; }
+@media (prefers-reduced-motion: reduce) {
+    .reels-watch-item[data-tier="legendary"] { animation: none; }
+}
+.reels-watch-item > a { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.reels-watch-meta { color: var(--text-muted); white-space: nowrap; font-size: 0.75rem; }
+.reels-watch-error { color: var(--fail); cursor: help; }
+/* Row controls: small, quiet, the arrow kept clear of the text. */
+/* Row controls: full-size click targets (36px tall), arrow clear of text. */
+.reels-row-group {
+    flex: none;
+    width: 9rem;
+    min-height: 36px;
+    padding: 6px 28px 6px var(--s-3);
+    font-size: var(--step--1);
+    background-position: calc(100% - 16px) center, calc(100% - 10px) center;
+}
+.reels-watch-item .reels-unwatch {
+    flex: none;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+}
+/* Compact: three reels a row at every width. */
+.reels-feed { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-2); }
+.reel-card {
+    --tier: var(--border);
+    --tier-glow: transparent;
+    position: relative;
+    gap: var(--s-1);
+    padding: var(--s-1);
+    border: 2px solid var(--tier);
+    box-shadow: 0 0 10px var(--tier-glow);
+    cursor: pointer;
+    user-select: none;
+}
+.reel-card:hover { border-color: var(--tier); box-shadow: 0 0 14px var(--tier-glow); }
+/* The border is the view tier (instagram.models.VIEW_TIERS), coloured like
+   game loot; a pick is shown by a white ring + tick on top of it, so the
+   tier stays readable on a picked card. */
+.reel-card[data-tier="common"] { --tier: #9ca3af; }
+.reel-card[data-tier="uncommon"] { --tier: #22c55e; --tier-glow: rgba(34, 197, 94, 0.25); }
+.reel-card[data-tier="rare"] { --tier: #a855f7; --tier-glow: rgba(168, 85, 247, 0.4); }
+.reel-card[data-tier="epic"] { --tier: #f97316; --tier-glow: rgba(249, 115, 22, 0.5); }
+.reel-card[data-tier="legendary"] {
+    --tier-glow: rgba(255, 200, 40, 0.6);
+    border-color: transparent;
+    background:
+        linear-gradient(var(--surface), var(--surface)) padding-box,
+        linear-gradient(110deg, #8a6100, #ffd84d, #fff4c2, #ffd84d, #8a6100, #ffd84d, #fff4c2) border-box;
+    background-size: 100% 100%, 300% 100%;
+    animation: reel-gold-shine 3s linear infinite, reel-gold-glow 2s ease-in-out infinite alternate;
+}
+.reel-card[data-tier="legendary"]:hover { border-color: transparent; }
+.reel-card[data-tier="legendary"] .reel-views { color: #ffd84d; }
+@keyframes reel-gold-shine {
+    from { background-position: 0 0, 0% 0; }
+    to { background-position: 0 0, 150% 0; }
+}
+@keyframes reel-gold-glow {
+    from { box-shadow: 0 0 8px rgba(255, 200, 40, 0.35); }
+    to { box-shadow: 0 0 20px rgba(255, 200, 40, 0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .reel-card[data-tier="legendary"] { animation: none; }
+}
+.reel-views { font-weight: 800; color: var(--tier); }
+/* The ratio pill wears the card's tier colour, so tier reads at a glance. */
+.reel-ratio {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--tier);
+    color: #111;
+    font-weight: 700;
+}
+.reel-card[data-tier="legendary"] .reel-ratio { background: linear-gradient(110deg, #c99a00, #ffe680, #c99a00); }
+.reel-sub { color: var(--text-muted); }
+/* A reel Instagram shows to logged-in viewers only, with no working login
+   to resolve it: listed for its views, but not pickable. */
+.reel-locked { cursor: default; }
+.reel-locked .reel-thumb { opacity: 0.55; }
+.reel-lock {
+    position: absolute;
+    z-index: 1;
+    top: var(--s-2);
+    left: var(--s-2);
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+.reel-sub a { color: inherit; }
+.reel-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reel-card[aria-pressed="true"] { outline: 3px solid #fff; outline-offset: 2px; }
+.reel-card[aria-pressed="true"]::after {
+    content: "✓";
+    position: absolute;
+    z-index: 1;
+    top: var(--s-2);
+    right: var(--s-2);
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 800;
+}
+/* Thumbnail first; the <video> reels.js creates on hover lies on top of it. */
+.reel-media {
+    position: relative;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: #000;
+}
+.reel-thumb,
+.reel-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+}
+.reels-feed .gallery-sentinel { grid-column: 1 / -1; }
+/* Feed filters: a row of group chips, the rank chips under it. Chips are
+   full-size click targets; a rank chip wears its tier colour. */
+.reels-filter { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-3); }
+.reels-ranks { margin-bottom: var(--s-5); }
+.reels-filter a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 var(--s-4);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    font-weight: 600;
+    text-decoration: none;
+    text-transform: capitalize;
+}
+.reels-filter a:hover { border-color: var(--border-strong); color: var(--text); }
+.reels-filter a[aria-current="page"] { border-color: var(--accent); color: var(--text); background: var(--accent-wash); }
+.reels-ranks a[data-tier="uncommon"] { --tier: #22c55e; }
+.reels-ranks a[data-tier="rare"] { --tier: #a855f7; }
+.reels-ranks a[data-tier="epic"] { --tier: #f97316; }
+.reels-ranks a[data-tier="legendary"] { --tier: #ffd84d; }
+.reels-ranks a[data-tier] { border-color: var(--tier); color: var(--tier); }
+.reels-ranks a[data-tier][aria-current="page"] { background: var(--tier); color: #111; }
+.reel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; font-size: 0.75rem; line-height: 1.3; }

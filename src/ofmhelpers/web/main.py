@@ -16,6 +16,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
 from ofmhelpers.web.recovery import recovery_loop
+from ofmhelpers.web.reel_watch import reel_watch_loop
 from ofmhelpers.web.routers import ROUTERS
 from ofmhelpers.web.stores.jobs import load_jobs
 from ofmhelpers.web.templates_config import render
@@ -38,10 +39,14 @@ async def lifespan(app: FastAPI):
     # in-request poll timed out (or that a restart orphaned) -- see
     # ofmhelpers/web/recovery.py. Cancelled cleanly on shutdown.
     sweeper = asyncio.create_task(recovery_loop())
-    logger.info("startup complete: job history loaded, recovery sweeper running")
+    # Rescans /reels' watched Instagram profiles when due -- see
+    # ofmhelpers/web/reel_watch.py.
+    reel_watch = asyncio.create_task(reel_watch_loop())
+    logger.info("startup complete: job history loaded, sweepers running")
     yield
     sweeper.cancel()
-    logger.info("shutdown: recovery sweeper cancelled")
+    reel_watch.cancel()
+    logger.info("shutdown: sweepers cancelled")
 
 
 app = FastAPI(title="Global Ascend LLC — Content Ops", lifespan=lifespan)

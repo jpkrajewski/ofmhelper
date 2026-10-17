@@ -96,6 +96,15 @@ migration changed everything under `stores/` without touching a router.
   owns; losing it degrades the picker to "most recently uploaded". Redis
   errors are swallowed: a broker that can't record a pick is no reason to fail
   a generation that has every file it needs.
+- `reel_watch.py` — second lifespan sweeper: every
+  `rescan_check_interval_s` it atomically claims watched Instagram profiles
+  whose scan is older than `rescan_interval_s` (12 h) and queues **one**
+  worker job scanning them sequentially (parallel logged-out calls just get
+  429s). Claims expire after `rescan_claim_ttl_s`, so a job killed by a
+  deploy is retried. A rate limit (`InstagramRateLimitedError`) ends the
+  batch without recording anything for the rest, so they stay due and the
+  next sweep after the claim expires retries them. Also what
+  `POST /reels/watch` calls for new profiles.
 - `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
   key, so an in-request poll timeout or a server restart mid-generation
@@ -261,6 +270,34 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   using `downloaders.generic`/`downloaders.images`, the grouped-by-source-URL
   result shape.
 - `clean_image.py` — strips image metadata (`utils.metadata_cleaner`).
+- `reels.py` — `/reels`, both roles, own page: a watch list of Instagram
+  profiles, each in an optional **group** (`stores/watched_profiles.py`,
+  `watched_profiles.group_name`; a group made with "+ New group" before any
+  profile is in it lives in `profile_groups`, `POST /reels/groups`; a row's
+  dropdown moves a profile, `POST /reels/group/{username}`), rows
+  `_reels_watch_item.html`, most feed reels first
+  (`WatchedProfile.by_reels`), and **one flat feed** of their latest
+  scans (`schemas.FeedItem.of`, cards `_reel_card.html`), most viewed first,
+  filtered by `?group=` and `?rank=` (a `VIEW_TIERS` name: exactly that
+  rank; common 50k, uncommon 100k, rare 200k, epic 500k, legendary 1M+), paged
+  `feed_page_size` (60) at a time through `GET /reels/feed` +
+  `static/js/gallery-scroll.js` (which now accepts an endpoint carrying its
+  own query). A scan (`instagram.scan_profile`) keeps reels from the last
+  `max_age_days` with >= `min_views` views and <= `max_duration_s` (30 s,
+  Wan 3.0's max). Card border + ratio pill = view tier
+  (`instagram.models.VIEW_TIERS`). `POST /reels/watch` (`schemas.WatchForm`:
+  first token per line, so "@name — Real Name" works; one bad line rejects
+  the paste) adds new profiles to the group, moves already-watched ones to
+  it, and calls `reel_watch.queue_due_scans()` -- scans never run in a
+  request; the page polls `GET /reels/watchlist` (`data-pending` rows) and
+  reloads when none is left. The page holds only lazy `<img>` thumbnails;
+  `reels.js` creates the `<video>` (CDN mp4, sound once the page has had a
+  click) on first hover. Picks live in `sessionStorage` (code -> mp4 URL),
+  so they survive paging, group switches and reloads. Nothing is downloaded
+  until `POST /reels/clone`, which saves the picked reels into the asset
+  store and answers `/clone?video=...` — `clone.py` validates those against
+  the session's store and pre-fills the videos picker. See
+  `instagram/CLAUDE.md` for how Instagram is reached and why.
 
 ## `image_tools/` — local image edits
 

@@ -6,6 +6,7 @@ The app's configuration: every env var is read here and nowhere else.
 
 - `settings.py` — one `BaseSettings` group per app module (`SessionSettings`,
   `WebSettings`, `InfraSettings`, `KieAISettings`, `DownloadersSettings`,
+  `InstagramSettings`,
   `LoggingSettings`).
 - `__init__.py` — the single import point, `from ofmhelpers.config import
   settings`. Each group property constructs its class fresh on access (a lazy

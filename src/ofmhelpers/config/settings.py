@@ -317,6 +317,94 @@ class DownloadersSettings(BaseSettings):
     )
 
 
+class InstagramSettings(BaseSettings):
+    """instagram/client.py, routers/downloads/reels.py, web/reel_watch.py."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # The public web app's id; Instagram's web API rejects calls without it.
+    app_id: str = Field(default="936619743392459", validation_alias="OFM_IG_APP_ID")
+    user_agent: str = Field(
+        default=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+        ),
+        validation_alias="OFM_IG_USER_AGENT",
+    )
+    asbd_id: str = Field(default="359341", validation_alias="OFM_IG_ASBD_ID")
+    # The logged-out web GraphQL queries instagram/client.py runs. Instagram
+    # rotates these every few weeks; a fresh one is in instagram.com's JS
+    # (gallery-dl's instagram extractor tracks them too).
+    profile_doc_id: str = Field(
+        default="28036671149327607", validation_alias="OFM_IG_PROFILE_DOC_ID"
+    )
+    reels_doc_id: str = Field(
+        default="28989741540630190", validation_alias="OFM_IG_REELS_DOC_ID"
+    )
+    media_doc_id: str = Field(
+        default="27130156389949648", validation_alias="OFM_IG_MEDIA_DOC_ID"
+    )
+    timeline_doc_id: str = Field(
+        default="28142289515441884", validation_alias="OFM_IG_TIMELINE_DOC_ID"
+    )
+    # /reels feed: cards per page (the rest load on scroll).
+    feed_page_size: int = Field(
+        default=60, ge=1, validation_alias="OFM_IG_FEED_PAGE_SIZE"
+    )
+    timeout_s: int = Field(default=20, validation_alias="OFM_IG_TIMEOUT_S")
+    # Proxies the logged-out Instagram calls go through, comma-separated,
+    # "user:pass@host:port" or a full URL. Each profile scan takes one; a
+    # rate-limited profile is retried on the next. Empty: direct. Secrets --
+    # .env only, never committed. The logged-in (cookies.txt) calls never
+    # use them: one account seen from many IPs is what trips a checkpoint.
+    proxies: str = Field(default="", validation_alias="OFM_IG_PROXIES")
+    # Proxies a rate-limited profile is retried on before a batch stops.
+    proxy_retries: int = Field(default=3, ge=0, validation_alias="OFM_IG_PROXY_RETRIES")
+
+    @property
+    def proxy_urls(self) -> list[str]:
+        return [
+            p if "://" in p else f"http://{p}"
+            for p in (part.strip() for part in self.proxies.split(","))
+            if p
+        ]
+
+    # A scan looks at every reel posted in the last max_age_days, fetched
+    # page_size at a time; reels_per_profile caps it for a profile posting
+    # dozens a day.
+    max_age_days: float = Field(
+        default=14, gt=0, validation_alias="OFM_IG_MAX_AGE_DAYS"
+    )
+    reels_per_profile: int = Field(
+        default=120, ge=1, validation_alias="OFM_IG_REELS_PER_PROFILE"
+    )
+    page_size: int = Field(default=12, ge=1, validation_alias="OFM_IG_PAGE_SIZE")
+    # /reels: a reel is listed from min_views up (the lowest tier, see
+    # instagram/models.py's VIEW_TIERS), and anything longer than
+    # max_duration_s never is. 30 s is the most Wan 3.0 (what /clone runs)
+    # takes.
+    min_views: int = Field(default=50_000, ge=0, validation_alias="OFM_IG_MIN_VIEWS")
+    max_duration_s: float = Field(
+        default=30.0, gt=0, validation_alias="OFM_IG_MAX_DURATION_S"
+    )
+    # web/reel_watch.py: how stale a watched profile's scan may get, how
+    # often the sweeper looks for stale ones, and how long a claimed scan
+    # may run before another sweep takes it over.
+    rescan_interval_s: int = Field(
+        default=12 * 60 * 60, validation_alias="OFM_IG_RESCAN_INTERVAL_S"
+    )
+    rescan_check_interval_s: int = Field(
+        default=600, validation_alias="OFM_IG_RESCAN_CHECK_INTERVAL_S"
+    )
+    rescan_claim_ttl_s: int = Field(
+        default=60 * 60, validation_alias="OFM_IG_RESCAN_CLAIM_TTL_S"
+    )
+    # Reel mp4 downloads "Clone selected" runs at once.
+    download_workers: int = Field(
+        default=6, ge=1, validation_alias="OFM_IG_DOWNLOAD_WORKERS"
+    )
+
+
 class LoggingSettings(BaseSettings):
     """Read once per process by ofmhelpers.logging.configure_logging(), which
     every entrypoint (web/main.py, the RQ worker, alembic/env.py) calls before

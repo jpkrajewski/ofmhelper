@@ -9,7 +9,8 @@
 <div class="generate-form-col">
 <h2 class="col-title">Wan 3.0 — one subject, many videos</h2>
 
-<form id="clone-form" action="/clone/run" data-max-videos="{{ max_videos }}" data-max-images="{{ max_images }}" novalidate>
+<form id="clone-form" action="/clone/run" data-max-videos="{{ max_videos }}" data-max-images="{{ max_images }}"
+      data-prefill-videos='{{ prefill_videos|tojson }}' novalidate>
     {% include "_kie_api_key_field.html" %}
     {{ fp.file_picker('image', 'image', 'Subject images (@Image1, @Image2…)', 'Up to ' ~ max_images ~ ' photos of the same person (different angles help likeness). Every run gets all of them.', max=max_images, multiple=true) }}
     {{ fp.file_picker('videos', 'video', 'Videos (@Video1)', 'Up to ' ~ max_videos ~ ' videos. Each one is its own Wan 3.0 run, as long as the video (2–30 s).', multiple=true) }}

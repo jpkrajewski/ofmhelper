@@ -23,6 +23,7 @@ existed):
 from ofmhelpers.config.settings import (
     DownloadersSettings,
     InfraSettings,
+    InstagramSettings,
     KieAISettings,
     LoggingSettings,
     SessionSettings,
@@ -52,6 +53,10 @@ class Settings:
     @property
     def downloaders(self) -> DownloadersSettings:
         return DownloadersSettings()
+
+    @property
+    def instagram(self) -> InstagramSettings:
+        return InstagramSettings()
 
     @property
     def logging(self) -> LoggingSettings:

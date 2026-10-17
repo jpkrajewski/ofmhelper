@@ -7,6 +7,7 @@
 - `files.py` -- stored files as the reuse picker and file manager list them.
 - `tools.py` -- a background-job tool as the task registry knows it.
 - `applications.py` -- the landing-page application form and stored lead.
+- `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
 
 Import from here; the split is an implementation detail of this package.
 """
@@ -29,6 +30,12 @@ from ofmhelpers.web.schemas.jobs import (
 )
 from ofmhelpers.web.schemas.persistence import Job, JobPreview, JobStatus, ResultFile
 from ofmhelpers.web.schemas.tools import Tool
+from ofmhelpers.web.schemas.watched import (
+    FeedItem,
+    GroupForm,
+    WatchedProfile,
+    WatchForm,
+)
 
 __all__ = [
     "ActionLogEntry",
@@ -40,7 +47,9 @@ __all__ = [
     "CloneQueued",
     "DirEntry",
     "FailedSource",
+    "FeedItem",
     "FileEntry",
+    "GroupForm",
     "InputFileGroup",
     "InputSetting",
     "Job",
@@ -56,4 +65,6 @@ __all__ = [
     "ResultFile",
     "TaskCard",
     "Tool",
+    "WatchForm",
+    "WatchedProfile",
 ]

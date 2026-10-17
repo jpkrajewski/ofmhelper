@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 from ofmhelpers.config.settings import (
     DownloadersSettings,
     InfraSettings,
+    InstagramSettings,
     KieAISettings,
     SessionSettings,
     WebSettings,
@@ -102,6 +103,8 @@ _SETTINGS_CLASSES = (
     InfraSettings,
     KieAISettings,
     DownloadersSettings,
+    # Its .env holds the real scan proxies: a test must never go through them.
+    InstagramSettings,
 )
 
 

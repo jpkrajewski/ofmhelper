@@ -4,7 +4,7 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `generation/` -- the AI generation tools (one module per kie.ai model, plus
   the no-cost fake_ai stand-in) and the unified picker page that fronts them.
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
-  metadata cleaner, and their picker page.
+  metadata cleaner, their picker page, and the viral-reel finder.
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
 - `video_tools/` -- local video edits with no external service (uniqify).
@@ -25,7 +25,7 @@ never touched.
 from ofmhelpers.web.routers import apply, auth, refs
 from ofmhelpers.web.routers.admin import action_log, cookies, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
-from ofmhelpers.web.routers.downloads import clean_image
+from ofmhelpers.web.routers.downloads import clean_image, reels
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import videos as download_videos
@@ -71,6 +71,7 @@ ROUTERS = [
     download_videos.router,
     download_images.router,
     clean_image.router,
+    reels.router,
     # image_tools/
     character_sheet.router,
     # video_tools/
