@@ -10,7 +10,10 @@ import time
 from collections.abc import Iterator
 from itertools import islice
 
-from ofmhelpers.instagram.client import InstagramClient, InstagramError
+from ofmhelpers.instagram.client import (
+    InstagramClient,
+    ProfilePrivateError,
+)
 from ofmhelpers.instagram.models import (
     Profile,
     ProfileReels,
@@ -86,7 +89,7 @@ def scan_profile(
     profile = client.open_profile(username)
     if profile.is_private:
         msg = "profile is private"
-        raise InstagramError(msg)
+        raise ProfilePrivateError(msg)
     since = time.time() - max_age_s
     recent = list(islice(_recent(client.reels(profile.user_id), since), limit))
     viral = [s for s in recent if (s.play_count or 0) >= min_views]

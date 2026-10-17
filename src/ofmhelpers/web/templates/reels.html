@@ -8,7 +8,7 @@
 <div class="generate-form-col">
 <h2 class="col-title">Watch profiles</h2>
 
-<form id="reels-form" action="/reels/watch" data-clone-action="/reels/clone"
+<form id="reels-form" action="/reels/watch" data-clone-action="/reels/clone" data-download-action="/reels/download"
       data-max-videos="{{ max_videos }}" novalidate>
     <div class="field">
         <label for="reels-profiles">Add Instagram profiles</label>
@@ -35,17 +35,21 @@
     <div class="generation-status" role="status" aria-live="polite"></div>
     <p class="form-hint">
         New profiles are scanned in the background; after that every profile
-        is rescanned every {{ rescan_hours }} h; profiles that don't exist are
-        dropped. The feed holds reels from the last
+        is rescanned every {{ rescan_hours }} h. Deleted, renamed or private
+        profiles are not added (you're told which). Once a profile has
+        scanned fine it is never removed for you: if Instagram later can't
+        show it, it keeps its reels with a ⚠ saying why. The feed holds reels from the last
         {{ max_age_days|round|int }} days with at least
         {{ "{:,}".format(min_views) }} views, most viewed first; over
         {{ max_duration_s|round|int }} s are skipped. Rank = border: common
         50k grey, uncommon 100k green, rare 200k purple, epic 500k orange,
-        legendary 1M+ gold. Hover to play, click to pick, then Clone selected.
+        legendary 1M+ gold. Hover to play, click to pick, then Clone or Download in
+        the bar under the reels. On top of the list: the most viewed profile (gold), then the
+        one with the most feed reels (orange).
     </p>
 </form>
 
-<h2 class="col-title reels-watch-title">Watching <span id="reels-watch-count">{{ profiles|length }}</span></h2>
+<h2 class="col-title reels-watch-title">Watching <span id="reels-watch-count">{{ board.rows|length }}</span></h2>
 <input type="search" id="reels-watch-search" class="reels-watch-search" placeholder="Find a profile…" aria-label="Find a profile">
 <ul class="reels-watch-list" id="reels-watch-list" data-endpoint="/reels/watchlist{% if group %}?group={{ group|urlencode }}{% endif %}">
     {% include "_reels_watch_rows.html" %}
@@ -53,32 +57,44 @@
 </div>
 
 <div class="generate-gallery-col">
-<div class="reels-bar">
-    <h2 class="col-title">Reels</h2>
-    <button type="button" class="btn-primary" id="reels-clone" disabled>Clone selected (0)</button>
+<h2 class="col-title">Reels</h2>
+<div class="reels-filters">
+    <span class="reels-filter-label" id="reels-filter-group">Group</span>
+    <nav class="reels-filter" aria-labelledby="reels-filter-group">
+        {% for label, href, current in group_links %}
+        <a href="{{ href }}" {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+    </nav>
+    <span class="reels-filter-label" id="reels-filter-rank">Rank</span>
+    <nav class="reels-filter reels-ranks" aria-labelledby="reels-filter-rank">
+        {% for label, tier, href, current in rank_links %}
+        <a href="{{ href }}" {% if tier %}data-tier="{{ tier }}"{% endif %} {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+    </nav>
+    <span class="reels-filter-label" id="reels-filter-reach" title="A reel's views divided by its account's followers">Views ÷ followers</span>
+    <nav class="reels-filter" aria-labelledby="reels-filter-reach">
+        {% for label, href, current in ratio_links %}
+        <a href="{{ href }}" {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+    </nav>
 </div>
-<nav class="reels-filter" aria-label="Group">
-    {% for label, href, current in group_links %}
-    <a href="{{ href }}" {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
-</nav>
-<nav class="reels-filter reels-ranks" aria-label="Rank">
-    {% for label, tier, href, current in rank_links %}
-    <a href="{{ href }}" {% if tier %}data-tier="{{ tier }}"{% endif %} {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
-</nav>
 <div class="generation-status" id="reels-clone-status" role="status" aria-live="polite"></div>
 
 <div class="results reels-feed" id="reels-feed" data-gallery-endpoint="{{ feed_endpoint }}">
     {% include "_reels_feed_page.html" %}
 </div>
 <p class="empty-state" id="reels-empty" {% if feed %}hidden{% endif %}>
-    {% if group or rank %}
-    No {{ rank or "" }} reels{% if group %} in {{ group }}{% endif %} right now. <a href="/reels">Show all</a>
+    {% if group or rank or ratio %}
+    No {{ rank or "" }} reels{% if ratio %} past {{ ratio }}× followers{% endif %}{% if group %} in {{ group }}{% endif %} right now. <a href="/reels">Show all</a>
     {% else %}
     No reels yet. Add profiles, then Add &amp; scan.
     {% endif %}
 </p>
+<div class="reels-selection" role="region" aria-label="Selected reels">
+    <span class="reels-selection-count" id="reels-picked-count" aria-live="polite">No reels selected</span>
+    <button type="button" class="btn-outline" id="reels-download" disabled>Download</button>
+    <button type="button" class="btn-primary" id="reels-clone" disabled>Clone</button>
+</div>
 </div>
 </div>
 

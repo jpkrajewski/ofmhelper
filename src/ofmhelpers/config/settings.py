@@ -360,6 +360,18 @@ class InstagramSettings(BaseSettings):
     proxies: str = Field(default="", validation_alias="OFM_IG_PROXIES")
     # Proxies a rate-limited profile is retried on before a batch stops.
     proxy_retries: int = Field(default=3, ge=0, validation_alias="OFM_IG_PROXY_RETRIES")
+    # A random pause up to this long before a profile is retried on the next
+    # proxy, so retries don't land on Instagram in lockstep.
+    retry_jitter_s: float = Field(
+        default=2.0, ge=0, validation_alias="OFM_IG_RETRY_JITTER_S"
+    )
+    # Each call's own retries of a dropped connection, a read timeout or a
+    # 5xx (exponential backoff from retry_backoff_s, plus as much jitter),
+    # before the proxy rotation takes over.
+    http_retries: int = Field(default=2, ge=0, validation_alias="OFM_IG_HTTP_RETRIES")
+    retry_backoff_s: float = Field(
+        default=0.5, ge=0, validation_alias="OFM_IG_RETRY_BACKOFF_S"
+    )
 
     @property
     def proxy_urls(self) -> list[str]:

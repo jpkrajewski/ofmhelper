@@ -9,14 +9,14 @@
 {% if reel.video_url %}
 <div class="result-item reel-card" role="button" tabindex="0" aria-pressed="false"
      data-username="{{ item.username }}" data-code="{{ reel.code }}" data-video-url="{{ reel.video_url }}"
-     data-views="{{ reel.views }}" data-tier="{{ reel.tier or '' }}">
+     data-views="{{ reel.views }}" data-ratio="{{ reel.ratio }}" data-tier="{{ reel.tier or '' }}">
 {% else %}
 {# Instagram shows this one to logged-in viewers only and no working login
    was at hand: listed, but nothing to play or clone. #}
 <div class="result-item reel-card reel-locked" aria-disabled="true"
      title="Instagram hides this reel from logged-out visitors — upload fresh cookies at /cookies"
      data-username="{{ item.username }}" data-code="{{ reel.code }}"
-     data-views="{{ reel.views }}" data-tier="{{ reel.tier or '' }}">
+     data-views="{{ reel.views }}" data-ratio="{{ reel.ratio }}" data-tier="{{ reel.tier or '' }}">
     <span class="reel-lock" aria-hidden="true">🔒 login only</span>
 {% endif %}
     <div class="reel-media">

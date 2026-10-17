@@ -137,6 +137,17 @@ class WatchedProfileRepository(CachedRepository):
             return sorted(claimed.scalars().all())
 
     @invalidates_cache
+    def replace_result(self, username: str, result: dict[str, Any]) -> None:
+        """The stored scan rewritten in place: not a new scan, so neither
+        `scanned_at` nor the stats history moves."""
+        with session_scope() as s:
+            s.execute(
+                update(WatchedProfileRow)
+                .where(WatchedProfileRow.username == username)
+                .values(result=result)
+            )
+
+    @invalidates_cache
     def record_scan(
         self, username: str, result: dict[str, Any] | None, error: str | None
     ) -> None:

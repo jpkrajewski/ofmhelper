@@ -12,8 +12,10 @@ from fastapi import APIRouter, Depends, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.reel_watch import unlock_gated
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
@@ -35,4 +37,6 @@ async def upload_cookies(file: UploadFile):
     # Blocking disk I/O off the event loop.
     await run_in_threadpool(dest.parent.mkdir, parents=True, exist_ok=True)
     await run_in_threadpool(dest.write_bytes, payload)
+    # /reels' login-only reels open up now, not at their next rescan.
+    await run_in_threadpool(enqueue, unlock_gated)
     return RedirectResponse(url="/cookies?uploaded=1", status_code=303)

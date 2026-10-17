@@ -4,12 +4,14 @@ reels a scan keeps."""
 import time
 
 import pytest
+import requests
 from pydantic import ValidationError
 
 from ofmhelpers.instagram import (
     InstagramClient,
     InstagramError,
     InstagramRateLimitedError,
+    InstagramUnavailableError,
     ProfileHandle,
     ProfileNotFoundError,
     ReelDownload,
@@ -189,8 +191,75 @@ def test_media_falls_back_to_the_login_for_gated_reels(monkeypatch):
         client, "_query", lambda *_a, **_k: MediaPage.model_validate({"data": {}})
     )
     resolved = ReelMedia(video_url=CDN, duration_s=1, taken_at=0)
-    monkeypatch.setattr(client, "_media_logged_in", lambda pk: resolved)
+    monkeypatch.setattr(client, "media_logged_in", lambda pk: resolved)
     assert client.media("1") == resolved
+
+
+def test_a_5xx_is_a_transient_failure():
+    page = _Page("bad gateway", status=502)
+    page.url, page.is_redirect = "https://www.instagram.com/x", False
+    with pytest.raises(InstagramUnavailableError):
+        InstagramClient._raise_for(page)
+
+
+def test_calls_retry_drops_and_5xx_with_backoff_and_jitter(monkeypatch):
+    monkeypatch.setenv("OFM_IG_HTTP_RETRIES", "4")
+    retry = InstagramClient()._session.get_adapter("https://x").max_retries
+    assert retry.total == 4
+    assert 503 in retry.status_forcelist
+    assert retry.backoff_jitter > 0
+
+
+def test_unreachable_login_leaves_the_reel_login_only(monkeypatch, tmp_path):
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    monkeypatch.setattr(
+        "ofmhelpers.instagram.client.get_cookiefile", lambda: str(cookies)
+    )
+    client = InstagramClient()
+
+    def drop(*_a, **_k):
+        raise requests.exceptions.ConnectionError
+
+    monkeypatch.setattr(client._logged_in, "get", drop)
+    assert client.media_logged_in("1") is None
+
+
+@pytest.mark.parametrize(
+    ("page", "exists"),
+    [
+        ('"pageID":"profilePage"', True),
+        ('"pageID":"httpErrorPage"', False),
+        ("<html>login</html>", None),
+    ],
+)
+def test_login_tells_a_real_profile_from_a_deleted_one(monkeypatch, page, exists):
+    monkeypatch.setattr(
+        "ofmhelpers.instagram.client.get_cookiefile", lambda: "cookies.txt"
+    )
+    client = InstagramClient()
+    monkeypatch.setattr(
+        type(client), "_logged_in", property(lambda _self: _FakeSession(page))
+    )
+    assert client.exists_logged_in("someone") is exists
+
+
+def test_without_a_login_existence_is_unknown(monkeypatch):
+    monkeypatch.setattr("ofmhelpers.instagram.client.get_cookiefile", lambda: None)
+    assert InstagramClient().exists_logged_in("someone") is None
+
+
+class _FakeSession:
+    def __init__(self, text):
+        self.text = text
+
+    def get(self, *_args, **_kwargs):
+        return _Page(self.text)
+
+
+def test_gated_reel_without_cookies_stays_unresolved(monkeypatch):
+    monkeypatch.setattr("ofmhelpers.instagram.client.get_cookiefile", lambda: None)
+    assert InstagramClient().media_logged_in("1") is None
 
 
 def test_unresolvable_viral_reel_is_listed_not_dropped():
@@ -210,6 +279,19 @@ def _pk(days_ago: float) -> str:
     """A media id posted `days_ago` (Instagram ids carry their post time)."""
     ms = (time.time() - days_ago * DAY - 1314220021.721) * 1000
     return str(int(ms) << 23)
+
+
+def test_reel_shortcode_decodes_to_its_media_id():
+    reel = Reel(
+        code="Def8WjmhG77",
+        taken_at=0,
+        duration_s=None,
+        views=0,
+        followers=0,
+        thumbnail_url="",
+        video_url=None,
+    )
+    assert reel.pk == "4008187626229362427"
 
 
 def test_media_id_carries_its_post_time():

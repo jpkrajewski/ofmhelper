@@ -35,6 +35,17 @@ class WatchedProfile(BaseModel):
         top = max(profiles, key=lambda p: p.views_total, default=None)
         return top.username if top and top.views_total else None
 
+    @classmethod
+    def most_reels(
+        cls, profiles: list["WatchedProfile"], excluding: str | None
+    ) -> str | None:
+        """The username with the most feed reels besides `excluding` (the
+        most viewed, which already leads), window views breaking a tie; None
+        while no other profile has any."""
+        rest = [p for p in profiles if p.username != excluding]
+        top = max(rest, key=lambda p: (p.reel_count, p.views_total), default=None)
+        return top.username if top and top.reel_count else None
+
     @property
     def reel_count(self) -> int:
         """Reels in the feed from the last scan (past every filter); 0 before
@@ -52,6 +63,29 @@ class WatchedProfile(BaseModel):
             return (p.pending, p.reel_count, views)
 
         return sorted(profiles, key=key, reverse=True)
+
+
+class Leaderboard(BaseModel):
+    """The watch list as /reels shows it, for whichever group is filtered:
+    the most viewed profile first, then the one with the most feed reels,
+    both outlined and labelled; the rest in `WatchedProfile.by_reels` order."""
+
+    rows: list[WatchedProfile]
+    top_views: str | None
+    top_reels: str | None
+
+    @classmethod
+    def of(cls, profiles: list[WatchedProfile]) -> "Leaderboard":
+        top_views = WatchedProfile.most_viewed(profiles)
+        top_reels = WatchedProfile.most_reels(profiles, top_views)
+        leaders = [u for u in (top_views, top_reels) if u]
+        by_name = {p.username: p for p in profiles}
+        rest = [p for p in profiles if p.username not in leaders]
+        return cls(
+            rows=[by_name[u] for u in leaders] + WatchedProfile.by_reels(rest),
+            top_views=top_views,
+            top_reels=top_reels,
+        )
 
 
 class FeedItem(BaseModel):

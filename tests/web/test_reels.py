@@ -8,24 +8,35 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+import io
 import json
+import zipfile
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 
 from ofmhelpers.instagram import (
     InstagramError,
     InstagramRateLimitedError,
+    InstagramUnavailableError,
     ProfileNotFoundError,
+    ProfilePrivateError,
 )
-from ofmhelpers.instagram.models import Profile, ProfileReels, Reel, ReelStat
+from ofmhelpers.instagram.models import (
+    Profile,
+    ProfileReels,
+    Reel,
+    ReelMedia,
+    ReelStat,
+)
 from ofmhelpers.web import reel_watch
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import reels
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.schemas import FeedItem, WatchedProfile, WatchForm
+from ofmhelpers.web.schemas import FeedItem, Leaderboard, WatchedProfile, WatchForm
 from ofmhelpers.web.stores.watched_profiles import (
     claim_due,
     get_watched,
@@ -35,6 +46,11 @@ from ofmhelpers.web.stores.watched_profiles import (
 )
 
 CDN = "https://scontent.cdninstagram.com/v/{}.mp4"
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_pause(monkeypatch):
+    monkeypatch.setenv("OFM_IG_RETRY_JITTER_S", "0")
 
 
 @pytest.fixture
@@ -195,6 +211,37 @@ def test_login_only_reel_is_shown_but_not_pickable(client, monkeypatch):
     assert "data-video-url" not in html
 
 
+def test_uploading_cookies_unlocks_stored_login_only_reels(
+    client, tmp_path, monkeypatch
+):
+    def gated(_client, username, *_args):
+        found = _found(username)
+        found.reels[0] = found.reels[0].model_copy(
+            update={"video_url": None, "duration_s": None}
+        )
+        return found
+
+    monkeypatch.setattr(reel_watch, "scan_profile", gated)
+    client.post("/reels/watch", data={"profiles": "x"})
+    scanned_at = get_watched("x").scanned_at
+    asked = []
+
+    def logged_in(_self, pk):
+        asked.append(pk)
+        return ReelMedia(video_url=CDN.format("u"), duration_s=9.0, taken_at=5)
+
+    monkeypatch.setattr(reel_watch.InstagramClient, "media_logged_in", logged_in)
+    monkeypatch.setenv("OFM_COOKIES_FILE", str(tmp_path / "cookies.txt"))
+    client.post("/login", data={"password": "test-admin", "next": "/"})
+    client.post("/cookies", files={"file": ("cookies.txt", b"# Netscape")})
+
+    watched = get_watched("x")
+    assert asked == [_found("x").reels[0].pk]
+    assert watched.result.reels[0].video_url == CDN.format("u")
+    assert watched.scanned_at == scanned_at
+    assert "login only" not in client.get("/reels").text
+
+
 def test_feed_is_every_profiles_reels_most_viewed_first():
     def watched(username, views):
         return WatchedProfile(
@@ -260,15 +307,172 @@ def test_rate_limit_stops_the_batch_and_leaves_the_rest_due(monkeypatch):
     ]
 
 
-def test_a_profile_that_does_not_exist_is_dropped(client, monkeypatch):
-    def missing(_client, username, *_args):
+def test_not_found_is_retried_on_another_proxy_and_never_drops_the_profile(
+    client, scans, monkeypatch
+):
+    client.post("/reels/watch", data={"profiles": "real"})
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2,c:3")
+    used = []
+
+    def flagged_ip(_client, username, *_args):
+        used.append(username)
         msg = "profile not found"
         raise ProfileNotFoundError(msg)
 
-    monkeypatch.setattr(reel_watch, "scan_profile", missing)
-    r = client.post("/reels/watch", data={"profiles": "gone_for_good"})
-    assert r.json()["added"] == ["gone_for_good"]
-    assert get_watched("gone_for_good") is None
+    monkeypatch.setattr(reel_watch, "scan_profile", flagged_ip)
+    reel_watch.scan_all(["real"])
+    watched = get_watched("real")
+    assert used == ["real", "real", "real"]
+    assert watched is not None
+    assert "no such profile (3 tries)" in watched.error
+    assert watched.result is not None  # the last good scan stays on show
+
+
+def _not_found(_client, username, *_args):
+    msg = "profile not found"
+    raise ProfileNotFoundError(msg)
+
+
+def test_a_new_profile_confirmed_gone_is_not_added(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
+    monkeypatch.setattr(reel_watch, "scan_profile", _not_found)
+    monkeypatch.setattr(
+        reel_watch.InstagramClient, "exists_logged_in", lambda _self, _u: False
+    )
+    watch("deleted_account")
+    reel_watch.scan_all(["deleted_account"])
+    assert get_watched("deleted_account") is None
+
+
+def test_a_new_profile_the_login_still_sees_is_kept(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
+    monkeypatch.setattr(reel_watch, "scan_profile", _not_found)
+    monkeypatch.setattr(
+        reel_watch.InstagramClient, "exists_logged_in", lambda _self, _u: True
+    )
+    watch("flagged_proxies")
+    reel_watch.scan_all(["flagged_proxies"])
+    assert "no such profile" in get_watched("flagged_proxies").error
+
+
+def test_a_private_profile_is_not_added_but_a_known_one_turning_private_stays(
+    client, scans, monkeypatch
+):
+    client.post("/reels/watch", data={"profiles": "known"})  # scanned fine
+
+    def private(_client, username, *_args):
+        msg = "profile is private"
+        raise ProfilePrivateError(msg)
+
+    monkeypatch.setattr(reel_watch, "scan_profile", private)
+    watch("new_private")
+    reel_watch.scan_all(["new_private", "known"])
+    assert get_watched("new_private") is None
+    known = get_watched("known")
+    assert known.error == "profile is private"
+    assert known.result is not None  # its good reels stay
+
+
+def test_instagram_errors_on_every_try_are_shown_and_the_batch_goes_on(
+    monkeypatch,
+):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
+    seen = []
+
+    def flaky(_client, username, *_args):
+        seen.append(username)
+        if username == "down":
+            msg = "Instagram answered 503"
+            raise InstagramUnavailableError(msg)
+        return _found(username)
+
+    monkeypatch.setattr(reel_watch, "scan_profile", flaky)
+    watch("down")
+    watch("up")
+    reel_watch.scan_all(["down", "up"])
+    assert seen == ["down", "down", "up"]
+    assert "errors (2 tries)" in get_watched("down").error
+    assert get_watched("up").error is None
+
+
+def test_tries_that_never_reach_instagram_record_nothing(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2,c:3")
+
+    def dropped(_client, username, *_args):
+        if username == "x":
+            raise requests.exceptions.ReadTimeout
+        return _found(username)
+
+    monkeypatch.setattr(reel_watch, "scan_profile", dropped)
+    watch("x")
+    watch("y")
+    reel_watch.scan_all(["x", "y"])
+    x = get_watched("x")
+    assert (x.pending, x.error) == (True, None)  # still due, nothing blamed
+    assert get_watched("y").error is None
+
+
+def test_a_network_outage_stops_the_batch_without_blaming_anyone(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1")
+    used = []
+
+    def offline(username, proxy=None):
+        used.append((username, proxy))
+        raise requests.exceptions.ProxyError if proxy else requests.ConnectionError
+
+    monkeypatch.setattr(reel_watch, "scan_watched", offline)
+    for u in ("x", "y", "z"):
+        watch(u)
+    reel_watch.scan_all(["x", "y", "z"])
+    # x kills the only proxy, y goes direct and fails: the batch stops there.
+    assert used == [("x", "http://a:1"), ("y", None)]
+    assert [(p.pending, p.error) for p in list_watched()] == [(True, None)] * 3
+
+
+def test_a_dead_proxy_leaves_the_pool_for_the_rest_of_the_job(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "dead:1,b:2,c:3")
+    used = []
+
+    def scan(username, proxy=None):
+        used.append(proxy)
+        if proxy == "http://dead:1":
+            raise requests.exceptions.ProxyError
+
+    monkeypatch.setattr(reel_watch, "scan_watched", scan)
+    reel_watch.scan_all(["x", "y", "z", "w"])
+    assert used == [
+        "http://dead:1",
+        "http://b:2",
+        "http://c:3",
+        "http://b:2",
+        "http://c:3",
+    ]
+
+
+def test_one_rate_limited_try_does_not_stop_the_batch(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
+    used = []
+
+    def scan(username, proxy=None):
+        used.append(username)
+        if username == "x":
+            if proxy == "http://a:1":
+                msg = "gone"
+                raise ProfileNotFoundError(msg)
+            msg = "429"
+            raise InstagramRateLimitedError(msg)
+
+    monkeypatch.setattr(reel_watch, "scan_watched", scan)
+    watch("x")
+    reel_watch.scan_all(["x", "y"])
+    assert used == ["x", "x", "y"]
+    assert "no such profile (2 tries)" in get_watched("x").error
+
+
+def test_with_every_proxy_dead_the_job_goes_direct():
+    pool = reel_watch._ProxyPool(["http://a:1"])
+    pool.drop("http://a:1")
+    assert pool.next() is None
 
 
 def test_row_dropdown_moves_a_profile(client):
@@ -360,6 +564,40 @@ def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
             assert f'data-code="{other}"' not in page
 
 
+def test_feed_filters_by_follower_multiple(client, monkeypatch):
+    def found(username, followers, views):
+        result = _found(username, views=views)
+        reel = result.reels[0].model_copy(update={"followers": followers})
+        profile = result.profile.model_copy(update={"followers": followers})
+        result = result.model_copy(update={"reels": [reel], "profile": profile})
+        return WatchedProfile(
+            username=username, added_at=0, scanned_at=1, result=result
+        )
+
+    profiles = [
+        found("small_viral", 10_000, 120_000),  # 12x its followers
+        found("mid", 50_000, 160_000),  # 3.2x
+        found("big", 1_000_000, 900_000),  # 0.9x
+    ]
+    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+
+    def shown(query):
+        return [
+            u
+            for u in ("small_viral", "mid", "big")
+            if f'data-username="{u}"' in client.get(f"/reels/feed{query}").text
+        ]
+
+    assert shown("") == ["small_viral", "mid", "big"]
+    assert shown("?ratio=3") == ["small_viral", "mid"]
+    assert shown("?ratio=10") == ["small_viral"]
+    html = client.get("/reels?ratio=5&rank=epic").text
+    nav = html.split('aria-labelledby="reels-filter-reach"', 1)[1].split("</nav>", 1)[0]
+    for n in (2, 3, 5, 10):
+        assert f"\N{MULTIPLICATION SIGN}{n}+" in nav
+    assert 'href="/reels?rank=epic&amp;ratio=5" aria-current="page"' in nav
+
+
 def test_an_empty_filter_says_so(client):
     html = client.get("/reels", params={"group": "gay", "rank": "legendary"}).text
     assert "No legendary reels in gay right now." in html
@@ -369,10 +607,10 @@ def test_rank_chips_are_best_first_with_their_ranges(client):
     html = client.get("/reels").text
     labels = [
         "legendary 1M+",
-        "epic 500k\N{EN DASH}1M",
-        "rare 200k\N{EN DASH}500k",
-        "uncommon 100k\N{EN DASH}200k",
-        "common 50k\N{EN DASH}100k",
+        "epic 1M\N{EN DASH}500k",
+        "rare 500k\N{EN DASH}200k",
+        "uncommon 200k\N{EN DASH}100k",
+        "common 100k\N{EN DASH}50k",
     ]
     positions = [html.index(label) for label in labels]
     assert positions == sorted(positions)
@@ -436,9 +674,49 @@ def test_watch_list_shows_two_week_views_and_crowns_the_most_viewed(
     king = rows.split('data-username="king"', 1)[1].split("</li>", 1)[0]
     small = rows.split('data-username="small"', 1)[1].split("</li>", 1)[0]
     assert 'data-tier="legendary"' in king
+    assert "#1 views" in king
     assert "2.5M views" in king
     assert 'data-tier="legendary"' not in small
     assert "5k views" in small
+
+
+def test_leaderboard_leads_with_most_views_then_most_reels(client, monkeypatch):
+    def scanned(username, reel_count, window_views):
+        found = _with_recent(_found(username), [window_views])
+        return WatchedProfile(
+            username=username,
+            added_at=0,
+            scanned_at=1,
+            group="asian",
+            result=found.model_copy(update={"reels": found.reels * reel_count}),
+        )
+
+    profiles = [
+        scanned("few", 3, 1_000_000),
+        scanned("sheep_love33", 15, 13_700_000),
+        scanned("nnnaomi.chuu", 10, 14_100_000),
+        WatchedProfile(username="new", added_at=0),
+    ]
+    board = Leaderboard.of(profiles)
+    assert [p.username for p in board.rows] == [
+        "nnnaomi.chuu",
+        "sheep_love33",
+        "new",
+        "few",
+    ]
+    assert (board.top_views, board.top_reels) == ("nnnaomi.chuu", "sheep_love33")
+
+    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+    rows = client.get("/reels/watchlist?group=asian").text
+    sheep = rows.split('data-username="sheep_love33"', 1)[1].split("</li>", 1)[0]
+    assert 'data-tier="epic"' in sheep
+    assert "#2 viral reels" in sheep
+    assert rows.index("nnnaomi.chuu") < rows.index("sheep_love33")
+
+
+def test_leaderboard_without_scans_outlines_nobody():
+    board = Leaderboard.of([WatchedProfile(username="new", added_at=0)])
+    assert (board.top_views, board.top_reels) == (None, None)
 
 
 def test_watch_list_is_most_feed_reels_first():
@@ -502,6 +780,24 @@ def test_a_rate_limited_profile_moves_to_the_next_proxy(monkeypatch):
     monkeypatch.setattr(reel_watch, "scan_watched", scan)
     reel_watch.scan_all(["x", "y"])
     assert used == [("x", "http://a:1"), ("x", "http://b:2"), ("y", "http://c:3")]
+
+
+def test_a_proxy_that_breaks_tls_moves_to_the_next_proxy(monkeypatch):
+    monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2")
+    used = []
+
+    def scan(_client, username, *_args):
+        used.append(username)
+        if len(used) == 1:
+            msg = "handshake failure"
+            raise requests.exceptions.SSLError(msg)
+        return _found(username)
+
+    monkeypatch.setattr(reel_watch, "scan_profile", scan)
+    watch("x")
+    reel_watch.scan_all(["x"])
+    assert used == ["x", "x"]
+    assert [(p.username, p.error) for p in list_watched()] == [("x", None)]
 
 
 def test_a_batch_stops_when_every_retry_is_rate_limited(monkeypatch):
@@ -570,6 +866,32 @@ def test_clone_downloads_picked_reels_and_opens_clone_with_them(client, monkeypa
     form_tag = html.split('id="clone-form"', 1)[1].split(">", 1)[0]
     prefill = json.loads(form_tag.split("data-prefill-videos='", 1)[1].split("'", 1)[0])
     assert prefill == videos
+
+
+def test_download_answers_one_mp4_or_a_zip_of_several(client, tmp_path, monkeypatch):
+    def fake_download(_self, url, dest: Path):
+        dest.write_bytes(url.encode())
+        return dest
+
+    monkeypatch.setattr(reels.InstagramClient, "download_video", fake_download)
+    one = [{"code": "A1", "video_url": CDN.format("a")}]
+    r = client.post("/reels/download", data={"reels": json.dumps(one)})
+    assert r.headers["content-type"] == "video/mp4"
+    assert 'filename="A1.mp4"' in r.headers["content-disposition"]
+    assert r.content == CDN.format("a").encode()
+
+    two = [*one, {"code": "B2", "video_url": CDN.format("b")}]
+    r = client.post("/reels/download", data={"reels": json.dumps(two)})
+    assert r.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        assert sorted(zf.namelist()) == ["A1.mp4", "B2.mp4"]
+    # Nothing stays on the server once the file is sent.
+    assert not any((tmp_path / "uploads" / "reels").iterdir())
+
+
+def test_download_refuses_an_empty_pick(client):
+    r = client.post("/reels/download", data={"reels": "[]"})
+    assert r.status_code == 400
 
 
 def test_clone_refuses_non_cdn_urls_and_empty_picks(client):

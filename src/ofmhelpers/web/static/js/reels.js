@@ -168,6 +168,47 @@
         });
     }
 
+    // Profiles just added are remembered until their first scans are done:
+    // a deleted or private one is dropped by its scan, and once nothing is
+    // pending, the ones missing from the list are the ones not added.
+    const ADDED_KEY = "reels-added";
+
+    function rememberAdded(usernames) {
+        try {
+            const earlier = JSON.parse(sessionStorage.getItem(ADDED_KEY) || "[]");
+            sessionStorage.setItem(ADDED_KEY, JSON.stringify([...earlier, ...usernames]));
+        } catch {
+            // storage unavailable: just no "not added" report
+        }
+    }
+
+    async function reportNotAdded(watchList, statusEl) {
+        if (watchList.querySelector("[data-pending]")) return;
+        let added = [];
+        try {
+            added = JSON.parse(sessionStorage.getItem(ADDED_KEY) || "[]");
+            sessionStorage.removeItem(ADDED_KEY);
+        } catch {
+            return;
+        }
+        if (!added.length) return;
+        // The whole list, not this page's: it may be filtered to one group.
+        const response = await fetch("/reels/watchlist");
+        if (!response.ok) return;
+        const rows = document.createElement("template");
+        rows.innerHTML = await response.text();
+        const listed = new Set(
+            [...rows.content.querySelectorAll(".reels-watch-item")].map((row) => row.dataset.username)
+        );
+        const notAdded = added.filter((username) => !listed.has(username));
+        if (!notAdded.length) return;
+        setStatus(
+            statusEl,
+            [`Not added — deleted, renamed or private: ${notAdded.map((u) => "@" + u).join(", ")}`],
+            true
+        );
+    }
+
     // Poll the watch list while any first scan runs; reload once none is left.
     function pollPending(watchList, statusEl, applySearch) {
         if (!watchList.querySelector("[data-pending]")) return;
@@ -248,6 +289,7 @@
                 }
                 const { added, already_watched: skipped } = await response.json();
                 form.elements.profiles.value = "";
+                rememberAdded(added);
                 const lines = [`Added ${added.length} profile(s); scanning in the background.`];
                 if (skipped) lines.push(`${skipped} already watched — moved to this group.`);
                 setStatus(statusEl, lines, false);
@@ -296,20 +338,65 @@
         });
     }
 
+    // Download selected: the server fetches the picks and answers one mp4 or
+    // a zip, saved through a blob link (the CDN URLs are cross-origin, so an
+    // <a download> straight to them would just open the video). Picks stay,
+    // so the same reels can still be cloned.
+    function initDownload(form, picks, downloadBtn, refresh) {
+        const statusEl = document.getElementById("reels-clone-status");
+        const maxVideos = Number(form.dataset.maxVideos);
+
+        downloadBtn.addEventListener("click", async () => {
+            if (picks.size > maxVideos) {
+                setStatus(statusEl, [`Pick at most ${maxVideos} reels.`], true);
+                return;
+            }
+            const reels = [...picks].map(([code, video_url]) => ({ code, video_url }));
+            const body = new FormData();
+            body.append("reels", JSON.stringify(reels));
+            downloadBtn.disabled = true;
+            setStatus(statusEl, [`Downloading ${reels.length} reel${reels.length === 1 ? "" : "s"}…`], false);
+            try {
+                const response = await fetch(form.dataset.downloadAction, { method: "POST", body });
+                if (!response.ok) {
+                    setStatus(statusEl, [await errorDetail(response)], true);
+                    return;
+                }
+                const name = /filename="?([^";]+)"?/.exec(response.headers.get("Content-Disposition") || "");
+                const url = URL.createObjectURL(await response.blob());
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = name ? name[1] : "reels.zip";
+                link.click();
+                URL.revokeObjectURL(url);
+                setStatus(statusEl, [`Downloaded ${reels.length} reel${reels.length === 1 ? "" : "s"}.`], false);
+            } catch {
+                setStatus(statusEl, ["Network error — try again."], true);
+            } finally {
+                refresh();
+            }
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         const form = document.getElementById("reels-form");
         const feed = document.getElementById("reels-feed");
         const watchList = document.getElementById("reels-watch-list");
         const empty = document.getElementById("reels-empty");
         const cloneBtn = document.getElementById("reels-clone");
+        const downloadBtn = document.getElementById("reels-download");
+        const pickedCount = document.getElementById("reels-picked-count");
         const picks = loadPicks();
         const refresh = () => {
             formatTimes(feed);
             feed.querySelectorAll(".reel-card").forEach((card) => {
                 card.setAttribute("aria-pressed", String(picks.has(card.dataset.code)));
             });
-            cloneBtn.textContent = `Clone selected (${picks.size})`;
+            pickedCount.textContent = picks.size
+                ? `${picks.size} reel${picks.size === 1 ? "" : "s"} selected`
+                : "No reels selected";
             cloneBtn.disabled = picks.size === 0;
+            downloadBtn.disabled = picks.size === 0;
             document.getElementById("reels-watch-count").textContent = watchList.children.length;
             empty.hidden = feed.querySelector(".reel-card") !== null;
         };
@@ -318,7 +405,9 @@
         initWatchList(feed, watchList, refresh);
         initAdd(form, watchList, applySearch);
         initClone(form, picks, cloneBtn, refresh);
+        initDownload(form, picks, downloadBtn, refresh);
         refresh();
+        reportNotAdded(watchList, form.querySelector(".generation-status"));
         pollPending(watchList, form.querySelector(".generation-status"), applySearch);
     });
 })();

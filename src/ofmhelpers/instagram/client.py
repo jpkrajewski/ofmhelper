@@ -30,6 +30,8 @@ from typing import Any
 
 import requests
 from pydantic import BaseModel
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
@@ -51,6 +53,9 @@ ROOT = "https://www.instagram.com"
 
 _LSD = re.compile(r'"LSD",\[\],\{"token":"([^"]+)"|"lsd":"([^"]+)"')
 _PROFILE_ID = re.compile(r'"profile_id":"(\d+)"')
+# Which page instagram.com rendered: "profilePage", or "httpErrorPage" for
+# "Sorry, this page isn't available" (a deleted, banned or renamed account).
+_PAGE_ID = re.compile(r'"pageID":"([^"]+)"')
 
 _PAGE_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -79,9 +84,44 @@ class InstagramRateLimitedError(InstagramError):
     same way, so a batch should stop rather than burn through its list."""
 
 
+class ProfilePrivateError(InstagramError):
+    """The account is private: nothing of it is visible logged out."""
+
+
+class InstagramUnavailableError(InstagramError):
+    """Instagram answered 5xx even after this client's own retries: a blip
+    on its side (or the proxy's), worth another try through another proxy."""
+
+
 class ProfileNotFoundError(InstagramError):
-    """The account does not exist (deleted, banned or renamed) -- confirmed,
-    not just a profile page that came back empty."""
+    """Even the crawler view shows no profile. Usually the account is gone,
+    but a proxy IP Instagram has flagged gets that same answer for a real
+    account -- so a caller confirms it through another connection and never
+    deletes anything on it."""
+
+
+# Transient answers urllib3 retries itself (with backoff + jitter) before a
+# call gives up; 429 is not one -- it is the proxy rotation's job.
+_RETRY_STATUSES = (500, 502, 503, 504)
+
+
+def _retrying(session: requests.Session) -> requests.Session:
+    """`session` retrying connection drops, read timeouts and 5xx
+    `http_retries` times. Every call here is a read, POSTed GraphQL
+    included, so retrying any method is safe."""
+    s = settings.instagram
+    retry = Retry(
+        total=s.http_retries,
+        backoff_factor=s.retry_backoff_s,
+        backoff_jitter=s.retry_backoff_s,
+        status_forcelist=_RETRY_STATUSES,
+        allowed_methods=None,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
 
 
 # What a link-preview crawler gets for an existing profile, and only then:
@@ -101,7 +141,7 @@ class InstagramClient:
         """`proxy`: the URL every logged-out call of this client goes
         through (`settings.instagram.proxy_urls`), None for direct."""
         self._settings = settings.instagram
-        self._session = requests.Session()
+        self._session = _retrying(requests.Session())
         self._session.headers["User-Agent"] = self._settings.user_agent
         if proxy:
             self._session.proxies = {"http": proxy, "https": proxy}
@@ -240,17 +280,18 @@ class InstagramClient:
             self._settings.media_doc_id,
             {"media_id": pk},
         )
-        return ReelMedia.from_page(page) or self._media_logged_in(pk)
+        return ReelMedia.from_page(page) or self.media_logged_in(pk)
 
     @cached_property
     def _logged_in(self) -> requests.Session | None:
         """A session carrying the uploaded cookies.txt, or None without one."""
         cookiefile = get_cookiefile()
         if cookiefile is None:
+            logger.warning("no cookies.txt uploaded; gated reels stay login-only")
             return None
         jar = http.cookiejar.MozillaCookieJar(cookiefile)
         jar.load(ignore_discard=True, ignore_expires=True)
-        session = requests.Session()
+        session = _retrying(requests.Session())
         session.cookies = jar  # type: ignore[assignment]
         session.headers.update(
             {
@@ -266,18 +307,44 @@ class InstagramClient:
         )
         return session
 
-    def _media_logged_in(self, pk: str) -> ReelMedia | None:
+    def exists_logged_in(self, username: str) -> bool | None:
+        """Whether the uploaded login sees `username`'s profile page: the
+        answer a flagged proxy cannot fake. None when there is no working
+        login or the page says neither."""
+        session = self._logged_in
+        if session is None:
+            return None
+        try:
+            r = session.get(
+                f"{ROOT}/{username}/",
+                headers=_PAGE_HEADERS,
+                timeout=self._settings.timeout_s,
+            )
+        except requests.RequestException:
+            logger.warning("logged-in profile %s unreachable", username, exc_info=True)
+            return None
+        page = _PAGE_ID.search(r.text)
+        if not r.ok or page is None:
+            return None
+        return {"profilePage": True, "httpErrorPage": False}.get(page.group(1))
+
+    def media_logged_in(self, pk: str) -> ReelMedia | None:
         """A logged-out-gated reel, through the uploaded login. None when
         there is none or it no longer works (Instagram redirects a dead
         session to its home page) -- the scan still lists the reel."""
         session = self._logged_in
         if session is None:
             return None
-        r = session.get(
-            f"{ROOT}/api/v1/media/{pk}/info/",
-            timeout=self._settings.timeout_s,
-            allow_redirects=False,
-        )
+        try:
+            r = session.get(
+                f"{ROOT}/api/v1/media/{pk}/info/",
+                timeout=self._settings.timeout_s,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            # One reel left login-only, not the whole scan failed.
+            logger.warning("logged-in media %s unreachable", pk, exc_info=True)
+            return None
         if r.status_code != HTTPStatus.OK:
             logger.info("logged-in media %s -> %s", pk, r.status_code)
             return None
@@ -339,6 +406,10 @@ class InstagramClient:
         ):
             msg = "Instagram is rate-limiting — wait a few minutes"
             raise InstagramRateLimitedError(msg)
+        if r.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+            logger.warning("instagram %s -> %s", r.url, r.status_code)
+            msg = f"Instagram answered {r.status_code}"
+            raise InstagramUnavailableError(msg)
         if r.status_code == HTTPStatus.NOT_FOUND:
             msg = "profile not found"
         elif not r.ok or r.is_redirect:

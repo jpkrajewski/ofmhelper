@@ -33,6 +33,7 @@ from ofmhelpers.web.schemas.tools import Tool
 from ofmhelpers.web.schemas.watched import (
     FeedItem,
     GroupForm,
+    Leaderboard,
     WatchedProfile,
     WatchForm,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "JobQueued",
     "JobStatus",
     "JobStatusPayload",
+    "Leaderboard",
     "RefEntry",
     "ReferenceAsset",
     "ReferenceUploads",
