@@ -218,6 +218,82 @@
         });
     }
 
+    // "Upload to Drive" on a batch: the first click goes through Google's
+    // login and comes back with ?drive_batch=<id>, which clicks it again.
+    function setDriveButton(btn, text, busy) {
+        btn.textContent = text;
+        btn.disabled = busy;
+    }
+
+    function pollDriveUpload(btn, jobId) {
+        fetch(`/drive/uploads/${jobId}`)
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.status === "running") {
+                    setTimeout(() => pollDriveUpload(btn, jobId), 2000);
+                    return;
+                }
+                if (data.status === "failed") {
+                    setDriveButton(btn, "⬆ Upload to Drive", false);
+                    btn.title = data.error || "Upload failed";
+                    window.alert(`Drive upload failed: ${btn.title}`);
+                    return;
+                }
+                const link = document.createElement("a");
+                link.className = "btn btn-outline batch-drive-link";
+                link.href = data.folder_url;
+                link.target = "_blank";
+                link.rel = "noopener";
+                link.textContent = "✓ Open in Drive";
+                btn.replaceWith(link);
+            })
+            .catch(() => setTimeout(() => pollDriveUpload(btn, jobId), 4000));
+    }
+
+    function uploadBatchToDrive(batch) {
+        const btn = batch.querySelector(".batch-drive-btn");
+        const body = new FormData();
+        batch.querySelectorAll(".result-item[data-job-id]").forEach((card) => {
+            body.append("job_ids", card.dataset.jobId);
+        });
+        body.append("next", `/clone?drive_batch=${batch.dataset.batch}`);
+        setDriveButton(btn, "Uploading…", true);
+        fetch("/drive/upload", { method: "POST", body })
+            .then((r) => r.json().then((data) => ({ status: r.status, data })))
+            .then(({ status, data }) => {
+                if (status === 409) {
+                    window.location.href = data.connect_url;
+                    return;
+                }
+                if (status >= 400) {
+                    setDriveButton(btn, "⬆ Upload to Drive", false);
+                    window.alert(data.detail || `Upload failed (${status})`);
+                    return;
+                }
+                setDriveButton(btn, `Uploading ${data.files} to ${data.drive}…`, true);
+                pollDriveUpload(btn, data.job_id);
+            })
+            .catch(() => {
+                setDriveButton(btn, "⬆ Upload to Drive", false);
+                window.alert("Upload failed — check your connection and try again.");
+            });
+    }
+
+    function initDriveUpload() {
+        const batches = document.getElementById("clone-batches");
+        batches.addEventListener("click", (e) => {
+            const btn = e.target.closest(".batch-drive-btn");
+            if (btn && !btn.disabled) uploadBatchToDrive(btn.closest(".clone-batch"));
+        });
+        const url = new URL(window.location.href);
+        const back = url.searchParams.get("drive_batch");
+        if (!back) return;
+        url.searchParams.delete("drive_batch");
+        window.history.replaceState(null, "", url);
+        const batch = batches.querySelector(`[data-batch="${CSS.escape(back)}"]`);
+        if (batch) uploadBatchToDrive(batch);
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         const form = document.getElementById("clone-form");
         formatTimes(document);
@@ -226,5 +302,6 @@
         initSubmit(form);
         initRecreate(form);
         initPrefill(form);
+        initDriveUpload();
     });
 })();

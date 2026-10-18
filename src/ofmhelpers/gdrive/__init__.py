@@ -3,12 +3,13 @@ user's Drive (`oauth`) and the upload a worker job does with it (`upload`).
 Google's own client libraries only -- see CLAUDE.md here."""
 
 from ofmhelpers.gdrive.oauth import SCOPES, authorization_url, exchange_code
-from ofmhelpers.gdrive.upload import account_email, upload_file
+from ofmhelpers.gdrive.upload import UploadReport, account_email, upload_files
 
 __all__ = [
     "SCOPES",
+    "UploadReport",
     "account_email",
     "authorization_url",
     "exchange_code",
-    "upload_file",
+    "upload_files",
 ]

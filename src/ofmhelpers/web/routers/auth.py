@@ -12,6 +12,7 @@ from ofmhelpers.web.middleware.ratelimit import (
     login_blocked,
     record_failed_login,
 )
+from ofmhelpers.web.routers.drive import forget_drive
 from ofmhelpers.web.stores.jobs import log_event
 from ofmhelpers.web.templates_config import render
 
@@ -70,5 +71,6 @@ def logout(request: Request):
     role = request.session.get("role")
     if role == settings.web.role_va:
         log_event("logout", actor=role)  # capture before clearing
+    forget_drive(request)
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)

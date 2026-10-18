@@ -61,9 +61,14 @@ class WebSettings(BaseSettings):
     #   /apply                    -- the landing page's application form POST,
     #                                see routers/apply.py (rate-limited, not
     #                                unguarded)
+    #   /privacy, /terms          -- linked from Google's consent screen
     public_paths: set[str] = Field(
-        default={"/login", "/health", "/home", "/", "/apply"},
+        default={"/login", "/health", "/home", "/", "/apply", "/privacy", "/terms"},
         validation_alias="OFM_PUBLIC_PATHS",
+    )
+    # Shown on /privacy and /terms (Google's consent screen links them).
+    contact_email: str | None = Field(
+        default=None, validation_alias="OFM_CONTACT_EMAIL"
     )
     public_prefixes: tuple[str, ...] = Field(
         default=("/static/",), validation_alias="OFM_PUBLIC_PREFIXES"
@@ -240,7 +245,7 @@ class GoogleDriveSettings(BaseSettings):
 
     The OAuth client is a Google Cloud "Web application" client; its
     authorized redirect URI must equal `redirect_uri` exactly. Unset client
-    id/secret = the Drive button shows disabled and clones stay local only."""
+    id/secret = "Upload to Drive" answers that Drive is not set up."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -258,6 +263,11 @@ class GoogleDriveSettings(BaseSettings):
     folder_name: str = Field(
         default="ofmhelpers clones", validation_alias="OFM_GDRIVE_FOLDER"
     )
+    # Videos of one batch uploaded at once.
+    upload_workers: int = Field(default=4, validation_alias="OFM_GDRIVE_WORKERS")
+    # Google's own retry (exponential backoff) per request, on 5xx / 429 /
+    # dropped connections.
+    upload_retries: int = Field(default=5, validation_alias="OFM_GDRIVE_RETRIES")
 
     @property
     def configured(self) -> bool:

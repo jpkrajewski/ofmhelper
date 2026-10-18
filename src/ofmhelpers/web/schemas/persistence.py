@@ -44,8 +44,6 @@ class ResultFile(BaseModel):
     name: str
     path: str | None
     remote_url: str | None = None
-    # The copy uploaded to the user's Google Drive (/clone, when connected).
-    drive_url: str | None = None
 
     def to_result(self) -> dict[str, Any]:
         return self.model_dump(exclude_unset=True)

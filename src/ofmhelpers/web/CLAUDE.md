@@ -287,11 +287,8 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   `kie_usd_per_credit` ($50 = 10,000 credits). A video over
   `WAN3_MAX_REFERENCE_S` (15) is flagged and left out of the total; it
   watches the picker through file-picker.js's `filepicker:change` event.
-  With a Google Drive connected (`routers/drive.py`, session key
-  `gdrive_connection` -> `stores/drive_connections.py`), `/run` stores the
-  connection id as the `drive_connection` param and the worker uploads each
-  result (`gdrive.upload_file`) and sets `ResultFile.drive_url`, shown as
-  "Open in Drive" on the card. A failed upload keeps the result.
+  Each batch header has "Upload to Drive" next to "Recreate batch"
+  (`clone.js` `initDriveUpload`, served by `routers/drive.py`).
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
@@ -377,10 +374,24 @@ files is admin-only by default.
 ## At the `routers/` root
 
 - `auth.py` — `/login`, `/logout`.
-- `drive.py` — `/drive/connect` -> Google's consent page -> `/drive/callback`
-  (state + PKCE verifier checked from the session) stores the refresh token
-  and puts the connection id in the session; `POST /drive/disconnect`
-  deletes it. See `gdrive/CLAUDE.md` for the Google Cloud setup.
+- `drive.py` — /clone's "Upload to Drive". `POST /drive/upload` (the
+  batch's job ids) queues a `drive_upload` job uploading their finished
+  files (`gdrive.upload_files`, into the app's Drive folder); with no Drive
+  in the session it answers 409 + `connect_url` instead: `/drive/connect`
+  -> Google's consent page -> `/drive/callback` (state + PKCE verifier
+  checked from the session) stores the refresh token
+  (`stores/drive_connections.py`), puts its id in the session and returns to
+  `/clone?drive_batch=<id>`, which clicks Upload again. `GET
+  /drive/uploads/{id}` is what the button polls (-> folder link). Any file
+  that did not go up fails the job with "N/M in Drive; failed: ..." -- the
+  next click uploads only the rest. A refresh token Google revoked deletes
+  the connection, so the next click reconnects; `/logout` deletes it too
+  (`forget_drive`), so the next person in that browser connects their own. See `gdrive/CLAUDE.md` for the Google Cloud setup.
+- `legal.py` — public `/privacy` and `/terms` (`_legal_page.html` layout,
+  contact from `settings.web.contact_email`), linked from Google's OAuth
+  consent screen and the landing page footer. The privacy page carries the
+  Google API "Limited Use" disclosure the Drive verification requires; bump
+  `UPDATED` with any change to either text.
 - `apply.py` — `POST /apply`, the only public *write* in the app: the
   application form on the `/` landing page (`templates/reachmodel.html`).
   Public via `settings.web.public_paths`, still capped per IP by

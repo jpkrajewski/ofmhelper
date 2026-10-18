@@ -1329,7 +1329,6 @@ summary:hover { color: var(--accent-soft); }
 /* At 48px a video's native controls are only noise; the frame is the preview. */
 .clone-form .file-order-list video::-webkit-media-controls { display: none !important; }
 .clone-output-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) var(--s-5); }
-.drive-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
 .clone-output-row select { width: auto; min-width: 120px; }
 .clone-output-row .check-field { margin: 0; font-weight: 500; color: var(--text-muted); }
 .clone-batch-uploading progress { width: 100%; margin-top: var(--s-2); accent-color: var(--accent); }
@@ -1851,3 +1850,14 @@ summary:hover { color: var(--accent-soft); }
     background: color-mix(in srgb, var(--tier) 16%, transparent);
 }
 .reel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; font-size: 0.75rem; line-height: 1.3; }
+
+/* Public legal pages (/privacy, /terms): plain readable column, no app nav. */
+.legal { max-width: 720px; margin: 0 auto; padding: var(--s-6) var(--s-4); line-height: 1.65; }
+.legal-brand { display: inline-flex; align-items: center; gap: var(--s-3); color: var(--text); font-weight: 700; text-decoration: none; }
+.legal-brand img { border-radius: var(--radius-sm); }
+.legal h1 { margin-top: var(--s-5); }
+.legal h2 { margin-top: var(--s-6); }
+.legal-updated { color: var(--text-muted); }
+.legal ul { padding-left: 1.2em; }
+.legal li { margin-bottom: var(--s-3); }
+.legal-links { display: flex; flex-wrap: wrap; gap: var(--s-4); margin-top: var(--s-6); padding-top: var(--s-4); border-top: 1px solid var(--surface-3); }

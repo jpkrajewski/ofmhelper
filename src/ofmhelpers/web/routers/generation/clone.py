@@ -11,9 +11,6 @@ With `capcut` on (the default), each generated video is then re-edited and
 re-encoded as a CapCut export (`utils.capcut`) and that copy is the job's
 result; kie.ai's hosted original is dropped from it so view/download serve
 the CapCut copy.
-
-With a Google Drive connected (routers/drive.py), each finished video is
-also uploaded into it and the card links there.
 """
 
 import subprocess
@@ -23,8 +20,6 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from google.auth.exceptions import GoogleAuthError
-from googleapiclient.errors import HttpError
 
 from ofmhelpers.aigenproviders.kaiai.types import (
     ADAPTIVE_ASPECT_RATIO,
@@ -34,13 +29,11 @@ from ofmhelpers.aigenproviders.kaiai.types import (
     Wan3Resolution,
 )
 from ofmhelpers.config import settings
-from ofmhelpers.gdrive import upload_file
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.capcut import DEFAULT_PRESET, apply_preset
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.api_keys import get_kie_api_key
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.drive import session_drive
 from ofmhelpers.web.routers.generation.kie_jobs import (
     add_kie_job_routes,
     require_api_key,
@@ -57,7 +50,6 @@ from ofmhelpers.web.routers.task_helpers import (
     strip_asset_hash_prefix,
 )
 from ofmhelpers.web.schemas import CloneBatch, CloneCard, CloneQueued, Job, ResultFile
-from ofmhelpers.web.stores.drive_connections import get_connection
 from ofmhelpers.web.stores.jobs import get_job, list_jobs_page
 from ofmhelpers.web.templates_config import render, render_partial
 
@@ -80,38 +72,16 @@ def wan3_duration(seconds: float) -> int:
 
 
 def _run_clone(
-    clone_batch: str,
-    clone_index: int,
-    capcut: bool = False,
-    drive_connection: str | None = None,
-    **wan3_kwargs: Any,
+    clone_batch: str, clone_index: int, capcut: bool = False, **wan3_kwargs: Any
 ) -> list[ResultFile]:
     """The batch keys are stored on the job for grouping only; the generation
     itself is a plain Wan 3.0 run. `capcut` defaults off so jobs queued before
     the option existed run as they always did."""
     del clone_batch, clone_index
     results = _run_wan3(**wan3_kwargs)
-    if capcut:
-        assets_root = Path(wan3_kwargs["assets_root"])
-        results = [_capcut_result(r, assets_root) for r in results]
-    if drive_connection:
-        results = [_drive_result(r, drive_connection) for r in results]
-    return results
-
-
-def _drive_result(result: ResultFile, connection_id: str) -> ResultFile:
-    """`result` with its Google Drive link once uploaded. Like CapCut, a
-    failed upload (or a Drive disconnected meanwhile) keeps the result as
-    it is: the video is paid for and on disk either way."""
-    connection = get_connection(connection_id)
-    if result.path is None or connection is None:
-        return result
-    try:
-        link = upload_file(connection.refresh_token, Path(result.path))
-    except (GoogleAuthError, HttpError, OSError):
-        logger.warning("drive upload failed for %s", result.path, exc_info=True)
-        return result
-    return result.model_copy(update={"drive_url": link})
+    if not capcut:
+        return results
+    return [_capcut_result(r, Path(wan3_kwargs["assets_root"])) for r in results]
 
 
 def _capcut_result(result: ResultFile, assets_root: Path) -> ResultFile:
@@ -162,12 +132,10 @@ def _recent_batches(request: Request) -> list[CloneBatch]:
 
 def _card(job: Job) -> CloneCard:
     video = job.params["reference_videos"][0]
-    files = job.result_files()
     return CloneCard.from_job(
         job,
         *job_assets(job, FILES_PREFIX),
         video_name=strip_asset_hash_prefix(Path(video).name),
-        drive_url=files[0].drive_url if files else None,
     )
 
 
@@ -204,9 +172,6 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
         credits_per_video_s=settings.web.clone_credits_per_video_s,
         usd_per_credit=settings.web.kie_usd_per_credit,
         max_reference_s=WAN3_MAX_REFERENCE_S,
-        drive=session_drive(request),
-        drive_configured=settings.gdrive.configured,
-        drive_folder=settings.gdrive.folder_name,
     )
 
 
@@ -256,7 +221,6 @@ def run(
     with ThreadPoolExecutor(settings.web.clone_probe_workers) as pool:
         durations = list(pool.map(_video_duration, video_paths))
 
-    drive = session_drive(request)
     batch_id = uuid.uuid4().hex[:12]
     job_ids = [
         start_kie_job(
@@ -271,7 +235,6 @@ def run(
                 "duration": duration,
                 "audio": audio,
                 "capcut": capcut,
-                "drive_connection": drive.id if drive else None,
                 "clone_batch": batch_id,
                 "clone_index": index,
             },

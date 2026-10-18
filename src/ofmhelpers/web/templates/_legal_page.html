@@ -1,0 +1,33 @@
+{# Layout of the public legal pages (/privacy, /terms): no app nav, no
+   session -- Google's consent screen and the landing page link here. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>{% block title %}{% endblock %} — Ascend Global</title>
+    <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+</head>
+<body>
+    <main class="legal">
+        <a class="legal-brand" href="/">
+            <img src="{{ static_url('img/ascend-global-logo-120.png') }}" alt="" width="40" height="40">
+            Ascend Global
+        </a>
+        <h1>{{ self.title() }}</h1>
+        <p class="legal-updated">Last updated {{ updated }}</p>
+        {% block body %}{% endblock %}
+        <h2>Contact</h2>
+        <p>
+            Questions about this page or your data:
+            {% if contact_email %}<a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% else %}via the contact details on our <a href="/">home page</a>{% endif %}.
+        </p>
+        <nav class="legal-links">
+            <a href="/">Home</a>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+        </nav>
+    </main>
+</body>
+</html>

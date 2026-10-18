@@ -1,7 +1,7 @@
 # Module purpose
 
-Google Drive for /clone: a user connects their Drive with Google's normal
-consent page, and each finished clone is uploaded into it by the worker.
+Google Drive for /clone's "Upload to Drive": a user connects their Drive
+with Google's normal consent page, and the worker uploads a batch into it.
 Google's own libraries only (`google-auth-oauthlib`, `google-api-python-client`).
 
 # Module files
@@ -11,14 +11,19 @@ Google's own libraries only (`google-auth-oauthlib`, `google-api-python-client`)
   verifier, where to go back) the caller keeps in the session;
   `exchange_code` -> `Credentials` with a refresh token.
 - `upload.py` — `account_email` (Drive `about.get`, so no extra identity
-  scope), `upload_file(refresh_token, path)` -> resumable upload into the
-  app's folder (`settings.gdrive.folder_name`, created on first use),
-  returns the `webViewLink`.
+  scope), `upload_files(refresh_token, paths)` -> resumable uploads,
+  `upload_workers` at once (one service object each: googleapiclient's HTTP
+  is not thread-safe), into the app's folder (`settings.gdrive.folder_name`,
+  created on first use). Every request retries itself (`execute(num_retries=
+  upload_retries)`: Google's backoff on 5xx/429/drops, resuming an upload
+  mid-file). Names already in the folder are skipped, so a retry never
+  duplicates; one failed file never stops the rest. Returns an
+  `UploadReport` (uploaded / already_there / failed + folder link).
 
 # Who calls this
 
-`web/routers/drive.py` (connect / callback / disconnect) and
-`web/routers/generation/clone.py` (`_drive_result`, on the worker).
+`web/routers/drive.py` (connect / callback / upload, the upload on the
+worker).
 
 # Setup (Google Cloud Console)
 
@@ -30,7 +35,7 @@ Google's own libraries only (`google-auth-oauthlib`, `google-api-python-client`)
    redirect URI exactly `OFM_GDRIVE_REDIRECT_URI`
    (prod `https://ascendglobal.cash/drive/callback`).
 4. `.env`: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
-   `OFM_GDRIVE_REDIRECT_URI`. Unset id/secret = the button shows disabled.
+   `OFM_GDRIVE_REDIRECT_URI`. Unset id/secret = Upload answers 503.
 
 # Findings
 
