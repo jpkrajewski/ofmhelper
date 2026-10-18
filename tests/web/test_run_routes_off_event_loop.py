@@ -20,6 +20,6 @@ def test_run_routes_do_not_block_the_event_loop():
         for r in router.routes
         if isinstance(r, APIRoute) and r.path.endswith("/run")
     ]
-    assert len(runs) >= 12
+    assert {"/ai/run", "/clone/run"} <= {r.path for r in runs}
     blocking = [r.path for r in runs if inspect.iscoroutinefunction(r.endpoint)]
     assert blocking == []

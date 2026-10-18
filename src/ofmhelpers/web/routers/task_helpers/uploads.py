@@ -12,7 +12,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request
+from starlette.datastructures import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.models import DownloadResult

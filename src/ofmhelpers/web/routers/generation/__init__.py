@@ -1,10 +1,8 @@
 """
-AI generation tools. Every module here follows the same five-endpoint shape
-(see routers/task_helpers.py): POST /run creates a job and returns
-{"job_id": ...} immediately, GET /jobs/{id} renders the status page, GET
-/jobs/{id}/status is the polling payload, GET /files/{id}/{index} streams a
-result file. `index.py` is the unified picker page that fronts them all.
-
-Adding a generation backend = one module in this shape + one line in
-routers/__init__.py's ROUTERS.
+AI generation. `ai.py` is the one generation router: every model of every
+provider (`aigenproviders/`) posts to `/ai/run` and its jobs share one task
+name, so adding a model or a provider never adds a module here. `index.py` is
+its /generate page, `clone.py` is /clone (one generation per source video,
+through `ai.run_ai`), and `legacy.py` keeps the job pages of the per-model
+routers `ai.py` replaced.
 """

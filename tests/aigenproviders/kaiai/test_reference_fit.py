@@ -5,9 +5,9 @@ An oversized reference used to upload fine and then fail createTask with a
 character sheet, in practice)."""
 
 import os
-from unittest import mock
 
 import pytest
+from kie_http_fake import kie_http, response
 from PIL import Image
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
@@ -21,7 +21,6 @@ def client(tmp_path):
         out_dir=tmp_path / "out",
         task_log=tmp_path / "tasks.jsonl",
         completions_log=tmp_path / "completions.jsonl",
-        resolved_log=tmp_path / "resolved.jsonl",
     )
 
 
@@ -55,11 +54,13 @@ def test_upload_sends_a_fitted_copy_and_keeps_the_original(
     src = noisy_png(tmp_path / "sheet.png", (2000, 400))
     original = src.read_bytes()
 
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
-        mreq.post.return_value.json.return_value = {
-            "success": True,
-            "data": {"downloadUrl": "https://tempfile.example/sheet.jpg"},
-        }
+    with kie_http() as mreq:
+        mreq.post.return_value = response(
+            {
+                "success": True,
+                "data": {"downloadUrl": "https://tempfile.example/sheet.jpg"},
+            }
+        )
         client.upload_local_file(str(src))
 
     sent = mreq.post.call_args.kwargs

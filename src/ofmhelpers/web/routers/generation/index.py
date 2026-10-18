@@ -1,24 +1,19 @@
 """
-ofmhelpers/web/routers/generation/index.py
-
-Unified Higgsfield-style page for Seedance 2.0 / Seedance 2.5 / Kling 3.0 /
-Wan 3.0 / MiniMax H3 / Nano Banana Pro / Seedream 4.5 / Seedream 5.0 / GPT
-Image 2.5 Flare (plus the Fake AI Model testing tool): one prompt+settings form (a
-tool picker switches which fieldset is active) posting straight to each tool's
-existing /run endpoint, and a non-blocking gallery of the last 20 generations
-across all of them that a click reloads back into the form.
+/generate: one form for every model of every provider -- provider, then
+model, then the model's own settings (loaded from /ai/fields) -- posting to
+/ai/run, and a non-blocking gallery of past generations that a click reloads
+back into the form.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
-from ofmhelpers.aigenproviders.kaiai.types import Seedance2Model
 from ofmhelpers.config import settings
-from ofmhelpers.web.api_keys import get_kie_api_key
+from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
-from ofmhelpers.web.schemas import TaskCard
+from ofmhelpers.web.schemas import ModelChoice, ProviderChoice, TaskCard
 from ofmhelpers.web.stores.jobs import list_jobs_page
 from ofmhelpers.web.templates_config import render
 
@@ -48,11 +43,14 @@ def _gallery_page(request: Request, offset: int) -> tuple[list[TaskCard], int | 
 @router.get("")
 def form(request: Request):
     gallery, next_offset = _gallery_page(request, 0)
+    providers = ProviderChoice.all()
     return render(
         request,
         "generate_form.html",
-        models=[m.value for m in Seedance2Model],
-        kie_api_key=get_kie_api_key(request),
+        providers=providers,
+        selected_provider=providers[0].name,
+        models=[m.model_dump() for m in ModelChoice.all()],
+        api_keys=get_api_keys(request),
         gallery=gallery,
         next_offset=next_offset,
         live_poll_s=settings.web.gallery_live_poll_s,

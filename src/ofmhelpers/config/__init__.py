@@ -21,7 +21,9 @@ existed):
 """
 
 from ofmhelpers.config.settings import (
+    AigenSettings,
     DownloadersSettings,
+    HiggsfieldSettings,
     InfraSettings,
     InstagramSettings,
     KieAISettings,
@@ -49,6 +51,14 @@ class Settings:
     @property
     def kieai(self) -> KieAISettings:
         return KieAISettings()
+
+    @property
+    def aigen(self) -> AigenSettings:
+        return AigenSettings()
+
+    @property
+    def higgsfield(self) -> HiggsfieldSettings:
+        return HiggsfieldSettings()
 
     @property
     def downloaders(self) -> DownloadersSettings:

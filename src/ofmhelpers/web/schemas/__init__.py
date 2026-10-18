@@ -1,7 +1,7 @@
 """The web layer's typed shapes, split by what they are a contract *with*:
 
 - `persistence.py` -- what a job looks like in the database.
-- `generation.py` -- what a generation form posts.
+- `generation.py` -- the providers and models a generation page offers.
 - `gallery.py` -- what a tool page's gallery renders for a job.
 - `jobs.py` -- what the job endpoints return (status payloads, asset cards).
 - `files.py` -- stored files as the reuse picker and file manager list them.
@@ -15,7 +15,7 @@ Import from here; the split is an implementation detail of this package.
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
 from ofmhelpers.web.schemas.gallery import CloneBatch, CloneCard, JobCard, TaskCard
-from ofmhelpers.web.schemas.generation import ReferenceUploads
+from ofmhelpers.web.schemas.generation import ModelChoice, ProviderChoice
 from ofmhelpers.web.schemas.jobs import (
     ActionLogEntry,
     AssetCard,
@@ -61,9 +61,10 @@ __all__ = [
     "JobStatus",
     "JobStatusPayload",
     "Leaderboard",
+    "ModelChoice",
+    "ProviderChoice",
     "RefEntry",
     "ReferenceAsset",
-    "ReferenceUploads",
     "ResultFile",
     "TaskCard",
     "Tool",

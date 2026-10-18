@@ -19,9 +19,11 @@ from unittest import mock
 
 import pytest
 import requests
+from kie_http_fake import kie_http, response
 from PIL import Image
 from redis.exceptions import RedisError
 
+from ofmhelpers.aigenproviders.errors import ProviderAuthError, ProviderUnavailableError
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.cache import get_redis, get_text
 from ofmhelpers.config import settings
@@ -34,7 +36,6 @@ def client(tmp_path):
         out_dir=tmp_path / "out",
         task_log=tmp_path / "tasks.jsonl",
         completions_log=tmp_path / "completions.jsonl",
-        resolved_log=tmp_path / "resolved.jsonl",
     )
 
 
@@ -50,10 +51,7 @@ def _cached(api_key: str, path) -> str | None:
 
 
 def _mock_post_response(url="https://tempfile.example/refs/ref.png", success=True):
-    resp = mock.Mock()
-    resp.raise_for_status = mock.Mock()
-    resp.json.return_value = {"success": success, "data": {"downloadUrl": url}}
-    return resp
+    return response({"success": success, "data": {"downloadUrl": url}})
 
 
 def _mock_head_response(status_code=200):
@@ -63,7 +61,7 @@ def _mock_head_response(status_code=200):
 
 
 def test_first_upload_hits_network_and_populates_cache(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
         url = client.upload_local_file(str(ref_file))
 
@@ -74,7 +72,7 @@ def test_first_upload_hits_network_and_populates_cache(client, ref_file):
 
 def test_cached_entry_carries_the_configured_ttl(client, ref_file):
     """A dead entry must age out on its own -- nothing else expires it."""
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response()
         client.upload_local_file(str(ref_file))
 
@@ -85,7 +83,7 @@ def test_cached_entry_carries_the_configured_ttl(client, ref_file):
 def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
     client, ref_file
 ):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
         first = client.upload_local_file(str(ref_file))
 
@@ -103,12 +101,11 @@ def test_a_second_client_with_the_same_key_reuses_the_cached_upload(tmp_path, re
     kwargs = {
         "task_log": tmp_path / "t.jsonl",
         "completions_log": tmp_path / "c.jsonl",
-        "resolved_log": tmp_path / "r.jsonl",
     }
     first_client = KieAIClient(api_key="k", out_dir=tmp_path / "a", **kwargs)
     second_client = KieAIClient(api_key="k", out_dir=tmp_path / "b", **kwargs)
 
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
         mreq.head.return_value = _mock_head_response(200)
         first = first_client.upload_local_file(str(ref_file))
@@ -119,7 +116,7 @@ def test_a_second_client_with_the_same_key_reuses_the_cached_upload(tmp_path, re
 
 
 def test_repeated_uploads_stay_cached_across_many_calls(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
         mreq.head.return_value = _mock_head_response(200)
         urls = [client.upload_local_file(str(ref_file)) for _ in range(5)]
@@ -129,7 +126,7 @@ def test_repeated_uploads_stay_cached_across_many_calls(client, ref_file):
 
 
 def test_cache_hit_but_remote_gone_triggers_reupload(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/old")
         client.upload_local_file(str(ref_file))
 
@@ -143,7 +140,7 @@ def test_cache_hit_but_remote_gone_triggers_reupload(client, ref_file):
 
 
 def test_remote_check_network_error_triggers_reupload(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         # requests itself is mocked, so `except requests.RequestException`
         # inside _remote_file_exists needs the REAL class here -- otherwise
         # it's an auto-generated Mock attribute and Python can't match a
@@ -171,7 +168,7 @@ def test_an_unreachable_broker_degrades_to_re_uploading(client, ref_file, monkey
         mock.Mock(side_effect=RedisError("down")),
     )
 
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
         first = client.upload_local_file(str(ref_file))
         second = client.upload_local_file(str(ref_file))
@@ -189,17 +186,15 @@ def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
         out_dir=tmp_path / "a",
         task_log=tmp_path / "a.jsonl",
         completions_log=tmp_path / "a-c.jsonl",
-        resolved_log=tmp_path / "a-r.jsonl",
     )
     client_b = KieAIClient(
         api_key="key-b",
         out_dir=tmp_path / "b",
         task_log=tmp_path / "b.jsonl",
         completions_log=tmp_path / "b-c.jsonl",
-        resolved_log=tmp_path / "b-r.jsonl",
     )
 
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.side_effect = [
             _mock_post_response(url="https://tempfile.example/for-a"),
             _mock_post_response(url="https://tempfile.example/for-b"),
@@ -215,21 +210,19 @@ def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
 
 
 def test_wrong_api_key_response_raises_and_never_populates_cache(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(success=False)
-        with pytest.raises(Exception, match="Wrong API Key"):
+        with pytest.raises(ProviderAuthError, match="upload rejected"):
             client.upload_local_file(str(ref_file))
 
     assert _cached("test-key", ref_file) is None
 
 
 def test_http_error_on_upload_raises_and_never_populates_cache(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
-        resp = mock.Mock()
-        resp.raise_for_status.side_effect = requests.HTTPError("500 server error")
-        mreq.post.return_value = resp
+    with kie_http() as mreq:
+        mreq.post.return_value = response({}, status_code=500)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(ProviderUnavailableError):
             client.upload_local_file(str(ref_file))
 
     assert _cached("test-key", ref_file) is None
@@ -241,7 +234,7 @@ def test_two_different_local_files_cache_independently(client, tmp_path):
     ref_b = tmp_path / "b.png"
     Image.new("RGB", (8, 8), "blue").save(ref_b)
 
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.side_effect = [
             _mock_post_response(url="https://tempfile.example/a"),
             _mock_post_response(url="https://tempfile.example/b"),
@@ -256,7 +249,7 @@ def test_two_different_local_files_cache_independently(client, tmp_path):
 
 
 def test_upload_path_argument_still_forwarded_on_a_fresh_upload(client, ref_file):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response()
         client.upload_local_file(str(ref_file), upload_path="custom-dir")
 
@@ -265,13 +258,13 @@ def test_upload_path_argument_still_forwarded_on_a_fresh_upload(client, ref_file
 
 
 def test_remote_file_exists_head_4xx_is_treated_as_missing(client):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.head.return_value = _mock_head_response(410)
         assert client._remote_file_exists("https://tempfile.example/gone") is False
 
 
 def test_remote_file_exists_head_2xx_is_treated_as_present(client):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.head.return_value = _mock_head_response(200)
         assert (
             client._remote_file_exists("https://tempfile.example/still-there") is True
@@ -279,7 +272,7 @@ def test_remote_file_exists_head_2xx_is_treated_as_present(client):
 
 
 def test_remote_file_exists_swallows_request_exceptions(client):
-    with mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests") as mreq:
+    with kie_http() as mreq:
         mreq.RequestException = requests.RequestException
         mreq.head.side_effect = requests.Timeout("slow host")
         assert client._remote_file_exists("https://tempfile.example/x") is False

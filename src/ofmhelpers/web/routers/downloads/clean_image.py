@@ -41,21 +41,19 @@ def run(
     request: Request,
     files: Annotated[list[UploadFile] | None, File()] = None,
 ):
-    if files is None:
-        files = []
-    files = [convert_heic_upload(f) for f in files if f.filename]
-    if not files:
+    uploads = [convert_heic_upload(f) for f in files or [] if f.filename]
+    if not uploads:
         raise HTTPException(status_code=400, detail="At least one image is required")
 
     # Validate every name before writing any of them: the cleaner skips a
     # file it doesn't recognise rather than failing, which would otherwise
     # leave an unprocessed upload sitting in the job dir and listed in the
     # result (a .html there used to come back as a page on our own origin).
-    for f in files:
+    for f in uploads:
         require_upload_kind(f.filename, IMAGE_KINDS)
 
     job_dir = make_job_dir(UPLOAD_ROOT)
-    saved_names = [Path(save_upload(job_dir, f)).name for f in files]
+    saved_names = [Path(save_upload(job_dir, f)).name for f in uploads]
 
     job_id = create_job(
         "clean_images",

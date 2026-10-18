@@ -33,7 +33,7 @@ router = APIRouter(
 ROOTS = {
     "uploads": Path(settings.infra.uploads_root).resolve(),
     "downloads": Path("downloads").resolve(),
-    "kieai_out": Path(settings.kieai.out_dir).resolve(),
+    "kieai_out": Path(settings.aigen.out_dir).resolve(),
 }
 DEFAULT_ROOT = "uploads"
 

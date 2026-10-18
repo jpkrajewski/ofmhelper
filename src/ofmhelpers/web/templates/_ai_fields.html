@@ -1,0 +1,41 @@
+{# One model's settings and file pickers, built from its input schema
+   (aigenproviders/spec.py). Swapped into /generate's form by ai-form.js on
+   every model change. The prompt is the page's own box, so it is skipped. #}
+{% import "_file_picker.html" as fp %}
+<legend>{{ spec.label }}</legend>
+{% for f in spec.form_fields if f.name != "prompt" %}
+{% set id = "ai-" ~ f.name %}
+{% if f.type == "boolean" %}
+<input type="hidden" name="{{ f.name }}" value="false">
+<label class="check-field">
+    <input type="checkbox" name="{{ f.name }}" value="true"{% if f.default %} checked{% endif %}>
+    {{ f.label }}
+</label>
+{% else %}
+<div class="field">
+    <label for="{{ id }}">{{ f.label }}{% if f.required %} *{% endif %}</label>
+    {% if f.enum %}
+    <select name="{{ f.name }}" id="{{ id }}">
+        {% if not f.required and f.default is none %}<option value="">Default</option>{% endif %}
+        {% for v in f.enum %}
+        <option value="{{ v }}"{% if v == f.default %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+    </select>
+    {% elif f.type in ("integer", "number") %}
+    <input type="number" name="{{ f.name }}" id="{{ id }}"
+           {% if f.default is not none %}value="{{ f.default }}"{% endif %}
+           {% if f.minimum is not none %}min="{{ f.minimum }}"{% endif %}
+           {% if f.maximum is not none %}max="{{ f.maximum }}"{% endif %}
+           step="{{ 1 if f.type == 'integer' else 'any' }}"{% if f.required %} required{% endif %}>
+    {% else %}
+    <input type="text" name="{{ f.name }}" id="{{ id }}"
+           {% if f.default is not none %}value="{{ f.default }}"{% endif %}{% if f.required %} required{% endif %}>
+    {% endif %}
+    {% if f.description %}<p class="picker-help">{{ f.description }}</p>{% endif %}
+</div>
+{% endif %}
+{% endfor %}
+{% for m in spec.media_fields %}
+{{ fp.file_picker(m.name, m.kind, m.label ~ (" (required)" if m.required else " (optional)"),
+                  max=(m.max_items or 0) if m.multiple else 1) }}
+{% endfor %}

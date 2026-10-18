@@ -22,7 +22,6 @@ from ofmhelpers.web.routers.task_helpers.download_names import download_name
 from ofmhelpers.web.routers.task_helpers.manifests import (
     build_ordered_paths,
     resolve_existing_ref,
-    resolve_reference_uploads,
 )
 from ofmhelpers.web.routers.task_helpers.responses import (
     asset_card,
@@ -83,7 +82,6 @@ __all__ = [
     "register_grouped_results",
     "require_upload_kind",
     "resolve_existing_ref",
-    "resolve_reference_uploads",
     "safe_filename",
     "save_asset",
     "save_upload",

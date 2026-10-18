@@ -2,12 +2,14 @@
  * /clone live cost estimate.
  *
  * Every picked video is one Wan 3.0 run, and a run costs about the same
- * number of credits per second of its source video (the server hands the
- * per-resolution rates, measured from this account's history, in
- * data-credits-per-video-s). Lengths are read in the browser from each
- * video's metadata -- a local File or a reused server file alike -- and
- * remembered, so reordering or changing resolution recalculates instantly.
- * A video over kie.ai's reference limit is flagged and left out of the total.
+ * number of credits per second of its source video. The server hands every
+ * clone provider's price in data-pricing (credits per video second by
+ * resolution, dollars per credit, the longest reference it takes); the
+ * estimate prices the provider currently picked, and hides for one it has
+ * no price for. Lengths are read in the browser from each video's metadata
+ * -- a local File or a reused server file alike -- and remembered, so
+ * reordering or switching resolution or provider recalculates instantly. A
+ * video over the provider's reference limit is flagged and left out.
  */
 (function () {
     const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -18,6 +20,13 @@
         maximumFractionDigits: 3,
     });
     const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+    // Higgsfield's credits are worth 80x kie.ai's, so a run is a few of them:
+    // whole numbers would round a cheap run to 0.
+    const fewDigits = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+
+    function creditsText(credits) {
+        return `${(credits < 100 ? fewDigits : whole).format(credits)} credits`;
+    }
 
     const fileLengths = new WeakMap();
     const pathLengths = new Map();
@@ -74,15 +83,19 @@
         const resolution = form.querySelector('[name="resolution"]');
         const panel = document.getElementById("clone-cost");
         const lines = document.getElementById("clone-cost-lines");
-        const rates = JSON.parse(form.dataset.creditsPerVideoS || "{}");
-        const usdPerCredit = Number(form.dataset.usdPerCredit);
-        const maxSeconds = Number(form.dataset.maxReferenceS);
+        const pricing = JSON.parse(form.dataset.pricing || "{}");
+        const provider = form.querySelector('[name="provider"]');
 
         function render() {
             const items = window.FilePicker.items(picker);
-            panel.hidden = items.length === 0;
-            if (!items.length) return;
-            const rate = rates[resolution.value] || 0;
+            const price = provider ? pricing[provider.value] : undefined;
+            panel.hidden = items.length === 0 || !price;
+            if (panel.hidden) return;
+            const providerName = provider.selectedOptions[0].textContent.trim();
+            const usdPerCredit = price.usd_per_credit;
+            const maxSeconds = price.max_reference_s;
+            const rate = price.credits_per_video_s[resolution.value] || 0;
+            document.getElementById("clone-cost-note").textContent = price.note;
             document.getElementById("clone-cost-rate").textContent =
                 `${resolution.value} · ${rateUsd.format(rate * usdPerCredit)} per video second`;
 
@@ -102,8 +115,8 @@
                     lines.append(line(i + 1, item.name, "length unreadable", "—", true));
                     return;
                 }
-                if (length > maxSeconds) {
-                    const detail = `${length.toFixed(1)} s · over ${maxSeconds} s, kie.ai rejects it`;
+                if (maxSeconds && length > maxSeconds) {
+                    const detail = `${length.toFixed(1)} s · over ${maxSeconds} s, ${providerName} rejects it`;
                     lines.append(line(i + 1, item.name, detail, "—", true));
                     return;
                 }
@@ -111,7 +124,7 @@
                 credits += lineCredits;
                 seconds += length;
                 runs += 1;
-                const detail = `${length.toFixed(1)} s · ${whole.format(lineCredits)} credits`;
+                const detail = `${length.toFixed(1)} s · ${creditsText(lineCredits)}`;
                 lines.append(line(i + 1, item.name, detail, usd.format(lineCredits * usdPerCredit), false));
             });
 
@@ -120,7 +133,7 @@
                 ? `${runs} ${runNoun} · reading ${pending} more…`
                 : `${runs} ${runNoun} · ${seconds.toFixed(1)} s of video`;
             document.getElementById("clone-cost-usd").textContent = usd.format(credits * usdPerCredit);
-            document.getElementById("clone-cost-credits").textContent = `${whole.format(credits)} credits`;
+            document.getElementById("clone-cost-credits").textContent = creditsText(credits);
         }
 
         function update() {
@@ -131,6 +144,7 @@
 
         picker.addEventListener("filepicker:change", update);
         resolution.addEventListener("change", render);
+        if (provider) provider.addEventListener("change", render);
         update();
     }
 

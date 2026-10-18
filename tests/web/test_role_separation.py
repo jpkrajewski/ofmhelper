@@ -47,14 +47,19 @@ def assets_dir(tmp_path, monkeypatch):
 
 
 def _fake_ai_job(client: TestClient, prompt: str) -> str:
+    """A fake-provider job with one uploaded reference. Its outcome is an
+    error, so the only file it adds to the asset store is that reference."""
     r = client.post(
-        "/fake-ai/run",
+        "/ai/run",
         data={
+            "provider": "fake",
+            "model": "fake:image",
             "prompt": prompt,
             "delay": "0",
-            "reference_images_manifest": '[{"kind": "new"}]',
+            "outcome": "error",
+            "reference_image_urls_manifest": '[{"kind": "new"}]',
         },
-        files={"reference_images": ("ref.png", _png_bytes(), "image/png")},
+        files={"reference_image_urls": ("ref.png", _png_bytes(), "image/png")},
     )
     return r.json()["job_id"]
 
@@ -62,16 +67,16 @@ def _fake_ai_job(client: TestClient, prompt: str) -> str:
 def test_va_cannot_reach_an_admin_job(admin, va, assets_dir):
     job_id = _fake_ai_job(admin, "admin secret")
 
-    assert va.get(f"/fake-ai/jobs/{job_id}").status_code == 404
-    assert va.get(f"/fake-ai/jobs/{job_id}/status").status_code == 404
-    assert va.get(f"/fake-ai/files/{job_id}/0").status_code == 404
+    assert va.get(f"/ai/jobs/{job_id}").status_code == 404
+    assert va.get(f"/ai/jobs/{job_id}/status").status_code == 404
+    assert va.get(f"/ai/files/{job_id}/0").status_code == 404
     assert "admin secret" not in va.get("/generate").text
 
 
 def test_admin_still_sees_a_va_job(admin, va, assets_dir):
     job_id = _fake_ai_job(va, "va work")
 
-    assert admin.get(f"/fake-ai/jobs/{job_id}/status").status_code == 200
+    assert admin.get(f"/ai/jobs/{job_id}/status").status_code == 200
     assert "va work" in admin.get("/generate").text
     assert "va work" in va.get("/generate").text
 
@@ -98,10 +103,12 @@ def test_va_cannot_reuse_an_admin_file_by_path(admin, va, assets_dir):
     [admin_file] = admin.get("/refs?kind=image").json()
 
     r = va.post(
-        "/fake-ai/run",
+        "/ai/run",
         data={
+            "provider": "fake",
+            "model": "fake:image",
             "prompt": "p",
-            "reference_images_manifest": json.dumps(
+            "reference_image_urls_manifest": json.dumps(
                 [{"kind": "existing", "path": admin_file["path"]}]
             ),
         },

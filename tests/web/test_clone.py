@@ -6,7 +6,9 @@ os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+import html as html_lib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,7 +16,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.aigenproviders.base import TaskState
+from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
+from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
@@ -43,13 +48,13 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def fake_runs(monkeypatch):
-    """Video "a.mp4" is 2.6 s long, "b.mp4" 3.6 s, and so on; no kie.ai."""
+    """Video "a.mp4" is 2.6 s long, "b.mp4" 3.6 s, and so on; no provider."""
     monkeypatch.setattr(
         clone,
         "duration_s",
         lambda path, _t: "abcdefghijklmnopqrstuvwxyz".index(Path(path).name[-5]) + 2.6,
     )
-    monkeypatch.setattr(clone, "_run_wan3", lambda **_kwargs: [])
+    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: [])
 
 
 def _post(client, videos, data=None):
@@ -69,7 +74,8 @@ def _post(client, videos, data=None):
     ("seconds", "expected"), [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)]
 )
 def test_duration_is_the_video_length_clamped_to_wan3(seconds, expected):
-    assert clone.wan3_duration(seconds) == expected
+    for target in clone.CLONE_TARGETS.values():
+        assert clone.clip_duration(target.spec, seconds) == expected
 
 
 def test_page_defaults(client):
@@ -275,48 +281,151 @@ def test_duration_s_reads_the_container_length(tmp_path):
     assert duration_s(_clip(tmp_path / "c.mp4", 3), 20) == pytest.approx(3.0, abs=0.2)
 
 
-@needs_ffmpeg
-def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatch):
-    """Real upload, real ffprobe, real Wan 3.0 runner -- only kie.ai's HTTP is
-    faked, so this is exactly the payload a paid run would send."""
-    sent = []
+def _stub(provider_cls, monkeypatch, sent):
+    """The provider's single calls answered locally; its download fails, so
+    each job ends on the hosted copy (no file needed)."""
 
-    def create_task(_self, model, payload, callback_url=None):
-        sent.append((model, payload))
+    def submit(_self, spec, payload, idempotency_key):
+        sent.append((spec.model_id, payload))
         return f"t{len(sent)}"
 
-    def download_urls(_self, *_args):
-        raise OSError
+    def download(_self, url, dest):
+        msg = "no download in tests"
+        raise ProviderUnavailableError(msg)
 
+    monkeypatch.setattr(provider_cls, "upload", lambda _self, p: f"https://up/{p.name}")
+    monkeypatch.setattr(provider_cls, "submit", submit)
     monkeypatch.setattr(
-        KieAIClient, "upload_local_file", lambda _self, p: f"https://up/{Path(p).name}"
+        provider_cls,
+        "status",
+        lambda _self, tid: TaskState(state="done", urls=[f"https://res/{tid}.mp4"]),
     )
-    monkeypatch.setattr(KieAIClient, "create_task", create_task)
-    monkeypatch.setattr(
-        KieAIClient, "poll_task", lambda _self, tid, **_k: [f"https://res/{tid}.mp4"]
-    )
-    monkeypatch.setattr(KieAIClient, "download_urls", download_urls)
-    clips = [_clip(tmp_path / "a.mp4", 3), _clip(tmp_path / "b.mp4", 5)]
+    monkeypatch.setattr(provider_cls, "download", download)
 
-    r = client.post(
+
+def _post_clips(client, clips, data=None):
+    return client.post(
         "/clone/run",
-        data={"api_key": "k", "image_manifest": NEW, "videos_manifest": _new(2)},
+        data={
+            "api_key": "k",
+            "image_manifest": NEW,
+            "videos_manifest": _new(len(clips)),
+            **(data or {}),
+        },
         files=[
             ("image", ("face.png", b"img", "image/png")),
             *[("videos", (c.name, c.read_bytes(), "video/mp4")) for c in clips],
         ],
     )
 
-    assert r.status_code == 200
+
+@needs_ffmpeg
+def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatch):
+    """Real upload, real ffprobe, real runner -- only kie.ai's calls are
+    stubbed, so this is exactly the payload a paid run would send."""
+    sent = []
+    _stub(KieProvider, monkeypatch, sent)
+    clips = [_clip(tmp_path / "a.mp4", 3), _clip(tmp_path / "b.mp4", 5)]
+
+    r = _post_clips(client, clips)
+
+    assert r.status_code == 200, r.text
     assert [model for model, _ in sent] == ["wan/3-0-video", "wan/3-0-video"]
     for (_model, payload), name, seconds in zip(sent, "ab", [3, 5], strict=True):
         assert payload["prompt"] == clone.DEFAULT_PROMPT
         assert payload["duration"] == seconds
         assert payload["resolution"] == "720P"
+        assert payload["nsfw_checker"] is False
         assert payload["reference_image_urls"][0].endswith("face.png")
         assert payload["reference_video_urls"][0].endswith(f"{name}.mp4")
     statuses = [get_job(j).status for j in r.json()["job_ids"]]
     assert statuses == ["done", "done"]
+
+
+@needs_ffmpeg
+def test_run_on_higgsfield_sends_its_own_field_names(client, tmp_path, monkeypatch):
+    sent = []
+    _stub(HiggsfieldProvider, monkeypatch, sent)
+
+    r = _post_clips(
+        client,
+        [_clip(tmp_path / "a.mp4", 3)],
+        {"provider": "higgsfield", "audio": "true"},
+    )
+
+    assert r.status_code == 200, r.text
+    [(model, payload)] = sent
+    assert model == "alibaba/wan-3.0/reference-to-video"
+    assert payload["resolution"] == "720p", "Higgsfield spells it lower-case"
+    assert payload["generate_audio"] is True
+    assert payload["image_urls"][0].endswith("face.png")
+    assert payload["video_urls"][0].endswith("a.mp4")
+    job = get_job(r.json()["job_ids"][0])
+    assert (job.params["provider"], job.params["resolution"]) == ("higgsfield", "720P")
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_run_rejects_a_provider_that_cannot_clone(client):
+    assert _post(client, ["a.mp4"], {"provider": "fake"}).status_code == 400
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
+    """A batch over the picked model's own limits (its schema) fails the
+    submit up front, nothing paid. Seedance 2.0 takes at most 9 images."""
+    monkeypatch.setitem(
+        clone.CLONE_TARGETS,
+        "higgsfield",
+        clone.CloneTarget(
+            model="higgsfield:bytedance/seedance-2.0/reference-to-video",
+            images="image_urls",
+            video="video_urls",
+            audio="generate_audio",
+        ),
+    )
+    files = [("image", (f"{i}.png", bytes([i]), "image/png")) for i in range(10)]
+    files.append(("videos", ("a.mp4", b"a", "video/mp4")))
+    before = len(list_jobs())
+
+    r = client.post(
+        "/clone/run",
+        data={
+            "api_key": "k",
+            "provider": "higgsfield",
+            "image_manifest": _new(10),
+            "videos_manifest": NEW,
+        },
+        files=files,
+    )
+
+    assert r.status_code == 400
+    assert "image_urls" in r.json()["detail"]
+    assert len(list_jobs()) == before
+
+
+def test_page_offers_the_providers_that_can_clone(client):
+    html = client.get("/clone").text
+
+    assert '<option value="kie"' in html
+    assert '<option value="higgsfield"' in html
+    assert '<option value="fake"' not in html
+
+
+def _run_clone(capcut, assets_root):
+    return clone._run_clone(
+        job_id="j",
+        api_key="k",
+        assets_root=assets_root,
+        provider="kie",
+        prompt="p",
+        resolution="720P",
+        duration=5,
+        reference_images=["/x/face.png"],
+        reference_videos=["/x/src.mp4"],
+        capcut=capcut,
+        clone_batch="b",
+        clone_index=0,
+    )
 
 
 def test_page_has_capcut_on_by_default(client):
@@ -338,16 +447,16 @@ def test_capcut_choice_is_stored_and_recreated(client):
 
 def test_capcut_off_returns_the_generation_untouched(monkeypatch):
     result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
-    monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
+    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
 
-    assert clone._run_clone("b", 0, capcut=False, assets_root="/x") == result
+    assert _run_clone(capcut=False, assets_root="/x") == result
 
 
 def test_capcut_keeps_a_remote_only_result(monkeypatch):
     result = [ResultFile(name="v.mp4", path=None, remote_url="https://r/v")]
-    monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
+    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
 
-    assert clone._run_clone("b", 0, capcut=True, assets_root="/x") == result
+    assert _run_clone(capcut=True, assets_root="/x") == result
 
 
 @needs_ffmpeg
@@ -355,12 +464,14 @@ def test_capcut_on_serves_the_capcut_copy(tmp_path, monkeypatch):
     src = _clip(tmp_path / "gen.mp4", 2)
     monkeypatch.setattr(
         clone,
-        "_run_wan3",
-        lambda **_k: [ResultFile(name=src.name, path=str(src), remote_url="https://r")],
+        "run_ai",
+        lambda *_a, **_k: [
+            ResultFile(name=src.name, path=str(src), remote_url="https://r")
+        ],
     )
     assets = tmp_path / "assets"
 
-    [result] = clone._run_clone("b", 0, capcut=True, assets_root=str(assets))
+    [result] = _run_clone(capcut=True, assets_root=str(assets))
 
     out = Path(result.path)
     assert result == ResultFile(name="gen_capcut.mp4", path=str(out), remote_url=None)
@@ -371,7 +482,7 @@ def test_capcut_on_serves_the_capcut_copy(tmp_path, monkeypatch):
 
 def test_capcut_failure_keeps_the_generated_video(monkeypatch):
     result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
-    monkeypatch.setattr(clone, "_run_wan3", lambda **_k: result)
+    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
 
     def broken(*_a, **_k):
         msg = "ffmpeg failed: boom"
@@ -379,16 +490,44 @@ def test_capcut_failure_keeps_the_generated_video(monkeypatch):
 
     monkeypatch.setattr(clone, "apply_preset", broken)
 
-    assert clone._run_clone("b", 0, capcut=True, assets_root="/x") == result
+    assert _run_clone(capcut=True, assets_root="/x") == result
 
 
-def test_form_carries_the_cost_rates_from_settings(client, monkeypatch):
+def _pricing(client):
+    html = client.get("/clone").text
+    raw = re.search(r"data-pricing='([^']*)'", html).group(1)
+    return json.loads(html_lib.unescape(raw))
+
+
+def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatch):
     """clone-cost.js prices a pick from these, so a rate change in the env
     reaches the estimate without touching the JS."""
     monkeypatch.setenv("OFM_CLONE_CREDITS_PER_VIDEO_S", '{"720P": 40.0}')
     monkeypatch.setenv("OFM_KIE_USD_PER_CREDIT", "0.004")
-    html = client.get("/clone").text
-    assert """data-credits-per-video-s='{"720P": 40.0}'""" in html
-    assert 'data-usd-per-credit="0.004"' in html
-    assert 'data-max-reference-s="15"' in html
-    assert 'id="clone-cost"' in html
+    monkeypatch.setenv("OFM_CLONE_HF_CREDITS_PER_VIDEO_S", '{"720P": 2.0}')
+
+    pricing = _pricing(client)
+
+    assert set(pricing) == set(clone.CLONE_TARGETS), "every clone provider is priced"
+    assert pricing["kie"]["credits_per_video_s"] == {"720P": 40.0}
+    assert pricing["kie"]["usd_per_credit"] == 0.004
+    assert pricing["kie"]["max_reference_s"] == 15
+    assert pricing["higgsfield"]["credits_per_video_s"] == {"720P": 2.0}
+    assert pricing["higgsfield"]["max_reference_s"] is None
+    assert 'id="clone-cost"' in client.get("/clone").text
+
+
+def test_higgsfield_default_rate_matches_the_measured_run(client):
+    """2026-10-18: a 13.09 s source at 720p cost $1.05 on Higgsfield (26.09
+    billed seconds at 60% off). The per-source-second rate must reproduce it
+    within a cent or two."""
+    price = _pricing(client)["higgsfield"]
+
+    estimate = 13.09 * price["credits_per_video_s"]["720P"] * price["usd_per_credit"]
+
+    assert estimate == pytest.approx(1.05, abs=0.02)
+    for res, per_s in price["credits_per_video_s"].items():
+        list_usd_per_billed_s = {"480P": 0.05, "720P": 0.10, "1080P": 0.20}[res]
+        assert per_s * price["usd_per_credit"] == pytest.approx(
+            2 * list_usd_per_billed_s * 0.4
+        )

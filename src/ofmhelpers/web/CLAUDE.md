@@ -1,8 +1,9 @@
 # Module purpose
 
 The FastAPI web app ("Global Ascend LLC — Content Ops"): a single-password,
-two-role (admin/VA) internal tool for AI content generation (the kie.ai
-models), media downloading/cleaning, the landing-page application CRM, and
+two-role (admin/VA) internal tool for AI content generation (every model of
+every provider in `aigenproviders/`: kie.ai, Higgsfield), media
+downloading/cleaning, the landing-page application CRM, and
 file management. No
 SPA framework — Jinja2 server-rendered templates + a small shared vanilla-JS
 layer for background-job polling.
@@ -17,10 +18,10 @@ new plumbing.
 ```
 web/
   main.py            app assembly only — middleware, static, lifespan, loop over ROUTERS
-  api_keys.py        provider API-key form pre-fills (kie.ai per role)
+  api_keys.py        provider API-key form pre-fills (per provider, per role)
   middleware/        one concern per file, each owning its own policy: auth, ratelimit
-  recovery.py        background sweeper for orphaned kie.ai generations
-  schemas/           typed shapes: persistence.py (DB), generation.py (forms)
+  recovery.py        background sweeper for provider requests that outlived their poll
+  schemas/           typed shapes: persistence.py (DB), generation.py (provider/model lists)
   templates_config.py  get_templates(), the shared Jinja2Templates instance
   stores/            the app's nouns: jobs, applications
   db/                the only code that touches Postgres
@@ -66,10 +67,11 @@ migration changed everything under `stores/` without touching a router.
   HTML with status 200. Session lifetime is
   `settings.session.session_max_age_s` (config, not a literal), consumed by
   `SessionMiddleware`'s `max_age` and by `static/js/session.js`.
-- `api_keys.py` — `get_kie_api_key(request)` (per-role pre-fill). Deliberately
-  not in the middleware: it decides what a form field *starts out containing*,
-  not who may reach it, and they are optional by design — unset var means an
-  empty field the user pastes into.
+- `api_keys.py` — `get_api_key(request, provider)` / `get_api_keys(request)`
+  (every provider's pre-fill, from `Provider.default_key(admin)`).
+  Deliberately not in the middleware: it decides what a form field *starts
+  out containing*, not who may reach it, and they are optional by design —
+  unset var means an empty field the user pastes into.
 - `middleware/ratelimit.py` — fixed-window counters **and** their two
   enforcement points, one file: the login route calls `login_blocked` /
   `record_failed_login` / `clear_failed_logins` (only **failed** attempts are
@@ -118,18 +120,17 @@ migration changed everything under `stores/` without touching a router.
   the ones not added. Only every try rate-limited ends the batch (the
   rest stay due). Also what
   `POST /reels/watch` calls for new profiles.
-- `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
-  calling `KieAIClient.resume_pending()` for every configured kie.ai API
-  key, so an in-request poll timeout or a server restart mid-generation
-  still gets finished automatically. Each task is logged with its job id
-  (`KieAIClient(job_id=...)`, passed by every `_run_<tool>`); once such a
-  task ends, `finish_job` settles a job that already **failed** (gave up
-  polling): kie.ai failed it -> the job's error becomes kie's reason;
-  it succeeded -> the job is re-run with its stored params via
-  `registry.RESUMABLE` (each kie.ai `Tool`'s `run`), and the re-run picks
-  the same task back up (`_job_task`) instead of paying again, so the
-  tool's own tail (CapCut, asset store) runs. A running or done job is left
-  alone. A task without a job id is just downloaded to `kieai_out/`.
+- `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s),
+  provider-agnostic: for every request `aigenproviders.tasks` still
+  remembers, `settle` checks its job. Running -> left alone; done or deleted
+  -> forgotten; older than `settings.aigen.resume_max_age_s` -> forgotten;
+  **failed** (gave up polling) -> one `status` call on the key the request
+  was made with: still running -> next sweep; failed -> the job's error
+  becomes the provider's reason; done -> the job is re-run with its stored
+  params via `registry.RESUMABLE` (`ai`'s `run_ai`, `clone`'s `_run_clone`),
+  and the re-run resumes the same request (`runner` recalls it) instead of
+  paying again, so the tool's own tail (CapCut, asset store) runs. A
+  provider error skips one task, never the sweep.
 - `middleware/` — one concern per file, and a concern is *whole*: `auth.py`
   (`AuthMiddleware` + the allowlist/password/role checks) and `ratelimit.py`
   (`WriteRateLimitMiddleware` + the counters and the login brake). Order is
@@ -137,9 +138,10 @@ migration changed everything under `stores/` without touching a router.
   request order.
 - `schemas/` — `persistence.py` holds the Pydantic v2 models
   (`Job`) that are the typed contract at the
-  persistence boundary; `generation.py` holds `ReferenceUploads`, the
-  three-picker form shape seedance, wan, minimax and fake_ai share (resolved to paths by
-  `routers/task_helpers.resolve_reference_uploads`); `gallery.py` holds the
+  persistence boundary; `generation.py` holds `ProviderChoice` and
+  `ModelChoice`, the provider select and the model list (`#model-catalog`
+  JSON) a generation page offers, built from the provider registry and the
+  catalog; `gallery.py` holds the
   gallery card every tool page renders per job (`JobCard`, `TaskCard` for
   the mixed-tool galleries, `CloneCard`/`CloneBatch` for /clone, whose
   `CloneBatch.group` regroups a page of cards into submits). Data only: the
@@ -231,43 +233,66 @@ our own origin.
 `{"job_id": ...}` immediately; `GET /<prefix>/jobs/{id}` renders
 `templates/job_status.html`; `GET /<prefix>/jobs/{id}/status` returns the
 JSON polling payload; `GET /<prefix>/files/{id}/{index}` streams the result
-file. Adding a generation backend = write `_run_<tool>(...)` calling that
-backend + its `/run` + one `add_kie_job_routes` call, nothing else.
+file. AI generation does not add tools: a new model is a catalog entry and
+a new provider is an `aigenproviders/` subpackage, both served by
+`generation/ai.py` (see `aigenproviders/CLAUDE.md`).
 
 ## `generation/` — the AI tools
 
-- `index.py` — the unified tool-picker page (`/generate`): one form whose
-  fieldset switches between seedance/seedance25/kling3/wan3/minimax_h3/nanobanana/
-  seedream45/seedream5/gpt_image/fake_ai, plus a
-  cross-tool gallery with click-to-reuse. `TOOLS` (task -> label + the
-  tool's router, whose prefix gives the file and poll URLs) is the central
-  registry — **add an entry here for any
-  new job task name that should show up in this gallery.**
-  The gallery pages `gallery_limit` at a time: `GET /generate/gallery?offset=`
-  returns the next page as an HTML fragment for `static/js/gallery-scroll.js`
-  to append, and `_gallery_page` emits a next offset only while there is
-  another page — the absence of a `.gallery-sentinel` in a response is what
-  ends the scroll, so there is no `has_more` flag that could disagree with the
-  cards actually returned. Both the page and the fragment render each card
-  through `_generate_gallery_card.html`, so an appended card is
-  indistinguishable from a server-rendered one (the delegated Recreate and
-  Download handlers and the resumed poller all key off its attributes).
-- One module per kie.ai model — `seedance.py` (2.0) / `seedance25.py` /
-  `kling.py` / `wan.py` / `minimax.py` / `nbp.py` / `seedream45.py` /
-  `seedream5.py` / `gpt_image.py` — each only its `/run` form and the
-  `KieAIClient.generate_*` call it wraps. Everything they share lives once in
-  `kie_jobs.py`: `start_kie_job` (create + enqueue), `run_kie_generation`
-  (preview, remote-only fallback, asset registration), `upload_references`,
-  and `add_kie_job_routes` (`task_helpers.add_job_routes` worded for a
-  generation, with its inputs shown). Allowed values come from
-  `aigenproviders/kaiai/types.py`, typed on the form so a bad value is a 422.
+- `index.py` — `/generate`: provider select, then model select (every
+  model of that provider from `#model-catalog`, grouped by family), the
+  shared prompt box, then the model's own fieldset, which
+  `static/js/ai-form.js` loads from `GET /ai/fields?model=` on every model
+  change (picked files follow the switch by kind, the prompt box is
+  required / optional / hidden per model, a model's `default_prompt` fills
+  it only while it holds no text of the user's), posting to `/ai/run`. Plus
+  a cross-provider gallery with click-to-reuse ("↻ Recreate" restores
+  provider, model, settings and reference files; a job from before /ai
+  restores its prompt only). The gallery pages `gallery_limit` at a time:
+  `GET /generate/gallery?offset=` returns the next page as an HTML fragment
+  for `static/js/gallery-scroll.js` to append, and `_gallery_page` emits a
+  next offset only while there is another page — the absence of a
+  `.gallery-sentinel` in a response is what ends the scroll. Both the page
+  and the fragment render each card through `_generate_gallery_card.html`,
+  so an appended card is indistinguishable from a server-rendered one. The
+  tasks it lists are `registry.GENERATE_TOOLS`.
+- `ai.py` — `/ai`, every model of every provider, task `ai`.
+  `GET /ai/fields` renders `_ai_fields.html` from the spec (enum -> select,
+  number with min/max, boolean as a hidden "false" + checkbox, one
+  `_file_picker` per media field — `max=1` for a single-file one — the
+  prompt skipped: it is the page's own box). `POST /ai/run` reads the raw
+  form (an async dependency, so the route itself stays sync and off the
+  event loop): `provider` / `model` / `api_key` (`AiRunForm`), the spec's
+  scalars typed by `spec.parse_form`, each media picker through
+  `build_ordered_paths` (the raw form holds Starlette's `UploadFile`, not
+  FastAPI's subclass), then `spec.check` — a bad request is a 400 naming the
+  field, before anything is uploaded or paid. Params stored: `provider`,
+  `model` (the catalog key) and the inputs under the schema's own names,
+  media as lists of asset-store paths (which is what Recreate restores and
+  `job_inputs` previews). The key goes to the worker only. `run_ai` is the
+  worker side: upload the references through the provider, then
+  `aigenproviders.runner.generate`; the hosted result is the job preview
+  the moment it exists, a failed local download keeps the job done on the
+  hosted copy, results are registered in the asset store. `describe(job)`
+  labels its gallery card "<model> · <provider>".
+- `legacy.py` — the job routes (status page, polling, files) of the
+  per-model routers `ai.py` replaced (`/seedance`, `/kling3`, ...,
+  `/fake-ai`), no `/run`, so old gallery cards and links keep working; the
+  registry lists those task names label-only (not resumable).
 - `clone.py` — `/clone`, both roles, own page: 1..`clone_max_images` subject
   images (same person, sent to every run) + N videos
   (two file pickers, so reuse/Recreate never re-uploads) -> one batch of
-  `clone` jobs, each a plain Wan 3.0 run (wan's `_run_wan3`) whose duration
-  is its video's length (`utils.video_probe`, rounded, clamped 2–30 s). Every
-  video is probed before any job is queued, and `clone_max_videos` caps a
-  batch, so a bad submit spends nothing. Jobs share `clone_batch` +
+  `clone` jobs, each a Wan 3.0 reference-to-video run (`ai.run_ai`) on the
+  picked provider. `CLONE_TARGETS` names, per provider, its Wan 3.0 model and
+  which schema fields take the subject, the video and the audio switch (kie
+  `wan/3-0-video`, Higgsfield `alibaba/wan-3.0/reference-to-video`); a
+  provider joins /clone by one entry there. Params stay provider-neutral
+  (`reference_images`, `reference_videos`, `resolution` as 480P/720P/1080P
+  — sent in each model's own spelling), so the page and Recreate read
+  every batch alike. Each run's duration is its video's length
+  (`utils.video_probe`, rounded, clamped to the model's schema range). Every
+  video is probed and every run `spec.check`ed before any job is queued, and
+  `clone_max_videos` caps a batch, so a bad submit spends nothing. Jobs share `clone_batch` +
   `clone_index` params; `schemas.CloneBatch.group` regroups them for the
   page (one hue per batch). `/run` answers with the new
   batch rendered through `_clone_batch.html` (the page's own partial), which
@@ -277,19 +302,28 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   runs without it) re-encodes each generated video through
   `utils.capcut.DEFAULT_PRESET` on the worker; the `_capcut.mp4` copy
   becomes the result with `remote_url` dropped, so view/download serve it
-  rather than kie.ai's original (which stays on disk and in the asset
-  store). A remote-only result (local download failed) is left as is.
-  Above Start, `static/js/clone-cost.js` prices the pick live: each video's
-  length (read from its metadata in the browser) x
-  `settings.web.clone_credits_per_video_s[resolution]` (credits per second
-  of source video, measured from this account's Wan 3.0 history -- kie.ai
-  bills output + reference seconds, so about 2x its 16/32 per s) x
-  `kie_usd_per_credit` ($50 = 10,000 credits). A video over
-  `WAN3_MAX_REFERENCE_S` (15) is flagged and left out of the total; it
-  watches the picker through file-picker.js's `filepicker:change` event.
-- `fake_ai.py` — a no-cost stand-in with the exact same shape (same
-  `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
-  without spending kie.ai credits or waiting on a real provider.
+  rather than the provider's original (which stays on disk and in the
+  asset store). A remote-only result (local download failed) is left as is.
+  Above Start, `static/js/clone-cost.js` prices the pick live for the
+  provider picked: each video's length (read from its metadata in the
+  browser) x that provider's credits per second of source video at the
+  resolution x its dollars per credit, from `clone_pricing()` (one
+  `ClonePrice` per provider, handed to the page as `data-pricing`). Both
+  providers bill output + reference seconds, so about 2x the source
+  length. kie.ai: `settings.web.clone_credits_per_video_s`, measured from
+  this account's history, x `kie_usd_per_credit` ($50 = 10,000 credits).
+  Higgsfield: `clone_hf_credits_per_video_s` x `hf_usd_per_credit`
+  (16 credits = $1) -- its list price at this account's 60% discount,
+  measured 2026-10-18 (a 13.09 s source at 720p billed 26.09 s, $1.05;
+  Higgsfield's API never reports a charge or a balance, and its estimate
+  endpoint gives Wan 3.0's list rate card only). A video over the
+  provider's `max_reference_s` (kie.ai 15; Higgsfield none known) is
+  flagged and left out of the total; it watches the picker through
+  file-picker.js's `filepicker:change` event. A provider with no price
+  hides the panel.
+- The no-cost stand-in is a provider now (`aigenproviders/fake/`, "Fake AI
+  (testing)" in the provider select): same router, runner and result
+  handling as a real one, so the e2e suite exercises the real pipeline.
 
 ## `downloads/` — pulling media in
 
@@ -400,7 +434,9 @@ role-aware nav — add a new top-level page's link in `base.html`'s
 `nav_items` list; it also feeds the footer). Shared partials:
 `_file_picker.html` (multi-file ordered picker macro; `max=` caps it, newest
 winning, `multiple=` lets the dialog pick several at once),
-`_kie_api_key_field.html`, `_asset_grid.html`/`_asset_media.html` (result
+`_provider_fields.html` (provider select + its API key, swapped per
+provider; emits `provider:change`), `_ai_fields.html` (one model's fields,
+see `ai.py`), `_asset_grid.html`/`_asset_media.html` (result
 rendering), `job_status.html` (the generic status/polling page every
 standard-shape tool reuses),
 `_generate_gallery_card.html`/`_generate_gallery_sentinel.html` +
@@ -431,13 +467,15 @@ queries add the wider ones. `static/js/nav.js` only drives the small-screen
 nav drawer (`aria-expanded` + `.open`); at ≥980px the CSS puts the links
 back in a row and hides the toggle, so the desktop nav needs no JS at all.
 
-`static/js/generation.js` is the shared "submit -> poll -> render inline"
-controller: any `<form data-prefix="..." data-result-kind="video|image">`
+`static/js/ai-form.js` drives /generate's provider -> model -> fields form
+(see `index.py`). `static/js/generation.js` is the shared "submit -> poll ->
+render inline" controller: any `<form data-prefix="..." data-result-kind="video|image">`
 auto-wires on page load, POSTs to `form.action`, then polls
 `${prefix}/jobs/${job_id}/status` and swaps the pending card for the result
 (or error) in place — no page navigation. `static/js/file-picker.js` is the
-reference-file picker widget (`FilePicker.collectFormData`); works with the
-manifest reuse pattern in `task_helpers.build_ordered_paths`.
+reference-file picker widget (`FilePicker.collectFormData`; `FilePicker.init` wires pickers inserted
+after load); works with the manifest reuse pattern in
+`task_helpers.build_ordered_paths`.
 `static/js/session.js` is loaded in `base.html`'s `<head>` **before every
 other script** and wraps `window.fetch` once, globally: any `401` carrying a
 `login_url` shows a brief "Session expired" overlay and redirects the tab to

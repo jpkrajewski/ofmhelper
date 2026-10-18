@@ -4,56 +4,24 @@ stored under: its label and the router that serves it. The /generate and
 tool is one entry here instead of one in each of them."""
 
 from ofmhelpers.web.routers.downloads import clean_image, images, videos
-from ofmhelpers.web.routers.generation import (
-    clone,
-    fake_ai,
-    gpt_image,
-    kling,
-    minimax,
-    nbp,
-    seedance,
-    seedance25,
-    seedream5,
-    seedream45,
-    wan,
-)
+from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation.clone import _run_clone
-from ofmhelpers.web.routers.generation.gpt_image import _run_gpt_image
-from ofmhelpers.web.routers.generation.kling import _run_kling3
-from ofmhelpers.web.routers.generation.minimax import _run_minimax_h3
-from ofmhelpers.web.routers.generation.nbp import _run_nanobanana
-from ofmhelpers.web.routers.generation.seedance import _run_seedance
-from ofmhelpers.web.routers.generation.seedance25 import _run_seedance25
-from ofmhelpers.web.routers.generation.seedream5 import _run_seedream5
-from ofmhelpers.web.routers.generation.seedream45 import _run_seedream45
-from ofmhelpers.web.routers.generation.wan import _run_wan3
+from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
 from ofmhelpers.web.schemas import Job, TaskCard, Tool
 
-# The /generate gallery, in its picker's order.
+# The /generate gallery: every /ai job, plus the jobs of the per-model tools
+# it replaced (their pages still answer, see generation/legacy.py).
 GENERATE_TOOLS = {
-    "seedance": Tool(label="Seedance 2.0", router=seedance.router, run=_run_seedance),
-    "seedance25": Tool(
-        label="Seedance 2.5", router=seedance25.router, run=_run_seedance25
+    ai.TASK: Tool(
+        label="AI generation", router=ai.router, run=ai.run_ai, describe=ai.describe
     ),
-    "kling3": Tool(label="Kling 3.0", router=kling.router, run=_run_kling3),
-    "wan3": Tool(label="Wan 3.0", router=wan.router, run=_run_wan3),
-    "minimax_h3": Tool(label="MiniMax H3", router=minimax.router, run=_run_minimax_h3),
-    "nanobanana": Tool(label="Nano Banana Pro", router=nbp.router, run=_run_nanobanana),
-    "seedream45": Tool(
-        label="Seedream 4.5", router=seedream45.router, run=_run_seedream45
-    ),
-    "seedream5": Tool(
-        label="Seedream 5.0", router=seedream5.router, run=_run_seedream5
-    ),
-    "gpt_image": Tool(
-        label="GPT Image 2.5 Flare",
-        router=gpt_image.router,
-        run=_run_gpt_image,
-    ),
-    "fake_ai": Tool(label="Fake AI Model", router=fake_ai.router),
+    **{
+        task: Tool(label=label, router=router)
+        for task, (label, router) in LEGACY_TOOLS.items()
+    },
 }
 
 # The /download-assets gallery.
@@ -83,6 +51,6 @@ def task_card(job: Job) -> TaskCard:
     return TaskCard.from_job(
         job,
         *job_assets(job, tool.files_prefix),
-        task_label=tool.label,
+        task_label=tool.describe(job) if tool.describe else tool.label,
         poll_prefix=tool.prefix,
     )

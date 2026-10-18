@@ -1,0 +1,1106 @@
+[
+  {
+    "model_id": "bytedance/seedance-2",
+    "label": "Seedance 2.0 · Standard",
+    "family": "Seedance 2.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "default": "720p"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "adaptive",
+            "1:1",
+            "16:9",
+            "21:9",
+            "3:4",
+            "4:3",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 4,
+          "maximum": 15
+        },
+        "generate_audio": {
+          "type": "boolean",
+          "default": true
+        },
+        "reference_image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        },
+        "reference_video_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "video"
+        },
+        "reference_audio_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "audio"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "web_search": false,
+      "return_last_frame": false,
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "bytedance/seedance-2-fast",
+    "label": "Seedance 2.0 · Fast",
+    "family": "Seedance 2.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "default": "720p"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "adaptive",
+            "1:1",
+            "16:9",
+            "21:9",
+            "3:4",
+            "4:3",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 4,
+          "maximum": 15
+        },
+        "generate_audio": {
+          "type": "boolean",
+          "default": true
+        },
+        "reference_image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        },
+        "reference_video_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "video"
+        },
+        "reference_audio_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "audio"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "web_search": false,
+      "return_last_frame": false,
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "bytedance/seedance-2-mini",
+    "label": "Seedance 2.0 · Mini",
+    "family": "Seedance 2.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "default": "720p"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "adaptive",
+            "1:1",
+            "16:9",
+            "21:9",
+            "3:4",
+            "4:3",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 4,
+          "maximum": 15
+        },
+        "generate_audio": {
+          "type": "boolean",
+          "default": true
+        },
+        "reference_image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        },
+        "reference_video_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "video"
+        },
+        "reference_audio_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "audio"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "web_search": false,
+      "return_last_frame": false,
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "bytedance/seedance-2-5",
+    "label": "Seedance 2.5",
+    "family": "Seedance 2.5",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "default": "720p"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "adaptive",
+            "1:1",
+            "16:9",
+            "21:9",
+            "3:4",
+            "4:3",
+            "9:16"
+          ],
+          "default": "adaptive"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 4,
+          "maximum": 30
+        },
+        "generate_audio": {
+          "type": "boolean",
+          "default": true
+        },
+        "reference_image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        },
+        "reference_video_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "video"
+        },
+        "reference_audio_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "audio"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "web_search": false,
+      "return_last_frame": false,
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "kling-3.0/video",
+    "label": "Kling 3.0",
+    "family": "Kling 3.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "std",
+            "pro",
+            "4K"
+          ],
+          "default": "pro"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "duration": {
+          "type": "string",
+          "enum": [
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15"
+          ],
+          "default": "5"
+        },
+        "sound": {
+          "type": "boolean",
+          "default": true
+        },
+        "image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "multi_shots": false
+    },
+    "default_prompt": "Handheld camera movement, slight natural shake and micro-tremors, real person filming casually on iPhone, authentic motion blur on fast pans, natural lighting with slight overexposure, vertical 9:16 format, candid documentary feel, imperfect framing, shallow depth of field, warm color grade, smooth but slightly jerky movement like a real hand holding phone, ambient background noise feel, zoom drift, real-time speed, no cinematic stabilization"
+  },
+  {
+    "model_id": "wan/3-0-video",
+    "label": "Wan 3.0",
+    "family": "Wan 3.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "480P",
+            "720P",
+            "1080P"
+          ],
+          "default": "1080P"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "adaptive",
+            "16:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16"
+          ],
+          "default": "adaptive"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 30
+        },
+        "audio": {
+          "type": "boolean",
+          "default": true
+        },
+        "reference_image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        },
+        "reference_video_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "video"
+        },
+        "reference_audio_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "audio"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "minimax-h3/text-to-video",
+    "label": "MiniMax H3 · Text to video",
+    "family": "MiniMax H3",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "768P",
+            "2K"
+          ],
+          "default": "2K"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "16:9",
+            "21:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 4,
+          "maximum": 15
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "minimax-h3/image-to-video",
+    "label": "MiniMax H3 · Image to video",
+    "family": "MiniMax H3",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "768P",
+            "2K"
+          ],
+          "default": "2K"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 4,
+          "maximum": 15
+        },
+        "first_frame_url": {
+          "type": "string",
+          "format": "uri",
+          "x-media": "image"
+        },
+        "last_frame_url": {
+          "type": "string",
+          "format": "uri",
+          "x-media": "image"
+        }
+      },
+      "required": [
+        "prompt",
+        "first_frame_url"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "minimax-h3/reference-to-video",
+    "label": "MiniMax H3 · Reference to video",
+    "family": "MiniMax H3",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "768P",
+            "2K"
+          ],
+          "default": "2K"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "adaptive",
+            "16:9",
+            "21:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "duration": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 4,
+          "maximum": 15
+        },
+        "reference_image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image"
+        },
+        "reference_video_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "video"
+        },
+        "reference_audio_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "audio"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "nano-banana-pro",
+    "label": "Nano Banana Pro",
+    "family": "Nano Banana Pro",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "default": "1K"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpg"
+          ],
+          "default": "png"
+        },
+        "image_input": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image",
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "image_input": []
+    },
+    "default_prompt": "Refer to first image and second image, replicate third image."
+  },
+  {
+    "model_id": "seedream/4.5-text-to-image",
+    "label": "Seedream 4.5 · Text to image",
+    "family": "Seedream 4.5",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "high"
+          ],
+          "default": "basic"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/4.5-edit",
+    "label": "Seedream 4.5 · Edit",
+    "family": "Seedream 4.5",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "high"
+          ],
+          "default": "basic"
+        },
+        "image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image",
+          "maxItems": 14,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "prompt",
+        "image_urls"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/5-lite-text-to-image",
+    "label": "Seedream 5.0 Lite · Text to image",
+    "family": "Seedream 5.0",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "high",
+            "ultra"
+          ],
+          "default": "basic"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/5-lite-image-to-image",
+    "label": "Seedream 5.0 Lite · Image to image",
+    "family": "Seedream 5.0",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "high",
+            "ultra"
+          ],
+          "default": "basic"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        },
+        "image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image",
+          "maxItems": 14,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "prompt",
+        "image_urls"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/5-pro-text-to-image",
+    "label": "Seedream 5.0 Pro · Text to image",
+    "family": "Seedream 5.0",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "high"
+          ],
+          "default": "basic"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/5-pro-image-to-image",
+    "label": "Seedream 5.0 Pro · Image to image",
+    "family": "Seedream 5.0",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "default": "1:1"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "high"
+          ],
+          "default": "basic"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        },
+        "image_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image",
+          "maxItems": 10,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "prompt",
+        "image_urls"
+      ],
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "gpt-image-2-5-flare-image-to-image",
+    "label": "GPT Image 2.5 Flare",
+    "family": "GPT Image 2.5 Flare",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to generate"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9",
+            "27:16",
+            "16:27",
+            "9:8",
+            "8:9"
+          ],
+          "default": "auto"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "default": "1K"
+        },
+        "background": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "opaque",
+            "transparent"
+          ],
+          "default": "auto"
+        },
+        "input_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "x-media": "image",
+          "maxItems": 16,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "prompt",
+        "input_urls"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

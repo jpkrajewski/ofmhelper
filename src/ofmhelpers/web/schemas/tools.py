@@ -16,9 +16,13 @@ class Tool(BaseModel):
 
     label: str
     router: APIRouter
-    # The worker function its jobs run, for a kie.ai tool: what recovery
-    # re-runs a job with once its task finishes after the job gave up.
+    # The worker function its jobs run, for an AI tool: what recovery
+    # re-runs a job with once its provider request finishes after the job
+    # gave up.
     run: Callable[..., Any] | None = None
+    # A card label read off the job itself, for a tool whose jobs differ
+    # (/ai: the model and provider); `label` otherwise.
+    describe: Callable[[Any], str] | None = None
 
     @property
     def prefix(self) -> str:

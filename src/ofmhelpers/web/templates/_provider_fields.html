@@ -1,0 +1,55 @@
+{# Provider select + its API key, shared by /generate and /clone.
+   `providers`: ProviderChoice list; `api_keys`: provider -> pre-filled key.
+   Switching provider swaps the key to that provider's pre-fill, unless the
+   user typed one; a provider that needs no key hides the field. Emits
+   "provider:change" on the select for the page to react to. #}
+<div class="field">
+    <label for="provider-select">Provider</label>
+    <select name="provider" id="provider-select">
+        {% for p in providers %}
+        <option value="{{ p.name }}" data-needs-key="{{ 'true' if p.needs_key else 'false' }}"
+                {% if p.name == selected_provider %}selected{% endif %}>{{ p.label }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div class="field" id="api-key-field">
+    <label for="api-key">API key</label>
+    <input type="password" name="api_key" id="api-key" value=""
+           data-keys="{{ api_keys|tojson|forceescape }}"
+           required autocomplete="new-password"
+           data-lpignore="true" data-1p-ignore data-bwignore="true" data-dashlane-ignore="true"
+           data-form-type="other">
+</div>
+<script>
+(function () {
+    // Browsers and password-manager extensions routinely ignore
+    // autocomplete="off" on password fields and replace the server-rendered
+    // value with a saved credential; autocomplete="new-password" + the
+    // *ignore hints fix most of it, and this restores the pre-fill a few
+    // times until the user actually touches the field.
+    const select = document.getElementById("provider-select");
+    const field = document.getElementById("api-key");
+    const wrap = document.getElementById("api-key-field");
+    if (!select || !field) return;
+    const keys = JSON.parse(field.dataset.keys || "{}");
+    let userTouched = false;
+    field.addEventListener("input", () => { userTouched = true; });
+
+    function apply() {
+        const option = select.selectedOptions[0];
+        const needsKey = !option || option.dataset.needsKey !== "false";
+        wrap.style.display = needsKey ? "" : "none";
+        field.required = needsKey;
+        field.disabled = !needsKey;
+        if (!userTouched) field.value = keys[select.value] || "";
+    }
+
+    select.addEventListener("change", () => {
+        userTouched = false;
+        apply();
+        select.dispatchEvent(new CustomEvent("provider:change", { bubbles: true }));
+    });
+    apply();
+    [100, 400].forEach((delay) => setTimeout(() => { if (!userTouched) apply(); }, delay));
+})();
+</script>
