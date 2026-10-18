@@ -22,6 +22,7 @@ existed):
 
 from ofmhelpers.config.settings import (
     DownloadersSettings,
+    GoogleDriveSettings,
     InfraSettings,
     InstagramSettings,
     KieAISettings,
@@ -45,6 +46,10 @@ class Settings:
     @property
     def infra(self) -> InfraSettings:
         return InfraSettings()
+
+    @property
+    def gdrive(self) -> GoogleDriveSettings:
+        return GoogleDriveSettings()
 
     @property
     def kieai(self) -> KieAISettings:

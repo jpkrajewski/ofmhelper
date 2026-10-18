@@ -14,6 +14,25 @@
       data-credits-per-video-s='{{ credits_per_video_s|tojson }}' data-usd-per-credit="{{ usd_per_credit }}"
       data-max-reference-s="{{ max_reference_s }}" novalidate>
     {% include "_kie_api_key_field.html" %}
+    <div class="field drive-field">
+        <span class="field-label">Google Drive</span>
+        {% if drive %}
+        <div class="drive-row">
+            <span class="badge badge-neutral">Saving to {{ drive.email }} · {{ drive_folder }}</span>
+            <button type="submit" form="drive-disconnect" class="btn-ghost">Disconnect</button>
+        </div>
+        {% elif drive_configured %}
+        <div class="drive-row">
+            <a class="btn btn-outline" href="/drive/connect?next=/clone">Connect Google Drive</a>
+        </div>
+        <p class="form-hint">Each finished video is uploaded to your Drive.</p>
+        {% else %}
+        <div class="drive-row">
+            <button type="button" class="btn-outline" disabled>Connect Google Drive</button>
+        </div>
+        <p class="form-hint">Not set up: GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET missing in .env.</p>
+        {% endif %}
+    </div>
     {{ fp.file_picker('image', 'image', 'Subject', 'Up to ' ~ max_images ~ ' photos of one person', max=max_images, multiple=true) }}
     {{ fp.file_picker('videos', 'video', 'Videos', 'One run each · 1–' ~ max_reference_s ~ ' s · up to ' ~ max_videos, multiple=true) }}
     <div class="field">
@@ -56,6 +75,9 @@
     </section>
     <button type="submit" class="btn-primary">Start</button>
     <div class="generation-status" role="status" aria-live="polite"></div>
+</form>
+<form id="drive-disconnect" method="post" action="/drive/disconnect" hidden>
+    <input type="hidden" name="next" value="/clone">
 </form>
 </div>
 

@@ -29,6 +29,7 @@
                 <p class="filename">{{ card.assets[0].name }}</p>
                 <a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].download_name }}"
                    data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
+                {% if card.drive_url %}<a href="{{ card.drive_url }}" target="_blank" rel="noopener" class="download-btn">Open in Drive</a>{% endif %}
                 <button type="button" class="recreate-btn">↻ Recreate</button>
             {% elif card.status == "failed" %}
                 <div class="result-file" title="{{ card.error }}">⚠ {{ card.error|default("generation failed", true)|truncate(80) }}</div>

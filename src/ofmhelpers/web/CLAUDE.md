@@ -287,6 +287,11 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   `kie_usd_per_credit` ($50 = 10,000 credits). A video over
   `WAN3_MAX_REFERENCE_S` (15) is flagged and left out of the total; it
   watches the picker through file-picker.js's `filepicker:change` event.
+  With a Google Drive connected (`routers/drive.py`, session key
+  `gdrive_connection` -> `stores/drive_connections.py`), `/run` stores the
+  connection id as the `drive_connection` param and the worker uploads each
+  result (`gdrive.upload_file`) and sets `ResultFile.drive_url`, shown as
+  "Open in Drive" on the card. A failed upload keeps the result.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.
@@ -372,6 +377,10 @@ files is admin-only by default.
 ## At the `routers/` root
 
 - `auth.py` — `/login`, `/logout`.
+- `drive.py` — `/drive/connect` -> Google's consent page -> `/drive/callback`
+  (state + PKCE verifier checked from the session) stores the refresh token
+  and puts the connection id in the session; `POST /drive/disconnect`
+  deletes it. See `gdrive/CLAUDE.md` for the Google Cloud setup.
 - `apply.py` — `POST /apply`, the only public *write* in the app: the
   application form on the `/` landing page (`templates/reachmodel.html`).
   Public via `settings.web.public_paths`, still capped per IP by

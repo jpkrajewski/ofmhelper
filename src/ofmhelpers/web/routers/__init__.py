@@ -11,8 +11,8 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `admin/`      -- admin-only surfaces: landing-page applications, file
   manager, action log, cookie upload.
 
-Four modules sit at this level because they belong to no single feature:
-`auth` (login/logout), `apply` (the public landing-page application form's
+Five modules sit at this level because they belong to no single feature:
+`auth` (login/logout), `drive` (connecting a Google Drive), `apply` (the public landing-page application form's
 POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
 reference-file browser every generation form uses), and `task_helpers` (the
 upload/job/serve plumbing those routers are built out of).
@@ -22,7 +22,7 @@ it, so **adding a page means one import and one entry here**, and main.py is
 never touched.
 """
 
-from ofmhelpers.web.routers import apply, auth, refs
+from ofmhelpers.web.routers import apply, auth, drive, refs
 from ofmhelpers.web.routers.admin import action_log, cookies, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.downloads import clean_image, reels
@@ -52,6 +52,7 @@ from ofmhelpers.web.routers.video_tools import uniqify
 ROUTERS = [
     auth.router,
     apply.router,
+    drive.router,
     refs.router,
     # generation/
     generation_index.router,

@@ -235,6 +235,35 @@ class InfraSettings(BaseSettings):
     cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")
 
 
+class GoogleDriveSettings(BaseSettings):
+    """gdrive/, routers/drive.py, routers/generation/clone.py.
+
+    The OAuth client is a Google Cloud "Web application" client; its
+    authorized redirect URI must equal `redirect_uri` exactly. Unset client
+    id/secret = the Drive button shows disabled and clones stay local only."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    client_id: str | None = Field(
+        default=None, validation_alias="GOOGLE_OAUTH_CLIENT_ID"
+    )
+    client_secret: str | None = Field(
+        default=None, validation_alias="GOOGLE_OAUTH_CLIENT_SECRET"
+    )
+    redirect_uri: str = Field(
+        default="http://localhost:8000/drive/callback",
+        validation_alias="OFM_GDRIVE_REDIRECT_URI",
+    )
+    # Created in the user's Drive on the first upload, reused after.
+    folder_name: str = Field(
+        default="ofmhelpers clones", validation_alias="OFM_GDRIVE_FOLDER"
+    )
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.client_id and self.client_secret)
+
+
 class KieAISettings(BaseSettings):
     """aigenproviders/kaiai/client.py, routers/generation/fake_ai.py,
     routers/admin/file_manager.py."""

@@ -8,11 +8,13 @@
 - `tools.py` -- a background-job tool as the task registry knows it.
 - `applications.py` -- the landing-page application form and stored lead.
 - `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
+- `drive.py` -- a connected Google Drive.
 
 Import from here; the split is an implementation detail of this package.
 """
 
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
+from ofmhelpers.web.schemas.drive import DriveConnection
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
 from ofmhelpers.web.schemas.gallery import CloneBatch, CloneCard, JobCard, TaskCard
 from ofmhelpers.web.schemas.generation import ReferenceUploads
@@ -47,6 +49,7 @@ __all__ = [
     "CloneCard",
     "CloneQueued",
     "DirEntry",
+    "DriveConnection",
     "FailedSource",
     "FeedItem",
     "FileEntry",

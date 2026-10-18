@@ -23,7 +23,15 @@ by domain and a domain may grow a second module.
 """
 
 from ofmhelpers.web.db.repositories.applications import ApplicationRepository
+from ofmhelpers.web.db.repositories.drive_connections import (
+    DriveConnectionRepository,
+)
 from ofmhelpers.web.db.repositories.jobs import JobRepository
 from ofmhelpers.web.db.repositories.watched_profiles import WatchedProfileRepository
 
-__all__ = ["ApplicationRepository", "JobRepository", "WatchedProfileRepository"]
+__all__ = [
+    "ApplicationRepository",
+    "DriveConnectionRepository",
+    "JobRepository",
+    "WatchedProfileRepository",
+]

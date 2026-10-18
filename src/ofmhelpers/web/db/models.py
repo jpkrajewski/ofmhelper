@@ -105,6 +105,19 @@ class ProfileGroupRow(Base):
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class DriveConnectionRow(Base):
+    """A Google Drive a browser session connected (routers/drive.py). The
+    session holds only `id`; the worker uploads /clone results with the
+    refresh token. drive.file scope: it reaches only files this app made."""
+
+    __tablename__ = "drive_connections"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class ProfileScanStatRow(Base):
     """One successful scan of a watched profile, as numbers: the history the
     feed's latest-scan-only `watched_profiles.result` does not keep (growth,

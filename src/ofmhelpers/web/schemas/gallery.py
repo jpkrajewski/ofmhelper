@@ -69,6 +69,7 @@ class CloneCard(JobCard):
     """One video's run inside a /clone batch."""
 
     video_name: str
+    drive_url: str | None = None
 
 
 class CloneBatch(BaseModel):
