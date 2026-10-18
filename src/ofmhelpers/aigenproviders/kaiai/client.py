@@ -32,6 +32,10 @@ from ofmhelpers.utils.image_fit import fit_image, fits
 logger = get_logger(__name__)
 
 
+def _task_key_cache_key(task_id: str) -> str:
+    return f"kieai:task-key:{task_id}"
+
+
 class KieAIClient:
     """
     OOP wrapper around the kie.ai Market API (image/video generation
@@ -65,8 +69,12 @@ class KieAIClient:
         task_log: str | pathlib.Path = "./tasks.jsonl",
         completions_log: str | pathlib.Path = "./completions.jsonl",
         resolved_log: str | pathlib.Path = "./resolved.jsonl",
+        job_id: str | None = None,
     ) -> None:
         self.api_key = api_key
+        # The web job this client generates for, logged with each task so
+        # recovery can finish that job rather than leave a stray download.
+        self.job_id = job_id
         # Read here rather than as a default expression: a default is bound at
         # import, which would capture the env before a test override lands.
         self.JOBS_BASE = jobs_base or settings.kieai.jobs_base
@@ -95,10 +103,15 @@ class KieAIClient:
                         "model": model,
                         "prompt": prompt,
                         "createdAt": time.time(),
+                        "jobId": self.job_id,
                     }
                 )
                 + "\n"
             )
+        # The key a task was created with is the only one kie.ai answers
+        # recordInfo for, and a pasted form key is in no env var -- recovery
+        # reads it back from here for as long as it keeps checking the task.
+        set_text(_task_key_cache_key(task_id), self.api_key, self.RESUME_MAX_AGE_S)
 
     # ------------------------------------------------------------------
     # File upload - only needed if a reference image/video/audio is a
@@ -266,8 +279,8 @@ class KieAIClient:
 
         msg = (
             f"kie.ai is still generating (task {task_id}, waited {timeout_s}s). "
-            f"No action needed -- the background recovery sweeper will download "
-            f"it to the server automatically once it finishes."
+            f"No action needed -- the background recovery sweeper finishes "
+            f"this job automatically once kie.ai does."
         )
         raise TimeoutError(msg)
 
@@ -332,7 +345,9 @@ class KieAIClient:
         on_result_urls: Callable[[list[str]], None] | None,
         ext: str = IMAGE_EXT,
     ) -> pathlib.Path:
-        task_id = self.create_task(model, payload, callback_url)
+        # A job re-run by recovery picks its task back up: creating another
+        # would pay for the same generation twice.
+        task_id = self._job_task() or self.create_task(model, payload, callback_url)
         if model in VIDEO_MODELS:
             urls = self.poll_task(
                 task_id, timeout_s=settings.kieai.video_poll_timeout_s
@@ -342,6 +357,20 @@ class KieAIClient:
         if on_result_urls:
             on_result_urls(urls)
         return self.download_urls(urls, task_id, ext)[0]
+
+    def _job_task(self) -> str | None:
+        """The last task logged for this client's job, if it has one."""
+        if not self.job_id or not self.TASK_LOG.exists():
+            return None
+        task_id = None
+        for line in self.TASK_LOG.read_text().splitlines():
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("jobId") == self.job_id:
+                task_id = rec["taskId"]
+        return task_id
 
     @staticmethod
     def _reference_inputs(
@@ -763,16 +792,32 @@ class KieAIClient:
                 self._mark_resolved(tid, "expired")
                 continue
 
+            owner = self._owner_of(tid)
             try:
-                state, payload = self.check_task(tid)
+                state, payload = owner.check_task(tid)
             except Exception:  # network blip etc. -- next sweep retries
                 logger.warning("recovery %s: status check failed", tid, exc_info=True)
                 continue
 
+            job_id = rec.get("jobId")
+            if job_id and state in ("success", "fail"):
+                # The job finishes itself: the web layer re-runs it, and the
+                # re-run downloads through its own tool (CapCut, asset store).
+                self._mark_resolved(tid, f"job-{state}")
+                recovered.append(
+                    {
+                        "taskId": tid,
+                        "jobId": job_id,
+                        "outcome": state,
+                        "error": payload if state == "fail" else None,
+                        "apiKey": owner.api_key,
+                    }
+                )
+                continue
             if state == "success" and isinstance(payload, list):
                 ext = VIDEO_EXT if rec.get("model") in VIDEO_MODELS else IMAGE_EXT
                 try:
-                    self.download_urls(payload, tid, ext)
+                    owner.download_urls(payload, tid, ext)
                 except Exception:  # leave pending, next sweep retries
                     logger.warning("recovery %s: download failed", tid, exc_info=True)
                     continue
@@ -787,11 +832,28 @@ class KieAIClient:
             # and the age cutoff above guarantees it can't linger forever.
         return recovered
 
+    def _owner_of(self, task_id: str) -> "KieAIClient":
+        """A client on the key `task_id` was created with, when that was
+        recorded and isn't this one's; otherwise this client."""
+        key = get_text(_task_key_cache_key(task_id))
+        if not key or key == self.api_key:
+            return self
+        return KieAIClient(
+            api_key=key,
+            jobs_base=self.JOBS_BASE,
+            upload_base=self.UPLOAD_BASE,
+            out_dir=self.OUT_DIR,
+            task_log=self.TASK_LOG,
+            completions_log=self.COMPLETIONS_LOG,
+            resolved_log=self.RESOLVED_LOG,
+        )
+
     @classmethod
-    def from_env(cls, api_key):
+    def from_env(cls, api_key, job_id=None):
         s = settings.kieai
         return cls(
             api_key=api_key,
+            job_id=job_id,
             out_dir=s.out_dir,
             task_log=s.task_log,
             completions_log=s.completions_log,

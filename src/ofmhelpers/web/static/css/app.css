@@ -1275,16 +1275,18 @@ summary:hover { color: var(--accent-soft); }
    colour from --batch-hue (set per batch by the server), so the runs of one
    submit read as a group at a glance and keep that colour across reloads. */
 .clone-batch {
-    --batch-color: hsl(var(--batch-hue, 260) 85% 68%);
+    /* Muted on purpose: the hue only has to tell batches apart, not compete
+       with the results inside them. */
+    --batch-color: hsl(var(--batch-hue, 260) 32% 52%);
     margin-bottom: var(--s-5);
     padding: var(--s-4);
     border: 1px solid var(--border);
-    border-left: 4px solid var(--batch-color);
+    border-left: 3px solid var(--batch-color);
     border-radius: var(--radius);
     background: var(--surface-2);
 }
 .clone-batch .results { margin-top: var(--s-3); }
-.clone-batch .result-item { border-top: 2px solid var(--batch-color); }
+.clone-batch .result-item { border-top: 1px solid var(--batch-color); }
 .clone-batch-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
 .clone-batch-thumb {
     width: 56px;
@@ -1292,7 +1294,7 @@ summary:hover { color: var(--accent-soft); }
     flex: none;
     object-fit: cover;
     border-radius: var(--radius-sm);
-    border: 2px solid var(--batch-color);
+    border: 1px solid var(--border-strong);
     background: #000;
 }
 .clone-batch-meta { flex: 1 1 160px; min-width: 0; }
@@ -1306,7 +1308,106 @@ summary:hover { color: var(--accent-soft); }
     white-space: nowrap;
 }
 .clone-batch-uploading { --batch-color: var(--border-strong); }
+
+/* /clone form: each picker is label + hint on one line, then the file
+   chooser and "reuse" side by side, then compact picked rows. Output
+   settings share one row. */
+.clone-form .file-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-2);
+}
+.clone-form .file-picker > label { margin: 0; }
+.clone-form .file-picker > .picker-help { margin: 0; color: var(--text-faint); text-align: right; }
+.clone-form .file-picker > .ref-toggle { width: auto; margin: 0; padding: 0 var(--s-4); }
+.clone-form .file-picker > .ref-browser,
+.clone-form .file-picker > .file-order-list { grid-column: 1 / -1; margin: 0; }
+.clone-form .file-order-list:empty { display: none; }
+.clone-form .file-order-list li { margin-bottom: var(--s-1); padding: var(--s-1) var(--s-2); }
+.clone-form .file-order-list li .thumb-small { width: 48px; height: 48px; }
+/* At 48px a video's native controls are only noise; the frame is the preview. */
+.clone-form .file-order-list video::-webkit-media-controls { display: none !important; }
+.clone-output-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) var(--s-5); }
+.clone-output-row select { width: auto; min-width: 120px; }
+.clone-output-row .check-field { margin: 0; font-weight: 500; color: var(--text-muted); }
 .clone-batch-uploading progress { width: 100%; margin-top: var(--s-2); accent-color: var(--accent); }
+
+/* Live cost estimate above a paid submit (/clone, static/js/clone-cost.js):
+   one line per run, the total as the panel's anchor. Figures use tabular
+   numerals so the prices line up as they recalculate. */
+.cost-panel {
+    margin-bottom: var(--s-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+}
+.cost-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+    padding: var(--s-3) var(--s-4);
+    border-bottom: 1px solid var(--border-soft);
+}
+.cost-panel-title {
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.cost-lines {
+    max-height: 240px;
+    margin: 0;
+    padding: var(--s-2) 0;
+    overflow-y: auto;
+    list-style: none;
+}
+.cost-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--s-3);
+    padding: var(--s-1) var(--s-4);
+    font-size: var(--step--1);
+}
+.cost-line-name {
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cost-line-detail { grid-column: 1; color: var(--text-faint); }
+.cost-line-price { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 700; }
+.cost-line-flagged .cost-line-detail,
+.cost-line-flagged .cost-line-price { color: var(--warn); }
+.cost-total {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-2);
+    padding: var(--s-3) var(--s-4);
+    border-top: 1px solid var(--border-soft);
+    background: var(--accent-wash);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.cost-total-value { display: inline-flex; align-items: baseline; gap: var(--s-2); }
+.cost-total-value strong {
+    color: var(--text);
+    font-size: var(--step-2);
+    letter-spacing: -0.02em;
+}
+.cost-note {
+    margin: 0;
+    padding: var(--s-2) var(--s-4) var(--s-3);
+    color: var(--text-faint);
+    font-size: var(--step--1);
+}
 
 /* ---------------------------------------------------------------------
    15. Shared page bits (cookies form, action log, applications, file manager)
@@ -1515,6 +1616,15 @@ summary:hover { color: var(--accent-soft); }
    group dropdown), so nothing wraps differently from row to row. Every
    card carries a 2px border; a leader only recolours it, so outlined rows
    never grow, shift or overlap their neighbours. */
+/* View tiers (instagram.models.VIEW_TIERS): clear enough to read at a
+   glance, no glow or animation. */
+.reels-filters, .reels-watch-list {
+    --tier-common: #9ca3af;
+    --tier-uncommon: #3fbf7f;
+    --tier-rare: #a582f0;
+    --tier-epic: #f08a3c;
+    --tier-legendary: #f2c94c;
+}
 .reels-watch-title { margin-top: var(--s-6); }
 .reels-watch-search { margin-bottom: var(--s-3); }
 .reels-watch-list {
@@ -1535,10 +1645,11 @@ summary:hover { color: var(--accent-soft); }
 
 .reels-watch-item {
     display: grid;
-    gap: var(--s-2);
+    gap: var(--s-1);
     min-width: 0;
-    padding: var(--s-3);
-    border: 2px solid var(--border-soft);
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--border-soft);
+    border-left: 3px solid transparent;
     border-radius: var(--radius-sm);
     background: var(--surface-2);
 }
@@ -1557,7 +1668,10 @@ summary:hover { color: var(--accent-soft); }
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
 }
+.reels-row-name:hover { color: var(--accent-soft); text-decoration: underline; }
 .reels-leader {
     flex: none;
     padding: 2px 8px;
@@ -1565,8 +1679,8 @@ summary:hover { color: var(--accent-soft); }
     font-size: 0.7rem;
     font-weight: 700;
     white-space: nowrap;
-    background: rgba(249, 115, 22, 0.18);
-    color: #f97316;
+    background: color-mix(in srgb, var(--leader) 16%, transparent);
+    color: var(--leader);
 }
 .reels-watch-error { flex: none; color: var(--fail); cursor: help; }
 .reels-watch-item .reels-unwatch {
@@ -1587,30 +1701,21 @@ summary:hover { color: var(--accent-soft); }
 
 .reels-row-group {
     width: 100%;
-    min-height: 36px;
-    padding: 6px 28px 6px var(--s-3);
+    min-height: 32px;
+    margin-top: var(--s-1);
+    padding: 4px 28px 4px var(--s-3);
+    background-color: transparent;
+    border-color: var(--border-soft);
+    color: var(--text-muted);
     font-size: var(--step--1);
     background-position: calc(100% - 16px) center, calc(100% - 10px) center;
 }
 
-/* Leaders: most views gold, most feed reels orange. */
-.reels-watch-item[data-tier="legendary"] {
-    border-color: #ffd84d;
-    animation: reel-gold-glow 2s ease-in-out infinite alternate;
-}
-.reels-watch-item[data-tier="legendary"] .reels-watch-views { color: #ffd84d; }
-.reels-watch-item[data-tier="legendary"] .reels-leader {
-    background: rgba(255, 200, 40, 0.18);
-    color: #ffd84d;
-}
-.reels-watch-item[data-tier="epic"] {
-    border-color: #f97316;
-    box-shadow: 0 0 8px rgba(249, 115, 22, 0.35);
-}
+/* Leaders: most views gold, most feed reels orange -- a side stripe and
+   the badge, nothing that moves. */
+.reels-watch-item[data-tier="legendary"] { --leader: var(--tier-legendary); border-left-color: var(--leader); }
+.reels-watch-item[data-tier="epic"] { --leader: var(--tier-epic); border-left-color: var(--leader); }
 
-@media (prefers-reduced-motion: reduce) {
-    .reels-watch-item[data-tier="legendary"] { animation: none; }
-}
 /* Compact: three reels a row at every width. */
 .reels-feed { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-2); }
 .reel-card {
@@ -1734,10 +1839,14 @@ summary:hover { color: var(--accent-soft); }
 }
 .reels-filter a:hover { border-color: var(--border-strong); color: var(--text); }
 .reels-filter a[aria-current="page"] { border-color: var(--accent); color: var(--text); background: var(--accent-wash); }
-.reels-ranks a[data-tier="uncommon"] { --tier: #22c55e; }
-.reels-ranks a[data-tier="rare"] { --tier: #a855f7; }
-.reels-ranks a[data-tier="epic"] { --tier: #f97316; }
-.reels-ranks a[data-tier="legendary"] { --tier: #ffd84d; }
-.reels-ranks a[data-tier] { border-color: var(--tier); color: var(--tier); }
-.reels-ranks a[data-tier][aria-current="page"] { background: var(--tier); color: #111; }
+.reels-ranks a[data-tier="common"] { --tier: var(--tier-common); }
+.reels-ranks a[data-tier="uncommon"] { --tier: var(--tier-uncommon); }
+.reels-ranks a[data-tier="rare"] { --tier: var(--tier-rare); }
+.reels-ranks a[data-tier="epic"] { --tier: var(--tier-epic); }
+.reels-ranks a[data-tier="legendary"] { --tier: var(--tier-legendary); }
+.reels-ranks a[data-tier] { border-color: color-mix(in srgb, var(--tier) 45%, var(--border)); color: var(--tier); }
+.reels-ranks a[data-tier][aria-current="page"] {
+    border-color: var(--tier);
+    background: color-mix(in srgb, var(--tier) 16%, transparent);
+}
 .reel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; font-size: 0.75rem; line-height: 1.3; }

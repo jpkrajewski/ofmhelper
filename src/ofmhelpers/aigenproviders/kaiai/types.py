@@ -72,6 +72,8 @@ class Kling3Mode(StrEnum):
 # Wan 3.0's accepted duration range, in whole seconds.
 WAN3_MIN_DURATION_S = 2
 WAN3_MAX_DURATION_S = 30
+# The longest reference video kie.ai takes (a longer one is a 422).
+WAN3_MAX_REFERENCE_S = 15
 
 
 class Wan3Resolution(StrEnum):

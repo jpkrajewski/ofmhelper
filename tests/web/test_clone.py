@@ -380,3 +380,15 @@ def test_capcut_failure_keeps_the_generated_video(monkeypatch):
     monkeypatch.setattr(clone, "apply_preset", broken)
 
     assert clone._run_clone("b", 0, capcut=True, assets_root="/x") == result
+
+
+def test_form_carries_the_cost_rates_from_settings(client, monkeypatch):
+    """clone-cost.js prices a pick from these, so a rate change in the env
+    reaches the estimate without touching the JS."""
+    monkeypatch.setenv("OFM_CLONE_CREDITS_PER_VIDEO_S", '{"720P": 40.0}')
+    monkeypatch.setenv("OFM_KIE_USD_PER_CREDIT", "0.004")
+    html = client.get("/clone").text
+    assert """data-credits-per-video-s='{"720P": 40.0}'""" in html
+    assert 'data-usd-per-credit="0.004"' in html
+    assert 'data-max-reference-s="15"' in html
+    assert 'id="clone-cost"' in html

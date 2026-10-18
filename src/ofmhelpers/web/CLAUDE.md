@@ -121,7 +121,15 @@ migration changed everything under `stores/` without touching a router.
 - `recovery.py` — background sweeper (every `SWEEP_INTERVAL_S` = 300s)
   calling `KieAIClient.resume_pending()` for every configured kie.ai API
   key, so an in-request poll timeout or a server restart mid-generation
-  still gets downloaded automatically.
+  still gets finished automatically. Each task is logged with its job id
+  (`KieAIClient(job_id=...)`, passed by every `_run_<tool>`); once such a
+  task ends, `finish_job` settles a job that already **failed** (gave up
+  polling): kie.ai failed it -> the job's error becomes kie's reason;
+  it succeeded -> the job is re-run with its stored params via
+  `registry.RESUMABLE` (each kie.ai `Tool`'s `run`), and the re-run picks
+  the same task back up (`_job_task`) instead of paying again, so the
+  tool's own tail (CapCut, asset store) runs. A running or done job is left
+  alone. A task without a job id is just downloaded to `kieai_out/`.
 - `middleware/` — one concern per file, and a concern is *whole*: `auth.py`
   (`AuthMiddleware` + the allowlist/password/role checks) and `ratelimit.py`
   (`WriteRateLimitMiddleware` + the counters and the login brake). Order is
@@ -271,6 +279,14 @@ backend + its `/run` + one `add_kie_job_routes` call, nothing else.
   becomes the result with `remote_url` dropped, so view/download serve it
   rather than kie.ai's original (which stays on disk and in the asset
   store). A remote-only result (local download failed) is left as is.
+  Above Start, `static/js/clone-cost.js` prices the pick live: each video's
+  length (read from its metadata in the browser) x
+  `settings.web.clone_credits_per_video_s[resolution]` (credits per second
+  of source video, measured from this account's Wan 3.0 history -- kie.ai
+  bills output + reference seconds, so about 2x its 16/32 per s) x
+  `kie_usd_per_credit` ($50 = 10,000 credits). A video over
+  `WAN3_MAX_REFERENCE_S` (15) is flagged and left out of the total; it
+  watches the picker through file-picker.js's `filepicker:change` event.
 - `fake_ai.py` — a no-cost stand-in with the exact same shape (same
   `OUT_DIR`/`ASSETS_ROOT`), for exercising the upload/poll/gallery plumbing
   without spending kie.ai credits or waiting on a real provider.

@@ -7,40 +7,55 @@
 
 <div class="generate-layout">
 <div class="generate-form-col">
-<h2 class="col-title">Wan 3.0 — one subject, many videos</h2>
+<h2 class="col-title">New clone · Wan 3.0</h2>
 
-<form id="clone-form" action="/clone/run" data-max-videos="{{ max_videos }}" data-max-images="{{ max_images }}"
-      data-prefill-videos='{{ prefill_videos|tojson }}' novalidate>
+<form id="clone-form" class="clone-form" action="/clone/run" data-max-videos="{{ max_videos }}" data-max-images="{{ max_images }}"
+      data-prefill-videos='{{ prefill_videos|tojson }}'
+      data-credits-per-video-s='{{ credits_per_video_s|tojson }}' data-usd-per-credit="{{ usd_per_credit }}"
+      data-max-reference-s="{{ max_reference_s }}" novalidate>
     {% include "_kie_api_key_field.html" %}
-    {{ fp.file_picker('image', 'image', 'Subject images (@Image1, @Image2…)', 'Up to ' ~ max_images ~ ' photos of the same person (different angles help likeness). Every run gets all of them.', max=max_images, multiple=true) }}
-    {{ fp.file_picker('videos', 'video', 'Videos (@Video1)', 'Up to ' ~ max_videos ~ ' videos. Each one is its own Wan 3.0 run, as long as the video (2–30 s).', multiple=true) }}
+    {{ fp.file_picker('image', 'image', 'Subject', 'Up to ' ~ max_images ~ ' photos of one person', max=max_images, multiple=true) }}
+    {{ fp.file_picker('videos', 'video', 'Videos', 'One run each · 1–' ~ max_reference_s ~ ' s · up to ' ~ max_videos, multiple=true) }}
     <div class="field">
         <label for="clone-prompt">Prompt</label>
         <textarea id="clone-prompt" name="prompt" class="prompt-input" rows="3" required>{{ default_prompt }}</textarea>
+        <p class="form-hint">@Image1, @Image2… are the subject photos, @Video1 the video.</p>
     </div>
-    <div class="field">
-        <label for="clone-resolution">Resolution</label>
-        <select id="clone-resolution" name="resolution">
-            {% for r in resolutions %}
-            <option value="{{ r.value }}" {% if r.value == default_resolution %}selected{% endif %}>{{ r.value }}</option>
-            {% endfor %}
-        </select>
+    <div class="field clone-output">
+        <span class="field-label">Output</span>
+        <div class="clone-output-row">
+            <select id="clone-resolution" name="resolution" aria-label="Resolution">
+                {% for r in resolutions %}
+                <option value="{{ r.value }}" {% if r.value == default_resolution %}selected{% endif %}>{{ r.value }}</option>
+                {% endfor %}
+            </select>
+            <label class="check-field">
+                <input type="checkbox" name="audio" value="true" checked>
+                Audio
+            </label>
+            <label class="check-field" title="Re-encoded with CapCut-style edits and metadata, exported in 4K">
+                <input type="checkbox" name="capcut" value="true" checked>
+                CapCut export
+            </label>
+        </div>
     </div>
-    <label class="check-field">
-        <input type="checkbox" name="audio" value="true" checked>
-        Generate audio
-    </label>
-    <label class="check-field">
-        <input type="checkbox" name="capcut" value="true" checked>
-        CapCut edit + export (4K, CapCut metadata)
-    </label>
+    <section class="cost-panel" id="clone-cost" aria-live="polite" hidden>
+        <header class="cost-panel-head">
+            <span class="cost-panel-title">Estimated cost</span>
+            <span class="badge badge-neutral" id="clone-cost-rate"></span>
+        </header>
+        <ol class="cost-lines" id="clone-cost-lines"></ol>
+        <footer class="cost-total">
+            <span id="clone-cost-summary"></span>
+            <span class="cost-total-value">
+                <strong id="clone-cost-usd"></strong>
+                <span id="clone-cost-credits"></span>
+            </span>
+        </footer>
+        <p class="cost-note">From your Wan 3.0 history · $50 = 10,000 credits</p>
+    </section>
     <button type="submit" class="btn-primary">Start</button>
     <div class="generation-status" role="status" aria-live="polite"></div>
-    <p class="form-hint">
-        Runs are grouped by submit, one colour per batch. ↻ Recreate on a
-        batch loads its images, every video and its settings; on a single
-        result, the images and just that video. Reused files are not uploaded again.
-    </p>
 </form>
 </div>
 
@@ -63,5 +78,6 @@
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 <script src="{{ static_url('js/clone.js') }}"></script>
+<script src="{{ static_url('js/clone-cost.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
 {% endblock %}

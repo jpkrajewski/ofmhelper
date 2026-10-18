@@ -177,6 +177,20 @@ class WebSettings(BaseSettings):
     clone_gallery_limit: int = Field(
         default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
     )
+    # The /clone form's live cost estimate: credits one clone run costs per
+    # second of its source video, by resolution. Measured from this
+    # account's Wan 3.0 history (2026-10-17: 81 runs at 720P, 14 at 1080P;
+    # kie.ai bills the output plus the reference video, so about twice its
+    # 16 / 32 credits a second). 480P has no runs yet: half of 720P, as on
+    # kie.ai's price list. JSON in the env var.
+    clone_credits_per_video_s: dict[str, float] = Field(
+        default={"480P": 16.39, "720P": 32.78, "1080P": 64.0},
+        validation_alias="OFM_CLONE_CREDITS_PER_VIDEO_S",
+    )
+    # What one kie.ai credit costs in dollars: $50 buys 10,000.
+    kie_usd_per_credit: float = Field(
+        default=0.005, gt=0, validation_alias="OFM_KIE_USD_PER_CREDIT"
+    )
 
 
 class InfraSettings(BaseSettings):

@@ -31,7 +31,7 @@ def _run_seedream5(
     output_format: str,
     image_urls: list[str],
 ) -> list[ResultFile]:
-    client = KieAIClient.from_env(api_key=api_key)
+    client = KieAIClient.from_env(api_key=api_key, job_id=job_id)
     uploaded = [client.upload_local_file(p) for p in image_urls]
     return run_kie_generation(
         job_id,

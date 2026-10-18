@@ -2,7 +2,8 @@
 RQ queue the API enqueues background work onto, and the worker container
 (`rq worker-pool`) consumes. This replaces FastAPI BackgroundTasks: instead of
 running a job in-process, a route does `enqueue(run_job, job_id, fn, kwargs)`
-and returns immediately; a separate worker process runs it, writing status to
+and returns immediately (logged by function name only -- the kwargs carry
+API keys); a separate worker process runs it, writing status to
 Postgres (see web/stores/jobs.py) that the API can then read back.
 
 It lives beside `redis.py` because that is what it is built on -- the queue is
@@ -48,4 +49,9 @@ def enqueue(fn, *args, **kwargs):
     worker."""
     if not settings.infra.rq_async:
         return fn(*args, **kwargs)
-    return get_queue().enqueue(fn, *args, **kwargs)
+    # RQ's default description -- what the worker logs for every job it
+    # starts -- is the call with its arguments, and those carry the kie.ai
+    # API key a job runs with. The function name is all the log needs.
+    return get_queue().enqueue(
+        fn, *args, description=f"{fn.__module__}.{fn.__qualname__}", **kwargs
+    )

@@ -1,7 +1,7 @@
 """End to end, in a real browser against a running stack (see conftest.py):
 log in, open every page, make a fake asset and download it, run a clone
-batch with a wrong kie.ai key so nothing is spent, click through every /reels
-filter and download three reels."""
+batch with a wrong kie.ai key so nothing is spent, price a clone pick live,
+click through every /reels filter and download three reels."""
 
 import re
 import zipfile
@@ -144,6 +144,36 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
 # their followers and at most 15 s long.
 VIRAL_PROFILES = ["sheep_love33", "https://www.instagram.com/brookslockvip/"]
 SCAN_TIMEOUT_MS = 120_000
+
+
+def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Path]):
+    # 3 s + 5 s of video at the default rates (32.78 / 64 credits a second).
+    va.goto("/clone")
+    panel = va.page.locator("#clone-cost")
+    expect(panel).to_be_hidden()
+    va.page.locator(
+        '.file-picker[data-field="videos"] .file-add-input'
+    ).set_input_files([str(p) for p in source_videos])
+
+    expect(panel).to_be_visible()
+    expect(va.page.locator("#clone-cost-lines .cost-line")).to_have_count(2)
+    expect(va.page.locator("#clone-cost-summary")).to_have_text(
+        "2 runs · 8.0 s of video"
+    )
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.31")
+    expect(va.page.locator("#clone-cost-credits")).to_have_text("262 credits")
+    expect(va.page.locator("#clone-cost-rate")).to_have_text(
+        "720P · $0.164 per video second"
+    )
+
+    va.page.select_option("#clone-resolution", "1080P")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$2.56")
+
+    va.page.locator(
+        '.file-picker[data-field="videos"] .file-order-list button', has_text="✕"
+    ).first.click()
+    expect(va.page.locator("#clone-cost-lines .cost-line")).to_have_count(1)
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.60")
 
 
 def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(

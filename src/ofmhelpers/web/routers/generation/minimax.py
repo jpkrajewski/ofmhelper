@@ -32,7 +32,7 @@ def _run_minimax_h3(
     reference_videos: list[str],
     reference_audio: list[str],
 ) -> list[ResultFile]:
-    client = KieAIClient.from_env(api_key=api_key)
+    client = KieAIClient.from_env(api_key=api_key, job_id=job_id)
     refs = upload_references(
         client, reference_images, reference_videos, reference_audio
     )

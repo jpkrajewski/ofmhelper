@@ -13,6 +13,8 @@ import pytest
 
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.web import recovery
+from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT
+from ofmhelpers.web.stores.jobs import create_job, fail_job, get_job
 
 
 @pytest.fixture
@@ -173,3 +175,116 @@ def test_run_recovery_once_survives_a_broken_key(monkeypatch):
     # first key's crash didn't stop the second key's sweep
     assert FakeClient.calls == ["key-a", "key-b"]
     assert recovered == [{"taskId": "x", "outcome": "downloaded"}]
+
+
+def test_task_is_checked_with_the_key_it_was_created_with(client, monkeypatch):
+    # A key pasted into a form is in no env var: the env-key sweep must still
+    # ask kie.ai with the creating key, since only that account sees the task.
+    creator = KieAIClient(
+        api_key="pasted-key",
+        out_dir=client.OUT_DIR,
+        task_log=client.TASK_LOG,
+        completions_log=client.COMPLETIONS_LOG,
+        resolved_log=client.RESOLVED_LOG,
+    )
+    creator._log_task("t8", "wan/3-0-video", "p")
+    asked = []
+
+    def check_task(self, tid):
+        asked.append(self.api_key)
+        return "generating", None
+
+    monkeypatch.setattr(KieAIClient, "check_task", check_task)
+    client.resume_pending()
+    assert asked == ["pasted-key"]
+
+
+def _client_for_job(client, job_id):
+    return KieAIClient(
+        api_key=client.api_key,
+        out_dir=client.OUT_DIR,
+        task_log=client.TASK_LOG,
+        completions_log=client.COMPLETIONS_LOG,
+        resolved_log=client.RESOLVED_LOG,
+        job_id=job_id,
+    )
+
+
+def test_a_rerun_job_picks_its_task_back_up_instead_of_paying_again(
+    client, monkeypatch
+):
+    job_client = _client_for_job(client, "job-1")
+    job_client._log_task("t9", "wan/3-0-video", "p")
+    monkeypatch.setattr(
+        job_client, "create_task", lambda *a: pytest.fail("created a second task")
+    )
+    polled = []
+    monkeypatch.setattr(
+        job_client, "poll_task", lambda tid, **kw: (polled.append(tid), ["u"])[1]
+    )
+    monkeypatch.setattr(
+        job_client, "download_urls", lambda urls, tid, ext: [client.OUT_DIR / tid]
+    )
+
+    job_client._generate("wan/3-0-video", {}, None, None, "mp4")
+    assert polled == ["t9"]
+
+
+def test_a_job_task_is_handed_to_its_job_not_downloaded(client, monkeypatch):
+    _client_for_job(client, "job-2")._log_task("t10", "wan/3-0-video", "p")
+    monkeypatch.setattr(client, "check_task", lambda tid: ("success", ["u"]))
+    monkeypatch.setattr(
+        client, "download_urls", lambda *a: pytest.fail("job task was downloaded")
+    )
+
+    [record] = client.resume_pending()
+    assert record["jobId"] == "job-2"
+    assert record["outcome"] == "success"
+    assert record["apiKey"] == "test-key"
+    assert "t10" in client._load_resolved()
+
+
+def test_finish_job_reruns_a_failed_job_with_its_params(monkeypatch):
+    job_id = create_job("clone", {"prompt": "p"}, actor="admin")
+    fail_job(job_id, "kie.ai is still generating")
+    seen = {}
+    monkeypatch.setitem(
+        recovery.RESUMABLE, "clone", lambda **kw: (seen.update(kw), [])[1]
+    )
+
+    recovery.finish_job(
+        {"taskId": "t", "jobId": job_id, "outcome": "success", "apiKey": "k"}
+    )
+
+    assert seen == {
+        "prompt": "p",
+        "job_id": job_id,
+        "api_key": "k",
+        "assets_root": str(ASSETS_ROOT),
+    }
+    job = get_job(job_id)
+    assert job.status == "done"
+    assert job.error is None
+
+
+def test_finish_job_fails_a_job_with_kies_reason(monkeypatch):
+    job_id = create_job("clone", {}, actor="admin")
+    fail_job(job_id, "kie.ai is still generating")
+
+    recovery.finish_job(
+        {"taskId": "t", "jobId": job_id, "outcome": "fail", "error": "upstream timeout"}
+    )
+
+    assert get_job(job_id).error == "kie.ai failed this generation: upstream timeout"
+
+
+def test_finish_job_leaves_a_running_job_alone(monkeypatch):
+    job_id = create_job("clone", {}, actor="admin")
+    monkeypatch.setitem(
+        recovery.RESUMABLE, "clone", lambda **kw: pytest.fail("running job re-run")
+    )
+
+    recovery.finish_job(
+        {"taskId": "t", "jobId": job_id, "outcome": "success", "apiKey": "k"}
+    )
+    assert get_job(job_id).status == "running"

@@ -157,7 +157,6 @@ def form(
     rank: RankQuery = None,
     ratio: RatioQuery = None,
 ):
-    s = settings.instagram
     filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
     feed, next_offset = _feed_page(filters, 0)
     return render(
@@ -174,10 +173,6 @@ def form(
         group=group or "",
         rank=rank or "",
         ratio=ratio,
-        min_views=s.min_views,
-        max_duration_s=s.max_duration_s,
-        max_age_days=s.max_age_days,
-        rescan_hours=s.rescan_interval_s // 3600,
         max_videos=settings.web.clone_max_videos,
     )
 
