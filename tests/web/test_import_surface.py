@@ -41,7 +41,6 @@ TASK_HELPERS = (
     "register_grouped_results",
     "require_upload_kind",
     "resolve_existing_ref",
-    "resolve_reference_uploads",
     "safe_filename",
     "save_asset",
     "save_upload",

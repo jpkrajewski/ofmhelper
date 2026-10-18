@@ -1,26 +1,31 @@
 """
 ofmhelpers/web/recovery.py
 
-Background recovery sweeper: every few minutes, sweep kie.ai's task log for
-generations that were created but never downloaded (the in-request poll
-timed out, the server restarted mid-generation, ...) and pull them down to
-the server automatically. This is what makes a poll timeout a non-event --
-nobody has to log into kie.ai and check manually.
+Background recovery sweeper: every few minutes, settle the jobs whose
+provider request outlived their poll (it timed out, the worker restarted
+mid-generation, ...). This is what makes a poll timeout a non-event --
+nobody has to log into a provider and check manually.
 
-Runs with the API keys configured in the environment (admin first, then VA);
-a task created with any other key (one pasted into a form) is checked with
-that key, which KieAIClient keeps for it. KieAIClient's resolved-log
-bookkeeping guarantees each terminal task is only ever handled once, and its
-age cutoff guarantees nothing is re-checked forever.
+It works off `aigenproviders.tasks`: every accepted request is remembered
+with its job, provider and key until its result is saved. For each one whose
+job already **failed** (gave up waiting), one status check decides:
 
-A task logged with its job finishes that job: a job that gave up on it is
-re-run (it picks the same task back up, so its tool downloads and
-post-processes the result as usual), or failed with kie.ai's own reason.
+- done   -> the job is re-run with its stored params (`registry.RESUMABLE`);
+            the re-run resumes the same request instead of paying again, so
+            the tool's own tail (CapCut, asset store) runs as usual;
+- failed -> the job's error becomes the provider's reason;
+- still running -> left for the next sweep.
+
+A job that is running is left alone, a done or deleted one is forgotten, and
+nothing older than `resume_max_age_s` is checked again. Provider-agnostic:
+a new provider is recovered without a line here.
 """
 
 import asyncio
 
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
+from ofmhelpers.aigenproviders import tasks
+from ofmhelpers.aigenproviders.base import get_provider
+from ofmhelpers.aigenproviders.errors import ProviderError
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
@@ -34,29 +39,29 @@ logger = get_logger(__name__)
 SWEEP_INTERVAL_S = settings.web.recovery_sweep_interval_s
 
 
-def _configured_keys() -> list[str]:
-    s = settings.web
-    keys = []
-    for raw_key in (s.kie_ai_api_key_admin, s.kie_ai_api_key_va):
-        key = (raw_key or "").strip()
-        if key and key not in keys:
-            keys.append(key)
-    return keys
-
-
-def finish_job(record: dict) -> None:
-    """Settle the job a recovered task belongs to. Only a job that already
-    failed (it gave up polling) is touched: a running or done one is still
-    handling its task, or has."""
-    job = get_job(record["jobId"])
-    if job is None or job.status != JobStatus.failed:
-        return
-    if record["outcome"] == "fail":
-        fail_job(job.id, f"kie.ai failed this generation: {record['error']}")
-        return
+def settle(task: tasks.ProviderTask) -> str:
+    """Settle one remembered request; what happened, for the log and tests."""
+    job = get_job(task.job_id)
+    if job is None or job.status == JobStatus.done:
+        tasks.forget(task.job_id)
+        return "forgotten"
+    if job.status != JobStatus.failed:
+        return "running"
+    if task.age_s > settings.aigen.resume_max_age_s:
+        tasks.forget(task.job_id)
+        return "expired"
+    provider = get_provider(task.provider, task.api_key)
+    state = provider.status(task.task_id)
+    if state.state == "pending":
+        return "pending"
+    if state.state == "failed":
+        tasks.forget(task.job_id)
+        fail_job(job.id, f"{provider.label} failed this generation: {state.error}")
+        return "failed"
     run = RESUMABLE.get(job.task)
     if run is None:
-        return
+        tasks.forget(task.job_id)
+        return "not resumable"
     reopen_job(job.id)
     enqueue(
         run_job,
@@ -65,37 +70,34 @@ def finish_job(record: dict) -> None:
         {
             **job.params,
             "job_id": job.id,
-            "api_key": record["apiKey"],
+            "api_key": task.api_key,
             "assets_root": str(assets_root_for_role(job.actor)),
         },
     )
-    logger.info("recovery re-running job %s for task %s", job.id, record["taskId"])
+    logger.info("recovery re-running job %s for task %s", job.id, task.task_id)
+    return "rerun"
 
 
-def run_recovery_once() -> list[dict]:
-    """One sweep across all configured keys. Blocking (requests) -- call via
-    asyncio.to_thread from the event loop."""
-    recovered = []
-    for key in _configured_keys():
+def run_recovery_once() -> dict[str, str]:
+    """One sweep: job id -> outcome. Blocking -- call via asyncio.to_thread
+    from the event loop. One bad task never stops the sweep."""
+    outcomes = {}
+    for task in tasks.remembered():
         try:
-            records = KieAIClient.from_env(api_key=key).resume_pending()
+            outcomes[task.job_id] = settle(task)
+        except ProviderError:
+            # Network blip, provider down: the next sweep tries again.
+            logger.warning("recovery: %s check failed", task.task_id, exc_info=True)
         except Exception:
-            # A broken sweep must never take the loop down -- log and move on.
-            logger.exception("recovery sweep failed for one key")
-            continue
-        for record in records:
-            if record.get("jobId"):
-                try:
-                    finish_job(record)
-                except Exception:
-                    logger.exception(
-                        "recovery could not finish job %s", record["jobId"]
-                    )
-        recovered += records
-    return recovered
+            logger.exception("recovery could not settle job %s", task.job_id)
+    return outcomes
 
 
 async def recovery_loop() -> None:
     while True:
-        await asyncio.to_thread(run_recovery_once)
+        try:
+            await asyncio.to_thread(run_recovery_once)
+        except Exception:
+            # A broken sweep (Redis down) must never take the loop down.
+            logger.exception("recovery sweep failed")
         await asyncio.sleep(SWEEP_INTERVAL_S)

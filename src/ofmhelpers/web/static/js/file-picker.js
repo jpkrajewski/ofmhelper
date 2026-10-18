@@ -436,5 +436,6 @@
         );
     }
 
-    window.FilePicker = { collectFormData, clearPicker, setExisting, carryOver, items };
+    // init: wire pickers a page inserts after load (/generate's model fields).
+    window.FilePicker = { init: initPicker, collectFormData, clearPicker, setExisting, carryOver, items };
 })();

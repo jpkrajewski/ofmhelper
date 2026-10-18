@@ -1,6 +1,7 @@
 """End to end, in a real browser against a running stack (see conftest.py):
-log in, open every page, make a fake asset and download it, run a clone
-batch with a wrong kie.ai key so nothing is spent, price a clone pick live,
+log in, open every page, make a fake asset and download it, carry picked
+files across providers' models, run a clone batch with a wrong kie.ai key so
+nothing is spent, price a clone pick live,
 click through every /reels filter and download three reels."""
 
 import re
@@ -59,11 +60,14 @@ def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
 ):
     coworker.goto("/generate")
     va.goto("/generate")
-    va.page.select_option("#tool-select", "fake_ai")
-    va.page.fill("#kie-api-key", "unused-by-fake-ai")
+    va.page.select_option("#provider-select", "fake")
+    va.page.select_option("#model-select", "fake:image")
+    expect(va.page.locator("#api-key-field")).to_be_hidden()  # no key needed
+    expect(va.page.locator('#model-fields [name="outcome"]')).to_be_visible()
+    va.page.fill('#model-fields [name="delay"]', "0")
     va.page.fill('textarea[name="prompt"]', "e2e: a red studio backdrop")
 
-    with va.page.expect_response(lambda r: r.url.endswith("/fake-ai/run")) as run:
+    with va.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
         va.page.click('#generate-form button[type="submit"]')
     job_id = run.value.json()["job_id"]
 
@@ -83,18 +87,27 @@ def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
 
 
 def test_picked_files_survive_a_model_switch(va: Session, subject_images: list[Path]):
+    """Within a provider and across providers: the images go to the new
+    model's image picker, whatever that field is called."""
     va.goto("/generate")
-    va.page.select_option("#tool-select", "seedance")
-    images = 'fieldset[data-tool="{}"] .file-picker[data-kind="image"]'
+    va.page.select_option("#provider-select", "kie")
+    va.page.select_option("#model-select", "kie:bytedance/seedance-2-5")
+    seedance = '#model-fields .file-picker[data-field="reference_image_urls"]'
     for path in subject_images:  # a one-at-a-time picker, like a person
-        va.page.locator(f"{images.format('seedance')} .file-add-input").set_input_files(
-            str(path)
-        )
+        va.page.locator(f"{seedance} .file-add-input").set_input_files(str(path))
 
-    va.page.select_option("#tool-select", "nanobanana")
+    va.page.select_option("#model-select", "kie:nano-banana-pro")
+    nbp = '#model-fields .file-picker[data-field="image_input"]'
+    expect(va.page.locator(f"{nbp} li")).to_have_count(2)
+    expect(va.page.locator(seedance)).to_have_count(0)
 
-    expect(va.page.locator(f"{images.format('nanobanana')} li")).to_have_count(2)
-    expect(va.page.locator(f"{images.format('seedance')} li")).to_have_count(0)
+    va.page.select_option("#provider-select", "higgsfield")
+    va.page.select_option(
+        "#model-select", "higgsfield:bytedance/seedance-2.5/reference-to-video"
+    )
+    hf = '#model-fields .file-picker[data-field="image_urls"]'
+    expect(va.page.locator(f"{hf} li")).to_have_count(2)
+    assert va.js_errors == []
 
 
 def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
@@ -105,7 +118,8 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
 ):
     coworker.goto("/clone")
     va.goto("/clone")
-    va.page.fill("#kie-api-key", "e2e-wrong-key")
+    va.page.select_option("#provider-select", "kie")
+    va.page.fill("#api-key", "e2e-wrong-key")
     va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
         [str(p) for p in subject_images]
     )
@@ -128,7 +142,7 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
 
     # kie.ai rejects the key at the first upload: every run fails with it,
     # and nothing is generated or paid for.
-    failed = va.page.locator(f"{batch} .result-file", has_text="Wrong API Key")
+    failed = va.page.locator(f"{batch} .result-file", has_text="kie.ai")
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
 
     # Recreate brings the whole batch back without re-uploading.
@@ -166,6 +180,20 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
         "720P · $0.164 per video second"
     )
 
+    va.page.select_option("#clone-resolution", "1080P")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$2.56")
+
+    # Higgsfield: Wan 3.0 at 60% off, measured from a real run.
+    va.page.select_option("#provider-select", "higgsfield")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.28")
+    va.page.select_option("#clone-resolution", "720P")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$0.64")
+    expect(va.page.locator("#clone-cost-credits")).to_have_text("10.2 credits")
+    expect(va.page.locator("#clone-cost-rate")).to_have_text(
+        "720P · $0.08 per video second"
+    )
+    expect(va.page.locator("#clone-cost-note")).to_contain_text("Higgsfield")
+    va.page.select_option("#provider-select", "kie")
     va.page.select_option("#clone-resolution", "1080P")
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$2.56")
 
@@ -236,7 +264,7 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
 
     videos = va.page.locator('.file-picker[data-field="videos"] li')
     expect(videos).to_have_count(len(picked))
-    va.page.fill("#kie-api-key", "e2e-wrong-key")
+    va.page.fill("#api-key", "e2e-wrong-key")
     va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
         [str(p) for p in subject_images]
     )
@@ -247,7 +275,7 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     batch_id = re.search(r'data-batch="([^"]+)"', body["html"]).group(1)
 
     batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
-    failed = va.page.locator(f"{batch} .result-file", has_text="Wrong API Key")
+    failed = va.page.locator(f"{batch} .result-file", has_text="kie.ai")
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
 
     assert va.js_errors == []

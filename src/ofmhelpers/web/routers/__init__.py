@@ -1,8 +1,9 @@
 """
 Every HTTP route in the app, grouped by what it is *for*:
 
-- `generation/` -- the AI generation tools (one module per kie.ai model, plus
-  the no-cost fake_ai stand-in) and the unified picker page that fronts them.
+- `generation/` -- AI generation: `ai.py` runs every model of every provider
+  (aigenproviders/), `index.py` is its /generate page, `clone.py` is /clone,
+  and `legacy.py` keeps the job pages of the per-model tools it replaced.
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
   metadata cleaner, their picker page, and the viral-reel finder.
 - `image_tools/` -- local image edits with no external service (character
@@ -29,20 +30,9 @@ from ofmhelpers.web.routers.downloads import clean_image, reels
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import videos as download_videos
-from ofmhelpers.web.routers.generation import (
-    clone,
-    fake_ai,
-    gpt_image,
-    kling,
-    minimax,
-    nbp,
-    seedance,
-    seedance25,
-    seedream5,
-    seedream45,
-    wan,
-)
+from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation import index as generation_index
+from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
 from ofmhelpers.web.routers.video_tools import uniqify
 
@@ -55,17 +45,9 @@ ROUTERS = [
     refs.router,
     # generation/
     generation_index.router,
-    seedance.router,
-    seedance25.router,
-    kling.router,
-    wan.router,
-    minimax.router,
-    nbp.router,
-    seedream45.router,
-    seedream5.router,
-    gpt_image.router,
-    fake_ai.router,
+    ai.router,
     clone.router,
+    *(router for _label, router in LEGACY_TOOLS.values()),
     # downloads/
     downloads_index.router,
     download_videos.router,

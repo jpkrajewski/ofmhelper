@@ -1,7 +1,6 @@
 /*
- * Shared "submit -> poll -> render inline" behaviour for the kie.ai-backed
- * generation tools (Seedance, Kling 3.0, Nano Banana Pro, Fake AI Model)
- * and the download tools. No page navigation, and non-blocking: every
+ * Shared "submit -> poll -> render inline" behaviour for /generate (every
+ * AI provider, through /ai) and the download tools. No page navigation, and non-blocking: every
  * submit immediately prepends its own "generating…" card to the
  * #results-panel gallery and polls `${prefix}/jobs/${job_id}/status` in the
  * background, so more runs can be fired while earlier ones are still
@@ -260,7 +259,7 @@
 
     function toolLabel(form) {
         if (form.dataset.toolLabel) return form.dataset.toolLabel;
-        const select = document.getElementById("tool-select");
+        const select = document.getElementById("model-select");
         if (select && select.selectedOptions.length) {
             return select.selectedOptions[0].textContent.trim();
         }

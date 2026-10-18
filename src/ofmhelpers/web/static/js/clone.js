@@ -51,7 +51,7 @@
         const maxImages = Number(form.dataset.maxImages);
         const videos = manifestCount(formData, "videos");
         const images = manifestCount(formData, "image");
-        if (!String(formData.get("api_key") || "").trim()) return "Enter the kie.ai API key.";
+        if (!String(formData.get("api_key") || "").trim()) return "Enter the API key.";
         if (images < 1) return "Pick at least one subject image.";
         if (images > maxImages) return `Pick at most ${maxImages} subject images.`;
         if (videos < 1) return "Pick at least one video.";
@@ -184,6 +184,12 @@
         prompt.value = params.prompt || "";
         prompt.dispatchEvent(new Event("input", { bubbles: true }));
         if (params.resolution) form.querySelector('[name="resolution"]').value = params.resolution;
+        const provider = form.querySelector('[name="provider"]');
+        if (provider && params.provider && provider.value !== params.provider
+            && provider.querySelector(`option[value="${params.provider}"]`)) {
+            provider.value = params.provider;
+            provider.dispatchEvent(new Event("change"));
+        }
         form.querySelector('[name="audio"]').checked = !!params.audio;
         form.querySelector('[name="capcut"]').checked = !!params.capcut;
         setStatus(form.querySelector(".generation-status"), message, false);

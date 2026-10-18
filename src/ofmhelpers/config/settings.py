@@ -17,7 +17,7 @@ config/__init__.py's docstring for why.
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -191,6 +191,19 @@ class WebSettings(BaseSettings):
     kie_usd_per_credit: float = Field(
         default=0.005, gt=0, validation_alias="OFM_KIE_USD_PER_CREDIT"
     )
+    # The same estimate on Higgsfield. Its Wan 3.0 list price is $0.05 /
+    # $0.10 / $0.20 per billed second (480p/720p/1080p), billed = output +
+    # reference video seconds, so about twice the source length; this
+    # account gets 60% off. Measured 2026-10-18: a 13.09 s source at 720p
+    # billed 26.09 s and cost $1.05, i.e. $0.04 a billed second.
+    clone_hf_credits_per_video_s: dict[str, float] = Field(
+        default={"480P": 0.64, "720P": 1.28, "1080P": 2.56},
+        validation_alias="OFM_CLONE_HF_CREDITS_PER_VIDEO_S",
+    )
+    # What one Higgsfield credit costs in dollars: 16 credits = $1.
+    hf_usd_per_credit: float = Field(
+        default=0.0625, gt=0, validation_alias="OFM_HF_USD_PER_CREDIT"
+    )
 
 
 class InfraSettings(BaseSettings):
@@ -236,25 +249,17 @@ class InfraSettings(BaseSettings):
 
 
 class KieAISettings(BaseSettings):
-    """aigenproviders/kaiai/client.py, routers/generation/fake_ai.py,
-    routers/admin/file_manager.py."""
+    """aigenproviders/kaiai/: kie.ai's endpoints, upload limits and audit
+    logs. What every provider shares (output dir, polling) is AigenSettings."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    out_dir: str = Field(default="/app/kieai_out", validation_alias="OFM_KIEAI_OUT_DIR")
     task_log: str = Field(
         default="/app/kieai_out/tasks.jsonl", validation_alias="OFM_KIEAI_TASK_LOG"
     )
     completions_log: str = Field(
         default="/app/kieai_out/completions.jsonl",
         validation_alias="OFM_KIEAI_COMPLETIONS_LOG",
-    )
-    resolved_log: str = Field(
-        default="/app/kieai_out/resolved.jsonl",
-        validation_alias="OFM_KIEAI_RESOLVED_LOG",
-    )
-    resume_max_age_s: int = Field(
-        default=48 * 3600, validation_alias="OFM_KIEAI_RESUME_MAX_AGE_S"
     )
     # How long a "this local file is already hosted at that URL" entry is kept
     # in Redis (see client.upload_local_file). Well under kie.ai's own tempfile
@@ -272,9 +277,6 @@ class KieAISettings(BaseSettings):
     ref_image_max_side: int = Field(
         default=8000, validation_alias="OFM_KIEAI_REF_IMAGE_MAX_SIDE"
     )
-    fake_ai_video_duration_seconds: int = Field(
-        default=3, validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS"
-    )
 
     jobs_base: str = Field(
         default="https://api.kie.ai/api/v1/jobs", validation_alias="OFM_KIEAI_JOBS_BASE"
@@ -290,9 +292,6 @@ class KieAISettings(BaseSettings):
     upload_timeout_s: int = Field(
         default=900, validation_alias="OFM_KIEAI_UPLOAD_TIMEOUT_S"
     )
-    download_timeout_s: int = Field(
-        default=60, validation_alias="OFM_KIEAI_DOWNLOAD_TIMEOUT_S"
-    )
     request_timeout_s: int = Field(
         default=30, validation_alias="OFM_KIEAI_REQUEST_TIMEOUT_S"
     )
@@ -301,15 +300,79 @@ class KieAISettings(BaseSettings):
     remote_check_timeout_s: int = Field(
         default=10, validation_alias="OFM_KIEAI_REMOTE_CHECK_TIMEOUT_S"
     )
-    # How long an in-request poll waits before handing the task to the
-    # recovery sweeper. kie.ai caps sane polling at 10-15 min.
-    poll_timeout_s: int = Field(
-        default=1000, validation_alias="OFM_KIEAI_POLL_TIMEOUT_S"
+
+
+class AigenSettings(BaseSettings):
+    """aigenproviders/runner.py, aigenproviders/tasks.py, web/recovery.py:
+    what every provider shares -- where results land, how long a poll waits
+    before handing the job to recovery, and how long recovery keeps trying.
+
+    The output dir keeps reading OFM_KIEAI_OUT_DIR so results stay where
+    kie.ai's always went (the file manager and fake AI model read it too)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    out_dir: str = Field(
+        default="/app/kieai_out",
+        validation_alias=AliasChoices("OFM_AIGEN_OUT_DIR", "OFM_KIEAI_OUT_DIR"),
     )
-    # Video takes materially longer than an image, so the two generation
-    # wrappers wait different amounts before deferring to the sweeper.
+    poll_timeout_s: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "OFM_AIGEN_POLL_TIMEOUT_S", "OFM_KIEAI_POLL_TIMEOUT_S"
+        ),
+    )
     video_poll_timeout_s: int = Field(
-        default=1800, validation_alias="OFM_KIEAI_VIDEO_POLL_TIMEOUT_S"
+        default=1800,
+        validation_alias=AliasChoices(
+            "OFM_AIGEN_VIDEO_POLL_TIMEOUT_S", "OFM_KIEAI_VIDEO_POLL_TIMEOUT_S"
+        ),
+    )
+    poll_interval_s: float = Field(
+        default=2.5, validation_alias="OFM_AIGEN_POLL_INTERVAL_S"
+    )
+    poll_max_interval_s: float = Field(
+        default=20.0, validation_alias="OFM_AIGEN_POLL_MAX_INTERVAL_S"
+    )
+    download_timeout_s: int = Field(
+        default=60,
+        validation_alias=AliasChoices(
+            "OFM_AIGEN_DOWNLOAD_TIMEOUT_S", "OFM_KIEAI_DOWNLOAD_TIMEOUT_S"
+        ),
+    )
+    # A provider's result URLs outlive this (kie.ai ~24h, Higgsfield 7 days),
+    # so a job recovery has not finished by then is written off.
+    resume_max_age_s: int = Field(
+        default=48 * 3600,
+        validation_alias=AliasChoices(
+            "OFM_AIGEN_RESUME_MAX_AGE_S", "OFM_KIEAI_RESUME_MAX_AGE_S"
+        ),
+    )
+    # The fake provider's placeholder video length.
+    fake_video_duration_s: int = Field(
+        default=3, validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS"
+    )
+
+
+class HiggsfieldSettings(BaseSettings):
+    """aigenproviders/higgsfield/. Keys are Higgsfield's `KEY_ID:KEY_SECRET`
+    pair as one string, pre-filled per role like the kie.ai keys; unset just
+    means the form's key field starts empty."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    api_key_admin: str | None = Field(default=None, validation_alias="HF_API_KEY_ADMIN")
+    api_key_va: str | None = Field(default=None, validation_alias="HF_API_KEY_VA")
+    base_url: str = Field(
+        default="https://api.higgsfield.ai", validation_alias="OFM_HF_BASE_URL"
+    )
+    # One SDK call (submit, status, presign, upload PUT); an upload streams
+    # a whole reference video, so this is generous.
+    request_timeout_s: float = Field(
+        default=300, validation_alias="OFM_HF_REQUEST_TIMEOUT_S"
+    )
+    upload_cache_ttl_s: int = Field(
+        default=24 * 3600, validation_alias="OFM_HF_UPLOAD_CACHE_TTL_S"
     )
 
 

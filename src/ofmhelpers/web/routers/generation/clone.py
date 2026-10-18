@@ -3,14 +3,23 @@
 videos -> one Wan 3.0 run per video, every run getting all the images, all
 submitted as one batch and shown grouped on the page (`schemas.CloneBatch`).
 
-Each run's duration is its source video's length, clamped to what Wan 3.0
-takes. Every video is probed before any job is queued, so a bad file fails the
-whole submit up front instead of after some runs were already paid for.
+Wan 3.0 runs on whichever provider is picked: `CLONE_TARGETS` names, per
+provider, its Wan 3.0 reference-to-video model and which of that model's
+fields take the subject, the video and the audio switch. Each run goes
+through `ai.run_ai`, like any /generate job; a provider joins /clone by one
+entry there. A job's params stay provider-neutral (`reference_images`,
+`reference_videos`, `resolution` ...), so the page and Recreate read every
+batch the same way.
+
+Each run's duration is its source video's length, clamped to the model's
+schema range. Every video is probed and every run checked against the
+model's schema before any job is queued, so a bad file fails the whole submit
+up front instead of after some runs were already paid for.
 
 With `capcut` on (the default), each generated video is then re-edited and
 re-encoded as a CapCut export (`utils.capcut`) and that copy is the job's
-result; kie.ai's hosted original is dropped from it so view/download serve
-the CapCut copy.
+result; the provider's hosted original is dropped from it so view/download
+serve the CapCut copy.
 """
 
 import subprocess
@@ -20,27 +29,21 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from pydantic import BaseModel
 
-from ofmhelpers.aigenproviders.kaiai.types import (
-    ADAPTIVE_ASPECT_RATIO,
-    WAN3_MAX_DURATION_S,
-    WAN3_MAX_REFERENCE_S,
-    WAN3_MIN_DURATION_S,
-    Wan3Resolution,
-)
+from ofmhelpers.aigenproviders.catalog import get_spec
+from ofmhelpers.aigenproviders.errors import InvalidInputError
+from ofmhelpers.aigenproviders.spec import ModelSpec
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.capcut import DEFAULT_PRESET, apply_preset
 from ofmhelpers.utils.video_probe import duration_s
-from ofmhelpers.web.api_keys import get_kie_api_key
+from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.generation.kie_jobs import (
-    add_kie_job_routes,
-    require_api_key,
-    start_kie_job,
-)
-from ofmhelpers.web.routers.generation.wan import _run_wan3
+from ofmhelpers.web.routers.generation.ai import run_ai
 from ofmhelpers.web.routers.task_helpers import (
+    add_job_routes,
     assets_root_for,
     build_ordered_paths,
     classify_kind,
@@ -49,8 +52,15 @@ from ofmhelpers.web.routers.task_helpers import (
     resolve_existing_ref,
     strip_asset_hash_prefix,
 )
-from ofmhelpers.web.schemas import CloneBatch, CloneCard, CloneQueued, Job, ResultFile
-from ofmhelpers.web.stores.jobs import get_job, list_jobs_page
+from ofmhelpers.web.schemas import (
+    CloneBatch,
+    CloneCard,
+    CloneQueued,
+    Job,
+    ProviderChoice,
+    ResultFile,
+)
+from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
 from ofmhelpers.web.templates_config import render, render_partial
 
 logger = get_logger(__name__)
@@ -63,25 +73,146 @@ TASK = "clone"
 
 DEFAULT_PROMPT = settings.web.clone_default_prompt
 
-DEFAULT_RESOLUTION = Wan3Resolution.P720
+# Offered in the form; each provider gets them in its own spelling.
+RESOLUTIONS = ("480P", "720P", "1080P")
+DEFAULT_RESOLUTION = "720P"
+# The longest reference video kie.ai's Wan 3.0 takes (a longer one is a 422);
+# the form and the cost estimate flag anything over it.
+MAX_REFERENCE_S = 15
+DEFAULT_PROVIDER = "kie"
 
 
-def wan3_duration(seconds: float) -> int:
-    """A source video's length as the nearest duration Wan 3.0 accepts."""
-    return min(max(round(seconds), WAN3_MIN_DURATION_S), WAN3_MAX_DURATION_S)
+class CloneTarget(BaseModel):
+    """One provider's Wan 3.0 reference-to-video: the catalog model, and the
+    fields of its schema the subject, the video and the audio switch go in."""
+
+    model: str
+    images: str
+    video: str
+    audio: str
+
+    @property
+    def spec(self) -> ModelSpec:
+        return get_spec(self.model)
+
+
+class ClonePrice(BaseModel):
+    """One provider's clone price, as the form's live estimate
+    (clone-cost.js) reads it: credits per second of source video by
+    resolution, what a credit costs, and the longest reference it takes
+    (None: no known limit)."""
+
+    credits_per_video_s: dict[str, float]
+    usd_per_credit: float
+    max_reference_s: int | None
+    note: str
+
+
+def clone_pricing() -> dict[str, ClonePrice]:
+    """Every clone provider's price. A provider missing here gets no
+    estimate (the panel hides)."""
+    web = settings.web
+    return {
+        "kie": ClonePrice(
+            credits_per_video_s=web.clone_credits_per_video_s,
+            usd_per_credit=web.kie_usd_per_credit,
+            max_reference_s=MAX_REFERENCE_S,
+            note="From your Wan 3.0 history · $50 = 10,000 credits",
+        ),
+        "higgsfield": ClonePrice(
+            credits_per_video_s=web.clone_hf_credits_per_video_s,
+            usd_per_credit=web.hf_usd_per_credit,
+            max_reference_s=None,
+            note="Higgsfield list price at 60% off, measured on a real run · $1 = 16 credits",
+        ),
+    }
+
+
+CLONE_TARGETS = {
+    "kie": CloneTarget(
+        model="kie:wan/3-0-video",
+        images="reference_image_urls",
+        video="reference_video_urls",
+        audio="audio",
+    ),
+    "higgsfield": CloneTarget(
+        model="higgsfield:alibaba/wan-3.0/reference-to-video",
+        images="image_urls",
+        video="video_urls",
+        audio="generate_audio",
+    ),
+}
+
+
+def _enum_value(spec: ModelSpec, field: str, value: str) -> str:
+    """`value` in the spelling `spec` takes ("720P" vs "720p")."""
+    allowed = spec.properties[field].enum or []
+    return next((str(v) for v in allowed if str(v).lower() == value.lower()), value)
+
+
+def clip_duration(spec: ModelSpec, seconds: float) -> int:
+    """A source video's length as the nearest duration `spec` accepts."""
+    field = spec.properties["duration"]
+    whole = round(seconds)
+    low = int(field.minimum) if field.minimum is not None else 1
+    high = int(field.maximum) if field.maximum is not None else max(whole, low)
+    return min(max(whole, low), high)
+
+
+def _clone_values(
+    target: CloneTarget,
+    prompt: str,
+    resolution: str,
+    duration: int,
+    audio: bool,
+    images: list[str],
+    video: str,
+) -> dict[str, Any]:
+    """One run's inputs, in the target model's own field names."""
+    return {
+        "prompt": prompt,
+        "resolution": _enum_value(target.spec, "resolution", resolution),
+        "aspect_ratio": "adaptive",
+        "duration": duration,
+        target.audio: audio,
+        target.images: images,
+        target.video: [video],
+    }
 
 
 def _run_clone(
-    clone_batch: str, clone_index: int, capcut: bool = False, **wan3_kwargs: Any
+    job_id: str,
+    api_key: str,
+    assets_root: str,
+    provider: str,
+    prompt: str,
+    resolution: str,
+    duration: int,
+    reference_images: list[str],
+    reference_videos: list[str],
+    audio: bool = False,
+    capcut: bool = False,
+    **page_keys: Any,
 ) -> list[ResultFile]:
-    """The batch keys are stored on the job for grouping only; the generation
-    itself is a plain Wan 3.0 run. `capcut` defaults off so jobs queued before
-    the option existed run as they always did."""
-    del clone_batch, clone_index
-    results = _run_wan3(**wan3_kwargs)
-    if not capcut:
-        return results
-    return [_capcut_result(r, Path(wan3_kwargs["assets_root"])) for r in results]
+    """One clone run. `page_keys` (`clone_batch`, `clone_index`, `model`)
+    are stored on the job for the page only."""
+    del page_keys
+    target = CLONE_TARGETS[provider]
+    values = _clone_values(
+        target,
+        prompt,
+        resolution,
+        duration,
+        audio,
+        reference_images,
+        reference_videos[0],
+    )
+    results = run_ai(
+        job_id, api_key, assets_root, provider=provider, model=target.model, **values
+    )
+    if capcut:
+        results = [_capcut_result(r, Path(assets_root)) for r in results]
+    return results
 
 
 def _capcut_result(result: ResultFile, assets_root: Path) -> ResultFile:
@@ -105,15 +236,14 @@ def _capcut_result(result: ResultFile, assets_root: Path) -> ResultFile:
     return ResultFile(name=dst.name, path=str(dst), remote_url=None)
 
 
-def _video_duration(path: str) -> int:
+def _video_seconds(path: str) -> float:
     try:
-        seconds = duration_s(Path(path), settings.web.ffmpeg_timeout_s)
+        return duration_s(Path(path), settings.web.ffmpeg_timeout_s)
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
         name = Path(path).name.split("__", 1)[-1]
         raise HTTPException(
             status_code=400, detail=f"Could not read the length of {name}"
         ) from exc
-    return wan3_duration(seconds)
 
 
 def _require_kind(paths: list[str], kind: str, label: str) -> None:
@@ -161,17 +291,18 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
         request,
         "clone.html",
         batches=_recent_batches(request),
-        kie_api_key=get_kie_api_key(request),
+        providers=ProviderChoice.all(list(CLONE_TARGETS)),
+        selected_provider=DEFAULT_PROVIDER,
+        api_keys=get_api_keys(request),
+        pricing={name: price.model_dump() for name, price in clone_pricing().items()},
         default_prompt=DEFAULT_PROMPT,
-        default_resolution=DEFAULT_RESOLUTION.value,
-        resolutions=list(Wan3Resolution),
+        default_resolution=DEFAULT_RESOLUTION,
+        resolutions=RESOLUTIONS,
         max_videos=settings.web.clone_max_videos,
         max_images=settings.web.clone_max_images,
         live_poll_s=settings.web.gallery_live_poll_s,
         prefill_videos=_prefill_videos(request, video or []),
-        credits_per_video_s=settings.web.clone_credits_per_video_s,
-        usd_per_credit=settings.web.kie_usd_per_credit,
-        max_reference_s=WAN3_MAX_REFERENCE_S,
+        max_reference_s=MAX_REFERENCE_S,
     )
 
 
@@ -184,12 +315,31 @@ def batches(request: Request):
     )
 
 
+def _queue(request: Request, api_key: str, params: dict[str, Any]) -> str:
+    """One run's job. The key goes to the worker only, never into the
+    params its page shows."""
+    job_id = create_job(TASK, params, actor=request.session.get("role"))
+    enqueue(
+        run_job,
+        job_id,
+        _run_clone,
+        {
+            "job_id": job_id,
+            "api_key": api_key,
+            "assets_root": str(assets_root_for(request)),
+            **params,
+        },
+    )
+    return job_id
+
+
 @router.post("/run")
 def run(
     request: Request,
-    api_key: Annotated[str, Form()],
+    api_key: Annotated[str, Form()] = "",
+    provider: Annotated[str, Form()] = DEFAULT_PROVIDER,
     prompt: Annotated[str, Form(min_length=1)] = DEFAULT_PROMPT,
-    resolution: Annotated[Wan3Resolution, Form()] = DEFAULT_RESOLUTION,
+    resolution: Annotated[str, Form()] = DEFAULT_RESOLUTION,
     audio: Annotated[bool, Form()] = False,
     capcut: Annotated[bool, Form()] = False,
     image: Annotated[list[UploadFile] | None, File()] = None,
@@ -199,7 +349,13 @@ def run(
 ):
     """Queues the batch and returns its job ids plus the batch rendered as
     the page's group partial, so the page shows it without a reload."""
-    require_api_key(api_key)
+    target = CLONE_TARGETS.get(provider)
+    if target is None:
+        raise HTTPException(status_code=400, detail="That provider cannot clone")
+    if not api_key.strip():
+        raise HTTPException(status_code=400, detail="API key is required")
+    if resolution.upper() not in RESOLUTIONS:
+        raise HTTPException(status_code=400, detail="Unknown resolution")
     assets_root = assets_root_for(request)
     image_paths = build_ordered_paths(image_manifest, image or [], assets_root)
     video_paths = build_ordered_paths(videos_manifest, videos or [], assets_root)
@@ -219,31 +375,39 @@ def run(
     # Probed side by side (each is its own ffprobe process), in picked order;
     # the first unreadable video still fails the whole submit.
     with ThreadPoolExecutor(settings.web.clone_probe_workers) as pool:
-        durations = list(pool.map(_video_duration, video_paths))
+        seconds = list(pool.map(_video_seconds, video_paths))
+    durations = [clip_duration(target.spec, s) for s in seconds]
+    try:
+        for path, duration in zip(video_paths, durations, strict=True):
+            target.spec.check(
+                _clone_values(
+                    target, prompt, resolution, duration, audio, image_paths, path
+                )
+            )
+    except InvalidInputError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
-    batch_id = uuid.uuid4().hex[:12]
+    shared = {
+        "provider": provider,
+        "model": target.model,
+        "prompt": prompt,
+        "resolution": resolution.upper(),
+        "audio": audio,
+        "capcut": capcut,
+        "clone_batch": uuid.uuid4().hex[:12],
+        "reference_images": image_paths,
+    }
     job_ids = [
-        start_kie_job(
+        _queue(
             request,
-            TASK,
-            _run_clone,
-            api_key,
+            api_key.strip(),
             {
-                "prompt": prompt,
-                "resolution": resolution.value,
-                "aspect_ratio": ADAPTIVE_ASPECT_RATIO,
+                **shared,
                 "duration": duration,
-                "audio": audio,
-                "capcut": capcut,
-                "clone_batch": batch_id,
                 "clone_index": index,
-            },
-            {
-                "reference_images": image_paths,
                 "reference_videos": [path],
-                "reference_audio": [],
             },
-        ).job_id
+        )
         for index, (path, duration) in enumerate(
             zip(video_paths, durations, strict=True)
         )
@@ -256,4 +420,11 @@ def run(
     return CloneQueued(job_ids=job_ids, html=html)
 
 
-add_kie_job_routes(router, "Clone", "video", back_url="/clone", back_label="clone more")
+add_job_routes(
+    router,
+    "Clone",
+    lambda _job: "Generating video… this can take a few minutes.",
+    back_url="/clone",
+    back_label="clone more",
+    show_inputs=True,
+)

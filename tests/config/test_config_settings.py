@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from ofmhelpers.config.settings import (
+    AigenSettings,
     DownloadersSettings,
     InfraSettings,
     KieAISettings,
@@ -19,6 +20,11 @@ from ofmhelpers.config.settings import (
 )
 
 ALL_ENV_VARS = [
+    "OFM_AIGEN_OUT_DIR",
+    "OFM_AIGEN_POLL_TIMEOUT_S",
+    "OFM_AIGEN_VIDEO_POLL_TIMEOUT_S",
+    "OFM_AIGEN_DOWNLOAD_TIMEOUT_S",
+    "OFM_AIGEN_RESUME_MAX_AGE_S",
     "SESSION_SECRET",
     "SESSION_HTTPS_ONLY",
     "APP_PASSWORD_ADMIN",
@@ -139,13 +145,27 @@ def test_infra_settings_env_overrides(monkeypatch):
 
 def test_kieai_settings_defaults_match_pre_refactor_values(clean_env):
     s = KieAISettings(_env_file=None)
-    assert s.out_dir == "/app/kieai_out"
     assert s.task_log == "/app/kieai_out/tasks.jsonl"
     assert s.completions_log == "/app/kieai_out/completions.jsonl"
-    assert s.resolved_log == "/app/kieai_out/resolved.jsonl"
-    assert s.resume_max_age_s == 48 * 3600
     assert s.upload_cache_ttl_s == 12 * 3600
-    assert s.fake_ai_video_duration_seconds == 3
+
+
+def test_aigen_settings_keep_the_kie_era_defaults(clean_env):
+    """What moved from KieAISettings to the provider-shared group kept its
+    default, so a deployment that sets nothing behaves as before."""
+    s = AigenSettings(_env_file=None)
+    assert s.out_dir == "/app/kieai_out"
+    assert s.resume_max_age_s == 48 * 3600
+    assert (s.poll_timeout_s, s.video_poll_timeout_s) == (1000, 1800)
+    assert s.download_timeout_s == 60
+    assert s.fake_video_duration_s == 3
+
+
+def test_aigen_settings_still_read_the_old_kie_env_names(monkeypatch):
+    monkeypatch.setenv("OFM_KIEAI_OUT_DIR", "/old/name")
+    monkeypatch.setenv("OFM_KIEAI_POLL_TIMEOUT_S", "7")
+    s = AigenSettings(_env_file=None)
+    assert (s.out_dir, s.poll_timeout_s) == ("/old/name", 7)
 
 
 def test_downloaders_settings_defaults_match_pre_refactor_values(clean_env):
@@ -157,8 +177,8 @@ def test_downloaders_settings_defaults_match_pre_refactor_values(clean_env):
 
 def test_env_file_override(tmp_path):
     env_file = tmp_path / "custom.env"
-    env_file.write_text("OFM_KIEAI_OUT_DIR=/custom/out\n")
-    s = KieAISettings(_env_file=env_file)
+    env_file.write_text("OFM_AIGEN_OUT_DIR=/custom/out\n")
+    s = AigenSettings(_env_file=env_file)
     assert s.out_dir == "/custom/out"
 
 
@@ -197,9 +217,8 @@ def test_kieai_endpoints_and_timeouts_default_to_the_previous_literals(clean_env
     s = KieAISettings(_env_file=None)
     assert s.jobs_base == "https://api.kie.ai/api/v1/jobs"
     assert s.upload_base == "https://kieai.redpandaai.co"
-    assert (s.upload_timeout_s, s.download_timeout_s) == (900, 60)
+    assert s.upload_timeout_s == 900
     assert (s.request_timeout_s, s.remote_check_timeout_s) == (30, 10)
-    assert (s.poll_timeout_s, s.video_poll_timeout_s) == (1000, 1800)
 
 
 def test_web_picker_limits_default_to_the_previous_literals(clean_env):

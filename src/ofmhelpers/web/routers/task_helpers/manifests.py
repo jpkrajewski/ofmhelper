@@ -6,13 +6,14 @@ the only place that claim is validated against the asset store.
 """
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
+from starlette.datastructures import UploadFile
 
 from ofmhelpers.web import ref_usage
 from ofmhelpers.web.routers.task_helpers.uploads import save_asset
-from ofmhelpers.web.schemas import ReferenceUploads
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
@@ -36,7 +37,7 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
 
 def build_ordered_paths(
     manifest_json: str,
-    new_files: list[UploadFile],
+    new_files: Sequence[UploadFile],
     allowed_root: Path,
 ) -> list[str]:
     """Reconstructs an ordered list of file paths from a JSON manifest like
@@ -64,26 +65,3 @@ def build_ordered_paths(
                 continue
             paths.append(save_asset(upload, allowed_root))
     return paths
-
-
-def resolve_reference_uploads(
-    refs: ReferenceUploads, assets_root: Path
-) -> dict[str, list[str]]:
-    """The three reference pickers a generation form posts, resolved to paths
-    in `assets_root` (the poster's part of the store, see
-    `uploads.assets_root_for`) -- keyed by the picker's field name, which is
-    what /generate's click-to-reuse reads back out of a job's stored params.
-
-    Lives here rather than on `ReferenceUploads` because resolving is what
-    touches the asset store; the schema only says what was posted."""
-    return {
-        "reference_images": build_ordered_paths(
-            refs.images_manifest, refs.images, assets_root
-        ),
-        "reference_videos": build_ordered_paths(
-            refs.videos_manifest, refs.videos, assets_root
-        ),
-        "reference_audio": build_ordered_paths(
-            refs.audio_manifest, refs.audio, assets_root
-        ),
-    }
