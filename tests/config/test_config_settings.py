@@ -162,6 +162,7 @@ def test_aigen_settings_keep_the_kie_era_defaults(clean_env):
 
 
 def test_aigen_settings_still_read_the_old_kie_env_names(monkeypatch):
+    monkeypatch.delenv("OFM_AIGEN_OUT_DIR", raising=False)
     monkeypatch.setenv("OFM_KIEAI_OUT_DIR", "/old/name")
     monkeypatch.setenv("OFM_KIEAI_POLL_TIMEOUT_S", "7")
     s = AigenSettings(_env_file=None)
@@ -175,7 +176,8 @@ def test_downloaders_settings_defaults_match_pre_refactor_values(clean_env):
     assert s.cookies_from_browser is None
 
 
-def test_env_file_override(tmp_path):
+def test_env_file_override(tmp_path, monkeypatch):
+    monkeypatch.delenv("OFM_AIGEN_OUT_DIR", raising=False)
     env_file = tmp_path / "custom.env"
     env_file.write_text("OFM_AIGEN_OUT_DIR=/custom/out\n")
     s = AigenSettings(_env_file=env_file)

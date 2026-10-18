@@ -130,3 +130,21 @@ def _no_real_dotenv_in_tests(monkeypatch):
     _env_file=<temp file> override instead of the real one."""
     for cls in _SETTINGS_CLASSES:
         monkeypatch.setitem(cls.model_config, "env_file", None)
+
+
+@pytest.fixture(autouse=True)
+def _provider_files_in_tmp(monkeypatch, tmp_path):
+    """Provider output and kie.ai's audit logs default to /app/... (the
+    container's paths). Anything that builds a provider -- even with its
+    calls stubbed -- creates those directories, which a Linux CI runner
+    refuses (`Permission denied: '/app'`); Windows quietly made C:\\app.
+    Every test gets its own instead. A test that sets one itself wins."""
+    root = tmp_path / "provider-files"
+    defaults = {
+        "OFM_AIGEN_OUT_DIR": root / "out",
+        "OFM_KIEAI_TASK_LOG": root / "tasks.jsonl",
+        "OFM_KIEAI_COMPLETIONS_LOG": root / "completions.jsonl",
+    }
+    for name, path in defaults.items():
+        if name not in os.environ:
+            monkeypatch.setenv(name, str(path))
