@@ -26,7 +26,7 @@ def _run_gpt_image(
     background: str,
     input_urls: list[str],
 ) -> list[ResultFile]:
-    client = KieAIClient.from_env(api_key=api_key)
+    client = KieAIClient.from_env(api_key=api_key, job_id=job_id)
     uploaded = [client.upload_local_file(p) for p in input_urls]
     return run_kie_generation(
         job_id,

@@ -141,6 +141,9 @@
             li.append(up, down, remove);
             listEl.appendChild(li);
         });
+        // Every change to the list ends here, so this is the one place a page
+        // (clone-cost.js) can watch what is picked.
+        picker.dispatchEvent(new CustomEvent("filepicker:change", { bubbles: true }));
     }
 
     // How many tiles "show older" asks for -- must stay <= the server's own
@@ -423,5 +426,15 @@
         initPreviewInputs();
     });
 
-    window.FilePicker = { collectFormData, clearPicker, setExisting, carryOver };
+    // What one picker holds, in order: a new item's File, or a reused one's
+    // server path.
+    function items(picker) {
+        return (picker._items || []).map((item) =>
+            item.kind === "new"
+                ? { name: item.file.name, file: item.file }
+                : { name: item.name, path: item.path }
+        );
+    }
+
+    window.FilePicker = { collectFormData, clearPicker, setExisting, carryOver, items };
 })();

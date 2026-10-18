@@ -27,7 +27,7 @@ def _run_kling3(
     sound: bool,
     images: list[str],
 ) -> list[ResultFile]:
-    client = KieAIClient.from_env(api_key=api_key)
+    client = KieAIClient.from_env(api_key=api_key, job_id=job_id)
     image_urls = [client.upload_local_file(p) for p in images]
     return run_kie_generation(
         job_id,

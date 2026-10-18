@@ -23,6 +23,7 @@ globalThis.URL = { createObjectURL: () => "blob:" };
 %s
 const picker = (kind, items) => ({
     dataset: { kind }, _items: items, querySelector: () => el(),
+    dispatchEvent() {},
 });
 const root = (pickers) => ({
     querySelectorAll: () => pickers,

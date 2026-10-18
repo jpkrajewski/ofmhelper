@@ -22,7 +22,15 @@ dependency).
   `generate_video_seedance25`, `generate_video_kling3`, `generate_video_wan3`,
   `generate_video_minimax_h3`). A wrapper only builds its payload; the shared
   create -> poll -> preview -> download tail is `_generate`. Plus crash/timeout recovery (`resume_pending`, used by `web/recovery.py`'s
-  background sweeper). Also handles uploading local reference files
+  background sweeper). kie.ai's recordInfo answers only the account that
+  created a task, and a key pasted into a form is in no env var, so
+  `_log_task` keeps each task's key in Redis (`kieai:task-key:<id>`, TTL
+  `RESUME_MAX_AGE_S`) and `resume_pending` checks and downloads with it
+  (`_owner_of`); without it, every pasted-key task stayed "unknown" until it
+  expired (2026-10-17). A task is logged with the client's `job_id`, and
+  `_generate` reuses that job's logged task instead of creating one;
+  `resume_pending` hands a job's ended task back as a record (no download)
+  for `web/recovery.py` to finish the job with. Also handles uploading local reference files
   (`upload_local_file`), memoized in Redis (see below). An image reference over
   `OFM_KIEAI_REF_IMAGE_MAX_BYTES` / `_MAX_SIDE` is uploaded as a shrunk JPEG
   copy (`_fit_for_upload`, `utils/image_fit.py`) under `OUT_DIR/fitted/`;

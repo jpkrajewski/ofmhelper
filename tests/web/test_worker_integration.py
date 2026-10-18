@@ -15,7 +15,7 @@ import pytest
 import worker_tasks
 from rq import SimpleWorker
 
-from ofmhelpers.cache import get_queue, get_redis
+from ofmhelpers.cache import enqueue, get_queue, get_redis
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
@@ -57,3 +57,16 @@ def test_worker_marks_a_raising_job_failed_never_stuck_running():
     job = get_job(job_id)
     assert job.status == "failed"
     assert job.error == "Wrong API Key"
+
+
+def test_worker_log_description_never_carries_the_job_arguments():
+    # RQ logs the description of every job it starts; the kwargs hold the
+    # kie.ai API key.
+    job_id = create_job("seedance", {})
+    rq_job = enqueue(
+        run_job, job_id, worker_tasks.make_result, {"name": "secret-api-key"}
+    )
+
+    assert rq_job.description == "ofmhelpers.web.stores.jobs.run_job"
+    _drain_queue()
+    assert get_job(job_id).status == "done"

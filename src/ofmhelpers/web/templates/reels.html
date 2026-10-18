@@ -33,20 +33,6 @@
     </div>
     <button type="submit" class="btn-primary">Add &amp; scan</button>
     <div class="generation-status" role="status" aria-live="polite"></div>
-    <p class="form-hint">
-        New profiles are scanned in the background; after that every profile
-        is rescanned every {{ rescan_hours }} h. Deleted, renamed or private
-        profiles are not added (you're told which). Once a profile has
-        scanned fine it is never removed for you: if Instagram later can't
-        show it, it keeps its reels with a ⚠ saying why. The feed holds reels from the last
-        {{ max_age_days|round|int }} days with at least
-        {{ "{:,}".format(min_views) }} views, most viewed first; over
-        {{ max_duration_s|round|int }} s are skipped. Rank = border: common
-        50k grey, uncommon 100k green, rare 200k purple, epic 500k orange,
-        legendary 1M+ gold. Hover to play, click to pick, then Clone or Download in
-        the bar under the reels. On top of the list: the most viewed profile (gold), then the
-        one with the most feed reels (orange).
-    </p>
 </form>
 
 <h2 class="col-title reels-watch-title">Watching <span id="reels-watch-count">{{ board.rows|length }}</span></h2>

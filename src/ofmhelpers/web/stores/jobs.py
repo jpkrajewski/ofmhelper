@@ -77,6 +77,15 @@ def run_job(job_id: str, fn, kwargs: dict):
         traceback.print_exc()
 
 
+def reopen_job(job_id: str) -> None:
+    """Back to running, error cleared, for a job about to be run again."""
+    _repository().update_status(job_id, "running", error=None)
+
+
+def fail_job(job_id: str, error: str) -> None:
+    _repository().update_status(job_id, "failed", error=error)
+
+
 def _stored(result: Any) -> Any:
     """A run function's return value as the JSON the result column holds:
     its models (`ResultFile`, `DownloadResult`) dumped, anything else as is."""

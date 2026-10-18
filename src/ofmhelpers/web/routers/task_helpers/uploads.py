@@ -45,8 +45,14 @@ def assets_root_for(request: Request) -> Path:
     whole store. Reads ASSETS_ROOT at call time: it is the seam tests move.
 
     Request-side only: a worker job is handed the resolved path as a kwarg."""
+    return assets_root_for_role(request.session.get("role"))
+
+
+def assets_root_for_role(role: str | None) -> Path:
+    """`assets_root_for` by role name: what a job re-run without its session
+    (recovery) resolves from the job's actor."""
     s = settings.web
-    if request.session.get("role") == s.role_admin:
+    if role == s.role_admin:
         return ASSETS_ROOT
     return ASSETS_ROOT / s.role_va
 

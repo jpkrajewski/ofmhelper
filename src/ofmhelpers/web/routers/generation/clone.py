@@ -24,6 +24,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from ofmhelpers.aigenproviders.kaiai.types import (
     ADAPTIVE_ASPECT_RATIO,
     WAN3_MAX_DURATION_S,
+    WAN3_MAX_REFERENCE_S,
     WAN3_MIN_DURATION_S,
     Wan3Resolution,
 )
@@ -168,6 +169,9 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
         max_images=settings.web.clone_max_images,
         live_poll_s=settings.web.gallery_live_poll_s,
         prefill_videos=_prefill_videos(request, video or []),
+        credits_per_video_s=settings.web.clone_credits_per_video_s,
+        usd_per_credit=settings.web.kie_usd_per_credit,
+        max_reference_s=WAN3_MAX_REFERENCE_S,
     )
 
 
