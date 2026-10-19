@@ -56,74 +56,34 @@ jobs:
     name: Tests (pytest)
     runs-on: ubuntu-latest
 
-    # The suite needs a real Postgres and Redis (see tests/conftest.py) --
-    # pinned to the same major versions docker-compose.yml runs in prod, so
-    # CI can't pass against a database the app never actually meets.
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: ofmhelpers
-          POSTGRES_PASSWORD: ofmhelpers
-          POSTGRES_DB: ofmhelpers
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U ofmhelpers"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
+    # The exact local setup (CLAUDE.md "Validation"): the Dockerfile's `test`
+    # stage -- the same ffmpeg/exiftool versions the export fixtures were
+    # made with -- against the compose Postgres/Redis, pinned to what prod
+    # runs. A runner's own apt tools differ (Ubuntu's exiftool names Keys
+    # tags differently), so nothing runs on the runner itself.
     env:
-      # conftest.py reads these; they point at the service containers above.
-      # It creates/uses a separate `ofmhelpers_test` database itself.
-      OFM_TEST_DATABASE_URL: postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test
-      OFM_TEST_REDIS_URL: redis://127.0.0.1:6379/1
+      COMPOSE: docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --group dev
-
-      # The same media tools as the Docker test stage, before any test: the
-      # iPhone/CapCut export tests encode for real (ffmpeg) and compare
-      # against a real recording (exiftool) -- without them they skip, and
-      # yt-dlp in the integration step needs ffmpeg too.
-      - name: Install ffmpeg and exiftool
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl
-
       # No .env exists on a runner (it's gitignored), and that's the point:
       # this proves the app doesn't quietly depend on a developer's local
-      # secrets file to start up.
+      # secrets file. Compose only needs the file to exist.
+      - name: Empty .env
+        run: touch .env
+
+      - name: Build test image
+        run: $COMPOSE --profile test build tests
+
       - name: Run tests
-        run: uv run pytest -q
+        run: $COMPOSE run --rm tests
 
       # TikTok, Instagram, kie.ai and Higgsfield reached for real (DNS, TLS
       # and each API's answer, tests/integration). No secret needed: the paid
       # APIs are called with a key they must reject.
-
       - name: Live services (integration)
-        run: uv run pytest -m integration -q
+        run: $COMPOSE run --rm tests uv run --frozen pytest -m integration -q
 
   build:
     name: Docker build
