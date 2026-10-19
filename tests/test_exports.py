@@ -68,6 +68,7 @@ def test_original_with_mirror_is_flipped(monkeypatch, tmp_path):
     import ofmhelpers.exports as module
 
     seen = []
+    monkeypatch.setattr(module, "binary", lambda name: name)
     monkeypatch.setattr(module, "run", lambda args, _t: seen.append(args))
 
     out = get_export("original").render(tmp_path / "v.mp4", MIRROR)
