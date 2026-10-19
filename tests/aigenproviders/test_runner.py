@@ -89,7 +89,7 @@ def test_a_transient_status_error_is_retried():
 
 
 def test_a_fatal_status_error_is_raised():
-    provider = ScriptedProvider([ProviderAuthError("bad key")])
+    provider = ScriptedProvider([ProviderAuthError("Fake", "bad key")])
 
     with pytest.raises(ProviderAuthError):
         runner.generate(provider, SPEC, {}, "job4")

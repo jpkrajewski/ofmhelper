@@ -19,6 +19,16 @@
 #   - postgres/redis published on 127.0.0.1 for host-run `uv run pytest`.
 #   - rq-dashboard, behind the `dev` profile so it stays off unless asked for.
 
+# Docker Desktop's DNS proxy intermittently answers "no address" for names
+# that also have an IPv6 record (www.instagram.com, www.tiktok.com,
+# api.kie.ai -- 2026-10-19, it failed every download and upload of the
+# worker). The containers' embedded resolver still answers service names
+# (postgres, redis); everything else is forwarded to these instead.
+# Prod is Linux Docker, which has no such proxy, so the base file sets none.
+x-dns: &public-dns
+  - 1.1.1.1
+  - 8.8.8.8
+
 services:
   ofmhelpers:
     # The image's CMD is the production one (no --reload) -- override it here
@@ -33,6 +43,7 @@ services:
       - --reload
       - --reload-dir
       - /app/src
+    dns: *public-dns
     volumes:
       # Merged with (not replacing) the base file's volume list.
       - ./src:/app/src
@@ -46,6 +57,7 @@ services:
       # processes competing for the same laptop, and startup/restart is the
       # slow part of the dev loop. Bump if you need real concurrency here.
       - OFM_RQ_WORKERS=2
+    dns: *public-dns
     volumes:
       - ./src:/app/src
 
@@ -58,6 +70,35 @@ services:
   redis:
     ports:
       - "127.0.0.1:6379:6379"
+
+  # Every test/lint/type check, inside Linux:
+  #   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm tests
+  #   docker compose ... run --rm tests uv run --frozen pytest -m e2e    (stack up)
+  #   docker compose ... run --rm tests uv run --frozen pytest -m integration
+  #   docker compose ... run --rm tests uv run --frozen mypy
+  #   docker compose ... run --rm tests uv run --frozen pre-commit run --all-files
+  tests:
+    build:
+      context: .
+      target: test
+    profiles:
+      - test
+    working_dir: /app
+    command: ["uv", "run", "--frozen", "pytest"]
+    dns: *public-dns
+    environment:
+      - OFM_TEST_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers_test
+      - OFM_TEST_REDIS_URL=redis://redis:6379/1
+      - OFM_E2E_BASE_URL=http://ofmhelpers:8000
+    volumes:
+      - .:/app
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
   # RQ job dashboard. Reuses the app image (rq-dashboard is a project
   # dependency) so there is no extra unpinned third-party image to trust.

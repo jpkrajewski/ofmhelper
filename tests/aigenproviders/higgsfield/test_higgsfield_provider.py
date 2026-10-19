@@ -147,8 +147,20 @@ def test_ended_without_output_is_failed_with_a_reason(wire, provider, body, erro
 def test_http_errors_map_to_error_types(wire, provider, status, error):
     wire({("POST", f"/{SPEC.model_id}"): (status, {"detail": "nope"})})
 
-    with pytest.raises(error, match="nope"):
+    with pytest.raises(error) as raised:
         provider.submit(SPEC, {}, "job")
+
+    assert "nope" in str(raised.value) + getattr(raised.value, "detail", "")
+
+
+def test_a_rejected_key_says_so_in_one_line(wire, provider):
+    wire({("POST", f"/{SPEC.model_id}"): (401, {"detail": "Invalid credentials"})})
+
+    with pytest.raises(ProviderAuthError) as raised:
+        provider.submit(SPEC, {}, "job")
+
+    assert str(raised.value) == "Higgsfield: wrong API key"
+    assert "Invalid credentials" in raised.value.detail
 
 
 def test_a_5xx_outliving_the_sdks_retries_is_unavailable(wire, provider, monkeypatch):
@@ -237,3 +249,25 @@ def test_a_file_type_higgsfield_refuses_is_rejected_before_any_call(
     with pytest.raises(ProviderInputError, match="MP4"):
         provider.upload(clip)
     assert fake.calls == []
+
+
+def test_an_image_over_the_limits_goes_up_as_a_shrunk_copy(
+    wire, provider, tmp_path, monkeypatch
+):
+    """An 8262 px character sheet failed Wan 3.0 after submit (2026-10-19)."""
+    monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
+    monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
+    sheet = tmp_path / "sheet.png"
+    Image.new("RGB", (2000, 400)).save(sheet)
+    original = sheet.read_bytes()
+    fake = wire(_upload_routes())
+
+    provider.upload(sheet)
+
+    presign, put = fake.calls
+    assert presign["json"] == {"content_type": "image/jpeg"}
+    sent = tmp_path / "out" / "higgsfield" / "fitted" / "sheet.jpg"
+    assert put["content"] == sent.read_bytes()
+    with Image.open(sent) as img:
+        assert img.size == (500, 100)
+    assert sheet.read_bytes() == original

@@ -663,7 +663,8 @@ textarea:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-ring);
-    background: var(--surface);
+    /* background-color, not the shorthand: that would wipe select's caret. */
+    background-color: var(--surface);
 }
 input::placeholder, textarea::placeholder { color: var(--text-faint); }
 
@@ -1328,8 +1329,10 @@ summary:hover { color: var(--accent-soft); }
 .clone-form .file-order-list li .thumb-small { width: 48px; height: 48px; }
 /* At 48px a video's native controls are only noise; the frame is the preview. */
 .clone-form .file-order-list video::-webkit-media-controls { display: none !important; }
-.clone-output-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) var(--s-5); }
-.clone-output-row select { width: auto; min-width: 120px; }
+/* Select + switch pairs on a grid: every select gets the widest one's
+   width, so the switches line up in one column. */
+.clone-output-row { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: var(--s-3) var(--s-5); }
+.clone-output-row select { min-width: 120px; }
 .clone-output-row .check-field { margin: 0; font-weight: 500; color: var(--text-muted); }
 .clone-batch-uploading progress { width: 100%; margin-top: var(--s-2); accent-color: var(--accent); }
 

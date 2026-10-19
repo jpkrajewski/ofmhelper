@@ -12,6 +12,32 @@ COPY src ./src
 COPY README.md ./
 RUN uv sync --frozen --no-dev
 
+# ---- Test stage (dev only: docker-compose.dev.yml's `tests` service) ----
+# Every check runs here, on the same Linux userland as prod, never on the
+# dev host. The repo is bind-mounted at /app; the venv lives outside it so a
+# host .venv can never leak in. Not built by a plain `docker build`: the
+# last stage (runtime) is the default target.
+FROM python:3.12-slim AS test
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# ffmpeg as in runtime; exiftool (Debian's libimage-exiftool-perl) to inspect
+# media the app writes; git for pre-commit; node for the static-JS unit tests.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl git nodejs ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_LINK_MODE=copy \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project
+RUN playwright install --with-deps chromium
+
 # ---- Runtime stage ----
 FROM python:3.12-slim AS runtime
 

@@ -48,7 +48,7 @@ def form(request: Request):
         request,
         "generate_form.html",
         providers=providers,
-        selected_provider=providers[0].name,
+        selected_provider=settings.aigen.default_provider,
         models=[m.model_dump() for m in ModelChoice.all()],
         api_keys=get_api_keys(request),
         gallery=gallery,

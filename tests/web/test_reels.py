@@ -89,7 +89,7 @@ def scans(monkeypatch):
         seen.append(username)
         assert (min_views, max_duration_s, max_age_s, limit) == (
             50_000,
-            30.0,
+            15.0,
             14 * 86400,
             120,
         )
@@ -907,3 +907,27 @@ def test_clone_page_drops_prefill_paths_outside_the_store(client, tmp_path):
     outside.write_bytes(b"v")
     html = client.get("/clone", params={"video": [str(outside), "/nope.mp4"]}).text
     assert "data-prefill-videos='[]'" in html
+
+
+def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
+    """A reel stored by an older scan (30 s cap) disappears as soon as the
+    cap drops, not at the profile's next rescan."""
+
+    def stored(username, length):
+        result = _found(username, code=f"c_{username}")
+        reel = result.reels[0].model_copy(update={"duration_s": length})
+        return WatchedProfile(
+            username=username,
+            added_at=0,
+            scanned_at=1,
+            result=result.model_copy(update={"reels": [reel]}),
+        )
+
+    profiles = [stored("short", 15.0), stored("long", 15.7), stored("gated", None)]
+    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+
+    html = client.get("/reels/feed").text
+
+    assert 'data-code="c_short"' in html
+    assert 'data-code="c_gated"' in html
+    assert 'data-code="c_long"' not in html

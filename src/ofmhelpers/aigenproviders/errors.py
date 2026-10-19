@@ -19,7 +19,16 @@ class ProviderError(Exception):
 
 
 class ProviderAuthError(ProviderError):
-    """The API key was rejected."""
+    """The API key was rejected. Every provider shows it the same way,
+    "<provider>: wrong API key"; the provider's own wording (which differs
+    per provider and per endpoint) is kept in `detail` for the logs."""
+
+    def __init__(self, provider: str, detail: str = "") -> None:
+        super().__init__(f"{provider}: wrong API key")
+        self.detail = detail
+        if detail:
+            # Shown under the traceback wherever the error is logged.
+            self.add_note(detail)
 
 
 class ProviderInputError(ProviderError):

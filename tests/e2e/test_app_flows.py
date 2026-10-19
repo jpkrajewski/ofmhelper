@@ -142,7 +142,7 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
 
     # kie.ai rejects the key at the first upload: every run fails with it,
     # and nothing is generated or paid for.
-    failed = va.page.locator(f"{batch} .result-file", has_text="kie.ai")
+    failed = va.page.locator(f"{batch} .result-file", has_text="kie.ai: wrong API key")
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
 
     # Recreate brings the whole batch back without re-uploading.
@@ -160,9 +160,28 @@ VIRAL_PROFILES = ["sheep_love33", "https://www.instagram.com/brookslockvip/"]
 SCAN_TIMEOUT_MS = 120_000
 
 
-def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Path]):
-    # 3 s + 5 s of video at the default rates (32.78 / 64 credits a second).
+def test_clone_output_selects_and_switches_line_up(va: Session):
+    """Each select sits beside its switch; both selects share one width and
+    both switches one column, whatever the labels' lengths."""
     va.goto("/clone")
+    row = va.page.locator(".clone-output-row")
+    va.page.locator("#clone-export").focus()  # focus must keep the caret
+
+    selects = [row.locator("select").nth(i).bounding_box() for i in range(2)]
+    switches = [row.locator(".check-field").nth(i).bounding_box() for i in range(2)]
+
+    assert selects[0]["width"] == selects[1]["width"]
+    assert switches[0]["x"] == switches[1]["x"]
+    assert va.page.eval_on_selector(
+        "#clone-export", "e => getComputedStyle(e).backgroundImage"
+    ).startswith("linear-gradient")
+    assert va.js_errors == []
+
+
+def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Path]):
+    # 3 s + 5 s of video at kie.ai's rates (32.78 / 64 credits a second).
+    va.goto("/clone")
+    va.page.select_option("#provider-select", "kie")
     panel = va.page.locator("#clone-cost")
     expect(panel).to_be_hidden()
     va.page.locator(
@@ -275,7 +294,10 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     batch_id = re.search(r'data-batch="([^"]+)"', body["html"]).group(1)
 
     batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
-    failed = va.page.locator(f"{batch} .result-file", has_text="kie.ai")
+    # Higgsfield is the default provider; the wrong key fails on it.
+    failed = va.page.locator(
+        f"{batch} .result-file", has_text="Higgsfield: wrong API key"
+    )
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
 
     assert va.js_errors == []

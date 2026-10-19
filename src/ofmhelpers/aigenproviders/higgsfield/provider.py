@@ -36,6 +36,7 @@ from ofmhelpers.aigenproviders.spec import ModelSpec, Payload
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils.image_fit import fitted
 
 logger = get_logger(__name__)
 
@@ -70,10 +71,10 @@ def _mapped_errors(action: str) -> Iterator[None]:
             else 0
         )
         message = f"Higgsfield {action}: {exc} (HTTP {code or '?'})"
-        error: type[ProviderError] = ProviderInputError
         if code in _AUTH_STATUSES:
-            error = ProviderAuthError
-        elif code in _RETRYABLE_STATUSES or code >= _SERVER_ERROR or not code:
+            raise ProviderAuthError(HiggsfieldProvider.label, message) from exc
+        error: type[ProviderError] = ProviderInputError
+        if code in _RETRYABLE_STATUSES or code >= _SERVER_ERROR or not code:
             error = ProviderUnavailableError
         raise error(message) from exc
     except httpx.TransportError as exc:
@@ -106,7 +107,8 @@ class HiggsfieldProvider(Provider):
 
     def upload(self, path: Path) -> str:
         """Memoized like kie.ai's: a reference reused across generations is
-        uploaded once, and a cached URL is confirmed live before reuse."""
+        uploaded once, and a cached URL is confirmed live before reuse. An
+        image over `ref_image_limits` goes up as a shrunk copy."""
         content_type = mimetypes.guess_type(path.name)[0] or ""
         if content_type not in UPLOAD_TYPES:
             msg = (
@@ -114,6 +116,11 @@ class HiggsfieldProvider(Provider):
                 f"video -- not {path.name}"
             )
             raise ProviderInputError(msg)
+        path = fitted(
+            path,
+            Path(settings.aigen.out_dir) / "higgsfield" / "fitted",
+            settings.higgsfield.ref_image_limits,
+        )
         cache_key = self._upload_cache_key(path)
         cached = get_text(cache_key)
         if cached is not None and _live(cached):

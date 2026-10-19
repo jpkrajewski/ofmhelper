@@ -212,8 +212,11 @@ def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
 def test_wrong_api_key_response_raises_and_never_populates_cache(client, ref_file):
     with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(success=False)
-        with pytest.raises(ProviderAuthError, match="upload rejected"):
+        with pytest.raises(ProviderAuthError) as exc:
             client.upload_local_file(str(ref_file))
+
+    assert str(exc.value) == "kie.ai: wrong API key"
+    assert "upload rejected" in exc.value.detail
 
     assert _cached("test-key", ref_file) is None
 

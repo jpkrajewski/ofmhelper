@@ -68,6 +68,9 @@ line-length = 88
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+    # Checks run in Docker against a bind-mounted checkout; from a Windows host
+    # every file shows up executable there, so this would flag every file.
+    "EXE002",
     # Formatter owns layout; these fight `ruff format`.
     "COM812",
     "E501",
@@ -148,7 +151,8 @@ docstring-code-format = true
 [tool.pytest.ini_options]
 markers = [
     "e2e: drives a live app in a real browser (tests/e2e); run with -m e2e",
+    "integration: reaches the real outside services (tests/integration); run with -m integration",
 ]
-# The e2e suite needs the whole stack up and a browser installed, so a plain
-# `uv run pytest` leaves it out. A later -m on the command line wins.
-addopts = "-m 'not e2e'"
+# The e2e suite needs the whole stack up and a browser; integration needs the
+# internet. A plain `pytest` leaves both out; a later -m on the command line wins.
+addopts = "-m 'not e2e and not integration'"

@@ -32,9 +32,14 @@
                 <input type="checkbox" name="audio" value="true" checked>
                 Audio
             </label>
-            <label class="check-field" title="Re-encoded with CapCut-style edits and metadata, exported in 4K">
-                <input type="checkbox" name="capcut" value="true" checked>
-                CapCut export
+            <select id="clone-export" name="export" aria-label="Export as">
+                {% for e in exports %}
+                <option value="{{ e.name }}" {% if e.name == default_export %}selected{% endif %}>{{ e.label }}</option>
+                {% endfor %}
+            </select>
+            <label class="check-field">
+                <input type="checkbox" name="mirror" value="true" {% if default_mirror %}checked{% endif %}>
+                Mirror
             </label>
         </div>
     </div>

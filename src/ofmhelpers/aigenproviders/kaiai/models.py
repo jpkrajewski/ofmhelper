@@ -19,6 +19,8 @@ from ofmhelpers.aigenproviders.errors import (
 
 _OK = 200
 _AUTH_CODES = frozenset({401, 403})
+# How errors name the provider (its `Provider.label`).
+_PROVIDER = "kie.ai"
 # 455 is kie.ai's "under maintenance".
 _RETRYABLE_CODES = frozenset({408, 429, 455, 500, 502, 503, 504})
 
@@ -42,11 +44,11 @@ class KieEnvelope(_Lenient):
 
 def raise_for(code: int, message: str) -> NoReturn:
     """kie.ai's code (in the body, or the HTTP status) as the shared error."""
-    text = f"kie.ai: {message or 'error'} (code {code})"
-    error: type[ProviderError] = ProviderInputError
+    text = f"{_PROVIDER}: {message or 'error'} (code {code})"
     if code in _AUTH_CODES:
-        error = ProviderAuthError
-    elif code in _RETRYABLE_CODES or code >= 500:  # noqa: PLR2004
+        raise ProviderAuthError(_PROVIDER, text)
+    error: type[ProviderError] = ProviderInputError
+    if code in _RETRYABLE_CODES or code >= 500:  # noqa: PLR2004
         error = ProviderUnavailableError
     raise error(text)
 

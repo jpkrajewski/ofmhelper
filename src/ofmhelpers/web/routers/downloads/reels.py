@@ -79,9 +79,13 @@ class _Filters(BaseModel):
     ratio: int | None = None
 
     def includes(self, item: FeedItem) -> bool:
-        """Whether the feed shows `item` under these filters."""
-        return (not self.rank or item.reel.tier == self.rank) and (
-            not self.ratio or item.reel.ratio >= self.ratio
+        """Whether the feed shows `item` under these filters; never a reel
+        past `max_duration_s`, even one stored by an older scan."""
+        length = item.reel.duration_s
+        return (
+            (length is None or length <= settings.instagram.max_duration_s)
+            and (not self.rank or item.reel.tier == self.rank)
+            and (not self.ratio or item.reel.ratio >= self.ratio)
         )
 
     def url(self, path: str, **changes: str | int | None) -> str:

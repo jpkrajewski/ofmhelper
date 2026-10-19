@@ -191,7 +191,8 @@
             provider.dispatchEvent(new Event("change"));
         }
         form.querySelector('[name="audio"]').checked = !!params.audio;
-        form.querySelector('[name="capcut"]').checked = !!params.capcut;
+        form.querySelector('[name="export"]').value = params.export;
+        form.querySelector('[name="mirror"]').checked = !!params.mirror;
         setStatus(form.querySelector(".generation-status"), message, false);
         form.scrollIntoView({ behavior: "smooth" });
     }

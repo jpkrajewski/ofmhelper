@@ -144,6 +144,8 @@ class CapcutPreset(BaseModel, frozen=True):
     speed: float = Field(0.0, ge=-50.0, le=100.0)
     trim_head: float = Field(0.0, ge=0.0)
     trim_tail: float = Field(0.0, ge=0.0)
+    # Flipped left-right (CapCut's Mirror button).
+    mirror: bool = False
 
     @property
     def tempo(self) -> float:
@@ -172,7 +174,8 @@ class CapcutPreset(BaseModel, frozen=True):
             f"eq=contrast={jitter.contrast}:brightness={jitter.brightness}"
             f":saturation={saturation:.4f}:gamma={gamma:.4f}"
         )
-        vf = [self.crop(src, jitter.zoom), eq]
+        vf = ["hflip"] if self.mirror else []
+        vf += [self.crop(src, jitter.zoom), eq]
         # Grain before exposure: `exposure` outputs float RGB, which `noise`
         # treats as 8-bit and turns into colour static.
         if jitter.noise:

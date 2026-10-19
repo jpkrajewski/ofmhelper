@@ -20,6 +20,9 @@ from __future__ import annotations
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from ofmhelpers.iphones.models import GeoPoint, Place
+from ofmhelpers.utils.image_fit import ImageLimits
+
 
 class SessionSettings(BaseSettings):
     """Only ever constructed by web/main.py, at app-construction time.
@@ -170,10 +173,6 @@ class WebSettings(BaseSettings):
     clone_probe_workers: int = Field(
         default=8, ge=1, validation_alias="OFM_CLONE_PROBE_WORKERS"
     )
-    # Bound on the CapCut re-encode (utils/capcut.py) of one generated clone.
-    clone_capcut_timeout_s: int = Field(
-        default=600, validation_alias="OFM_CLONE_CAPCUT_TIMEOUT_S"
-    )
     clone_gallery_limit: int = Field(
         default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
     )
@@ -224,8 +223,8 @@ class InfraSettings(BaseSettings):
         default="redis://redis:6379/0", validation_alias="OFM_REDIS_URL"
     )
     # A video generation job waits up to video_poll_timeout_s (30 min) on kie.ai
-    # alone, then downloads, and /clone may CapCut re-encode it (up to
-    # clone_capcut_timeout_s) -- far past RQ's 180s default. 45 min covers all
+    # alone, then downloads, and /clone may re-encode it for export (up to
+    # exports.timeout_s) -- far past RQ's 180s default. 45 min covers all
     # of it, so a slow-but-finished generation is never killed mid-way.
     rq_job_timeout_s: int = Field(default=2700, validation_alias="OFM_RQ_JOB_TIMEOUT_S")
     # When False, enqueue() runs the job inline in the calling process instead
@@ -278,6 +277,12 @@ class KieAISettings(BaseSettings):
         default=8000, validation_alias="OFM_KIEAI_REF_IMAGE_MAX_SIDE"
     )
 
+    @property
+    def ref_image_limits(self) -> ImageLimits:
+        return ImageLimits(
+            max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
+        )
+
     jobs_base: str = Field(
         default="https://api.kie.ai/api/v1/jobs", validation_alias="OFM_KIEAI_JOBS_BASE"
     )
@@ -312,6 +317,10 @@ class AigenSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # The provider every generation page (/generate, /clone) starts on.
+    default_provider: str = Field(
+        default="higgsfield", validation_alias="OFM_DEFAULT_PROVIDER"
+    )
     out_dir: str = Field(
         default="/app/kieai_out",
         validation_alias=AliasChoices("OFM_AIGEN_OUT_DIR", "OFM_KIEAI_OUT_DIR"),
@@ -374,6 +383,23 @@ class HiggsfieldSettings(BaseSettings):
     upload_cache_ttl_s: int = Field(
         default=24 * 3600, validation_alias="OFM_HF_UPLOAD_CACHE_TTL_S"
     )
+    # Reference images over either limit are shrunk to a JPEG copy before
+    # upload (provider.upload); a bigger one fails the generation after it is
+    # submitted ("The image dimensions or aspect ratio are not supported", an
+    # 8262 px character sheet on Wan 3.0, 2026-10-19). Wan 3.0 documents
+    # 20MB / 8000 px per side; bytes halved for models that document none.
+    ref_image_max_bytes: int = Field(
+        default=10 * 1024 * 1024, validation_alias="OFM_HF_REF_IMAGE_MAX_BYTES"
+    )
+    ref_image_max_side: int = Field(
+        default=8000, validation_alias="OFM_HF_REF_IMAGE_MAX_SIDE"
+    )
+
+    @property
+    def ref_image_limits(self) -> ImageLimits:
+        return ImageLimits(
+            max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
+        )
 
 
 class DownloadersSettings(BaseSettings):
@@ -470,11 +496,12 @@ class InstagramSettings(BaseSettings):
     page_size: int = Field(default=12, ge=1, validation_alias="OFM_IG_PAGE_SIZE")
     # /reels: a reel is listed from min_views up (the lowest tier, see
     # instagram/models.py's VIEW_TIERS), and anything longer than
-    # max_duration_s never is. 30 s is the most Wan 3.0 (what /clone runs)
-    # takes.
+    # max_duration_s never is (the feed also hides stored reels past it, so a
+    # lower cap applies before the next rescan). 15 s is the most Wan 3.0
+    # (what /clone runs) takes, on every provider.
     min_views: int = Field(default=50_000, ge=0, validation_alias="OFM_IG_MIN_VIEWS")
     max_duration_s: float = Field(
-        default=30.0, gt=0, validation_alias="OFM_IG_MAX_DURATION_S"
+        default=15.0, gt=0, validation_alias="OFM_IG_MAX_DURATION_S"
     )
     # web/reel_watch.py: how stale a watched profile's scan may get, how
     # often the sweeper looks for stale ones, and how long a claimed scan
@@ -509,3 +536,36 @@ class LoggingSettings(BaseSettings):
     # Uvicorn's per-request access log is noise once a reverse proxy in front
     # is already logging the same requests.
     access_log: bool = Field(default=True, validation_alias="OFM_LOG_ACCESS")
+
+
+class ExportSettings(BaseSettings):
+    """How a finished video is exported (`ofmhelpers.exports`): the default
+    choice, the bound on one export's encode, and the device exports' phone
+    time zone (IANA, so DST follows the date) and place -- each video lands
+    at a random point within `jitter_m` of `center`, reporting a GPS
+    accuracy from `accuracy_m` (2.0-2.7 m, the real iPhone 17 samples'
+    range). Default Midtown Manhattan; JSON in the env var, `null` = no
+    location (Location Services off)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    default: str = Field(default="capcut", validation_alias="OFM_EXPORT_DEFAULT")
+    # Where the pages' Mirror switch starts.
+    mirror: bool = Field(default=False, validation_alias="OFM_EXPORT_MIRROR")
+    timeout_s: int = Field(
+        default=600,
+        validation_alias=AliasChoices(
+            "OFM_EXPORT_TIMEOUT_S", "OFM_CLONE_CAPCUT_TIMEOUT_S"
+        ),
+    )
+    device_timezone: str = Field(
+        default="America/New_York", validation_alias="OFM_EXPORT_DEVICE_TIMEZONE"
+    )
+    device_place: Place | None = Field(
+        default=Place(
+            center=GeoPoint(latitude=40.7549, longitude=-73.9840, altitude_m=10.0),
+            jitter_m=1500,
+            accuracy_m=(2.0, 2.7),
+        ),
+        validation_alias="OFM_EXPORT_DEVICE_PLACE",
+    )

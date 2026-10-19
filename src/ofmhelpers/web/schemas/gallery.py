@@ -115,7 +115,9 @@ class CloneBatch(BaseModel):
                 "prompt": self.prompt,
                 "resolution": self.resolution,
                 "audio": self._first["audio"],
-                "capcut": self._first.get("capcut", False),
+                "export": self._first.get("export")
+                or ("capcut" if self._first.get("capcut") else "original"),
+                "mirror": self._first.get("mirror", False),
                 "reference_images": self.images,
                 "reference_videos": [
                     v for c in self.cards for v in c.params["reference_videos"]

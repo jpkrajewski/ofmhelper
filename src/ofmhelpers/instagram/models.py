@@ -48,6 +48,27 @@ def _instagram_cdn(value: AnyHttpUrl) -> AnyHttpUrl:
 
 CdnUrl = Annotated[AnyHttpUrl, AfterValidator(_instagram_cdn)]
 
+# Instagram's anycast CDN host. The per-region hosts it hands out
+# (`instagram.ftpa1-2.fna.fbcdn.net`, `scontent-xyz.cdninstagram.com`) serve
+# the same signed paths, but some have only an IPv6 address, so an
+# IPv4-only viewer (or container) cannot resolve them. Verified 2026-10-19:
+# thumbnails and mp4s of such a host load from this one with 200.
+GLOBAL_CDN_HOST = "scontent.cdninstagram.com"
+
+
+def _global_cdn(value: str) -> str:
+    """A CDN URL moved onto `GLOBAL_CDN_HOST`; anything else as it is."""
+    parts = urlsplit(value)
+    if parts.scheme != "https" or not (parts.hostname or "").endswith(
+        CDN_HOST_SUFFIXES
+    ):
+        return value
+    return parts._replace(netloc=GLOBAL_CDN_HOST).geturl()
+
+
+# A media URL from Instagram, always on the global CDN host.
+MediaUrl = Annotated[str, AfterValidator(_global_cdn)]
+
 
 class ProfileHandle(BaseModel):
     """One line of the /reels profile box: "name", "@name" or a profile URL,
@@ -263,7 +284,7 @@ class MediaInfo(_Base):
 class ReelMedia(BaseModel):
     """A reel's playable side: its mp4 and length."""
 
-    video_url: str
+    video_url: MediaUrl
     duration_s: float
     taken_at: int
 
@@ -325,8 +346,8 @@ class Reel(BaseModel):
     duration_s: float | None
     views: int
     followers: int
-    thumbnail_url: str
-    video_url: str | None
+    thumbnail_url: MediaUrl
+    video_url: MediaUrl | None
 
     @property
     def pk(self) -> str:

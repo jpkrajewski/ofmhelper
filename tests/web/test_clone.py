@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import ofmhelpers.exports as exports_module
 from ofmhelpers.aigenproviders.base import TaskState
 from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
@@ -202,6 +203,18 @@ def test_run_caps_videos_per_batch(client, monkeypatch):
     assert r.status_code == 400
 
 
+@pytest.mark.usefixtures("fake_runs")
+@pytest.mark.parametrize("provider", list(clone.CLONE_TARGETS))
+def test_a_video_over_15_s_queues_nothing_on_any_provider(client, provider):
+    before = len(list_jobs())
+
+    r = _post(client, ["a.mp4", "p.mp4"], {"provider": provider})  # p: 17.6 s
+
+    assert r.status_code == 400
+    assert r.json()["detail"] == "p.mp4 is 17.6 s; Wan 3.0 takes at most 15 s"
+    assert len(list_jobs()) == before
+
+
 def test_one_unreadable_video_queues_nothing(client, monkeypatch):
     def probe(path, _timeout):
         if Path(path).name.endswith("bad.mp4"):
@@ -327,7 +340,7 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
     _stub(KieProvider, monkeypatch, sent)
     clips = [_clip(tmp_path / "a.mp4", 3), _clip(tmp_path / "b.mp4", 5)]
 
-    r = _post_clips(client, clips)
+    r = _post_clips(client, clips, {"provider": "kie"})
 
     assert r.status_code == 200, r.text
     assert [model for model, _ in sent] == ["wan/3-0-video", "wan/3-0-video"]
@@ -411,7 +424,7 @@ def test_page_offers_the_providers_that_can_clone(client):
     assert '<option value="fake"' not in html
 
 
-def _run_clone(capcut, assets_root):
+def _run_clone(assets_root, **choice):
     return clone._run_clone(
         job_id="j",
         api_key="k",
@@ -422,56 +435,76 @@ def _run_clone(capcut, assets_root):
         duration=5,
         reference_images=["/x/face.png"],
         reference_videos=["/x/src.mp4"],
-        capcut=capcut,
         clone_batch="b",
         clone_index=0,
+        **choice,
     )
 
 
-def test_page_has_capcut_on_by_default(client):
-    assert '<input type="checkbox" name="capcut" value="true" checked>' in (
-        client.get("/clone").text
-    )
+def _generated(monkeypatch, result):
+    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
+
+
+def test_export_is_one_dropdown_with_capcut_selected(client):
+    html = client.get("/clone").text
+
+    assert '<select id="clone-export" name="export"' in html
+    assert '<option value="capcut" selected>CapCut export</option>' in html
+    assert '<option value="original" >Original</option>' in html
+    assert '<option value="iphone17" >iPhone 17 Pro Max</option>' in html
+    assert '<input type="checkbox" name="mirror" value="true" >' in html
+    assert 'name="capcut"' not in html
 
 
 @pytest.mark.usefixtures("fake_runs")
-def test_capcut_choice_is_stored_and_recreated(client):
-    on = get_job(_post(client, ["a.mp4"], {"capcut": "true"}).json()["job_ids"][0])
-    off = get_job(_post(client, ["a.mp4"]).json()["job_ids"][0])
+def test_export_choice_is_stored_and_recreated(client):
+    picked = get_job(
+        _post(client, ["a.mp4"], {"export": "iphone17", "mirror": "true"}).json()[
+            "job_ids"
+        ][0]
+    )
+    default = get_job(_post(client, ["a.mp4"]).json()["job_ids"][0])
 
-    assert on.params["capcut"] is True
-    assert off.params["capcut"] is False
-    [batch] = _batches([on], page_full=False)
-    assert json.loads(batch.recreate_json)["capcut"] is True
+    assert (picked.params["export"], picked.params["mirror"]) == ("iphone17", True)
+    assert (default.params["export"], default.params["mirror"]) == ("capcut", False)
+    [batch] = _batches([picked], page_full=False)
+    recreated = json.loads(batch.recreate_json)
+    assert (recreated["export"], recreated["mirror"]) == ("iphone17", True)
 
 
-def test_capcut_off_returns_the_generation_untouched(monkeypatch):
+@pytest.mark.usefixtures("fake_runs")
+def test_unknown_export_is_rejected_before_anything_runs(client):
+    before = len(list_jobs())
+
+    r = _post(client, ["a.mp4"], {"export": "nokia3310"})
+
+    assert r.status_code == 400
+    assert len(list_jobs()) == before
+
+
+def test_original_export_returns_the_generation_untouched(monkeypatch):
     result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
-    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
+    _generated(monkeypatch, result)
 
-    assert _run_clone(capcut=False, assets_root="/x") == result
+    assert _run_clone("/x", export="original") == result
 
 
-def test_capcut_keeps_a_remote_only_result(monkeypatch):
+def test_export_keeps_a_remote_only_result(monkeypatch):
     result = [ResultFile(name="v.mp4", path=None, remote_url="https://r/v")]
-    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
+    _generated(monkeypatch, result)
 
-    assert _run_clone(capcut=True, assets_root="/x") == result
+    assert _run_clone("/x", export="capcut") == result
 
 
 @needs_ffmpeg
-def test_capcut_on_serves_the_capcut_copy(tmp_path, monkeypatch):
+def test_capcut_export_serves_the_capcut_copy(tmp_path, monkeypatch):
     src = _clip(tmp_path / "gen.mp4", 2)
-    monkeypatch.setattr(
-        clone,
-        "run_ai",
-        lambda *_a, **_k: [
-            ResultFile(name=src.name, path=str(src), remote_url="https://r")
-        ],
+    _generated(
+        monkeypatch, [ResultFile(name=src.name, path=str(src), remote_url="https://r")]
     )
     assets = tmp_path / "assets"
 
-    [result] = _run_clone(capcut=True, assets_root=str(assets))
+    [result] = _run_clone(str(assets), export="capcut")
 
     out = Path(result.path)
     assert result == ResultFile(name="gen_capcut.mp4", path=str(out), remote_url=None)
@@ -480,17 +513,47 @@ def test_capcut_on_serves_the_capcut_copy(tmp_path, monkeypatch):
     assert [p.name.split("__", 1)[1] for p in assets.iterdir()] == [out.name]
 
 
-def test_capcut_failure_keeps_the_generated_video(monkeypatch):
+def test_device_export_serves_the_device_copy(tmp_path, monkeypatch):
+    src = tmp_path / "gen.mp4"
+    src.write_bytes(b"video")
+    _generated(
+        monkeypatch, [ResultFile(name=src.name, path=str(src), remote_url="https://r")]
+    )
+    monkeypatch.setattr(
+        exports_module, "record", lambda s, d, *_a: d.write_bytes(s.read_bytes())
+    )
+
+    [result] = _run_clone(str(tmp_path / "assets"), export="iphone17")
+
+    out = tmp_path / "gen_iphone17.mov"
+    assert result == ResultFile(name=out.name, path=str(out), remote_url=None)
+
+
+def test_failed_export_keeps_the_generated_video(monkeypatch):
     result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
-    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
+    _generated(monkeypatch, result)
 
     def broken(*_a, **_k):
         msg = "ffmpeg failed: boom"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(clone, "apply_preset", broken)
+    monkeypatch.setattr(exports_module, "apply_preset", broken)
 
-    assert _run_clone(capcut=True, assets_root="/x") == result
+    assert _run_clone("/x", export="capcut") == result
+
+
+def test_jobs_from_before_export_keep_their_capcut_choice(monkeypatch):
+    result = [ResultFile(name="v.mp4", path=None, remote_url="https://r/v")]
+    _generated(monkeypatch, result)
+    seen = []
+    monkeypatch.setattr(
+        clone, "_exported", lambda r, export, _o, _root: seen.append(export) or r
+    )
+
+    _run_clone("/x", capcut=True)
+    _run_clone("/x", capcut=False)
+
+    assert seen == ["capcut", "original"]
 
 
 def _pricing(client):
@@ -513,7 +576,7 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     assert pricing["kie"]["usd_per_credit"] == 0.004
     assert pricing["kie"]["max_reference_s"] == 15
     assert pricing["higgsfield"]["credits_per_video_s"] == {"720P": 2.0}
-    assert pricing["higgsfield"]["max_reference_s"] is None
+    assert pricing["higgsfield"]["max_reference_s"] == 15
     assert 'id="clone-cost"' in client.get("/clone").text
 
 

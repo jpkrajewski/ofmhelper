@@ -27,7 +27,7 @@ from ofmhelpers.aigenproviders.spec import Payload
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils.image_fit import fit_image, fits
+from ofmhelpers.utils.image_fit import fitted
 
 logger = get_logger(__name__)
 
@@ -54,12 +54,6 @@ class KieAIClient:
     keys can coexist in one process."""
 
     _HTTP_ERROR = 400
-
-    # Reference images _fit_for_upload may re-encode (GIF is left alone: a
-    # JPEG copy would drop its animation).
-    FITTABLE_IMAGE_SUFFIXES = frozenset(
-        {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
-    )
 
     def __init__(
         self,
@@ -164,17 +158,7 @@ class KieAIClient:
         from createTask ("file size exceeds limit") after the upload already
         succeeded. The original stays untouched (a character sheet is kept
         lossless), and the copy is reused on the next upload of the same file."""
-        limits = settings.kieai
-        if path.suffix.lower() not in self.FITTABLE_IMAGE_SUFFIXES or fits(
-            path, limits.ref_image_max_bytes, limits.ref_image_max_side
-        ):
-            return path
-        dest = self.OUT_DIR / "fitted" / f"{path.stem}.jpg"
-        if not dest.exists():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            fit_image(path, dest, limits.ref_image_max_bytes, limits.ref_image_max_side)
-            logger.info("shrunk oversized reference %s -> %s", path, dest)
-        return dest
+        return fitted(path, self.OUT_DIR / "fitted", settings.kieai.ref_image_limits)
 
     def _remote_file_exists(self, url: str) -> bool:
         """Best-effort existence check for a previously-uploaded file's

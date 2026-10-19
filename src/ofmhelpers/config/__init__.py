@@ -23,6 +23,7 @@ existed):
 from ofmhelpers.config.settings import (
     AigenSettings,
     DownloadersSettings,
+    ExportSettings,
     HiggsfieldSettings,
     InfraSettings,
     InstagramSettings,
@@ -67,6 +68,10 @@ class Settings:
     @property
     def instagram(self) -> InstagramSettings:
         return InstagramSettings()
+
+    @property
+    def exports(self) -> ExportSettings:
+        return ExportSettings()
 
     @property
     def logging(self) -> LoggingSettings:

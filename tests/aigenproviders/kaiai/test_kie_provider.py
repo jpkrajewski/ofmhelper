@@ -63,8 +63,22 @@ def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path):
 def test_kies_in_body_code_maps_to_an_error_type(provider, code, error):
     with kie_http() as http:
         http.request.return_value = response({"code": code, "msg": "nope"})
-        with pytest.raises(error, match="nope"):
+        with pytest.raises(error) as raised:
             provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
+
+    assert "nope" in str(raised.value) + getattr(raised.value, "detail", "")
+
+
+def test_a_rejected_key_says_so_in_one_line(provider):
+    with kie_http() as http:
+        http.request.return_value = response(
+            {"code": 401, "msg": "Authentication failed: Unauthorized"}
+        )
+        with pytest.raises(ProviderAuthError) as raised:
+            provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
+
+    assert str(raised.value) == "kie.ai: wrong API key"
+    assert "Authentication failed" in raised.value.detail
 
 
 def test_an_http_error_maps_by_status(provider):

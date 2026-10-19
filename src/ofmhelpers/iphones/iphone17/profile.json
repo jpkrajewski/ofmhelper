@@ -1,0 +1,139 @@
+{
+  "name": "iphone17",
+  "samples": 7,
+  "device": {
+    "make": "Apple",
+    "model": "iPhone 17 Pro Max",
+    "software": "26.5.1"
+  },
+  "container": {
+    "major_brand": "qt  ",
+    "chunk_duration_ms": 370,
+    "minor_version": 0,
+    "compatible_brands": ["qt  "],
+    "movie_timescale": 600,
+    "moov_after_mdat": true
+  },
+  "handlers": {
+    "vendor": "appl",
+    "video": "Core Media Video",
+    "audio": "Core Media Audio",
+    "data": "Core Media Data Handler",
+    "data_reference": "alis",
+    "media_language": "und"
+  },
+  "video": {
+    "codec": "hevc",
+    "profile": "main10",
+    "codec_tag": "hvc1",
+    "compressor_name": "HEVC",
+    "level": 120,
+    "width": 1080,
+    "height": 1920,
+    "pix_fmt": "yuv420p10le",
+    "color_primaries": "bt2020",
+    "color_transfer": "arib-std-b67",
+    "color_space": "bt2020nc",
+    "color_range": "tv",
+    "sdr_white_nits": 203,
+    "fps": 30,
+    "timescale": 600,
+    "bitrate_kbps": 8400,
+    "b_frames": 2,
+    "gop_size": 28,
+    "sync_nal_unit_type": 21,
+    "negative_cts_offsets": true,
+    "graphics_mode": 64,
+    "op_color": 32768,
+    "timing": {
+      "first_frame_slots": 4,
+      "startup_gaps": [0, 4],
+      "gap_drops": [1, 2],
+      "nudge_every": 250,
+      "last_frame_ticks": [12, 21]
+    },
+    "sample_quality": 512,
+    "encoded_sync_nal_unit_type": 19
+  },
+  "audio": {
+    "codec": "aac",
+    "profile": "LC",
+    "codec_tag": "mp4a",
+    "sample_rate": 48000,
+    "channels": 2,
+    "bitrate_kbps": 160,
+    "buffer_size": 6144,
+    "max_bitrate": 192000,
+    "avg_bitrate": 0
+  },
+  "movie_keys": [
+    {
+      "key": "com.apple.quicktime.location.accuracy.horizontal",
+      "data_type": 1,
+      "per_recording": "location_accuracy"
+    },
+    {
+      "key": "com.apple.quicktime.full-frame-rate-playback-intent",
+      "data_type": 21,
+      "value": 1,
+      "int_width": 8
+    },
+    {
+      "key": "com.apple.quicktime.location.ISO6709",
+      "data_type": 1,
+      "per_recording": "location_iso6709"
+    },
+    {
+      "key": "com.apple.quicktime.make",
+      "data_type": 1,
+      "value": "Apple"
+    },
+    {
+      "key": "com.apple.quicktime.model",
+      "data_type": 1,
+      "value": "iPhone 17 Pro Max"
+    },
+    {
+      "key": "com.apple.quicktime.software",
+      "data_type": 1,
+      "value": "26.5.1"
+    },
+    {
+      "key": "com.apple.quicktime.creationdate",
+      "data_type": 1,
+      "per_recording": "creation_date"
+    }
+  ],
+  "video_track_keys": [
+    {
+      "key": "com.apple.quicktime.camera.lens_model",
+      "data_type": 1,
+      "locale": {"country": "US", "language": "eng"},
+      "value": "iPhone 17 Pro Max front camera 2.715mm f/1.9"
+    },
+    {
+      "key": "com.apple.quicktime.camera.focal_length.35mm_equivalent",
+      "data_type": 1,
+      "locale": {"country": "US", "language": "eng"},
+      "value": "20"
+    },
+    {
+      "key": "com.apple.quicktime.camera.lens_irisfnumber",
+      "data_type": 1,
+      "locale": {"country": "US", "language": "eng"},
+      "value": "F1.90"
+    },
+    {
+      "key": "com.apple.quicktime.apple-maker-note.74",
+      "data_type": 21,
+      "value": 6,
+      "int_width": 4
+    },
+    {
+      "key": "com.apple.quicktime.apple-maker-note.97",
+      "data_type": 21,
+      "value": 20,
+      "int_width": 4
+    }
+  ]
+}

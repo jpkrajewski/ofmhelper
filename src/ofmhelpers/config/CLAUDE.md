@@ -1,19 +1,8 @@
-# Module purpose
+# config
 
-The app's configuration: every env var is read here and nowhere else.
+Every env var is read here and nowhere else.
 
-# Module files
+- `settings.py` — one `BaseSettings` group per module (Session, Web, Infra, KieAI, Downloaders, Instagram, Aigen, Higgsfield, Logging).
+- `__init__.py` — `from ofmhelpers.config import settings`; each group is built fresh on access, so a test's `monkeypatch.setenv` applies immediately.
 
-- `settings.py` — one `BaseSettings` group per app module (`SessionSettings`,
-  `WebSettings`, `InfraSettings`, `KieAISettings`, `DownloadersSettings`,
-  `InstagramSettings`, `AigenSettings` (what every AI
-  provider shares), `HiggsfieldSettings`,
-  `LoggingSettings`).
-- `__init__.py` — the single import point, `from ofmhelpers.config import
-  settings`. Each group property constructs its class fresh on access (a lazy
-  global, not a cached one) so a test's `monkeypatch.setenv` is seen by the
-  very next call.
-
-# Who calls this
-
-Everything that needs a setting, via `settings.<group>.<field>`.
+Use: `settings.<group>.<field>`.

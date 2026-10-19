@@ -191,3 +191,9 @@ def test_apply_preset_handles_a_silent_clip(tmp_path: Path):
     apply_preset(src, dst, DEFAULT_PRESET, timeout_s=60)
     streams = _probe(dst, "stream=codec_type")["streams"]
     assert [s["codec_type"] for s in streams] == ["video"]
+
+
+def test_mirror_flips_before_the_crop():
+    preset = DEFAULT_PRESET.model_copy(update={"mirror": True})
+    assert preset.video_filter(PORTRAIT, NEUTRAL).startswith("hflip,crop=")
+    assert "hflip" not in DEFAULT_PRESET.video_filter(PORTRAIT, NEUTRAL)

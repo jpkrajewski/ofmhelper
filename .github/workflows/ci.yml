@@ -111,6 +111,15 @@ jobs:
       - name: Run tests
         run: uv run pytest -q
 
+      # TikTok, Instagram, kie.ai and Higgsfield reached for real (DNS, TLS
+      # and each API's answer, tests/integration). No secret needed: the paid
+      # APIs are called with a key they must reject. yt-dlp needs ffmpeg.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Live services (integration)
+        run: uv run pytest -m integration -q
+
   build:
     name: Docker build
     runs-on: ubuntu-latest
