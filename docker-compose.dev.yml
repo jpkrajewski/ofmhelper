@@ -18,6 +18,8 @@
 #   - a 2-process RQ pool instead of the production 10.
 #   - postgres/redis published on 127.0.0.1 for host-run `uv run pytest`.
 #   - rq-dashboard, behind the `dev` profile so it stays off unless asked for.
+#   - `migrate` reading ./src and ./alembic, so `up -d` applies the working
+#     tree's migrations before the app starts.
 
 # Docker Desktop's DNS proxy intermittently answers "no address" for names
 # that also have an IPv6 record (www.instagram.com, www.tiktok.com,
@@ -60,6 +62,14 @@ services:
     dns: *public-dns
     volumes:
       - ./src:/app/src
+
+  migrate:
+    # Migrates from the working tree: revision files and models without a
+    # rebuild.
+    dns: *public-dns
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
 
   postgres:
     ports:

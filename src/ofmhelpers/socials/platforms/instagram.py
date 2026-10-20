@@ -101,6 +101,7 @@ class InstagramPlatform(Platform):
         return AccountStats(
             profile=AccountProfile(
                 handle=profile.username,
+                account_id=profile.user_id,
                 display_name=profile.full_name,
                 followers=profile.followers,
                 following=profile.following,
@@ -118,7 +119,8 @@ class InstagramPlatform(Platform):
                 )
                 for r in reels[:cap]
             ],
-            complete=len(reels) <= cap,
+            # A private account's posts were not read at all.
+            complete=not profile.is_private and len(reels) <= cap,
             limited=limited,
             scanned_at=time.time(),
         )

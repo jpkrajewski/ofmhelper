@@ -22,9 +22,10 @@ FROM python:3.12-slim AS test
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # ffmpeg as in runtime; exiftool (Debian's libimage-exiftool-perl) to inspect
-# media the app writes; git for pre-commit; node for the static-JS unit tests.
+# media the app writes; git for pre-commit; node for the static-JS unit tests;
+# psql to load the production snapshot the migration tests run on.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl git nodejs ca-certificates && \
+    apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl git nodejs postgresql-client ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \

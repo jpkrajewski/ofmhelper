@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     logger.info("shutdown: sweepers cancelled")
 
 
-app = FastAPI(title="Global Ascend LLC — Content Ops", lifespan=lifespan)
+app = FastAPI(title="Ascend Global LLC — Content Ops", lifespan=lifespan)
 
 # --- Middleware -------------------------------------------------------
 # Starlette applies middleware outside-in in the order added, so the LAST

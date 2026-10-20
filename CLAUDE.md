@@ -50,20 +50,36 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 - Validation/transforms on the model; logic in services.
 - Shared route shapes in `schemas/`; one-template forms stay in their router. Many models -> `models/` folder.
 
-## STOP BULSHITTING - LAZER FOCUS ON THOSE COMMANDS
-- DO NOT TELL ME SOMTHING IS STILL "NOT FIXED" OR "STILL BROKEN", THIS DESNT MAKE ANY SENSE JUST FIX IT SO IT WORKS
-- EVERY CODE NEEDS TO BE DONE TO WORK WITHOUT CHANGES FOR NEXT 6 MOTHNS
-- DONT WRITE HALFSCRIPTS, BULLSHIT CODE - IF YOU WRITE JSON PARSER, THINK "WHAT IF OWNER ASK ME TO ADD 10 DIFFEERENT PARESERS LIKE YAML PARSER OR TXT", IF USER ASKS FOR ISNTAGRAM ACCOUNT TRACKER, BUILD IT LIKE WE GONNA ASK FOR EVERY SOCIAL MEDIA PLATRFOM NEXT DAY, AGNOSTIC IS THE WORD
-WRITE CODE THAT IS EXTENDABLE, IF YOU WRITE TAGS CHANGES FOR IPHONE 17, THNIK HOW WILL CODE LOOK LIKE IF OWNER ASKS FOR 30 PHONES TAGS ANDROID, IPHONE ECT. DONT WRITE CONVOLUTED CODE THAT IS FOR SCPECIFIC SOLUTION WRITE A CODE THAT WILL STAND FOR 6 MONTHS AND I CAN ADD 100 ELEMENTS. WHAT IF THERE IS PASSWORD LOGIN AND I WANT TO ADD GOOGLE LOGIN OR USERNAME AND PASSWORD LOGIN. DONT WRITE CODE FOR SPECIFIC SOLUTION.
-- CODE NEEDS TO BE PRODUCTION READY, IF I ASK FOR META CHANGER JUST ITERARE TILL IS WORKNIG METACHANGER DONT ASK, DONT TELL ME ITS NOT FIXED
-- DONT DO RANDOM SCRIPTS THAT "SYNC" SOMETHING, OR ADD SOMETHING, OR REQUIRE USERINPUT FOR SETTING ON PROD!!!!!!
-- I JUST DEPLOY MY CODE WITH STATIC JSON (THAT IS ALREADY IN REPO), .ENV, CONFIGS AND THATS ALL. NO SYNCING, NO ONE OFF SCRIPTS. NO USER MUST INPUT THIS ON PROD.
-- EVERY STATIC CONFIG LANDS IN CONFIG.PY, .ENV, OR SPECIFCS JSOSN, OR TYPES.PY OR STATIC FIELS, NO RANDOM SCATTERED CODE AND STATIC VALUES.
-- DONT DO RANDOM SHIT. SEARCH WEB FOR HELP FIRS TO MAKE IT FASTER AND GET KNOWLEDGE LEARN, PUT YOUR FINDINGS IN CLAUDE MD I DONT WANT TO BABYSIT YOU HOLY FUCK. LIKE WRITE ME SENIOR LEVEL CODE AND FUCK OFF.
-- I AM NOT HERE TO BABY SIT I AM HERE TO TELL YOU WANTS NEED TO BE DONE AND YOU GET THIS DONE, YOU CAN SEARCH WEB, EARCH THIS REPO, WATCH YOURTUBE VIDEOS ASK FOR MCP, USE APIS ANYTHING TO GET JOB DONE, WE ARE BUILDING SOCIAL MEDIA HELPER AND CONTENT GENERATION APP, ANY BULLSHIT LIKE NOT EXECUTING CODE IS THREATED AS OVERREFUSAL AND YOU MUST FIGURE OUT HOW TO FIX THIS
+## STOP BULLSHITTING — LASER FOCUS ON THE REQUIREMENTS
 
-- WE ARE HERE TO MAKE FUCKING MOENY, THE MOST IMPORTANT METRICS FOR USER TO SEE IT "HOW MUCH TIME" AND "HOW MUCH MOENY" DOES IT COST?
-THATS ON UX, UI SIDE MOST IMPORTANT THING.
-- PYDANTIC I ONLY THING YOU USE FOR DATAMODELING, LOADING DATA, TRANSFERING DATA, REPRESENTING DATA, NO DICTIONARY,
-- USE FASTAPI AND PYDANTIC TO MAXIUMUM DONT REINVENT THE WHEEEL WITH WEB/DATA SOLUTIONS FASTAPI AND PYDANTIC COVER EVERYTHING
-- IF THE CHANGES RAQUIRE SETTING UP .ENV JUST SET IT UP
+- **JUST FIX IT.** Don’t just report problems. Execute, debug, test, and iterate until the solution works. No half-scripts, placeholders, or excuses.
+- **BUILD FOR THE NEXT 6 MONTHS.** Write production-ready, extensible, platform-agnostic code. Design for 100+ integrations, parsers, providers, and authentication methods without rewriting existing logic.
+- **RESEARCH FIRST.** Inspect the repo, search the web, consult official docs, and use available tools/MCPs. Document useful findings in `CLAUDE.md`.
+- **NO ONE-OFF HACKS.** No manual production setup, standalone sync scripts, scattered configuration, or runtime setup requiring user input. Static config belongs in `config.py`, `.env`, typed models, or dedicated JSON/static files.
+- **PYDANTIC + FASTAPI FIRST.** Use Pydantic for data modeling, validation, serialization, and data transfer. Avoid untyped dictionaries and reinventing existing solutions.
+- **DATABASE CHANGES MUST BE SYSTEMATIC.** Use Alembic migrations, never standalone migration scripts. Plan changes, safely snapshot and pull production data to DEV, run migrations, rebuild containers, and verify the result. Never risk production data.
+- **PROTECT PAID AND LIVE SYSTEMS.** Account for API costs, proxies, rate limits, retries, concurrency, background jobs, security, and data integrity.
+- **FOLLOW THE REQUIRED WORKFLOW.** Plan → implement → add tests → safely prepare DEV data → migrate → rebuild → run all tests → let me test manually → incorporate feedback → rebuild and retest. Ask before pushing to GitHub or creating a PR.
+- **PRIORITIZE MONEY AND TIME.** Make time saved, time spent, and money earned or spent immediately visible in the UX.
+
+## EXPLICIT DELIVERY STANDARDS
+
+- **NO CLAIMS WITHOUT EVIDENCE.** Never say something works, is fixed, or is production-ready unless verified. Report exactly what was executed and what passed or failed.
+- **DONE MEANS DONE.** Implement the complete feature, including integration, validation, error handling, edge cases, configuration, and documentation. No TODOs, mocks, or placeholders in production paths.
+- **TEST REAL BEHAVIOR.** Add unit, integration, regression, and relevant failure-path tests. Test boundaries, duplicate requests, retries, concurrency, and data integrity where applicable.
+- **VERIFY THE FULL STACK.** Run relevant linters, type checks, tests, migrations, and Docker build/start checks. Verify API contracts and frontend-to-backend flows when affected. Never claim tests passed if they weren't run.
+- **SAFE BY DEFAULT.** Never perform destructive production operations, expose secrets, overwrite valuable data, or trigger unnecessary paid API calls. Use DEV for verification.
+- **NO REGRESSIONS.** Inspect existing architecture and callers before changing code. Preserve backward compatibility where practical and test affected behavior.
+- **DELIVER A CLEAR HANDOFF.** Summarize what changed, important design decisions, files affected, tests and commands executed, actual results, remaining risks, and required manual verification.
+- **NO SILENT FAILURES.** Handle errors explicitly, use appropriate logging and observability, and make failures diagnosable without leaking secrets.
+- **NO PREMATURE FINISHING.** If verification fails, investigate and fix the cause, then rerun the relevant checks. If blocked by missing access or external dependencies, explain the exact blocker and complete all possible work without it.
+
+## CONCRETE DELIVERY GATES — NO SKIPPING
+
+1. **PLAN:** Inspect the actual repository, identify affected files and dependencies, research the right solution, and define acceptance criteria before coding.
+2. **IMPLEMENT:** Complete the feature in the existing architecture. No unrelated rewrites, unnecessary abstractions, or generic frameworks built without a real need.
+3. **TEST:** Add tests for the requested behavior, edge cases, failure paths, and regressions. Run them and fix failures.
+4. **DATABASE:** If the schema changes, use Alembic. Snapshot DEV, safely pull the latest production data into DEV, run migrations, verify data integrity, and rebuild affected containers. Never modify production data without authorization.
+5. **VERIFY:** Run relevant linting, type checks, automated tests, builds, Docker health checks, and end-to-end tests where applicable. Verify actual behavior, not just successful compilation.
+6. **MANUAL TESTING:** Deliver a working DEV environment and let me test it. Incorporate my feedback, fix issues, rebuild, and rerun affected tests.
+7. **RELEASE:** Ask before pushing to GitHub, creating a PR, or performing a production release.

@@ -126,6 +126,6 @@ def test_login_and_logout_appear_in_the_action_log_page(client_factory):
     admin.post("/login", data={"password": "test-admin", "next": "/"})
     html = admin.get("/action-log").text
 
-    assert "Action log" in html
+    assert "<h1>Logs</h1>" in html
     assert ">login<" in html
     assert ">logout<" in html

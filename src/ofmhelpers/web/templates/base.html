@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>{% block title %}Global Ascend LLC — Content Ops{% endblock %}</title>
+    <title>{% block title %}Ascend Global LLC — Content Ops{% endblock %}</title>
     <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
     <!-- Before every other script: it wraps fetch() so an expired session
          redirects to /login instead of failing opaquely. -->
@@ -18,27 +18,27 @@
     {# The bar's links, then the rest folded under "More" (admin pages only
        for admins). A new page = one entry in the list it belongs to. #}
     {% set nav_items = [
-        ("/generate", "Generate AI Assets"),
+        ("/generate", "Gen AI"),
         ("/clone", "Clone"),
-        ("/reels", "Viral Reels"),
-        ("/download-assets", "Download Assets"),
+        ("/reels", "Viral"),
+        ("/download-assets", "Download"),
         ("/accounts", "Accounts"),
     ] %}
     {% set more_items = [
         ("/uniqify", "Uniqify"),
     ] + ([
         ("/character-sheet", "Character Sheet"),
-        ("/applications", "Applications"),
-        ("/file-manager", "File Manager"),
-        ("/action-log", "Action log"),
-        ("/cookies", "Instagram cookies"),
+        ("/applications", "Leads"),
+        ("/file-manager", "Files"),
+        ("/action-log", "Logs"),
+        ("/cookies", "Cookies"),
     ] if is_admin else []) %}
     {% set here = request.url.path %}
 
     <header class="site-header">
         <div class="site-header-inner">
             <a class="brand" href="/">
-                <span class="brand-name">GLOBAL ASCEND</span>
+                <span class="brand-name">ASCEND GLOBAL</span>
                 <span class="brand-sub">Content Ops</span>
             </a>
 
@@ -89,22 +89,22 @@
     <footer class="site-footer">
         <div class="site-footer-inner">
             <div class="footer-brand">
-                <strong>GLOBAL ASCEND LLC</strong>
+                <strong>ASCEND GLOBAL LLC</strong>
                 <span>© 2026 — internal content ops toolkit</span>
             </div>
             <nav class="footer-links" aria-label="Footer">
-                <a href="/generate">Generate</a>
+                <a href="/generate">Gen AI</a>
                 <a href="/clone">Clone</a>
-                <a href="/reels">Viral Reels</a>
+                <a href="/reels">Viral</a>
                 <a href="/download-assets">Download</a>
                 <a href="/accounts">Accounts</a>
                 <a href="/uniqify">Uniqify</a>
                 {% if is_admin %}
                 <a href="/character-sheet">Character Sheet</a>
-                <a href="/applications">Applications</a>
-                <a href="/file-manager">File Manager</a>
-                <a href="/action-log">Action log</a>
-                <a href="/cookies">Instagram cookies</a>
+                <a href="/applications">Leads</a>
+                <a href="/file-manager">Files</a>
+                <a href="/action-log">Logs</a>
+                <a href="/cookies">Cookies</a>
                 {% endif %}
             </nav>
         </div>

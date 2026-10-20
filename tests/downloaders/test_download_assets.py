@@ -139,7 +139,7 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     assert get_job(va_job).actor == "va"
 
     html = client.get("/action-log").text
-    assert "Action log" in html
+    assert "<h1>Logs</h1>" in html
     assert 'actor-admin">admin' in html
     assert 'actor-va">va' in html
 

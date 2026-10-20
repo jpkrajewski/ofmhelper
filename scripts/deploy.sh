@@ -61,9 +61,11 @@ fi
 echo "== deploying to $OFM_DEPLOY_HOST =="
 # Same sequence as .github/workflows/deploy.yml -- keep the two in step.
 #
-# Order matters: migrate before the new code goes live (expand-then-deploy).
-# Old code tolerates a table it does not know about; new code against an
-# un-migrated database 500ed /models on 2026-07-27.
+# Order matters, and compose enforces it: the app and worker stop, `migrate`
+# runs `alembic upgrade head` to completion, and only then do they start (they
+# depend on it with service_completed_successfully). Neither old code on the
+# new schema nor new code on the old one ever runs -- the latter 500ed
+# /models on 2026-07-27.
 remote_script='
   set -eu
   cd "$1"
@@ -76,17 +78,24 @@ remote_script='
   echo "== checking out =="
   git reset --hard origin/main
   echo "== building =="
-  $compose build ofmhelpers worker
-  # One-off container off the image just built -- `exec` would run the OLD
-  # image, which has none of the new revision files.
-  echo "== migrating =="
-  $compose run --rm -T ofmhelpers alembic upgrade head
+  $compose build ofmhelpers worker migrate
   echo "== swapping in the new containers =="
   $compose up -d postgres redis pot-provider
-  # --force-recreate on the app services: a deploy that leaves the old
-  # containers running while reporting success is the worst outcome, and worth
-  # one guaranteed restart. --no-deps so the database is not bounced with them.
-  $compose up -d --no-deps --force-recreate ofmhelpers worker
+  # Seconds of downtime, so old code never sees the new schema.
+  echo "== stopping the app =="
+  $compose stop ofmhelpers worker
+  # --force-recreate: a deploy that leaves the old containers running while
+  # reporting success is the worst outcome. --no-deps so the database is not
+  # bounced with them. Compose waits for `migrate` to exit 0 before starting
+  # the app and worker.
+  echo "== migrating, then starting the app =="
+  # A failed migration exits non-zero here (and leaves the app down): print
+  # why before `set -e` ends the deploy.
+  if ! $compose up -d --no-deps --force-recreate migrate ofmhelpers worker; then
+    $compose logs migrate
+    exit 1
+  fi
+  $compose logs migrate
   # Otherwise every deploy leaves its predecessor dangling on the disk.
   docker image prune -f >/dev/null
   echo "== deployed =="

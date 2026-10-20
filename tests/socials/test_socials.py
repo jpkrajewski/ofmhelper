@@ -15,9 +15,11 @@ from ofmhelpers.socials import (
     AccountProfile,
     AccountStats,
     PostStat,
+    PostViews,
     RateLimitedError,
     RetryableError,
     SocialError,
+    ViewWindow,
     get_platform,
     platforms,
 )
@@ -149,7 +151,7 @@ def test_without_a_working_login_the_logged_out_view_is_marked_limited(
     stats = get_platform("instagram").fetch("yuki", None)
     assert [p.id for p in stats.posts] == ["A"]
     assert stats.limited
-    assert stats.metrics([7]).limited
+    assert stats.metrics().limited
 
 
 def test_logged_in_listing_can_be_switched_off(fake_client, monkeypatch):
@@ -166,7 +168,7 @@ def test_instagram_private_account_keeps_its_numbers_without_reels(fake_client):
     assert stats.profile.is_private
     assert stats.profile.followers == 1234
     assert stats.posts == []
-    assert stats.complete
+    assert not stats.complete  # nothing was read
     assert not made[0].reels_read
 
 
@@ -196,42 +198,43 @@ def test_instagram_lasting_error_is_a_social_error(fake_client):
     assert not isinstance(caught.value, RetryableError)
 
 
-def test_metrics_view_windows_with_previous_period():
+def test_metrics_are_the_scan_totals():
     stats = AccountStats(
         profile=AccountProfile(handle="y", followers=10, following=3),
         posts=[
             PostStat(id="a", url="u", views=100, posted_at=NOW - 1 * DAY),
-            PostStat(id="b", url="u", views=40, posted_at=NOW - 10 * DAY),
-            PostStat(id="c", url="u", views=7, posted_at=NOW - 100 * DAY),
-        ],
-        scanned_at=NOW,
-    )
-    metrics = stats.metrics([7, 30])
-    assert (metrics.followers, metrics.following) == (10, 3)
-    assert (metrics.posts_scanned, metrics.views_scanned) == (3, 147)
-    assert [(w.days, w.views, w.posts) for w in metrics.windows] == [
-        (7, 100, 1),
-        (14, 140, 2),
-        (30, 140, 2),
-        (60, 140, 2),
-    ]
-    assert metrics.views(7) == 100
-    assert metrics.previous_views(7) == 40
-    assert metrics.posts(30) == 2
-    assert metrics.views(365) is None
-
-
-def test_capped_scan_does_not_claim_windows_it_did_not_reach():
-    stats = AccountStats(
-        profile=AccountProfile(handle="y", followers=10),
-        posts=[
-            PostStat(id="a", url="u", views=100, posted_at=NOW - 1 * DAY),
-            PostStat(id="b", url="u", views=40, posted_at=NOW - 10 * DAY),
+            PostStat(id="b", url="u", views=47, posted_at=NOW - 100 * DAY),
         ],
         complete=False,
+        limited=True,
         scanned_at=NOW,
     )
-    metrics = stats.metrics([7, 30])
-    assert metrics.views(7) == 100  # the read reached back past 7 days
-    assert metrics.previous_views(7) is None  # but not past 14
-    assert metrics.views(30) is None
+    metrics = stats.metrics()
+    assert (metrics.followers, metrics.following) == (10, 3)
+    assert (metrics.posts_scanned, metrics.views_scanned) == (2, 147)
+    assert metrics.limited
+    assert stats.reach == NOW - 100 * DAY  # capped: back to its oldest post
+
+
+POSTS = [
+    PostViews(views=100, posted_at=NOW - 1 * DAY),
+    PostViews(views=40, posted_at=NOW - 10 * DAY),
+    PostViews(views=7, posted_at=NOW - 100 * DAY),
+]
+
+
+@pytest.mark.parametrize(
+    ("days", "views", "posts"),
+    [(1, 100, 1), (7, 100, 1), (14, 140, 2), (365, 147, 3)],
+)
+def test_view_window_counts_posts_published_in_it(days, views, posts):
+    window = ViewWindow.of(POSTS, days, NOW, covered_since=0)
+    assert (window.days, window.views, window.posts) == (days, views, posts)
+    assert window.covered
+
+
+def test_capped_scan_does_not_cover_windows_it_did_not_reach():
+    reach = NOW - 10 * DAY  # a capped read back to its oldest post
+    assert ViewWindow.of(POSTS, 7, NOW, covered_since=reach).covered
+    assert not ViewWindow.of(POSTS, 14, NOW, covered_since=reach).covered
+    assert not ViewWindow.of(POSTS, 1, NOW, covered_since=None).covered

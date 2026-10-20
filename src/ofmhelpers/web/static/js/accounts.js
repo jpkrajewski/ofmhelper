@@ -162,7 +162,7 @@
         });
         $("accounts-bulk-delete").addEventListener("click", async () => {
             const ids = picks().map(rowId);
-            if (!window.confirm(`Stop tracking ${ids.length} account(s)? Their history is deleted too.`)) return;
+            if (!window.confirm(`Stop tracking ${ids.length} account(s)? Their history is kept: add them again to resume.`)) return;
             try {
                 await postJson("/accounts/delete", { ids });
                 window.location.reload();

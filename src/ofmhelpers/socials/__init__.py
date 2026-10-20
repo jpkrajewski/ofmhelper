@@ -8,6 +8,7 @@ from ofmhelpers.socials.models import (
     AccountProfile,
     AccountStats,
     PostStat,
+    PostViews,
     ViewWindow,
 )
 from ofmhelpers.socials.platforms import Platform, get_platform, platforms
@@ -18,6 +19,7 @@ __all__ = [
     "AccountStats",
     "Platform",
     "PostStat",
+    "PostViews",
     "RateLimitedError",
     "RetryableError",
     "SocialError",
