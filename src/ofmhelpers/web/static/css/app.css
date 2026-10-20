@@ -180,6 +180,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
 .muted { color: var(--text-muted); }
 
 /* Screen-reader-only text and the skip link that reveals itself on focus. */
+/* The hidden attribute wins over any component's display (JS toggles it). */
+[hidden] { display: none !important; }
+.inline-form { display: inline; }
 .sr-only {
     position: absolute;
     width: 1px; height: 1px;
@@ -394,6 +397,24 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
     color: var(--accent-soft);
     box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
+/* "More": the rarely used pages, folded. Phone: opens inline in the drawer;
+   desktop: a dropdown under it. */
+/* Not the card the base `details` rule draws. */
+.nav-more > details { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.nav-more > details > summary {
+    display: block;
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-weight: 600;
+    list-style: none;
+    cursor: pointer;
+}
+.nav-more > details > summary::-webkit-details-marker { display: none; }
+.nav-more > details > summary::after { content: " ▾"; font-size: 0.8em; }
+.nav-more > details > summary:hover { background: var(--surface-2); color: var(--text); }
+.nav-more > details > summary[data-current] { color: var(--accent-soft); }
+.nav-more-links { list-style: none; margin: 0; padding: 0 0 0 var(--s-4); }
 /* Log out sits in the header bar next to the menu button, separate from
    the navigation list -- it is an action, not a destination. */
 .logout-form { margin: 0 0 0 auto; }
@@ -413,6 +434,20 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
     }
     .nav-links { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
     .nav-links a { padding: var(--s-2) var(--s-3); font-size: var(--step--1); white-space: nowrap; }
+    .nav-more { position: relative; }
+    .nav-more > details > summary { padding: var(--s-2) var(--s-3); font-size: var(--step--1); white-space: nowrap; }
+    .nav-more-links {
+        position: absolute;
+        top: calc(100% + var(--s-1));
+        left: 0;
+        z-index: 110;
+        min-width: 200px;
+        padding: var(--s-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
     /* Brand left, nav next to it, log out pinned to the far right. */
     .brand { margin-right: var(--s-6); }
     .logout-form { margin-left: auto; padding-left: var(--s-4); border-left: 1px solid var(--border); }
@@ -1853,3 +1888,237 @@ summary:hover { color: var(--accent-soft); }
     background: color-mix(in srgb, var(--tier) 16%, transparent);
 }
 .reel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; font-size: 0.75rem; line-height: 1.3; }
+
+/* ---------------------------------------------------------------------
+   18. Tracked accounts (/accounts, /accounts/{id}; static/js/accounts.js)
+   --------------------------------------------------------------------- */
+/* Hierarchy: page head + KPI cards, one filter row, one compact table.
+   Numbers right-aligned in tabular figures; green/red only for change. */
+.accounts-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3); }
+.accounts-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--s-3);
+    margin-bottom: var(--s-5);
+}
+.accounts-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--s-4) var(--s-5);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+.accounts-kpi > span { color: var(--text-muted); font-size: var(--step--1); font-weight: 600; }
+.accounts-kpi > strong { font-size: var(--step-2); font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.accounts-kpi > small, .accounts-kpi > strong small { color: var(--text-faint); font-size: var(--step--1); font-weight: 400; }
+.accounts-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-4); }
+.accounts-filters input[type="search"] { width: 260px; max-width: 100%; }
+.accounts-filter-form { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0; }
+.accounts-filter-form select { width: auto; }
+/* Selection actions: a card of its own above the table, shown only while
+   rows are picked. */
+.accounts-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2) var(--s-4);
+    margin-bottom: var(--s-3);
+    padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4);
+    border: 1px solid var(--accent-ring);
+    border-radius: var(--radius);
+    background: var(--accent-wash);
+}
+.accounts-actions[hidden] { display: none; }
+.accounts-bulk-count { font-weight: 600; }
+.accounts-actions-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.accounts-actions-controls input { width: 180px; min-height: 34px; }
+.accounts-actions-controls button { min-height: 34px; }
+.accounts-bulk-remove { color: var(--fail); }
+.accounts-table-wrap { border-color: var(--border-soft); }
+.accounts-table th { letter-spacing: 0.06em; }
+.accounts-table td { vertical-align: middle; }
+.accounts-table th:first-child, .accounts-table td:first-child { width: 1%; padding-right: 0; }
+.accounts-sort { color: inherit; text-decoration: none; }
+.accounts-sort:hover { color: var(--text); }
+th[aria-sort] .accounts-sort { color: var(--text); }
+th[aria-sort="descending"] .accounts-sort::after { content: " \2193"; }
+th[aria-sort="ascending"] .accounts-sort::after { content: " \2191"; }
+th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.accounts-who { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+.accounts-who-text { min-width: 0; }
+.accounts-name { color: var(--text); font-weight: 600; text-decoration: none; }
+.accounts-name:hover { text-decoration: underline; }
+.accounts-verified { display: inline-block; width: 0.95em; height: 0.95em; margin-left: 0.3em; vertical-align: -0.1em; }
+.accounts-avatar {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--surface-3);
+}
+.accounts-avatar-lg { width: 64px; height: 64px; }
+.accounts-sub { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
+.accounts-sub a { color: inherit; }
+/* Notes read as text until hovered or focused (element-qualified to win
+   over the base textarea rule). */
+textarea.accounts-notes {
+    width: 100%;
+    min-width: 140px;
+    min-height: 34px;
+    border-color: transparent;
+    background: transparent;
+    font-size: var(--step--1);
+    resize: vertical;
+}
+textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var(--border-strong); background: var(--surface-2); }
+.accounts-creator-tag {
+    display: inline-block;
+    padding: 2px var(--s-2);
+    border-radius: var(--radius-pill);
+    background: var(--accent-wash);
+    color: var(--accent-soft);
+    font-size: var(--step--1);
+    font-weight: 600;
+    white-space: nowrap;
+}
+/* Unreachable (private, failed sync): the whole row goes red; the reason
+   is its tooltip. */
+.accounts-table tr[hidden] { display: none; }
+.accounts-table tr[data-problem] td { background: var(--fail-wash); }
+.accounts-table tr[data-problem] td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
+.accounts-problem-text { color: var(--fail); font-weight: 600; }
+.accounts-go { white-space: nowrap; text-align: right; }
+.accounts-go a { font-size: var(--step--1); font-weight: 600; text-decoration: none; }
+.growth { white-space: nowrap; }
+.growth small { color: var(--text-faint); font-weight: 400; }
+.growth[data-trend="up"] { color: var(--ok); }
+.growth[data-trend="down"] { color: var(--fail); }
+.accounts-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    margin-top: var(--s-4);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.accounts-per-page { display: inline-flex; align-items: center; gap: var(--s-2); }
+.accounts-per-page select { width: auto; }
+.accounts-dialog {
+    width: min(560px, calc(100vw - 2 * var(--s-4)));
+    padding: var(--s-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+}
+.accounts-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.accounts-dialog h2 { margin-top: 0; }
+.accounts-dialog-actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
+/* Desktop: the table fits without scrolling, so its header can stick to
+   the viewport under the site header. */
+@media (min-width: 1100px) {
+    .accounts-table-wrap, .accounts-table { overflow: visible; }
+    .accounts-table thead th { position: sticky; top: var(--header-h); z-index: 2; }
+}
+/* Phone: one card per account instead of a sideways-scrolling table. */
+@media (max-width: 719px) {
+    .accounts-table-wrap { border: 0; background: none; overflow: visible; }
+    .accounts-table, .accounts-table tbody { display: block; background: none; border: 0; }
+    .accounts-table thead { display: none; }
+    .accounts-kpis { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+    .accounts-kpi { padding: var(--s-3); }
+    .accounts-table tr[data-problem] { border-color: var(--fail-border); background: var(--fail-wash); }
+    .accounts-table tr[data-problem] td { background: none; box-shadow: none; }
+    .accounts-table tr {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--s-2) var(--s-3);
+        margin-bottom: var(--s-3);
+        padding: var(--s-4);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface);
+    }
+    .accounts-table td { display: block; padding: 0; border: 0; text-align: left; }
+    .accounts-table td.num, .accounts-table .growth { text-align: left; white-space: normal; }
+    .accounts-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--text-faint);
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+    .accounts-table td.accounts-pick-cell { position: absolute; top: var(--s-3); right: var(--s-3); width: auto; }
+    .accounts-who-cell { grid-column: 1 / -1; padding-right: var(--s-6); }
+    .accounts-table td[data-label="Last synced"],
+    .accounts-table td[data-label="Creator"],
+    .accounts-table td[data-label="Notes"],
+    .accounts-go { grid-column: 1 / -1; text-align: left; }
+}
+/* Analytics page: identity, four KPIs, trend, top posts, folded extras. */
+.accounts-back { margin: 0 0 var(--s-3); font-size: var(--step--1); }
+.accounts-identity { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4); margin-bottom: var(--s-5); }
+.accounts-identity-text { flex: 1 1 240px; min-width: 0; }
+.accounts-identity h1 { margin: 0 0 var(--s-1); }
+.accounts-identity .badge { margin-right: var(--s-2); }
+.accounts-period { margin: 0; }
+.accounts-period select { width: auto; }
+.accounts-card {
+    margin-bottom: var(--s-5);
+    padding: var(--s-4) var(--s-5);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+.accounts-card h2 { margin: 0 0 var(--s-3); font-size: var(--step-1); }
+.accounts-empty { margin: 0; padding: var(--s-5) 0; color: var(--text-muted); text-align: center; }
+.accounts-chart-range { display: flex; justify-content: space-between; color: var(--text-faint); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+.accounts-chart { display: block; width: 100%; height: 160px; margin-top: var(--s-2); color: var(--accent-strong); }
+.accounts-posts { margin: 0; padding: 0; list-style: none; }
+.accounts-posts li {
+    display: grid;
+    grid-template-columns: 1.5em 48px 1fr 7ch;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-2) 0;
+    border-bottom: 1px solid var(--border-soft);
+}
+.accounts-posts li:last-child { border-bottom: 0; }
+.accounts-rank { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.accounts-thumb { display: block; width: 48px; height: 64px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); }
+.accounts-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.accounts-post-main { min-width: 0; font-size: var(--step--1); }
+/* A <progress>: the post's views against the top post's. */
+.accounts-bar {
+    display: block;
+    width: 100%;
+    height: 6px;
+    margin-top: var(--s-2);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--surface-3);
+    overflow: hidden;
+    appearance: none;
+}
+.accounts-bar::-webkit-progress-bar { background: var(--surface-3); }
+.accounts-bar::-webkit-progress-value { border-radius: var(--radius-pill); background: var(--accent); }
+.accounts-bar::-moz-progress-bar { border-radius: var(--radius-pill); background: var(--accent); }
+.accounts-fold > summary { cursor: pointer; list-style: none; }
+.accounts-fold > summary::-webkit-details-marker { display: none; }
+.accounts-fold > summary h2 { display: inline; margin: 0; }
+.accounts-fold > summary::before { content: "\25B8  "; color: var(--text-faint); }
+.accounts-fold[open] > summary::before { content: "\25BE  "; }
+.accounts-fold[open] > summary { margin-bottom: var(--s-3); }
+.accounts-details { display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-5); margin: 0; }
+.accounts-details dt { color: var(--text-muted); }
+.accounts-details dd { margin: 0; }
+.accounts-notes-view { white-space: pre-wrap; }

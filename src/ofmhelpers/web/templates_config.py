@@ -1,4 +1,5 @@
 import hashlib
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from ofmhelpers.config import settings
+from ofmhelpers.web.schemas.accounts import ago
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -27,6 +29,12 @@ def static_url(path: str) -> str:
     /clone/run). The version changes exactly when the file does."""
     mtime_ns = (STATIC_DIR / path).stat().st_mtime_ns
     return f"/static/{path}?v={_content_version(path, mtime_ns)}"
+
+
+def utc(ts: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """`{{ epoch|utc }}`: a stored epoch as UTC text (pages show UTC; the
+    server and the team are in different zones)."""
+    return time.strftime(fmt, time.gmtime(ts))
 
 
 @lru_cache(maxsize=1)
@@ -51,6 +59,8 @@ def get_templates() -> Jinja2Templates:
         settings.session.session_max_age_s
     )
     templates.env.globals["static_url"] = static_url
+    templates.env.filters["utc"] = utc
+    templates.env.filters["ago"] = ago
     return templates
 
 

@@ -32,6 +32,7 @@ from ofmhelpers.instagram import (
     scan_profile,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils.proxy_pool import ProxyPool
 from ofmhelpers.web.stores.watched_profiles import (
     claim_due,
     get_watched,
@@ -64,36 +65,6 @@ class _OfflineError(Exception):
     """Even a direct connection fails: our own network is down (a DNS blip
     did exactly that on dev), so the rest of the batch would only fail the
     same way."""
-
-
-class _ProxyPool:
-    """One job's proxies, taken in turn, minus the ones found dead; direct
-    once none is left (or none was configured)."""
-
-    def __init__(self, urls: list[str]) -> None:
-        self._live = list(urls)
-        self._turn = 0
-
-    def __len__(self) -> int:
-        return len(self._live)
-
-    def next(self) -> str | None:
-        if not self._live:
-            return None
-        self._turn %= len(self._live)
-        proxy = self._live[self._turn]
-        self._turn += 1
-        return proxy
-
-    def drop(self, proxy: str | None) -> None:
-        if proxy in self._live:
-            # Shift the turn back past a dropped earlier entry, so the next
-            # proxy in line is not skipped.
-            if self._live.index(proxy) < self._turn:
-                self._turn -= 1
-            self._live.remove(proxy)
-            # Never the URL itself: it carries the proxy's credentials.
-            logger.warning("dead proxy skipped for this job; %d left", len(self))
 
 
 def _is_new(username: str) -> bool:
@@ -163,7 +134,7 @@ def _failure(failures: list[BaseException]) -> str:
     return f"Instagram answered errors ({tries} tries) -- retried at the next rescan"
 
 
-def _scan_rotating(username: str, pool: _ProxyPool, tries: int) -> None:
+def _scan_rotating(username: str, pool: ProxyPool, tries: int) -> None:
     """One profile, up to `tries` times, each through the pool's next proxy
     after a jittered pause; a dead proxy leaves the pool. The batch stops
     only when every try was rate-limited, or a direct connection fails
@@ -209,7 +180,7 @@ def scan_all(usernames: list[str]) -> None:
     claim, which expires after `rescan_claim_ttl_s`, and the next sweep
     picks them up then (with a fresh proxy pool)."""
     s = settings.instagram
-    pool = _ProxyPool(s.proxy_urls)
+    pool = ProxyPool(s.proxy_urls)
     for done, username in enumerate(usernames):
         tries = 1 + min(s.proxy_retries, max(len(pool) - 1, 0))
         try:

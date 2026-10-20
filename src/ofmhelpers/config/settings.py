@@ -519,6 +519,73 @@ class InstagramSettings(BaseSettings):
     download_workers: int = Field(
         default=6, ge=1, validation_alias="OFM_IG_DOWNLOAD_WORKERS"
     )
+    # /accounts: newest reels read per tracked account (reels tab, page_size
+    # a request) -- the range its view windows can cover.
+    track_max_reels: int = Field(
+        default=96, ge=1, validation_alias="OFM_IG_TRACK_MAX_REELS"
+    )
+    # /accounts: list reels through the uploaded login (cookies.txt) when it
+    # works -- the only view with an account's sensitive/age-restricted
+    # reels; off, or without a working login, the logged-out tab is used.
+    track_logged_in: bool = Field(
+        default=True, validation_alias="OFM_IG_TRACK_LOGGED_IN"
+    )
+
+
+class AccountsSettings(BaseSettings):
+    """web/account_tracker.py, routers/accounts.py: tracked social accounts
+    (every platform of `ofmhelpers.socials`). Each platform's own knobs
+    (proxies, how many posts a scan reads) live in its own group."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # How stale an account's numbers may get, how often the sweeper looks,
+    # and how long a claimed scan may sit queued + run before another sweep
+    # takes it over.
+    rescan_interval_s: int = Field(
+        default=6 * 60 * 60, ge=60, validation_alias="OFM_ACCOUNTS_RESCAN_INTERVAL_S"
+    )
+    rescan_check_interval_s: int = Field(
+        default=300, ge=10, validation_alias="OFM_ACCOUNTS_RESCAN_CHECK_INTERVAL_S"
+    )
+    claim_ttl_s: int = Field(
+        default=2 * 60 * 60, ge=60, validation_alias="OFM_ACCOUNTS_CLAIM_TTL_S"
+    )
+    # Accounts per worker job: jobs run in parallel on the worker pool, each
+    # rotating through the platform's proxies from its own starting point.
+    batch_size: int = Field(
+        default=20, ge=1, validation_alias="OFM_ACCOUNTS_BATCH_SIZE"
+    )
+    # Other proxies one account is retried on, and a random pause up to
+    # retry_jitter_s before each retry.
+    proxy_retries: int = Field(
+        default=3, ge=0, validation_alias="OFM_ACCOUNTS_PROXY_RETRIES"
+    )
+    retry_jitter_s: float = Field(
+        default=2.0, ge=0, validation_alias="OFM_ACCOUNTS_RETRY_JITTER_S"
+    )
+    # The reporting periods of the period selector, in days, the first the
+    # default: views of posts published in the period (vs the period before
+    # it) and follower growth against the newest snapshot that old.
+    periods_days: list[int] = Field(
+        default=[7, 30], min_length=1, validation_alias="OFM_ACCOUNTS_PERIODS_DAYS"
+    )
+    # Analytics page: how far back the history goes, and how many of the
+    # latest synced posts it ranks when the period has none.
+    history_days: int = Field(
+        default=90, ge=1, validation_alias="OFM_ACCOUNTS_HISTORY_DAYS"
+    )
+    top_posts: int = Field(default=10, ge=1, validation_alias="OFM_ACCOUNTS_TOP_POSTS")
+    page_sizes: list[int] = Field(
+        default=[25, 50, 100, 200],
+        min_length=1,
+        validation_alias="OFM_ACCOUNTS_PAGE_SIZES",
+    )
+    default_page_size: int = Field(
+        default=50, ge=1, validation_alias="OFM_ACCOUNTS_DEFAULT_PAGE_SIZE"
+    )
+    # Handles one "Add accounts" paste may hold.
+    max_add: int = Field(default=500, ge=1, validation_alias="OFM_ACCOUNTS_MAX_ADD")
 
 
 class LoggingSettings(BaseSettings):

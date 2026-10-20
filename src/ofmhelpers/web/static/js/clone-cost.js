@@ -11,7 +11,7 @@
  * reordering or switching resolution or provider recalculates instantly. A
  * video over the provider's reference limit is flagged and left out.
  */
-(function () {
+(() => {
     const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
     // A per-second rate is fractions of a cent apart; cents would hide that.
     const rateUsd = new Intl.NumberFormat("en-US", {
@@ -56,7 +56,7 @@
                 resolve(seconds);
             };
             video.addEventListener("loadedmetadata", () => finish(video.duration));
-            video.addEventListener("error", () => finish(NaN));
+            video.addEventListener("error", () => finish(Number.NaN));
             video.src = src;
         });
     }

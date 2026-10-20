@@ -43,6 +43,35 @@ def test_active_nav_item_is_marked_for_assistive_tech(client):
     assert re.search(r'<a href="/action-log"\s+aria-current="page"', html)
 
 
+def _nav(html: str) -> tuple[list[str], list[str]]:
+    """The header's (bar links, links folded under More)."""
+    header = html.split('id="site-nav"')[1].split("</nav>", maxsplit=1)[0]
+    bar, more = header.split('class="nav-more"')
+    return re.findall(r'<a href="([^"]+)"', bar), re.findall(r'<a href="([^"]+)"', more)
+
+
+def test_bar_links_then_the_rest_under_more(client):
+    bar, more = _nav(client.get("/generate").text)
+    assert bar == ["/generate", "/clone", "/reels", "/download-assets", "/accounts"]
+    assert more == [
+        "/uniqify",
+        "/character-sheet",
+        "/applications",
+        "/file-manager",
+        "/action-log",
+        "/cookies",
+    ]
+    # A page under More marks it.
+    assert "<summary data-current>More</summary>" in client.get("/action-log").text
+
+
+def test_va_more_has_no_admin_pages():
+    va = TestClient(app)
+    va.post("/login", data={"password": "test-va", "next": "/"})
+    _bar, more = _nav(va.get("/generate").text)
+    assert more == ["/uniqify"]
+
+
 def test_login_page_is_standalone_but_still_responsive():
     html = TestClient(app).get("/login").text
 

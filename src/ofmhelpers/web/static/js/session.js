@@ -15,7 +15,7 @@
  * other script in base.html, so the wrap is in place by the time anything
  * else can fire a request.
  */
-(function () {
+(() => {
     // How long the "Session expired" overlay is shown before the redirect --
     // long enough to read, short enough not to feel like a hang.
     const REDIRECT_DELAY_MS = 1200;
@@ -56,8 +56,7 @@
 
     const nativeFetch = window.fetch.bind(window);
 
-    window.fetch = function (input, init) {
-        return nativeFetch(input, init).then((response) => {
+    window.fetch = (input, init) => nativeFetch(input, init).then((response) => {
             if (response.status !== 401) return response;
 
             // Read the body from a clone -- the caller still needs an unread
@@ -67,7 +66,7 @@
                 .clone()
                 .json()
                 .then((body) => {
-                    if (body && body.login_url) {
+                    if (body?.login_url) {
                         expire(body.login_url);
                         // Never settle: the tab is navigating away, and
                         // resolving would let the caller paint an error card
@@ -78,7 +77,6 @@
                 })
                 .catch(() => response);
         });
-    };
 
     // Expire the session on schedule too, not only when a request happens to
     // fail: an idle tab left open past the cookie's lifetime otherwise keeps
@@ -92,9 +90,9 @@
         // timers late/not at all, and "the machine was suspended" is exactly
         // the case that produces a stale tab.
         const deadline = Date.now() + seconds * 1000;
-        const loginUrl = "/login?next=" + encodeURIComponent(
+        const loginUrl = `/login?next=${encodeURIComponent(
             window.location.pathname + window.location.search
-        );
+        )}`;
 
         function tick() {
             if (Date.now() >= deadline) expire(loginUrl);

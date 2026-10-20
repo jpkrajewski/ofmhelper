@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
+from ofmhelpers.web.account_tracker import rescan_limited
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.reel_watch import unlock_gated
 from ofmhelpers.web.templates_config import render
@@ -39,4 +40,6 @@ async def upload_cookies(file: UploadFile):
     await run_in_threadpool(dest.write_bytes, payload)
     # /reels' login-only reels open up now, not at their next rescan.
     await run_in_threadpool(enqueue, unlock_gated)
+    # /accounts synced without a working login: every reel counted now.
+    await run_in_threadpool(rescan_limited)
     return RedirectResponse(url="/cookies?uploaded=1", status_code=303)

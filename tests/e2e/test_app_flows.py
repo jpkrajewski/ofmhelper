@@ -2,9 +2,11 @@
 log in, open every page, make a fake asset and download it, carry picked
 files across providers' models, run a clone batch with a wrong kie.ai key so
 nothing is spent, price a clone pick live,
-click through every /reels filter and download three reels."""
+click through every /reels filter and download three reels, track an
+Instagram account on /accounts end to end."""
 
 import re
+import time
 import zipfile
 from pathlib import Path
 
@@ -14,8 +16,22 @@ from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
-VA_PAGES = ["/generate", "/clone", "/reels", "/download-assets", "/uniqify"]
-ADMIN_ONLY_PAGES = ["/character-sheet", "/applications", "/file-manager", "/action-log"]
+# Header order: the bar, then "More" (Uniqify, then the admin pages).
+VA_PAGES = [
+    "/generate",
+    "/clone",
+    "/reels",
+    "/download-assets",
+    "/accounts",
+    "/uniqify",
+]
+ADMIN_ONLY_PAGES = [
+    "/character-sheet",
+    "/applications",
+    "/file-manager",
+    "/action-log",
+    "/cookies",
+]
 
 # A generation is polled with backoff; a fake one takes ~1 s plus the poll.
 RESULT_TIMEOUT_MS = 30_000
@@ -371,3 +387,65 @@ def test_three_picked_reels_download_as_one_zip(va: Session, tmp_path: Path):
     for i in range(3):
         cards.nth(i).click()
     expect(va.page.locator("#reels-picked-count")).to_have_text("No reels selected")
+
+
+# A real, small Instagram account the /accounts flow tracks (live scan).
+TRACKED_ACCOUNT = "yuki_kanasiva"
+
+
+def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
+    va.goto("/accounts")
+    va.page.click("#accounts-add-open")
+    va.page.fill("#accounts-add-handles", f"@{TRACKED_ACCOUNT}")
+    va.page.fill("#accounts-add-creator", "e2e creator")
+    va.page.click('#accounts-add-form button[type="submit"]')
+
+    row = va.page.locator("#accounts-table tbody tr", has_text=f"@{TRACKED_ACCOUNT}")
+    expect(row).to_have_count(1, timeout=SCAN_TIMEOUT_MS)
+    # The first scan runs on the worker; the page reloads itself until done.
+    expect(row).to_have_attribute(
+        "data-status", re.compile("active|private"), timeout=SCAN_TIMEOUT_MS
+    )
+    expect(row.locator(".accounts-creator-tag")).to_have_text("e2e creator")
+    expect(row.locator('td[data-label="Followers"]')).to_contain_text(re.compile(r"\d"))
+
+    # Notes save on blur and survive a reload (unique, so it always changes).
+    note = f"e2e note {time.time()}"
+    notes = row.locator(".accounts-notes")
+    with va.page.expect_response(lambda r: r.url.endswith("/notes")):
+        notes.fill(note)
+        notes.blur()
+    va.page.reload()
+    expect(row.locator(".accounts-notes")).to_have_value(note)
+
+    # Search filters the rows instantly, without a reload.
+    va.page.fill("#accounts-search", TRACKED_ACCOUNT[:6])
+    expect(row).to_be_visible()
+    va.page.fill("#accounts-search", "zzzz-no-such")
+    expect(row).to_be_hidden()
+    va.page.fill("#accounts-search", "")
+
+    # Filtered by its creator, it is the only row.
+    va.page.select_option('select[name="creator"]', "e2e creator")
+    expect(va.page.locator("#accounts-table tbody tr")).to_have_count(1)
+
+    with va.page.expect_navigation():
+        row.locator(".accounts-go a").click()
+    expect(va.page.locator(".accounts-identity")).to_contain_text(f"@{TRACKED_ACCOUNT}")
+    kpis = va.page.locator(".accounts-kpi")
+    expect(kpis).to_have_count(4)
+    expect(kpis.first).to_contain_text("Followers")
+    # The period selector reloads the page for that period.
+    with va.page.expect_navigation():
+        va.page.select_option(".accounts-period select", "30")
+    expect(kpis.nth(1)).to_contain_text("Last 30 days")
+
+    va.goto("/accounts")
+    row.locator(".accounts-pick").check()
+    expect(va.page.locator("#accounts-bulk")).to_be_visible()
+    va.page.once("dialog", lambda d: d.accept())
+    with va.page.expect_navigation():
+        va.page.click("#accounts-bulk-delete")
+    expect(row).to_have_count(0)
+
+    assert va.js_errors == []

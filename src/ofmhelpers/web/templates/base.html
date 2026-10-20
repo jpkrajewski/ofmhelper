@@ -15,18 +15,25 @@
     <a class="skip-link" href="#main">Skip to content</a>
 
     {% set is_admin = request.session.get("role") == "admin" %}
+    {# The bar's links, then the rest folded under "More" (admin pages only
+       for admins). A new page = one entry in the list it belongs to. #}
     {% set nav_items = [
         ("/generate", "Generate AI Assets"),
         ("/clone", "Clone"),
         ("/reels", "Viral Reels"),
         ("/download-assets", "Download Assets"),
+        ("/accounts", "Accounts"),
+    ] %}
+    {% set more_items = [
         ("/uniqify", "Uniqify"),
     ] + ([
         ("/character-sheet", "Character Sheet"),
         ("/applications", "Applications"),
         ("/file-manager", "File Manager"),
         ("/action-log", "Action log"),
+        ("/cookies", "Instagram cookies"),
     ] if is_admin else []) %}
+    {% set here = request.url.path %}
 
     <header class="site-header">
         <div class="site-header-inner">
@@ -40,9 +47,24 @@
                     {% for href, label in nav_items %}
                     <li>
                         <a href="{{ href }}"
-                           {% if request.url.path == href or request.url.path.startswith(href ~ "/") %}aria-current="page"{% endif %}>{{ label }}</a>
+                           {% if here == href or here.startswith(href ~ "/") %}aria-current="page"{% endif %}>{{ label }}</a>
                     </li>
                     {% endfor %}
+                    {% set more = namespace(current=false) %}
+                    {% for href, _label in more_items if here == href or here.startswith(href ~ "/") %}{% set more.current = true %}{% endfor %}
+                    <li class="nav-more">
+                        <details>
+                            <summary {% if more.current %}data-current{% endif %}>More</summary>
+                            <ul class="nav-more-links">
+                                {% for href, label in more_items %}
+                                <li>
+                                    <a href="{{ href }}"
+                                       {% if here == href or here.startswith(href ~ "/") %}aria-current="page"{% endif %}>{{ label }}</a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    </li>
                 </ul>
             </nav>
 
@@ -75,12 +97,14 @@
                 <a href="/clone">Clone</a>
                 <a href="/reels">Viral Reels</a>
                 <a href="/download-assets">Download</a>
+                <a href="/accounts">Accounts</a>
                 <a href="/uniqify">Uniqify</a>
                 {% if is_admin %}
                 <a href="/character-sheet">Character Sheet</a>
                 <a href="/applications">Applications</a>
                 <a href="/file-manager">File Manager</a>
                 <a href="/action-log">Action log</a>
+                <a href="/cookies">Instagram cookies</a>
                 {% endif %}
             </nav>
         </div>

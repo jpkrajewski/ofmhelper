@@ -32,6 +32,7 @@ from ofmhelpers.instagram.models import (
     ReelMedia,
     ReelStat,
 )
+from ofmhelpers.utils.proxy_pool import ProxyPool
 from ofmhelpers.web import reel_watch
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import reels
@@ -470,7 +471,7 @@ def test_one_rate_limited_try_does_not_stop_the_batch(monkeypatch):
 
 
 def test_with_every_proxy_dead_the_job_goes_direct():
-    pool = reel_watch._ProxyPool(["http://a:1"])
+    pool = ProxyPool(["http://a:1"])
     pool.drop("http://a:1")
     assert pool.next() is None
 

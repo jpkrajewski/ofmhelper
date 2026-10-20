@@ -15,7 +15,7 @@
  * event for the highlight to refresh -- generate_form.html's restore code
  * does.
  */
-(function () {
+(() => {
     // (?!\w) keeps "@imagery" from lighting up as "@image".
     const TOKEN_RE = /(\[\s*(image|video|audio)\s*_?\s*\d*\s*\]|@(image|video|audio)_?\d*(?!\w))/gi;
 

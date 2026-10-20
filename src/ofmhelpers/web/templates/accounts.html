@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% import "_account_numbers.html" as num %}
+{% block title %}Accounts — Global Ascend LLC{% endblock %}
+{% block content %}
+<div class="page-head accounts-head">
+    <div>
+        <h1>Accounts</h1>
+        <p class="lead">Monitor performance across your social accounts.</p>
+    </div>
+    <button type="button" class="btn-primary" id="accounts-add-open">+ Add account</button>
+</div>
+
+<div class="accounts-kpis">
+    <div class="accounts-kpi">
+        <span>Total followers</span>
+        <strong>{{ num.short(summary.followers) }}</strong>
+        <small>Across {{ summary.accounts }} account{{ "" if summary.accounts == 1 else "s" }}</small>
+    </div>
+    <div class="accounts-kpi">
+        <span>Views · {{ period.label|lower }}</span>
+        <strong>{{ num.short(summary.views, "No synced account covers the period yet") }}</strong>
+        <small>On posts published in the period</small>
+    </div>
+    <div class="accounts-kpi">
+        <span>Tracked accounts</span>
+        <strong>{{ summary.accounts }}</strong>
+        <small>{% if summary.unreachable %}<span class="accounts-problem-text">{{ summary.unreachable }} unreachable</span>{% else %}All reachable{% endif %}</small>
+    </div>
+</div>
+
+{% if summary.limited %}
+<p class="notice notice-warn">{{ summary.limited }} account{{ " was" if summary.limited == 1 else "s were" }} synced without a working Instagram login. Instagram hides sensitive and age-restricted reels from logged-out viewers, so those reels are missing and views can be lower than on Instagram. Upload a fresh Instagram cookies.txt at <a href="/cookies">/cookies</a> (admin); the next sync counts every reel.</p>
+{% endif %}
+
+<div class="accounts-filters">
+    <input type="search" id="accounts-search" placeholder="Search accounts…" aria-label="Search accounts" autocomplete="off">
+    <form method="get" action="/accounts" data-autosubmit class="accounts-filter-form">
+        <select name="period" aria-label="Reporting period">
+            {% for p in periods %}
+            <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="creator" aria-label="Creator">
+            <option value="">All creators</option>
+            {% for c in creators %}
+            <option value="{{ c }}" {% if c == query.creator %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+        </select>
+        {% if query.sort != sorts.FOLLOWERS %}<input type="hidden" name="sort" value="{{ query.sort }}">{% endif %}
+        {% if query.order %}<input type="hidden" name="order" value="{{ query.order }}">{% endif %}
+        {% if query.per_page %}<input type="hidden" name="per_page" value="{{ query.per_page }}">{% endif %}
+        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+    </form>
+</div>
+<div class="generation-status" id="accounts-status" role="status" aria-live="polite"></div>
+
+<datalist id="accounts-creator-names">
+    {% for c in creators %}<option value="{{ c }}"></option>{% endfor %}
+</datalist>
+
+{# A sortable column header: a link to that sort; clicking the current one
+   flips its order. #}
+{% macro sort_th(key, label, numeric=True) -%}
+<th scope="col" {% if numeric %}class="num"{% endif %} {% if query.sort == key %}aria-sort="{{ 'ascending' if query.direction == 'asc' else 'descending' }}"{% endif %}>
+    <a class="accounts-sort" href="{{ query.sort_link(key) }}">{{ label }}</a>
+</th>
+{%- endmacro %}
+
+{% if not page.rows %}
+<p class="empty-state">
+    {% if query.creator %}
+    No accounts for {{ query.creator }}. <a href="{{ query.link(creator='') }}">All creators</a>
+    {% else %}
+    No accounts yet. Press <strong>+ Add account</strong> and paste some handles.
+    {% endif %}
+</p>
+{% else %}
+<div class="accounts-actions" id="accounts-bulk" role="region" aria-label="Selected accounts" hidden>
+    <span class="accounts-bulk-count" id="accounts-bulk-count" aria-live="polite"></span>
+    <div class="accounts-actions-controls">
+        <input type="text" id="accounts-bulk-creator" list="accounts-creator-names" maxlength="64" placeholder="Creator name" aria-label="Creator for the selected accounts">
+        <button type="button" class="btn-outline" id="accounts-bulk-assign">Assign creator</button>
+        <button type="button" class="btn-ghost accounts-bulk-remove" id="accounts-bulk-delete">Remove</button>
+    </div>
+</div>
+<div class="table-wrap accounts-table-wrap">
+    <table class="accounts-table" id="accounts-table">
+        <thead>
+            <tr>
+                <th scope="col"><input type="checkbox" id="accounts-pick-all" aria-label="Select all on this page"></th>
+                {{ sort_th(sorts.HANDLE, "Account", numeric=False) }}
+                {{ sort_th(sorts.FOLLOWERS, "Followers") }}
+                {{ sort_th(sorts.GROWTH, "Growth · " ~ period.short) }}
+                {{ sort_th(sorts.VIEWS, "Views · " ~ period.short) }}
+                <th scope="col">Creator</th>
+                <th scope="col">Notes</th>
+                <th scope="col"><span class="sr-only">Analytics</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in page.rows %}
+            {% set views = a.views(period.days) %}
+            {% set problem = a.error or ("Private account" if a.status == "private" else "") %}
+            <tr data-id="{{ a.id }}" data-status="{{ a.status }}"
+                data-search="{{ (a.handle ~ ' ' ~ a.name ~ ' ' ~ (a.creator or '') ~ ' ' ~ a.notes)|lower }}"
+                {% if problem %}data-problem title="{{ problem }}"{% endif %}>
+                <td class="accounts-pick-cell"><input type="checkbox" class="accounts-pick" aria-label="Select @{{ a.handle }}"></td>
+                <td class="accounts-who-cell">
+                    <div class="accounts-who">
+                        {% if a.profile and a.profile.avatar_url %}
+                        <img class="accounts-avatar" src="{{ a.profile.avatar_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+                        {% else %}
+                        <span class="accounts-avatar" aria-hidden="true"></span>
+                        {% endif %}
+                        <div class="accounts-who-text">
+                            <a class="accounts-name" href="{{ query.link('/accounts/' ~ a.id) }}">{{ a.name }}</a>{% if a.profile and a.profile.is_verified %}{{ num.verified() }}{% endif %}
+                            <div class="accounts-sub"><a href="{{ a.profile_url }}" target="_blank" rel="noopener">@{{ a.handle }}</a>{% if a.status == "scanning" %} · syncing…{% endif %}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="num" data-label="Followers"><strong>{{ num.count(a.followers, "Not synced yet") }}</strong></td>
+                <td class="num" data-label="Growth · {{ period.short }}">{{ num.growth(a.growth(period.days)) }}</td>
+                <td class="num" data-label="Views · {{ period.short }}">
+                    {% if views %}<strong>{{ num.short(views.views) }}</strong>
+                    <div class="accounts-sub">{{ num.views_vs(views, period) }}</div>
+                    {% else %}{{ num.nodata("Not synced yet, or the scan does not cover the period") }}{% endif %}
+                </td>
+                <td data-label="Creator">{% if a.creator %}<span class="accounts-creator-tag">{{ a.creator }}</span>{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td data-label="Notes"><textarea class="accounts-notes" rows="1" maxlength="5000" placeholder="+ Add note" aria-label="Notes on @{{ a.handle }}">{{ a.notes }}</textarea></td>
+                <td class="accounts-go"><a href="{{ query.link('/accounts/' ~ a.id) }}" aria-label="Analytics of @{{ a.handle }}">View analytics →</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="empty-state" id="accounts-no-match" hidden>No accounts on this page match your search.</p>
+{% endif %}
+
+<div class="accounts-pager">
+    <span>Showing {{ page.first }}–{{ page.last }} of {{ page.total }} accounts</span>
+    <label class="accounts-per-page">Per page
+        <select id="accounts-per-page">
+            {% for n in page_sizes %}
+            <option value="{{ query.link(per_page=n) }}" {% if n == page.per_page %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% if page.pages > 1 %}
+    <nav class="reels-filter" aria-label="Pages">
+        {% if page.page > 1 %}<a href="{{ query.link(page=page.page - 1) }}" aria-label="Previous page">‹</a>{% endif %}
+        {% for n in range(1, page.pages + 1) %}
+        {% if n == 1 or n == page.pages or (n - page.page)|abs <= 2 %}
+        <a href="{{ query.link(page=n) }}" {% if n == page.page %}aria-current="page"{% endif %}>{{ n }}</a>
+        {% elif (n - page.page)|abs == 3 %}<span class="pending">…</span>{% endif %}
+        {% endfor %}
+        {% if page.page < page.pages %}<a href="{{ query.link(page=page.page + 1) }}" aria-label="Next page">›</a>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+
+<dialog class="accounts-dialog" id="accounts-add">
+    <form id="accounts-add-form" method="dialog">
+        <h2>Add accounts</h2>
+        {% if platforms|length > 1 %}
+        <div class="field">
+            <label for="accounts-add-platform">Platform</label>
+            <select id="accounts-add-platform" name="platform">
+                {% for key, p in platforms.items() %}<option value="{{ key }}">{{ p.label }}</option>{% endfor %}
+            </select>
+        </div>
+        {% else %}
+        <input type="hidden" name="platform" value="{{ platforms|first }}">
+        {% endif %}
+        <div class="field">
+            <label for="accounts-add-handles">Accounts (up to {{ max_add }})</label>
+            <textarea id="accounts-add-handles" name="handles" rows="8" required
+                      placeholder="one per line: username, @username or profile URL"></textarea>
+        </div>
+        <div class="field">
+            <label for="accounts-add-creator">Creator (optional)</label>
+            <input type="text" id="accounts-add-creator" name="creator" list="accounts-creator-names" maxlength="64" placeholder="e.g. Yuki">
+        </div>
+        <div class="generation-status" id="accounts-add-status" role="status" aria-live="polite"></div>
+        <div class="accounts-dialog-actions">
+            <button type="button" class="btn-ghost" id="accounts-add-cancel">Cancel</button>
+            <button type="submit" class="btn-primary">Add &amp; sync</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="{{ static_url('js/accounts.js') }}"></script>
+{% endblock %}

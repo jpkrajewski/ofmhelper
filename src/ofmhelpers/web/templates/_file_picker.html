@@ -8,7 +8,7 @@
     {% endif %}
     <input type="file" accept="{{ kind }}/*" class="file-add-input"{% if multiple %} multiple{% endif %}>
     <button type="button" class="ref-toggle">🗂 Reuse an uploaded {{ kind }}</button>
-    <div class="ref-browser" style="display:none"></div>
+    <div class="ref-browser" hidden></div>
     <ul class="file-order-list"></ul>
 </div>
 {% endmacro %}

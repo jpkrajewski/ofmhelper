@@ -14,7 +14,7 @@
  * still-running card needs its poller armed, hence Generation.resumePendingCards
  * (idempotent by design -- it skips cards already being polled).
  */
-(function () {
+(() => {
     // Fetch a page before the sentinel is actually on screen: at a normal
     // scroll speed the cards are already there by the time you reach them.
     const ROOT_MARGIN = "600px";

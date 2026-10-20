@@ -37,6 +37,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
 from ofmhelpers.instagram.models import (
     ClipsPage,
+    LoginTokens,
     MediaInfo,
     MediaPage,
     Profile,
@@ -53,6 +54,10 @@ ROOT = "https://www.instagram.com"
 
 _LSD = re.compile(r'"LSD",\[\],\{"token":"([^"]+)"|"lsd":"([^"]+)"')
 _PROFILE_ID = re.compile(r'"profile_id":"(\d+)"')
+# The logged-in web app's viewer id and request token, in its page HTML
+# ("actorID":null on a page served logged out).
+_ACTOR_ID = re.compile(r'"actorID":"(\d+)"')
+_DTSG = re.compile(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"')
 # Which page instagram.com rendered: "profilePage", or "httpErrorPage" for
 # "Sorry, this page isn't available" (a deleted, banned or renamed account).
 _PAGE_ID = re.compile(r'"pageID":"([^"]+)"')
@@ -181,6 +186,10 @@ class InstagramClient:
             username=user.username,
             followers=user.follower_count,
             is_private=user.is_private,
+            full_name=user.full_name,
+            following=user.following_count,
+            is_verified=user.is_verified,
+            avatar_url=user.avatar_url,
         )
 
     def _missing(self, username: str) -> InstagramError:
@@ -328,6 +337,75 @@ class InstagramClient:
             return None
         return {"profilePage": True, "httpErrorPage": False}.get(page.group(1))
 
+    def _login_tokens(self, username: str) -> LoginTokens | None:
+        """What the uploaded login's GraphQL calls need, read off the
+        profile's reels page the way the browser loads it. None when there
+        is no login, or Instagram no longer treats it as logged in (the
+        page has no viewer)."""
+        session = self._logged_in
+        if session is None:
+            return None
+        r = session.get(
+            f"{ROOT}/{username}/reels/",
+            headers=_PAGE_HEADERS,
+            timeout=self._settings.timeout_s,
+        )
+        actor = _ACTOR_ID.search(r.text)
+        dtsg = _DTSG.search(r.text)
+        if not r.ok or actor is None or dtsg is None:
+            logger.warning("the uploaded Instagram login is not logged in")
+            return None
+        lsd = _LSD.search(r.text)
+        return LoginTokens(
+            actor_id=actor.group(1),
+            fb_dtsg=dtsg.group(1),
+            lsd=next((g for g in lsd.groups() if g), "") if lsd else "",
+            referer=f"{ROOT}/{username}/reels/",
+        )
+
+    def reels_logged_in(
+        self, username: str, user_id: str, limit: int
+    ) -> list[ReelSummary] | None:
+        """Up to `limit` of the profile's newest reels as the uploaded login
+        sees them: every reel, including the ones Instagram hides from
+        logged-out visitors (sensitive/age-restricted -- the logged-out tab
+        just ends early). The browser's own reels-tab GraphQL query, sent
+        with the login; its REST API (`/api/v1/clips/user/`) redirects
+        cookie sessions to the home page (2026-10-20). None without a
+        working login, so the caller falls back to the logged-out tab."""
+        tokens = self._login_tokens(username)
+        if tokens is None:
+            return None
+        found: list[ReelSummary] = []
+        cursor: str | None = None
+        page_size = self._settings.page_size
+        while len(found) < limit:
+            variables = {
+                "after": cursor,
+                "before": None,
+                "data": {
+                    "include_feed_video": True,
+                    "page_size": page_size,
+                    "target_user_id": user_id,
+                },
+                "first": page_size,
+                "last": None,
+                "id": user_id,
+                "__relay_internal__pv__PolarisShortDramaEnabledrelayprovider": False,
+            }
+            page = self._query(
+                ClipsPage,
+                "PolarisProfileReelsTabContentQuery_connection",
+                self._settings.reels_doc_id,
+                variables,
+                login=tokens,
+            )
+            found.extend(page.reels)
+            cursor = page.next_cursor
+            if not cursor:
+                break
+        return found[:limit]
+
     def media_logged_in(self, pk: str) -> ReelMedia | None:
         """A logged-out-gated reel, through the uploaded login. None when
         there is none or it no longer works (Instagram redirects a dead
@@ -359,35 +437,51 @@ class InstagramClient:
         return dest
 
     def _query[M: BaseModel](
-        self, model: type[M], name: str, doc_id: str, variables: dict[str, Any]
+        self,
+        model: type[M],
+        name: str,
+        doc_id: str,
+        variables: dict[str, Any],
+        login: LoginTokens | None = None,
     ) -> M:
-        r = self._session.post(
-            f"{ROOT}/api/graphql",
+        """One GraphQL query: logged out (this client's session, through its
+        proxy), or -- with `login` -- as the uploaded login, the way the
+        logged-in web app sends it."""
+        session = self._logged_in if login else self._session
+        if session is None:
+            msg = "no Instagram login uploaded"
+            raise InstagramError(msg)
+        lsd = login.lsd if login else self._lsd
+        form = {
+            "av": login.actor_id if login else "0",
+            "__d": "www",
+            "__user": "0",
+            "__a": "1",
+            "__comet_req": "7",
+            "lsd": lsd,
+            "fb_api_caller_class": "RelayModern",
+            "fb_api_req_friendly_name": name,
+            "server_timestamps": "true",
+            "variables": json.dumps(variables, separators=(",", ":")),
+            "doc_id": doc_id,
+        }
+        if login:
+            form["fb_dtsg"] = login.fb_dtsg
+        r = session.post(
+            f"{ROOT}/graphql/query" if login else f"{ROOT}/api/graphql",
             headers={
                 "Accept": "*/*",
                 "X-FB-Friendly-Name": name,
-                "X-FB-LSD": self._lsd,
+                "X-FB-LSD": lsd,
                 "X-IG-App-ID": self._settings.app_id,
                 "X-ASBD-ID": self._settings.asbd_id,
                 "Origin": ROOT,
-                "Referer": self._referer,
+                "Referer": login.referer if login else self._referer,
                 "Sec-Fetch-Dest": "empty",
                 "Sec-Fetch-Mode": "cors",
                 "Sec-Fetch-Site": "same-origin",
             },
-            data={
-                "av": "0",
-                "__d": "www",
-                "__user": "0",
-                "__a": "1",
-                "__comet_req": "7",
-                "lsd": self._lsd,
-                "fb_api_caller_class": "RelayModern",
-                "fb_api_req_friendly_name": name,
-                "server_timestamps": "true",
-                "variables": json.dumps(variables, separators=(",", ":")),
-                "doc_id": doc_id,
-            },
+            data=form,
             timeout=self._settings.timeout_s,
             allow_redirects=False,
         )

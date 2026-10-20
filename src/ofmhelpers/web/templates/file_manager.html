@@ -30,7 +30,7 @@
                 <td>📁 <a href="/file-manager?root={{ current_root }}&path={{ d.rel_path }}">{{ d.name }}/</a></td>
                 <td class="pending">—</td>
                 <td>
-                    <form method="post" action="/file-manager/delete" style="display:inline"
+                    <form method="post" action="/file-manager/delete" class="inline-form"
                           onsubmit="return confirm('Delete folder {{ d.name }} and everything in it?')">
                         <input type="hidden" name="root" value="{{ current_root }}">
                         <input type="hidden" name="path" value="{{ d.rel_path }}">
