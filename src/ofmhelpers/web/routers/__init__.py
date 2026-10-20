@@ -6,6 +6,8 @@ Every HTTP route in the app, grouped by what it is *for*:
   and `legacy.py` keeps the job pages of the per-model tools it replaced.
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
   metadata cleaner, their picker page, and the viral-reel finder.
+- `tracking/`   -- social accounts' numbers over time (/accounts, every
+  platform of `ofmhelpers.socials`).
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
 - `video_tools/` -- local video edits with no external service (uniqify).
@@ -34,6 +36,7 @@ from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
+from ofmhelpers.web.routers.tracking import accounts
 from ofmhelpers.web.routers.video_tools import uniqify
 
 # Order is presentational only -- FastAPI matches on path and no two routers
@@ -54,6 +57,8 @@ ROUTERS = [
     download_images.router,
     clean_image.router,
     reels.router,
+    # tracking/
+    accounts.router,
     # image_tools/
     character_sheet.router,
     # video_tools/

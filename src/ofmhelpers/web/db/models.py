@@ -1,6 +1,7 @@
 """
 SQLAlchemy ORM tables backing web/stores/jobs.py,
-web/stores/applications.py and web/stores/watched_profiles.py. Column sets mirror the exact dict/JSON shapes those
+web/stores/applications.py, web/stores/watched_profiles.py and
+web/stores/tracked_accounts.py. Column sets mirror the exact dict/JSON shapes those
 modules write today (see web/schemas.py for the Pydantic mirror), so the
 step-5 backfill is a straight field-for-field copy.
 
@@ -21,7 +22,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import BigInteger, Float, Index, Integer, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -128,4 +138,70 @@ class ProfileScanStatRow(Base):
 
     __table_args__ = (
         Index("ix_profile_scan_stats_username_scanned_at", "username", "scanned_at"),
+    )
+
+
+class CreatorRow(Base):
+    """A creator /accounts assigns accounts to (any platform). Created the
+    first time a name is assigned; the name is how the page refers to it."""
+
+    __tablename__ = "creators"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class TrackedAccountRow(Base):
+    """A social account /accounts tracks (web/account_tracker.py rescans it
+    every `rescan_interval_s`), with its latest scan: `profile` is a
+    `socials.AccountProfile` dump, `metrics` an `AccountMetrics` one (what
+    the list shows), `posts` the scan's `PostStat`s (analytics only, never
+    loaded for the list). `error` is the last scan's failure, shown next to
+    the previous numbers; `claimed_at` marks a scan in flight."""
+
+    __tablename__ = "tracked_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # A `socials.platforms()` key.
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    handle: Mapped[str] = mapped_column(String(64), nullable=False)
+    creator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("creators.id", ondelete="SET NULL"), nullable=True
+    )
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    added_at: Mapped[float] = mapped_column(Float, nullable=False)
+    scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    metrics: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    posts: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "platform", "handle", name="uq_tracked_accounts_platform_handle"
+        ),
+        Index("ix_tracked_accounts_creator_id", "creator_id"),
+    )
+
+
+class AccountSnapshotRow(Base):
+    """One successful scan of a tracked account: the history growth and the
+    analytics chart are read from. `followers` is a column (growth is a SQL
+    lookup); the rest is the scan's `AccountMetrics` dump, so a platform
+    with other numbers needs no migration. Deleted with its account."""
+
+    __tablename__ = "account_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("tracked_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    taken_at: Mapped[float] = mapped_column(Float, nullable=False)
+    followers: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    __table_args__ = (
+        Index("ix_account_snapshots_account_id_taken_at", "account_id", "taken_at"),
     )

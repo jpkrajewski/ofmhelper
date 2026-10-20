@@ -20,7 +20,7 @@
  * to opt out of the auto-wiring, and instead call
  * `Generation.submit(form, formData)` once they've built their own FormData.
  */
-(function () {
+(() => {
     // A single dropped request (a network blip, a momentary server hiccup)
     // shouldn't abandon a job that's still running fine on the server --
     // only give up after several consecutive failures.
@@ -174,7 +174,7 @@
         const box = document.createElement("div");
         box.className = "result-file";
         box.title = error;
-        box.textContent = `⚠ ${error.length > 80 ? error.slice(0, 80) + "…" : error}`;
+        box.textContent = `⚠ ${error.length > 80 ? `${error.slice(0, 80)}…` : error}`;
         div.appendChild(box);
         if (job) {
             attachJobData(div, job);
@@ -199,7 +199,7 @@
             })
             .then((job) => {
                 if (job.status === "running" || job.status === "queued") {
-                    if (job.preview && job.preview.remote_url) {
+                    if (job.preview?.remote_url) {
                         showPreview(card, job.preview, resultKind);
                     }
                     setTimeout(
@@ -225,7 +225,7 @@
                 // Grouped download jobs can finish "done" with some sources
                 // failed -- surface those as their own card so partial
                 // failures don't vanish silently.
-                if (job.failed_sources && job.failed_sources.length) {
+                if (job.failed_sources?.length) {
                     const msg = job.failed_sources
                         .map((f) => `${f.source}: ${f.error}`)
                         .join("\n");
@@ -260,7 +260,7 @@
     function toolLabel(form) {
         if (form.dataset.toolLabel) return form.dataset.toolLabel;
         const select = document.getElementById("model-select");
-        if (select && select.selectedOptions.length) {
+        if (select?.selectedOptions.length) {
             return select.selectedOptions[0].textContent.trim();
         }
         return form.dataset.prefix;
@@ -357,7 +357,7 @@
                 if (!prefix || !jobId) return;
                 card.dataset.resumed = "1";
                 const label =
-                    (card.querySelector(".source") || {}).textContent?.trim() || prefix;
+                    card.querySelector(".source")?.textContent?.trim() || prefix;
                 pollJob(card, prefix, jobId, label, card.dataset.pollKind || "image");
             });
     }

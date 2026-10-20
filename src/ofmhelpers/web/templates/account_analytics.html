@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% import "_account_numbers.html" as num %}
+{% block title %}{{ account.name }} — Accounts{% endblock %}
+{% block content %}
+{% set growth = account.growth(period.days) %}
+{% set views = account.views(period.days) %}
+<p class="accounts-back"><a href="{{ query.link(period=query.period) }}">‹ Accounts</a></p>
+
+<div class="accounts-identity">
+    {% if account.profile and account.profile.avatar_url %}
+    <img class="accounts-avatar accounts-avatar-lg" src="{{ account.profile.avatar_url }}" alt="" referrerpolicy="no-referrer">
+    {% else %}
+    <span class="accounts-avatar accounts-avatar-lg" aria-hidden="true"></span>
+    {% endif %}
+    <div class="accounts-identity-text">
+        <h1>{{ account.name }}{% if account.profile and account.profile.is_verified %}{{ num.verified() }}{% endif %}</h1>
+        <p class="accounts-sub">
+            <a href="{{ account.profile_url }}" target="_blank" rel="noopener">@{{ account.handle }}</a>
+            {% if account.creator %} · <span class="accounts-creator-tag">{{ account.creator }}</span>{% endif %}
+        </p>
+        {% if account.status == "scanning" %}<p class="accounts-sub">Syncing…</p>{% endif %}
+    </div>
+    <form method="get" class="accounts-period" data-autosubmit>
+        {% for key, value in query.model_dump(mode="json").items() if value not in (none, "") and key not in ("period", "page") %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endfor %}
+        <select name="period" aria-label="Reporting period">
+            {% for p in periods %}
+            <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+    </form>
+</div>
+
+{% if account.error %}
+<p class="notice notice-fail">Unreachable: {{ account.error }}{% if account.metrics %} — showing the last successful sync.{% endif %}</p>
+{% elif account.status == "private" %}
+<p class="notice notice-fail">Private account: only its follower count is visible.</p>
+{% elif account.metrics and account.metrics.limited %}
+<p class="notice notice-warn">Synced without a working Instagram login: reels Instagram hides from logged-out viewers (sensitive, age-restricted) are missing below. Upload a fresh cookies.txt at <a href="/cookies">/cookies</a> (admin).</p>
+{% endif %}
+
+<div class="accounts-kpis accounts-kpis-4">
+    <div class="accounts-kpi">
+        <span>Followers</span>
+        <strong>{{ num.count(account.followers, "Not synced yet") }}</strong>
+        <small>Current total</small>
+    </div>
+    <div class="accounts-kpi">
+        <span>Views</span>
+        <strong>{{ num.short(views.views if views else none, "The scan does not cover the period") }}</strong>
+        <small>{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}</small>
+    </div>
+    <div class="accounts-kpi">
+        <span>Follower growth</span>
+        <strong>{{ num.growth(growth) }}</strong>
+        <small>{% if growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}</small>
+    </div>
+    <div class="accounts-kpi">
+        <span>Posts published</span>
+        <strong>{{ num.count(account.posts_in(period.days), "The scan does not cover the period") }}</strong>
+        <small>{{ period.label }}</small>
+    </div>
+</div>
+
+<section class="accounts-card">
+    <h2>Followers · {{ period.label|lower }}</h2>
+    {% set line = history.followers_line(period.days) %}
+    {% if line.points %}
+    <div class="accounts-chart-range"><span>{{ "{:,}".format(line.high) }}</span><span>{{ "{:,}".format(line.low) }}</span></div>
+    <svg class="accounts-chart" viewBox="0 -4 {{ line.width }} {{ line.height + 8 }}" preserveAspectRatio="none" role="img" aria-label="Daily followers, {{ period.label|lower }}">
+        <polyline points="{{ line.points }}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+    </svg>
+    {% else %}
+    <p class="accounts-empty">The follower trend appears once there are syncs on two different days. Tracking since {{ account.added_at|utc("%b %d, %Y") }}.</p>
+    {% endif %}
+</section>
+
+<section class="accounts-card">
+    <h2>{% if top.in_period %}{{ top.posts|length }} post{{ '' if top.posts|length == 1 else 's' }} · {{ period.label|lower }}, by views{% else %}Top posts by views · latest synced{% endif %}</h2>
+    {% if not top.in_period and top.posts %}<p class="accounts-sub">No posts published in the {{ period.label|lower }}; showing the latest synced ones.</p>{% endif %}
+    {% if top.posts %}
+    <ol class="accounts-posts">
+        {% for p in top.posts %}
+        <li>
+            <span class="accounts-rank">{{ loop.index }}</span>
+            <a class="accounts-thumb" href="{{ p.url }}" target="_blank" rel="noopener">
+                {% if p.thumbnail_url %}<img src="{{ p.thumbnail_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+            </a>
+            <div class="accounts-post-main">
+                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ p.posted_at|utc }} UTC">Posted {{ p.posted_at|ago }}</a>
+                <progress class="accounts-bar" max="{{ top.max_views or 1 }}" value="{{ p.views }}" aria-label="{{ p.views }} views"></progress>
+            </div>
+            <strong class="num">{{ "{:,}".format(p.views) }}</strong>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p class="accounts-empty">{% if account.profile and account.profile.is_private %}A private account's posts are not visible.{% else %}No posts synced yet.{% endif %}</p>
+    {% endif %}
+</section>
+
+<script src="{{ static_url('js/accounts.js') }}"></script>
+{% endblock %}

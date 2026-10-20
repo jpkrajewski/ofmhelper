@@ -14,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.web.account_tracker import account_tracker_loop
 from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
 from ofmhelpers.web.recovery import recovery_loop
 from ofmhelpers.web.reel_watch import reel_watch_loop
@@ -42,10 +43,14 @@ async def lifespan(app: FastAPI):
     # Rescans /reels' watched Instagram profiles when due -- see
     # ofmhelpers/web/reel_watch.py.
     reel_watch = asyncio.create_task(reel_watch_loop())
+    # Rescans /accounts' tracked social accounts when due -- see
+    # ofmhelpers/web/account_tracker.py.
+    account_tracker = asyncio.create_task(account_tracker_loop())
     logger.info("startup complete: job history loaded, sweepers running")
     yield
     sweeper.cancel()
     reel_watch.cancel()
+    account_tracker.cancel()
     logger.info("shutdown: sweepers cancelled")
 
 

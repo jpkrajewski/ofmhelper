@@ -17,7 +17,7 @@
  * Fires "live-gallery:update" on the container after a change, for pages
  * that post-process their markup (clone.js formats batch times).
  */
-(function () {
+(() => {
     function jobCount(el) {
         return el.querySelectorAll("[data-job-id]").length;
     }

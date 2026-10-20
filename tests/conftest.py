@@ -6,6 +6,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
 from ofmhelpers.config.settings import (
+    AccountsSettings,
     AigenSettings,
     DownloadersSettings,
     HiggsfieldSettings,
@@ -109,6 +110,7 @@ _SETTINGS_CLASSES = (
     DownloadersSettings,
     # Its .env holds the real scan proxies: a test must never go through them.
     InstagramSettings,
+    AccountsSettings,
 )
 
 

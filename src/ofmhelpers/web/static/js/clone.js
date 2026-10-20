@@ -14,7 +14,7 @@
  * Prefill: /reels sends the picked reels here as ?video= paths, which the
  * server checks and hands over in data-prefill-videos.
  */
-(function () {
+(() => {
     function setStatus(statusEl, message, isError) {
         statusEl.innerHTML = "";
         if (!message) return;

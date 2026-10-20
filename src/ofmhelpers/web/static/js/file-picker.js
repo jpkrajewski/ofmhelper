@@ -27,7 +27,7 @@
  * Also handles the simpler single-slot `.preview-input` fields: just an
  * object-URL preview swap, submitted as a plain file input.
  */
-(function () {
+(() => {
     // "uploads/assets/{sha256}__{original}.png" -> "{original}.png" -- the
     // hash prefix is a storage detail, not something to show the user.
     function displayName(path) {
@@ -296,7 +296,7 @@
     // textarea is very often focused right when you go to paste a
     // screenshot, and an editable-target check would swallow it there.
     document.addEventListener("paste", (e) => {
-        const items = e.clipboardData && e.clipboardData.items;
+        const items = e.clipboardData?.items;
         if (!items) return;
 
         const picker = [...document.querySelectorAll(".file-picker")].find((p) => {
@@ -341,11 +341,11 @@
         const toggle = picker.querySelector(".ref-toggle");
         const browser = picker.querySelector(".ref-browser");
         toggle.addEventListener("click", () => {
-            if (browser.style.display !== "none") {
-                browser.style.display = "none";
+            if (!browser.hidden) {
+                browser.hidden = true;
                 return;
             }
-            browser.style.display = "";
+            browser.hidden = false;
             loadRefBrowser(picker, browser);
         });
     }

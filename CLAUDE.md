@@ -23,6 +23,7 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 - `$C run --rm tests` — pytest.
 - `$C run --rm tests uv run --frozen pytest -m integration` — live TikTok/Instagram/kie.ai/Higgsfield checks; local only, not on CI (Instagram rate-limits runner IPs).
 - `$C run --rm tests uv run --frozen mypy` / `ruff check src tests` / `ruff format --check src tests`.
+- Templates/JS/CSS: `$C run --rm tests uv run --frozen djlint src/ofmhelpers/web/templates --lint` and `$C run --rm tests biome lint` (config `[tool.djlint]` in pyproject, `biome.json`; Biome is a pinned binary in the test image).
 - Page/template/JS/job-flow change: `$C up -d` (+ `$C restart worker`), then `$C run --rm tests uv run --frozen pytest -m e2e`.
 - `pyproject.toml`/`uv.lock`/test-stage change: `$C --profile test build tests`.
 - A test for every change.
@@ -52,7 +53,7 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 ## STOP BULSHITTING - LAZER FOCUS ON THOSE COMMANDS
 - DO NOT TELL ME SOMTHING IS STILL "NOT FIXED" OR "STILL BROKEN", THIS DESNT MAKE ANY SENSE JUST FIX IT SO IT WORKS
 - EVERY CODE NEEDS TO BE DONE TO WORK WITHOUT CHANGES FOR NEXT 6 MOTHNS
-- DONT WRITE HALFSCRIPTS, BULLSHIT CODE - IF YOU WRITE JSON PARSER, THINK "WHAT IF OWNER ASK ME TO ADD 10 DIFFEERENT PARESERS LIKE YAML PARSER OR TXT",
+- DONT WRITE HALFSCRIPTS, BULLSHIT CODE - IF YOU WRITE JSON PARSER, THINK "WHAT IF OWNER ASK ME TO ADD 10 DIFFEERENT PARESERS LIKE YAML PARSER OR TXT", IF USER ASKS FOR ISNTAGRAM ACCOUNT TRACKER, BUILD IT LIKE WE GONNA ASK FOR EVERY SOCIAL MEDIA PLATRFOM NEXT DAY, AGNOSTIC IS THE WORD
 WRITE CODE THAT IS EXTENDABLE, IF YOU WRITE TAGS CHANGES FOR IPHONE 17, THNIK HOW WILL CODE LOOK LIKE IF OWNER ASKS FOR 30 PHONES TAGS ANDROID, IPHONE ECT. DONT WRITE CONVOLUTED CODE THAT IS FOR SCPECIFIC SOLUTION WRITE A CODE THAT WILL STAND FOR 6 MONTHS AND I CAN ADD 100 ELEMENTS. WHAT IF THERE IS PASSWORD LOGIN AND I WANT TO ADD GOOGLE LOGIN OR USERNAME AND PASSWORD LOGIN. DONT WRITE CODE FOR SPECIFIC SOLUTION.
 - CODE NEEDS TO BE PRODUCTION READY, IF I ASK FOR META CHANGER JUST ITERARE TILL IS WORKNIG METACHANGER DONT ASK, DONT TELL ME ITS NOT FIXED
 - DONT DO RANDOM SCRIPTS THAT "SYNC" SOMETHING, OR ADD SOMETHING, OR REQUIRE USERINPUT FOR SETTING ON PROD!!!!!!

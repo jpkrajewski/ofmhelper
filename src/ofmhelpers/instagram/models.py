@@ -112,8 +112,18 @@ class _ImageVersions(_Base):
 class _ProfileUser(_Base):
     pk: str
     username: str
+    full_name: str = ""
     follower_count: int = 0
+    following_count: int | None = None
     is_private: bool = False
+    is_verified: bool = False
+    profile_pic_url: str = ""
+    hd_profile_pic_url_info: _Image | None = None
+
+    @property
+    def avatar_url(self) -> str:
+        hd = self.hd_profile_pic_url_info
+        return hd.url if hd else self.profile_pic_url
 
 
 class _ProfileData(_Base):
@@ -129,6 +139,12 @@ class Profile(BaseModel):
     username: str
     followers: int
     is_private: bool
+    # Defaulted: scans stored before these were read have none.
+    full_name: str = ""
+    following: int | None = None
+    is_verified: bool = False
+    # Signed CDN URL that expires within days: only the latest scan's shows.
+    avatar_url: MediaUrl = ""
 
 
 # --- PolarisProfileReelsTabContentQuery_connection --------------------------
@@ -195,6 +211,20 @@ class ClipsPage(_Base):
         user = self.data.user
         info = user.clips_connection.page_info if user else _PageInfo()
         return info.end_cursor if info.has_next_page else None
+
+
+# --- the uploaded login -------------------------------------------------------
+
+
+class LoginTokens(BaseModel):
+    """What a GraphQL query sent as the uploaded login carries, read off a
+    page the login loaded: its viewer id (`av`), request token
+    (`fb_dtsg`), `lsd`, and that page (the Referer)."""
+
+    actor_id: str
+    fb_dtsg: str
+    lsd: str
+    referer: str
 
 
 # --- PolarisLoggedOutDesktopWWWPostRootContentQuery -------------------------

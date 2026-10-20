@@ -38,6 +38,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project
 RUN playwright install --with-deps chromium
 
+# Biome: the JS/CSS linter for src/ofmhelpers/web/static (biome.json). One
+# static binary, pinned and checksummed -- no npm toolchain in the image.
+ADD --chmod=755     --checksum=sha256:ce247fb644999ef52e5111dd6fd6e471019669fc9c4a44b5699721e39b7032c3     https://github.com/biomejs/biome/releases/download/cli%2Fv1.9.4/biome-linux-x64     /usr/local/bin/biome
+
 # ---- Runtime stage ----
 FROM python:3.12-slim AS runtime
 

@@ -436,3 +436,88 @@ def test_view_tier(views, tier):
 def test_scan_refuses_private_profiles():
     with pytest.raises(InstagramError):
         scan_profile(FakeClient([], private=True), "u", 5, 30, 14 * DAY, 24)
+
+
+class _Response:
+    def __init__(self, status: int, body: dict | None = None, text: str = "") -> None:
+        self.status_code = status
+        self.ok = status < 400
+        self.is_redirect = 300 <= status < 400
+        self.text = text
+        self.url = "https://www.instagram.com/x"
+        self._body = body or {}
+
+    def json(self) -> dict:
+        return self._body
+
+
+# The logged-in web app's page: its viewer and request token.
+_LOGGED_IN_PAGE = (
+    '"actorID":"999","DTSGInitialData",[],{"token":"dtsg-1"} "LSD",[],{"token":"lsd-1"}'
+)
+
+
+class _LoggedInSession:
+    """The uploaded login: GET answers `page`, POSTs answer `pages` in turn."""
+
+    def __init__(self, page: str, pages: list[dict]) -> None:
+        self.page = page
+        self.pages = pages
+        self.sent: list[tuple[str, dict]] = []
+
+    def get(self, _url, **_kwargs):
+        return _Response(200, text=self.page)
+
+    def post(self, url, data, **_kwargs):
+        self.sent.append((url, data))
+        return _Response(200, self.pages.pop(0))
+
+
+def _clips(codes: list[str], cursor: str | None) -> dict:
+    return {
+        "data": {
+            "fetch__XDTUserDict": {
+                "clips_connection": {
+                    "edges": [
+                        {"node": {"media": {"pk": str(n), "code": c, "play_count": n}}}
+                        for n, c in enumerate(codes, 1)
+                    ],
+                    "page_info": {"end_cursor": cursor, "has_next_page": bool(cursor)},
+                }
+            }
+        }
+    }
+
+
+def _with_login(session) -> InstagramClient:
+    client = InstagramClient()
+    client.__dict__["_logged_in"] = session
+    return client
+
+
+def test_reels_logged_in_pages_the_reels_tab_as_the_login():
+    session = _LoggedInSession(
+        _LOGGED_IN_PAGE, [_clips(["a", "b"], "next"), _clips(["c", "d"], "more")]
+    )
+    reels = _with_login(session).reels_logged_in("dany", "42", limit=3)
+    assert [r.code for r in reels] == ["a", "b", "c"]
+    url, form = session.sent[0]
+    assert url.endswith("/graphql/query")
+    assert (form["av"], form["fb_dtsg"], form["lsd"]) == ("999", "dtsg-1", "lsd-1")
+    assert '"target_user_id":"42"' in form["variables"]
+    assert '"after":"next"' in session.sent[1][1]["variables"]
+
+
+def test_reels_logged_in_stops_at_the_last_page():
+    session = _LoggedInSession(_LOGGED_IN_PAGE, [_clips(["a"], None)])
+    assert [r.code for r in _with_login(session).reels_logged_in("d", "42", 10)] == [
+        "a"
+    ]
+
+
+def test_reels_logged_in_without_a_working_login_is_none():
+    assert _with_login(None).reels_logged_in("d", "42", 10) is None
+    # A dead login gets the logged-out page: no viewer on it.
+    dead = _LoggedInSession('"actorID":null', [])
+    assert _with_login(dead).reels_logged_in("d", "42", 10) is None
+    assert dead.sent == []

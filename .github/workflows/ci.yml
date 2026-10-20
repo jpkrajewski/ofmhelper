@@ -27,7 +27,7 @@ env:
 
 jobs:
   lint:
-    name: Lint (ruff)
+    name: Lint (ruff, djlint, biome)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +51,18 @@ jobs:
 
       - name: ruff format
         run: uv run ruff format --check
+
+      - name: djlint (HTML/Jinja templates)
+        run: uv run djlint src/ofmhelpers/web/templates --lint
+
+      # Same pinned version as the Dockerfile's test stage.
+      - name: Install Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: 1.9.4
+
+      - name: biome (JS/CSS)
+        run: biome lint
 
   test:
     name: Tests (pytest)

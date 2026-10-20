@@ -10,13 +10,13 @@
  * "↻ Recreate" on a gallery card restores provider, model, settings and
  * reference files (reused from the server, nothing re-uploaded).
  */
-(function () {
+(() => {
     const form = document.getElementById("generate-form");
     const providerSelect = document.getElementById("provider-select");
     const modelSelect = document.getElementById("model-select");
     let fieldset = document.getElementById("model-fields");
     const promptField = document.getElementById("prompt-field");
-    const promptBox = form && form.querySelector('textarea[name="prompt"]');
+    const promptBox = form?.querySelector('textarea[name="prompt"]');
     const catalogEl = document.getElementById("model-catalog");
     if (!form || !providerSelect || !modelSelect || !fieldset || !catalogEl) return;
 

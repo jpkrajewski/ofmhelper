@@ -21,6 +21,7 @@ existed):
 """
 
 from ofmhelpers.config.settings import (
+    AccountsSettings,
     AigenSettings,
     DownloadersSettings,
     ExportSettings,
@@ -68,6 +69,10 @@ class Settings:
     @property
     def instagram(self) -> InstagramSettings:
         return InstagramSettings()
+
+    @property
+    def accounts(self) -> AccountsSettings:
+        return AccountsSettings()
 
     @property
     def exports(self) -> ExportSettings:

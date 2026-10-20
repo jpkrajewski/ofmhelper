@@ -3,8 +3,7 @@
 // Desktop (>=980px) needs no JS at all -- the CSS puts the links back into
 // a plain inline row and hides the toggle -- so this only manages the
 // small-screen open/closed state and the aria-expanded that goes with it.
-(function () {
-    "use strict";
+(() => {
 
     const toggle = document.querySelector(".nav-toggle");
     const nav = document.getElementById("site-nav");
@@ -34,4 +33,12 @@
     wide.addEventListener("change", (e) => {
         if (e.matches) setOpen(false);
     });
+
+    // The "More" dropdown closes on a click anywhere else, like a menu.
+    const more = nav.querySelector(".nav-more details");
+    if (more) {
+        document.addEventListener("click", (e) => {
+            if (more.open && !more.contains(e.target)) more.open = false;
+        });
+    }
 })();

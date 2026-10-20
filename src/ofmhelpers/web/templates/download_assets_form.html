@@ -34,7 +34,7 @@
         </p>
     </fieldset>
 
-    <fieldset class="tool-fields" data-tool="download_images" disabled style="display:none">
+    <fieldset class="tool-fields" data-tool="download_images" disabled hidden>
         <legend>Download images</legend>
         <div class="field">
             <label>URLs (one per line)</label>
@@ -49,7 +49,7 @@
         </p>
     </fieldset>
 
-    <fieldset class="tool-fields" data-tool="clean_images" disabled style="display:none">
+    <fieldset class="tool-fields" data-tool="clean_images" disabled hidden>
         <legend>Clean image metadata</legend>
         <div class="field">
             <label>Images to clean (EXIF/GPS/location metadata gets stripped)</label>
@@ -119,7 +119,7 @@ document.getElementById('tool-select').addEventListener('change', (e) => {
     document.querySelectorAll('.tool-fields').forEach((fieldset) => {
         const active = fieldset.dataset.tool === option.value;
         fieldset.disabled = !active;
-        fieldset.style.display = active ? '' : 'none';
+        fieldset.hidden = !active;
     });
 });
 

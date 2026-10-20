@@ -18,7 +18,7 @@
  * them into the asset store and answers the /clone URL that opens with them
  * in the videos picker.
  */
-(function () {
+(() => {
     const PICKS_KEY = "reels-picks";
     const POLL_MS = 4000;
 
@@ -204,7 +204,7 @@
         if (!notAdded.length) return;
         setStatus(
             statusEl,
-            [`Not added — deleted, renamed or private: ${notAdded.map((u) => "@" + u).join(", ")}`],
+            [`Not added — deleted, renamed or private: ${notAdded.map((u) => `@${u}`).join(", ")}`],
             true
         );
     }

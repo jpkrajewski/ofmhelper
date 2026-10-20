@@ -8,10 +8,27 @@
 - `tools.py` -- a background-job tool as the task registry knows it.
 - `applications.py` -- the landing-page application form and stored lead.
 - `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
+- `accounts.py` -- a tracked social account (/accounts), its list query and history.
 
 Import from here; the split is an implementation detail of this package.
 """
 
+from ofmhelpers.web.schemas.accounts import (
+    NO_CREATOR,
+    AccountHistory,
+    AccountPage,
+    AccountQuery,
+    AccountSort,
+    AccountStatus,
+    AccountSummary,
+    AddAccounts,
+    AddResult,
+    AssignCreator,
+    Notes,
+    Period,
+    SelectedAccounts,
+    TrackedAccount,
+)
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
 from ofmhelpers.web.schemas.gallery import CloneBatch, CloneCard, JobCard, TaskCard
@@ -39,10 +56,20 @@ from ofmhelpers.web.schemas.watched import (
 )
 
 __all__ = [
+    "NO_CREATOR",
+    "AccountHistory",
+    "AccountPage",
+    "AccountQuery",
+    "AccountSort",
+    "AccountStatus",
+    "AccountSummary",
     "ActionLogEntry",
+    "AddAccounts",
+    "AddResult",
     "Application",
     "ApplicationForm",
     "AssetCard",
+    "AssignCreator",
     "CloneBatch",
     "CloneCard",
     "CloneQueued",
@@ -62,12 +89,16 @@ __all__ = [
     "JobStatusPayload",
     "Leaderboard",
     "ModelChoice",
+    "Notes",
+    "Period",
     "ProviderChoice",
     "RefEntry",
     "ReferenceAsset",
     "ResultFile",
+    "SelectedAccounts",
     "TaskCard",
     "Tool",
+    "TrackedAccount",
     "WatchForm",
     "WatchedProfile",
 ]
