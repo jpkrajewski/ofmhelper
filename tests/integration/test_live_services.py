@@ -21,6 +21,7 @@ from ofmhelpers.aigenproviders.errors import ProviderAuthError
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.config import settings
+from ofmhelpers.instagram import InstagramRateLimitedError
 from ofmhelpers.instagram import client as instagram_client
 from ofmhelpers.instagram.client import InstagramClient
 from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
@@ -73,9 +74,18 @@ def test_host_resolves_and_completes_tls(host: Host):
 
 
 def test_instagram_serves_a_public_profile():
-    profile = InstagramClient().open_profile(INSTAGRAM_PROFILE)
-
-    assert profile.followers > 0
+    """Like the app's scans: direct first, then each configured proxy
+    (`OFM_IG_PROXIES`) -- Instagram rate-limits datacenter IPs such as
+    GitHub's runners, which is why prod scans through proxies too."""
+    routes = [None, *settings.instagram.proxy_urls]
+    for proxy in routes:
+        try:
+            profile = InstagramClient(proxy).open_profile(INSTAGRAM_PROFILE)
+        except InstagramRateLimitedError:
+            continue
+        assert profile.followers > 0
+        return
+    pytest.fail(f"Instagram rate-limited all {len(routes)} routes")
 
 
 def test_tiktok_video_metadata_extracts():

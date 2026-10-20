@@ -63,6 +63,9 @@ jobs:
     # tags differently), so nothing runs on the runner itself.
     env:
       COMPOSE: docker compose -f docker-compose.yml -f docker-compose.dev.yml
+      # Instagram rate-limits runner IPs; the integration check falls back to
+      # the same proxies prod scans through (repo secret).
+      OFM_IG_PROXIES: ${{ secrets.OFM_IG_PROXIES }}
 
     steps:
       - uses: actions/checkout@v4
