@@ -55,9 +55,16 @@ def _ensure_test_database(url: str) -> None:
         engine.dispose()
 
 
+@pytest.fixture(scope="session")
+def test_database_url() -> str:
+    """The throwaway test database's URL; its server hosts any other
+    throwaway database a test needs."""
+    return TEST_DATABASE_URL
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _test_database():
-    """Point the whole app at the throwaway test database and create the
+    """Point the whole app at the throwaway test database and rebuild the
     schema once per session."""
     _ensure_test_database(TEST_DATABASE_URL)
     # Set on the real environment (not monkeypatch): session-scoped, and it
@@ -78,6 +85,9 @@ def _test_database():
     from ofmhelpers.web.db.session import get_engine
 
     engine = get_engine()
+    # Rebuilt every session: create_all alone never alters an existing
+    # table, so a local test database would drift from the models.
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
 

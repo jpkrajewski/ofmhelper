@@ -17,7 +17,7 @@ config/__init__.py's docstring for why.
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ofmhelpers.iphones.models import GeoPoint, Place
@@ -545,6 +545,14 @@ class AccountsSettings(BaseSettings):
     rescan_interval_s: int = Field(
         default=6 * 60 * 60, ge=60, validation_alias="OFM_ACCOUNTS_RESCAN_INTERVAL_S"
     )
+    # An account whose scans keep failing (banned, deleted) is retried at
+    # twice the interval per consecutive failure, up to this: fewer requests
+    # for dead accounts, so the proxies stay unflagged for the live ones.
+    max_rescan_interval_s: int = Field(
+        default=24 * 60 * 60,
+        ge=60,
+        validation_alias="OFM_ACCOUNTS_MAX_RESCAN_INTERVAL_S",
+    )
     rescan_check_interval_s: int = Field(
         default=300, ge=10, validation_alias="OFM_ACCOUNTS_RESCAN_CHECK_INTERVAL_S"
     )
@@ -564,11 +572,17 @@ class AccountsSettings(BaseSettings):
     retry_jitter_s: float = Field(
         default=2.0, ge=0, validation_alias="OFM_ACCOUNTS_RETRY_JITTER_S"
     )
-    # The reporting periods of the period selector, in days, the first the
-    # default: views of posts published in the period (vs the period before
-    # it) and follower growth against the newest snapshot that old.
+    # The reporting periods of the period selector, in days, in selector
+    # order (1 = the last 24 hours): views of posts published in the period
+    # (vs the period before it) and follower growth against the newest
+    # snapshot that old. The default must be one of them.
     periods_days: list[int] = Field(
-        default=[7, 30], min_length=1, validation_alias="OFM_ACCOUNTS_PERIODS_DAYS"
+        default=[1, 7, 14, 30],
+        min_length=1,
+        validation_alias="OFM_ACCOUNTS_PERIODS_DAYS",
+    )
+    default_period_days: int = Field(
+        default=7, ge=1, validation_alias="OFM_ACCOUNTS_DEFAULT_PERIOD_DAYS"
     )
     # Analytics page: how far back the history goes, and how many of the
     # latest synced posts it ranks when the period has none.
@@ -586,6 +600,22 @@ class AccountsSettings(BaseSettings):
     )
     # Handles one "Add accounts" paste may hold.
     max_add: int = Field(default=500, ge=1, validation_alias="OFM_ACCOUNTS_MAX_ADD")
+
+    @property
+    def post_retention_days(self) -> int:
+        """How long a tracked account's posts are kept: twice the longest
+        period, so every period compares against the one before it."""
+        return 2 * max(self.periods_days)
+
+    @model_validator(mode="after")
+    def _default_period_is_offered(self) -> AccountsSettings:
+        if self.default_period_days not in self.periods_days:
+            msg = (
+                f"OFM_ACCOUNTS_DEFAULT_PERIOD_DAYS={self.default_period_days} "
+                f"is not in OFM_ACCOUNTS_PERIODS_DAYS={self.periods_days}"
+            )
+            raise ValueError(msg)
+        return self
 
 
 class LoggingSettings(BaseSettings):

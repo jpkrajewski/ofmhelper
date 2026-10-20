@@ -9,10 +9,13 @@ os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
+from ofmhelpers.config.settings import AccountsSettings
 from ofmhelpers.socials import (
     AccountProfile,
     AccountStats,
@@ -24,7 +27,10 @@ from ofmhelpers.socials import (
 from ofmhelpers.socials.platforms.instagram import InstagramPlatform
 from ofmhelpers.utils.proxy_pool import ProxyPool
 from ofmhelpers.web import account_tracker
-from ofmhelpers.web.db.models import AccountSnapshotRow
+from ofmhelpers.web.db.models import AccountSnapshotRow, TrackedPostRow
+from ofmhelpers.web.db.repositories import (
+    tracked_accounts as tracked_accounts_repository,
+)
 from ofmhelpers.web.db.session import session_scope
 from ofmhelpers.web.main import app
 from ofmhelpers.web.schemas import (
@@ -43,7 +49,9 @@ from ofmhelpers.web.stores.tracked_accounts import (
     list_accounts,
     list_creators,
     record_scan,
+    set_notes,
     track,
+    untrack,
 )
 
 DAY = 86400
@@ -221,13 +229,36 @@ def test_notes(client):
     assert client.post("/accounts/999999/notes", json={"notes": "x"}).status_code == 404
 
 
-def test_delete_removes_account_and_history(client, fetches):
+def test_remove_untracks_but_keeps_every_record(client, fetches):
     client.post("/accounts/add", json={"platform": "instagram", "handles": "a\nb"})
     a = _id("a")
+    client.post(f"/accounts/{a}/notes", json={"notes": "banned, appealing"})
     r = client.post("/accounts/delete", json={"ids": [a]})
     assert r.json() == {"count": 1}
+    assert client.post("/accounts/delete", json={"ids": [a]}).json() == {"count": 0}
     assert [x.handle for x in list_accounts()] == ["b"]
-    assert get_history(a).snapshots == []
+    # Not scanned while untracked.
+    assert a not in claim_due(0, 0)
+    # Its page, history, posts and notes are all still there.
+    account = get_account(a)
+    assert account.untracked_at is not None
+    assert account.notes == "banned, appealing"
+    assert [p.id for p in account.posts] == ["new"]  # "old" is past retention
+    assert len(get_history(a).snapshots) == 1
+    page = client.get(f"/accounts/{a}")
+    assert page.status_code == 200
+    assert "Not tracked since" in page.text
+
+
+def test_adding_an_untracked_account_again_resumes_its_history(client, fetches):
+    client.post("/accounts/add", json={"platform": "instagram", "handles": "a"})
+    a = _id("a")
+    client.post("/accounts/delete", json={"ids": [a]})
+    r = client.post("/accounts/add", json={"platform": "instagram", "handles": "a"})
+    assert r.json()["added"] == ["a"]  # tracked again, rescanned right away
+    assert _id("a") == a  # the same account, not a new one
+    assert get_account(a).untracked_at is None
+    assert len(get_history(a).snapshots) == 2
 
 
 def test_growth_against_the_newest_snapshot_a_period_old(fetches):
@@ -298,6 +329,279 @@ def three(fetches):
         track("instagram", handle, "Yuki" if handle != "cc" else None)
         record_scan(_id(handle), _stats(handle, followers=followers, views=views))
     _snapshot("cc", 1, 2 * DAY)
+
+
+# --- rolling post storage ---------------------------------------------------
+
+
+class _Clock:
+    """The repository's clock, moved by hand."""
+
+    def __init__(self) -> None:
+        self.now = time.time()
+
+    def time(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def clock(monkeypatch) -> _Clock:
+    fake = _Clock()
+    monkeypatch.setattr(tracked_accounts_repository, "time", fake)
+    return fake
+
+
+def _post(code: str, age_s: float, now: float, views: int = 1) -> PostStat:
+    return PostStat(
+        id=code, url=f"https://x/{code}", views=views, posted_at=now - age_s
+    )
+
+
+def _scan(handle: str, now: float, *posts: PostStat, complete: bool = True) -> None:
+    stats = _stats(handle)
+    stats.posts = list(posts)
+    stats.complete = complete
+    stats.scanned_at = now
+    record_scan(_id(handle), stats)
+
+
+def _scan_as(handle: str, account_id: str, now: float, *posts: PostStat) -> None:
+    """A scan of `handle` that the platform reports as `account_id`."""
+    stats = _stats(handle)
+    stats.profile.account_id = account_id
+    stats.posts = list(posts)
+    stats.scanned_at = now
+    record_scan(_id(handle), stats)
+
+
+def _kept(handle: str) -> dict[str, int]:
+    """The account's kept posts: id -> views."""
+    return {p.id: p.views for p in get_account(_id(handle)).posts}
+
+
+RETENTION = 60 * DAY  # 2 x the longest default period (30 d)
+
+
+def test_scan_appends_and_keeps_posts_it_did_not_return(clock):
+    # Example A.
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", 20 * DAY, now), _post("b", 29 * DAY, now))
+    _scan("aa", now, _post("c", 2 * 3600, now))
+    assert set(_kept("aa")) == {"a", "b", "c"}
+
+
+def test_posts_past_retention_are_pruned(clock):
+    # Example B, with the cutoff boundary: on it is kept, a second past is not.
+    track("instagram", "aa")
+    now = clock.now
+    _scan(
+        "aa",
+        now,
+        _post("old", 70 * DAY, now),
+        _post("edge", RETENTION, now),
+        _post("gone", RETENTION + 1, now),
+    )
+    assert set(_kept("aa")) == {"edge"}  # "old"/"gone" never stored
+    clock.now += 1
+    _scan("aa", clock.now, _post("new", 4 * 3600, clock.now))
+    assert set(_kept("aa")) == {"new"}  # "edge" aged past the cutoff
+
+
+def test_a_post_seen_again_is_updated_not_duplicated(clock):
+    # Example C, and a retried scan.
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", 10 * DAY, now, views=5))
+    _scan("aa", now, _post("a", 10 * DAY, now, views=9), _post("b", 3600, now))
+    _scan("aa", now, _post("a", 10 * DAY, now, views=9), _post("b", 3600, now))
+    assert _kept("aa") == {"a": 9, "b": 1}
+    with session_scope() as s:
+        assert s.query(TrackedPostRow).count() == 2
+
+
+def test_empty_or_failed_scan_keeps_the_posts(clock):
+    # Example D.
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", 5 * DAY, now), _post("b", 15 * DAY, now))
+    _scan("aa", now)
+    record_scan(_id("aa"), None, "Instagram showed no such profile (4 tries)")
+    assert set(_kept("aa")) == {"a", "b"}
+
+
+def test_a_kept_post_ages_out_on_the_next_successful_scan(clock):
+    # Example E. A banned account's scans fail for days: its data stays as
+    # its last successful sync left it, aged posts included, until a scan
+    # succeeds again.
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", RETENTION - 3600, now), _post("b", 10 * DAY, now))
+    clock.now += 5 * DAY
+    record_scan(_id("aa"), None, "profile not found (4 tries)")
+    assert set(_kept("aa")) == {"a", "b"}
+    assert get_account(_id("aa")).views(60).views == 2
+    _scan("aa", clock.now, _post("c", 60, clock.now))
+    assert set(_kept("aa")) == {"b", "c"}
+
+
+def test_one_accounts_scan_never_touches_anothers_posts(clock):
+    track("instagram", "aa")
+    track("instagram", "bb")
+    now = clock.now
+    _scan("aa", now, _post("same", DAY, now, views=1))
+    _scan("bb", now, _post("same", DAY, now, views=2))
+    clock.now += RETENTION
+    _scan("aa", clock.now)
+    with session_scope() as s:
+        rows = s.query(TrackedPostRow.account_id, TrackedPostRow.views).all()
+    # aa's aged post is pruned; bb's same-id post stays until bb's own scan.
+    assert rows == [(_id("bb"), 2)]
+    assert _kept("bb") == {"same": 2}
+
+
+def test_concurrent_scans_of_one_account_do_not_duplicate(clock):
+    track("instagram", "aa")
+    now = clock.now
+    posts = [_post(f"p{i}", i * 3600, now, views=i) for i in range(20)]
+    with ThreadPoolExecutor(4) as pool:
+        list(pool.map(lambda _: _scan("aa", now, *posts), range(8)))
+    assert _kept("aa") == {f"p{i}": i for i in range(20)}
+
+
+def test_views_count_every_kept_post_not_only_the_latest_scan(clock):
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", 3 * DAY, now, views=100))
+    _scan("aa", now, _post("b", DAY / 2, now, views=5))
+    [account] = list_accounts()
+    assert account.posts == []  # the list reads views and dates only
+    assert account.views(1).views == 5
+    assert account.views(7).views == 105
+    assert account.posts_in(7) == 2
+    # No period is precomputed: any number of days works.
+    assert account.views(3).previous == 0
+
+
+def test_coverage_widens_from_capped_to_complete_scans(clock):
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", DAY, now), _post("b", 3 * DAY, now), complete=False)
+    account = get_account(_id("aa"))
+    assert account.views(2).views == 1  # read back past 2 days
+    assert account.views(2).previous is None  # but not past 4
+    assert account.views(7) is None
+    _scan("aa", now, _post("a", DAY, now), complete=True)
+    account = get_account(_id("aa"))
+    assert account.views(7).views == 2
+    assert account.views(30).previous == 0
+
+
+def test_a_private_account_claims_no_coverage(clock):
+    track("instagram", "aa")
+    stats = _stats("aa")
+    stats.profile.is_private = True
+    stats.posts, stats.complete = [], False
+    record_scan(_id("aa"), stats)
+    account = get_account(_id("aa"))
+    assert account.covered_since is not None
+    assert account.views(1) is None
+
+
+# --- corner cases -------------------------------------------------------------
+
+
+def test_a_capped_scan_after_a_gap_does_not_claim_the_gap(clock):
+    # Fully read, then unreachable for 10 days; the first scan back is
+    # capped and reads only 2 days: what was posted in the gap is unknown.
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", 20 * DAY, now))
+    assert get_account(_id("aa")).views(30) is not None
+    clock.now += 10 * DAY
+    record_scan(_id("aa"), None, "profile not found (4 tries)")
+    _scan("aa", clock.now, _post("b", 2 * DAY, clock.now), complete=False)
+    account = get_account(_id("aa"))
+    assert account.views(1).views == 0  # within the 2 days read
+    assert account.views(7) is None  # the gap was never read
+    # A capped scan that does reach back to the previous one keeps the
+    # coverage it had.
+    clock.now += 3600
+    _scan("aa", clock.now, _post("b", 2 * DAY + 3600, clock.now), complete=False)
+    assert get_account(_id("aa")).views(1) is not None
+    assert get_account(_id("aa")).views(7) is None
+
+
+def test_coverage_never_reaches_past_retention(clock, monkeypatch):
+    # With 1/7 d periods posts are kept 14 d: a later 30 d window must not
+    # read as covered from posts that were pruned.
+    monkeypatch.setenv("OFM_ACCOUNTS_PERIODS_DAYS", "[1, 7]")
+    monkeypatch.setenv("OFM_ACCOUNTS_DEFAULT_PERIOD_DAYS", "7")
+    track("instagram", "aa")
+    now = clock.now
+    _scan("aa", now, _post("a", DAY, now), _post("old", 20 * DAY, now))
+    account = get_account(_id("aa"))
+    assert account.covered_since == now - 14 * DAY
+    assert account.views(7).views == 1
+    assert account.views(30) is None
+
+
+def test_an_account_untracked_after_its_claim_is_not_scanned(fetches):
+    track("instagram", "aa")
+    a = _id("aa")
+    assert claim_due(0, 0) == [a]
+    untrack([a])
+    account_tracker.scan_accounts("instagram", [a])
+    assert fetches == []
+
+
+def test_a_renamed_account_merges_into_its_history(clock):
+    # @old is tracked and synced, gets banned and renamed to @new; @new is
+    # added: once scanned, it is the same account -- one row, both
+    # histories, under the new handle.
+    track("instagram", "old", "Mia")
+    old_id = _id("old")
+    now = clock.now
+    _scan_as("old", "pk1", now, _post("a", 3 * DAY, now, views=10))
+    set_notes(old_id, "main account")
+    untrack([old_id])
+    track("instagram", "new")
+    set_notes(_id("new"), "renamed after ban")
+    clock.now += 3600
+    _scan_as("new", "pk1", clock.now, _post("b", 3600, clock.now, views=5))
+
+    [account] = list_accounts()
+    assert (account.id, account.handle, account.creator) == (old_id, "new", "Mia")
+    assert account.untracked_at is None
+    assert account.notes == "main account\nrenamed after ban"
+    assert _kept("new") == {"a": 10, "b": 5}
+    assert len(get_history(old_id).snapshots) == 2
+    with session_scope() as s:
+        assert s.query(TrackedPostRow).count() == 2
+
+
+def test_failing_accounts_back_off_and_recover(clock):
+    track("instagram", "aa")
+    a = _id("aa")
+    _scan("aa", clock.now)
+    for _ in range(5):
+        record_scan(a, None, "profile not found (4 tries)")
+    # 5 failures: 100 s doubled 5 times, capped at 1000 s.
+    clock.now += 999
+    assert claim_due(100, 0, 1000) == []
+    clock.now += 2
+    assert claim_due(100, 0, 1000) == [a]
+    # One failure: twice the interval.
+    _scan("aa", clock.now)
+    record_scan(a, None, "profile not found (4 tries)")
+    clock.now += 150
+    assert claim_due(100, 0, 1000) == []
+    clock.now += 100
+    assert claim_due(100, 0, 1000) == [a]
+    # A success resets it.
+    _scan("aa", clock.now)
+    clock.now += 101
+    assert claim_due(100, 0, 1000) == [a]
 
 
 def _handles(client, **params) -> list[str]:
@@ -423,6 +727,26 @@ def test_period_selector_and_summary(client, three):
     assert "Views · 7d" in client.get("/accounts", params={"period": 5}).text
     summary = AccountSummary.of(list_accounts(), 7)
     assert (summary.accounts, summary.followers, summary.views) == (3, 60, 15)
+
+
+def test_period_selector_offers_24h_7d_14d_30d_with_7d_default(client, three):
+    html = client.get("/accounts").text
+    assert 'value="7" selected' in html
+    for days, label in (
+        (1, "Last 24 hours"),
+        (14, "Last 14 days"),
+        (30, "Last 30 days"),
+    ):
+        assert f'value="{days}"' in html
+        assert label in html
+    assert "Views · 24h" in client.get("/accounts", params={"period": 1}).text
+    assert "Views · 14d" in client.get("/accounts", params={"period": 14}).text
+
+
+def test_default_period_must_be_offered(monkeypatch):
+    monkeypatch.setenv("OFM_ACCOUNTS_PERIODS_DAYS", "[1, 14]")
+    with pytest.raises(ValidationError, match="DEFAULT_PERIOD_DAYS"):
+        AccountsSettings()
 
 
 def test_add_form_parses_handles():

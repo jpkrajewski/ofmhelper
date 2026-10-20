@@ -26,6 +26,8 @@ from ofmhelpers.socials import (
     AccountMetrics,
     AccountProfile,
     PostStat,
+    PostViews,
+    ViewWindow,
     get_platform,
     platforms,
 )
@@ -68,11 +70,11 @@ class Period(BaseModel):
 
     @property
     def label(self) -> str:
-        return f"Last {self.days} days"
+        return "Last 24 hours" if self.days == 1 else f"Last {self.days} days"
 
     @property
     def short(self) -> str:
-        return f"{self.days}d"
+        return "24h" if self.days == 1 else f"{self.days}d"
 
 
 class AccountStatus(StrEnum):
@@ -133,6 +135,8 @@ class TrackedAccount(BaseModel):
     notes: str = ""
     added_at: float
     scanned_at: float | None = None
+    # Set once removed from tracking: not synced or listed, history kept.
+    untracked_at: float | None = None
     error: str | None = None
     # None until the first scan succeeds.
     profile: AccountProfile | None = None
@@ -141,6 +145,11 @@ class TrackedAccount(BaseModel):
     baselines: list[Baseline] = []
     first: Baseline | None = None
     latest: Baseline | None = None
+    # The kept posts (every scan's, within retention), as much as view
+    # windows need: every period is derived from them on read. Complete
+    # from `covered_since` on (None: no scan read any yet).
+    post_views: list[PostViews] = []
+    covered_since: float | None = None
     # Only loaded for the analytics page.
     posts: list[PostStat] = []
 
@@ -193,13 +202,27 @@ class TrackedAccount(BaseModel):
             full=full,
         )
 
-    def views(self, days: int) -> ViewsChange | None:
-        if self.metrics is None or (views := self.metrics.views(days)) is None:
+    def window(self, days: int) -> ViewWindow | None:
+        """The last `days` of the latest successful sync; None before one,
+        or when its read did not reach back that far."""
+        if self.metrics is None or self.latest is None:
             return None
-        return ViewsChange(views=views, previous=self.metrics.previous_views(days))
+        found = ViewWindow.of(
+            self.post_views, days, self.latest.taken_at, self.covered_since
+        )
+        return found if found.covered else None
+
+    def views(self, days: int) -> ViewsChange | None:
+        """The period's views, and those of the `days` before it."""
+        if (last := self.window(days)) is None:
+            return None
+        both = self.window(2 * days)
+        return ViewsChange(
+            views=last.views, previous=both.views - last.views if both else None
+        )
 
     def posts_in(self, days: int) -> int | None:
-        return self.metrics.posts(days) if self.metrics else None
+        return found.posts if (found := self.window(days)) else None
 
     def top_posts(self, days: int, limit: int) -> TopPosts:
         since = (self.scanned_at or time.time()) - days * 86400
@@ -226,7 +249,7 @@ class AccountSort(StrEnum):
 
 
 class AccountQuery(BaseModel):
-    """The list's query string. `period` None: the first configured one."""
+    """The list's query string. `period` None: the configured default."""
 
     q: str = Field(default="", max_length=64)
     platform: str = Field(default="", max_length=32)

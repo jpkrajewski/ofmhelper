@@ -156,9 +156,11 @@ class TrackedAccountRow(Base):
     """A social account /accounts tracks (web/account_tracker.py rescans it
     every `rescan_interval_s`), with its latest scan: `profile` is a
     `socials.AccountProfile` dump, `metrics` an `AccountMetrics` one (what
-    the list shows), `posts` the scan's `PostStat`s (analytics only, never
-    loaded for the list). `error` is the last scan's failure, shown next to
-    the previous numbers; `claimed_at` marks a scan in flight."""
+    the list shows); its posts are `TrackedPostRow`s. `covered_since`: the
+    publish time from which those posts are complete (0: every post was
+    read; None: no scan read any yet). `error` is the last scan's failure,
+    shown next to the previous numbers; `claimed_at` marks a scan in
+    flight."""
 
     __tablename__ = "tracked_accounts"
 
@@ -173,16 +175,60 @@ class TrackedAccountRow(Base):
     added_at: Mapped[float] = mapped_column(Float, nullable=False)
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Set by "Remove": no longer scanned or listed, every record kept;
+    # adding the handle again clears it.
+    untracked_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The platform's stable id (`AccountProfile.account_id`), set by the
+    # first successful scan: a renamed account's new handle merges into it.
+    platform_account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Consecutive failed scans; backs the rescan interval off (see
+    # `AccountsSettings.max_rescan_interval_s`).
+    failed_scans: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     profile: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     metrics: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    posts: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    covered_since: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
             "platform", "handle", name="uq_tracked_accounts_platform_handle"
         ),
+        # NULLs never collide: only scanned accounts carry an id.
+        UniqueConstraint(
+            "platform",
+            "platform_account_id",
+            name="uq_tracked_accounts_platform_account",
+        ),
         Index("ix_tracked_accounts_creator_id", "creator_id"),
+    )
+
+
+class TrackedPostRow(Base):
+    """A post of a tracked account, kept while published within
+    `settings.accounts.post_retention_days`: scans upsert the posts they
+    read (by the platform's own `post_id`) and never remove one they did
+    not see; only age prunes. `views` are as of `last_seen_at`. Deleted
+    with its account."""
+
+    __tablename__ = "tracked_posts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("tracked_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    post_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    thumbnail_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    views: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    posted_at: Mapped[float] = mapped_column(Float, nullable=False)
+    first_seen_at: Mapped[float] = mapped_column(Float, nullable=False)
+    last_seen_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "post_id", name="uq_tracked_posts_account_post"),
+        Index("ix_tracked_posts_account_id_posted_at", "account_id", "posted_at"),
     )
 
 

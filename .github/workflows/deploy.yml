@@ -1,8 +1,9 @@
 name: Deploy
 
 # Deploys main to the production server over SSH. Mirrors what
-# scripts/deploy.sh does by hand (stop -> checkout -> build -> alembic upgrade
-# -> up -> health check); the script stays the manual escape hatch.
+# scripts/deploy.sh does by hand (checkout -> build -> stop app -> up, where
+# compose runs `migrate` to completion before the app starts -> health check);
+# the script stays the manual escape hatch.
 on:
   workflow_run:
     workflows: [CI]
@@ -132,24 +133,24 @@ jobs:
             git reset --hard "$target"
 
             echo "== building =="
-            $compose build ofmhelpers worker
-
-            # Migrate BEFORE the new code goes live (expand-then-deploy): the
-            # old code tolerates a table it does not know about, whereas new
-            # code against an un-migrated database is the outage of
-            # 2026-07-27. A one-off container off the image just built --
-            # `exec` would run the OLD image, which does not have the new
-            # revision files.
-            echo "== migrating =="
-            $compose run --rm -T ofmhelpers alembic upgrade head
+            $compose build ofmhelpers worker migrate
 
             echo "== swapping in the new containers =="
             $compose up -d postgres redis pot-provider
-            # --force-recreate on the app services specifically: a deploy that
-            # leaves the old containers running while reporting success is the
-            # worst possible outcome, and worth one guaranteed restart. --no-deps
+            # Old code never runs against the new schema: the app and worker
+            # stop before `migrate` touches it (seconds of downtime; the build
+            # is already done). Compose then runs `migrate` (alembic upgrade
+            # head, off the image just built) to completion and starts the app
+            # and worker only once it exited 0 -- a failed migration leaves
+            # them down instead of serving a half-migrated database.
+            # --force-recreate: a deploy that leaves the old containers running
+            # while reporting success is the worst possible outcome. --no-deps
             # so this does not bounce the database underneath them.
-            $compose up -d --no-deps --force-recreate ofmhelpers worker
+            echo "== stopping the app =="
+            $compose stop ofmhelpers worker
+            echo "== migrating, then starting the app =="
+            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker
+            $compose logs migrate
 
             # Every deploy leaves the previous image dangling; unreaped they
             # fill the server disk.
@@ -201,9 +202,9 @@ jobs:
             cd "$1"
             compose="docker compose -f docker-compose.yml"
             echo "== docker compose ps =="
-            $compose ps
+            $compose ps -a
             echo "== last 100 log lines =="
-            $compose logs --tail=100 ofmhelpers worker
+            $compose logs --tail=100 migrate ofmhelpers worker
           '
           # Delivered as a file for the same reason as the deploy step: piping
           # into `bash -s` lets the first stdin-reading command swallow the

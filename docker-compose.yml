@@ -13,7 +13,9 @@
 # `git reset --hard` went live in the running container minutes before its
 # Alembic migration did, and /models 500ed until the migration caught up
 # (2026-07-27). Both deploy paths pass `-f docker-compose.yml` explicitly so a
-# stray overlay on the server can never re-enable that.
+# stray overlay on the server can never re-enable that. Migrations are part of
+# the stack itself now: the `migrate` service runs `alembic upgrade head` and
+# the app and worker only start once it has exited 0.
 #
 # Shared app config, reused by the API and the RQ worker via YAML anchors so
 # the worker always mounts exactly the same filesystem the API serves results
@@ -54,6 +56,9 @@ services:
       - .env
     volumes: *app-volumes
     depends_on:
+      # Never against an un-migrated database: `migrate` must have exited 0.
+      migrate:
+        condition: service_completed_successfully
       pot-provider:
         condition: service_started
       postgres:
@@ -94,6 +99,9 @@ services:
       - .env
     volumes: *app-volumes
     depends_on:
+      # Never against an un-migrated database: `migrate` must have exited 0.
+      migrate:
+        condition: service_completed_successfully
       pot-provider:
         condition: service_started
       postgres:
@@ -108,6 +116,30 @@ services:
       - ALL
     cap_add:
       - DAC_OVERRIDE
+
+  # Brings the database to the newest Alembic revision, then exits. The app
+  # and the worker depend on it completing successfully, so every `up` --
+  # dev, a deploy, a fresh server -- migrates first and never starts new
+  # code on an old schema (or any code on a half-migrated one).
+  migrate:
+    build: .
+    container_name: ofmhelpers-migrate
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   postgres:
     image: postgres:16

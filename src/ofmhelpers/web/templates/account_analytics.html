@@ -33,6 +33,9 @@
     </form>
 </div>
 
+{% if account.untracked_at %}
+<p class="notice notice-warn">Not tracked since {{ account.untracked_at|utc("%b %d, %Y") }}: no longer synced, its history is kept. Add @{{ account.handle }} again to resume it.</p>
+{% endif %}
 {% if account.error %}
 <p class="notice notice-fail">Unreachable: {{ account.error }}{% if account.metrics %} — showing the last successful sync.{% endif %}</p>
 {% elif account.status == "private" %}

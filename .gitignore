@@ -24,6 +24,10 @@ deploy.local.env
 /cookies/
 backlog.txt
 
+# Production database snapshot the migration tests run against: real
+# customer data, local only -- this repo is public.
+/tests/fixtures/prod_snapshot.sql
+
 # Raw source media for the landing page. The web transcodes next to them
 # (*-web.mp4) are what the page loads and what ships in the image; these
 # originals are kept locally only -- results1.mp4 alone is 182MB, over

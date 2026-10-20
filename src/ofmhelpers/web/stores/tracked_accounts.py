@@ -58,8 +58,9 @@ def list_creators() -> list[str]:
 
 
 def track(platform: str, handle: str, creator: str | None = None) -> bool:
-    """True when the account is new; one already tracked is only assigned
-    to `creator` (when given)."""
+    """True when the account is new or tracked again (an untracked one comes
+    back with its history); one already tracked is only assigned to
+    `creator` (when given)."""
     return _repository().add(platform, handle, creator)
 
 
@@ -72,7 +73,8 @@ def set_notes(account_id: int, notes: str) -> bool:
 
 
 def untrack(account_ids: list[int]) -> int:
-    return _repository().delete(account_ids)
+    """Stops tracking the accounts; nothing of theirs is deleted."""
+    return _repository().untrack(account_ids)
 
 
 def mark_due(account_ids: list[int]) -> None:
@@ -80,22 +82,29 @@ def mark_due(account_ids: list[int]) -> None:
         _repository().mark_due(account_ids)
 
 
-def claim_due(interval_s: float, claim_ttl_s: float) -> list[int]:
-    return _repository().claim_due(interval_s, claim_ttl_s)
+def claim_due(
+    interval_s: float, claim_ttl_s: float, max_interval_s: float | None = None
+) -> list[int]:
+    """The due accounts, claimed (see the repository); `max_interval_s`
+    None: no backoff for failing ones."""
+    ceiling = interval_s if max_interval_s is None else max_interval_s
+    return _repository().claim_due(interval_s, claim_ttl_s, ceiling)
 
 
 def record_scan(
     account_id: int, stats: AccountStats | None, error: str | None = None
 ) -> None:
     """A scan's result (`stats`) or lasting failure (`error`)."""
+    retention = settings.accounts.post_retention_days
     if stats is None:
-        _repository().record_scan(account_id, None, None, None, error)
+        _repository().record_scan(account_id, None, None, [], None, retention, error)
         return
-    metrics = stats.metrics(settings.accounts.periods_days)
     _repository().record_scan(
         account_id,
         stats.profile.model_dump(mode="json"),
-        metrics.model_dump(mode="json"),
+        stats.metrics().model_dump(mode="json"),
         [p.model_dump(mode="json") for p in stats.posts],
+        stats.reach,
+        retention,
         None,
     )

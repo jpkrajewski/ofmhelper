@@ -1,6 +1,6 @@
 # web
 
-FastAPI app ("Global Ascend LLC — Content Ops"): one password per role (admin/VA), AI generation, media download/cleaning, landing-page CRM, file manager. Jinja2 pages + a small vanilla-JS polling layer.
+FastAPI app ("Ascend Global LLC — Content Ops"): one password per role (admin/VA), AI generation, media download/cleaning, landing-page CRM, file manager. Jinja2 pages + a small vanilla-JS polling layer.
 
 **New background-job tool?** Reuse `stores/jobs.py` + `routers/task_helpers/` + one router file; no new plumbing.
 
@@ -23,7 +23,7 @@ Dependency direction: **routers -> stores -> db**. Routers never open sessions; 
 ## stores/
 - `jobs.py` — `create_job` -> `enqueue(run_job, ...)` -> `get_job`. `run_job` stores only the error message. Results live in the job's JSONB `result`. Pages use `list_jobs_page(tasks, offset, limit, actor)`: SQL filter/slice, heals only the page.
 - `applications.py` — landing-page leads; write-once.
-- `tracked_accounts.py` — /accounts: `list_accounts` (growth baselines per `growth_windows_h`), `get_account`, `get_history`, creators, notes, `record_scan` (metrics computed with `view_windows_days`).
+- `tracked_accounts.py` — /accounts: `list_accounts` (growth baselines per `growth_windows_h`), `get_account`, `get_history`, creators, notes, `record_scan` (one transaction: account row lock, upsert `tracked_posts` within retention, widen `covered_since`, snapshot, age-prune; see socials/CLAUDE.md). View windows are never stored — `TrackedAccount.window(days)` derives any period on read from the kept posts' views/dates (the list loads only those two columns).
 
 ## db/
 `models.py`, `session.py`, `repositories/` (only DB code; inherit `cached_repository.py`). Alembic in `alembic/`; `RETIRED_TABLES` keeps unmapped old tables from being dropped.

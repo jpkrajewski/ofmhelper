@@ -2,6 +2,9 @@
 platform: the profile, the newest posts it could read with their views, and
 the numbers the /accounts list and history are made of."""
 
+from collections.abc import Sequence
+from typing import Self
+
 from pydantic import BaseModel, computed_field
 
 
@@ -9,6 +12,10 @@ class AccountProfile(BaseModel):
     """The account itself, as of the scan."""
 
     handle: str
+    # The platform's own id for the account, stable across handle renames
+    # ("" where the platform has none): a renamed account is matched to
+    # the one already tracked by it.
+    account_id: str = ""
     display_name: str = ""
     followers: int
     # None where the platform does not show it.
@@ -20,13 +27,18 @@ class AccountProfile(BaseModel):
     avatar_url: str = ""
 
 
-class PostStat(BaseModel):
+class PostViews(BaseModel):
+    """A post's views and when it was published: all a view window needs."""
+
+    views: int
+    posted_at: float
+
+
+class PostStat(PostViews):
     """One post (reel, video, ...) of the scan, with its views then."""
 
     id: str
     url: str
-    views: int
-    posted_at: float
     # Expiring CDN URL like the avatar; "" where the platform has none.
     thumbnail_url: str = ""
 
@@ -41,38 +53,37 @@ class ViewWindow(BaseModel):
     posts: int
     covered: bool = True
 
+    @classmethod
+    def of(
+        cls,
+        posts: Sequence[PostViews],
+        days: int,
+        as_of: float,
+        covered_since: float | None,
+    ) -> Self:
+        """The window ending `as_of` over an account's kept `posts`, which
+        are complete from `covered_since` on (None: from nowhere yet)."""
+        since = as_of - days * 86400
+        recent = [p for p in posts if p.posted_at >= since]
+        return cls(
+            days=days,
+            views=sum(p.views for p in recent),
+            posts=len(recent),
+            covered=covered_since is not None and covered_since <= since,
+        )
+
 
 class AccountMetrics(BaseModel):
     """One scan as numbers: stored with every snapshot (the history) and on
-    the account (the list). Posts themselves are not kept per snapshot.
-    Windows are kept for each reporting period and its double, so a period
-    compares against the one before it."""
+    the account (the list). View windows are not stored: any period is
+    derived on read from the account's kept posts (`ViewWindow.of`), so a
+    new reporting period needs no rescan."""
 
     followers: int
     following: int | None = None
     posts_scanned: int = 0
     views_scanned: int = 0
     limited: bool = False
-    windows: list[ViewWindow] = []
-
-    def window(self, days: int) -> ViewWindow | None:
-        """None when not computed or not fully covered by the scan."""
-        found = next((w for w in self.windows if w.days == days), None)
-        return found if found and found.covered else None
-
-    def views(self, days: int) -> int | None:
-        found = self.window(days)
-        return found.views if found else None
-
-    def posts(self, days: int) -> int | None:
-        found = self.window(days)
-        return found.posts if found else None
-
-    def previous_views(self, days: int) -> int | None:
-        """Views of the posts published in the `days` before the last `days`."""
-        both = self.window(2 * days)
-        last = self.window(days)
-        return both.views - last.views if both and last else None
 
 
 class AccountStats(BaseModel):
@@ -92,25 +103,19 @@ class AccountStats(BaseModel):
     def views_scanned(self) -> int:
         return sum(p.views for p in self.posts)
 
-    def metrics(self, periods_days: list[int]) -> AccountMetrics:
-        oldest = min((p.posted_at for p in self.posts), default=self.scanned_at)
-        windows = []
-        for days in sorted({*periods_days, *(2 * d for d in periods_days)}):
-            since = self.scanned_at - days * 86400
-            recent = [p for p in self.posts if p.posted_at >= since]
-            windows.append(
-                ViewWindow(
-                    days=days,
-                    views=sum(p.views for p in recent),
-                    posts=len(recent),
-                    covered=self.complete or oldest <= since,
-                )
-            )
+    @property
+    def reach(self) -> float:
+        """The publish time this read has every post back to: 0 when
+        complete, else its oldest post (none read: only from now on)."""
+        if self.complete:
+            return 0.0
+        return min((p.posted_at for p in self.posts), default=self.scanned_at)
+
+    def metrics(self) -> AccountMetrics:
         return AccountMetrics(
             followers=self.profile.followers,
             following=self.profile.following,
             posts_scanned=len(self.posts),
             views_scanned=self.views_scanned,
             limited=self.limited,
-            windows=windows,
         )

@@ -101,13 +101,13 @@ def scan_accounts(platform_key: str, account_ids: list[int], start: int = 0) -> 
     """The worker job: one platform's claimed accounts, one at a time, each
     tried on up to 1 + `proxy_retries` of the platform's proxies (direct
     without any), starting at proxy `start`. An account removed since it
-    was claimed is skipped."""
+    was claimed (or untracked) is skipped."""
     platform = get_platform(platform_key)
     pool = ProxyPool(platform.proxies(), start)
     retries = settings.accounts.proxy_retries
     for done, account_id in enumerate(account_ids):
         account = get_account(account_id)
-        if account is None:
+        if account is None or account.untracked_at is not None:
             continue
         tries = 1 + min(retries, max(len(pool) - 1, 0))
         try:
@@ -147,7 +147,7 @@ def _batches(due: list[int]) -> list[tuple[str, list[int]]]:
 
 def queue_due_scans() -> list[int]:
     s = settings.accounts
-    due = claim_due(s.rescan_interval_s, s.claim_ttl_s)
+    due = claim_due(s.rescan_interval_s, s.claim_ttl_s, s.max_rescan_interval_s)
     if due:
         logger.info("rescanning %d tracked account(s)", len(due))
         for start, (platform, ids) in enumerate(_batches(due)):

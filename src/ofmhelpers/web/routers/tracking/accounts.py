@@ -49,8 +49,9 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 def _period(query: AccountQuery) -> Period:
     """The query's period when it is a configured one, else the default."""
-    days = settings.accounts.periods_days
-    return Period(days=query.period if query.period in days else days[0])
+    s = settings.accounts
+    days = query.period if query.period in s.periods_days else s.default_period_days
+    return Period(days=days)
 
 
 def _periods() -> list[Period]:
@@ -117,7 +118,8 @@ def creator(body: AssignCreator) -> _Count:
 
 @router.post("/delete")
 def delete(body: SelectedAccounts) -> _Count:
-    """Stops tracking the accounts; their history goes with them."""
+    """Stops tracking the accounts; their history stays, and adding them
+    again resumes it."""
     return _Count(count=untrack(body.ids))
 
 
