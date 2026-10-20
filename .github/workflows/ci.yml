@@ -63,9 +63,6 @@ jobs:
     # tags differently), so nothing runs on the runner itself.
     env:
       COMPOSE: docker compose -f docker-compose.yml -f docker-compose.dev.yml
-      # Instagram rate-limits runner IPs; the integration check falls back to
-      # the same proxies prod scans through (repo secret).
-      OFM_IG_PROXIES: ${{ secrets.OFM_IG_PROXIES }}
 
     steps:
       - uses: actions/checkout@v4
@@ -79,14 +76,11 @@ jobs:
       - name: Build test image
         run: $COMPOSE --profile test build tests
 
+      # The live-service checks (`-m integration`) are not run here: they
+      # run locally and against prod, where the app's own network and
+      # Instagram proxies are (Instagram rate-limits runner IPs).
       - name: Run tests
         run: $COMPOSE run --rm tests
-
-      # TikTok, Instagram, kie.ai and Higgsfield reached for real (DNS, TLS
-      # and each API's answer, tests/integration). No secret needed: the paid
-      # APIs are called with a key they must reject.
-      - name: Live services (integration)
-        run: $COMPOSE run --rm tests uv run --frozen pytest -m integration -q
 
   build:
     name: Docker build

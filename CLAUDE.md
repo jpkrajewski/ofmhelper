@@ -21,7 +21,7 @@ Python 3.12, FastAPI, PostgreSQL, Redis, RQ. Prod = Linux/Docker.
 ## Validation
 Every check runs in Docker dev, never on the host. `C="docker compose -f docker-compose.yml -f docker-compose.dev.yml"`:
 - `$C run --rm tests` — pytest.
-- `$C run --rm tests uv run --frozen pytest -m integration` — live TikTok/Instagram/kie.ai/Higgsfield checks (also a CI step).
+- `$C run --rm tests uv run --frozen pytest -m integration` — live TikTok/Instagram/kie.ai/Higgsfield checks; local only, not on CI (Instagram rate-limits runner IPs).
 - `$C run --rm tests uv run --frozen mypy` / `ruff check src tests` / `ruff format --check src tests`.
 - Page/template/JS/job-flow change: `$C up -d` (+ `$C restart worker`), then `$C run --rm tests uv run --frozen pytest -m e2e`.
 - `pyproject.toml`/`uv.lock`/test-stage change: `$C --profile test build tests`.

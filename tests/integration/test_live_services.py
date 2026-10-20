@@ -1,7 +1,7 @@
 """Every outside service the app depends on, reached for real.
 
-Run with `-m integration` (Docker tests service locally, a step of the CI
-test job on GitHub). Each service is checked at two levels: its hosts
+Run with `-m integration` in the Docker tests service, locally -- not on CI
+(Instagram rate-limits runner IPs). Each service is checked at two levels: its hosts
 resolve and complete a TLS handshake (catches DNS/network breakage, like a
 container that cannot resolve anything), and its API answers the way the
 app's own client expects (catches a changed or blocked API). Nothing is
@@ -75,8 +75,8 @@ def test_host_resolves_and_completes_tls(host: Host):
 
 def test_instagram_serves_a_public_profile():
     """Like the app's scans: direct first, then each configured proxy
-    (`OFM_IG_PROXIES`) -- Instagram rate-limits datacenter IPs such as
-    GitHub's runners, which is why prod scans through proxies too."""
+    (`OFM_IG_PROXIES`) -- Instagram rate-limits datacenter IPs, which is why
+    prod scans through proxies too."""
     routes = [None, *settings.instagram.proxy_urls]
     for proxy in routes:
         try:
