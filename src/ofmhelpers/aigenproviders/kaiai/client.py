@@ -27,6 +27,7 @@ from ofmhelpers.aigenproviders.spec import Payload
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils import outbound
 from ofmhelpers.utils.image_fit import fitted
 
 logger = get_logger(__name__)
@@ -46,7 +47,7 @@ def _session() -> requests.Session:
     )
     session = requests.Session()
     session.mount("https://", HTTPAdapter(max_retries=retry))
-    return session
+    return outbound.mount(session)
 
 
 class KieAIClient:
@@ -165,7 +166,7 @@ class KieAIClient:
         hosted URL. Fails closed: any error is treated as "not there", so the
         caller re-uploads rather than hand kie.ai a broken reference."""
         try:
-            response = requests.head(
+            response = outbound.head(
                 url,
                 timeout=settings.kieai.remote_check_timeout_s,
                 allow_redirects=True,

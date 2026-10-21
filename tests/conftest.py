@@ -195,6 +195,33 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.enable_socket)
 
 
+@pytest.fixture
+def fake_externals(monkeypatch, tmp_path):
+    """OFM_FAKE_EXTERNALS on, every fake fresh (state in `tmp_path`): the
+    app's outside services answered in-process, as under e2e."""
+    from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
+    from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
+    from ofmhelpers.gdrive.fake import _fake_drive
+    from ofmhelpers.instagram.fake import fake_instagram
+    from ofmhelpers.utils import fake_media, outbound
+
+    caches = (
+        outbound._routes,
+        fake_instagram,
+        fake_kie,
+        fake_higgsfield,
+        _fake_drive,
+        fake_media.mp4,
+    )
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
+    monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path / "fakes"))
+    for cached in caches:
+        cached.cache_clear()
+    yield
+    for cached in caches:
+        cached.cache_clear()
+
+
 _SETTINGS_CLASSES = (
     SessionSettings,
     WebSettings,

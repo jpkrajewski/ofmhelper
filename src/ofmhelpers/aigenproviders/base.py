@@ -28,6 +28,7 @@ from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.spec import ModelSpec, Payload
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
@@ -81,7 +82,7 @@ class Provider(ABC):
         """Save a result locally. Result URLs are public on every provider so
         far; one that differs overrides this."""
         try:
-            with requests.get(
+            with outbound.get(
                 url, stream=True, timeout=settings.aigen.download_timeout_s
             ) as response:
                 response.raise_for_status()

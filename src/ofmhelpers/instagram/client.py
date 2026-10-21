@@ -21,7 +21,6 @@ changes it, this file and `models.py` are the whole blast radius.
 
 import http.cookiejar
 import json
-import re
 from collections.abc import Iterator
 from functools import cached_property
 from http import HTTPStatus
@@ -35,6 +34,7 @@ from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import get_cookiefile
+from ofmhelpers.instagram import pages
 from ofmhelpers.instagram.models import (
     ClipsPage,
     LoginTokens,
@@ -47,20 +47,11 @@ from ofmhelpers.instagram.models import (
     TimelinePage,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
 ROOT = "https://www.instagram.com"
-
-_LSD = re.compile(r'"LSD",\[\],\{"token":"([^"]+)"|"lsd":"([^"]+)"')
-_PROFILE_ID = re.compile(r'"profile_id":"(\d+)"')
-# The logged-in web app's viewer id and request token, in its page HTML
-# ("actorID":null on a page served logged out).
-_ACTOR_ID = re.compile(r'"actorID":"(\d+)"')
-_DTSG = re.compile(r'"DTSGInitialData",\[\],\{"token":"([^"]+)"')
-# Which page instagram.com rendered: "profilePage", or "httpErrorPage" for
-# "Sorry, this page isn't available" (a deleted, banned or renamed account).
-_PAGE_ID = re.compile(r'"pageID":"([^"]+)"')
 
 _PAGE_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -126,13 +117,12 @@ def _retrying(session: requests.Session) -> requests.Session:
     adapter = HTTPAdapter(max_retries=retry)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
-    return session
+    return outbound.mount(session)
 
 
-# What a link-preview crawler gets for an existing profile, and only then:
-# the one check that tells a missing account from a page that came back
-# without its data (a soft rate limit looks exactly like a missing account).
-_OG_PROFILE = '<meta property="og:type" content="profile"'
+# The link-preview crawler's view tells a missing account from a page that
+# came back without its data (a soft rate limit looks exactly like a missing
+# account): see `pages.crawler_sees_a_profile`.
 _CRAWLER_UA = (
     "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
 )
@@ -160,11 +150,10 @@ class InstagramClient:
             timeout=self._settings.timeout_s,
         )
         self._raise_for(r)
-        user_id = _PROFILE_ID.search(r.text)
-        if user_id is None:
+        tokens = pages.reels_page(r.text)
+        if tokens.profile_id is None:
             raise self._missing(username)
-        lsd = _LSD.search(r.text)
-        self._lsd = next(g for g in lsd.groups() if g) if lsd else ""
+        self._lsd = tokens.lsd
         self._referer = f"{ROOT}/{username}/reels/"
 
         page = self._query(
@@ -173,7 +162,7 @@ class InstagramClient:
             self._settings.profile_doc_id,
             {
                 "enable_integrity_filters": True,
-                "id": user_id.group(1),
+                "id": tokens.profile_id,
                 **_PROFILE_FLAGS,
             },
         )
@@ -201,7 +190,7 @@ class InstagramClient:
             headers={"User-Agent": _CRAWLER_UA},
             timeout=self._settings.timeout_s,
         )
-        if r.ok and _OG_PROFILE not in r.text:
+        if r.ok and not pages.crawler_sees_a_profile(r.text):
             return ProfileNotFoundError("profile not found")
         return InstagramRateLimitedError(
             "Instagram withheld the profile page — retrying later"
@@ -332,10 +321,7 @@ class InstagramClient:
         except requests.RequestException:
             logger.warning("logged-in profile %s unreachable", username, exc_info=True)
             return None
-        page = _PAGE_ID.search(r.text)
-        if not r.ok or page is None:
-            return None
-        return {"profilePage": True, "httpErrorPage": False}.get(page.group(1))
+        return pages.is_profile_page(r.text) if r.ok else None
 
     def _login_tokens(self, username: str) -> LoginTokens | None:
         """What the uploaded login's GraphQL calls need, read off the
@@ -350,18 +336,14 @@ class InstagramClient:
             headers=_PAGE_HEADERS,
             timeout=self._settings.timeout_s,
         )
-        actor = _ACTOR_ID.search(r.text)
-        dtsg = _DTSG.search(r.text)
-        if not r.ok or actor is None or dtsg is None:
-            logger.warning("the uploaded Instagram login is not logged in")
-            return None
-        lsd = _LSD.search(r.text)
-        return LoginTokens(
-            actor_id=actor.group(1),
-            fb_dtsg=dtsg.group(1),
-            lsd=next((g for g in lsd.groups() if g), "") if lsd else "",
-            referer=f"{ROOT}/{username}/reels/",
+        tokens = (
+            pages.login_tokens(r.text, referer=f"{ROOT}/{username}/reels/")
+            if r.ok
+            else None
         )
+        if tokens is None:
+            logger.warning("the uploaded Instagram login is not logged in")
+        return tokens
 
     def reels_logged_in(
         self, username: str, user_id: str, limit: int

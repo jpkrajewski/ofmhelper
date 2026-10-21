@@ -1,0 +1,1 @@
+{"code": 200, "msg": "success", "data": {"taskId": "task_seedream_0001", "model": "seedream/5-lite-text-to-image", "state": "generating", "param": "{}", "resultJson": null, "failCode": null, "failMsg": null, "costTime": null, "completeTime": null, "createTime": 1792550000000}}

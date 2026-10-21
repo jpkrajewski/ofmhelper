@@ -1,0 +1,56 @@
+{
+  "profiles": [
+    {
+      "username": "sheep_love33",
+      "pk": "41000000001",
+      "full_name": "Sheep Love",
+      "followers": 12000,
+      "following": 180,
+      "reels": [
+        {"views": 1500000, "age_h": 5, "duration_s": 9.5},
+        {"views": 620000, "age_h": 20, "duration_s": 12.0},
+        {"views": 260000, "age_h": 40, "duration_s": 7.2},
+        {"views": 130000, "age_h": 70, "duration_s": 14.1},
+        {"views": 61000, "age_h": 100, "duration_s": 11.0},
+        {"views": 900000, "age_h": 30, "duration_s": 31.0},
+        {"views": 21000, "age_h": 50, "duration_s": 8.0},
+        {"views": 3000000, "age_h": 900, "duration_s": 10.0, "pinned": true}
+      ]
+    },
+    {
+      "username": "brookslockvip",
+      "pk": "41000000002",
+      "full_name": "Brooks Lock",
+      "followers": 200000,
+      "following": 40,
+      "is_verified": true,
+      "reels": [
+        {"views": 2200000, "age_h": 8, "duration_s": 13.0},
+        {"views": 900000, "age_h": 26, "duration_s": 10.4},
+        {"views": 310000, "age_h": 60, "duration_s": 6.6},
+        {"views": 70000, "age_h": 90, "duration_s": 9.9}
+      ]
+    },
+    {
+      "username": "yuki_kanasiva",
+      "pk": "41000000003",
+      "full_name": "Yuki",
+      "followers": 850,
+      "following": 312,
+      "reels": [
+        {"views": 1200, "age_h": 10, "duration_s": 8.0},
+        {"views": 940, "age_h": 34, "duration_s": 12.0},
+        {"views": 2600, "age_h": 80, "duration_s": 15.0}
+      ]
+    },
+    {
+      "username": "closed_doors",
+      "pk": "41000000004",
+      "full_name": "Private",
+      "followers": 500,
+      "following": 20,
+      "is_private": true,
+      "reels": []
+    }
+  ]
+}

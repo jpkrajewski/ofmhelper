@@ -1,4 +1,6 @@
-"""Every outside service the app depends on, reached for real.
+"""Every outside service the app depends on, reached for real: DNS + TLS
+for each host, and TikTok through yt-dlp. What each service answers is
+checked in its own contract test (test_*_contract.py), on its fake too.
 
 Run with `scripts/test.sh live` (Docker tests service), locally -- not on CI
 (Instagram rate-limits runner IPs). Each service is checked at two levels: its hosts
@@ -17,13 +19,8 @@ import pytest
 import yt_dlp
 from pydantic import BaseModel
 
-from ofmhelpers.aigenproviders.errors import ProviderAuthError
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.config import settings
-from ofmhelpers.instagram import InstagramRateLimitedError, ProfileNotFoundError
 from ofmhelpers.instagram import client as instagram_client
-from ofmhelpers.instagram.client import InstagramClient
 from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
 
 pytestmark = pytest.mark.live
@@ -73,22 +70,6 @@ def test_host_resolves_and_completes_tls(host: Host):
         assert tls.version()
 
 
-def test_instagram_serves_a_public_profile():
-    """Like the app's scans: direct first, then each configured proxy
-    (`OFM_IG_PROXIES`). Like the app, a rate limit or a "not found" for an
-    account that exists means a flagged IP: try the next route (prod's own
-    IP gets "not found", 2026-10-20)."""
-    routes = [None, *settings.instagram.proxy_urls]
-    for proxy in routes:
-        try:
-            profile = InstagramClient(proxy).open_profile(INSTAGRAM_PROFILE)
-        except (InstagramRateLimitedError, ProfileNotFoundError):
-            continue
-        assert profile.followers > 0
-        return
-    pytest.fail(f"Instagram refused all {len(routes)} routes")
-
-
 def test_tiktok_video_metadata_extracts():
     options = {"quiet": True, "no_warnings": True, "skip_download": True}
     with yt_dlp.YoutubeDL(options) as ydl:
@@ -96,15 +77,3 @@ def test_tiktok_video_metadata_extracts():
 
     assert info["id"] == TIKTOK_VIDEO.rsplit("/", 1)[1]
     assert info.get("formats")
-
-
-def test_kie_answers_and_rejects_a_bad_key():
-    with pytest.raises(ProviderAuthError):
-        KieProvider(BAD_KEY).status("integration-test")
-
-
-def test_higgsfield_answers_and_rejects_a_bad_key():
-    with pytest.raises(ProviderAuthError):
-        HiggsfieldProvider(f"{BAD_KEY}:{BAD_KEY}").status(
-            "00000000-0000-0000-0000-000000000000"
-        )

@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
+from ofmhelpers.downloaders import fake
 from ofmhelpers.downloaders.cookies import get_cookiefile
 from ofmhelpers.downloaders.models import DownloadResult
 
@@ -44,6 +45,8 @@ class ImageDownloadConfig(BaseModel):
 
 def download(url: str, config: ImageDownloadConfig | None = None) -> DownloadResult:
     config = config or ImageDownloadConfig()
+    if settings.infra.fake_externals:
+        return fake.images(url, config.output_dir)
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     before_mtimes = {
