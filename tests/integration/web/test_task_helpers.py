@@ -12,6 +12,7 @@ Covers the "don't store a duplicate file" logic in web/routers/task_helpers.py:
 import io
 import json
 import os
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -182,6 +183,26 @@ def test_reusing_a_ref_records_it_as_used(tmp_path, monkeypatch):
     )
 
     assert recorded == [existing.resolve()]
+
+
+def test_a_new_upload_is_recorded_as_used_too(tmp_path, monkeypatch):
+    """Re-uploading a file the store already has keeps its old mtime
+    (content-deduped), so only "used" can bring it to the picker's front."""
+    assets_root = tmp_path / "assets"
+    first = build_ordered_paths(
+        json.dumps([{"kind": "new"}]), [make_upload("face.png")], assets_root
+    )
+    recorded = []
+    monkeypatch.setattr(ref_usage, "record_use", recorded.append)
+
+    again = build_ordered_paths(
+        json.dumps([{"kind": "new"}, {"kind": "existing", "path": first[0]}]),
+        [make_upload("face-copy.png")],
+        assets_root,
+    )
+
+    assert again == [first[0], first[0]]
+    assert recorded == [Path(first[0]), Path(first[0])]
 
 
 # ---------------------------------------------------------------------------

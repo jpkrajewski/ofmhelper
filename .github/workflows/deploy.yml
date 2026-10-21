@@ -155,6 +155,9 @@ jobs:
             # Every deploy leaves the previous image dangling; unreaped they
             # fill the server disk.
             docker image prune -f >/dev/null
+            # Each build also strands ~1GB of build cache (new .venv layer);
+            # cap it, keeping the newest layers so rebuilds stay fast.
+            docker builder prune -f --max-used-space 5gb >/dev/null
 
             echo "== deployed =="
             $compose ps
