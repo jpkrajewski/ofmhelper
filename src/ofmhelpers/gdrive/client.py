@@ -22,6 +22,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from ofmhelpers.config import settings
+from ofmhelpers.gdrive.base import DriveApi, DriveError, FolderGoneError
 from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder
 from ofmhelpers.log import get_logger
 
@@ -36,15 +37,6 @@ SCOPES = ("https://www.googleapis.com/auth/drive",)
 _FILE_FIELDS = "id, name, mimeType, webViewLink, hasThumbnail, createdTime, size"
 _THUMB_SIZE = re.compile(r"=s\d+$")
 _THUMB_TIMEOUT_S = 20
-
-
-class DriveError(Exception):
-    """Drive is not set up, refused, or failed; the message says which
-    (/drive shows it as is)."""
-
-
-class FolderGoneError(DriveError):
-    """Missing, trashed, not a folder, or not shared with the account."""
 
 
 @lru_cache(maxsize=1)
@@ -69,6 +61,10 @@ def _key() -> str:
 
 def service_account_email() -> str | None:
     """Who the root folder is shared with; None when not set up."""
+    if settings.infra.fake_externals:
+        from ofmhelpers.gdrive.fake import FAKE_BOT_EMAIL
+
+        return FAKE_BOT_EMAIL
     try:
         return _credentials(_key()).service_account_email
     except DriveError:
@@ -88,6 +84,8 @@ def _failure(exc: Exception, what: str) -> DriveError:
 
 
 class Drive:
+    """The real Drive (`DriveApi`)."""
+
     def __init__(
         self, credentials: service_account.Credentials, http: Any = None
     ) -> None:
@@ -188,34 +186,48 @@ class Drive:
         logger.info("drive: renamed folder %s to %r", folder_id, name)
         return DriveFolder(id=done["id"], name=done["name"])
 
-    def thumbnail(self, file_id: str, px: int) -> tuple[bytes, str] | None:
-        """The file's preview image (bytes, content type), `px` on its
-        longest side; None while Drive has none (a video just uploaded)."""
+    def file(self, file_id: str) -> DriveFile:
+        """One item with its parents and preview link. Raises
+        `FolderGoneError` when it is missing or not shared."""
         found = self._run(
             self._files.get(
-                fileId=file_id, fields="thumbnailLink", supportsAllDrives=True
+                fileId=file_id,
+                fields=f"{_FILE_FIELDS}, parents, thumbnailLink, ownedByMe, trashed",
+                supportsAllDrives=True,
             ),
             f"File {file_id}",
         )
-        link = found.get("thumbnailLink")
-        if not link:
+        if found.get("trashed"):
+            msg = f"File {file_id} is trashed"
+            raise FolderGoneError(msg)
+        return DriveFile.model_validate(found)
+
+    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
+        """`item`'s preview image (bytes, content type), `px` on its
+        longest side; None while Drive has none (a video just uploaded)."""
+        if not item.thumbnail_link:
             return None
         # Short-lived, and only answers with the account's token.
-        url = _THUMB_SIZE.sub(f"=s{px}", link)
+        url = _THUMB_SIZE.sub(f"=s{px}", item.thumbnail_link)
         try:
             response = AuthorizedSession(self._credentials).get(
                 url, timeout=_THUMB_TIMEOUT_S
             )
         except (GoogleAuthError, OSError) as exc:
-            raise _failure(exc, f"Preview of {file_id}") from exc
+            raise _failure(exc, f"Preview of {item.id}") from exc
         if response.status_code != HTTPStatus.OK:
             logger.warning(
-                "drive: preview of %s answered %s", file_id, response.status_code
+                "drive: preview of %s answered %s", item.id, response.status_code
             )
             return None
         return response.content, response.headers.get("Content-Type", "image/jpeg")
 
 
-def connect() -> Drive:
-    """A `Drive` for this thread. Raises `DriveError` when not set up."""
+def connect() -> DriveApi:
+    """A `Drive` for this thread (the fake one under OFM_FAKE_EXTERNALS).
+    Raises `DriveError` when not set up."""
+    if settings.infra.fake_externals:
+        from ofmhelpers.gdrive.fake import fake_drive
+
+        return fake_drive()
     return Drive(_credentials(_key()))

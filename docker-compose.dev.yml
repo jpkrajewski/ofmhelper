@@ -83,7 +83,7 @@ services:
 
   # Every test/lint/type check, inside Linux:
   #   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm tests
-  #   docker compose ... run --rm tests uv run --frozen pytest -m e2e    (stack up)
+  #   docker compose ... run --rm tests uv run --frozen pytest -m e2e    (starts its own app)
   #   docker compose ... run --rm tests uv run --frozen pytest -m integration
   #   docker compose ... run --rm tests uv run --frozen mypy
   #   docker compose ... run --rm tests uv run --frozen pre-commit run --all-files
@@ -99,7 +99,6 @@ services:
     environment:
       - OFM_TEST_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers_test
       - OFM_TEST_REDIS_URL=redis://redis:6379/1
-      - OFM_E2E_BASE_URL=http://ofmhelpers:8000
     volumes:
       - .:/app
     networks:

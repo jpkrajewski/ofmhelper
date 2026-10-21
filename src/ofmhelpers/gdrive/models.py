@@ -34,6 +34,10 @@ class DriveFile(BaseModel):
     has_thumbnail: bool = Field(default=False, alias="hasThumbnail")
     created_time: datetime | None = Field(default=None, alias="createdTime")
     size: int | None = None
+    # Only `Drive.file` asks for these three.
+    parents: list[str] = Field(default_factory=list)
+    thumbnail_link: str = Field(default="", alias="thumbnailLink")
+    owned_by_me: bool = Field(default=False, alias="ownedByMe")
 
     @property
     def is_folder(self) -> bool:

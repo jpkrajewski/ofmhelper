@@ -17,6 +17,8 @@ config/__init__.py's docstring for why.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -245,6 +247,23 @@ class InfraSettings(BaseSettings):
     # absorbs the read burst a page render makes, it is not a write-through
     # cache, and every write bumps its namespace anyway.
     cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")
+    # Which deployment this is. Only the server's .env says "production";
+    # anything else (dev, CI, tests) is kept off live resources that must
+    # only ever be touched by production (the live Drive folder).
+    environment: Literal["production", "development"] = Field(
+        default="development", validation_alias="OFM_ENV"
+    )
+    # Every outside service (Drive, AI providers, Instagram) swapped for its
+    # in-process fake (`ofmhelpers.fakes`). E2E runs with it on; production
+    # never does.
+    fake_externals: bool = Field(default=False, validation_alias="OFM_FAKE_EXTERNALS")
+    # Where fakes keep state shared between processes (the app under test
+    # and the test seeding it). Empty = in memory, this process only.
+    fakes_dir: str = Field(default="", validation_alias="OFM_FAKES_DIR")
+
+    @property
+    def production(self) -> bool:
+        return self.environment == "production"
 
 
 class KieAISettings(BaseSettings):
@@ -691,7 +710,7 @@ class GDriveSettings(BaseSettings):
     line) works in `root_folder_id`, which its owner shares with the
     account's `client_email` as Editor. Each Instagram login on an active
     phone gets a "<handle> - <owner>" folder there and, every day in
-    `timezone`, a day folder ("Oct 21") inside it."""
+    `timezone`, a day folder ("2026-10-21") inside it."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -699,6 +718,12 @@ class GDriveSettings(BaseSettings):
         default=None, validation_alias="OFM_GDRIVE_SERVICE_ACCOUNT"
     )
     root_folder_id: str = Field(default="", validation_alias="OFM_GDRIVE_ROOT_FOLDER")
+    # The live "ALL ACCOUNTS" folder. Set in every .env (prod and dev) so a
+    # non-production deployment can tell it apart and refuse it
+    # (web/drive_folders.py `root_folder`); not in code, the repo is public.
+    production_root_folder_id: str = Field(
+        default="", validation_alias="OFM_GDRIVE_PRODUCTION_ROOT_FOLDER"
+    )
     # IANA: the day starts at midnight here, DST included.
     timezone: str = Field(
         default="Europe/Warsaw", validation_alias="OFM_GDRIVE_TIMEZONE"

@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import datetime
 import time
+from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.web.db.models import DriveAccountFolderRow, DriveDayFolderRow
@@ -16,6 +18,12 @@ from ofmhelpers.web.db.repositories.cached_repository import (
     invalidates_cache,
 )
 from ofmhelpers.web.db.session import session_scope
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+# pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
+_SYNC_LOCK_KEY = 0x0D21_5E00
 
 
 class DriveFolderRepository(CachedRepository):
@@ -41,6 +49,30 @@ class DriveFolderRepository(CachedRepository):
                 )
             ).all()
             return {str(login_id): folder_id for login_id, folder_id in rows}
+
+    @cached
+    def folder_ids(self) -> list[str]:
+        """Every Drive folder id the app made or adopted (account and day
+        folders): what /drive may show previews from."""
+        with session_scope() as s:
+            accounts = s.execute(select(DriveAccountFolderRow.folder_id)).scalars()
+            days = s.execute(select(DriveDayFolderRow.folder_id)).scalars()
+            return sorted({*accounts, *days})
+
+    @contextmanager
+    def sync_lock(self) -> Iterator[bool]:
+        """Whether this caller holds the one sweep lock (Postgres advisory,
+        session level): never waits; a crashed holder's connection closing
+        frees it, no expiry to outlive."""
+        with session_scope() as s:
+            held = bool(
+                s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar()
+            )
+            try:
+                yield held
+            finally:
+                if held:
+                    s.execute(select(func.pg_advisory_unlock(_SYNC_LOCK_KEY)))
 
     @invalidates_cache
     def save_account_folder(self, login_id: int, folder_id: str, name: str) -> None:

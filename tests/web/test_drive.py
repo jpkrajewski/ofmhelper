@@ -1,24 +1,28 @@
 """/drive: every Instagram login on an active phone gets "<handle> - <owner>"
-in the shared Drive folder and a folder per day inside it; a re-run calls
-Drive for nothing, a hand-made folder is reused, a new owner renames, a
-deleted folder comes back; the page shows each day folder's files with
-previews proxied through the app."""
+in the shared Drive folder and a folder per day ("2026-10-21") inside it; a
+re-run writes nothing, a hand-made folder is reused, a new owner renames, a
+deleted folder comes back, concurrent sweeps never duplicate, the live
+folder is refused outside production; the page shows each day folder's
+files with previews proxied through the app, and only those."""
 
+import asyncio
 import datetime
-import itertools
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
+import time_machine
 from fastapi.testclient import TestClient
 
-from ofmhelpers.cache import get_redis
-from ofmhelpers.gdrive import DriveError, DriveFile, DriveFolder, FolderGoneError
-from ofmhelpers.gdrive.models import FOLDER_MIME
+from ofmhelpers.gdrive import FolderGoneError, connect
+from ofmhelpers.gdrive.fake import FAKE_BOT_EMAIL, FakeDrive
 from ofmhelpers.web import drive_folders
+from ofmhelpers.web.drive_folders import ProductionFolderError
 from ofmhelpers.web.main import app
 from ofmhelpers.web.schemas import DeviceFields, LoginFields, day_folder_name
 from ofmhelpers.web.stores import devices
@@ -28,93 +32,10 @@ DAY = datetime.date(2026, 10, 21)
 ROOT = "root-folder-id"
 
 
-class FakeDrive:
-    """Drive as a dict of items; counts every call so a test can tell a
-    sweep did nothing."""
-
-    def __init__(self) -> None:
-        self.items: dict[str, dict] = {
-            ROOT: {"name": "ALL ACCOUNTS", "parent": None, "mime": FOLDER_MIME}
-        }
-        self.calls: list[str] = []
-        self.shared = True
-        self.fail_on: set[str] = set()
-        self._ids = itertools.count(1)
-
-    def add(self, parent: str, name: str, mime: str = FOLDER_MIME, **extra) -> str:
-        item_id = f"fake-item-{next(self._ids):06d}"
-        self.items[item_id] = {"name": name, "parent": parent, "mime": mime, **extra}
-        return item_id
-
-    def _live(self, item_id: str) -> dict:
-        item = self.items.get(item_id)
-        if item is None or item.get("trashed") or (item_id == ROOT and not self.shared):
-            msg = f"Folder {item_id}: not found"
-            raise FolderGoneError(msg)
-        return item
-
-    def folder(self, folder_id: str) -> DriveFolder:
-        self.calls.append("folder")
-        return DriveFolder(id=folder_id, name=self._live(folder_id)["name"])
-
-    def children(
-        self, parent_id: str, *, folders_only: bool = False
-    ) -> list[DriveFile]:
-        self.calls.append("children")
-        self._live(parent_id)
-        return [
-            DriveFile(
-                id=i,
-                name=x["name"],
-                mime_type=x["mime"],
-                has_thumbnail=x.get("thumb", False),
-            )
-            for i, x in self.items.items()
-            if x["parent"] == parent_id
-            and not x.get("trashed")
-            and (not folders_only or x["mime"] == FOLDER_MIME)
-        ]
-
-    def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
-        self.calls.append("find")
-        for i, x in self.items.items():
-            if x["parent"] == parent_id and x["name"] == name and not x.get("trashed"):
-                return DriveFolder(id=i, name=name)
-        return None
-
-    def create_folder(self, parent_id: str, name: str) -> DriveFolder:
-        self.calls.append("create")
-        if name in self.fail_on:
-            msg = f"Creating {name!r}: Drive refused"
-            raise DriveError(msg)
-        self._live(parent_id)
-        return DriveFolder(id=self.add(parent_id, name), name=name)
-
-    def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:
-        return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
-
-    def rename(self, folder_id: str, name: str) -> DriveFolder:
-        self.calls.append("rename")
-        self.items[folder_id]["name"] = name
-        return DriveFolder(id=folder_id, name=name)
-
-    def thumbnail(self, file_id: str, _px: int) -> tuple[bytes, str] | None:
-        self.calls.append("thumbnail")
-        if not self.items.get(file_id, {}).get("thumb"):
-            return None
-        return b"\xff\xd8jpeg", "image/jpeg"
-
-    def named(self, name: str, parent: str = ROOT) -> list[str]:
-        return [
-            i
-            for i, x in self.items.items()
-            if x["name"] == name and x["parent"] == parent and not x.get("trashed")
-        ]
-
-
 @pytest.fixture
 def drive(monkeypatch) -> FakeDrive:
     fake = FakeDrive()
+    fake.seed_folder("ALL ACCOUNTS", item_id=ROOT, shared=True)
     monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
     monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", ROOT)
     monkeypatch.setattr(drive_folders, "connect", lambda: fake)
@@ -145,18 +66,24 @@ def _login(device_id: int, service: str, username: str) -> int:
     return added[0]
 
 
-def _day_folder(drive: FakeDrive, handle: str, owner: str = "Anna") -> str:
-    (account,) = drive.named(f"{handle} - {owner}")
-    (day,) = drive.named(day_folder_name(DAY), parent=account)
-    return day
+def _account(drive: FakeDrive, handle: str, owner: str = "Anna") -> str:
+    (account,) = drive.named(f"{handle} - {owner}", ROOT)
+    return account
+
+
+def _day_folder(
+    drive: FakeDrive, handle: str, owner: str = "Anna", day: datetime.date = DAY
+) -> str:
+    (folder,) = drive.named(day_folder_name(day), _account(drive, handle, owner))
+    return folder
 
 
 # --- names ---------------------------------------------------------------------
 
 
-def test_day_folder_is_month_and_day_without_zero():
-    assert day_folder_name(datetime.date(2026, 1, 1)) == "Jan 1"
-    assert day_folder_name(DAY) == "Oct 21"
+def test_day_folder_is_the_iso_date():
+    assert day_folder_name(datetime.date(2026, 1, 1)) == "2026-01-01"
+    assert day_folder_name(DAY) == "2026-10-21"
 
 
 def test_today_follows_the_configured_timezone(monkeypatch):
@@ -165,6 +92,42 @@ def test_today_follows_the_configured_timezone(monkeypatch):
     monkeypatch.setenv("OFM_GDRIVE_TIMEZONE", "Pacific/Pago_Pago")
     west = drive_folders.today()
     assert east - west == datetime.timedelta(days=1)
+
+
+# Warsaw: CEST (UTC+2) until 03:00 on 2026-10-25, the last Sunday of
+# October, then CET (UTC+1).
+@pytest.mark.parametrize(
+    ("utc", "day"),
+    [
+        ("2026-10-21T21:59:00", "2026-10-21"),  # 23:59 CEST
+        ("2026-10-21T22:01:00", "2026-10-22"),  # 00:01 CEST
+        ("2026-10-24T21:59:00", "2026-10-24"),  # 23:59 CEST, the night of the change
+        ("2026-10-24T22:01:00", "2026-10-25"),  # 00:01 CEST, Sunday
+        ("2026-10-25T22:59:00", "2026-10-25"),  # 23:59 CET, the first CET night
+        ("2026-10-25T23:01:00", "2026-10-26"),  # 00:01 CET
+    ],
+)
+def test_the_day_turns_at_warsaw_midnight_across_the_dst_change(utc, day):
+    instant = datetime.datetime.fromisoformat(utc).replace(tzinfo=datetime.UTC)
+    with time_machine.travel(instant, tick=False):
+        assert drive_folders.today().isoformat() == day
+
+
+def test_sync_at_warsaw_midnight_makes_the_new_days_folder(monkeypatch):
+    fake = FakeDrive()
+    fake.seed_folder("ALL ACCOUNTS", item_id=ROOT, shared=True)
+    monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
+    monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", ROOT)
+    monkeypatch.setattr(drive_folders, "connect", lambda: fake)
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    before = datetime.datetime(2026, 10, 24, 21, 59, tzinfo=datetime.UTC)
+    with time_machine.travel(before, tick=False):
+        drive_folders.sync()
+    with time_machine.travel(before + datetime.timedelta(minutes=2), tick=False):
+        assert drive_folders.sync().days == 1
+    account = _account(fake, "ann.ig")
+    assert fake.named("2026-10-24", account)
+    assert fake.named("2026-10-25", account)
 
 
 # --- sync ----------------------------------------------------------------------
@@ -184,13 +147,15 @@ def test_sync_makes_a_folder_and_a_day_folder_per_instagram_login(drive):
     assert report.days == 1
     assert not report.failed
     assert _day_folder(drive, "ann.ig")
-    assert not drive.named("bob.ig - Bob")
+    assert drive.named("bob.ig - Bob", ROOT) == []
+    # The bot owns what it made.
+    assert drive.item(_account(drive, "ann.ig")).owner == FAKE_BOT_EMAIL
 
 
 def test_second_sync_the_same_day_never_calls_drive(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
-    drive.calls.clear()
+    drive.clear_calls()
 
     report = drive_folders.sync()
 
@@ -199,37 +164,85 @@ def test_second_sync_the_same_day_never_calls_drive(drive):
     assert report.days == 0
 
 
-def test_next_day_adds_only_the_day_folder(drive, monkeypatch):
+def test_next_day_adds_only_the_day_folder(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     tomorrow = DAY + datetime.timedelta(days=1)
+    drive.clear_calls()
 
     report = drive_folders.sync(tomorrow)
 
     assert report.created == []
     assert report.days == 1
-    (account,) = drive.named("ann.ig - Anna")
-    assert drive.named(day_folder_name(tomorrow), parent=account)
+    assert drive.writes == ["create"]
+    assert _day_folder(drive, "ann.ig", day=tomorrow)
 
 
 def test_hand_made_folders_are_reused_not_duplicated(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
-    account = drive.add(ROOT, "ann.ig - Anna")
-    day = drive.add(account, "Oct 21")
+    account = drive.seed_folder("ann.ig - Anna", ROOT)
+    day = drive.seed_folder("2026-10-21", account)
 
     report = drive_folders.sync()
 
     assert report.adopted == ["ann.ig - Anna"]
     assert report.created == []
-    assert drive.named("ann.ig - Anna") == [account]
+    assert drive.writes == []
+    assert drive.named("ann.ig - Anna", ROOT) == [account]
     assert store.day_folders(DAY) == {store.targets()[0].login_id: day}
+
+
+def test_last_years_day_folder_is_never_reused(drive):
+    """With the year in the name, 2025's folder (and an old-style "Oct 21")
+    is left alone and this year's is made."""
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    account = drive.seed_folder("ann.ig - Anna", ROOT)
+    last_year = drive.seed_folder("2025-10-21", account)
+    old_style = drive.seed_folder("Oct 21", account)
+
+    drive_folders.sync()
+
+    made = _day_folder(drive, "ann.ig")
+    assert made not in (last_year, old_style)
+    assert drive.item(last_year).name == "2025-10-21"
+    assert drive.item(old_style).name == "Oct 21"
+
+
+def test_names_are_not_unique_and_the_oldest_is_adopted(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    oldest = drive.seed_folder("ann.ig - Anna", ROOT)
+    drive.seed_folder("ann.ig - Anna", ROOT)
+
+    drive_folders.sync()
+
+    assert store.account_folders()[store.targets()[0].login_id].folder_id == oldest
+
+
+def test_vas_near_miss_folders_are_left_alone(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    near = [
+        drive.seed_folder(name, ROOT)
+        for name in ("ann.ig-Anna", "Ann.ig - anna", "ann.ig - Anna ", "ann.ig")
+    ]
+
+    report = drive_folders.sync()
+
+    assert report.created == ["ann.ig - Anna"]
+    assert report.renamed == []
+    assert [drive.item(i).name for i in near] == [
+        "ann.ig-Anna",
+        "Ann.ig - anna",
+        "ann.ig - Anna ",
+        "ann.ig",
+    ]
+    assert drive.named("2026-10-21", near[0]) == []
 
 
 def test_new_owner_renames_the_folder(drive):
     phone = _phone("Phone 01", owner="Anna")
     _login(phone, "instagram", "ann.ig")
     drive_folders.sync()
-    (account,) = drive.named("ann.ig - Anna")
+    account = _account(drive, "ann.ig")
     devices.update_device(
         phone,
         DeviceFields(
@@ -240,28 +253,58 @@ def test_new_owner_renames_the_folder(drive):
     report = drive_folders.sync()
 
     assert report.renamed == ["ann.ig - Kate"]
-    assert drive.named("ann.ig - Kate") == [account]
+    assert drive.named("ann.ig - Kate", ROOT) == [account]
     assert report.days == 0
 
 
-def test_deleted_folder_is_made_again(drive):
+def test_a_hand_renamed_folder_stays_linked_by_id(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
-    (account,) = drive.named("ann.ig - Anna")
-    drive.items[account]["trashed"] = True
+    account = _account(drive, "ann.ig")
+    drive.rename_by_hand(account, "ANN (do not touch)")
+
+    tomorrow = DAY + datetime.timedelta(days=1)
+    report = drive_folders.sync(tomorrow)
+
+    # Same folder: the next day goes inside it, and its name comes back.
+    assert report.created == []
+    assert report.renamed == ["ann.ig - Anna"]
+    assert drive.named("ann.ig - Anna", ROOT) == [account]
+    assert drive.named("2026-10-22", account)
+
+
+def test_trashed_folder_is_made_again(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    account = _account(drive, "ann.ig")
+    drive.trash(account)
     store.forget_day_folder(store.targets()[0].login_id, DAY)
 
     report = drive_folders.sync()
 
     assert report.created == ["ann.ig - Anna"]
     assert report.days == 1
+    assert _account(drive, "ann.ig") != account
+    # Trash is not delete: the old one is still there, in the trash.
+    assert drive.item(account).trashed
+
+
+def test_deleted_folder_is_made_again(drive):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    drive.delete(_account(drive, "ann.ig"))
+    store.forget_day_folder(store.targets()[0].login_id, DAY)
+
+    report = drive_folders.sync()
+
+    assert report.created == ["ann.ig - Anna"]
     assert _day_folder(drive, "ann.ig")
 
 
 def test_one_failing_login_does_not_stop_the_others(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
-    drive.fail_on.add("ann.ig - Anna")
+    drive.fail_on("ann.ig - Anna")
 
     report = drive_folders.sync()
 
@@ -269,7 +312,7 @@ def test_one_failing_login_does_not_stop_the_others(drive):
     assert "ann.ig - Anna" in report.failed[0]
     assert _day_folder(drive, "bob.ig", owner="Bob")
     # Retried on the next sweep.
-    drive.fail_on.clear()
+    drive.fail_on()
     assert drive_folders.sync().created == ["ann.ig - Anna"]
 
 
@@ -284,20 +327,10 @@ def test_a_login_on_two_phones_gets_one_folder(drive):
 
 def test_root_not_shared_raises_and_changes_nothing(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
-    drive.shared = False
+    drive.unshare(ROOT)
     with pytest.raises(FolderGoneError):
         drive_folders.sync()
     assert store.account_folders() == {}
-
-
-def test_concurrent_sync_is_skipped(drive):
-    _login(_phone("Phone 01"), "instagram", "ann.ig")
-    get_redis().set("lock:drive:sync", "1")
-    try:
-        assert drive_folders.sync().busy
-        assert drive.calls == []
-    finally:
-        get_redis().delete("lock:drive:sync")
 
 
 def test_deleting_the_login_forgets_its_folders(drive):
@@ -308,7 +341,107 @@ def test_deleting_the_login_forgets_its_folders(drive):
     assert store.account_folders() == {}
     assert store.day_folders(DAY) == {}
     # Drive keeps the folder and what is in it.
-    assert drive.named("ann.ig - Anna")
+    assert drive.named("ann.ig - Anna", ROOT)
+
+
+# --- concurrency -------------------------------------------------------------------
+
+
+def _three_logins() -> None:
+    for i, owner in enumerate(("Anna", "Bob", "Cleo")):
+        _login(_phone(f"Phone 0{i}", owner=owner), "instagram", f"h{i}.ig")
+
+
+def _assert_one_of_each(drive: FakeDrive) -> None:
+    for i, owner in enumerate(("Anna", "Bob", "Cleo")):
+        (account,) = drive.named(f"h{i}.ig - {owner}", ROOT)
+        assert len(drive.named("2026-10-21", account)) == 1
+
+
+def test_a_sync_during_another_does_nothing(drive, monkeypatch):
+    """The button pressed while the loop's sweep is half-way: the second
+    one waits for nothing and touches nothing."""
+    _three_logins()
+    inside = threading.Event()
+    release = threading.Event()
+    real_create = drive.create_folder
+
+    def slow_create(parent: str, name: str):
+        inside.set()
+        assert release.wait(10)
+        return real_create(parent, name)
+
+    monkeypatch.setattr(drive, "create_folder", slow_create)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(drive_folders.sync)
+        assert inside.wait(10)
+        second = pool.submit(drive_folders.sync).result(timeout=10)
+        release.set()
+        done = first.result(timeout=10)
+
+    assert second.busy
+    assert second.created == []
+    assert len(done.created) == 3
+    _assert_one_of_each(drive)
+
+
+def test_concurrent_syncs_never_duplicate_a_folder(drive):
+    _three_logins()
+    start = threading.Barrier(4)
+
+    def racer():
+        start.wait(timeout=10)
+        return drive_folders.sync()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        reports = [f.result(timeout=30) for f in [pool.submit(racer) for _ in range(4)]]
+
+    assert sum(len(r.created) for r in reports) == 3
+    assert sum(r.days for r in reports) == 3
+    _assert_one_of_each(drive)
+
+
+# --- the live folder outside production ----------------------------------------------
+
+
+@pytest.fixture
+def live_root(drive, monkeypatch) -> FakeDrive:
+    monkeypatch.setenv("OFM_GDRIVE_PRODUCTION_ROOT_FOLDER", ROOT)
+    monkeypatch.delenv("OFM_ENV", raising=False)
+    return drive
+
+
+def test_sync_refuses_the_production_folder_outside_production(live_root):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    with pytest.raises(ProductionFolderError, match="sandbox"):
+        drive_folders.sync()
+    assert live_root.calls == []
+    assert store.account_folders() == {}
+
+
+def test_the_loop_does_not_start_on_the_production_folder(live_root):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    # Returns at once instead of looping forever.
+    asyncio.run(asyncio.wait_for(drive_folders.drive_loop(), timeout=5))
+    assert live_root.calls == []
+
+
+def test_page_says_why_on_the_production_folder(live_root):
+    html = _client().get("/drive").text
+    assert "Refusing the production Drive folder outside production" in html
+    assert live_root.calls == []
+
+
+def test_production_may_use_the_production_folder(live_root, monkeypatch):
+    monkeypatch.setenv("OFM_ENV", "production")
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    assert drive_folders.sync().created == ["ann.ig - Anna"]
+
+
+def test_another_folder_is_fine_outside_production(drive, monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_PRODUCTION_ROOT_FOLDER", "the-live-one")
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    assert drive_folders.sync().created == ["ann.ig - Anna"]
 
 
 # --- page ----------------------------------------------------------------------
@@ -319,13 +452,13 @@ def test_page_shows_today_files_with_previews(drive):
     _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
     drive_folders.sync()
     day = _day_folder(drive, "ann.ig")
-    video = drive.add(day, "reel1.mp4", mime="video/mp4", thumb=True)
-    drive.add(day, "notes.txt", mime="text/plain")
-    drive.add(ROOT, "old messy folder")
+    video = drive.add_file(day, "reel1.mp4", "video/mp4", thumbnail=True)
+    drive.add_file(day, "notes.txt", "text/plain")
+    drive.seed_folder("old messy folder", ROOT)
 
     html = _client().get("/drive").text
 
-    assert "Drive · Oct 21" in html
+    assert "Drive · 2026-10-21" in html
     assert "1 of 2 accounts uploaded today · 2 files" in html
     assert f'src="/drive/thumb/{video}"' in html
     assert "notes.txt" in html
@@ -336,14 +469,24 @@ def test_page_shows_today_files_with_previews(drive):
 
 def test_page_without_setup_says_what_is_missing(monkeypatch):
     monkeypatch.delenv("OFM_GDRIVE_SERVICE_ACCOUNT", raising=False)
+    monkeypatch.delenv("OFM_GDRIVE_ROOT_FOLDER", raising=False)
     html = _client().get("/drive").text
     assert "Google Drive is not set up" in html
     assert 'id="dr-sync" disabled' in html
 
 
+def test_page_without_a_root_folder_is_not_configured(monkeypatch):
+    """Dev's default now: a key, no folder."""
+    monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
+    monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", "")
+    response = _client().get("/drive")
+    assert response.status_code == 200
+    assert "Google Drive is not set up" in response.text
+
+
 def test_page_not_shared_names_the_bot(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
-    drive.shared = False
+    drive.unshare(ROOT)
     html = _client().get("/drive").text
     assert "share it with bot@x.iam as Editor" in html
 
@@ -351,7 +494,7 @@ def test_page_not_shared_names_the_bot(drive):
 def test_page_forgets_a_deleted_day_folder(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
-    drive.items[_day_folder(drive, "ann.ig")]["trashed"] = True
+    drive.trash(_day_folder(drive, "ann.ig"))
 
     html = _client().get("/drive").text
 
@@ -381,25 +524,87 @@ def test_sync_route_reports(drive):
 
 def test_sync_route_not_shared_is_502(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
-    drive.shared = False
+    drive.unshare(ROOT)
     response = _client().post("/drive/sync")
     assert response.status_code == 502
     assert "not found" in response.json()["detail"]
 
 
-def test_thumb_route_serves_and_caches_privately(drive):
-    file_id = drive.add(ROOT, "a.jpg", mime="image/jpeg", thumb=True)
+def test_sync_route_on_the_production_folder_is_502(live_root):
+    response = _client().post("/drive/sync")
+    assert response.status_code == 502
+    assert "Refusing the production Drive folder" in response.json()["detail"]
+
+
+def _uploaded_preview(drive: FakeDrive) -> str:
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    return drive.add_file(_day_folder(drive, "ann.ig"), "a.jpg", thumbnail=True)
+
+
+def test_thumb_route_serves_a_day_folder_file_and_caches_privately(drive):
+    file_id = _uploaded_preview(drive)
     response = _client().get(f"/drive/thumb/{file_id}")
     assert response.status_code == 200
-    assert response.content == b"\xff\xd8jpeg"
+    assert response.content.startswith(b"\xff\xd8")
+    assert response.headers["content-type"] == "image/jpeg"
     assert response.headers["cache-control"] == "private, max-age=86400"
 
 
 def test_thumb_route_without_preview_is_404(drive):
-    file_id = drive.add(ROOT, "a.txt", mime="text/plain")
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    file_id = drive.add_file(_day_folder(drive, "ann.ig"), "a.txt", "text/plain")
+    assert _client().get(f"/drive/thumb/{file_id}").status_code == 404
+
+
+def test_thumb_route_refuses_a_random_id(drive):
+    _uploaded_preview(drive)
+    response = _client().get("/drive/thumb/RandomFileId0123456789")
+    assert response.status_code == 404
+    assert "thumbnail" not in drive.calls
+
+
+def test_thumb_route_refuses_a_file_outside_the_apps_folders(drive):
+    """The bot sees the whole root: a file the VA keeps elsewhere in it
+    (or anywhere else shared with the bot) is not the page's to show."""
+    _uploaded_preview(drive)
+    loose = drive.add_file(ROOT, "passport.jpg", thumbnail=True)
+    elsewhere = drive.seed_folder("Someone else's", shared=True)
+    private = drive.add_file(elsewhere, "private.jpg", thumbnail=True)
+
+    for file_id in (loose, private):
+        assert _client().get(f"/drive/thumb/{file_id}").status_code == 404
+    assert "thumbnail" not in drive.calls
+
+
+def test_thumb_route_refuses_a_trashed_file(drive):
+    file_id = _uploaded_preview(drive)
+    drive.trash(file_id)
     assert _client().get(f"/drive/thumb/{file_id}").status_code == 404
 
 
 def test_thumb_route_rejects_a_bad_id(drive):
     assert _client().get("/drive/thumb/..%2Fetc").status_code in (404, 422)
     assert drive.calls == []
+
+
+def test_thumb_route_needs_login(drive):
+    file_id = _uploaded_preview(drive)
+    response = TestClient(app).get(f"/drive/thumb/{file_id}", follow_redirects=False)
+    assert response.status_code == 303
+
+
+# --- the fakes switch ---------------------------------------------------------------
+
+
+def test_fake_externals_connects_to_the_fake_drive(monkeypatch, tmp_path):
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
+    monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path))
+    monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", "fake-root")
+    drive = connect()
+    assert isinstance(drive, FakeDrive)
+    assert drive.folder("fake-root").name == "ALL ACCOUNTS"
+    # Shared through the file: another process sees the same Drive.
+    made = drive.create_folder("fake-root", "x")
+    assert FakeDrive(tmp_path).named("x", "fake-root") == [made.id]

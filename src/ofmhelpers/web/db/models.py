@@ -338,7 +338,7 @@ class DriveAccountFolderRow(Base):
 
 
 class DriveDayFolderRow(Base):
-    """One day's folder ("Oct 21") inside a login's Drive folder: its row
+    """One day's folder ("2026-10-21") inside a login's Drive folder: its row
     is what tells the sweeper the day is done."""
 
     __tablename__ = "drive_day_folders"

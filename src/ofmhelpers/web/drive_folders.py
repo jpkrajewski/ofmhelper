@@ -3,16 +3,20 @@ ofmhelpers/web/drive_folders.py
 
 /drive's folders in the shared Google Drive folder (`settings.gdrive`):
 every Instagram login on an active phone gets "<handle> - <owner>" in the
-root, and inside it one folder per day ("Oct 21", the day in
+root, and inside it one folder per day ("2026-10-21", the day in
 `settings.gdrive.timezone`), for the VA to upload that day's content into.
+The year is in the name, so finding a day folder by name can never pick
+up last year's.
 
 The sweeper (`drive_loop`, every `check_interval_s`) asks the database
 what is missing for today and calls Drive only for that, so a quiet day
 costs no request. Folders are found by name before one is made: a folder
 made by hand is reused, a re-run never duplicates. Once known, a folder is
 kept by id: a new owner renames it. Nothing in Drive is ever moved or
-deleted. One sweep at a time (a Redis lock): the page's Sync button and the
-loop can overlap.
+deleted. One sweep at a time (a Postgres advisory lock, `store.sync_lock`):
+the page's Sync button and the loop can overlap, the second one does
+nothing. Outside production the live folder
+(`settings.gdrive.production_root_folder_id`) is refused (`root_folder`).
 
 `board(day)` is what /drive shows: each login's day folder listed live
 from Drive, in parallel (`list_workers`).
@@ -25,10 +29,9 @@ import datetime
 from concurrent.futures import ThreadPoolExecutor
 from zoneinfo import ZoneInfo
 
-from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive import (
-    Drive,
+    DriveApi,
     DriveError,
     DriveFile,
     FolderGoneError,
@@ -48,9 +51,25 @@ from ofmhelpers.web.stores import drive_folders as store
 
 logger = get_logger(__name__)
 
-_LOCK_KEY = "lock:drive:sync"
-# Longer than any sweep; a crashed one frees the lock by itself.
-_LOCK_TTL_S = 600
+
+class ProductionFolderError(DriveError):
+    """The live Drive folder, configured outside production."""
+
+
+def root_folder() -> str:
+    """The configured root folder. Raises `ProductionFolderError` when it is
+    the live one and this is not production: dev, CI and tests must never
+    write into the folder the VA works in."""
+    s = settings.gdrive
+    live = s.production_root_folder_id
+    if live and s.root_folder_id == live and not settings.infra.production:
+        msg = (
+            "Refusing the production Drive folder outside production"
+            " (OFM_ENV is not 'production'): set OFM_GDRIVE_ROOT_FOLDER to a"
+            " sandbox folder."
+        )
+        raise ProductionFolderError(msg)
+    return s.root_folder_id
 
 
 def today() -> datetime.date:
@@ -74,7 +93,7 @@ def _missing(
 
 
 def _account_folder(
-    drive: Drive,
+    drive: DriveApi,
     root: str,
     target: DriveTarget,
     stored: StoredFolder | None,
@@ -112,7 +131,7 @@ def _account_folder(
 
 
 def _sync_one(
-    drive: Drive,
+    drive: DriveApi,
     root: str,
     target: DriveTarget,
     stored: StoredFolder | None,
@@ -134,18 +153,18 @@ def sync(day: datetime.date | None = None) -> SyncReport:
     is reported, the others still go."""
     day = day or today()
     report = SyncReport()
-    redis = get_redis()
-    if not redis.set(_LOCK_KEY, "1", nx=True, ex=_LOCK_TTL_S):
-        report.busy = True
-        return report
-    try:
+    root = root_folder()
+    with store.sync_lock() as held:
+        if not held:
+            report.busy = True
+            return report
+        # Read inside the lock: a sweep that just finished is seen.
         folders = store.account_folders()
         days = store.day_folders(day)
         todo = _missing(store.targets(), folders, days)
         if not todo:
             return report
         drive = connect()
-        root = settings.gdrive.root_folder_id
         drive.folder(root)
         for target in todo:
             try:
@@ -161,8 +180,6 @@ def sync(day: datetime.date | None = None) -> SyncReport:
             except DriveError as exc:
                 logger.warning("drive: %s not synced: %s", target.handle, exc)
                 report.failed.append(f"{target.folder_name}: {exc}")
-    finally:
-        redis.delete(_LOCK_KEY)
     logger.info(
         "drive: %s synced -- %d created, %d found, %d renamed, %d day folders,"
         " %d failed",
@@ -199,8 +216,7 @@ def _list_day(card: DriveCard, day: datetime.date) -> None:
         card.error = str(exc)
 
 
-def _other_folders(known: set[str]) -> list[DriveFile]:
-    root = settings.gdrive.root_folder_id
+def _other_folders(root: str, known: set[str]) -> list[DriveFile]:
     folders = connect().children(root, folders_only=True)
     return sorted(
         (f for f in folders if f.id not in known), key=lambda f: f.name.lower()
@@ -220,6 +236,11 @@ def board(day: datetime.date | None = None) -> DriveBoard:
             " OFM_GDRIVE_ROOT_FOLDER in .env."
         )
         return result
+    try:
+        root = root_folder()
+    except ProductionFolderError as exc:
+        result.problem = str(exc)
+        return result
     folders = store.account_folders()
     days = store.day_folders(day)
     result.cards = [
@@ -232,7 +253,7 @@ def board(day: datetime.date | None = None) -> DriveBoard:
     ]
     known = {f.folder_id for f in folders.values()}
     with ThreadPoolExecutor(max_workers=s.list_workers) as pool:
-        others = pool.submit(_other_folders, known)
+        others = pool.submit(_other_folders, root, known)
         for card in result.cards:
             pool.submit(_list_day, card, day)
         try:
@@ -245,10 +266,27 @@ def board(day: datetime.date | None = None) -> DriveBoard:
 
 
 def thumbnail(file_id: str) -> tuple[bytes, str] | None:
-    return connect().thumbnail(file_id, settings.gdrive.thumb_px)
+    """The preview of a file in one of the app's folders; None for any
+    other id (not ours, gone, no preview), so the proxy never serves the
+    rest of what the account can see."""
+    root_folder()
+    drive = connect()
+    try:
+        item = drive.file(file_id)
+    except FolderGoneError:
+        return None
+    if not set(item.parents) & store.folder_ids():
+        logger.warning("drive: preview of %s refused: not in a /drive folder", file_id)
+        return None
+    return drive.thumbnail(item, settings.gdrive.thumb_px)
 
 
 async def drive_loop() -> None:
+    try:
+        root_folder()
+    except ProductionFolderError as exc:
+        logger.error("drive sweep not started: %s", exc)  # noqa: TRY400
+        return
     while True:
         if settings.gdrive.configured:
             try:

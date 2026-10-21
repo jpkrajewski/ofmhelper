@@ -17,6 +17,7 @@ from ofmhelpers.web.stores.devices import list_devices
 
 if TYPE_CHECKING:
     import datetime
+    from contextlib import AbstractContextManager
 
 _SERVICE = "instagram"
 
@@ -69,3 +70,13 @@ def save_day_folder(login_id: int, day: datetime.date, folder_id: str) -> None:
 
 def forget_day_folder(login_id: int, day: datetime.date) -> None:
     _repository().forget_day_folder(login_id, day.isoformat())
+
+
+def folder_ids() -> set[str]:
+    """Every account and day folder the app knows (thumbnail authorisation)."""
+    return set(_repository().folder_ids())
+
+
+def sync_lock() -> AbstractContextManager[bool]:
+    """True inside the block when this caller is the one sweep running."""
+    return _repository().sync_lock()

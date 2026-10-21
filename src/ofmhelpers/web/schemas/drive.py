@@ -10,8 +10,9 @@ from ofmhelpers.web.schemas.devices import Device
 
 
 def day_folder_name(day: datetime.date) -> str:
-    """ "Oct 21", "Jan 1": what the VA sees, no year, no leading zero."""
-    return f"{day:%b} {day.day}"
+    """ "2026-10-21": the year in it, so a folder found by this name is
+    never last year's, and Drive sorts them by date."""
+    return day.isoformat()
 
 
 class DriveTarget(BaseModel):

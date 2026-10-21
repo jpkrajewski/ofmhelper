@@ -34,3 +34,6 @@ backlog.txt
 # GitHub's 100MB per-file limit.
 /src/ofmhelpers/web/static/media/videos/results1.mp4
 /src/ofmhelpers/web/static/media/videos/*.MOV
+
+# Test reports (scripts/test.sh): local, regenerated every run.
+/reports/

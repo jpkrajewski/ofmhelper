@@ -108,9 +108,46 @@ def test_create_folder_puts_it_in_the_parent():
     assert body == {"name": "ig - Ann", "mimeType": FOLDER_MIME, "parents": ["root"]}
 
 
+def _item(**fields) -> DriveFile:
+    return DriveFile.model_validate(
+        {"id": "f", "name": "a.jpg", "mimeType": "image/jpeg", **fields}
+    )
+
+
+def test_file_reads_parents_and_the_preview_link():
+    drive, http = _drive(
+        (
+            _OK,
+            {
+                "id": "f",
+                "name": "a.jpg",
+                "mimeType": "image/jpeg",
+                "parents": ["day"],
+                "thumbnailLink": "https://lh3.example/abc=s220",
+                "ownedByMe": False,
+            },
+        )
+    )
+    item = drive.file("f")
+    assert item.parents == ["day"]
+    assert item.thumbnail_link == "https://lh3.example/abc=s220"
+    fields = _query(http)["fields"][0]
+    assert "parents" in fields
+    assert "thumbnailLink" in fields
+
+
+def test_a_trashed_file_is_gone():
+    drive, _ = _drive(
+        (_OK, {"id": "f", "name": "a", "mimeType": "image/jpeg", "trashed": True})
+    )
+    with pytest.raises(FolderGoneError):
+        drive.file("f")
+
+
 def test_thumbnail_none_without_a_link():
-    drive, _ = _drive((_OK, {}))
-    assert drive.thumbnail("f", 400) is None
+    drive, http = _drive()
+    assert drive.thumbnail(_item(), 400) is None
+    assert http.request_sequence == []
 
 
 def test_thumbnail_asks_for_the_size(monkeypatch):
@@ -131,8 +168,9 @@ def test_thumbnail_asks_for_the_size(monkeypatch):
             return R()
 
     monkeypatch.setattr(drive_client, "AuthorizedSession", _Session)
-    drive, _ = _drive((_OK, {"thumbnailLink": "https://lh3.example/abc=s220"}))
-    assert drive.thumbnail("f", 400) == (b"jpeg", "image/jpeg")
+    drive, _ = _drive()
+    item = _item(thumbnailLink="https://lh3.example/abc=s220")
+    assert drive.thumbnail(item, 400) == (b"jpeg", "image/jpeg")
     assert asked["url"] == "https://lh3.example/abc=s400"
 
 

@@ -12,8 +12,13 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from e2e_session import Session
+from e2e_session import FAKE_DRIVE_ROOT, Session
 from playwright.sync_api import expect
+
+from ofmhelpers.gdrive.fake import FakeDrive
+from ofmhelpers.web import drive_folders
+from ofmhelpers.web.schemas import DeviceFields, LoginFields
+from ofmhelpers.web.stores import devices
 
 pytestmark = pytest.mark.e2e
 
@@ -529,20 +534,93 @@ def test_admin_adds_a_phone_and_login_va_views_and_exports(admin: Session, va: S
     assert va.js_errors == []
 
 
-def test_drive_page_lists_accounts_searches_and_syncs(va: Session):
-    # Read-only against whatever Drive the stack is set up with: no phone or
-    # login is added here, so Sync has nothing new to create in it.
+def _seed_phone(label: str, owner: str, *logins: tuple[str, str]) -> int:
+    device = devices.add_device(
+        DeviceFields(label=label, model_id="iphone-13", color_id="blue", owner=owner)
+    )
+    for service, username in logins:
+        assert devices.add_login(
+            device, LoginFields(service=service, username=username)
+        )
+    return device
+
+
+def _capture_json(session: Session, pattern: str) -> list[dict]:
+    """Bodies of the JSON answers to `pattern`, kept even when the page
+    navigates away before the test could read them."""
+    bodies: list[dict] = []
+
+    def handle(route):
+        response = route.fetch()
+        bodies.append(response.json())
+        route.fulfill(response=response)
+
+    session.page.route(pattern, handle)
+    return bodies
+
+
+def test_drive_page_lists_accounts_searches_and_syncs(
+    va: Session, fake_drive: FakeDrive
+):
+    _seed_phone("Phone 01", "Anna", ("instagram", "ann.ig"), ("gmail", "ann@gmail.com"))
+    _seed_phone("Phone 02", "Bob", ("instagram", "bob.ig"))
+    retired = _seed_phone("Phone 03", "Old", ("instagram", "old.ig"))
+    devices.retire_device(retired)
+    day = drive_folders.today().isoformat()
+
     va.goto("/drive")
-    expect(va.page.locator("h1")).to_contain_text("Drive ·")
+    expect(va.page.locator("h1")).to_have_text(f"Drive · {day}")
     cards = va.page.locator("#dr-grid .dr-card")
-    if cards.count():
-        va.page.fill("#dr-search", "no-such-account-e2e")
-        expect(va.page.locator("#dr-grid .dr-card:visible")).to_have_count(0)
-        va.page.fill("#dr-search", "")
-    sync = va.page.locator("#dr-sync")
-    if sync.is_enabled():
-        with va.page.expect_response("**/drive/sync") as answered:
-            sync.click()
-        assert answered.value.ok
-        va.page.wait_for_load_state("networkidle")
+    visible = va.page.locator("#dr-grid .dr-card:visible")
+    expect(cards).to_have_count(2)  # Instagram logins on active phones only
+    expect(cards.filter(has_text="No folder for today yet")).to_have_count(2)
+
+    # Search: handle, owner, phone label; instantly, no reload.
+    for query, shown in (("bob", ["bob.ig"]), ("phone 01", ["ann.ig"]), ("zzz", [])):
+        va.page.fill("#dr-search", query)
+        expect(visible).to_have_count(len(shown))
+        for handle in shown:
+            expect(visible.locator("h2")).to_have_text(handle)
+    va.page.fill("#dr-search", "")
+    expect(visible).to_have_count(2)
+
+    reports = _capture_json(va, "**/drive/sync")
+    with va.page.expect_navigation():  # the page reloads itself once done
+        va.page.click("#dr-sync")
+    assert reports.pop() == {
+        "created": ["ann.ig - Anna", "bob.ig - Bob"],
+        "adopted": [],
+        "renamed": [],
+        "days": 2,
+        "failed": [],
+        "busy": False,
+    }
+    expect(cards.filter(has_text="Nothing uploaded today")).to_have_count(2)
+
+    # Exactly one folder per account and one day folder in each, nothing else.
+    root = fake_drive.children(FAKE_DRIVE_ROOT)
+    assert sorted(f.name for f in root) == ["ann.ig - Anna", "bob.ig - Bob"]
+    for folder in root:
+        assert [f.name for f in fake_drive.children(folder.id)] == [day]
+    assert fake_drive.writes == ["create"] * 4
+
+    # What the VA uploads shows up, with its preview through the app.
+    (ann,) = fake_drive.named("ann.ig - Anna", FAKE_DRIVE_ROOT)
+    (ann_day,) = fake_drive.named(day, ann)
+    fake_drive.add_file(ann_day, "reel1.mp4", "video/mp4", thumbnail=True)
+    with va.page.expect_response(re.compile(r"/drive/thumb/")) as preview:
+        va.page.reload()
+    assert preview.value.ok
+    ann_card = cards.filter(has_text="ann.ig")
+    expect(ann_card.locator(".dr-count")).to_have_text("1 video")
+    expect(ann_card.locator(".dr-file img")).to_be_visible()
+    expect(va.page.locator(".lead")).to_have_text(
+        "1 of 2 accounts uploaded today · 1 file"
+    )
+
+    # A second Sync finds everything there and writes nothing.
+    with va.page.expect_navigation():
+        va.page.click("#dr-sync")
+    assert reports.pop()["created"] == []
+    assert fake_drive.writes == ["create"] * 4
     assert va.js_errors == []
