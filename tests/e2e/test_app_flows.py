@@ -25,6 +25,7 @@ VA_PAGES = [
     "/download-assets",
     "/accounts",
     "/phones",
+    "/drive",
     "/uniqify",
 ]
 ADMIN_ONLY_PAGES = [
@@ -104,12 +105,25 @@ def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
     assert coworker.js_errors == []
 
 
+def _swap_fields(session: Session, pick) -> None:
+    """Runs `pick` (a provider or model choice) and returns once the page
+    has replaced the model fields it showed."""
+    shown = session.page.locator("#model-fields").element_handle()
+    pick()
+    session.page.wait_for_function("el => !el.isConnected", arg=shown)
+
+
 def test_picked_files_survive_a_model_switch(va: Session, subject_images: list[Path]):
     """Within a provider and across providers: the images go to the new
     model's image picker, whatever that field is called."""
     va.goto("/generate")
-    va.page.select_option("#provider-select", "kie")
-    va.page.select_option("#model-select", "kie:bytedance/seedance-2-5")
+    # Each pick swaps in the model's fields when they arrive. Seedance 2.0
+    # (the provider's default) renders the same picker as 2.5, so wait for
+    # each swap, or a file can land on 2.0's just as it is replaced.
+    _swap_fields(va, lambda: va.page.select_option("#provider-select", "kie"))
+    _swap_fields(
+        va, lambda: va.page.select_option("#model-select", "kie:bytedance/seedance-2-5")
+    )
     seedance = '#model-fields .file-picker[data-field="reference_image_urls"]'
     for path in subject_images:  # a one-at-a-time picker, like a person
         va.page.locator(f"{seedance} .file-add-input").set_input_files(str(path))
@@ -512,4 +526,23 @@ def test_admin_adds_a_phone_and_login_va_views_and_exports(admin: Session, va: S
     expect(admin.page.locator(".ph-card", has_text=label)).to_have_count(0)
 
     assert admin.js_errors == []
+    assert va.js_errors == []
+
+
+def test_drive_page_lists_accounts_searches_and_syncs(va: Session):
+    # Read-only against whatever Drive the stack is set up with: no phone or
+    # login is added here, so Sync has nothing new to create in it.
+    va.goto("/drive")
+    expect(va.page.locator("h1")).to_contain_text("Drive ·")
+    cards = va.page.locator("#dr-grid .dr-card")
+    if cards.count():
+        va.page.fill("#dr-search", "no-such-account-e2e")
+        expect(va.page.locator("#dr-grid .dr-card:visible")).to_have_count(0)
+        va.page.fill("#dr-search", "")
+    sync = va.page.locator("#dr-sync")
+    if sync.is_enabled():
+        with va.page.expect_response("**/drive/sync") as answered:
+            sync.click()
+        assert answered.value.ok
+        va.page.wait_for_load_state("networkidle")
     assert va.js_errors == []

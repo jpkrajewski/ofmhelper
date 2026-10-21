@@ -683,3 +683,40 @@ class ExportSettings(BaseSettings):
         ),
         validation_alias="OFM_EXPORT_DEVICE_PLACE",
     )
+
+
+class GDriveSettings(BaseSettings):
+    """/drive (`ofmhelpers.gdrive`, web/drive_folders.py): the shared Google
+    Drive folder the VA uploads into. A service account (its key JSON, one
+    line) works in `root_folder_id`, which its owner shares with the
+    account's `client_email` as Editor. Each Instagram login on an active
+    phone gets a "<handle> - <owner>" folder there and, every day in
+    `timezone`, a day folder ("Oct 21") inside it."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    service_account: SecretStr | None = Field(
+        default=None, validation_alias="OFM_GDRIVE_SERVICE_ACCOUNT"
+    )
+    root_folder_id: str = Field(default="", validation_alias="OFM_GDRIVE_ROOT_FOLDER")
+    # IANA: the day starts at midnight here, DST included.
+    timezone: str = Field(
+        default="Europe/Warsaw", validation_alias="OFM_GDRIVE_TIMEZONE"
+    )
+    # How often the sweeper checks for missing folders (a DB query; Drive
+    # is called only for what is missing).
+    check_interval_s: int = Field(
+        default=300, ge=30, validation_alias="OFM_GDRIVE_CHECK_INTERVAL_S"
+    )
+    # Per request: googleapiclient's backoff on 5xx/429/dropped connections.
+    retries: int = Field(default=5, ge=0, validation_alias="OFM_GDRIVE_RETRIES")
+    # Folders listed at once when /drive opens.
+    list_workers: int = Field(
+        default=8, ge=1, validation_alias="OFM_GDRIVE_LIST_WORKERS"
+    )
+    # Longest side of a /drive preview, px.
+    thumb_px: int = Field(default=400, ge=32, validation_alias="OFM_GDRIVE_THUMB_PX")
+
+    @property
+    def configured(self) -> bool:
+        return self.service_account is not None and bool(self.root_folder_id)

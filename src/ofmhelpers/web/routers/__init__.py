@@ -9,7 +9,8 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `tracking/`   -- social accounts' numbers over time (/accounts, every
   platform of `ofmhelpers.socials`).
 - `inventory/`  -- what the agency owns and signs in with (/phones: the
-  physical phones and their logins).
+  physical phones and their logins; /drive: their Instagram accounts'
+  folders in the shared Google Drive).
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
 - `video_tools/` -- local video edits with no external service (uniqify).
@@ -38,7 +39,7 @@ from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
-from ofmhelpers.web.routers.inventory import phones
+from ofmhelpers.web.routers.inventory import drive, phones
 from ofmhelpers.web.routers.tracking import accounts
 from ofmhelpers.web.routers.video_tools import uniqify
 
@@ -64,6 +65,7 @@ ROUTERS = [
     accounts.router,
     # inventory/
     phones.router,
+    drive.router,
     # image_tools/
     character_sheet.router,
     # video_tools/

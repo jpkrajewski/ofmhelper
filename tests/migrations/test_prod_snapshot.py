@@ -180,6 +180,7 @@ TRACKED_POSTS = "f7a8b9c0d1e2"
 UNTRACKED = "a9b0c1d2e3f4"
 IDENTITY = "b0c1d2e3f4a5"
 DEVICES = "c1d2e3f4a5b6"
+DRIVE = "d2e3f4a5b6c7"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -278,6 +279,39 @@ def test_devices_adds_empty_tables_and_drops_only_them(db):
             {"d": device, "l": login},
         )
     command.downgrade(_alembic(), IDENTITY)
+    assert _row_counts(db) == before
+
+
+def test_drive_folders_follow_their_login_and_drop_only_themselves(db):
+    needs(DRIVE)(db)
+    command.upgrade(_alembic(), DEVICES)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), DRIVE)
+    with db.begin() as conn:
+        login = conn.execute(
+            text(
+                "INSERT INTO logins (service, username, added_at, updated_at)"
+                " VALUES ('instagram', 'drive_probe', 1, 1) RETURNING id"
+            )
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO drive_account_folders (login_id, folder_id, name,"
+                " updated_at) VALUES (:l, 'f1', 'drive_probe - Ann', 1)"
+            ),
+            {"l": login},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO drive_day_folders (login_id, day, folder_id, created_at)"
+                " VALUES (:l, '2026-10-21', 'f2', 1)"
+            ),
+            {"l": login},
+        )
+        conn.execute(text("DELETE FROM logins WHERE id = :l"), {"l": login})
+    assert _count(db, "drive_account_folders") == 0
+    assert _count(db, "drive_day_folders") == 0
+    command.downgrade(_alembic(), DEVICES)
     assert _row_counts(db) == before
 
 

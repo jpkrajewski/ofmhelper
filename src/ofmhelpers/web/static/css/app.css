@@ -2380,3 +2380,84 @@ a.ph-login-user:hover { text-decoration: underline; }
        it, still fixed there. */
     .ph-login-tools { grid-column: 2 / -1; grid-row: 2; margin-left: -6px; }
 }
+
+/* ---------------------------------------------------------------------
+   /drive: a card per Instagram account with what landed in today's Drive
+   folder. Previews are square tiles; an empty day says so in warn color,
+   the thing to chase.
+   --------------------------------------------------------------------- */
+.dr-grid {
+    display: grid;
+    gap: var(--s-3);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    align-items: stretch;
+}
+.dr-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    padding: var(--s-4);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+.dr-card[hidden] { display: none; }
+.dr-card[data-empty] { border-style: dashed; }
+.dr-card-head { display: flex; align-items: center; gap: var(--s-3); }
+.dr-phone { flex: none; display: inline-flex; }
+.dr-phone img { width: 20px; height: 38px; }
+.dr-title { flex: 1; min-width: 0; }
+.dr-title h2 { margin: 0; overflow: hidden; font-size: var(--step-0); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.dr-title p { margin: 2px 0 0; color: var(--text-faint); font-size: var(--step--1); }
+.dr-note { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
+.dr-missing { color: var(--warn); }
+.dr-error { color: var(--fail); }
+.dr-count { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: 0; color: var(--text-muted); font-size: var(--step--1); }
+.dr-files {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: var(--s-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.dr-file {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    color: var(--text-faint);
+}
+.dr-file img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dr-file:hover, .dr-file:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Over a preview only a video shows its play mark; without one the icon
+   and the name stand in. */
+.dr-file-icon { position: relative; display: inline-flex; }
+.dr-file:has(img) .dr-file-icon { display: none; }
+.dr-file[data-kind="video"]:has(img) .dr-file-icon {
+    display: inline-flex;
+    padding: 6px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+}
+.dr-file-name {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 2px 4px;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dr-file:has(img) .dr-file-name { display: none; }
+.dr-others { margin-top: var(--s-5); color: var(--text-muted); font-size: var(--step--1); }
+.dr-others summary { cursor: pointer; }
+.dr-others ul { display: grid; gap: var(--s-1); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
+.dr-others a { display: inline-flex; align-items: center; gap: var(--s-2); }

@@ -27,6 +27,7 @@ from ofmhelpers.web.routers.generation import clone
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.schemas import CloneBatch, Job, ResultFile
 from ofmhelpers.web.stores.jobs import get_job, list_jobs
+from ofmhelpers.web.templates_config import render_partial
 
 needs_ffmpeg = pytest.mark.skipif(
     shutil.which("ffmpeg") is None, reason="ffmpeg not installed"
@@ -269,6 +270,25 @@ def test_batches_group_newest_first_and_drop_a_cut_off_tail():
     assert new.hue == _batches(jobs, page_full=False)[0].hue
     assert old.id == "old"
     assert [b.id for b in _batches(jobs, page_full=True)] == ["new"]
+
+
+def test_batch_whose_subject_images_are_gone_draws_no_broken_thumb(tmp_path):
+    """A batch kept after its images were deleted (file manager, or a
+    database copied from another server) shows a blank tile, never a
+    /refs/thumb that 404s."""
+    kept = tmp_path / "kept.png"
+    kept.write_bytes(b"png")
+    job = _job("z1", "b", 0, 1.0)
+    job.params["reference_images"] = [str(tmp_path / "gone.png"), str(kept)]
+    [batch] = _batches([job], page_full=False)
+    assert batch.cover == str(kept)
+
+    job.params["reference_images"] = [str(tmp_path / "gone.png")]
+    [batch] = _batches([job], page_full=False)
+    assert batch.cover is None
+    html = render_partial("_clone_batch.html", batch=batch)
+    assert "/refs/thumb" not in html
+    assert "no longer stored" in html
 
 
 def _clip(dest: Path, seconds: int) -> Path:

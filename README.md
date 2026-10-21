@@ -111,6 +111,8 @@ cookies live in named Docker volumes (`postgres_data`, `redis_data`,
 | `OFM_DEFAULT_PROVIDER` | no | Generation provider the pages start on (default `higgsfield`) |
 | `OFM_IG_PROXIES` | for /reels, /accounts | Instagram scan proxies |
 | `OFM_EXPORT_DEFAULT` / `OFM_EXPORT_MIRROR` | no | Default video export and Mirror switch |
+| `OFM_GDRIVE_SERVICE_ACCOUNT` / `OFM_GDRIVE_ROOT_FOLDER` | for /drive | Google service account key (JSON on one line, in single quotes) and the shared folder's id. See below |
+| `OFM_GDRIVE_TIMEZONE` | no | Where /drive's day starts (default `Europe/Warsaw`) |
 
 Every other knob has a default; `src/ofmhelpers/config/settings.py` lists them
 all with their env names.
@@ -126,6 +128,15 @@ docker compose -f docker-compose.yml run --rm --no-deps ofmhelpers \
 > /phones logins in the database, and in every backup, cannot be decrypted.
 > To rotate, put the new key first and keep the old one after a comma
 > (`OFM_VAULT_KEY=new,old`). Re-save the logins, then drop the old key.
+
+**`OFM_GDRIVE_SERVICE_ACCOUNT`.** Google Cloud Console: enable the Drive
+API, create a service account, add a JSON key. Share the Drive folder with
+the account's `client_email` as **Editor**; its id (the end of the folder's
+URL) is `OFM_GDRIVE_ROOT_FOLDER`. Put the key in on one line:
+
+```bash
+printf "OFM_GDRIVE_SERVICE_ACCOUNT='%s'\n" "$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])), separators=(",", ":")))' key.json)" >> .env
+```
 
 When you move servers, copy `.env` over key by key. Never paste a local
 development `.env` over the production one.
@@ -304,6 +315,7 @@ $C --profile test run --rm tests uv run --frozen pytest -m e2e   # browser suite
 | App and worker never start after a deploy | `migrate` failed | `docker compose -f docker-compose.yml logs migrate` |
 | Container restarts at boot | Required `.env` key missing (`SESSION_SECRET`, `APP_PASSWORD_*`) | `docker compose -f docker-compose.yml logs ofmhelpers` |
 | /phones shows "OFM_VAULT_KEY is not set" or "do not decrypt" | Key missing, or not the key the logins were saved with | Put the original key back in `.env` (first in the list), `up -d` |
+| /drive says the bot cannot open the folder | Folder not shared with the service account, or wrong `OFM_GDRIVE_ROOT_FOLDER` | Share it with the email /drive names, as Editor |
 | `PermissionError: [Errno 13]` on uploads/downloads | Host folder not owned by uid 1000 | `sudo chown -R 1000:1000 uploads downloads kieai_out` |
 | Uploads fail with `413` | nginx body limit | `client_max_body_size` in the site file, `sudo systemctl reload nginx` |
 | Mixed-content warnings / `http://` links on the HTTPS site | Forwarded headers not reaching the app | nginx `X-Forwarded-Proto`; image CMD keeps `--proxy-headers` |

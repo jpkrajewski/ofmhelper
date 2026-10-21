@@ -38,6 +38,10 @@ dependencies = [
     "cryptography>=50.0.0",
     # /phones Excel export (web/exports/devices_xlsx.py), write-only.
     "openpyxl>=3.1.5",
+    # /drive (ofmhelpers/gdrive): the shared Google Drive folder, as a
+    # service account. google-auth also gives the authorised thumbnail fetch.
+    "google-api-python-client>=2.201.0",
+    "google-auth>=2.40.0",
 ]
 
 [dependency-groups]

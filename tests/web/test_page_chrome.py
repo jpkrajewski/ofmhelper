@@ -59,6 +59,7 @@ def test_bar_links_then_the_rest_under_more(client):
         "/download-assets",
         "/accounts",
         "/phones",
+        "/drive",
     ]
     assert more == [
         "/uniqify",

@@ -1,7 +1,7 @@
 """
 SQLAlchemy ORM tables backing web/stores/jobs.py,
 web/stores/applications.py, web/stores/watched_profiles.py and
-web/stores/tracked_accounts.py and web/stores/devices.py. Column sets mirror the exact dict/JSON shapes those
+web/stores/tracked_accounts.py, web/stores/devices.py and web/stores/drive_folders.py. Column sets mirror the exact dict/JSON shapes those
 modules write today (see web/schemas.py for the Pydantic mirror), so the
 step-5 backfill is a straight field-for-field copy.
 
@@ -20,10 +20,12 @@ lists them in RETIRED_TABLES so autogenerate never proposes dropping them.
 
 from __future__ import annotations
 
+import datetime  # noqa: TC003 -- SQLAlchemy reads Mapped[...] at runtime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -318,3 +320,32 @@ class DeviceLoginRow(Base):
     linked_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (Index("ix_device_logins_login_id", "login_id"),)
+
+
+class DriveAccountFolderRow(Base):
+    """An Instagram login's folder in the shared Drive folder (/drive),
+    "<handle> - <owner>". Kept by id, so a new owner renames it instead of
+    starting another. Deleted with the login; the Drive folder never is."""
+
+    __tablename__ = "drive_account_folders"
+
+    login_id: Mapped[int] = mapped_column(
+        ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
+    )
+    folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class DriveDayFolderRow(Base):
+    """One day's folder ("Oct 21") inside a login's Drive folder: its row
+    is what tells the sweeper the day is done."""
+
+    __tablename__ = "drive_day_folders"
+
+    login_id: Mapped[int] = mapped_column(
+        ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[datetime.date] = mapped_column(Date, primary_key=True)
+    folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)

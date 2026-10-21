@@ -24,6 +24,7 @@ by domain and a domain may grow a second module.
 
 from ofmhelpers.web.db.repositories.applications import ApplicationRepository
 from ofmhelpers.web.db.repositories.devices import DeviceRepository, DuplicateError
+from ofmhelpers.web.db.repositories.drive_folders import DriveFolderRepository
 from ofmhelpers.web.db.repositories.jobs import JobRepository
 from ofmhelpers.web.db.repositories.tracked_accounts import TrackedAccountRepository
 from ofmhelpers.web.db.repositories.watched_profiles import WatchedProfileRepository
@@ -31,6 +32,7 @@ from ofmhelpers.web.db.repositories.watched_profiles import WatchedProfileReposi
 __all__ = [
     "ApplicationRepository",
     "DeviceRepository",
+    "DriveFolderRepository",
     "DuplicateError",
     "JobRepository",
     "TrackedAccountRepository",

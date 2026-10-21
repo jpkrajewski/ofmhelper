@@ -10,6 +10,7 @@ from ofmhelpers.config.settings import (
     AccountsSettings,
     AigenSettings,
     DownloadersSettings,
+    GDriveSettings,
     HiggsfieldSettings,
     InfraSettings,
     InstagramSettings,
@@ -127,6 +128,8 @@ _SETTINGS_CLASSES = (
     InstagramSettings,
     AccountsSettings,
     VaultSettings,
+    # Its .env holds the real Drive key: a test must never reach Drive.
+    GDriveSettings,
 )
 
 
