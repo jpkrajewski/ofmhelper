@@ -3,7 +3,8 @@ log in, open every page, make a fake asset and download it, carry picked
 files across providers' models, run a clone batch with a wrong kie.ai key so
 nothing is spent, price a clone pick live,
 click through every /reels filter and download three reels, track an
-Instagram account on /accounts end to end."""
+Instagram account on /accounts end to end, add a phone with a login on
+/phones and export it."""
 
 import re
 import time
@@ -23,6 +24,7 @@ VA_PAGES = [
     "/reels",
     "/download-assets",
     "/accounts",
+    "/phones",
     "/uniqify",
 ]
 ADMIN_ONLY_PAGES = [
@@ -448,4 +450,72 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
         va.page.click("#accounts-bulk-delete")
     expect(row).to_have_count(0)
 
+    assert va.js_errors == []
+
+
+def test_admin_adds_a_phone_and_login_va_views_and_exports(admin: Session, va: Session):
+    # Unique per run: the dev database keeps what the suite adds.
+    stamp = str(int(time.time()))
+    label = f"e2e {stamp}"
+    username = f"e2e{stamp}@gmail.com"
+
+    admin.goto("/phones")
+    admin.page.click("#ph-add-open")
+    admin.page.select_option("#ph-family", "iphone-12")
+    admin.page.select_option("#ph-model", "iphone-12-mini")
+    admin.page.locator(".ph-swatch", has_text="Purple").click()
+    # The drawing follows the picked model and color.
+    expect(admin.page.locator("#ph-drawing")).to_have_attribute(
+        "src", "/phones/drawing.svg?model=iphone-12-mini&color=purple"
+    )
+    admin.page.fill("#ph-label", label)
+    with admin.page.expect_navigation():
+        admin.page.click('#ph-form button[type="submit"]')
+    card = admin.page.locator(".ph-card", has_text=label)
+    expect(card).to_have_count(1)
+    expect(card.locator(".ph-specs")).to_have_text("iPhone 12 mini · Purple")
+    expect(card.locator(".ph-media img")).to_be_visible()
+
+    card.locator(".ph-add-login").click()
+    admin.page.select_option("#ph-login-service", "gmail")
+    admin.page.fill("#ph-login-username", username)
+    admin.page.fill("#ph-login-password", "e2e-secret")
+    with admin.page.expect_navigation():
+        admin.page.click('#ph-login-form button[type="submit"]')
+
+    # Masked until asked: the page itself never holds the password.
+    assert "e2e-secret" not in admin.page.content()
+    row = card.locator(".ph-login", has_text=username)
+    secret = row.locator("[data-secret]")
+    expect(secret).to_be_hidden()
+    row.hover()
+    row.locator(".ph-reveal").click()
+    expect(secret).to_have_text("e2e-secret")
+    row.locator(".ph-reveal").click()
+    expect(secret).to_be_hidden()
+
+    # A VA sees it, cannot change it, and downloads the Excel file.
+    va.goto("/phones")
+    va_card = va.page.locator(".ph-card", has_text=label)
+    expect(va_card).to_contain_text(username)
+    expect(va.page.locator("#ph-add-open")).to_have_count(0)
+    expect(va_card.locator(".ph-menu")).to_have_count(0)
+    va.page.fill("#ph-search", stamp)
+    expect(va.page.locator("#ph-grid .ph-card:visible")).to_have_count(1)
+    with va.page.expect_download() as download:
+        va.page.click('a[href="/phones/export.xlsx"]')
+    assert re.fullmatch(
+        r"phones-\d{4}-\d{2}-\d{2}\.xlsx", download.value.suggested_filename
+    )
+    download.value.delete()
+
+    # Clean up through the menu: delete the phone (its only login goes too).
+    admin.goto("/phones")
+    admin.page.on("dialog", lambda d: d.accept())
+    card.locator(".ph-menu summary").click()
+    with admin.page.expect_navigation():
+        card.locator(".ph-delete").click()
+    expect(admin.page.locator(".ph-card", has_text=label)).to_have_count(0)
+
+    assert admin.js_errors == []
     assert va.js_errors == []

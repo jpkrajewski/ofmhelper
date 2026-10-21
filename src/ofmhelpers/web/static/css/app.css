@@ -676,6 +676,7 @@ input[type="number"],
 input[type="url"],
 input[type="email"],
 input[type="search"],
+input[type="tel"],
 select,
 textarea {
     width: 100%;
@@ -2122,3 +2123,257 @@ textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var
 .accounts-details dt { color: var(--text-muted); }
 .accounts-details dd { margin: 0; }
 .accounts-notes-view { white-space: pre-wrap; }
+
+/* ---------------------------------------------------------------------
+   /phones: device-first cards. The product photo anchors each card; the
+   logins are flat rows inside it (no box per login), secrets masked, row
+   tools quiet until hovered or focused.
+   --------------------------------------------------------------------- */
+.ph-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3); }
+.ph-head .lead { margin: var(--s-1) 0 0; color: var(--text-faint); font-size: var(--step--1); }
+.ph-btn { display: inline-flex; align-items: center; gap: var(--s-2); }
+
+.ph-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2);
+    margin: 0 0 var(--s-4);
+}
+.ph-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 240px;
+    max-width: 340px;
+    color: var(--text-faint);
+}
+.ph-search .icon { position: absolute; left: 10px; pointer-events: none; }
+.ph-search input { width: 100%; min-height: 36px; padding-left: 34px; }
+.ph-filters { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0; }
+.ph-filters select { width: auto; min-height: 36px; padding-top: 0; padding-bottom: 0; font-size: var(--step--1); }
+.ph-layout { display: inline-flex; margin-left: auto; padding: 2px; border-radius: var(--radius-sm); background: var(--surface); }
+.ph-layout [aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+
+/* Small square icon buttons: row tools, menu trigger, layout switch. */
+.ph-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    list-style: none;
+    transition: color var(--dur) var(--ease), background var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.ph-icon-btn::-webkit-details-marker { display: none; }
+.ph-icon-btn:hover, .ph-icon-btn:focus-visible { background: var(--surface-3); color: var(--text); }
+.ph-icon-btn.is-done, .ph-btn.is-done { color: var(--ok); }
+/* "Copied" over a copy button for a moment after its click. */
+.ph-icon-btn { position: relative; }
+.ph-icon-btn.is-done::after {
+    content: "Copied";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, -4px);
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--surface-3);
+    color: var(--ok);
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ph-grid {
+    display: grid;
+    gap: var(--s-3);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+    align-items: start;
+}
+.ph-grid[data-layout="list"] { grid-template-columns: 1fr; }
+
+.ph-card {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: var(--s-4);
+    padding: var(--s-4);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    transition: border-color var(--dur) var(--ease);
+}
+.ph-card:hover { border-color: var(--border); }
+.ph-card[hidden] { display: none; }
+.ph-grid[data-layout="list"] .ph-card { grid-template-columns: 88px minmax(0, 1fr); }
+
+/* The phone: its whole back, drawn from the catalog (phones/render.py),
+   on one canvas size for every model, so a mini looks smaller than a Max. */
+.ph-media, .ph-preview {
+    aspect-ratio: 9 / 17;
+    border-radius: var(--radius);
+    background: radial-gradient(circle at 50% 35%, var(--surface-3), var(--bg-2) 75%);
+}
+.ph-media img, .ph-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+}
+
+.ph-body { min-width: 0; }
+.ph-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2); }
+.ph-title { min-width: 0; }
+.ph-title h2 { margin: 0; font-size: var(--step-0); font-weight: 650; letter-spacing: -0.01em; }
+.ph-specs { margin: 2px 0 0; color: var(--text-muted); font-size: var(--step--1); }
+.ph-meta { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: var(--s-2) 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }
+
+/* Not the card the base `details` rule draws. */
+.ph-menu { position: relative; flex: none; margin: 0; padding: 0; border: 0; background: none; }
+.ph-menu-list {
+    position: absolute;
+    right: 0;
+    z-index: 5;
+    display: grid;
+    min-width: 160px;
+    margin-top: var(--s-1);
+    padding: var(--s-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    box-shadow: var(--shadow);
+}
+.ph-menu-list button {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    min-height: 34px;
+    padding: 0 var(--s-3);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-size: var(--step--1);
+    text-align: left;
+    cursor: pointer;
+}
+.ph-menu-list button:hover, .ph-menu-list button:focus-visible { background: var(--surface-3); }
+.ph-menu-list .ph-delete { color: var(--fail); }
+
+/* Logins: flat rows split by a hairline. */
+.ph-logins { margin: 0; padding: 0; list-style: none; }
+.ph-login {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--s-3);
+    padding: var(--s-2) 0;
+    border-top: 1px solid var(--border-soft);
+}
+.ph-login[hidden] { display: none; }
+.ph-logo {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--surface-2);
+}
+.ph-logo img { width: 18px; height: 18px; }
+.ph-login-main { display: grid; min-width: 0; }
+.ph-login-service { overflow: hidden; color: var(--text-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.ph-login-user {
+    overflow: hidden;
+    color: var(--text);
+    font-size: var(--step--1);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+a.ph-login-user:hover { text-decoration: underline; }
+/* Row tools: fixed in the row's right column, always there (muted until
+   the row is hovered or focused); nothing moves when a row is revealed. */
+.ph-login-tools { display: flex; align-items: center; grid-column: 3; grid-row: 1; }
+.ph-login-tools .ph-icon-btn { opacity: 0.55; }
+.ph-login:hover .ph-login-tools .ph-icon-btn,
+.ph-login:focus-within .ph-login-tools .ph-icon-btn,
+.ph-login-tools .ph-icon-btn[aria-pressed="true"] { opacity: 1; }
+.ph-revealed, .ph-login-notes { grid-column: 2 / -1; }
+.ph-revealed {
+    display: grid;
+    gap: var(--s-2);
+    margin-top: var(--s-1);
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    font-size: 12px;
+}
+.ph-revealed[hidden] { display: none; }
+.ph-revealed span { display: block; color: var(--text-faint); font-size: 11px; }
+.ph-revealed code, .ph-revealed pre { margin: 0; color: var(--text); font-family: var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.ph-login-notes, .ph-notes { margin: 0; color: var(--text-faint); font-size: 12px; white-space: pre-wrap; }
+.ph-notes { margin-top: var(--s-2); }
+
+.ph-card-foot { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-2); }
+.ph-card-foot:empty { display: none; }
+.ph-more, .ph-add-login {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    min-height: 0;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+.ph-more:hover, .ph-add-login:hover, .ph-more:focus-visible, .ph-add-login:focus-visible { color: var(--text); }
+
+.ph-retired { margin-top: var(--s-6); }
+.ph-retired .ph-card { opacity: 0.7; }
+
+/* Dialogs */
+.ph-dialog { width: min(600px, calc(100vw - 2 * var(--s-4))); max-height: calc(100vh - 2 * var(--s-4)); overflow-y: auto; }
+.ph-form-grid { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+.ph-fields-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 var(--s-3); }
+.ph-colors { margin: 0 0 var(--s-4); padding: 0; border: 0; }
+.ph-colors legend { margin-bottom: var(--s-2); padding: 0; color: var(--text); font-size: var(--step--1); font-weight: 700; letter-spacing: 0.01em; text-transform: none; }
+.ph-colors[hidden], .ph-dialog .field[hidden] { display: none; }
+.ph-swatches { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.ph-swatch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: 4px var(--s-3) 4px 4px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+.ph-swatch input { position: absolute; opacity: 0; pointer-events: none; }
+.ph-swatch > span:first-of-type { width: 20px; height: 20px; border-radius: 50%; background: var(--finish); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.ph-swatch:has(input:checked) { background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+.ph-swatch:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ph-hint { margin: 0 0 var(--s-3); color: var(--warn); font-size: var(--step--1); }
+
+/* Phone: one column, a smaller photo, filters scroll sideways in one line. */
+@media (max-width: 719px) {
+    .ph-card { grid-template-columns: 84px minmax(0, 1fr); gap: var(--s-3); padding: var(--s-3); }
+    .ph-search { max-width: none; flex-basis: 100%; }
+    .ph-filters { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
+    .ph-layout { display: none; }
+    .ph-form-grid { grid-template-columns: 72px minmax(0, 1fr); }
+    /* No room beside the login name: the icons get their own line under
+       it, still fixed there. */
+    .ph-login-tools { grid-column: 2 / -1; grid-row: 2; margin-left: -6px; }
+}

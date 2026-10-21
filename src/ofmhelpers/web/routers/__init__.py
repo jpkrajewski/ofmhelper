@@ -8,6 +8,8 @@ Every HTTP route in the app, grouped by what it is *for*:
   metadata cleaner, their picker page, and the viral-reel finder.
 - `tracking/`   -- social accounts' numbers over time (/accounts, every
   platform of `ofmhelpers.socials`).
+- `inventory/`  -- what the agency owns and signs in with (/phones: the
+  physical phones and their logins).
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
 - `video_tools/` -- local video edits with no external service (uniqify).
@@ -36,6 +38,7 @@ from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
+from ofmhelpers.web.routers.inventory import phones
 from ofmhelpers.web.routers.tracking import accounts
 from ofmhelpers.web.routers.video_tools import uniqify
 
@@ -59,6 +62,8 @@ ROUTERS = [
     reels.router,
     # tracking/
     accounts.router,
+    # inventory/
+    phones.router,
     # image_tools/
     character_sheet.router,
     # video_tools/

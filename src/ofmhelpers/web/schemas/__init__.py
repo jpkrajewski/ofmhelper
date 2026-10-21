@@ -9,6 +9,7 @@
 - `applications.py` -- the landing-page application form and stored lead.
 - `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
 - `accounts.py` -- a tracked social account (/accounts), its list query and history.
+- `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
 
 Import from here; the split is an implementation detail of this package.
 """
@@ -30,6 +31,15 @@ from ofmhelpers.web.schemas.accounts import (
     TrackedAccount,
 )
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
+from ofmhelpers.web.schemas.devices import (
+    Device,
+    DeviceFields,
+    DeviceLogin,
+    LoginFields,
+    LoginSecrets,
+    PhoneQuery,
+    PhoneSort,
+)
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
 from ofmhelpers.web.schemas.gallery import CloneBatch, CloneCard, JobCard, TaskCard
 from ofmhelpers.web.schemas.generation import ModelChoice, ProviderChoice
@@ -73,6 +83,9 @@ __all__ = [
     "CloneBatch",
     "CloneCard",
     "CloneQueued",
+    "Device",
+    "DeviceFields",
+    "DeviceLogin",
     "DirEntry",
     "FailedSource",
     "FeedItem",
@@ -88,9 +101,13 @@ __all__ = [
     "JobStatus",
     "JobStatusPayload",
     "Leaderboard",
+    "LoginFields",
+    "LoginSecrets",
     "ModelChoice",
     "Notes",
     "Period",
+    "PhoneQuery",
+    "PhoneSort",
     "ProviderChoice",
     "RefEntry",
     "ReferenceAsset",

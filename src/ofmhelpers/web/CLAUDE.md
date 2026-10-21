@@ -5,7 +5,7 @@ FastAPI app ("Ascend Global LLC — Content Ops"): one password per role (admin/
 **New background-job tool?** Reuse `stores/jobs.py` + `routers/task_helpers/` + one router file; no new plumbing.
 
 ## Layout
-`main.py` (assembly only), `api_keys.py`, `middleware/`, `recovery.py`, `reel_watch.py`, `account_tracker.py`, `ref_usage.py`, `schemas/`, `templates_config.py`, `stores/`, `db/`, `routers/`, `templates/`, `static/`.
+`main.py` (assembly only), `api_keys.py`, `phones_workbook.py`, `middleware/`, `recovery.py`, `reel_watch.py`, `account_tracker.py`, `ref_usage.py`, `schemas/`, `templates_config.py`, `stores/`, `db/`, `routers/`, `templates/`, `static/`.
 Dependency direction: **routers -> stores -> db**. Routers never open sessions; stores never render or raise `HTTPException`.
 
 ## Top-level files
@@ -18,15 +18,17 @@ Dependency direction: **routers -> stores -> db**. Routers never open sessions; 
 - `account_tracker.py` — `/accounts` sweeper (`ofmhelpers.socials`, any platform): claims accounts older than `OFM_ACCOUNTS_RESCAN_INTERVAL_S` (6 h), queues per-platform jobs of `batch_size` with staggered `ProxyPool` start; per account up to 1 + `proxy_retries` proxies. Rate-limited on every try / direct connection down -> batch stops, claims expire (`claim_ttl_s`). Never-reached tries record nothing; answered failures record `error`, previous numbers stay. Accounts are never auto-removed.
 - `recovery.py` — every 300 s, settles remembered provider requests: running -> wait; done/deleted/too old -> forget; failed poll -> one `status` call; done -> re-run via `registry.RESUMABLE` (resumes, never pays twice).
 - `schemas/` — `persistence.py` (`Job`), `generation.py` (`ProviderChoice`, `ModelChoice`), `gallery.py` (`JobCard`, `TaskCard`, `CloneCard`/`CloneBatch`).
+- `phones_workbook.py` — /phones Excel export (openpyxl write-only): sheet Phones (row per phone, per service any phone uses: usernames/passwords, social backup codes; several logins one cell, newline-joined; custom = "Provider: user") + sheet Logins (row per login per phone). Every cell forced to string type (a password starting `=` must not become a formula). Plaintext on purpose (VA tool).
 - `templates_config.py` — `get_templates()`; `static_url()` adds `?v=<hash>` to every CSS/JS link (nginx caches `/static` a week).
 
 ## stores/
 - `jobs.py` — `create_job` -> `enqueue(run_job, ...)` -> `get_job`. `run_job` stores only the error message. Results live in the job's JSONB `result`. Pages use `list_jobs_page(tasks, offset, limit, actor)`: SQL filter/slice, heals only the page.
 - `applications.py` — landing-page leads; write-once.
 - `tracked_accounts.py` — /accounts: `list_accounts` (growth baselines per `growth_windows_h`), `get_account`, `get_history`, creators, notes, `record_scan` (one transaction: account row lock, upsert `tracked_posts` within retention, widen `covered_since`, snapshot, age-prune; see socials/CLAUDE.md). View windows are never stored — `TrackedAccount.window(days)` derives any period on read from the kept posts' views/dates (the list loads only those two columns).
+- `devices.py` — /phones: `list_devices` (no secrets; logins linked to /accounts row via `LoginService.tracked_platform` + handle), `secrets(login)`, `export_devices` (decrypted), add/update/retire/restore/delete phone, add (link-or-create)/update/remove login. Raises `DuplicateError` and `VaultError`.
 
 ## db/
-`models.py`, `session.py`, `repositories/` (only DB code; inherit `cached_repository.py`). Alembic in `alembic/`; `RETIRED_TABLES` keeps unmapped old tables from being dropped.
+`models.py`, `session.py`, `encrypted.py` (`EncryptedText` Fernet column; `VaultError` on missing/wrong key, never blank), `repositories/` (only DB code; inherit `cached_repository.py`). `DeviceRepository` caches **no** read: they return decrypted secrets, which must never reach Redis. Alembic in `alembic/`; `RETIRED_TABLES` keeps unmapped old tables from being dropped.
 
 ## routers/
 `routers/__init__.py` `ROUTERS` = the registration list: new page = one import + one entry.
@@ -50,6 +52,10 @@ Dependency direction: **routers -> stores -> db**. Routers never open sessions; 
 ### tracking/
 - `accounts.py` — `/accounts`: KPI cards (total followers, period views, unreachable count) + table (account w/ blue verified badge, followers, growth, views vs previous period, creator tag, notes), default sort followers; header click sorts, clicking the current one flips `order`. Controls: instant JS search over rendered rows (`data-search`), period select (`?period=`), creator select. No status/platform filters or badges in the UI (backend still accepts `platform`/`status`); private/failed-sync rows are red (`data-problem`, reason as tooltip). Creator is assigned from the selection card above the table (shown only while rows are picked) or the Add dialog, never inline. All state in `schemas.AccountQuery` (blank params = unset; `link()`/`sort_link()`). JSON posts `/accounts/add`, `/creator`, `/delete` (bulk ids), `/{id}/notes`. `/accounts/{id}`: identity + period select, 4 KPIs, daily follower line, every post of the period by views (thumbnail, "N h/d ago", `<progress>` bar). Banner when accounts were synced without a working Instagram login (`metrics.limited`). Metric rules: 0 = confirmed zero, dash = no data, comparison blank when unknown; growth % only with a non-zero baseline. Phone: rows become cards. `accounts.js` serves both pages.
 
+### inventory/
+- `phones.py` — `/phones`: card per phone = its back drawn from the catalog (`GET /phones/drawing.svg?model=&color=`, `ofmhelpers.phones.render`, cached a day) + label, model · color, owner, number, then logins as flat rows (Iconify logo, service, username; first 3, rest behind "N more"). The page never holds a secret: Show / Copy / Edit / recovery codes fetch one login from `GET /phones/logins/{id}/secret` (`no-store`, logs role + id, never values). Toolbar: instant search (`data-search`, no secrets), filters/sort as query string (`schemas.PhoneQuery`), grid/list (localStorage). Everyone views, reveals and downloads `GET /phones/export.xlsx`. Admin-only per route: `POST /add`, `/{id}`, `/{id}/retire|restore|delete`, `/{id}/logins` (an account already saved is linked, never copied; a different password is a 409), `/logins/{id}` (edits it on every phone), `/{id}/logins/{login}/delete` (unlinks; deleted when no phone has it). Delete removes a phone and the logins only it had. Duplicate 409, vault problem 500 with reason. `phones.js`.
+- Data: `devices` (catalog `model_id`/`color_id` or `custom_model`), `logins` (one per service+provider+username, secrets `EncryptedText`, "" stored plain so lists know `has_password` without decrypting), `device_logins` links.
+
 ### Others
 - `image_tools/character_sheet.py` — admin; 2..N images side by side into one PNG; uploads saved `NN_<name>`.
 - `video_tools/uniqify.py` — N variants zipped (stored); zip is the only result.
@@ -57,6 +63,6 @@ Dependency direction: **routers -> stores -> db**. Routers never open sessions; 
 - `auth.py` (`/login`, `/logout`); `apply.py` (`POST /apply`, only public write, PRG); `refs.py` (reuse browser: 5 last-picked + 5 last-uploaded; `?limit=N` up to 60 = newest uploads; paths outside the session's store 403).
 
 ## templates/ and static/
-- Pages extend `base.html`: header bar = `nav_items` (Generate, Clone, Viral Reels, Download Assets, Accounts), the rest under "More" = `more_items` (Uniqify; admins also Character Sheet, Applications, File Manager, Action log, Instagram cookies). `[hidden]` always hides (global rule) -- toggle `hidden`, not `style.display`. Partials: `_file_picker.html`, `_provider_fields.html`, `_ai_fields.html`, `_asset_grid.html`/`_asset_media.html` (no filename of its own), `job_status.html`, `_generate_gallery_card.html` (JS twin: `buildResultCard`).
+- Pages extend `base.html`: header bar = `nav_items` (Generate, Clone, Viral Reels, Download Assets, Accounts, Phones), the rest under "More" = `more_items` (Uniqify; admins also Character Sheet, Applications, File Manager, Action log, Instagram cookies). `[hidden]` always hides (global rule) -- toggle `hidden`, not `style.display`. Partials: `_file_picker.html`, `_provider_fields.html`, `_ai_fields.html`, `_asset_grid.html`/`_asset_media.html` (no filename of its own), `job_status.html`, `_generate_gallery_card.html` (JS twin: `buildResultCard`).
 - `static/css/app.css` is the whole design system; use its components, no `<style>` blocks. JS-queried class names are contract. Mobile-first.
 - JS: `generation.js` (submit -> poll -> render for `form[data-prefix]`), `file-picker.js`, `ai-form.js`, `session.js` (loaded first; global 401 handling + wall-clock idle logout), `gallery-scroll.js`, `live-gallery.js` (cross-session sync, paused when hidden), `prompt-highlight.js`, `nav.js`.
