@@ -658,3 +658,35 @@ def test_folders_of_another_root_are_never_written_into_or_shown(drive, monkeypa
     assert drive.named("2026-10-22", new_account)
     assert drive.named("2026-10-22", old_account) == []
     assert drive.item(old_account).name == "ann.ig - Anna"
+
+
+def test_cards_are_ordered_by_the_accounts_followers(drive):
+    from ofmhelpers.socials.models import AccountProfile, AccountStats
+    from ofmhelpers.web.stores import tracked_accounts
+
+    for label, handle, followers in (
+        ("Phone 01", "small.ig", 500),
+        ("Phone 02", "big.ig", 90_000),
+        ("Phone 03", "new.ig", None),
+    ):
+        _login(_phone(label, owner=label[-2:]), "instagram", handle)
+        if followers is not None:
+            tracked_accounts.track("instagram", handle)
+            (account,) = [
+                a for a in tracked_accounts.list_accounts() if a.handle == handle
+            ]
+            tracked_accounts.record_scan(
+                account.id,
+                AccountStats(
+                    profile=AccountProfile(handle=handle, followers=followers),
+                    posts=[],
+                    scanned_at=1.0,
+                ),
+            )
+
+    assert [t.handle for t in store.targets()] == ["big.ig", "small.ig", "new.ig"]
+    html = _client().get("/drive").text
+    order = [html.index(f"<h2>{h}</h2>") for h in ("big.ig", "small.ig", "new.ig")]
+    assert order == sorted(order)
+    assert "90k" not in html
+    assert "90000" not in html

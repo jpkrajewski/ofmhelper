@@ -22,6 +22,8 @@ class DriveTarget(BaseModel):
     login_id: int
     handle: str
     device: Device
+    # Its /accounts follower count (orders /drive); None until tracked.
+    followers: int | None = None
 
     @property
     def owner(self) -> str:

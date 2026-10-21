@@ -31,8 +31,9 @@ def _repository() -> DriveFolderRepository:
 
 
 def targets() -> list[DriveTarget]:
-    """Every Instagram login on an active phone, by phone label; a login
-    on several phones once, with the first."""
+    """Every Instagram login on an active phone, most followed first (its
+    /accounts row; not tracked yet = last), then by phone label; a login on
+    several phones once, with the first by label."""
     found: dict[int, DriveTarget] = {}
     for device in list_devices():
         if device.retired:
@@ -40,9 +41,15 @@ def targets() -> list[DriveTarget]:
         for login in device.logins:
             if login.service == _SERVICE and login.id not in found:
                 found[login.id] = DriveTarget(
-                    login_id=login.id, handle=login.username, device=device
+                    login_id=login.id,
+                    handle=login.username,
+                    device=device,
+                    followers=login.tracked_followers,
                 )
-    return list(found.values())
+    # Stable: equal counts keep the phone-label order.
+    return sorted(
+        found.values(), key=lambda t: (t.followers is None, -(t.followers or 0))
+    )
 
 
 def _root() -> str:
