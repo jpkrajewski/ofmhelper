@@ -93,16 +93,17 @@
                 {{ sort_th(sorts.GROWTH, "Growth · " ~ period.short) }}
                 {{ sort_th(sorts.VIEWS, "Views · " ~ period.short) }}
                 <th scope="col">Creator</th>
-                <th scope="col">Notes</th>
+                <th scope="col">Phone</th>
                 <th scope="col"><span class="sr-only">Analytics</span></th>
             </tr>
         </thead>
         <tbody>
             {% for a in page.rows %}
             {% set views = a.views(period.days) %}
+            {% set on_phones = phones.get(a.id, []) %}
             {% set problem = a.error or ("Private account" if a.status == "private" else "") %}
             <tr data-id="{{ a.id }}" data-status="{{ a.status }}"
-                data-search="{{ (a.handle ~ ' ' ~ a.name ~ ' ' ~ (a.creator or '') ~ ' ' ~ a.notes)|lower }}"
+                data-search="{{ (a.handle ~ ' ' ~ a.name ~ ' ' ~ (a.creator or '') ~ ' ' ~ on_phones|map(attribute="label")|join(' ') ~ ' ' ~ on_phones|map(attribute="owner")|join(' '))|lower }}"
                 {% if problem %}data-problem title="{{ problem }}"{% endif %}>
                 <td class="accounts-pick-cell"><input type="checkbox" class="accounts-pick" aria-label="Select @{{ a.handle }}"></td>
                 <td class="accounts-who-cell">
@@ -126,7 +127,14 @@
                     {% else %}{{ num.nodata("Not synced yet, or the scan does not cover the period") }}{% endif %}
                 </td>
                 <td data-label="Creator">{% if a.creator %}<span class="accounts-creator-tag">{{ a.creator }}</span>{% else %}<span class="pending">—</span>{% endif %}</td>
-                <td data-label="Notes"><textarea class="accounts-notes" rows="1" maxlength="5000" placeholder="+ Add note" aria-label="Notes on @{{ a.handle }}">{{ a.notes }}</textarea></td>
+                <td data-label="Phone">
+                    {% for d in on_phones %}
+                    <a class="accounts-phone" href="/phones#phone-{{ d.id }}" title="{{ d.label }} · {{ d.specs }}">
+                        <img src="{{ d.drawing_url }}" alt="" width="20" height="38" loading="lazy">
+                        <span>{{ d.owner or d.label }}</span>
+                    </a>
+                    {% else %}<span class="pending" title="No phone on /phones has this login">—</span>{% endfor %}
+                </td>
                 <td class="accounts-go"><a href="{{ query.link('/accounts/' ~ a.id) }}" aria-label="Analytics of @{{ a.handle }}">View analytics →</a></td>
             </tr>
             {% endfor %}

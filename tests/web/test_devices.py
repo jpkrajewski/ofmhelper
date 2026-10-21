@@ -542,12 +542,47 @@ def test_page_filters_by_query_string(va):
 
 
 def test_many_logins_fold_behind_more(va):
+    """Two rows show (iCloud + Instagram); the rest fold behind "N more"."""
     device = _phone()
     for i in range(5):
         _add_login(device, "custom", f"user{i}", provider=f"Site {i}")
     html = va.get("/phones").text
-    assert html.count("data-extra hidden") == 2
-    assert 'data-more="2"' in html
+    assert html.count("data-extra hidden") == 3
+    assert 'data-more="3"' in html
+
+
+def test_two_logins_have_no_more_button(va):
+    device = _phone()
+    _add_login(device, "icloud", "a@icloud.com")
+    _add_login(device, "instagram", "ig_user")
+    html = va.get("/phones").text
+    assert 'class="ph-more"' not in html
+    assert "No logins yet" not in html
+
+
+def test_phone_without_logins_says_so(va):
+    _phone()
+    html = va.get("/phones").text
+    assert "No logins yet" in html
+    assert 'class="ph-more"' not in html
+
+
+def test_logins_ordered_icloud_instagram_gmail_first(va):
+    device = _phone()
+    _add_login(device, "threads", "t_user")
+    _add_login(device, "gmail", "a@gmail.com")
+    _add_login(device, "instagram", "ig_user")
+    _add_login(device, "x", "x_user")
+    _add_login(device, "icloud", "a@icloud.com")
+    logins = store.list_devices()[0].logins
+    assert [x.service for x in logins[:3]] == ["icloud", "instagram", "gmail"]
+    # Rest keep link order.
+    assert [x.service for x in logins[3:]] == ["threads", "x"]
+    html = va.get("/phones").text
+    positions = [
+        html.index(name) for name in ("a@icloud.com", "ig_user", "a@gmail.com")
+    ]
+    assert positions == sorted(positions)
 
 
 def test_empty_page(va):
@@ -697,10 +732,11 @@ def test_va_exports_every_active_phone_with_its_logins(va):
 
     logins = _rows(book["Logins"])
     assert [(x["Service"], x["Username"]) for x in logins] == [
+        # Service order, as on the cards.
         ("iCloud", "p1@icloud.com"),
+        ("Instagram", "yuki"),
         ("Gmail", "one@gmail.com"),
         ("Gmail", "two@gmail.com"),
-        ("Instagram", "yuki"),
         ("Shopify", "me"),
     ]
     assert {x["Phone"] for x in logins} == {"Phone 01"}
@@ -719,3 +755,37 @@ def test_export_logs_who_and_how_many_never_a_value(va, caplog):
     assert "Phones export by va: 1 phones, 1 logins" in caplog.text
     assert "log-must-not-see" not in caplog.text
     assert "a@b.c" not in caplog.text
+
+
+def test_phones_by_account_maps_active_phones_signed_in(va):
+    track("instagram", "yuki")
+    track("instagram", "nobody")
+    on = _phone("Phone 01", owner="Anna")
+    also = _phone("Phone 02", owner="Ben")
+    gone = _phone("Phone 99")
+    for device in (on, also, gone):
+        _add_login(device, "instagram", "yuki")
+    _add_login(on, "icloud", "a@icloud.com")
+    store.retire_device(gone)
+    accounts = list_accounts()
+    by_handle = {a.handle: a.id for a in accounts}
+    found = store.phones_by_account(accounts)
+    assert [d.label for d in found[by_handle["yuki"]]] == ["Phone 01", "Phone 02"]
+    assert by_handle["nobody"] not in found
+
+
+def test_accounts_page_shows_the_phone_in_place_of_notes(va):
+    track("instagram", "yuki")
+    track("instagram", "nobody")
+    device = _phone("Phone 01", owner="Anna", model_id="iphone-12", color_id="green")
+    _add_login(device, "instagram", "yuki")
+    html = va.get("/accounts").text
+    assert '<th scope="col">Phone</th>' in html
+    assert "accounts-notes" not in html
+    assert f'href="/phones#phone-{device}"' in html
+    assert "/phones/drawing.svg?model=iphone-12&amp;color=green" in html
+    assert "<span>Anna</span>" in html
+    # The other row has no phone.
+    assert html.count('title="No phone on /phones has this login"') == 1
+    # The phone card is the link's anchor.
+    assert f'id="phone-{device}"' in va.get("/phones").text

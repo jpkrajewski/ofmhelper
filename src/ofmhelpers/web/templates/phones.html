@@ -3,8 +3,9 @@
 {% block title %}Phones — Ascend Global LLC{% endblock %}
 {% block content %}
 {% set is_admin = request.session.get("role") == "admin" %}
-{# Rows shown before "N more": keeps a card short however many logins. #}
-{% set visible_logins = 3 %}
+{# Rows shown before "N more" (iCloud + Instagram, services.json order):
+   keeps a card short however many logins. #}
+{% set visible_logins = 2 %}
 
 <div class="page-head ph-head">
     <div>
@@ -64,6 +65,7 @@
     </div>
     {# Fixed in the row's right column: revealing opens below, nothing moves. #}
     <div class="ph-login-tools">
+        {% if x.tracked_account_id %}<a class="ph-icon-btn" href="/accounts/{{ x.tracked_account_id }}" title="Open analytics" aria-label="Analytics of {{ x.username }}">{{ ic.icon("chart") }}</a>{% endif %}
         {% set copy_hint = "Copy login:password:codes" if x.has_codes else ("Copy login:password" if x.has_password else "Copy login") %}
         <button type="button" class="ph-icon-btn ph-copy-all" title="{{ copy_hint }}" aria-label="{{ copy_hint }} ({{ x.label }})">{{ ic.icon("copy") }}</button>
         {% if x.has_password or x.has_codes %}
@@ -72,7 +74,6 @@
             <span class="ph-when-hidden">{{ ic.icon("eye") }}</span><span class="ph-when-shown" hidden>{{ ic.icon("eye-off") }}</span>
         </button>
         {% endif %}
-        {% if x.tracked_account_id %}<a class="ph-icon-btn" href="/accounts/{{ x.tracked_account_id }}" title="Open analytics" aria-label="Analytics of {{ x.username }}">{{ ic.icon("chart") }}</a>{% endif %}
         {% if is_admin %}
         <button type="button" class="ph-icon-btn ph-login-edit" title="Edit login" aria-label="Edit {{ x.label }} login">{{ ic.icon("pencil") }}</button>
         <button type="button" class="ph-icon-btn ph-login-remove" title="Remove from this phone" aria-label="Remove {{ x.label }} login from {{ d.label }}">{{ ic.icon("trash") }}</button>
@@ -89,7 +90,7 @@
 {%- endmacro %}
 
 {% macro phone_card(d) -%}
-<article class="ph-card" data-id="{{ d.id }}" data-search="{{ d.search_text }}"
+<article class="ph-card" id="phone-{{ d.id }}" data-id="{{ d.id }}" data-search="{{ d.search_text }}"
          {% if is_admin %}data-phone='{{ {"label": d.label, "model_id": d.model_id or "", "color_id": d.color_id or "", "custom_model": d.custom_model, "owner": d.owner, "phone_number": d.phone_number, "notes": d.notes}|tojson }}'{% endif %}>
     <div class="ph-media">
         <img src="{{ d.drawing_url }}" alt="{{ d.specs }}" loading="lazy">
@@ -123,6 +124,8 @@
         <ul class="ph-logins">
             {% for x in d.logins %}{{ login_row(d, x, loop.index) }}{% endfor %}
         </ul>
+        {% else %}
+        <p class="ph-no-logins">No logins yet</p>
         {% endif %}
         <div class="ph-card-foot">
             {% if d.logins|length > visible_logins %}

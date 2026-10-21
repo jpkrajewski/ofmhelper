@@ -19,7 +19,7 @@ from ofmhelpers.web.schemas import Device, LoginSecrets
 from ofmhelpers.web.stores.tracked_accounts import list_accounts
 
 if TYPE_CHECKING:
-    from ofmhelpers.web.schemas import DeviceFields, LoginFields
+    from ofmhelpers.web.schemas import DeviceFields, LoginFields, TrackedAccount
 
 
 @lru_cache(maxsize=1)
@@ -29,12 +29,25 @@ def _repository() -> DeviceRepository:
     return DeviceRepository()
 
 
-def _linked(rows: list[dict]) -> list[Device]:
-    """The rows as `Device`s, each login linked to its /accounts row when
-    that platform tracks the handle."""
+def _service_rank(service: str) -> int:
+    """Position in `services.json` (iCloud, Instagram, Gmail first); a
+    service no longer listed goes last."""
+    order = list(services())
+    return order.index(service) if service in order else len(order)
+
+
+def _linked(
+    rows: list[dict], accounts: list[TrackedAccount] | None = None
+) -> list[Device]:
+    """The rows as `Device`s, logins in service order (ties keep link
+    order), each linked to its /accounts row (of `accounts`, default every
+    tracked one) when that platform tracks the handle."""
     devices = [Device.model_validate(row) for row in rows]
-    tracked = {(a.platform, a.handle): a.id for a in list_accounts()}
+    if accounts is None:
+        accounts = list_accounts()
+    tracked = {(a.platform, a.handle): a.id for a in accounts}
     for device in devices:
+        device.logins.sort(key=lambda login: _service_rank(login.service))
         for login in device.logins:
             service = services().get(login.service)
             if service and service.tracked_platform:
@@ -47,6 +60,19 @@ def list_devices() -> list[Device]:
     """Every phone (retired too) by label, with its logins -- no password
     or backup code, only whether there is one."""
     return _linked(_repository().list_all())
+
+
+def phones_by_account(accounts: list[TrackedAccount]) -> dict[int, list[Device]]:
+    """The active phones signed in to each of `accounts`, by account id
+    (/accounts shows them in place of a typed note)."""
+    found: dict[int, list[Device]] = {}
+    for device in _linked(_repository().list_all(), accounts):
+        if device.retired:
+            continue
+        ids = {x.tracked_account_id for x in device.logins}
+        for account_id in sorted(i for i in ids if i is not None):
+            found.setdefault(account_id, []).append(device)
+    return found
 
 
 def export_devices() -> list[Device]:

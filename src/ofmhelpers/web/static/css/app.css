@@ -1964,18 +1964,19 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-avatar-lg { width: 64px; height: 64px; }
 .accounts-sub { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
 .accounts-sub a { color: inherit; }
-/* Notes read as text until hovered or focused (element-qualified to win
-   over the base textarea rule). */
-textarea.accounts-notes {
-    width: 100%;
-    min-width: 140px;
-    min-height: 34px;
-    border-color: transparent;
-    background: transparent;
+/* The phones signed in to the account (/phones logins): drawing + owner. */
+.accounts-phone {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    margin-right: var(--s-3);
+    color: var(--text);
     font-size: var(--step--1);
-    resize: vertical;
+    text-decoration: none;
+    white-space: nowrap;
 }
-textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var(--border-strong); background: var(--surface-2); }
+.accounts-phone img { width: 20px; height: 38px; }
+.accounts-phone:hover span { text-decoration: underline; }
 .accounts-creator-tag {
     display: inline-block;
     padding: 2px var(--s-2);
@@ -2062,7 +2063,7 @@ textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var
     .accounts-who-cell { grid-column: 1 / -1; padding-right: var(--s-6); }
     .accounts-table td[data-label="Last synced"],
     .accounts-table td[data-label="Creator"],
-    .accounts-table td[data-label="Notes"],
+    .accounts-table td[data-label="Phone"],
     .accounts-go { grid-column: 1 / -1; text-align: left; }
 }
 /* Analytics page: identity, four KPIs, trend, top posts, folded extras. */
@@ -2196,7 +2197,7 @@ textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var
     display: grid;
     gap: var(--s-3);
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
-    align-items: start;
+    align-items: stretch;
 }
 .ph-grid[data-layout="list"] { grid-template-columns: 1fr; }
 
@@ -2211,6 +2212,7 @@ textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var
     transition: border-color var(--dur) var(--ease);
 }
 .ph-card:hover { border-color: var(--border); }
+.ph-card:target { border-color: var(--accent); }
 .ph-card[hidden] { display: none; }
 .ph-grid[data-layout="list"] .ph-card { grid-template-columns: 88px minmax(0, 1fr); }
 
@@ -2279,6 +2281,7 @@ textarea.accounts-notes:hover, textarea.accounts-notes:focus { border-color: var
     border-top: 1px solid var(--border-soft);
 }
 .ph-login[hidden] { display: none; }
+.ph-no-logins { margin: var(--s-2) 0 0; color: var(--text-faint); font-size: var(--step--1); }
 .ph-logo {
     display: grid;
     place-items: center;

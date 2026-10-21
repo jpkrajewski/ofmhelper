@@ -411,14 +411,8 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
     expect(row.locator(".accounts-creator-tag")).to_have_text("e2e creator")
     expect(row.locator('td[data-label="Followers"]')).to_contain_text(re.compile(r"\d"))
 
-    # Notes save on blur and survive a reload (unique, so it always changes).
-    note = f"e2e note {time.time()}"
-    notes = row.locator(".accounts-notes")
-    with va.page.expect_response(lambda r: r.url.endswith("/notes")):
-        notes.fill(note)
-        notes.blur()
-    va.page.reload()
-    expect(row.locator(".accounts-notes")).to_have_value(note)
+    # The Phone column is filled from /phones logins, never typed here.
+    expect(row.locator('td[data-label="Phone"]')).to_be_visible()
 
     # Search filters the rows instantly, without a reload.
     va.page.fill("#accounts-search", TRACKED_ACCOUNT[:6])
