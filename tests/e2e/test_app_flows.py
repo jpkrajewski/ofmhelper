@@ -1,13 +1,12 @@
-"""End to end, in a real browser against a running stack (see conftest.py):
+"""End to end, in a real browser against the app the suite starts, every
+outside service faked (see conftest.py):
 log in, open every page, make a fake asset and download it, carry picked
-files across providers' models, run a clone batch with a wrong kie.ai key so
-nothing is spent, price a clone pick live,
+files across providers' models, run a clone batch with a wrong kie.ai key, price a clone pick live,
 click through every /reels filter and download three reels, track an
 Instagram account on /accounts end to end, add a phone with a login on
 /phones and export it."""
 
 import re
-import time
 import zipfile
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from playwright.sync_api import expect
 from ofmhelpers.gdrive.fake import FakeDrive
 from ofmhelpers.web import drive_folders
 from ofmhelpers.web.schemas import DeviceFields, LoginFields
-from ofmhelpers.web.stores import devices
+from ofmhelpers.web.stores import devices, watched_profiles
 
 pytestmark = pytest.mark.e2e
 
@@ -60,7 +59,7 @@ def test_admin_opens_every_page(admin: Session):
 
     for path in VA_PAGES + ADMIN_ONLY_PAGES:
         assert admin.goto(path) == 200, path
-        admin.page.wait_for_load_state("networkidle")
+        expect(admin.page.locator(".site-header nav")).to_be_visible()
 
     assert admin.js_errors == []
 
@@ -70,7 +69,7 @@ def test_va_sees_only_its_pages_and_none_of_the_admin_ones(va: Session):
 
     for path in VA_PAGES:
         assert va.goto(path) == 200, path
-        va.page.wait_for_load_state("networkidle")
+        expect(va.page.locator(".site-header nav")).to_be_visible()
     # Checked before the admin pages: the browser logs each 403 below as a
     # console error of its own.
     assert va.js_errors == []
@@ -191,10 +190,12 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
     assert coworker.js_errors == []
 
 
-# Live Instagram: public profiles that each have at least one reel past 5x
-# their followers and at most 15 s long.
+# Profiles of the Instagram fake (src/ofmhelpers/instagram/fake_profiles.json):
+# once scanned, sheep_love33 keeps 5 reels (12k followers) and brookslockvip
+# 4 (200k): within 14 days, 50k+ views, 15 s or shorter.
 VIRAL_PROFILES = ["sheep_love33", "https://www.instagram.com/brookslockvip/"]
-SCAN_TIMEOUT_MS = 120_000
+FEED_REELS = 9
+SCAN_TIMEOUT_MS = 30_000
 
 
 def test_clone_output_selects_and_switches_line_up(va: Session):
@@ -278,7 +279,7 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
             va.page.locator(f'.reels-watch-item[data-username="{username}"]')
         ).to_have_count(1)
     cards = va.page.locator(".reel-card[data-video-url]")
-    assert cards.count() >= len(VIRAL_PROFILES)
+    expect(cards).to_have_count(FEED_REELS)
     # One feed, most viewed first, across profiles.
     views = va.page.locator(".reel-card").evaluate_all(
         "cs => cs.map(c => Number(c.dataset.views))"
@@ -353,32 +354,53 @@ def _add_viral_profiles(session: Session) -> None:
     )
 
 
-def test_every_reels_filter_chip_narrows_the_feed(va: Session):
+# Cards each chip keeps, from the fake's numbers: tiers by views (legendary
+# 1M+, epic 500k+, rare 200k+, uncommon 100k+, common 50k+); reach = views
+# per follower (sheep 125x 52x 22x 11x 5.1x; brooks 11x 4.5x 1.6x 0.35x).
+CHIP_COUNTS = {
+    "reels-filter-group": {"All": FEED_REELS, "vip": 4},
+    "reels-filter-rank": {
+        "All": FEED_REELS,
+        "legendary": 2,
+        "epic": 2,
+        "rare": 2,
+        "uncommon": 1,
+        "common": 2,
+    },
+    "reels-filter-reach": {"Any": FEED_REELS, "2": 7, "3": 7, "5": 6, "10": 5},
+}
+
+
+def _chip_key(label: str, href: str) -> str:
+    """The chip's value: its group, tier or ratio from the href, else its
+    label (the reset chip)."""
+    query = (
+        dict(re.findall(r"(\w+)=([^&]+)", href.split("?", 1)[-1]))
+        if "?" in href
+        else {}
+    )
+    return query.get("group") or query.get("rank") or query.get("ratio") or label
+
+
+def test_every_reels_filter_chip_shows_exactly_its_reels(va: Session):
     _add_viral_profiles(va)
-    for label in ("reels-filter-group", "reels-filter-rank", "reels-filter-reach"):
+    watched_profiles.set_group("brookslockvip", "vip")
+    for nav, expected in CHIP_COUNTS.items():
         va.goto("/reels")
-        chips = va.page.locator(f'nav[aria-labelledby="{label}"] a')
-        hrefs = [chips.nth(i).get_attribute("href") for i in range(chips.count())]
-        assert len(hrefs) >= 2, label
-        for i, href in enumerate(hrefs):
+        chips = va.page.locator(f'nav[aria-labelledby="{nav}"] a')
+        keys = [
+            _chip_key(
+                chips.nth(i).inner_text().split()[0], chips.nth(i).get_attribute("href")
+            )
+            for i in range(chips.count())
+        ]
+        assert keys == list(expected), nav
+        for i, key in enumerate(keys):
             va.goto("/reels")
             with va.page.expect_navigation():
-                va.page.locator(f'nav[aria-labelledby="{label}"] a').nth(i).click()
-            chip = va.page.locator(f'nav[aria-labelledby="{label}"] a').nth(i)
-            expect(chip).to_have_attribute("aria-current", "page")
-            # Every card left is one the chip's filter keeps.
-            query = dict(re.findall(r"(\w+)=([^&]+)", href))
-            cards = va.page.locator(".reel-card")
-            if "rank" in query:
-                tiers = cards.evaluate_all("cs => cs.map(c => c.dataset.tier)")
-                assert set(tiers) <= {query["rank"]}, href
-            if "ratio" in query:
-                ratios = cards.evaluate_all(
-                    "cs => cs.map(c => Number(c.dataset.ratio))"
-                )
-                assert all(r >= int(query["ratio"]) for r in ratios), href
-            if not cards.count():
-                expect(va.page.locator("#reels-empty")).to_be_visible()
+                chips.nth(i).click()
+            expect(chips.nth(i)).to_have_attribute("aria-current", "page")
+            expect(va.page.locator(".reel-card")).to_have_count(expected[key])
     assert va.js_errors == []
 
 
@@ -386,7 +408,7 @@ def test_three_picked_reels_download_as_one_zip(va: Session, tmp_path: Path):
     _add_viral_profiles(va)
     va.goto("/reels")
     cards = va.page.locator(".reel-card[data-video-url]")
-    assert cards.count() >= 3, "needs three playable reels on the watch list"
+    expect(cards).to_have_count(FEED_REELS)
     codes = [cards.nth(i).get_attribute("data-code") for i in range(3)]
     for i in range(3):
         cards.nth(i).click()
@@ -410,7 +432,7 @@ def test_three_picked_reels_download_as_one_zip(va: Session, tmp_path: Path):
     expect(va.page.locator("#reels-picked-count")).to_have_text("No reels selected")
 
 
-# A real, small Instagram account the /accounts flow tracks (live scan).
+# A small account of the Instagram fake (850 followers).
 TRACKED_ACCOUNT = "yuki_kanasiva"
 
 
@@ -428,7 +450,7 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
         "data-status", re.compile("active|private"), timeout=SCAN_TIMEOUT_MS
     )
     expect(row.locator(".accounts-creator-tag")).to_have_text("e2e creator")
-    expect(row.locator('td[data-label="Followers"]')).to_contain_text(re.compile(r"\d"))
+    expect(row.locator('td[data-label="Followers"]')).to_contain_text("850")
 
     # The Phone column is filled from /phones logins, never typed here.
     expect(row.locator('td[data-label="Phone"]')).to_be_visible()
@@ -467,8 +489,7 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
 
 
 def test_admin_adds_a_phone_and_login_va_views_and_exports(admin: Session, va: Session):
-    # Unique per run: the dev database keeps what the suite adds.
-    stamp = str(int(time.time()))
+    stamp = "4242"
     label = f"e2e {stamp}"
     username = f"e2e{stamp}@gmail.com"
 

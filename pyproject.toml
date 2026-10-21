@@ -169,6 +169,9 @@ ban-relative-imports = "all"
 docstring-code-format = true
 
 [tool.pytest.ini_options]
+# Only tests/: without it pytest walks the whole checkout (uploads/,
+# downloads/, kieai_out/ ...) over the Docker bind mount -- 35 s per run.
+testpaths = ["tests"]
 # Applied by folder in tests/conftest.py (tests/<kind>/); `live`, `slow`
 # and `snapshot` are set per test.
 markers = [
@@ -178,18 +181,19 @@ markers = [
     "e2e: Playwright against the app the suite starts, with fakes (tests/e2e); scripts/test.sh e2e",
     "live: reaches a REAL outside service (Drive sandbox, AI providers, Instagram, proxies); scripts/test.sh live",
     "slow: takes more than 2 s (ffmpeg, real media)",
+    "heavy: real ffmpeg/ffprobe encoding; left out of the default run, runs on push (CI, scripts/test.sh push/deploy)",
     "snapshot: migrations on a copy of the production snapshot; scripts/test.sh snapshot",
 ]
 # A plain `pytest` is fast and offline: no browser, no real services, no
 # production data; a later -m on the command line wins. Sockets: only the
-# local app, Postgres and Redis (pytest-socket); `live` tests are let out,
+# local app and the test Postgres/Redis (pytest-socket); `live` tests are let out,
 # unit tests get none at all.
 addopts = [
     "--strict-markers",
-    "-m", "not e2e and not live and not snapshot",
+    "-m", "not e2e and not live and not snapshot and not heavy",
     "--disable-socket",
     "--allow-unix-socket",
-    "--allow-hosts=127.0.0.1,localhost,::1,postgres,redis",
+    "--allow-hosts=127.0.0.1,localhost,::1,postgres-test,redis-test",
 ]
 
 # HTML/Jinja templates: `djlint src/ofmhelpers/web/templates --lint`.

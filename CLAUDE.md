@@ -28,7 +28,7 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 - A test for every change.
 
 ## Testing
-- Run tests ONLY via `scripts/test.sh [preset|pytest args]`. Presets: (none)=unit+integration, e2e, all, live, deploy.
+- Run tests ONLY via `scripts/test.sh [preset|pytest args]`. Presets: (none)=unit+integration, e2e, all, push (=default+heavy ffmpeg tests, what CI runs), live, deploy.
 - Never pipe test output through grep/head/tail. Read `reports/latest/report.json`; full output is `reports/latest/output.log`.
 - After every run, report: pass/fail/skip counts, each failure with its error text, the 10 slowest tests.
 - Before any command >30s, say in one line what you're running and why. Background loops log to `reports/loops/`.

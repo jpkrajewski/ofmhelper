@@ -421,8 +421,12 @@ def test_sync_refuses_the_production_folder_outside_production(live_root):
 
 def test_the_loop_does_not_start_on_the_production_folder(live_root):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
-    # Returns at once instead of looping forever.
-    asyncio.run(asyncio.wait_for(drive_folders.drive_loop(), timeout=5))
+    # Returns at once instead of looping forever. Its own thread: under
+    # xdist this worker may also run e2e, whose Playwright loop is running.
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(
+            asyncio.run, asyncio.wait_for(drive_folders.drive_loop(), timeout=5)
+        ).result(timeout=10)
     assert live_root.calls == []
 
 

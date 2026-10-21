@@ -94,8 +94,9 @@ jobs:
       # The live-service checks (`-m live`) are not run here: they
       # run locally and against prod, where the app's own network and
       # Instagram proxies are (Instagram rate-limits runner IPs).
+      # Default run + the heavy ffmpeg tests (left out of local runs).
       - name: Run tests
-        run: $COMPOSE run --rm tests
+        run: $COMPOSE run --rm tests uv run --frozen pytest -n auto --maxprocesses=8 --dist loadgroup -m "not e2e and not live and not snapshot"
 
   build:
     name: Docker build

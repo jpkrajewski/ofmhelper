@@ -5,6 +5,8 @@ import random
 import re
 import subprocess
 
+import pytest
+
 from ofmhelpers.iphones import load_profile
 from ofmhelpers.iphones.recorder import _video_filter
 from ofmhelpers.utils.capcut import SourceInfo
@@ -12,6 +14,7 @@ from ofmhelpers.utils.capcut import SourceInfo
 BT2408_WHITE_CODE = 721  # 64 + 0.75 * (940 - 64)
 
 
+@pytest.mark.heavy
 def test_sdr_white_lands_on_hdr_reference_white():
     profile = load_profile("iphone17")
     src = SourceInfo(duration=1.0, width=1080, height=1920, has_audio=False)

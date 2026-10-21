@@ -3,9 +3,10 @@
 #
 #   scripts/test.sh              unit + integration + contract (fast, offline, parallel)
 #   scripts/test.sh e2e          e2e only (its own app, every outside service faked)
-#   scripts/test.sh all          unit + integration + contract + e2e
+#   scripts/test.sh all          unit + integration + contract + e2e (no heavy)
+#   scripts/test.sh push         default + heavy (ffmpeg): what CI runs on push
 #   scripts/test.sh live         live only: REAL Drive sandbox / providers / proxies
-#   scripts/test.sh deploy       all + live: the gate before a deploy
+#   scripts/test.sh deploy       all + heavy + live: the gate before a deploy
 #   scripts/test.sh snapshot     migrations on a copy of the prod snapshot
 #   scripts/test.sh <args...>    anything else goes straight to pytest
 #
@@ -27,7 +28,8 @@ parallel=(-n auto --maxprocesses=8 --dist loadgroup)
 case "${1:-}" in
     "") args=("${parallel[@]}") ;;
     e2e) shift; args=(-m e2e "$@") ;;
-    all) shift; args=(-m "not live and not snapshot" "${parallel[@]}" "$@") ;;
+    all) shift; args=(-m "not live and not snapshot and not heavy" "${parallel[@]}" "$@") ;;
+    push) shift; args=(-m "not e2e and not live and not snapshot" "${parallel[@]}" "$@") ;;
     live) shift; args=(-m live "$@") ;;
     deploy) shift; args=(-m "not snapshot" "${parallel[@]}" "$@") ;;
     snapshot) shift; args=(-m snapshot "$@") ;;

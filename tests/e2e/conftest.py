@@ -28,11 +28,16 @@ from typing import TYPE_CHECKING
 import allure
 import pytest
 import requests
+from alembic.config import Config
 from e2e_session import FAKE_DRIVE_ROOT, Session, log_in
 from PIL import Image
 from playwright.sync_api import Browser, sync_playwright
-from sqlalchemy import text
+from pydantic import BaseModel
+from repo_paths import REPO
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
+from alembic import command
 from ofmhelpers.gdrive.fake import FakeDrive
 
 if TYPE_CHECKING:
@@ -50,12 +55,23 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _app_env(workdir: Path, fakes: Path) -> dict[str, str]:
-    """The suite's own environment (test database, Redis, vault key: the
-    root conftest set them) plus the app's. Nothing from a .env file: the
-    app runs in `workdir`, which has none."""
+class E2EBackend(BaseModel):
+    """The app's own database and Redis db: never the ones the integration
+    tests of the same xdist worker truncate and flush, and its RQ worker
+    never takes their jobs."""
+
+    database_url: str
+    redis_url: str
+
+
+def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
+    """The suite's own environment (vault key: the root conftest set it)
+    plus the app's. Nothing from a .env file: the app runs in `workdir`,
+    which has none."""
     return {
         **os.environ,
+        "OFM_DATABASE_URL": backend.database_url,
+        "OFM_REDIS_URL": backend.redis_url,
         "OFM_RQ_ASYNC": "true",
         "OFM_RQ_WORKERS": "2",
         "OFM_FAKE_EXTERNALS": "1",
@@ -108,13 +124,37 @@ def app_log(app_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
+def e2e_backend(_test_environment) -> E2EBackend:
+    """A fresh database next to the suite's (`<test db>_e2e`), built by the
+    migrations, and Redis db 15 (the suite's workers use 1..8)."""
+    base = make_url(os.environ["OFM_DATABASE_URL"])
+    url = base.set(database=f"{base.database}_e2e")
+    admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f'DROP DATABASE IF EXISTS "{url.database}" WITH (FORCE)'))
+        conn.execute(text(f'CREATE DATABASE "{url.database}"'))
+    admin.dispose()
+    backend = E2EBackend(
+        database_url=url.render_as_string(hide_password=False),
+        redis_url=os.environ["OFM_REDIS_URL"].rsplit("/", 1)[0] + "/15",
+    )
+    suite_url = os.environ["OFM_DATABASE_URL"]
+    os.environ["OFM_DATABASE_URL"] = backend.database_url
+    try:
+        command.upgrade(Config(str(REPO / "alembic.ini")), "head")
+    finally:
+        os.environ["OFM_DATABASE_URL"] = suite_url
+    return backend
+
+
+@pytest.fixture(scope="session")
 def base_url(
-    _test_database, app_dir: Path, fakes_dir: Path, app_log: Path
+    e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
 ) -> Iterator[str]:
     """The app and its worker, up for the whole session."""
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
-    env = _app_env(app_dir, fakes_dir)
+    env = _app_env(app_dir, fakes_dir, e2e_backend)
     commands = [
         [
             sys.executable,
@@ -147,10 +187,12 @@ def base_url(
 
 
 @pytest.fixture(autouse=True)
-def _clean_tables(base_url):
-    """Overrides the root one: empty tables and the app's caches before
-    each test, but the RQ keys stay -- flushing them would pull the
-    registry from under the running worker."""
+def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
+    """Overrides the root one: the test seeds and reads the app's database
+    and Redis, starting from empty tables and caches -- but the RQ keys stay
+    (flushing them would pull the registry from under the running worker)."""
+    monkeypatch.setenv("OFM_DATABASE_URL", e2e_backend.database_url)
+    monkeypatch.setenv("OFM_REDIS_URL", e2e_backend.redis_url)
     from ofmhelpers.cache import get_redis
     from ofmhelpers.web.db.models import Base
     from ofmhelpers.web.db.session import get_engine

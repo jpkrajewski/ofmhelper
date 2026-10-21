@@ -105,6 +105,7 @@ def test_mirror_pct_100_mirrors_every_copy():
     assert all("hflip" in p.video_filter() for p in params)
 
 
+@pytest.mark.heavy
 def test_variants_are_named_capped_and_distinct(tmp_path):
     src = _write_clip(tmp_path / "src.mp4")
 
@@ -121,6 +122,7 @@ def test_variants_are_named_capped_and_distinct(tmp_path):
     assert len({p.read_bytes() for p in outputs}) == 3
 
 
+@pytest.mark.heavy
 def test_device_metadata_writes_a_recent_creation_time(tmp_path):
     src = _write_clip(tmp_path / "src.mp4", 320, 240)
 
@@ -133,6 +135,7 @@ def test_device_metadata_writes_a_recent_creation_time(tmp_path):
     assert tags["creation_time"].startswith("20")
 
 
+@pytest.mark.heavy
 def test_run_end_to_end_serves_every_copy(client, tmp_path, monkeypatch):
     monkeypatch.setattr(uniqify, "UPLOAD_ROOT", tmp_path)
     clip = _write_clip(tmp_path / "in.mp4", 320, 240).read_bytes()

@@ -111,6 +111,7 @@ def test_trims_longer_than_the_clip_are_rejected(tmp_path: Path):
 
 
 @pytest.mark.slow
+@pytest.mark.heavy
 def test_apply_preset_encodes_like_capcut_4k(tmp_path: Path):
     src = _write_clip(tmp_path / "in.mp4", "720x1280", 2.0)
     dst = tmp_path / "out.mp4"
@@ -136,6 +137,7 @@ def test_apply_preset_encodes_like_capcut_4k(tmp_path: Path):
     assert float(probe["format"]["duration"]) == pytest.approx(expected, abs=0.05)
 
 
+@pytest.mark.heavy
 def test_apply_preset_writes_capcut_tags(tmp_path: Path):
     src = _write_clip(tmp_path / "in.mp4", "320x240", 1.0)
     dst = tmp_path / "out.mp4"
@@ -159,6 +161,7 @@ def test_apply_preset_writes_capcut_tags(tmp_path: Path):
     assert b"Lavc" not in data
 
 
+@pytest.mark.heavy
 def test_apply_preset_handles_a_silent_clip(tmp_path: Path):
     src = tmp_path / "in.mp4"
     subprocess.run(

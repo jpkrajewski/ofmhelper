@@ -51,6 +51,7 @@ def _clip(dest: Path) -> Path:
 
 
 @pytest.mark.slow
+@pytest.mark.heavy
 def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
     profile = load_profile("iphone17")
     end = datetime.datetime(

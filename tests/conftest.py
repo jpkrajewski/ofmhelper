@@ -26,6 +26,8 @@ from ofmhelpers.config.settings import (
 #     docker compose up -d postgres redis
 # Tests run against a SEPARATE database (ofmhelpers_test) so they never touch
 # dev/prod data, and every table is truncated between tests for isolation.
+_TESTS_ROOT = Path(__file__).parent
+
 # Under pytest-xdist every worker (gw0, gw1, ...) gets its own database and
 # Redis db, so per-test TRUNCATE/FLUSHDB never hits another worker's test.
 _XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
@@ -96,7 +98,7 @@ def test_database_url() -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _test_environment():
+def _test_environment(tmp_path_factory):
     """The environment every test runs in: the app pointed at the throwaway
     test database and Redis db (nothing connects yet -- unit tests never
     do). Set on the real environment (not monkeypatch): session-scoped, and
@@ -115,23 +117,30 @@ def _test_environment():
     # A throwaway vault key: /phones logins encrypt with it (a test that
     # needs another key, or none, monkeypatches OFM_VAULT_KEY).
     os.environ["OFM_VAULT_KEY"] = Fernet.generate_key().decode()
+    # Nothing the app writes (uploads, assets) or reads (an uploaded
+    # Instagram login) is the checkout's: an empty folder per run.
+    run_dir = tmp_path_factory.mktemp("app-files")
+    os.environ["OFM_UPLOADS_ROOT"] = str(run_dir / "uploads")
+    os.environ["OFM_COOKIES_FILE"] = str(run_dir / "cookies" / "cookies.txt")
 
 
 @pytest.fixture(scope="session")
 def _test_database(_test_environment):
-    """Rebuild the schema of the throwaway test database once per session
-    (only for the tests that use a database: not tests/unit)."""
+    """The throwaway test database, emptied and built by the Alembic
+    migrations -- the schema production runs, not `create_all` -- once per
+    session (only for the tests that use a database: not tests/unit)."""
     _ensure_test_database(TEST_DATABASE_URL)
 
     # Import here, after the env var is set, so the engine binds to the test DB.
-    from ofmhelpers.web.db.models import Base
+    from alembic.config import Config
+
+    from alembic import command
     from ofmhelpers.web.db.session import get_engine
 
-    engine = get_engine()
-    # Rebuilt every session: create_all alone never alters an existing
-    # table, so a local test database would drift from the models.
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    with get_engine().begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+    command.upgrade(Config(str(_TESTS_ROOT.parent / "alembic.ini")), "head")
 
 
 @pytest.fixture(autouse=True)
@@ -168,7 +177,6 @@ _NO_REDIS = "unix:///nonexistent-unit-tests-have-no-redis.sock"
 
 # tests/<kind>/...: the folder is the kind; nobody marks one by hand.
 _KINDS = ("unit", "integration", "contract", "e2e")
-_TESTS_ROOT = Path(__file__).parent
 
 
 def _kind(item: pytest.Item) -> str:
@@ -180,6 +188,11 @@ def _kind(item: pytest.Item) -> str:
     return kind
 
 
+# First: xdist's own hook reads `xdist_group` to keep the e2e tests on one
+# worker; run after it, the marker came too late and e2e tests spread over
+# workers, each starting an app on one shared Redis db (they took each
+# other's jobs).
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config, items):
     for item in items:
         kind = _kind(item)

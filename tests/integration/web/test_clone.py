@@ -508,6 +508,7 @@ def test_export_keeps_a_remote_only_result(monkeypatch):
     assert _run_clone("/x", export="capcut") == result
 
 
+@pytest.mark.heavy
 def test_capcut_export_serves_the_capcut_copy(tmp_path, monkeypatch):
     src = _clip(tmp_path / "gen.mp4", 2)
     _generated(

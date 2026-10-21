@@ -114,6 +114,7 @@ def _compared(tag: str) -> bool:
 
 
 @pytest.mark.slow
+@pytest.mark.heavy
 def test_recording_matches_a_real_iphone17_file_tag_for_tag(tmp_path: Path):
     real = ExifDump.model_validate_json(FIXTURE.read_text(encoding="utf-8")).tags
     end = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3)))
@@ -147,6 +148,7 @@ REAL_HVCC_LEVEL = 0x78
 
 
 @pytest.mark.slow
+@pytest.mark.heavy
 def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
     dst = tmp_path / "out.mov"
     end = datetime.datetime.now(datetime.UTC)
@@ -166,6 +168,7 @@ def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
 
 
 @pytest.mark.slow
+@pytest.mark.heavy
 def test_every_track_ends_with_the_movie_like_an_iphone(tmp_path: Path):
     src = tmp_path / "in.mp4"
     # Audio outruns the video by 0.4 s, as in a downloaded reel.
