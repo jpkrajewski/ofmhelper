@@ -475,7 +475,10 @@ def test_page_without_setup_says_what_is_missing(monkeypatch):
     monkeypatch.delenv("OFM_GDRIVE_SERVICE_ACCOUNT", raising=False)
     monkeypatch.delenv("OFM_GDRIVE_ROOT_FOLDER", raising=False)
     html = _client().get("/drive").text
-    assert "Google Drive is not set up" in html
+    assert (
+        "Google Drive is not set up: OFM_GDRIVE_SERVICE_ACCOUNT and"
+        " OFM_GDRIVE_ROOT_FOLDER are empty in .env." in html
+    )
     assert 'id="dr-sync" disabled' in html
 
 
@@ -485,7 +488,20 @@ def test_page_without_a_root_folder_is_not_configured(monkeypatch):
     monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", "")
     response = _client().get("/drive")
     assert response.status_code == 200
-    assert "Google Drive is not set up" in response.text
+    assert (
+        "Google Drive is not set up: OFM_GDRIVE_ROOT_FOLDER is empty in .env."
+        in response.text
+    )
+
+
+def test_page_without_a_key_names_only_the_key(monkeypatch):
+    monkeypatch.delenv("OFM_GDRIVE_SERVICE_ACCOUNT", raising=False)
+    monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", "some-folder")
+    html = _client().get("/drive").text
+    assert (
+        "Google Drive is not set up: OFM_GDRIVE_SERVICE_ACCOUNT is empty in .env."
+        in html
+    )
 
 
 def test_page_not_shared_names_the_bot(drive):

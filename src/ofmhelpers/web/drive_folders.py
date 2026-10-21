@@ -232,8 +232,8 @@ def board(day: datetime.date | None = None) -> DriveBoard:
     result = DriveBoard(day=day, bot_email=bot, root_folder_id=s.root_folder_id)
     if not s.configured:
         result.problem = (
-            "Google Drive is not set up: OFM_GDRIVE_SERVICE_ACCOUNT and"
-            " OFM_GDRIVE_ROOT_FOLDER in .env."
+            f"Google Drive is not set up: {' and '.join(s.missing)}"
+            f" {'is' if len(s.missing) == 1 else 'are'} empty in .env."
         )
         return result
     try:

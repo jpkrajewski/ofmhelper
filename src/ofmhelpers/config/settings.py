@@ -743,5 +743,14 @@ class GDriveSettings(BaseSettings):
     thumb_px: int = Field(default=400, ge=32, validation_alias="OFM_GDRIVE_THUMB_PX")
 
     @property
+    def missing(self) -> list[str]:
+        """The settings still empty, by their .env name."""
+        empty = {
+            "OFM_GDRIVE_SERVICE_ACCOUNT": self.service_account is None,
+            "OFM_GDRIVE_ROOT_FOLDER": not self.root_folder_id,
+        }
+        return [name for name, is_empty in empty.items() if is_empty]
+
+    @property
     def configured(self) -> bool:
-        return self.service_account is not None and bool(self.root_folder_id)
+        return not self.missing
