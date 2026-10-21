@@ -5,9 +5,9 @@ Without them uvicorn keeps the request scheme at http behind the TLS proxy, so
 rate limiter buckets every client under the proxy's IP.
 """
 
-from pathlib import Path
+from repo_paths import REPO
 
-DOCKERFILE = Path(__file__).resolve().parents[2] / "Dockerfile"
+DOCKERFILE = REPO / "Dockerfile"
 
 
 def test_production_cmd_trusts_forwarded_headers() -> None:

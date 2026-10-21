@@ -2,15 +2,11 @@
 move picker-to-picker by kind, whatever each tool calls its field."""
 
 import json
-import shutil
 import subprocess
-from pathlib import Path
 
-import pytest
+from repo_paths import SRC
 
-SCRIPT = (
-    Path(__file__).parents[2] / "src/ofmhelpers/web/static/js/file-picker.js"
-).read_text(encoding="utf-8")
+SCRIPT = (SRC / "web/static/js/file-picker.js").read_text(encoding="utf-8")
 
 HARNESS = """
 const el = () => ({
@@ -38,7 +34,6 @@ console.log(JSON.stringify(dstImg._items.map((i) => i.path)));
 """
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_carry_over_moves_files_by_kind():
     out = subprocess.run(
         ["node", "-e", HARNESS % SCRIPT],

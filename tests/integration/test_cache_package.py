@@ -9,15 +9,13 @@ prevent, and it fails quietly.
 """
 
 import importlib
-import pathlib
 
 import pytest
 from redis import Redis
 from redis.exceptions import RedisError
+from repo_paths import SRC
 
 from ofmhelpers.cache import delete_text, get_queue, get_redis, get_text, set_text
-
-SRC = pathlib.Path(__file__).resolve().parents[1] / "src" / "ofmhelpers"
 
 
 def test_only_one_module_constructs_a_redis_connection():

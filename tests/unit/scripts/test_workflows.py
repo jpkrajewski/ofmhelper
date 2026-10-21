@@ -13,10 +13,9 @@ from pathlib import Path
 import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
+from repo_paths import REPO
 
-WORKFLOWS = sorted(
-    (Path(__file__).resolve().parents[2] / ".github/workflows").glob("*.yml")
-)
+WORKFLOWS = sorted((REPO / ".github/workflows").glob("*.yml"))
 
 # The first major of each action that runs on Node 24.
 NODE24_MAJOR = {

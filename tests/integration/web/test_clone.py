@@ -9,7 +9,6 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import html as html_lib
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -28,10 +27,6 @@ from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.schemas import CloneBatch, Job, ResultFile
 from ofmhelpers.web.stores.jobs import get_job, list_jobs
 from ofmhelpers.web.templates_config import render_partial
-
-needs_ffmpeg = pytest.mark.skipif(
-    shutil.which("ffmpeg") is None, reason="ffmpeg not installed"
-)
 
 NEW = json.dumps([{"kind": "new"}])
 
@@ -309,7 +304,6 @@ def _clip(dest: Path, seconds: int) -> Path:
     return dest
 
 
-@needs_ffmpeg
 def test_duration_s_reads_the_container_length(tmp_path):
     assert duration_s(_clip(tmp_path / "c.mp4", 3), 20) == pytest.approx(3.0, abs=0.2)
 
@@ -352,7 +346,6 @@ def _post_clips(client, clips, data=None):
     )
 
 
-@needs_ffmpeg
 def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatch):
     """Real upload, real ffprobe, real runner -- only kie.ai's calls are
     stubbed, so this is exactly the payload a paid run would send."""
@@ -375,7 +368,6 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
     assert statuses == ["done", "done"]
 
 
-@needs_ffmpeg
 def test_run_on_higgsfield_sends_its_own_field_names(client, tmp_path, monkeypatch):
     sent = []
     _stub(HiggsfieldProvider, monkeypatch, sent)
@@ -516,7 +508,6 @@ def test_export_keeps_a_remote_only_result(monkeypatch):
     assert _run_clone("/x", export="capcut") == result
 
 
-@needs_ffmpeg
 def test_capcut_export_serves_the_capcut_copy(tmp_path, monkeypatch):
     src = _clip(tmp_path / "gen.mp4", 2)
     _generated(

@@ -5,10 +5,10 @@ os.getenv/os.environ directly.
 """
 
 import re
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from repo_paths import SRC
 
 from ofmhelpers.config.settings import (
     AigenSettings,
@@ -190,7 +190,6 @@ def test_env_var_overrides_default(monkeypatch):
     assert s.cookies_file == "custom/cookies.txt"
 
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "ofmhelpers"
 ALLOWED_ENV_READ_DIR = SRC / "config"
 ENV_READ_PATTERN = re.compile(r"os\.getenv\(|os\.environ\[|os\.environ\.get\(")
 

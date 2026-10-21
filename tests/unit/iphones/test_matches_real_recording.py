@@ -18,18 +18,18 @@ dropped and each group:tag compares as the sorted list of its values. Every tag 
 import datetime
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, RootModel
+from repo_paths import FIXTURES
 
 from ofmhelpers.iphones import load_profile
 from ofmhelpers.iphones.models import Recording
 from ofmhelpers.iphones.recorder import record
 
-FIXTURE = Path(__file__).parent / "fixtures" / "iphone17_img0063.exif.json"
+FIXTURE = FIXTURES / "iphones" / "iphone17_img0063.exif.json"
 EXIFTOOL_ARGS = ["-j", "-a", "-G1:4", "-n", "-u"]
 
 COPY = re.compile(r":Copy\d+")
@@ -60,11 +60,6 @@ NOT_REPRODUCIBLE = re.compile(r"^Track[3-9]:|^QuickTime(:Copy\d+)?:NextTrackID$"
 EXIFTOOL_SKIPS_REAL_BOXES = re.compile(
     r"^Track1:(Unknown_hvcC|ColorProfiles|ColorPrimaries"
     r"|TransferCharacteristics|MatrixCoefficients)$"
-)
-
-needs_tools = pytest.mark.skipif(
-    any(shutil.which(b) is None for b in ("ffmpeg", "ffprobe", "exiftool")),
-    reason="ffmpeg/exiftool not installed (run in the Docker tests service)",
 )
 
 
@@ -118,7 +113,7 @@ def _compared(tag: str) -> bool:
     )
 
 
-@needs_tools
+@pytest.mark.slow
 def test_recording_matches_a_real_iphone17_file_tag_for_tag(tmp_path: Path):
     real = ExifDump.model_validate_json(FIXTURE.read_text(encoding="utf-8")).tags
     end = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3)))
@@ -151,7 +146,7 @@ REAL_HVCC_PROFILE = bytes.fromhex("010220000000")
 REAL_HVCC_LEVEL = 0x78
 
 
-@needs_tools
+@pytest.mark.slow
 def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
     dst = tmp_path / "out.mov"
     end = datetime.datetime.now(datetime.UTC)
@@ -170,7 +165,7 @@ def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
     assert REAL_COLR in data
 
 
-@needs_tools
+@pytest.mark.slow
 def test_every_track_ends_with_the_movie_like_an_iphone(tmp_path: Path):
     src = tmp_path / "in.mp4"
     # Audio outruns the video by 0.4 s, as in a downloaded reel.

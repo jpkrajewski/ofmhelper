@@ -1,6 +1,5 @@
 import json
 import random
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -12,11 +11,6 @@ from ofmhelpers.utils.capcut import (
     Jitter,
     SourceInfo,
     apply_preset,
-)
-
-needs_ffmpeg = pytest.mark.skipif(
-    any(shutil.which(b) is None for b in ("ffmpeg", "ffprobe")),
-    reason="ffmpeg not installed",
 )
 
 PORTRAIT = SourceInfo(duration=9.0, width=720, height=1280, has_audio=True)
@@ -110,14 +104,13 @@ def test_out_of_range_slider_rejected():
         CapcutPreset(exposure=51)
 
 
-@needs_ffmpeg
 def test_trims_longer_than_the_clip_are_rejected(tmp_path: Path):
     src = _write_clip(tmp_path / "in.mp4", "320x240", 0.5)
     with pytest.raises(ValueError, match="shorter than the trims"):
         apply_preset(src, tmp_path / "out.mp4", DEFAULT_PRESET, timeout_s=60)
 
 
-@needs_ffmpeg
+@pytest.mark.slow
 def test_apply_preset_encodes_like_capcut_4k(tmp_path: Path):
     src = _write_clip(tmp_path / "in.mp4", "720x1280", 2.0)
     dst = tmp_path / "out.mp4"
@@ -143,7 +136,6 @@ def test_apply_preset_encodes_like_capcut_4k(tmp_path: Path):
     assert float(probe["format"]["duration"]) == pytest.approx(expected, abs=0.05)
 
 
-@needs_ffmpeg
 def test_apply_preset_writes_capcut_tags(tmp_path: Path):
     src = _write_clip(tmp_path / "in.mp4", "320x240", 1.0)
     dst = tmp_path / "out.mp4"
@@ -167,7 +159,6 @@ def test_apply_preset_writes_capcut_tags(tmp_path: Path):
     assert b"Lavc" not in data
 
 
-@needs_ffmpeg
 def test_apply_preset_handles_a_silent_clip(tmp_path: Path):
     src = tmp_path / "in.mp4"
     subprocess.run(

@@ -54,8 +54,8 @@ def test_every_schema_is_valid_and_every_field_classified(spec):
     media = {f.name for f in spec.media_fields}
     scalars = {f.name for f in spec.form_fields}
     assert not media & scalars
-    if "prompt" in spec.properties:
-        assert "prompt" in scalars
+    # A prompt, where there is one, is a form field.
+    assert {"prompt"} & set(spec.properties) <= scalars
 
 
 def test_get_spec_by_key_and_unknown_key():

@@ -3,10 +3,7 @@ BT.2408's HDR reference white, 75% HLG signal (10-bit limited code 721)."""
 
 import random
 import re
-import shutil
 import subprocess
-
-import pytest
 
 from ofmhelpers.iphones import load_profile
 from ofmhelpers.iphones.recorder import _video_filter
@@ -14,12 +11,7 @@ from ofmhelpers.utils.capcut import SourceInfo
 
 BT2408_WHITE_CODE = 721  # 64 + 0.75 * (940 - 64)
 
-needs_ffmpeg = pytest.mark.skipif(
-    shutil.which("ffmpeg") is None, reason="ffmpeg not installed"
-)
 
-
-@needs_ffmpeg
 def test_sdr_white_lands_on_hdr_reference_white():
     profile = load_profile("iphone17")
     src = SourceInfo(duration=1.0, width=1080, height=1920, has_audio=False)

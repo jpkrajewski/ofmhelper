@@ -11,7 +11,6 @@ os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -117,7 +116,6 @@ def test_thumb_404s_for_unreadable_video_instead_of_500(client, assets_dir):
     assert r.status_code == 404
 
 
-@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_video_thumb_is_a_cached_webp_frame(client, assets_dir):
     """Video tiles poster through a first-frame grab rather than making the
     browser range-request the multi-MB original."""
@@ -133,7 +131,6 @@ def test_video_thumb_is_a_cached_webp_frame(client, assets_dir):
     assert (assets_dir / ".thumbs" / "abc123__200.webp").is_file()
 
 
-@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_video_thumb_preserves_aspect_ratio(client, assets_dir):
     """A 9:16 reel must not come back stretched into a square."""
     video = assets_dir / "def456__portrait.mp4"

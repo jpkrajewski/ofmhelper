@@ -15,23 +15,27 @@ them for every new revision, and refresh the snapshot first.
 import os
 import subprocess
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from pydantic import BaseModel
+from repo_paths import FIXTURES, REPO
 from sqlalchemy import Engine, create_engine, func, inspect, select, table, text
 from sqlalchemy.engine import URL, make_url
 
 from alembic import command
 
-SNAPSHOT = Path(__file__).parents[1] / "fixtures" / "prod_snapshot.sql"
-ROOT = Path(__file__).parents[2]
+SNAPSHOT = FIXTURES / "prod_snapshot.sql"
 
-pytestmark = pytest.mark.skipif(
-    not SNAPSHOT.exists(), reason="no production snapshot (tests/fixtures)"
-)
+# Opt-in (`scripts/test.sh snapshot`): real customer data, minutes per run.
+# The empty-database round trip runs every time (test_migrations.py).
+pytestmark = [
+    pytest.mark.snapshot,
+    pytest.mark.skipif(
+        not SNAPSHOT.exists(), reason="no production snapshot (tests/fixtures)"
+    ),
+]
 
 
 class StoredPost(BaseModel, frozen=True):
@@ -42,7 +46,7 @@ class StoredPost(BaseModel, frozen=True):
 
 
 def _alembic() -> Config:
-    return Config(str(ROOT / "alembic.ini"))
+    return Config(str(REPO / "alembic.ini"))
 
 
 @pytest.fixture

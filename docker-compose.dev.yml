@@ -84,7 +84,7 @@ services:
   # Every test/lint/type check, inside Linux:
   #   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm tests
   #   docker compose ... run --rm tests uv run --frozen pytest -m e2e    (starts its own app)
-  #   docker compose ... run --rm tests uv run --frozen pytest -m integration
+  #   docker compose ... run --rm tests uv run --frozen pytest -m live   (real services)
   #   docker compose ... run --rm tests uv run --frozen mypy
   #   docker compose ... run --rm tests uv run --frozen pre-commit run --all-files
   tests:

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
@@ -95,12 +96,12 @@ def test_database_url() -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _test_database():
-    """Point the whole app at the throwaway test database and rebuild the
-    schema once per session."""
-    _ensure_test_database(TEST_DATABASE_URL)
-    # Set on the real environment (not monkeypatch): session-scoped, and it
-    # must be visible before any app code builds its lazy engine / redis conn.
+def _test_environment():
+    """The environment every test runs in: the app pointed at the throwaway
+    test database and Redis db (nothing connects yet -- unit tests never
+    do). Set on the real environment (not monkeypatch): session-scoped, and
+    it must be visible before any app code builds its lazy engine / redis
+    conn."""
     os.environ["OFM_DATABASE_URL"] = TEST_DATABASE_URL
     os.environ["OFM_REDIS_URL"] = TEST_REDIS_URL
     # Run enqueued jobs inline (like the old BackgroundTasks) so TestClient
@@ -115,6 +116,13 @@ def _test_database():
     # needs another key, or none, monkeypatches OFM_VAULT_KEY).
     os.environ["OFM_VAULT_KEY"] = Fernet.generate_key().decode()
 
+
+@pytest.fixture(scope="session")
+def _test_database(_test_environment):
+    """Rebuild the schema of the throwaway test database once per session
+    (only for the tests that use a database: not tests/unit)."""
+    _ensure_test_database(TEST_DATABASE_URL)
+
     # Import here, after the env var is set, so the engine binds to the test DB.
     from ofmhelpers.web.db.models import Base
     from ofmhelpers.web.db.session import get_engine
@@ -127,14 +135,22 @@ def _test_database():
 
 
 @pytest.fixture(autouse=True)
-def _clean_tables():
+def _clean_tables(request):
     """Truncate every mapped table before each test so nothing leaks between
     tests -- the DB equivalent of the old per-test temp JSON files. The list
     comes from the ORM metadata, so it matches what create_all built: a
     hardcoded list kept naming retired tables that a fresh CI database never
     has. Also flushes the test Redis db: repository.py caches reads there, and
     a cached list/get from a previous test would otherwise survive the
-    TRUNCATE above until its TTL expired."""
+    TRUNCATE above until its TTL expired. Unit tests have no database: their
+    URLs point at sockets that do not exist (pytest-socket cannot see
+    psycopg's connections, which libpq makes in C)."""
+    if request.node.get_closest_marker("unit"):
+        monkeypatch = request.getfixturevalue("monkeypatch")
+        monkeypatch.setenv("OFM_DATABASE_URL", _NO_DATABASE)
+        monkeypatch.setenv("OFM_REDIS_URL", _NO_REDIS)
+        return
+    request.getfixturevalue("_test_database")
     from ofmhelpers.cache import get_redis
     from ofmhelpers.web.db.models import Base
     from ofmhelpers.web.db.session import get_engine
@@ -143,6 +159,40 @@ def _clean_tables():
     with get_engine().begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     get_redis().flushdb()
+
+
+_NO_DATABASE = (
+    "postgresql+psycopg://unit:unit@/none?host=/nonexistent-unit-tests-have-no-db"
+)
+_NO_REDIS = "unix:///nonexistent-unit-tests-have-no-redis.sock"
+
+# tests/<kind>/...: the folder is the kind; nobody marks one by hand.
+_KINDS = ("unit", "integration", "contract", "e2e")
+_TESTS_ROOT = Path(__file__).parent
+
+
+def _kind(item: pytest.Item) -> str:
+    rel = Path(item.path).relative_to(_TESTS_ROOT)
+    kind = rel.parts[0]
+    if kind not in _KINDS:
+        msg = f"{rel}: every test lives under tests/{{{','.join(_KINDS)}}}/"
+        raise pytest.UsageError(msg)
+    return kind
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        kind = _kind(item)
+        item.add_marker(kind)
+        if kind == "unit":
+            # Pure logic: no database, no network at all (pytest-socket).
+            item.add_marker(pytest.mark.disable_socket)
+        if kind == "e2e":
+            # One xdist worker runs every e2e test: it starts the one app.
+            item.add_marker(pytest.mark.xdist_group("e2e"))
+        if item.get_closest_marker("live"):
+            # The only tests that may reach the internet.
+            item.add_marker(pytest.mark.enable_socket)
 
 
 _SETTINGS_CLASSES = (

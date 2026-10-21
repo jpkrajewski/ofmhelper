@@ -3,7 +3,6 @@ independent check."""
 
 import datetime
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,11 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from ofmhelpers.iphones import load_profile
 from ofmhelpers.iphones.models import Recording
 from ofmhelpers.iphones.recorder import record
-
-needs_tools = pytest.mark.skipif(
-    any(shutil.which(b) is None for b in ("ffmpeg", "ffprobe", "exiftool")),
-    reason="ffmpeg/exiftool not installed (run in the Docker tests service)",
-)
 
 
 class ExifRead(BaseModel):
@@ -56,7 +50,7 @@ def _clip(dest: Path) -> Path:
     return dest
 
 
-@needs_tools
+@pytest.mark.slow
 def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
     profile = load_profile("iphone17")
     end = datetime.datetime(

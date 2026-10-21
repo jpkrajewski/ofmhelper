@@ -23,11 +23,14 @@ def test_iphone17_profile_is_fully_decoded():
 def test_every_key_has_exactly_one_source_of_value():
     profile = load_profile("iphone17")
 
-    for key in [*profile.movie_keys, *profile.video_track_keys]:
+    keys = [*profile.movie_keys, *profile.video_track_keys]
+    for key in keys:
         assert (key.value is None) != (key.per_recording is None), key.key
-        if key.data_type is DataType.SIGNED_INT_BE:
-            assert isinstance(key.value, int)
-            assert key.int_width is not None
+    signed = [k for k in keys if k.data_type is DataType.SIGNED_INT_BE]
+    assert signed
+    for key in signed:
+        assert isinstance(key.value, int), key.key
+        assert key.int_width is not None, key.key
 
 
 def test_per_recording_values_are_not_baked_into_the_profile():

@@ -169,13 +169,28 @@ ban-relative-imports = "all"
 docstring-code-format = true
 
 [tool.pytest.ini_options]
+# Applied by folder in tests/conftest.py (tests/<kind>/); `live`, `slow`
+# and `snapshot` are set per test.
 markers = [
-    "e2e: drives a live app in a real browser (tests/e2e); run with -m e2e",
-    "integration: reaches the real outside services (tests/integration); run with -m integration",
+    "unit: pure logic -- no database, no network, no files beyond tmp_path (tests/unit)",
+    "integration: the app through TestClient on the real test DB, every outside service faked (tests/integration)",
+    "contract: one behaviour checked on a fake and, under -m live, on the real service (tests/contract)",
+    "e2e: Playwright against the app the suite starts, with fakes (tests/e2e); scripts/test.sh e2e",
+    "live: reaches a REAL outside service (Drive sandbox, AI providers, Instagram, proxies); scripts/test.sh live",
+    "slow: takes more than 2 s (ffmpeg, real media)",
+    "snapshot: migrations on a copy of the production snapshot; scripts/test.sh snapshot",
 ]
-# The e2e suite needs the whole stack up and a browser; integration needs the
-# internet. A plain `pytest` leaves both out; a later -m on the command line wins.
-addopts = "-m 'not e2e and not integration'"
+# A plain `pytest` is fast and offline: no browser, no real services, no
+# production data; a later -m on the command line wins. Sockets: only the
+# local app, Postgres and Redis (pytest-socket); `live` tests are let out,
+# unit tests get none at all.
+addopts = [
+    "--strict-markers",
+    "-m", "not e2e and not live and not snapshot",
+    "--disable-socket",
+    "--allow-unix-socket",
+    "--allow-hosts=127.0.0.1,localhost,::1,postgres,redis",
+]
 
 # HTML/Jinja templates: `djlint src/ofmhelpers/web/templates --lint`.
 [tool.djlint]

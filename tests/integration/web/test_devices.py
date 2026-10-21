@@ -464,9 +464,10 @@ def test_secrets_never_reach_the_redis_cache():
     store.secrets(login_id)
     store.export_devices()
     redis = get_redis()
-    for key in redis.scan_iter("*"):
-        if redis.type(key) == b"string":
-            assert b"redis-must-not-see" not in (redis.get(key) or b"")
+    cached = [k for k in redis.scan_iter("cache:*") if redis.type(k) == b"string"]
+    # The reads above did go through the cache: there is something to check.
+    assert cached
+    assert not [k for k in cached if b"redis-must-not-see" in (redis.get(k) or b"")]
 
 
 # --- filters and sort ---------------------------------------------------------

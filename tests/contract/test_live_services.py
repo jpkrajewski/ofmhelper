@@ -1,6 +1,6 @@
 """Every outside service the app depends on, reached for real.
 
-Run with `-m integration` in the Docker tests service, locally -- not on CI
+Run with `scripts/test.sh live` (Docker tests service), locally -- not on CI
 (Instagram rate-limits runner IPs). Each service is checked at two levels: its hosts
 resolve and complete a TLS handshake (catches DNS/network breakage, like a
 container that cannot resolve anything), and its API answers the way the
@@ -26,7 +26,7 @@ from ofmhelpers.instagram import client as instagram_client
 from ofmhelpers.instagram.client import InstagramClient
 from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.live
 
 TLS_PORT = 443
 TIMEOUT_S = 15

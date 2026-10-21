@@ -5,22 +5,20 @@ on a copy of production's data is `-m snapshot`, test_prod_snapshot.py.)"""
 
 import logging
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from repo_paths import REPO
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import URL, make_url
 
 from alembic import command
 from ofmhelpers.web.db.models import Base
 
-ROOT = Path(__file__).parents[2]
-
 
 def _alembic() -> Config:
-    return Config(str(ROOT / "alembic.ini"))
+    return Config(str(REPO / "alembic.ini"))
 
 
 @pytest.fixture

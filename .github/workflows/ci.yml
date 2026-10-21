@@ -91,7 +91,7 @@ jobs:
       - name: Build test image
         run: $COMPOSE --profile test build tests
 
-      # The live-service checks (`-m integration`) are not run here: they
+      # The live-service checks (`-m live`) are not run here: they
       # run locally and against prod, where the app's own network and
       # Instagram proxies are (Instagram rate-limits runner IPs).
       - name: Run tests
