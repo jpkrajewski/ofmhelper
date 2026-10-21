@@ -181,6 +181,7 @@ markers = [
     "e2e: Playwright against the app the suite starts, with fakes (tests/e2e); scripts/test.sh e2e",
     "live: reaches a REAL outside service (Drive sandbox, AI providers, Instagram, proxies); scripts/test.sh live",
     "slow: takes more than 2 s (ffmpeg, real media)",
+    "paid: spends money at a provider (a real generation); never in any preset but scripts/test.sh paid",
     "heavy: real ffmpeg/ffprobe encoding; left out of the default run, runs on push (CI, scripts/test.sh push/deploy)",
     "snapshot: migrations on a copy of the production snapshot; scripts/test.sh snapshot",
 ]
@@ -190,7 +191,7 @@ markers = [
 # unit tests get none at all.
 addopts = [
     "--strict-markers",
-    "-m", "not e2e and not live and not snapshot and not heavy",
+    "-m", "not e2e and not live and not snapshot and not heavy and not paid",
     "--disable-socket",
     "--allow-unix-socket",
     "--allow-hosts=127.0.0.1,localhost,::1,postgres-test,redis-test",

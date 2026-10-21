@@ -33,6 +33,7 @@ Every check runs in Docker dev, never on the host. `C="docker compose -f docker-
 - After every run, report: pass/fail/skip counts, each failure with its error text, the 10 slowest tests.
 - Before any command >30s, say in one line what you're running and why. Background loops log to `reports/loops/`.
 - `-m live` (real Drive/providers/proxies/Gmail) runs ONLY when I say commit, push or deploy. Then use `scripts/test.sh deploy`.
+- `paid` tests (real provider generations, cost money) run ONLY when I explicitly ask: `scripts/test.sh paid`. No preset, hook or CI runs them.
 - Never state a cause without quoting the error, log line or trace. Label theories as theories.
 - Done = full default suite green after your last change, with counts. List anything not run.
 - Tests never use the dev DB, the prod snapshot (except `-m snapshot`), or the production Drive folder.

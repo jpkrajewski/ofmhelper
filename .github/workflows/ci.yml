@@ -96,7 +96,7 @@ jobs:
       # Instagram proxies are (Instagram rate-limits runner IPs).
       # Default run + the heavy ffmpeg tests (left out of local runs).
       - name: Run tests
-        run: $COMPOSE run --rm tests uv run --frozen pytest -n auto --maxprocesses=8 --dist loadgroup -m "not e2e and not live and not snapshot"
+        run: $COMPOSE run --rm tests uv run --frozen pytest -n auto --maxprocesses=8 --dist loadgroup -m "not e2e and not live and not snapshot and not paid"
 
   build:
     name: Docker build

@@ -1,7 +1,7 @@
 """kie.ai and Higgsfield behind the shared interface, on their fakes and on
 the real APIs: a wrong key is refused the same way everywhere (free), and
-the cheapest job runs end to end (PAID on the real side: a few cents per
-provider, `scripts/test.sh live`/`deploy` only; keys from .env)."""
+the cheapest job runs end to end (its real side is marked `paid`: a few
+cents per provider, run only by `scripts/test.sh paid`; keys from .env)."""
 
 import pytest
 from PIL import Image
@@ -45,19 +45,32 @@ def test_a_wrong_key_is_refused_at_the_first_upload(backend, provider_name, tmp_
         cls(bad).upload(image)
 
 
-def test_the_cheapest_job_runs_end_to_end(
-    backend, provider_name, monkeypatch, tmp_path
-):
-    monkeypatch.setenv("OFM_AIGEN_POLL_INTERVAL_S", "0.01")
-    monkeypatch.setenv("OFM_AIGEN_POLL_MAX_INTERVAL_S", "0.02")
-    cls, _, fake_key = PROVIDERS[provider_name]
-    key = fake_key if backend == "fake" else cls.default_key(admin=True)
+def _cheapest_job(cls, key: str) -> None:
     assert key, f"no {cls.label} key in .env"
-    spec = get_spec(CHEAPEST[provider_name])
-
+    spec = get_spec(CHEAPEST[cls.name])
     paths = generate(
         cls(key), spec, {"prompt": "a single red apple on white"}, "contract-job"
     )
-
     assert paths
     assert all(p.exists() and p.stat().st_size > 0 for p in paths)
+
+
+@pytest.fixture
+def fast_polls(monkeypatch):
+    monkeypatch.setenv("OFM_AIGEN_POLL_INTERVAL_S", "0.01")
+    monkeypatch.setenv("OFM_AIGEN_POLL_MAX_INTERVAL_S", "0.02")
+
+
+def test_the_cheapest_job_runs_end_to_end_on_the_fake(
+    fake_externals, fast_polls, provider_name
+):
+    cls, _, fake_key = PROVIDERS[provider_name]
+    _cheapest_job(cls, fake_key)
+
+
+@pytest.mark.live
+@pytest.mark.paid
+def test_the_cheapest_job_runs_end_to_end_for_real(real_env, provider_name):
+    """PAID: a few cents per provider. Only `scripts/test.sh paid`."""
+    cls, _, _ = PROVIDERS[provider_name]
+    _cheapest_job(cls, cls.default_key(admin=True))

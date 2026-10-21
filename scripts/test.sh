@@ -5,8 +5,9 @@
 #   scripts/test.sh e2e          e2e only (its own app, every outside service faked)
 #   scripts/test.sh all          unit + integration + contract + e2e (no heavy)
 #   scripts/test.sh push         default + heavy (ffmpeg): what CI runs on push
-#   scripts/test.sh live         live only: REAL Drive sandbox / providers / proxies
-#   scripts/test.sh deploy       all + heavy + live: the gate before a deploy
+#   scripts/test.sh live         live only: REAL Drive sandbox / providers / proxies (free)
+#   scripts/test.sh deploy       all + heavy + live: the gate before a deploy (free)
+#   scripts/test.sh paid         the real provider jobs that cost money -- by hand only
 #   scripts/test.sh snapshot     migrations on a copy of the prod snapshot
 #   scripts/test.sh <args...>    anything else goes straight to pytest
 #
@@ -28,10 +29,11 @@ parallel=(-n auto --maxprocesses=8 --dist loadgroup)
 case "${1:-}" in
     "") args=("${parallel[@]}") ;;
     e2e) shift; args=(-m e2e "$@") ;;
-    all) shift; args=(-m "not live and not snapshot and not heavy" "${parallel[@]}" "$@") ;;
-    push) shift; args=(-m "not e2e and not live and not snapshot" "${parallel[@]}" "$@") ;;
-    live) shift; args=(-m live "$@") ;;
-    deploy) shift; args=(-m "not snapshot" "${parallel[@]}" "$@") ;;
+    all) shift; args=(-m "not live and not snapshot and not heavy and not paid" "${parallel[@]}" "$@") ;;
+    push) shift; args=(-m "not e2e and not live and not snapshot and not paid" "${parallel[@]}" "$@") ;;
+    live) shift; args=(-m "live and not paid" "$@") ;;
+    deploy) shift; args=(-m "not snapshot and not paid" "${parallel[@]}" "$@") ;;
+    paid) shift; args=(-m paid "$@") ;;
     snapshot) shift; args=(-m snapshot "$@") ;;
     *) args=("$@") ;;
 esac
