@@ -57,11 +57,13 @@ def list_creators() -> list[str]:
     return _repository().list_creators()
 
 
-def track(platform: str, handle: str, creator: str | None = None) -> bool:
+def track(
+    platform: str, handle: str, creator: str | None = None, *, revive: bool = True
+) -> bool:
     """True when the account is new or tracked again (an untracked one comes
-    back with its history); one already tracked is only assigned to
-    `creator` (when given)."""
-    return _repository().add(platform, handle, creator)
+    back with its history -- unless `revive` is False); one already tracked
+    is only assigned to `creator` (when given)."""
+    return _repository().add(platform, handle, creator, revive)
 
 
 def assign_creator(account_ids: list[int], creator: str | None) -> int:

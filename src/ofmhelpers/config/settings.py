@@ -735,6 +735,14 @@ class GDriveSettings(BaseSettings):
     )
     # Per request: googleapiclient's backoff on 5xx/429/dropped connections.
     retries: int = Field(default=5, ge=0, validation_alias="OFM_GDRIVE_RETRIES")
+    # When a page waits on Drive (/drive, its previews): each socket wait
+    # and the retries, so a stalled Drive fails the page in seconds.
+    interactive_timeout_s: float = Field(
+        default=10, gt=0, validation_alias="OFM_GDRIVE_INTERACTIVE_TIMEOUT_S"
+    )
+    interactive_retries: int = Field(
+        default=1, ge=0, validation_alias="OFM_GDRIVE_INTERACTIVE_RETRIES"
+    )
     # Folders listed at once when /drive opens.
     list_workers: int = Field(
         default=8, ge=1, validation_alias="OFM_GDRIVE_LIST_WORKERS"

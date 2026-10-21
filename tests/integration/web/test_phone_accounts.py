@@ -105,7 +105,62 @@ def test_phones_show_followers_and_sort_by_them_by_default(admin):
 
 @pytest.mark.parametrize(
     ("n", "shown"),
-    [(0, "0"), (950, "950"), (1000, "1k"), (12_340, "12.3k"), (1_250_000, "1.2M")],
+    [
+        (0, "0"),
+        (999, "999"),
+        (1000, "1k"),
+        (12_340, "12.3k"),
+        (999_949, "999.9k"),
+        (999_960, "1M"),
+        (1_250_000, "1.2M"),
+    ],
 )
 def test_follower_counts_are_compact(n, shown):
     assert _compact(n) == shown
+
+
+def test_editing_a_login_never_brings_back_an_account_removed_by_hand(admin):
+    """Changing a password is no reason to re-add what an admin removed."""
+    login = _add(admin, _phone("Phone 07"), "instagram", "yuki_kanasiva")
+    untrack([a.id for a in list_accounts()])
+
+    r = admin.post(
+        f"/phones/logins/{login}",
+        json={"service": "instagram", "username": "yuki_kanasiva", "password": "new"},
+    )
+
+    assert r.status_code == 200
+    assert _tracked() == {}
+
+
+def test_a_failing_tracker_never_fails_the_saved_login(admin, monkeypatch):
+    from ofmhelpers.web import account_tracker
+
+    def broken(*_args, **_kwargs):
+        msg = "redis is down"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(account_tracker, "track", broken)
+    phone = _phone("Phone 07")
+
+    r = admin.post(
+        f"/phones/{phone}/logins",
+        json={"service": "instagram", "username": "yuki_kanasiva"},
+    )
+
+    assert r.status_code == 200
+    assert [x.username for x in store.list_devices()[0].logins] == ["yuki_kanasiva"]
+
+
+def test_the_sort_the_page_leaves_out_of_the_url_is_the_servers_default(admin):
+    """phones.js drops the default sort from the URL, so it must be the
+    server's default -- and "Sort: Name" must stay in it."""
+    from repo_paths import SRC
+
+    from ofmhelpers.web.schemas import PhoneQuery
+
+    html = admin.get("/phones").text
+    assert f'data-default="{PhoneQuery().sort}"' in html
+    js = (SRC / "web/static/js/phones.js").read_text(encoding="utf-8")
+    assert "field.value === field.dataset.default" in js
+    assert 'field.value === "label"' not in js

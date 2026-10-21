@@ -11,14 +11,18 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from functools import lru_cache
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
+import httplib2
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
+from googleapiclient.errors import Error as GoogleApiError
 from googleapiclient.errors import HttpError
 
 from ofmhelpers.config import settings
@@ -87,18 +91,33 @@ class Drive:
     """The real Drive (`DriveApi`)."""
 
     def __init__(
-        self, credentials: service_account.Credentials, http: Any = None
+        self,
+        credentials: service_account.Credentials,
+        http: Any = None,
+        *,
+        timeout_s: float | None = None,
+        retries: int | None = None,
     ) -> None:
-        """`http` replaces the authorised transport (tests)."""
+        """`http` replaces the authorised transport (tests); `timeout_s`
+        bounds each socket wait (httplib2 waits 60 s by default), `retries`
+        overrides `OFM_GDRIVE_RETRIES`."""
         self._credentials = credentials
-        auth = {"http": http} if http is not None else {"credentials": credentials}
-        self._files = build("drive", "v3", cache_discovery=False, **auth).files()
-        self._retries = settings.gdrive.retries
+        if http is None:
+            http = AuthorizedHttp(credentials, http=httplib2.Http(timeout=timeout_s))
+        self._files = build("drive", "v3", cache_discovery=False, http=http).files()
+        self._retries = settings.gdrive.retries if retries is None else retries
 
     def _run(self, request: HttpRequest, what: str) -> dict[str, Any]:
         try:
             return request.execute(num_retries=self._retries)
-        except (HttpError, GoogleAuthError, OSError) as exc:
+        # httplib2 errors (a DNS failure, a dropped connection) are not
+        # OSError: without them they escaped as raw exceptions.
+        except (
+            GoogleApiError,
+            GoogleAuthError,
+            OSError,
+            httplib2.HttpLib2Error,
+        ) as exc:
             raise _failure(exc, what) from exc
 
     def folder(self, folder_id: str) -> DriveFolder:
@@ -223,11 +242,32 @@ class Drive:
         return response.content, response.headers.get("Content-Type", "image/jpeg")
 
 
-def connect() -> DriveApi:
-    """A `Drive` for this thread (the fake one under OFM_FAKE_EXTERNALS).
-    Raises `DriveError` when not set up."""
+_THREAD = threading.local()
+
+
+def connect(*, interactive: bool = False) -> DriveApi:
+    """This thread's `Drive` (the fake one under OFM_FAKE_EXTERNALS), made
+    once per thread and setting: one googleapiclient service is not
+    thread-safe, and a new one per call is waste. `interactive`: a page is
+    waiting, so each request gets `interactive_timeout_s` and
+    `interactive_retries` -- a stalled Drive fails the page in seconds
+    instead of holding its thread for minutes. Raises `DriveError` when not
+    set up."""
     if settings.infra.fake_externals:
         from ofmhelpers.gdrive.fake import fake_drive
 
         return fake_drive()
-    return Drive(_credentials(_key()))
+    s = settings.gdrive
+    key = _key()
+    timeout_s, retries = (
+        (s.interactive_timeout_s, s.interactive_retries)
+        if interactive
+        else (None, None)
+    )
+    cache_key = (key, timeout_s, retries, s.retries)
+    drives: dict = _THREAD.__dict__.setdefault("drives", {})
+    if cache_key not in drives:
+        drives[cache_key] = Drive(
+            _credentials(key), timeout_s=timeout_s, retries=retries
+        )
+    return drives[cache_key]

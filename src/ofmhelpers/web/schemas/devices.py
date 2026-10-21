@@ -162,12 +162,19 @@ class DeviceLogin(BaseModel):
         return [p for p in self.on if p != label]
 
 
+_THOUSAND = 1_000
+_MILLION = 1_000_000
+
+
 def _compact(n: int) -> str:
-    """950, 12.3k, 1.2M: one decimal where it says something."""
-    for size, unit in ((1_000_000, "M"), (1_000, "k")):
-        if n >= size:
-            return f"{n / size:.1f}".rstrip("0").rstrip(".") + unit
-    return str(n)
+    """950, 12.3k, 1.2M: one decimal where it says something. The unit is
+    picked after rounding (999_960 is "1M", not "1000k")."""
+    if n < _THOUSAND:
+        return str(n)
+    thousands = round(n / _THOUSAND, 1)
+    if thousands < _THOUSAND:
+        return f"{thousands:.1f}".rstrip("0").rstrip(".") + "k"
+    return f"{round(n / _MILLION, 1):.1f}".rstrip("0").rstrip(".") + "M"
 
 
 class Device(BaseModel):

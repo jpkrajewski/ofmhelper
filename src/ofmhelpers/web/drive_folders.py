@@ -206,7 +206,11 @@ def _list_day(card: DriveCard, day: datetime.date) -> None:
     if card.day_folder_id is None:
         return
     try:
-        card.files = connect().children(card.day_folder_id)
+        # The folder first: listing a trashed or unshared folder is no
+        # error on Drive, only empty.
+        drive = connect(interactive=True)
+        drive.folder(card.day_folder_id)
+        card.files = drive.children(card.day_folder_id)
     except FolderGoneError:
         store.forget_day_folder(card.target.login_id, day)
         card.day_folder_id = None
@@ -217,7 +221,11 @@ def _list_day(card: DriveCard, day: datetime.date) -> None:
 
 
 def _other_folders(root: str, known: set[str]) -> list[DriveFile]:
-    folders = connect().children(root, folders_only=True)
+    """The root folders no login owns. Raises `FolderGoneError` when the
+    root itself is gone or not shared (its listing would only be empty)."""
+    drive = connect(interactive=True)
+    drive.folder(root)
+    folders = drive.children(root, folders_only=True)
     return sorted(
         (f for f in folders if f.id not in known), key=lambda f: f.name.lower()
     )
@@ -254,14 +262,20 @@ def board(day: datetime.date | None = None) -> DriveBoard:
     known = {f.folder_id for f in folders.values()}
     with ThreadPoolExecutor(max_workers=s.list_workers) as pool:
         others = pool.submit(_other_folders, root, known)
-        for card in result.cards:
-            pool.submit(_list_day, card, day)
+        listed = {pool.submit(_list_day, card, day): card for card in result.cards}
         try:
             result.other_folders = others.result()
         except FolderGoneError:
             result.problem = _not_shared(bot)
         except DriveError as exc:
             result.problem = str(exc)
+        for future, card in listed.items():
+            try:
+                future.result()
+            except Exception:
+                # Never "Nothing uploaded today" for a folder never read.
+                logger.exception("drive: card of %s failed", card.target.handle)
+                card.error = "Could not read this folder from Drive"
     return result
 
 
@@ -270,7 +284,7 @@ def thumbnail(file_id: str) -> tuple[bytes, str] | None:
     other id (not ours, gone, no preview), so the proxy never serves the
     rest of what the account can see."""
     root_folder()
-    drive = connect()
+    drive = connect(interactive=True)
     try:
         item = drive.file(file_id)
     except FolderGoneError:

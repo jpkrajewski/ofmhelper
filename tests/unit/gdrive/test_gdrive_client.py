@@ -199,3 +199,45 @@ def test_file_kinds_and_links():
     assert (video.kind, doc.kind, folder.kind) == ("video", "file", "folder")
     assert video.url == "https://drive.google.com/file/d/v/view"
     assert folder.url == "https://drive.google.com/drive/folders/f"
+
+
+class _NoNetwork:
+    """An httplib2 transport whose every request fails like a DNS miss."""
+
+    def request(self, *_args, **_kwargs):
+        import httplib2
+
+        msg = "Unable to find the server at www.googleapis.com"
+        raise httplib2.ServerNotFoundError(msg)
+
+
+def test_a_transport_failure_is_a_drive_error(monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
+    drive = Drive(credentials=None, http=_NoNetwork())  # type: ignore[arg-type]
+    with pytest.raises(DriveError, match="Unable to find the server"):
+        drive.folder("root")
+
+
+def test_connect_keeps_one_drive_per_thread_and_bounds_interactive_calls(
+    monkeypatch,
+):
+    made = []
+
+    class Recorded:
+        def __init__(self, _credentials, *, timeout_s, retries):
+            made.append((timeout_s, retries))
+
+    monkeypatch.setattr(drive_client, "Drive", Recorded)
+    monkeypatch.setattr(drive_client, "_key", lambda: "key-json")
+    monkeypatch.setattr(drive_client, "_credentials", lambda key: object())
+    monkeypatch.setenv("OFM_GDRIVE_INTERACTIVE_TIMEOUT_S", "7")
+    monkeypatch.setenv("OFM_GDRIVE_INTERACTIVE_RETRIES", "1")
+    drive_client._THREAD.__dict__.pop("drives", None)
+
+    first = drive_client.connect()
+    assert drive_client.connect() is first
+    page = drive_client.connect(interactive=True)
+
+    assert page is not first
+    assert drive_client.connect(interactive=True) is page
+    assert made == [(None, None), (7.0, 1)]

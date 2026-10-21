@@ -72,13 +72,20 @@ def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
         return None
 
 
-def track_login(service: str, username: str) -> bool:
+def track_login(service: str, username: str, *, revive: bool) -> bool:
     """A login added to a phone shows on /accounts (with that phone): its
-    account is tracked and its first scan queued. True when newly tracked."""
-    key = tracked_handle(service, username)
-    if key is None or not track(*key):
+    account is tracked and its first scan queued. `revive`: also bring back
+    one removed by hand (an add does; an edit does not). True when newly
+    tracked. Never raises: the login is saved already, and tracking it is a
+    side effect that must not fail that save -- a failure is logged."""
+    try:
+        key = tracked_handle(service, username)
+        if key is None or not track(*key, revive=revive):
+            return False
+        queue_due_scans()
+    except Exception:
+        logger.exception("tracking %s login %r failed", service, username)
         return False
-    queue_due_scans()
     return True
 
 

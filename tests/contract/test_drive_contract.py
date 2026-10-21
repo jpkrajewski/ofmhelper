@@ -77,3 +77,8 @@ def test_a_file_knows_its_parent_and_a_folder_has_no_preview(drive, parent):
 def test_a_missing_folder_is_gone(drive, parent):
     with pytest.raises(FolderGoneError):
         drive.folder("1" + uuid.uuid4().hex * 2)
+
+
+def test_listing_a_folder_the_bot_cannot_see_is_empty_not_an_error(drive, parent):
+    """Callers check `folder` first for that reason."""
+    assert drive.children("1" + uuid.uuid4().hex * 2) == []

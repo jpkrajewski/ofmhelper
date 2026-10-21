@@ -180,7 +180,10 @@ class FakeDrive:
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]:
         with self._state("children") as state:
-            self._live(state, parent_id, f"Listing folder {parent_id}")
+            # As files.list on Drive: a trashed, deleted or unshared parent
+            # is no error, just nothing (callers check `folder` first).
+            if self._visible(state, parent_id) is None:
+                return []
             found = [
                 i
                 for i in state.items.values()

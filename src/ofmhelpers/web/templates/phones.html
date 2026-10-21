@@ -38,7 +38,7 @@
         {{ filter("color", "All colors") }}
         {{ filter("owner", "All people") }}
         {{ filter("service", "All services") }}
-        <select name="sort" aria-label="Sort">
+        <select name="sort" aria-label="Sort" data-default="{{ default_sort }}">
             {% for value, label in [(sorts.FOLLOWERS, "Most followers"), (sorts.LABEL, "Name"), (sorts.MODEL, "Model"), (sorts.UPDATED, "Recently updated"), (sorts.LOGINS, "Most logins")] %}
             <option value="{{ value }}" {% if query.sort == value %}selected{% endif %}>Sort: {{ label }}</option>
             {% endfor %}

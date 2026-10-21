@@ -38,7 +38,7 @@ def drive(monkeypatch) -> FakeDrive:
     fake.seed_folder("ALL ACCOUNTS", item_id=ROOT, shared=True)
     monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
     monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", ROOT)
-    monkeypatch.setattr(drive_folders, "connect", lambda: fake)
+    monkeypatch.setattr(drive_folders, "connect", lambda **_: fake)
     monkeypatch.setattr(drive_folders, "service_account_email", lambda: "bot@x.iam")
     monkeypatch.setattr(drive_folders, "today", lambda: DAY)
     return fake
@@ -118,7 +118,7 @@ def test_sync_at_warsaw_midnight_makes_the_new_days_folder(monkeypatch):
     fake.seed_folder("ALL ACCOUNTS", item_id=ROOT, shared=True)
     monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
     monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", ROOT)
-    monkeypatch.setattr(drive_folders, "connect", lambda: fake)
+    monkeypatch.setattr(drive_folders, "connect", lambda **_: fake)
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     before = datetime.datetime(2026, 10, 24, 21, 59, tzinfo=datetime.UTC)
     with time_machine.travel(before, tick=False):
@@ -690,3 +690,38 @@ def test_cards_are_ordered_by_the_accounts_followers(drive):
     assert order == sorted(order)
     assert "90k" not in html
     assert "90000" not in html
+
+
+def test_a_trashed_parent_lists_empty_like_drive_and_is_still_forgotten(drive):
+    """Drive lists a trashed folder as empty (no error); the page checks
+    the folder itself, so the day is forgotten and made again."""
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    account = _account(drive, "ann.ig")
+    day = _day_folder(drive, "ann.ig")
+    drive.trash(account)
+    assert drive.children(day) == []
+
+    html = _client().get("/drive").text
+
+    assert "Today&#39;s folder was deleted" in html
+    assert store.day_folders(DAY) == {}
+
+
+def test_a_card_that_fails_to_load_says_so(drive, monkeypatch):
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    real_children = drive.children
+
+    def children(parent_id, *, folders_only=False):
+        if not folders_only:
+            msg = "boom"
+            raise RuntimeError(msg)
+        return real_children(parent_id, folders_only=folders_only)
+
+    monkeypatch.setattr(drive, "children", children)
+
+    html = _client().get("/drive").text
+
+    assert "Could not read this folder from Drive" in html
+    assert "Nothing uploaded today" not in html
