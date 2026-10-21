@@ -36,6 +36,7 @@ from ofmhelpers.aigenproviders.spec import ModelSpec, Payload
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils import outbound
 from ofmhelpers.utils.image_fit import fitted
 
 logger = get_logger(__name__)
@@ -94,6 +95,10 @@ class HiggsfieldProvider(Provider):
         self.client = SyncClient(
             base_url=s.base_url, timeout=s.request_timeout_s, api_key=api_key
         )
+        if settings.infra.fake_externals:
+            from ofmhelpers.aigenproviders.higgsfield.fake import install
+
+            install(self.client)
 
     @classmethod
     def default_key(cls, admin: bool) -> str | None:
@@ -152,7 +157,7 @@ class HiggsfieldProvider(Provider):
 def _live(url: str) -> bool:
     """Fails closed: any doubt means upload again."""
     try:
-        response = requests.head(
+        response = outbound.head(
             url, timeout=settings.kieai.remote_check_timeout_s, allow_redirects=True
         )
     except requests.RequestException:

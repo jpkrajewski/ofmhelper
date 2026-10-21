@@ -24,6 +24,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.phones import catalog, find_model, services
 from ofmhelpers.phones.render import render as draw
 from ofmhelpers.web import phones_workbook
+from ofmhelpers.web.account_tracker import track_login
 from ofmhelpers.web.db.encrypted import VaultError
 from ofmhelpers.web.db.repositories import DuplicateError
 from ofmhelpers.web.middleware.auth import AuthMiddleware
@@ -108,6 +109,7 @@ def index(request: Request, query: Annotated[PhoneQuery, Query()]):
         choices=_choices(active),
         query=query,
         sorts=PhoneSort,
+        default_sort=PhoneQuery().sort,
         services=services(),
         catalog=catalog(),
     )
@@ -193,12 +195,18 @@ def add_login(device_id: int, body: LoginFields, _admin: AdminOnly) -> _LoginAdd
     added = _vault(store.add_login, device_id, body)
     if added is None:
         raise HTTPException(status_code=404, detail="Phone not found")
+    # An Instagram (any tracked service's) login: on /accounts with this phone.
+    track_login(body.service, body.username, revive=True)
     return _LoginAdded(id=added[0], linked=added[1])
 
 
 @router.post("/logins/{login_id}")
 def edit_login(login_id: int, body: LoginFields, _admin: AdminOnly) -> _Done:
-    return _found(_vault(store.update_login, login_id, body), "Login")
+    done = _found(_vault(store.update_login, login_id, body), "Login")
+    # A renamed handle is tracked; an account removed by hand stays removed
+    # (editing a password is no reason to bring it back).
+    track_login(body.service, body.username, revive=False)
+    return done
 
 
 @router.post("/{device_id}/logins/{login_id}/delete")

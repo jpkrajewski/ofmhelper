@@ -43,6 +43,17 @@ RUN playwright install --with-deps chromium
 # static binary, pinned and checksummed -- no npm toolchain in the image.
 ADD --chmod=755     --checksum=sha256:ce247fb644999ef52e5111dd6fd6e471019669fc9c4a44b5699721e39b7032c3     https://github.com/biomejs/biome/releases/download/cli%2Fv1.9.4/biome-linux-x64     /usr/local/bin/biome
 
+# ---- Allure report CLI (scripts/test.sh, scripts/report.sh) ----
+# Java lives here, never on the host. Pinned and checksummed (Maven Central's
+# published sha256).
+FROM eclipse-temurin:21-jre AS allure
+
+ADD --checksum=sha256:37428164f310c8d137cfdd2c3a25d049b233261ddab13e1bd4dfd7627b5cbf8d     https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/2.46.1/allure-commandline-2.46.1.tgz     /tmp/allure.tgz
+RUN tar -xzf /tmp/allure.tgz -C /opt &&     ln -s /opt/allure-2.46.1/bin/allure /usr/local/bin/allure &&     rm /tmp/allure.tgz
+
+WORKDIR /app
+ENTRYPOINT ["allure"]
+
 # ---- Runtime stage ----
 FROM python:3.12-slim AS runtime
 

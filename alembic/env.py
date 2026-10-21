@@ -17,7 +17,10 @@ from ofmhelpers.web.db.models import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Not disable_existing_loggers=True (fileConfig's default): run in-process
+    # (alembic.command, the migration tests) it would silence every logger
+    # the app already made.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # One source of truth for the connection string (see alembic.ini comment).
 config.set_main_option("sqlalchemy.url", settings.infra.database_url)

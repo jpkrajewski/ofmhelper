@@ -83,8 +83,8 @@ services:
 
   # Every test/lint/type check, inside Linux:
   #   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm tests
-  #   docker compose ... run --rm tests uv run --frozen pytest -m e2e    (stack up)
-  #   docker compose ... run --rm tests uv run --frozen pytest -m integration
+  #   docker compose ... run --rm tests uv run --frozen pytest -m e2e    (starts its own app)
+  #   docker compose ... run --rm tests uv run --frozen pytest -m live   (real services)
   #   docker compose ... run --rm tests uv run --frozen mypy
   #   docker compose ... run --rm tests uv run --frozen pre-commit run --all-files
   tests:
@@ -94,21 +94,87 @@ services:
     profiles:
       - test
     working_dir: /app
-    command: ["uv", "run", "--frozen", "pytest"]
+    command: ["uv", "run", "--frozen", "pytest", "-n", "auto", "--maxprocesses=8", "--dist", "loadgroup"]
     dns: *public-dns
     environment:
-      - OFM_TEST_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers_test
-      - OFM_TEST_REDIS_URL=redis://redis:6379/1
-      - OFM_E2E_BASE_URL=http://ofmhelpers:8000
+      # Their own servers (below), never the dev database or Redis.
+      - OFM_TEST_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres-test:5432/ofmhelpers_test
+      - OFM_TEST_REDIS_URL=redis://redis-test:6379/1
+      # The image never writes bytecode (fine for a deploy); here every run
+      # would recompile the whole app from the slow Windows bind mount, so
+      # it is kept in a volume of its own instead.
+      - PYTHONDONTWRITEBYTECODE=
+      - PYTHONPYCACHEPREFIX=/pycache
     volumes:
       - .:/app
+      # Already inside the checkout mount; named so the reports'
+      # destination on the host is explicit (scripts/test.sh writes here).
+      - ./reports:/app/reports
+      - test_pycache:/pycache
     networks:
       - internal
     depends_on:
-      postgres:
-        condition: service_started
-      redis:
-        condition: service_started
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+
+  # The suite's own Postgres and Redis: in memory, nothing persisted, no
+  # fsync -- they hold nothing worth keeping, so every write (and the
+  # TRUNCATE before each test) is as cheap as it gets, and no test can
+  # reach the dev data.
+  postgres-test:
+    image: postgres:16
+    profiles:
+      - test
+    environment:
+      - POSTGRES_USER=ofmhelpers
+      - POSTGRES_PASSWORD=ofmhelpers
+      - POSTGRES_DB=ofmhelpers_test
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - max_connections=300
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ofmhelpers"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - internal
+
+  redis-test:
+    image: redis:7
+    profiles:
+      - test
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - internal
+
+  # Allure CLI: scripts/test.sh generates the report with it. Java stays in
+  # this image.
+  allure:
+    build:
+      context: .
+      target: allure
+    profiles:
+      - test
+    working_dir: /app
+    volumes:
+      - ./reports:/app/reports
 
   # RQ job dashboard. Reuses the app image (rq-dashboard is a project
   # dependency) so there is no extra unpinned third-party image to trust.
@@ -136,3 +202,6 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+volumes:
+  test_pycache:

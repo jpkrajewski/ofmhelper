@@ -7,8 +7,12 @@
 <section class="clone-batch" style="--batch-hue: {{ batch.hue }}" data-batch="{{ batch.id }}"
          data-params='{{ batch.recreate_json }}'>
     <header class="clone-batch-head">
+        {% if batch.cover %}
         <img class="clone-batch-thumb" alt="Subject image" loading="lazy"
-             src="/refs/thumb?path={{ batch.images[0]|urlencode }}&size=150">
+             src="/refs/thumb?path={{ batch.cover|urlencode }}&size=150">
+        {% else %}
+        <span class="clone-batch-thumb" title="Subject image no longer stored"></span>
+        {% endif %}
         <div class="clone-batch-meta">
             <p class="clone-batch-title">
                 {{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }}

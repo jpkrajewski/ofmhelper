@@ -124,8 +124,18 @@ class DeviceLogin(BaseModel):
     # Only in the export.
     password: str = ""
     backup_codes: str = ""
-    # Its /accounts row, when that platform tracks this handle.
+    # Its /accounts row, when that platform tracks this handle, and that
+    # row's latest follower count (None until its first scan).
     tracked_account_id: int | None = None
+    tracked_followers: int | None = None
+
+    @property
+    def followers_label(self) -> str:
+        """ "12.3k followers"; "" when not tracked or not scanned yet."""
+        n = self.tracked_followers
+        if n is None:
+            return ""
+        return f"{_compact(n)} follower{'' if n == 1 else 's'}"
 
     @property
     def info(self) -> LoginService | None:
@@ -152,6 +162,21 @@ class DeviceLogin(BaseModel):
         return [p for p in self.on if p != label]
 
 
+_THOUSAND = 1_000
+_MILLION = 1_000_000
+
+
+def _compact(n: int) -> str:
+    """950, 12.3k, 1.2M: one decimal where it says something. The unit is
+    picked after rounding (999_960 is "1M", not "1000k")."""
+    if n < _THOUSAND:
+        return str(n)
+    thousands = round(n / _THOUSAND, 1)
+    if thousands < _THOUSAND:
+        return f"{thousands:.1f}".rstrip("0").rstrip(".") + "k"
+    return f"{round(n / _MILLION, 1):.1f}".rstrip("0").rstrip(".") + "M"
+
+
 class Device(BaseModel):
     id: int
     label: str
@@ -169,6 +194,14 @@ class Device(BaseModel):
     @property
     def retired(self) -> bool:
         return self.retired_at is not None
+
+    @property
+    def followers(self) -> int | None:
+        """The most followers of any tracked account signed in on it."""
+        counts = [
+            x.tracked_followers for x in self.logins if x.tracked_followers is not None
+        ]
+        return max(counts) if counts else None
 
     @property
     def family(self) -> Family | None:
@@ -224,6 +257,7 @@ class Device(BaseModel):
 
 
 class PhoneSort(StrEnum):
+    FOLLOWERS = "followers"
     LABEL = "label"
     MODEL = "model"
     UPDATED = "updated"
@@ -238,12 +272,12 @@ class PhoneQuery(BaseModel):
     color: str = ""
     owner: str = ""
     service: str = ""
-    sort: PhoneSort = PhoneSort.LABEL
+    sort: PhoneSort = PhoneSort.FOLLOWERS
 
     @field_validator("sort", mode="before")
     @classmethod
     def _blank_sort(cls, value: object) -> object:
-        return value or PhoneSort.LABEL
+        return value or PhoneSort.FOLLOWERS
 
     @property
     def filtered(self) -> bool:
@@ -273,4 +307,14 @@ class PhoneQuery(BaseModel):
             return sorted(devices, key=lambda d: -d.updated_at)
         if self.sort is PhoneSort.LOGINS:
             return sorted(devices, key=lambda d: (-len(d.logins), d.label.lower()))
+        if self.sort is PhoneSort.FOLLOWERS:
+            # Most followed first; phones with no tracked account last.
+            return sorted(
+                devices,
+                key=lambda d: (
+                    d.followers is None,
+                    -(d.followers or 0),
+                    d.label.lower(),
+                ),
+            )
         return sorted(devices, key=lambda d: d.label.lower())

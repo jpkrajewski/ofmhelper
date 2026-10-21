@@ -1,3 +1,5 @@
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.0
@@ -5,29 +7,74 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
-
-  # Type checking, deliberately file-scoped: pre-commit passes the staged
-  # paths, so mypy checks what you actually touched. A repo-wide gate would
-  # fail on ~30 findings in modules nobody is editing (mostly `x = []` needing
-  # an annotation and third-party stubs being stricter than the runtime), and
-  # a hook that is always red gets ignored. Run `uv run mypy src/ofmhelpers`
-  # by hand for the full picture.
   - repo: local
     hooks:
+      # The whole of src/ (pyproject [tool.mypy]): it is clean, keep it so.
       - id: mypy
         name: mypy
         entry: uv run mypy
         language: system
+        pass_filenames: false
         types_or: [python, pyi]
         require_serial: true
-        exclude: ^(tests|alembic)/
-
+      - id: djlint
+        name: djlint (templates)
+        entry: uv run djlint --lint
+        language: system
+        files: \.html$
+        # Saved Instagram pages the parsing tests read, not our templates.
+        exclude: ^tests/fixtures/
+      # Biome is a pinned binary in the Docker test image, not on the host.
+      - id: biome
+        name: biome (js/css, in Docker)
+        entry: docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -T tests biome lint
+        language: system
+        pass_filenames: false
+        types_or: [javascript, css]
+      # .env is gitignored; this is the backstop (the Drive key lives there).
+      - id: no-env-files
+        name: forbid .env files
+        entry: ".env files must not be committed"
+        language: fail
+        files: (^|/)\.env(\..*)?$
+        exclude: \.env\.example$
+      # Two migration heads = a broken deploy.
+      - id: alembic-single-head
+        name: alembic has one head
+        entry: bash -c '[ "$(uv run alembic heads | grep -c head)" -le 1 ] || { echo "Multiple alembic heads"; exit 1; }'
+        language: system
+        files: ^alembic/versions/
+        pass_filenames: false
+      # Before anything leaves this machine: what CI runs (default + heavy
+      # ffmpeg tests), in Docker. Never live or paid.
+      - id: push-tests
+        name: test suite (scripts/test.sh push)
+        entry: bash scripts/test.sh push
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.19
+    hooks:
+      - id: uv-lock
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks # API keys/tokens (kie.ai, Higgsfield, proxies), not just private keys
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-case-conflict # Windows checkout, Linux prod
       - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-ast
+      - id: debug-statements
       - id: check-added-large-files
         args: [--maxkb=5000]
       - id: check-merge-conflict

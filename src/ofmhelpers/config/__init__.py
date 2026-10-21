@@ -25,6 +25,7 @@ from ofmhelpers.config.settings import (
     AigenSettings,
     DownloadersSettings,
     ExportSettings,
+    GDriveSettings,
     HiggsfieldSettings,
     InfraSettings,
     InstagramSettings,
@@ -82,6 +83,10 @@ class Settings:
     @property
     def vault(self) -> VaultSettings:
         return VaultSettings()
+
+    @property
+    def gdrive(self) -> GDriveSettings:
+        return GDriveSettings()
 
     @property
     def logging(self) -> LoggingSettings:

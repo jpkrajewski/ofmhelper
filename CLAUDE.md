@@ -20,13 +20,28 @@ Python 3.12, FastAPI, PostgreSQL, Redis, RQ. Prod = Linux/Docker.
 
 ## Validation
 Every check runs in Docker dev, never on the host. `C="docker compose -f docker-compose.yml -f docker-compose.dev.yml"`:
-- `$C run --rm tests` — pytest.
-- `$C run --rm tests uv run --frozen pytest -m integration` — live TikTok/Instagram/kie.ai/Higgsfield checks; local only, not on CI (Instagram rate-limits runner IPs).
+- Tests: `scripts/test.sh [preset]` (see Testing). `live` = real TikTok/Instagram/kie.ai/Higgsfield/Drive sandbox; local only, not on CI (Instagram rate-limits runner IPs).
 - `$C run --rm tests uv run --frozen mypy` / `ruff check src tests` / `ruff format --check src tests`.
 - Templates/JS/CSS: `$C run --rm tests uv run --frozen djlint src/ofmhelpers/web/templates --lint` and `$C run --rm tests biome lint` (config `[tool.djlint]` in pyproject, `biome.json`; Biome is a pinned binary in the test image).
-- Page/template/JS/job-flow change: `$C up -d` (+ `$C restart worker`), then `$C run --rm tests uv run --frozen pytest -m e2e`.
+- Page/template/JS/job-flow change: `scripts/test.sh e2e` (starts its own app with fakes; the dev stack is not used).
 - `pyproject.toml`/`uv.lock`/test-stage change: `$C --profile test build tests`.
 - A test for every change.
+
+## Testing
+- Run tests ONLY via `scripts/test.sh [preset|pytest args]`. Presets: (none)=unit+integration, e2e, all, push (=default+heavy ffmpeg tests, what CI runs), live, deploy.
+- Never pipe test output through grep/head/tail. Read `reports/latest/report.json`; full output is `reports/latest/output.log`.
+- After every run, report: pass/fail/skip counts, each failure with its error text, the 10 slowest tests.
+- Before any command >30s, say in one line what you're running and why. Background loops log to `reports/loops/`.
+- `-m live` (real Drive/providers/proxies/Gmail) runs ONLY when I say commit, push or deploy. Then use `scripts/test.sh deploy`.
+- `paid` tests (real provider generations, cost money) run ONLY when I explicitly ask: `scripts/test.sh paid`. No preset, hook or CI runs them.
+- Never state a cause without quoting the error, log line or trace. Label theories as theories.
+- Done = full default suite green after your last change, with counts. List anything not run.
+- Tests never use the dev DB, the prod snapshot (except `-m snapshot`), or the production Drive folder.
+- New external integrations: interface + fake + contract test (fake always, real under `live`).
+- New behavior gets an integration test first; e2e only if it needs browser JavaScript.
+- No conditional assertions. Tests create their own data.
+- Flaky = bug. Reproduce with --count=20 and traces, fix the cause with evidence, prove 20/20 green.
+- Never rewrite whole files for line endings.
 
 ## Logging
 - `logger = get_logger(__name__)` (`ofmhelpers.log`), module scope; lazy `%s` args; `exc_info=True` in `except`.

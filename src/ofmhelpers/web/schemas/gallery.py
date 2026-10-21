@@ -12,6 +12,7 @@ Data only: the result's asset cards come in already built (`job_assets` in
 import hashlib
 import json
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Self
 
 from pydantic import BaseModel, computed_field
@@ -87,6 +88,13 @@ class CloneBatch(BaseModel):
     @property
     def images(self) -> list[str]:
         return self._first["reference_images"]
+
+    @property
+    def cover(self) -> str | None:
+        """The first subject image still on disk; None when every one has
+        gone (deleted in the file manager, or a database copied from another
+        server), so the page draws a blank tile instead of a broken image."""
+        return next((p for p in self.images if Path(p).is_file()), None)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

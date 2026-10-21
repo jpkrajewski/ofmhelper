@@ -15,7 +15,14 @@ Providers: kie.ai (`kaiai/`), Higgsfield (`higgsfield/`), fake (`fake/`, free, f
 1. `<name>/provider.py` (`@register_provider`), `models.py` (wire format, `extra="ignore"`), `client.py` only without an official SDK.
 2. `<name>/catalog.json`: `{model_id, label, family, kind, input_schema[, fixed, default_prompt]}`; generate it if the provider publishes schemas.
 3. Map failures to `errors.py`, statuses to `TaskState`. Wire-level faked tests.
+4. `<name>/fake.py`: the provider's wire faked for OFM_FAKE_EXTERNALS (requests via `utils/outbound.py` routes, httpx via a `MockTransport`), one `FAKE_KEY` accepted; add it to `tests/contract/test_ai_provider_contract.py`.
 Nothing else changes. For /clone: one `CloneTarget` in `clone.py`.
+
+## Fakes (OFM_FAKE_EXTERNALS)
+- `kaiai/fake.py` — upload/createTask/recordInfo/result host; `FAKE_KEY` only (else code 401); "generating" for 2 polls, then success.
+- `higgsfield/fake.py` — `install(client)` puts an httpx `MockTransport` under the SDK (its `_client`/`_upload_client` cached properties, higgsfield-client 0.2.0); `FAKE_KEY` only (else 401); queued 2 polls, then completed; result/upload host served to `requests` too.
+- `base.Provider.download` goes through `utils/outbound.get`.
+- Wire behaviour (success after 3 polls, 4xx, 5xx, timeout, rate limit, failed, rerun resumes, never resubmits): `tests/integration/aigenproviders/test_provider_wire_behaviour.py`, bodies in `tests/fixtures/providers/`.
 
 ## kie.ai (`kaiai/`, typo kept for imports)
 - `client.py` — retries GET/HEAD only (a createTask is never resent — paid twice). Errors via `models.raise_for` (401/403 auth, 408/429/455/5xx unavailable, else input; 402 = no credits). Audit logs `tasks.jsonl`, `completions.jsonl`. Upload memo in Redis keyed by key+path, HEAD-checked; oversized images uploaded as a shrunk JPEG copy.

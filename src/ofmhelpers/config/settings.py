@@ -17,6 +17,8 @@ config/__init__.py's docstring for why.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -245,6 +247,23 @@ class InfraSettings(BaseSettings):
     # absorbs the read burst a page render makes, it is not a write-through
     # cache, and every write bumps its namespace anyway.
     cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")
+    # Which deployment this is. Only the server's .env says "production";
+    # anything else (dev, CI, tests) is kept off live resources that must
+    # only ever be touched by production (the live Drive folder).
+    environment: Literal["production", "development"] = Field(
+        default="development", validation_alias="OFM_ENV"
+    )
+    # Every outside service (Drive, AI providers, Instagram) swapped for its
+    # in-process fake (`ofmhelpers.fakes`). E2E runs with it on; production
+    # never does.
+    fake_externals: bool = Field(default=False, validation_alias="OFM_FAKE_EXTERNALS")
+    # Where fakes keep state shared between processes (the app under test
+    # and the test seeding it). Empty = in memory, this process only.
+    fakes_dir: str = Field(default="", validation_alias="OFM_FAKES_DIR")
+
+    @property
+    def production(self) -> bool:
+        return self.environment == "production"
 
 
 class KieAISettings(BaseSettings):
@@ -683,3 +702,63 @@ class ExportSettings(BaseSettings):
         ),
         validation_alias="OFM_EXPORT_DEVICE_PLACE",
     )
+
+
+class GDriveSettings(BaseSettings):
+    """/drive (`ofmhelpers.gdrive`, web/drive_folders.py): the shared Google
+    Drive folder the VA uploads into. A service account (its key JSON, one
+    line) works in `root_folder_id`, which its owner shares with the
+    account's `client_email` as Editor. Each Instagram login on an active
+    phone gets a "<handle> - <owner>" folder there and, every day in
+    `timezone`, a day folder ("2026-10-21") inside it."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    service_account: SecretStr | None = Field(
+        default=None, validation_alias="OFM_GDRIVE_SERVICE_ACCOUNT"
+    )
+    root_folder_id: str = Field(default="", validation_alias="OFM_GDRIVE_ROOT_FOLDER")
+    # The live "ALL ACCOUNTS" folder. Set in every .env (prod and dev) so a
+    # non-production deployment can tell it apart and refuse it
+    # (web/drive_folders.py `root_folder`); not in code, the repo is public.
+    production_root_folder_id: str = Field(
+        default="", validation_alias="OFM_GDRIVE_PRODUCTION_ROOT_FOLDER"
+    )
+    # IANA: the day starts at midnight here, DST included.
+    timezone: str = Field(
+        default="Europe/Warsaw", validation_alias="OFM_GDRIVE_TIMEZONE"
+    )
+    # How often the sweeper checks for missing folders (a DB query; Drive
+    # is called only for what is missing).
+    check_interval_s: int = Field(
+        default=300, ge=30, validation_alias="OFM_GDRIVE_CHECK_INTERVAL_S"
+    )
+    # Per request: googleapiclient's backoff on 5xx/429/dropped connections.
+    retries: int = Field(default=5, ge=0, validation_alias="OFM_GDRIVE_RETRIES")
+    # When a page waits on Drive (/drive, its previews): each socket wait
+    # and the retries, so a stalled Drive fails the page in seconds.
+    interactive_timeout_s: float = Field(
+        default=10, gt=0, validation_alias="OFM_GDRIVE_INTERACTIVE_TIMEOUT_S"
+    )
+    interactive_retries: int = Field(
+        default=1, ge=0, validation_alias="OFM_GDRIVE_INTERACTIVE_RETRIES"
+    )
+    # Folders listed at once when /drive opens.
+    list_workers: int = Field(
+        default=8, ge=1, validation_alias="OFM_GDRIVE_LIST_WORKERS"
+    )
+    # Longest side of a /drive preview, px.
+    thumb_px: int = Field(default=400, ge=32, validation_alias="OFM_GDRIVE_THUMB_PX")
+
+    @property
+    def missing(self) -> list[str]:
+        """The settings still empty, by their .env name."""
+        empty = {
+            "OFM_GDRIVE_SERVICE_ACCOUNT": self.service_account is None,
+            "OFM_GDRIVE_ROOT_FOLDER": not self.root_folder_id,
+        }
+        return [name for name, is_empty in empty.items() if is_empty]
+
+    @property
+    def configured(self) -> bool:
+        return not self.missing

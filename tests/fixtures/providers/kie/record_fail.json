@@ -1,0 +1,1 @@
+{"code": 200, "msg": "success", "data": {"taskId": "task_seedream_0001", "model": "seedream/5-lite-text-to-image", "state": "fail", "param": "{}", "resultJson": null, "failCode": "500", "failMsg": "Content moderation: the prompt was rejected", "costTime": 900, "completeTime": 1792550000900, "createTime": 1792550000000}}

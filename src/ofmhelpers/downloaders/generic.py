@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
+from ofmhelpers.downloaders import fake
 from ofmhelpers.downloaders.cookies import get_cookiefile
 from ofmhelpers.downloaders.models import (
     DownloadResult,
@@ -167,6 +168,8 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
 def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
     """Download a single URL. TikTok URLs get re-encoded to H.264; everything else doesn't."""
     config = config or DownloadConfig()
+    if settings.infra.fake_externals:
+        return fake.video(url, config.output_dir)
 
     try:
         import yt_dlp

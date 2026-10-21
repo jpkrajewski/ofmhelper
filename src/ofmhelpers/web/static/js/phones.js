@@ -114,10 +114,11 @@
 
     // --- filters / sort -------------------------------------------------------
     document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
-        // Blank fields stay out of the URL (the server reads them as unset too).
+        // Blank fields and the default sort (the server's, in data-default)
+        // stay out of the URL: the server reads them as unset too.
         form.addEventListener("submit", () => {
             form.querySelectorAll("select").forEach((field) => {
-                field.disabled = field.value === "" || (field.name === "sort" && field.value === "label");
+                field.disabled = field.value === "" || field.value === field.dataset.default;
             });
         });
         form.querySelectorAll("select").forEach((select) => {

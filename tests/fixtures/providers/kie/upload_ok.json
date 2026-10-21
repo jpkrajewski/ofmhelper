@@ -1,0 +1,1 @@
+{"success": true, "code": 200, "msg": "File uploaded successfully", "data": {"fileName": "ref.png", "filePath": "refs/ref.png", "downloadUrl": "https://tempfile.redpandaai.co/kieai/refs/ref.png", "fileSize": 1024, "mimeType": "image/png", "uploadedAt": "2026-10-21T10:00:00.000Z"}}

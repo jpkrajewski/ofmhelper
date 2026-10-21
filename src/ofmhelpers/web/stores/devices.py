@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from ofmhelpers.phones import services
+from ofmhelpers.socials import get_platform
 from ofmhelpers.web.db.repositories import DeviceRepository
 from ofmhelpers.web.schemas import Device, LoginSecrets
 from ofmhelpers.web.stores.tracked_accounts import list_accounts
@@ -36,6 +37,15 @@ def _service_rank(service: str) -> int:
     return order.index(service) if service in order else len(order)
 
 
+def _handle(platform: str, username: str) -> str:
+    """The username as that platform stores handles ("@Name" -> "name"),
+    as typed when it takes no such form."""
+    try:
+        return get_platform(platform).handle(username)
+    except (KeyError, ValueError):
+        return username
+
+
 def _linked(
     rows: list[dict], accounts: list[TrackedAccount] | None = None
 ) -> list[Device]:
@@ -45,14 +55,21 @@ def _linked(
     devices = [Device.model_validate(row) for row in rows]
     if accounts is None:
         accounts = list_accounts()
-    tracked = {(a.platform, a.handle): a.id for a in accounts}
+    tracked = {(a.platform, a.handle): a for a in accounts}
     for device in devices:
         device.logins.sort(key=lambda login: _service_rank(login.service))
         for login in device.logins:
             service = services().get(login.service)
             if service and service.tracked_platform:
-                key = (service.tracked_platform, login.username)
-                login.tracked_account_id = tracked.get(key)
+                found = tracked.get(
+                    (
+                        service.tracked_platform,
+                        _handle(service.tracked_platform, login.username),
+                    )
+                )
+                if found is not None:
+                    login.tracked_account_id = found.id
+                    login.tracked_followers = found.followers
     return devices
 
 

@@ -22,6 +22,7 @@ import time
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.phones import services
 from ofmhelpers.socials import (
     Platform,
     RateLimitedError,
@@ -37,6 +38,7 @@ from ofmhelpers.web.stores.tracked_accounts import (
     list_accounts,
     mark_due,
     record_scan,
+    track,
 )
 
 logger = get_logger(__name__)
@@ -51,6 +53,40 @@ def _failure(answered: list[RetryableError], tries: int) -> str:
     """What the row shows once the platform itself answered a failure on
     every try that reached it. The previous numbers stay."""
     return f"{answered[-1]} ({tries} tries) -- retried at the next rescan"
+
+
+def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
+    """(platform, handle) a phone login of `service` is tracked as on
+    /accounts -- any service whose services.json entry names a
+    `tracked_platform` -- or None (not a tracked service, or a username that
+    platform does not take)."""
+    found = services().get(service)
+    if found is None or not found.tracked_platform:
+        return None
+    try:
+        return found.tracked_platform, get_platform(found.tracked_platform).handle(
+            username
+        )
+    except (KeyError, ValueError):
+        logger.warning("%s login %r is not a trackable handle", service, username)
+        return None
+
+
+def track_login(service: str, username: str, *, revive: bool) -> bool:
+    """A login added to a phone shows on /accounts (with that phone): its
+    account is tracked and its first scan queued. `revive`: also bring back
+    one removed by hand (an add does; an edit does not). True when newly
+    tracked. Never raises: the login is saved already, and tracking it is a
+    side effect that must not fail that save -- a failure is logged."""
+    try:
+        key = tracked_handle(service, username)
+        if key is None or not track(*key, revive=revive):
+            return False
+        queue_due_scans()
+    except Exception:
+        logger.exception("tracking %s login %r failed", service, username)
+        return False
+    return True
 
 
 def scan_account(

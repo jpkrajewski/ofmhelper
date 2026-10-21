@@ -251,7 +251,9 @@ class TrackedAccountRepository(CachedRepository):
     cache_namespace = "tracked_account"
 
     @invalidates_cache
-    def add(self, platform: str, handle: str, creator: str | None) -> bool:
+    def add(
+        self, platform: str, handle: str, creator: str | None, revive: bool = True
+    ) -> bool:
         """True when the account is new, or was untracked and is tracked
         again -- the same row, its whole history kept, due for a scan now.
         Adding one already tracked only assigns it to `creator`, when one
@@ -278,6 +280,8 @@ class TrackedAccountRepository(CachedRepository):
                 return True
             if creator_id is not None:
                 s.execute(update(acc).where(*same).values(creator_id=creator_id))
+            if not revive:
+                return False
             restored = s.execute(
                 update(acc)
                 .where(*same, acc.untracked_at.is_not(None))

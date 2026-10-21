@@ -38,17 +38,28 @@ dependencies = [
     "cryptography>=50.0.0",
     # /phones Excel export (web/exports/devices_xlsx.py), write-only.
     "openpyxl>=3.1.5",
+    # /drive (ofmhelpers/gdrive): the shared Google Drive folder, as a
+    # service account. google-auth also gives the authorised thumbnail fetch.
+    "google-api-python-client>=2.201.0",
+    "google-auth>=2.40.0",
 ]
 
 [dependency-groups]
 dev = [
+    "allure-pytest>=2.16.2",
     "djlint>=1.36",
     "httpx2>=2.9.1",
     "mypy>=2.3.0",
     # Browser for tests/e2e (uv run playwright install chromium).
     "playwright>=1.64.0",
     "pre-commit>=4.6.1",
+    "pytest-json-report>=1.5.0",
+    "pytest-repeat>=0.9.4",
+    "pytest-socket>=0.8.1",
+    "pytest-xdist>=3.8.0",
+    "responses>=0.26.3",
     "ruff>=0.16.0",
+    "time-machine>=3.5.1",
 ]
 
 [build-system]
@@ -60,6 +71,9 @@ packages = ["src/ofmhelpers"]
 
 [tool.mypy]
 python_version = "3.12"
+# The code runs only on Linux (Docker, the server); the pre-commit hook may
+# run mypy on a Windows host, where Linux-only modules (fcntl) do not exist.
+platform = "linux"
 # Third-party stubs are for a stricter API than these libraries actually
 # accept at runtime, and several deps ship none at all; neither is a defect in
 # this code.
@@ -155,13 +169,33 @@ ban-relative-imports = "all"
 docstring-code-format = true
 
 [tool.pytest.ini_options]
+# Only tests/: without it pytest walks the whole checkout (uploads/,
+# downloads/, kieai_out/ ...) over the Docker bind mount -- 35 s per run.
+testpaths = ["tests"]
+# Applied by folder in tests/conftest.py (tests/<kind>/); `live`, `slow`
+# and `snapshot` are set per test.
 markers = [
-    "e2e: drives a live app in a real browser (tests/e2e); run with -m e2e",
-    "integration: reaches the real outside services (tests/integration); run with -m integration",
+    "unit: pure logic -- no database, no network, no files beyond tmp_path (tests/unit)",
+    "integration: the app through TestClient on the real test DB, every outside service faked (tests/integration)",
+    "contract: one behaviour checked on a fake and, under -m live, on the real service (tests/contract)",
+    "e2e: Playwright against the app the suite starts, with fakes (tests/e2e); scripts/test.sh e2e",
+    "live: reaches a REAL outside service (Drive sandbox, AI providers, Instagram, proxies); scripts/test.sh live",
+    "slow: takes more than 2 s (ffmpeg, real media)",
+    "paid: spends money at a provider (a real generation); never in any preset but scripts/test.sh paid",
+    "heavy: real ffmpeg/ffprobe encoding; left out of the default run, runs on push (CI, scripts/test.sh push/deploy)",
+    "snapshot: migrations on a copy of the production snapshot; scripts/test.sh snapshot",
 ]
-# The e2e suite needs the whole stack up and a browser; integration needs the
-# internet. A plain `pytest` leaves both out; a later -m on the command line wins.
-addopts = "-m 'not e2e and not integration'"
+# A plain `pytest` is fast and offline: no browser, no real services, no
+# production data; a later -m on the command line wins. Sockets: only the
+# local app and the test Postgres/Redis (pytest-socket); `live` tests are let out,
+# unit tests get none at all.
+addopts = [
+    "--strict-markers",
+    "-m", "not e2e and not live and not snapshot and not heavy and not paid",
+    "--disable-socket",
+    "--allow-unix-socket",
+    "--allow-hosts=127.0.0.1,localhost,::1,postgres-test,redis-test",
+]
 
 # HTML/Jinja templates: `djlint src/ofmhelpers/web/templates --lint`.
 [tool.djlint]

@@ -38,8 +38,8 @@
         {{ filter("color", "All colors") }}
         {{ filter("owner", "All people") }}
         {{ filter("service", "All services") }}
-        <select name="sort" aria-label="Sort">
-            {% for value, label in [(sorts.LABEL, "Name"), (sorts.MODEL, "Model"), (sorts.UPDATED, "Recently updated"), (sorts.LOGINS, "Most logins")] %}
+        <select name="sort" aria-label="Sort" data-default="{{ default_sort }}">
+            {% for value, label in [(sorts.FOLLOWERS, "Most followers"), (sorts.LABEL, "Name"), (sorts.MODEL, "Model"), (sorts.UPDATED, "Recently updated"), (sorts.LOGINS, "Most logins")] %}
             <option value="{{ value }}" {% if query.sort == value %}selected{% endif %}>Sort: {{ label }}</option>
             {% endfor %}
         </select>
@@ -59,7 +59,7 @@
     {% if loop_index > visible_logins %}data-extra hidden{% endif %}>
     <span class="ph-logo" aria-hidden="true">{% if x.icon_url %}<img src="{{ x.icon_url }}" alt="" width="18" height="18" loading="lazy" referrerpolicy="no-referrer">{% endif %}</span>
     <div class="ph-login-main">
-        <span class="ph-login-service">{{ x.label }}{% if x.elsewhere(d.label) %} · also on {{ x.elsewhere(d.label)|join(", ") }}{% endif %}</span>
+        <span class="ph-login-service">{{ x.label }}{% if x.followers_label %} · <span class="ph-login-followers">{{ x.followers_label }}</span>{% endif %}{% if x.elsewhere(d.label) %} · also on {{ x.elsewhere(d.label)|join(", ") }}{% endif %}</span>
         {% if x.link %}<a class="ph-login-user" href="{{ x.link }}" target="_blank" rel="noopener" title="{{ x.username }}">{{ x.username }}</a>
         {% else %}<span class="ph-login-user" title="{{ x.username }}">{{ x.username }}</span>{% endif %}
     </div>
