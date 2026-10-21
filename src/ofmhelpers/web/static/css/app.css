@@ -2293,6 +2293,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .ph-logo img { width: 18px; height: 18px; }
 .ph-login-main { display: grid; min-width: 0; }
 .ph-login-service { overflow: hidden; color: var(--text-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.ph-login-followers { font-variant-numeric: tabular-nums; }
 .ph-login-user {
     overflow: hidden;
     color: var(--text);

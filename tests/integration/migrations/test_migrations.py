@@ -100,3 +100,38 @@ def test_migrating_in_process_leaves_the_apps_loggers_on(db):
     finally:
         app_logger.removeHandler(records)
     assert records.messages == ["still heard"]
+
+
+def test_phone_logins_already_saved_are_tracked_once(db):
+    """f4a5b6c7d8e9: Instagram logins on active phones become /accounts
+    accounts (handle as Instagram writes it); a retired phone's do not, an
+    account removed by hand stays removed, other services track nothing."""
+    from ofmhelpers.web.schemas import DeviceFields, LoginFields
+    from ofmhelpers.web.stores import devices
+    from ofmhelpers.web.stores import tracked_accounts as accounts
+
+    cfg = _alembic()
+    command.upgrade(cfg, "e3f4a5b6c7d8")
+
+    def phone(label: str) -> int:
+        return devices.add_device(DeviceFields(label=label, model_id="iphone-13"))
+
+    active, retired = phone("Active"), phone("Retired")
+    for service, username in (("instagram", "@Dany.Walking"), ("gmail", "a@b.c")):
+        devices.add_login(active, LoginFields(service=service, username=username))
+    devices.add_login(active, LoginFields(service="instagram", username="removed_one"))
+    devices.add_login(retired, LoginFields(service="instagram", username="old_phone"))
+    devices.retire_device(retired)
+    accounts.track("instagram", "removed_one")
+    accounts.untrack([a.id for a in accounts.list_accounts()])
+
+    command.upgrade(cfg, "head")
+
+    with db.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT handle, untracked_at IS NOT NULL FROM tracked_accounts"
+                " ORDER BY handle"
+            )
+        ).all()
+    assert rows == [("dany.walking", False), ("removed_one", True)]
