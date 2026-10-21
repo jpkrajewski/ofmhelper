@@ -1,0 +1,5 @@
+# Local-only demo media (gitignored too): prod builds from a git checkout and
+# never has them, so a local image must not carry them either.
+src/ofmhelpers/web/static/media/videos/results1.mp4
+src/ofmhelpers/web/static/media/videos/*.MOV
+**/__pycache__

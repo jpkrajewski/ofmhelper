@@ -55,13 +55,16 @@ def build_ordered_paths(
     for entry in manifest:
         if entry.get("kind") == "existing":
             resolved = resolve_existing_ref(entry["path"], allowed_root)
-            # The one place a resolve means "the user picked this file", so
-            # the one place that records it (see routers/refs.py's ordering).
-            ref_usage.record_use(resolved)
-            paths.append(str(resolved))
         else:
             upload = next(new_files_iter, None)
             if upload is None or not upload.filename:
                 continue
-            paths.append(save_asset(upload, allowed_root))
+            resolved = Path(save_asset(upload, allowed_root)).resolve()
+        # Picked or freshly uploaded, this file was just used, and the picker
+        # opens on what you last used (see routers/refs.py's ordering). A new
+        # upload counts too: save_asset dedupes by content, so re-uploading a
+        # file you already had keeps its old mtime and would sink it in
+        # "Recently uploaded".
+        ref_usage.record_use(resolved)
+        paths.append(str(resolved))
     return paths

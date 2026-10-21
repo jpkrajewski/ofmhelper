@@ -1,0 +1,5 @@
+{# Every page head includes this: SVG for current browsers, ICO for old ones,
+   a PNG for iOS home screens (Safari ignores SVG there). #}
+<link rel="icon" href="{{ static_url('img/favicon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/favicon.ico') }}" sizes="any">
+<link rel="apple-touch-icon" href="{{ static_url('img/apple-touch-icon.png') }}">

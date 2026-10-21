@@ -98,6 +98,9 @@ remote_script='
   $compose logs migrate
   # Otherwise every deploy leaves its predecessor dangling on the disk.
   docker image prune -f >/dev/null
+  # Each build also strands ~1GB of build cache (new .venv layer); cap it,
+  # keeping the newest layers so rebuilds stay fast.
+  docker builder prune -f --max-used-space 5gb >/dev/null
   echo "== deployed =="
   $compose ps
 '

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <title>{% block title %}Ascend Global LLC — Content Ops{% endblock %}</title>
+    {% include "_favicon.html" %}
     <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
     <!-- Before every other script: it wraps fetch() so an expired session
          redirects to /login instead of failing opaquely. -->

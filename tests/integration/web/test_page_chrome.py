@@ -86,3 +86,18 @@ def test_login_page_is_standalone_but_still_responsive():
     assert '<html lang="en">' in html
     assert 'name="viewport"' in html
     assert 'action="/login"' in html
+
+
+@pytest.mark.parametrize("path", ["/generate", "/login", "/"])
+def test_every_page_head_links_the_favicon_and_it_loads_signed_out(client, path):
+    """App pages, the login page and the public landing page all carry it,
+    and the icon files are public: the tab shows it before you sign in."""
+    html = client.get(path).text
+    links = re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="([^"]+)"', html)
+
+    assert len(links) == 3
+    signed_out = TestClient(app)
+    for href in links:
+        response = signed_out.get(href)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("image/")

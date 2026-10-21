@@ -1,16 +1,16 @@
 # ---- Build stage ----
 FROM python:3.12-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
 WORKDIR /app
 
+# Dependencies only. The project itself is not installed: runtime puts src
+# on PYTHONPATH instead, so this .venv (~1GB) depends on uv.lock alone and a
+# code-only deploy reuses its layer instead of stranding a fresh copy in the
+# build cache.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
-
-COPY src ./src
-COPY README.md ./
-RUN uv sync --frozen --no-dev
 
 # ---- Test stage (dev only: docker-compose.dev.yml's `tests` service) ----
 # Every check runs here, on the same Linux userland as prod, never on the
@@ -19,7 +19,7 @@ RUN uv sync --frozen --no-dev
 # last stage (runtime) is the default target.
 FROM python:3.12-slim AS test
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
 # ffmpeg as in runtime; exiftool (Debian's libimage-exiftool-perl) to inspect
 # media the app writes; git for pre-commit; node for the static-JS unit tests;
@@ -71,19 +71,22 @@ RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 WORKDIR /app
 
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
-COPY --from=builder --chown=appuser:appuser /app/src /app/src
+
+RUN mkdir -p /app/downloads /app/uploads /app/cookies && \
+    chown -R appuser:appuser /app/downloads /app/uploads /app/cookies
+
+ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
+    PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Alembic config + migrations, so `alembic upgrade head` can run inside the
 # container on deploy (see scripts/deploy.sh).
 COPY --chown=appuser:appuser alembic.ini /app/alembic.ini
 COPY --chown=appuser:appuser alembic /app/alembic
 
-RUN mkdir -p /app/downloads /app/uploads /app/cookies && \
-    chown -R appuser:appuser /app/downloads /app/uploads /app/cookies
-
-ENV PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Code last: it changes every deploy, so only these few-MB layers rebuild.
+COPY --chown=appuser:appuser src /app/src
 
 USER appuser
 
