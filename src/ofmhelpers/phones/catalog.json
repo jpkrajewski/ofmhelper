@@ -1,0 +1,887 @@
+{
+  "palettes": {
+    "se-2": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#1f2020"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f2f2f2"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#a50011"
+      }
+    ],
+    "se-3": [
+      {
+        "id": "midnight",
+        "label": "Midnight",
+        "hex": "#232a31"
+      },
+      {
+        "id": "starlight",
+        "label": "Starlight",
+        "hex": "#f0e9df"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#bf0013"
+      }
+    ],
+    "xr": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#1f2020"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f5f5f0"
+      },
+      {
+        "id": "blue",
+        "label": "Blue",
+        "hex": "#4fa3d8"
+      },
+      {
+        "id": "yellow",
+        "label": "Yellow",
+        "hex": "#f9d045"
+      },
+      {
+        "id": "coral",
+        "label": "Coral",
+        "hex": "#f56c58"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#ba0c2e"
+      }
+    ],
+    "xs": [
+      {
+        "id": "gold",
+        "label": "Gold",
+        "hex": "#f5dccb"
+      },
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#e3e4e5"
+      },
+      {
+        "id": "space-gray",
+        "label": "Space Gray",
+        "hex": "#3b3b3d"
+      }
+    ],
+    "11": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#1f2020"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f9f6ef"
+      },
+      {
+        "id": "green",
+        "label": "Green",
+        "hex": "#aee1cd"
+      },
+      {
+        "id": "yellow",
+        "label": "Yellow",
+        "hex": "#ffe681"
+      },
+      {
+        "id": "purple",
+        "label": "Purple",
+        "hex": "#d1cdda"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#ba0c2e"
+      }
+    ],
+    "11-pro": [
+      {
+        "id": "midnight-green",
+        "label": "Midnight Green",
+        "hex": "#4e5851"
+      },
+      {
+        "id": "space-gray",
+        "label": "Space Gray",
+        "hex": "#535150"
+      },
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#ebebe3"
+      },
+      {
+        "id": "gold",
+        "label": "Gold",
+        "hex": "#fad7bd"
+      }
+    ],
+    "12": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#25212b"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f6f2ef"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#ba0c2e"
+      },
+      {
+        "id": "green",
+        "label": "Green",
+        "hex": "#d8efd5"
+      },
+      {
+        "id": "blue",
+        "label": "Blue",
+        "hex": "#023b63"
+      },
+      {
+        "id": "purple",
+        "label": "Purple",
+        "hex": "#b7afe6"
+      }
+    ],
+    "12-pro": [
+      {
+        "id": "graphite",
+        "label": "Graphite",
+        "hex": "#52514d"
+      },
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#e3e4df"
+      },
+      {
+        "id": "gold",
+        "label": "Gold",
+        "hex": "#fcebd3"
+      },
+      {
+        "id": "pacific-blue",
+        "label": "Pacific Blue",
+        "hex": "#2e4452"
+      }
+    ],
+    "13": [
+      {
+        "id": "midnight",
+        "label": "Midnight",
+        "hex": "#232a31"
+      },
+      {
+        "id": "starlight",
+        "label": "Starlight",
+        "hex": "#faf6f2"
+      },
+      {
+        "id": "blue",
+        "label": "Blue",
+        "hex": "#276787"
+      },
+      {
+        "id": "pink",
+        "label": "Pink",
+        "hex": "#faddd7"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#bf0013"
+      },
+      {
+        "id": "green",
+        "label": "Green",
+        "hex": "#394c38"
+      }
+    ],
+    "13-pro": [
+      {
+        "id": "graphite",
+        "label": "Graphite",
+        "hex": "#54524f"
+      },
+      {
+        "id": "gold",
+        "label": "Gold",
+        "hex": "#fae7cf"
+      },
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#f1f2ed"
+      },
+      {
+        "id": "sierra-blue",
+        "label": "Sierra Blue",
+        "hex": "#a7c1d9"
+      },
+      {
+        "id": "alpine-green",
+        "label": "Alpine Green",
+        "hex": "#576856"
+      }
+    ],
+    "14": [
+      {
+        "id": "midnight",
+        "label": "Midnight",
+        "hex": "#222930"
+      },
+      {
+        "id": "purple",
+        "label": "Purple",
+        "hex": "#e5ddea"
+      },
+      {
+        "id": "starlight",
+        "label": "Starlight",
+        "hex": "#f9f3ee"
+      },
+      {
+        "id": "product-red",
+        "label": "(PRODUCT)RED",
+        "hex": "#fc0324"
+      },
+      {
+        "id": "blue",
+        "label": "Blue",
+        "hex": "#a0b4c7"
+      },
+      {
+        "id": "yellow",
+        "label": "Yellow",
+        "hex": "#f9e479"
+      }
+    ],
+    "14-pro": [
+      {
+        "id": "space-black",
+        "label": "Space Black",
+        "hex": "#403e3d"
+      },
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#f0f2f2"
+      },
+      {
+        "id": "gold",
+        "label": "Gold",
+        "hex": "#f4e8ce"
+      },
+      {
+        "id": "deep-purple",
+        "label": "Deep Purple",
+        "hex": "#594f63"
+      }
+    ],
+    "15": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#35393b"
+      },
+      {
+        "id": "blue",
+        "label": "Blue",
+        "hex": "#d5dde0"
+      },
+      {
+        "id": "green",
+        "label": "Green",
+        "hex": "#cad4c5"
+      },
+      {
+        "id": "yellow",
+        "label": "Yellow",
+        "hex": "#ede6c8"
+      },
+      {
+        "id": "pink",
+        "label": "Pink",
+        "hex": "#e3c8ca"
+      }
+    ],
+    "15-pro": [
+      {
+        "id": "black-titanium",
+        "label": "Black Titanium",
+        "hex": "#3c3c3d"
+      },
+      {
+        "id": "white-titanium",
+        "label": "White Titanium",
+        "hex": "#f2f1ed"
+      },
+      {
+        "id": "blue-titanium",
+        "label": "Blue Titanium",
+        "hex": "#2f4452"
+      },
+      {
+        "id": "natural-titanium",
+        "label": "Natural Titanium",
+        "hex": "#bab4a9"
+      }
+    ],
+    "16e": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#2c2c2e"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f2f2f2"
+      }
+    ],
+    "16": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#3c4042"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#fafafa"
+      },
+      {
+        "id": "pink",
+        "label": "Pink",
+        "hex": "#f2adda"
+      },
+      {
+        "id": "teal",
+        "label": "Teal",
+        "hex": "#b0d4d2"
+      },
+      {
+        "id": "ultramarine",
+        "label": "Ultramarine",
+        "hex": "#9aadf6"
+      }
+    ],
+    "16-pro": [
+      {
+        "id": "black-titanium",
+        "label": "Black Titanium",
+        "hex": "#3c3c3d"
+      },
+      {
+        "id": "white-titanium",
+        "label": "White Titanium",
+        "hex": "#f2f1ed"
+      },
+      {
+        "id": "natural-titanium",
+        "label": "Natural Titanium",
+        "hex": "#c2bcb2"
+      },
+      {
+        "id": "desert-titanium",
+        "label": "Desert Titanium",
+        "hex": "#bfa48f"
+      }
+    ],
+    "17e": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#2c2c2e"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f2f2f2"
+      },
+      {
+        "id": "soft-pink",
+        "label": "Soft Pink",
+        "hex": "#f3d7d8"
+      }
+    ],
+    "17": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#2b2b2d"
+      },
+      {
+        "id": "white",
+        "label": "White",
+        "hex": "#f5f5f2"
+      },
+      {
+        "id": "mist-blue",
+        "label": "Mist Blue",
+        "hex": "#a9bfd6"
+      },
+      {
+        "id": "sage",
+        "label": "Sage",
+        "hex": "#b5c4a8"
+      },
+      {
+        "id": "lavender",
+        "label": "Lavender",
+        "hex": "#d6c9e6"
+      }
+    ],
+    "air": [
+      {
+        "id": "space-black",
+        "label": "Space Black",
+        "hex": "#2a2a2c"
+      },
+      {
+        "id": "cloud-white",
+        "label": "Cloud White",
+        "hex": "#f4f3ef"
+      },
+      {
+        "id": "light-gold",
+        "label": "Light Gold",
+        "hex": "#ecdfc8"
+      },
+      {
+        "id": "sky-blue",
+        "label": "Sky Blue",
+        "hex": "#c9dcec"
+      }
+    ],
+    "17-pro": [
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#e4e4e2"
+      },
+      {
+        "id": "cosmic-orange",
+        "label": "Cosmic Orange",
+        "hex": "#f07a2c"
+      },
+      {
+        "id": "deep-blue",
+        "label": "Deep Blue",
+        "hex": "#2d3c57"
+      }
+    ],
+    "18-pro": [
+      {
+        "id": "black",
+        "label": "Black",
+        "hex": "#2a2a2c"
+      },
+      {
+        "id": "silver",
+        "label": "Silver",
+        "hex": "#e4e4e2"
+      },
+      {
+        "id": "glacier",
+        "label": "Glacier",
+        "hex": "#c8dbe6"
+      },
+      {
+        "id": "burgundy",
+        "label": "Burgundy",
+        "hex": "#5e1a26"
+      }
+    ]
+  },
+  "families": [
+    {
+      "id": "iphone-18",
+      "label": "iPhone 18",
+      "models": [
+        {
+          "id": "iphone-18-pro",
+          "label": "iPhone 18 Pro",
+          "year": 2026,
+          "size": "standard",
+          "palette": "18-pro",
+          "camera": "plateau_triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-18-pro-max",
+          "label": "iPhone 18 Pro Max",
+          "year": 2026,
+          "size": "max",
+          "palette": "18-pro",
+          "camera": "plateau_triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-17",
+      "label": "iPhone 17",
+      "models": [
+        {
+          "id": "iphone-17e",
+          "label": "iPhone 17e",
+          "year": 2026,
+          "size": "standard",
+          "palette": "17e",
+          "camera": "single_bare"
+        },
+        {
+          "id": "iphone-17",
+          "label": "iPhone 17",
+          "year": 2025,
+          "size": "standard",
+          "palette": "17",
+          "camera": "dual_pill"
+        },
+        {
+          "id": "iphone-air",
+          "label": "iPhone Air",
+          "year": 2025,
+          "size": "max",
+          "palette": "air",
+          "camera": "plateau_single"
+        },
+        {
+          "id": "iphone-17-pro",
+          "label": "iPhone 17 Pro",
+          "year": 2025,
+          "size": "standard",
+          "palette": "17-pro",
+          "camera": "plateau_triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-17-pro-max",
+          "label": "iPhone 17 Pro Max",
+          "year": 2025,
+          "size": "max",
+          "palette": "17-pro",
+          "camera": "plateau_triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-16",
+      "label": "iPhone 16",
+      "models": [
+        {
+          "id": "iphone-16e",
+          "label": "iPhone 16e",
+          "year": 2025,
+          "size": "standard",
+          "palette": "16e",
+          "camera": "single_bare"
+        },
+        {
+          "id": "iphone-16",
+          "label": "iPhone 16",
+          "year": 2024,
+          "size": "standard",
+          "palette": "16",
+          "camera": "dual_pill"
+        },
+        {
+          "id": "iphone-16-plus",
+          "label": "iPhone 16 Plus",
+          "year": 2024,
+          "size": "max",
+          "palette": "16",
+          "camera": "dual_pill"
+        },
+        {
+          "id": "iphone-16-pro",
+          "label": "iPhone 16 Pro",
+          "year": 2024,
+          "size": "standard",
+          "palette": "16-pro",
+          "camera": "triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-16-pro-max",
+          "label": "iPhone 16 Pro Max",
+          "year": 2024,
+          "size": "max",
+          "palette": "16-pro",
+          "camera": "triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-15",
+      "label": "iPhone 15",
+      "models": [
+        {
+          "id": "iphone-15",
+          "label": "iPhone 15",
+          "year": 2023,
+          "size": "standard",
+          "palette": "15",
+          "camera": "dual_diagonal"
+        },
+        {
+          "id": "iphone-15-plus",
+          "label": "iPhone 15 Plus",
+          "year": 2023,
+          "size": "max",
+          "palette": "15",
+          "camera": "dual_diagonal"
+        },
+        {
+          "id": "iphone-15-pro",
+          "label": "iPhone 15 Pro",
+          "year": 2023,
+          "size": "standard",
+          "palette": "15-pro",
+          "camera": "triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-15-pro-max",
+          "label": "iPhone 15 Pro Max",
+          "year": 2023,
+          "size": "max",
+          "palette": "15-pro",
+          "camera": "triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-14",
+      "label": "iPhone 14",
+      "models": [
+        {
+          "id": "iphone-14",
+          "label": "iPhone 14",
+          "year": 2022,
+          "size": "standard",
+          "palette": "14",
+          "camera": "dual_diagonal"
+        },
+        {
+          "id": "iphone-14-plus",
+          "label": "iPhone 14 Plus",
+          "year": 2022,
+          "size": "max",
+          "palette": "14",
+          "camera": "dual_diagonal"
+        },
+        {
+          "id": "iphone-14-pro",
+          "label": "iPhone 14 Pro",
+          "year": 2022,
+          "size": "standard",
+          "palette": "14-pro",
+          "camera": "triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-14-pro-max",
+          "label": "iPhone 14 Pro Max",
+          "year": 2022,
+          "size": "max",
+          "palette": "14-pro",
+          "camera": "triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-13",
+      "label": "iPhone 13",
+      "models": [
+        {
+          "id": "iphone-13-mini",
+          "label": "iPhone 13 mini",
+          "year": 2021,
+          "size": "mini",
+          "palette": "13",
+          "camera": "dual_diagonal"
+        },
+        {
+          "id": "iphone-13",
+          "label": "iPhone 13",
+          "year": 2021,
+          "size": "standard",
+          "palette": "13",
+          "camera": "dual_diagonal"
+        },
+        {
+          "id": "iphone-13-pro",
+          "label": "iPhone 13 Pro",
+          "year": 2021,
+          "size": "standard",
+          "palette": "13-pro",
+          "camera": "triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-13-pro-max",
+          "label": "iPhone 13 Pro Max",
+          "year": 2021,
+          "size": "max",
+          "palette": "13-pro",
+          "camera": "triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-12",
+      "label": "iPhone 12",
+      "models": [
+        {
+          "id": "iphone-12-mini",
+          "label": "iPhone 12 mini",
+          "year": 2020,
+          "size": "mini",
+          "palette": "12",
+          "camera": "dual_square"
+        },
+        {
+          "id": "iphone-12",
+          "label": "iPhone 12",
+          "year": 2020,
+          "size": "standard",
+          "palette": "12",
+          "camera": "dual_square"
+        },
+        {
+          "id": "iphone-12-pro",
+          "label": "iPhone 12 Pro",
+          "year": 2020,
+          "size": "standard",
+          "palette": "12-pro",
+          "camera": "triple",
+          "lidar": true
+        },
+        {
+          "id": "iphone-12-pro-max",
+          "label": "iPhone 12 Pro Max",
+          "year": 2020,
+          "size": "max",
+          "palette": "12-pro",
+          "camera": "triple",
+          "lidar": true
+        }
+      ]
+    },
+    {
+      "id": "iphone-11",
+      "label": "iPhone 11",
+      "models": [
+        {
+          "id": "iphone-11",
+          "label": "iPhone 11",
+          "year": 2019,
+          "size": "standard",
+          "palette": "11",
+          "camera": "dual_square"
+        },
+        {
+          "id": "iphone-11-pro",
+          "label": "iPhone 11 Pro",
+          "year": 2019,
+          "size": "standard",
+          "palette": "11-pro",
+          "camera": "triple"
+        },
+        {
+          "id": "iphone-11-pro-max",
+          "label": "iPhone 11 Pro Max",
+          "year": 2019,
+          "size": "max",
+          "palette": "11-pro",
+          "camera": "triple"
+        }
+      ]
+    },
+    {
+      "id": "iphone-se",
+      "label": "iPhone SE",
+      "models": [
+        {
+          "id": "iphone-se-3",
+          "label": "iPhone SE (3rd generation)",
+          "year": 2022,
+          "size": "compact",
+          "palette": "se-3",
+          "camera": "single_bare"
+        },
+        {
+          "id": "iphone-se-2",
+          "label": "iPhone SE (2nd generation)",
+          "year": 2020,
+          "size": "compact",
+          "palette": "se-2",
+          "camera": "single_bare"
+        }
+      ]
+    },
+    {
+      "id": "iphone-x",
+      "label": "iPhone XR / XS",
+      "models": [
+        {
+          "id": "iphone-xr",
+          "label": "iPhone XR",
+          "year": 2018,
+          "size": "standard",
+          "palette": "xr",
+          "camera": "single_bump"
+        },
+        {
+          "id": "iphone-xs",
+          "label": "iPhone XS",
+          "year": 2018,
+          "size": "standard",
+          "palette": "xs",
+          "camera": "pill_x"
+        },
+        {
+          "id": "iphone-xs-max",
+          "label": "iPhone XS Max",
+          "year": 2018,
+          "size": "max",
+          "palette": "xs",
+          "camera": "pill_x"
+        }
+      ]
+    }
+  ]
+}

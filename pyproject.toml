@@ -33,6 +33,11 @@ dependencies = [
     "pillow-heif>=1.8.1",
     "higgsfield-client>=0.2.0",
     "jsonschema>=4.23",
+    # Fernet for the /phones vault (web/db/encrypted.py): logins and backup
+    # codes are encrypted at rest. >=50.0.0: CVE-2026-69247 and older fixes.
+    "cryptography>=50.0.0",
+    # /phones Excel export (web/exports/devices_xlsx.py), write-only.
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]

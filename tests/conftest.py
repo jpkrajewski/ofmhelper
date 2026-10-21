@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
@@ -14,6 +15,7 @@ from ofmhelpers.config.settings import (
     InstagramSettings,
     KieAISettings,
     SessionSettings,
+    VaultSettings,
     WebSettings,
 )
 
@@ -79,6 +81,9 @@ def _test_database():
     # ceiling would eventually trip on unrelated tests. Off by default; the
     # rate-limit tests turn it back on explicitly.
     os.environ["OFM_RATE_LIMIT_ENABLED"] = "false"
+    # A throwaway vault key: /phones logins encrypt with it (a test that
+    # needs another key, or none, monkeypatches OFM_VAULT_KEY).
+    os.environ["OFM_VAULT_KEY"] = Fernet.generate_key().decode()
 
     # Import here, after the env var is set, so the engine binds to the test DB.
     from ofmhelpers.web.db.models import Base
@@ -121,6 +126,7 @@ _SETTINGS_CLASSES = (
     # Its .env holds the real scan proxies: a test must never go through them.
     InstagramSettings,
     AccountsSettings,
+    VaultSettings,
 )
 
 

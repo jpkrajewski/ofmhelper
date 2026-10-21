@@ -52,7 +52,14 @@ def _nav(html: str) -> tuple[list[str], list[str]]:
 
 def test_bar_links_then_the_rest_under_more(client):
     bar, more = _nav(client.get("/generate").text)
-    assert bar == ["/generate", "/clone", "/reels", "/download-assets", "/accounts"]
+    assert bar == [
+        "/generate",
+        "/clone",
+        "/reels",
+        "/download-assets",
+        "/accounts",
+        "/phones",
+    ]
     assert more == [
         "/uniqify",
         "/character-sheet",

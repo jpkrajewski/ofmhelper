@@ -1,7 +1,7 @@
 """
 SQLAlchemy ORM tables backing web/stores/jobs.py,
 web/stores/applications.py, web/stores/watched_profiles.py and
-web/stores/tracked_accounts.py. Column sets mirror the exact dict/JSON shapes those
+web/stores/tracked_accounts.py and web/stores/devices.py. Column sets mirror the exact dict/JSON shapes those
 modules write today (see web/schemas.py for the Pydantic mirror), so the
 step-5 backfill is a straight field-for-field copy.
 
@@ -34,6 +34,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from ofmhelpers.web.db.encrypted import EncryptedText
 
 
 class Base(DeclarativeBase):
@@ -251,3 +253,68 @@ class AccountSnapshotRow(Base):
     __table_args__ = (
         Index("ix_account_snapshots_account_id_taken_at", "account_id", "taken_at"),
     )
+
+
+class DeviceRow(Base):
+    """A physical phone of the agency (/phones). `model_id`/`color_id` are
+    `ofmhelpers.phones.catalog()` ids (`custom_model` for a phone the
+    catalog does not list). Its logins are linked through
+    `DeviceLoginRow`. "Retire" sets `retired_at`: off the list and the
+    export, every login kept."""
+
+    __tablename__ = "devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # How the agency calls it ("Phone 07"); unique.
+    label: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    model_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    color_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    custom_model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    owner: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    phone_number: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    added_at: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+    retired_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class LoginRow(Base):
+    """One account: an iCloud, a Gmail, an Instagram, a website... `service`
+    is an `ofmhelpers.phones.services()` key; `provider` names it for a
+    custom service ("Acme Corp"), "" otherwise. Stored once, signed in on
+    any number of phones (`DeviceLoginRow`). Password and backup codes are
+    encrypted at rest (`EncryptedText`); "" stays "", so a list can tell
+    which logins have one without decrypting anything."""
+
+    __tablename__ = "logins"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    service: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    password: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="")
+    backup_codes: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    added_at: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("service", "provider", "username", name="uq_logins_identity"),
+    )
+
+
+class DeviceLoginRow(Base):
+    """A login signed in on a phone. Deleted with either side; a login no
+    phone links any more is deleted with its last link (repository)."""
+
+    __tablename__ = "device_logins"
+
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
+    )
+    login_id: Mapped[int] = mapped_column(
+        ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
+    )
+    linked_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (Index("ix_device_logins_login_id", "login_id"),)

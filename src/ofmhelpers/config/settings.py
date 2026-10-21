@@ -17,7 +17,7 @@ config/__init__.py's docstring for why.
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ofmhelpers.iphones.models import GeoPoint, Place
@@ -616,6 +616,23 @@ class AccountsSettings(BaseSettings):
             )
             raise ValueError(msg)
         return self
+
+
+class VaultSettings(BaseSettings):
+    """web/db/encrypted.py: the Fernet keys the /phones logins and backup
+    codes are encrypted with at rest. Comma-separated, newest first: the
+    first key encrypts, every key decrypts (rotate by prepending a new one,
+    drop the old one once nothing uses it). Losing every key loses the
+    logins -- keep a copy off the server."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    keys: SecretStr | None = Field(default=None, validation_alias="OFM_VAULT_KEY")
+
+    def key_list(self) -> list[str]:
+        if self.keys is None:
+            return []
+        return [k.strip() for k in self.keys.get_secret_value().split(",") if k.strip()]
 
 
 class LoggingSettings(BaseSettings):

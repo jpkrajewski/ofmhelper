@@ -7,7 +7,6 @@
  * link. The search box filters the rendered rows instantly (their
  * data-search text). Everything that writes posts JSON:
  *   + Add account    -> POST /accounts/add, then reload (new rows syncing)
- *   notes cell       -> POST /accounts/{id}/notes on change (blur)
  *   selected rows    -> POST /accounts/creator (assign; "" unassigns) or
  *                       /accounts/delete, from the bar above the table
  * While a row is still on its first sync the list reloads every POLL_MS,
@@ -118,18 +117,6 @@
             if (noMatch) noMatch.hidden = shown > 0;
         });
     }
-
-    // --- notes ----------------------------------------------------------------
-    document.querySelectorAll(".accounts-notes").forEach((area) => {
-        area.addEventListener("change", async () => {
-            try {
-                await postJson(`/accounts/${rowId(area)}/notes`, { notes: area.value });
-                setStatus(statusEl, "");
-            } catch (error) {
-                setStatus(statusEl, error.message, true);
-            }
-        });
-    });
 
     // --- selection + bulk actions -------------------------------------------
     const bulk = $("accounts-bulk");

@@ -179,6 +179,7 @@ def test_upgrade_downgrade_upgrade_keeps_every_row(db):
 TRACKED_POSTS = "f7a8b9c0d1e2"
 UNTRACKED = "a9b0c1d2e3f4"
 IDENTITY = "b0c1d2e3f4a5"
+DEVICES = "c1d2e3f4a5b6"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -246,6 +247,38 @@ def test_identity_starts_unknown_with_no_failures(db):
             )
         ).one()
     assert (ids, failures) == (0, 0)
+
+
+def test_devices_adds_empty_tables_and_drops_only_them(db):
+    needs(DEVICES)(db)
+    command.upgrade(_alembic(), IDENTITY)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), DEVICES)
+    for name in ("devices", "logins", "device_logins"):
+        assert _count(db, name) == 0
+    assert {"password", "backup_codes"} <= _columns(db, "logins")
+    with db.begin() as conn:
+        device = conn.execute(
+            text(
+                "INSERT INTO devices (label, added_at, updated_at)"
+                " VALUES ('p1', 1, 1) RETURNING id"
+            )
+        ).scalar_one()
+        login = conn.execute(
+            text(
+                "INSERT INTO logins (service, username, password, added_at, updated_at)"
+                " VALUES ('gmail', 'a@b.c', 'tok', 1, 1) RETURNING id"
+            )
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO device_logins (device_id, login_id, linked_at)"
+                " VALUES (:d, :l, 1)"
+            ),
+            {"d": device, "l": login},
+        )
+    command.downgrade(_alembic(), IDENTITY)
+    assert _row_counts(db) == before
 
 
 def test_a_revision_on_production_is_no_longer_pending(db):

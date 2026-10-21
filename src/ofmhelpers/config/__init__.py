@@ -31,6 +31,7 @@ from ofmhelpers.config.settings import (
     KieAISettings,
     LoggingSettings,
     SessionSettings,
+    VaultSettings,
     WebSettings,
 )
 
@@ -77,6 +78,10 @@ class Settings:
     @property
     def exports(self) -> ExportSettings:
         return ExportSettings()
+
+    @property
+    def vault(self) -> VaultSettings:
+        return VaultSettings()
 
     @property
     def logging(self) -> LoggingSettings:

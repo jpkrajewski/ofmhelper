@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% import "_icons.html" as ic %}
+{% block title %}Phones — Ascend Global LLC{% endblock %}
+{% block content %}
+{% set is_admin = request.session.get("role") == "admin" %}
+{# Rows shown before "N more" (iCloud + Instagram, services.json order):
+   keeps a card short however many logins. #}
+{% set visible_logins = 2 %}
+
+<div class="page-head ph-head">
+    <div>
+        <h1>Phones</h1>
+        <p class="lead">{{ total }} phone{{ "" if total == 1 else "s" }} · {{ logins }} login{{ "" if logins == 1 else "s" }}</p>
+    </div>
+    <div class="page-head-actions">
+        <a class="btn-ghost ph-btn" href="/phones/export.xlsx" download>{{ ic.icon("download") }} Export</a>
+        {% if is_admin %}<button type="button" class="btn-primary ph-btn" id="ph-add-open">{{ ic.icon("plus") }} Add phone</button>{% endif %}
+    </div>
+</div>
+
+<div class="ph-toolbar">
+    <label class="ph-search">
+        {{ ic.icon("search") }}
+        <input type="search" id="ph-search" placeholder="Search phones, people, logins…" aria-label="Search phones" autocomplete="off">
+    </label>
+    <form method="get" action="/phones" data-autosubmit class="ph-filters">
+        {% macro filter(name, all_label) -%}
+        {% if choices[name] %}
+        <select name="{{ name }}" aria-label="{{ all_label }}">
+            <option value="">{{ all_label }}</option>
+            {% for value, label in choices[name] %}
+            <option value="{{ value }}" {% if query[name] == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        {%- endmacro %}
+        {{ filter("family", "All models") }}
+        {{ filter("color", "All colors") }}
+        {{ filter("owner", "All people") }}
+        {{ filter("service", "All services") }}
+        <select name="sort" aria-label="Sort">
+            {% for value, label in [(sorts.LABEL, "Name"), (sorts.MODEL, "Model"), (sorts.UPDATED, "Recently updated"), (sorts.LOGINS, "Most logins")] %}
+            <option value="{{ value }}" {% if query.sort == value %}selected{% endif %}>Sort: {{ label }}</option>
+            {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+    </form>
+    <div class="ph-layout" role="group" aria-label="Layout">
+        <button type="button" class="ph-icon-btn" data-layout="grid" aria-pressed="true" title="Grid" aria-label="Grid">{{ ic.icon("grid") }}</button>
+        <button type="button" class="ph-icon-btn" data-layout="list" aria-pressed="false" title="List" aria-label="List">{{ ic.icon("list") }}</button>
+    </div>
+</div>
+<div class="generation-status" id="ph-status" role="status" aria-live="polite"></div>
+
+{% macro login_row(d, x, loop_index) -%}
+<li class="ph-login" data-login-id="{{ x.id }}"
+    data-login='{{ {"service": x.service, "provider": x.provider, "username": x.username, "notes": x.notes}|tojson }}'
+    data-others="{{ x.elsewhere(d.label)|join(', ') }}"
+    {% if loop_index > visible_logins %}data-extra hidden{% endif %}>
+    <span class="ph-logo" aria-hidden="true">{% if x.icon_url %}<img src="{{ x.icon_url }}" alt="" width="18" height="18" loading="lazy" referrerpolicy="no-referrer">{% endif %}</span>
+    <div class="ph-login-main">
+        <span class="ph-login-service">{{ x.label }}{% if x.elsewhere(d.label) %} · also on {{ x.elsewhere(d.label)|join(", ") }}{% endif %}</span>
+        {% if x.link %}<a class="ph-login-user" href="{{ x.link }}" target="_blank" rel="noopener" title="{{ x.username }}">{{ x.username }}</a>
+        {% else %}<span class="ph-login-user" title="{{ x.username }}">{{ x.username }}</span>{% endif %}
+    </div>
+    {# Fixed in the row's right column: revealing opens below, nothing moves. #}
+    <div class="ph-login-tools">
+        {% if x.tracked_account_id %}<a class="ph-icon-btn" href="/accounts/{{ x.tracked_account_id }}" title="Open analytics" aria-label="Analytics of {{ x.username }}">{{ ic.icon("chart") }}</a>{% endif %}
+        {% set copy_hint = "Copy login:password:codes" if x.has_codes else ("Copy login:password" if x.has_password else "Copy login") %}
+        <button type="button" class="ph-icon-btn ph-copy-all" title="{{ copy_hint }}" aria-label="{{ copy_hint }} ({{ x.label }})">{{ ic.icon("copy") }}</button>
+        {% if x.has_password or x.has_codes %}
+        {% set show_hint = "Show password and recovery codes" if x.has_codes else "Show password" %}
+        <button type="button" class="ph-icon-btn ph-reveal" aria-pressed="false" title="{{ show_hint }}" aria-label="{{ show_hint }} ({{ x.label }})" data-hint-shown="Hide">
+            <span class="ph-when-hidden">{{ ic.icon("eye") }}</span><span class="ph-when-shown" hidden>{{ ic.icon("eye-off") }}</span>
+        </button>
+        {% endif %}
+        {% if is_admin %}
+        <button type="button" class="ph-icon-btn ph-login-edit" title="Edit login" aria-label="Edit {{ x.label }} login">{{ ic.icon("pencil") }}</button>
+        <button type="button" class="ph-icon-btn ph-login-remove" title="Remove from this phone" aria-label="Remove {{ x.label }} login from {{ d.label }}">{{ ic.icon("trash") }}</button>
+        {% endif %}
+    </div>
+    {% if x.has_password or x.has_codes %}
+    <div class="ph-revealed" hidden>
+        {% if x.has_password %}<div><span>Password</span><code data-secret></code></div>{% endif %}
+        {% if x.has_codes %}<div><span>Recovery codes</span><pre data-codes></pre></div>{% endif %}
+    </div>
+    {% endif %}
+    {% if x.notes %}<p class="ph-login-notes">{{ x.notes }}</p>{% endif %}
+</li>
+{%- endmacro %}
+
+{% macro phone_card(d) -%}
+<article class="ph-card" id="phone-{{ d.id }}" data-id="{{ d.id }}" data-search="{{ d.search_text }}"
+         {% if is_admin %}data-phone='{{ {"label": d.label, "model_id": d.model_id or "", "color_id": d.color_id or "", "custom_model": d.custom_model, "owner": d.owner, "phone_number": d.phone_number, "notes": d.notes}|tojson }}'{% endif %}>
+    <div class="ph-media">
+        <img src="{{ d.drawing_url }}" alt="{{ d.specs }}" loading="lazy">
+    </div>
+    <div class="ph-body">
+        <div class="ph-title-row">
+            <div class="ph-title">
+                <h2>{{ d.label }}</h2>
+                <p class="ph-specs">{{ d.specs }}</p>
+            </div>
+            {% if is_admin %}
+            <details class="ph-menu">
+                <summary class="ph-icon-btn" title="Edit, retire or delete" aria-label="Actions for {{ d.label }}">{{ ic.icon("ellipsis") }}</summary>
+                <div class="ph-menu-list">
+                    {% if d.retired %}
+                    <button type="button" class="ph-restore">{{ ic.icon("restore") }} Restore</button>
+                    {% else %}
+                    <button type="button" class="ph-edit">{{ ic.icon("pencil") }} Edit</button>
+                    <button type="button" class="ph-retire">{{ ic.icon("archive") }} Retire</button>
+                    {% endif %}
+                    <button type="button" class="ph-delete">{{ ic.icon("trash") }} Delete</button>
+                </div>
+            </details>
+            {% endif %}
+        </div>
+        <p class="ph-meta">
+            {% for part in [d.owner, d.phone_number] if part %}<span>{{ part }}</span>{% endfor %}
+            <span>{{ d.logins|length }} login{{ "" if d.logins|length == 1 else "s" }}{% if d.codes_count %} · {{ d.codes_count }} recovery-code set{{ "" if d.codes_count == 1 else "s" }}{% endif %}</span>
+        </p>
+        {% if d.logins %}
+        <ul class="ph-logins">
+            {% for x in d.logins %}{{ login_row(d, x, loop.index) }}{% endfor %}
+        </ul>
+        {% else %}
+        <p class="ph-no-logins">No logins yet</p>
+        {% endif %}
+        <div class="ph-card-foot">
+            {% if d.logins|length > visible_logins %}
+            <button type="button" class="ph-more" aria-expanded="false" data-more="{{ d.logins|length - visible_logins }}">{{ d.logins|length - visible_logins }} more</button>
+            {% endif %}
+            {% if is_admin and not d.retired %}
+            <button type="button" class="ph-add-login">{{ ic.icon("plus", 14) }} Add login</button>
+            {% endif %}
+        </div>
+        {% if d.notes %}<p class="ph-notes">{{ d.notes }}</p>{% endif %}
+    </div>
+</article>
+{%- endmacro %}
+
+{% if not devices %}
+<p class="empty-state">
+    {% if query.filtered %}
+    No phone matches these filters. <a href="/phones">Show all</a>
+    {% else %}
+    No phones yet.{% if is_admin %} Press <strong>Add phone</strong> to add the first one.{% endif %}
+    {% endif %}
+</p>
+{% else %}
+<div class="ph-grid" id="ph-grid" data-layout="grid">
+    {% for d in devices %}{{ phone_card(d) }}{% endfor %}
+</div>
+<p class="empty-state" id="ph-no-match" hidden>No phone matches your search.</p>
+{% endif %}
+
+{% if retired %}
+<details class="accounts-fold ph-retired">
+    <summary><h2>Retired ({{ retired|length }})</h2></summary>
+    <div class="ph-grid" data-layout="grid">
+        {% for d in retired %}{{ phone_card(d) }}{% endfor %}
+    </div>
+</details>
+{% endif %}
+
+{% if is_admin %}
+<script type="application/json" id="ph-catalog">{{ catalog.model_dump(mode="json")|tojson }}</script>
+
+<dialog class="accounts-dialog ph-dialog" id="ph-dialog">
+    <form id="ph-form" method="dialog">
+        <h2>Add phone</h2>
+        <div class="ph-form-grid">
+            <div class="ph-preview">
+                <img src="/phones/drawing.svg" alt="" id="ph-drawing">
+            </div>
+            <div>
+                <div class="field">
+                    <label for="ph-family">Model family</label>
+                    <select id="ph-family" name="family">
+                        <option value="">Not in the list</option>
+                        {% for f in catalog.families %}<option value="{{ f.id }}">{{ f.label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="field" data-catalog-only>
+                    <label for="ph-model">Model</label>
+                    <select id="ph-model" name="model_id"></select>
+                </div>
+                <div class="field" data-custom-only hidden>
+                    <label for="ph-custom-model">Model</label>
+                    <input type="text" id="ph-custom-model" name="custom_model" maxlength="64" placeholder="e.g. Galaxy S24">
+                </div>
+            </div>
+        </div>
+        <fieldset class="field ph-colors" data-catalog-only>
+            <legend>Color</legend>
+            <div id="ph-colors" class="ph-swatches"></div>
+        </fieldset>
+        <div class="ph-fields-2">
+            <div class="field">
+                <label for="ph-label">Name</label>
+                <input type="text" id="ph-label" name="label" required maxlength="32" placeholder="e.g. Phone 07">
+            </div>
+            <div class="field">
+                <label for="ph-owner">Assigned to</label>
+                <input type="text" id="ph-owner" name="owner" maxlength="64" list="ph-owners">
+            </div>
+            <div class="field">
+                <label for="ph-number">Phone number</label>
+                <input type="tel" id="ph-number" name="phone_number" maxlength="32">
+            </div>
+        </div>
+        <datalist id="ph-owners">{% for value, _label in choices.owner %}<option value="{{ value }}"></option>{% endfor %}</datalist>
+        <div class="field">
+            <label for="ph-notes">Notes</label>
+            <textarea id="ph-notes" name="notes" rows="2" maxlength="5000"></textarea>
+        </div>
+        <div class="generation-status" id="ph-form-status" role="status" aria-live="polite"></div>
+        <div class="accounts-dialog-actions">
+            <button type="button" class="btn-ghost" data-close>Cancel</button>
+            <button type="submit" class="btn-primary">Save</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="accounts-dialog ph-dialog" id="ph-login-dialog">
+    <form id="ph-login-form" method="dialog">
+        <h2>Add login</h2>
+        <div class="ph-fields-2">
+            <div class="field">
+                <label for="ph-login-service">Service</label>
+                <select id="ph-login-service" name="service">
+                    {% for key, s in services.items() %}<option value="{{ key }}" data-custom="{{ 'true' if s.custom else 'false' }}">{{ s.label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="field" data-provider hidden>
+                <label for="ph-login-provider">Company or site</label>
+                <input type="text" id="ph-login-provider" name="provider" maxlength="64" placeholder="e.g. Shopify">
+            </div>
+        </div>
+        <div class="field">
+            <label for="ph-login-username">Email or username</label>
+            <input type="text" id="ph-login-username" name="username" required maxlength="255" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+            <label for="ph-login-password">Password</label>
+            <input type="password" id="ph-login-password" name="password" maxlength="1000" autocomplete="new-password" spellcheck="false">
+        </div>
+        <div class="field">
+            <label for="ph-login-codes">Recovery codes</label>
+            <textarea id="ph-login-codes" name="backup_codes" rows="3" maxlength="5000" spellcheck="false" placeholder="one per line"></textarea>
+        </div>
+        <div class="field">
+            <label for="ph-login-notes">Notes</label>
+            <textarea id="ph-login-notes" name="notes" rows="2" maxlength="5000"></textarea>
+        </div>
+        <p class="ph-hint" id="ph-login-shared" hidden></p>
+        <div class="generation-status" id="ph-login-status" role="status" aria-live="polite"></div>
+        <div class="accounts-dialog-actions">
+            <button type="button" class="btn-ghost" data-close>Cancel</button>
+            <button type="submit" class="btn-primary">Save</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
+<script src="{{ static_url('js/phones.js') }}"></script>
+{% endblock %}
