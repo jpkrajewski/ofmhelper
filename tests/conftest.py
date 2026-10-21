@@ -25,12 +25,41 @@ from ofmhelpers.config.settings import (
 #     docker compose up -d postgres redis
 # Tests run against a SEPARATE database (ofmhelpers_test) so they never touch
 # dev/prod data, and every table is truncated between tests for isolation.
-TEST_DATABASE_URL = os.environ.get(
-    "OFM_TEST_DATABASE_URL",
-    "postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test",
+# Under pytest-xdist every worker (gw0, gw1, ...) gets its own database and
+# Redis db, so per-test TRUNCATE/FLUSHDB never hits another worker's test.
+_XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
+_WORKER_INDEX = int(_XDIST_WORKER.removeprefix("gw") or 0)
+# Redis has dbs 0-15: dev uses 0, the suite 1 + worker index.
+_MAX_WORKERS = 15
+
+
+def _per_worker_database(url: str) -> str:
+    if not _XDIST_WORKER:
+        return url
+    parsed = make_url(url)
+    return parsed.set(database=f"{parsed.database}_{_XDIST_WORKER}").render_as_string(
+        hide_password=False
+    )
+
+
+def _per_worker_redis(url: str) -> str:
+    if _WORKER_INDEX >= _MAX_WORKERS:
+        msg = f"at most {_MAX_WORKERS} xdist workers (Redis has 16 dbs)"
+        raise RuntimeError(msg)
+    base, _, db = url.rpartition("/")
+    return f"{base}/{int(db) + _WORKER_INDEX}"
+
+
+TEST_DATABASE_URL = _per_worker_database(
+    os.environ.get(
+        "OFM_TEST_DATABASE_URL",
+        "postgresql+psycopg://ofmhelpers:ofmhelpers@127.0.0.1:5432/ofmhelpers_test",
+    )
 )
 # RQ integration tests use a real broker; db 1 keeps them off dev's db 0.
-TEST_REDIS_URL = os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1")
+TEST_REDIS_URL = _per_worker_redis(
+    os.environ.get("OFM_TEST_REDIS_URL", "redis://127.0.0.1:6379/1")
+)
 
 
 def _ensure_test_database(url: str) -> None:

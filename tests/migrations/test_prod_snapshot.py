@@ -49,7 +49,9 @@ def _alembic() -> Config:
 def snapshot_url(monkeypatch, test_database_url) -> Iterator[URL]:
     """A fresh database holding the snapshot; Alembic and the app's settings
     point at it."""
-    url = make_url(test_database_url).set(database="ofmhelpers_snapshot")
+    # Named after the test database: one per xdist worker.
+    base = make_url(test_database_url)
+    url = base.set(database=f"{base.database}_snapshot")
     admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
     with admin.connect() as conn:
         conn.execute(text(f'DROP DATABASE IF EXISTS "{url.database}" WITH (FORCE)'))
