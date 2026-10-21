@@ -30,33 +30,60 @@ class DriveFolderRepository(CachedRepository):
     cache_namespace = "drive_folder"
 
     @cached
-    def account_folders(self) -> list[dict]:
+    def account_folders(self, root: str) -> list[dict]:
+        """The logins' folders in `root`; rows of any other root are left
+        out (their folders belong to another Drive folder)."""
         with session_scope() as s:
-            rows = s.execute(select(DriveAccountFolderRow)).scalars().all()
+            rows = (
+                s.execute(
+                    select(DriveAccountFolderRow).where(
+                        DriveAccountFolderRow.root_folder_id == root
+                    )
+                )
+                .scalars()
+                .all()
+            )
             return [
                 {"login_id": r.login_id, "folder_id": r.folder_id, "name": r.name}
                 for r in rows
             ]
 
     @cached
-    def day_folders(self, day: str) -> dict[str, str]:
-        """{login id (str: the cache is JSON): folder id} for `day`
-        (ISO date)."""
+    def day_folders(self, day: str, root: str) -> dict[str, str]:
+        """{login id (str: the cache is JSON): folder id} for `day` (ISO
+        date), only inside account folders of `root`."""
         with session_scope() as s:
             rows = s.execute(
-                select(DriveDayFolderRow.login_id, DriveDayFolderRow.folder_id).where(
-                    DriveDayFolderRow.day == _date(day)
+                select(DriveDayFolderRow.login_id, DriveDayFolderRow.folder_id)
+                .join(
+                    DriveAccountFolderRow,
+                    DriveAccountFolderRow.login_id == DriveDayFolderRow.login_id,
+                )
+                .where(
+                    DriveDayFolderRow.day == _date(day),
+                    DriveAccountFolderRow.root_folder_id == root,
                 )
             ).all()
             return {str(login_id): folder_id for login_id, folder_id in rows}
 
     @cached
-    def folder_ids(self) -> list[str]:
-        """Every Drive folder id the app made or adopted (account and day
-        folders): what /drive may show previews from."""
+    def folder_ids(self, root: str) -> list[str]:
+        """Every Drive folder id the app made or adopted in `root` (account
+        and day folders): what /drive may show previews from."""
         with session_scope() as s:
-            accounts = s.execute(select(DriveAccountFolderRow.folder_id)).scalars()
-            days = s.execute(select(DriveDayFolderRow.folder_id)).scalars()
+            accounts = s.execute(
+                select(DriveAccountFolderRow.folder_id).where(
+                    DriveAccountFolderRow.root_folder_id == root
+                )
+            ).scalars()
+            days = s.execute(
+                select(DriveDayFolderRow.folder_id)
+                .join(
+                    DriveAccountFolderRow,
+                    DriveAccountFolderRow.login_id == DriveDayFolderRow.login_id,
+                )
+                .where(DriveAccountFolderRow.root_folder_id == root)
+            ).scalars()
             return sorted({*accounts, *days})
 
     @contextmanager
@@ -75,8 +102,15 @@ class DriveFolderRepository(CachedRepository):
                     s.execute(select(func.pg_advisory_unlock(_SYNC_LOCK_KEY)))
 
     @invalidates_cache
-    def save_account_folder(self, login_id: int, folder_id: str, name: str) -> None:
-        values = {"folder_id": folder_id, "name": name, "updated_at": time.time()}
+    def save_account_folder(
+        self, login_id: int, folder_id: str, name: str, root: str
+    ) -> None:
+        values = {
+            "folder_id": folder_id,
+            "name": name,
+            "root_folder_id": root,
+            "updated_at": time.time(),
+        }
         with session_scope() as s:
             s.execute(
                 insert(DriveAccountFolderRow)

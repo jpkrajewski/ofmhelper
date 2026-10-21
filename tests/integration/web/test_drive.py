@@ -628,3 +628,33 @@ def test_fake_externals_connects_to_the_fake_drive(monkeypatch, tmp_path):
     # Shared through the file: another process sees the same Drive.
     made = drive.create_folder("fake-root", "x")
     assert FakeDrive(tmp_path).named("x", "fake-root") == [made.id]
+
+
+# --- a different root folder -----------------------------------------------------------
+
+
+def test_folders_of_another_root_are_never_written_into_or_shown(drive, monkeypatch):
+    """Dev once pointed at the live folder: once the root is a sandbox,
+    the folders saved under the live one are ignored -- the sweep makes the
+    sandbox's own, and nothing more is written into the old ones."""
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    old_account = _account(drive, "ann.ig")
+    old_day = _day_folder(drive, "ann.ig")
+    preview = drive.add_file(old_day, "live.jpg", thumbnail=True)
+    sandbox = drive.seed_folder("SANDBOX", shared=True)
+    monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", sandbox)
+
+    assert store.account_folders() == {}
+    assert store.day_folders(DAY) == {}
+    assert "live.jpg" not in _client().get("/drive").text
+    assert _client().get(f"/drive/thumb/{preview}").status_code == 404
+
+    tomorrow = DAY + datetime.timedelta(days=1)
+    report = drive_folders.sync(tomorrow)
+
+    assert report.created == ["ann.ig - Anna"]
+    (new_account,) = drive.named("ann.ig - Anna", sandbox)
+    assert drive.named("2026-10-22", new_account)
+    assert drive.named("2026-10-22", old_account) == []
+    assert drive.item(old_account).name == "ann.ig - Anna"

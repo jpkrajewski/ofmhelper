@@ -335,6 +335,9 @@ class DriveAccountFolderRow(Base):
     folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+    # The root folder it was made or found in: a row of another root (dev
+    # once pointed at the live folder) is ignored, never written into.
+    root_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class DriveDayFolderRow(Base):

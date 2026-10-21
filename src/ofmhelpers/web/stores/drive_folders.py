@@ -11,6 +11,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from ofmhelpers.config import settings
 from ofmhelpers.web.db.repositories import DriveFolderRepository
 from ofmhelpers.web.schemas import DriveTarget, StoredFolder
 from ofmhelpers.web.stores.devices import list_devices
@@ -44,19 +45,24 @@ def targets() -> list[DriveTarget]:
     return list(found.values())
 
 
+def _root() -> str:
+    """Only the configured root's folders exist for /drive."""
+    return settings.gdrive.root_folder_id
+
+
 def account_folders() -> dict[int, StoredFolder]:
-    rows = _repository().account_folders()
+    rows = _repository().account_folders(_root())
     return {r["login_id"]: StoredFolder.model_validate(r) for r in rows}
 
 
 def day_folders(day: datetime.date) -> dict[int, str]:
     """{login id: that day's folder id}."""
-    rows = _repository().day_folders(day.isoformat())
+    rows = _repository().day_folders(day.isoformat(), _root())
     return {int(login_id): folder_id for login_id, folder_id in rows.items()}
 
 
 def save_account_folder(login_id: int, folder_id: str, name: str) -> None:
-    _repository().save_account_folder(login_id, folder_id, name)
+    _repository().save_account_folder(login_id, folder_id, name, _root())
 
 
 def forget_account_folder(login_id: int) -> None:
@@ -74,7 +80,7 @@ def forget_day_folder(login_id: int, day: datetime.date) -> None:
 
 def folder_ids() -> set[str]:
     """Every account and day folder the app knows (thumbnail authorisation)."""
-    return set(_repository().folder_ids())
+    return set(_repository().folder_ids(_root()))
 
 
 def sync_lock() -> AbstractContextManager[bool]:
