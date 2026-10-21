@@ -180,10 +180,17 @@ class FakeDrive:
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]:
         with self._state("children") as state:
-            # As files.list on Drive: a trashed, deleted or unshared parent
-            # is no error, just nothing (callers check `folder` first).
-            if self._visible(state, parent_id) is None:
-                return []
+            # As Drive (checked live 2026-10-21): a missing or unshared parent
+            # is a 404, but a TRASHED one still lists its children -- so a
+            # listing never tells a deleted folder; callers check `folder`.
+            chain = list(self._chain(state, parent_id))
+            if any(i is None for i in chain) or not any(
+                i is not None and i.id in state.shared for i in chain
+            ):
+                msg = (
+                    f"Listing folder {parent_id}: not found, or not shared with the bot"
+                )
+                raise FolderGoneError(msg)
             found = [
                 i
                 for i in state.items.values()

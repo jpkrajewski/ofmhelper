@@ -692,15 +692,15 @@ def test_cards_are_ordered_by_the_accounts_followers(drive):
     assert "90000" not in html
 
 
-def test_a_trashed_parent_lists_empty_like_drive_and_is_still_forgotten(drive):
-    """Drive lists a trashed folder as empty (no error); the page checks
-    the folder itself, so the day is forgotten and made again."""
+def test_a_trashed_day_folder_that_still_lists_is_forgotten(drive):
+    """Drive still lists a trashed folder's files; the page checks the
+    folder itself, so the day is forgotten and made again."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
-    account = _account(drive, "ann.ig")
     day = _day_folder(drive, "ann.ig")
-    drive.trash(account)
-    assert drive.children(day) == []
+    drive.add_file(day, "kept.jpg")
+    drive.trash(day)
+    assert [f.name for f in drive.children(day)] == ["kept.jpg"]
 
     html = _client().get("/drive").text
 

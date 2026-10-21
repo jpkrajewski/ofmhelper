@@ -79,6 +79,29 @@ def test_a_missing_folder_is_gone(drive, parent):
         drive.folder("1" + uuid.uuid4().hex * 2)
 
 
-def test_listing_a_folder_the_bot_cannot_see_is_empty_not_an_error(drive, parent):
-    """Callers check `folder` first for that reason."""
-    assert drive.children("1" + uuid.uuid4().hex * 2) == []
+def test_listing_a_missing_folder_is_gone(drive, parent):
+    with pytest.raises(FolderGoneError):
+        drive.children("1" + uuid.uuid4().hex * 2)
+
+
+def _trash(drive, backend, folder_id: str) -> None:
+    """What the VA does in the Drive UI (not part of DriveApi: the app
+    never deletes)."""
+    if backend == "fake":
+        drive.trash(folder_id)
+    else:
+        drive._files.update(
+            fileId=folder_id, body={"trashed": True}, supportsAllDrives=True
+        ).execute()
+
+
+def test_a_trashed_folder_still_lists_but_is_gone_as_a_folder(drive, backend, parent):
+    """Why /drive checks `folder` before listing: the listing alone never
+    says the folder was deleted."""
+    trashed = drive.create_folder(parent, "trashed")
+    child = drive.create_folder(trashed.id, "child")
+    _trash(drive, backend, trashed.id)
+
+    assert [f.id for f in drive.children(trashed.id)] == [child.id]
+    with pytest.raises(FolderGoneError):
+        drive.folder(trashed.id)
