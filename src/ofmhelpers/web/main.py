@@ -16,7 +16,12 @@ from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.web.account_tracker import account_tracker_loop
 from ofmhelpers.web.drive_folders import drive_loop
-from ofmhelpers.web.middleware import AuthMiddleware, WriteRateLimitMiddleware
+from ofmhelpers.web.middleware import (
+    AuthMiddleware,
+    CompressionMiddleware,
+    WriteRateLimitMiddleware,
+)
+from ofmhelpers.web.preview_backfill import preview_backfill_once
 from ofmhelpers.web.recovery import recovery_loop
 from ofmhelpers.web.reel_watch import reel_watch_loop
 from ofmhelpers.web.routers import ROUTERS
@@ -50,12 +55,16 @@ async def lifespan(app: FastAPI):
     # Makes /drive's folders for the day in the shared Google Drive -- see
     # ofmhelpers/web/drive_folders.py.
     drive = asyncio.create_task(drive_loop())
+    # One pass: gallery previews for jobs older than previews -- see
+    # ofmhelpers/web/preview_backfill.py.
+    backfill = asyncio.create_task(preview_backfill_once())
     logger.info("startup complete: job history loaded, sweepers running")
     yield
     sweeper.cancel()
     reel_watch.cancel()
     account_tracker.cancel()
     drive.cancel()
+    backfill.cancel()
     logger.info("shutdown: sweepers cancelled")
 
 
@@ -75,6 +84,8 @@ app.add_middleware(
     max_age=_session_settings.session_max_age_s,
     https_only=_session_settings.session_https_only,
 )
+# Outermost: compresses what everything inside produced (pages, JSON, CSS/JS).
+app.add_middleware(CompressionMiddleware)
 
 app.mount(
     "/static",

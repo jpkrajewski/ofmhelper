@@ -21,6 +21,9 @@ class AssetCard(BaseModel):
     download_url: str
     download_name: str
     local_fallback_url: str | None = None
+    # A video's small stand-ins for galleries (task_helpers/previews.py).
+    preview_url: str | None = None
+    poster_url: str | None = None
     source: str | None = None
 
 

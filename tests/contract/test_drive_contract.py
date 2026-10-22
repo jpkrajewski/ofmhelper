@@ -74,6 +74,12 @@ def test_a_file_knows_its_parent_and_a_folder_has_no_preview(drive, parent):
     assert drive.thumbnail(item, 200) is None
 
 
+def test_a_folder_knows_its_parent(drive, parent):
+    """How /drive tells a POSTED folder dragged out of its account folder."""
+    made = drive.create_folder(parent, "POSTED")
+    assert drive.folder(made.id).parents == [parent]
+
+
 def test_a_missing_folder_is_gone(drive, parent):
     with pytest.raises(FolderGoneError):
         drive.folder("1" + uuid.uuid4().hex * 2)

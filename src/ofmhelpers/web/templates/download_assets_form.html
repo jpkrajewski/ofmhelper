@@ -9,40 +9,26 @@
 <div class="generate-form-col">
 <h2 class="col-title">Fetch / clean</h2>
 
-<form id="download-assets-form" method="post" action="/download-videos/run" enctype="multipart/form-data"
-      data-prefix="/download-videos" data-result-kind="video">
+<form id="download-assets-form" method="post" action="/download-media/run" enctype="multipart/form-data"
+      data-prefix="/download-media" data-result-kind="video">
     <div class="field">
         <label>Tool</label>
         <select id="tool-select">
-            <option value="download_videos" data-action="/download-videos/run" data-prefix="/download-videos" data-result-kind="video">Download videos</option>
-            <option value="download_images" data-action="/download-images/run" data-prefix="/download-images" data-result-kind="image">Download images</option>
+            <option value="download_media" data-tasks="download_media download_videos download_images" data-action="/download-media/run" data-prefix="/download-media" data-result-kind="video">Download videos &amp; images</option>
             <option value="clean_images" data-action="/clean-images/run" data-prefix="/clean-images" data-result-kind="image">Clean image metadata</option>
         </select>
     </div>
 
-    <fieldset class="tool-fields" data-tool="download_videos">
-        <legend>Download videos</legend>
+    <fieldset class="tool-fields" data-tool="download_media">
+        <legend>Download videos &amp; images</legend>
         <div class="field">
             <label>URLs (one per line)</label>
-            <textarea name="urls" rows="6" placeholder="https://www.tiktok.com/@user/video/123&#10;https://www.instagram.com/reel/abc123/"></textarea>
+            <textarea name="urls" rows="6" placeholder="https://www.tiktok.com/@user/video/123&#10;https://www.instagram.com/reel/abc123/&#10;https://www.instagram.com/p/abc123/"></textarea>
         </div>
         <p class="picker-help">
+            Any link: reels, TikToks, YouTube, photo posts and carousels (Instagram,
+            X, Pinterest, TikTok photos) -- each link gets whatever it holds.
             Login/cookies error on a link? Upload a fresh <code>cookies.txt</code> on the
-            <a href="/cookies">Upload Cookies</a> page first. Still refusing to download?
-            Grab the file by hand from
-            <a href="https://snapreels.net/en" target="_blank" rel="noopener">snapreels.net</a>.
-        </p>
-    </fieldset>
-
-    <fieldset class="tool-fields" data-tool="download_images" disabled hidden>
-        <legend>Download images</legend>
-        <div class="field">
-            <label>URLs (one per line)</label>
-            <textarea name="urls" rows="6" placeholder="https://www.instagram.com/p/abc123/&#10;https://x.com/user/status/123"></textarea>
-        </div>
-        <p class="picker-help">
-            Instagram posts, Twitter/X posts, Pinterest, TikTok photo posts, etc.
-            Login/cookies error? Upload a fresh <code>cookies.txt</code> on the
             <a href="/cookies">Upload Cookies</a> page first. Still refusing to download?
             Grab the file by hand from
             <a href="https://snapreels.net/en" target="_blank" rel="noopener">snapreels.net</a>.
@@ -131,12 +117,19 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
     const card = e.target.closest('.result-item[data-task]');
     if (!card) return;
 
+    // A past Download videos / Download images run reopens in the one
+    // Download tool that replaced both (its option lists them in data-tasks).
     const toolSelect = document.getElementById('tool-select');
-    toolSelect.value = card.dataset.task;
+    const task = card.dataset.task;
+    const option = [...toolSelect.options].find(
+        (o) => o.value === task || (o.dataset.tasks || '').split(' ').includes(task)
+    );
+    if (!option) return;
+    toolSelect.value = option.value;
     toolSelect.dispatchEvent(new Event('change'));
 
     const params = JSON.parse(card.dataset.params || '{}');
-    const fieldset = document.querySelector(`fieldset[data-tool="${card.dataset.task}"]`);
+    const fieldset = document.querySelector(`fieldset[data-tool="${option.value}"]`);
     for (const [key, value] of Object.entries(params)) {
         const field = fieldset.querySelector(`[name="${key}"]`);
         if (!field || field.type === 'file') continue;

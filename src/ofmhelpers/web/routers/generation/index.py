@@ -15,7 +15,7 @@ from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
 from ofmhelpers.web.schemas import ModelChoice, ProviderChoice, TaskCard
 from ofmhelpers.web.stores.jobs import list_jobs_page
-from ofmhelpers.web.templates_config import render
+from ofmhelpers.web.templates_config import render, render_polled
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
@@ -76,6 +76,6 @@ def gallery_latest(request: Request):
     """The newest page of cards, no sentinel: what live-gallery.js polls to
     prepend runs started in other sessions."""
     gallery, _ = _gallery_page(request, 0)
-    return render(
+    return render_polled(
         request, "generate_gallery_fragment.html", gallery=gallery, next_offset=None
     )

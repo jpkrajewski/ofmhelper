@@ -226,7 +226,7 @@ def test_one_unreadable_video_queues_nothing(client, monkeypatch):
 
 
 def _batches(jobs, page_full):
-    return CloneBatch.group([clone._card(j) for j in jobs], page_full=page_full)
+    return CloneBatch.group([clone._card(j, {}) for j in jobs], page_full=page_full)
 
 
 def _job(job_id, batch, index, created_at):
@@ -284,6 +284,34 @@ def test_batch_whose_subject_images_are_gone_draws_no_broken_thumb(tmp_path):
     html = render_partial("_clone_batch.html", batch=batch)
     assert "/refs/thumb" not in html
     assert "no longer stored" in html
+
+
+def test_cards_show_took_and_count_against_the_estimate():
+    """A finished run shows how long it took; a running one counts from its
+    submit against the median of recent runs, scaled to its clip, and is
+    flagged past the slowest normal one."""
+    slow = _job("t1", "old", 0, 100.0).model_copy(
+        update={"status": "done", "finished_at": 400.0}
+    )
+    fast = _job("t2", "old", 1, 100.0).model_copy(
+        update={"status": "done", "finished_at": 200.0}
+    )
+    running = _job("r1", "new", 0, 500.0)
+    running.params["duration"] = 10
+    for job in (slow, fast, running):
+        job.params["provider"] = "kie"
+    rates = clone.clone_rates([running, slow, fast], runs=30)
+
+    batches = CloneBatch.group(
+        [clone._card(j, rates) for j in (running, slow, fast)], page_full=False
+    )
+    html = "".join(render_partial("_clone_batch.html", batch=b) for b in batches)
+
+    # 300 s and 100 s for 5 s clips: 60 and 20 s per clip second, median 40.
+    assert 'data-started-at="500.0"' in html
+    assert 'data-eta-s="400" data-slow-s="600"' in html
+    assert 'data-took-s="300"' in html
+    assert 'data-took-s="100"' in html
 
 
 def _clip(dest: Path, seconds: int) -> Path:

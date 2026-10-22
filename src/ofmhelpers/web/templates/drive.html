@@ -6,8 +6,8 @@
 
 <div class="page-head ph-head">
     <div>
-        <h1>Drive · {{ board.day_label }}</h1>
-        <p class="lead">{{ board.filled }} of {{ cards|length }} account{{ "" if cards|length == 1 else "s" }} uploaded today · {{ board.uploads }} file{{ "" if board.uploads == 1 else "s" }}</p>
+        <h1>Drive</h1>
+        <p class="lead">{{ board.files_waiting }} file{{ "" if board.files_waiting == 1 else "s" }} waiting to post in {{ board.accounts_waiting }} of {{ cards|length }} account{{ "" if cards|length == 1 else "s" }} · Posted today: {{ board.posted_today }} · Last 7 days: {{ board.posted_week }}</p>
     </div>
     <div class="page-head-actions">
         {% if board.root_url %}<a class="btn-ghost ph-btn" href="{{ board.root_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} Open in Drive</a>{% endif %}
@@ -31,7 +31,7 @@
 <div class="dr-grid" id="dr-grid">
     {% for c in cards %}
     {% set t = c.target %}
-    <article class="dr-card" data-search="{{ c.search_text }}" {% if not c.files %}data-empty{% endif %}>
+    <article class="dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
         <header class="dr-card-head">
             <a class="dr-phone" href="/phones#phone-{{ t.device.id }}" title="{{ t.device.label }} · {{ t.device.specs }}">
                 <img src="{{ t.device.drawing_url }}" alt="" width="20" height="38" loading="lazy">
@@ -40,33 +40,41 @@
                 <h2>{{ t.handle }}</h2>
                 <p>{{ t.owner }} · {{ t.device.label }}</p>
             </div>
-            {% if c.day_url %}
-            <a class="ph-icon-btn" href="{{ c.day_url }}" target="_blank" rel="noopener" title="Open today's folder" aria-label="Open today's folder of {{ t.handle }}">{{ ic.icon("folder") }}</a>
-            {% elif c.account_url %}
+            {% if c.account_url %}
             <a class="ph-icon-btn" href="{{ c.account_url }}" target="_blank" rel="noopener" title="Open the account's folder" aria-label="Open the folder of {{ t.handle }}">{{ ic.icon("folder") }}</a>
             {% endif %}
         </header>
         {% if c.error %}
         <p class="dr-note dr-error">{{ c.error }}</p>
-        {% elif not c.day_folder_id %}
-        <p class="dr-note">No folder for today yet: Sync makes it.</p>
-        {% elif not c.files %}
-        <p class="dr-note dr-missing">Nothing uploaded today</p>
+        {% elif not c.account_folder_id %}
+        <p class="dr-note">No folder yet: Sync makes it.</p>
+        {% else %}
+        {% if not c.waiting %}
+        <p class="dr-note dr-missing">Nothing waiting to post</p>
         {% else %}
         <p class="dr-count">
-            {% for kind, label in [("video", "video"), ("image", "image"), ("file", "file"), ("folder", "folder")] if c.count(kind) %}<span>{{ c.count(kind) }} {{ label }}{{ "" if c.count(kind) == 1 else "s" }}</span>{% endfor %}
+            <span>Waiting:</span>{% for kind, label in [("video", "video"), ("image", "image"), ("file", "file")] if c.count(kind) %}<span>{{ c.count(kind) }} {{ label }}{{ "" if c.count(kind) == 1 else "s" }}</span>{% endfor %}
         </p>
         <ul class="dr-files">
-            {% for f in c.files %}
+            {% for f in c.waiting %}
             <li>
                 <a class="dr-file" href="{{ f.url }}" target="_blank" rel="noopener" title="{{ f.name }}" data-kind="{{ f.kind }}">
                     {% if f.has_thumbnail %}<img src="/drive/thumb/{{ f.id }}" alt="{{ f.name }}" loading="lazy">{% endif %}
-                    <span class="dr-file-icon">{{ ic.icon("play" if f.kind == "video" else ("folder" if f.kind == "folder" else "file"), 20) }}</span>
+                    <span class="dr-file-icon">{{ ic.icon("play" if f.kind == "video" else "file", 20) }}</span>
                     <span class="dr-file-name">{{ f.name }}</span>
                 </a>
             </li>
             {% endfor %}
         </ul>
+        {% endif %}
+        {% if c.scan.extra_posted_folders %}
+        <p class="dr-note dr-missing">{{ c.scan.extra_posted_folders|length }} more "{{ board.posted_folder_name }}" folder{{ "" if c.scan.extra_posted_folders|length == 1 else "s" }} in here (counted too): move their videos into one and delete the rest.</p>
+        {% endif %}
+        <p class="dr-posted">
+            {% if c.posted_url %}<a href="{{ c.posted_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} {{ board.posted_folder_name }}</a>{% else %}<span>{{ board.posted_folder_name }}: not made yet, Sync makes it</span>{% endif %}
+            <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
+            <span>Last 7 days: <strong>{{ c.posted_week }}</strong></span>
+        </p>
         {% endif %}
     </article>
     {% endfor %}

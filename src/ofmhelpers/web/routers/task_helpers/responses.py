@@ -33,6 +33,7 @@ def asset_card(
     files_prefix: str,
     source: str | None = None,
     remote_url: str | None = None,
+    local: bool = True,
 ) -> AssetCard:
     """One entry for the generic asset grid / status page: what kind of
     preview to render, and the two URLs a client can already reach (never
@@ -45,16 +46,24 @@ def asset_card(
     the frontend can swap to our own copy client-side (an <video onerror>,
     see generation.js) once the hosted one goes stale. There may be no local
     copy at all (see job_status_payload's remote-only result) -- callers
-    that never had a local file just won't see this field used."""
+    that never had a local file just won't see this field used.
+
+    An image or video with a local copy also gets `preview_url` (what a
+    gallery shows) and a video `poster_url` (shown until played); see
+    web/previews.py."""
     local_url = f"{files_prefix}/{index}"
+    kind = classify_kind(name)
+    previewed = local and kind in ("image", "video")
     return AssetCard(
         name=name,
         index=index,
-        kind=classify_kind(name),
+        kind=kind,
         view_url=remote_url or local_url,
         download_url=remote_url or f"{local_url}?dl=1",
         download_name=download_name(name),
         local_fallback_url=local_url if remote_url else None,
+        preview_url=f"{local_url}/preview" if previewed else None,
+        poster_url=f"{local_url}/poster" if previewed and kind == "video" else None,
         source=source,
     )
 
@@ -70,7 +79,9 @@ def job_assets(
     prefix = f"{files_prefix}/{job.id}"
     if not job.is_grouped:
         assets = [
-            asset_card(f.name, idx, prefix, remote_url=f.remote_url)
+            asset_card(
+                f.name, idx, prefix, remote_url=f.remote_url, local=f.path is not None
+            )
             for idx, f in enumerate(job.result_files())
         ]
         return assets, []

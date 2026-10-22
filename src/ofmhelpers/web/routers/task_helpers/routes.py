@@ -16,7 +16,11 @@ from ofmhelpers.web.routers.task_helpers.responses import (
     job_inputs,
     job_status_payload,
 )
-from ofmhelpers.web.routers.task_helpers.serving import serve_job_file
+from ofmhelpers.web.routers.task_helpers.serving import (
+    serve_job_file,
+    serve_job_poster,
+    serve_job_preview,
+)
 from ofmhelpers.web.schemas import Job
 from ofmhelpers.web.stores.jobs import get_job
 from ofmhelpers.web.templates_config import render
@@ -65,3 +69,13 @@ def add_job_routes(
     ):
         job = get_job(job_id, AuthMiddleware.visible_actor(request))
         return serve_job_file(job, index, as_attachment=bool(dl))
+
+    @router.get("/files/{job_id}/{index}/preview")
+    def preview_file(request: Request, job_id: str, index: int):
+        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        return serve_job_preview(job, index)
+
+    @router.get("/files/{job_id}/{index}/poster")
+    def poster_file(request: Request, job_id: str, index: int):
+        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        return serve_job_poster(job, index)

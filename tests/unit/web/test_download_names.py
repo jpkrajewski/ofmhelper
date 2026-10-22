@@ -49,3 +49,11 @@ def test_attachment_download_uses_the_camera_roll_name(tmp_path):
 def test_digit_count_comes_from_config(monkeypatch):
     monkeypatch.setenv("OFM_DOWNLOAD_NAME_DIGITS", "6")
     assert re.fullmatch(r"IMG_\d{6}\.png", download_name("x.png"))
+
+
+def test_one_file_always_gets_the_same_name_and_files_differ():
+    """A polled gallery must render the same bytes while nothing changed
+    (ETag/304); the digits still differ from file to file."""
+    assert download_name("a.png") == download_name("a.png")
+    names = {download_name(f"result_{i}.png") for i in range(50)}
+    assert len(names) > 40

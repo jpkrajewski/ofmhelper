@@ -3,10 +3,10 @@ stored under: its label and the router that serves it. The /generate and
 /download-assets galleries and the admin action log all read this, so a new
 tool is one entry here instead of one in each of them."""
 
-from ofmhelpers.web.routers.downloads import clean_image, images, videos
+from ofmhelpers.web.routers.downloads import clean_image, images, media, videos
 from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation.clone import _run_clone
-from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
+from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
 from ofmhelpers.web.routers.image_tools import character_sheet
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
@@ -19,13 +19,15 @@ GENERATE_TOOLS = {
         label="AI generation", router=ai.router, run=ai.run_ai, describe=ai.describe
     ),
     **{
-        task: Tool(label=label, router=router)
+        task: Tool(label=label, router=router, form_params=as_ai_params)
         for task, (label, router) in LEGACY_TOOLS.items()
     },
 }
 
 # The /download-assets gallery.
 DOWNLOAD_TOOLS = {
+    media.TASK: Tool(label="Download", router=media.router),
+    # Before /download-media picked the downloader itself: their past jobs.
     "download_videos": Tool(label="Download videos", router=videos.router),
     "download_images": Tool(label="Download images", router=images.router),
     "clean_images": Tool(label="Clean images", router=clean_image.router),
@@ -48,6 +50,8 @@ RESUMABLE = {task: tool.run for task, tool in TOOLS.items() if tool.run}
 def task_card(job: Job) -> TaskCard:
     """A job as a card in a gallery that mixes several tools."""
     tool = TOOLS[job.task]
+    if tool.form_params:
+        job = job.model_copy(update={"params": tool.form_params(job)})
     return TaskCard.from_job(
         job,
         *job_assets(job, tool.files_prefix),

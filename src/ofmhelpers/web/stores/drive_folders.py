@@ -2,8 +2,8 @@
 ofmhelpers/web/stores/drive_folders.py
 
 /drive's side of the database: the Instagram logins on active phones (the
-ones that get a Drive folder) and the Drive ids already made for them
-(web/drive_folders.py makes them).
+ones that get a Drive folder), the Drive ids already made for them
+(web/drive_folders.py makes them), and the files seen posted.
 """
 
 from __future__ import annotations
@@ -17,8 +17,9 @@ from ofmhelpers.web.schemas import DriveTarget, StoredFolder
 from ofmhelpers.web.stores.devices import list_devices
 
 if TYPE_CHECKING:
-    import datetime
     from contextlib import AbstractContextManager
+
+    from ofmhelpers.gdrive import DriveFile
 
 _SERVICE = "instagram"
 
@@ -62,31 +63,38 @@ def account_folders() -> dict[int, StoredFolder]:
     return {r["login_id"]: StoredFolder.model_validate(r) for r in rows}
 
 
-def day_folders(day: datetime.date) -> dict[int, str]:
-    """{login id: that day's folder id}."""
-    rows = _repository().day_folders(day.isoformat(), _root())
-    return {int(login_id): folder_id for login_id, folder_id in rows.items()}
-
-
 def save_account_folder(login_id: int, folder_id: str, name: str) -> None:
+    """A different folder than the stored one drops its POSTED id too."""
     _repository().save_account_folder(login_id, folder_id, name, _root())
 
 
 def forget_account_folder(login_id: int) -> None:
-    """With its day folders: all are made or found again next sweep."""
+    """With its POSTED folder: both are made or found again next sweep."""
     _repository().forget_account_folder(login_id)
 
 
-def save_day_folder(login_id: int, day: datetime.date, folder_id: str) -> None:
-    _repository().save_day_folder(login_id, day.isoformat(), folder_id)
+def save_posted_folder(login_id: int, folder_id: str) -> None:
+    _repository().save_posted_folder(login_id, folder_id)
 
 
-def forget_day_folder(login_id: int, day: datetime.date) -> None:
-    _repository().forget_day_folder(login_id, day.isoformat())
+def forget_posted_folder(login_id: int) -> None:
+    _repository().save_posted_folder(login_id, None)
+
+
+def record_posted(login_id: int, files: list[DriveFile], seen_at: float) -> int:
+    """Remembers when each file was first seen posted; how many are new."""
+    rows = [(f.id, f.name, f.kind) for f in files]
+    return _repository().record_posted(login_id, rows, seen_at)
+
+
+def posted_counts(since: list[float]) -> dict[int, list[int]]:
+    """{login id: [files first seen posted since each of `since`]}."""
+    rows = _repository().posted_counts(_root(), since)
+    return {int(login_id): counts for login_id, counts in rows.items()}
 
 
 def folder_ids() -> set[str]:
-    """Every account and day folder the app knows (thumbnail authorisation)."""
+    """Every account and POSTED folder the app knows (preview authorisation)."""
     return set(_repository().folder_ids(_root()))
 
 

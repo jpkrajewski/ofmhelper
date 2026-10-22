@@ -39,6 +39,9 @@ RETIRED_TABLES = frozenset(
         "model_contacts",
         "competitor_profiles",
         "instagram_stats",
+        # /drive's day folders, replaced by one POSTED folder per account
+        # (2026-10-21). Kept: a rollback to the old code still finds them.
+        "drive_day_folders",
     }
 )
 

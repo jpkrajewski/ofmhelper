@@ -34,6 +34,7 @@ def _job_to_dict(row: JobRow) -> dict:
         "result": row.result,
         "error": row.error,
         "created_at": row.created_at,
+        "finished_at": row.finished_at,
         "preview": row.preview,
     }
 
@@ -97,7 +98,11 @@ class JobRepository(CachedRepository):
         result: Any = _UNSET,
         error: Any = _UNSET,
     ) -> None:
-        values: dict[str, Any] = {"status": status}
+        finished = status in ("done", "failed")
+        values: dict[str, Any] = {
+            "status": status,
+            "finished_at": time.time() if finished else None,
+        }
         if result is not _UNSET:
             values["result"] = result
         if error is not _UNSET:

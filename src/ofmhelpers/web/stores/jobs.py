@@ -25,9 +25,15 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 
+from ofmhelpers.cache import PREVIEWS_QUEUE, enqueue_to
+from ofmhelpers.log import get_logger
 from ofmhelpers.web.db.repositories import JobRepository
+from ofmhelpers.web.previews import warm_previews
 from ofmhelpers.web.schemas import Job, JobPreview, ResultFile
+
+logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -75,6 +81,21 @@ def run_job(job_id: str, fn, kwargs: dict):
             job_id, "failed", error=str(exc) or exc.__class__.__name__
         )
         traceback.print_exc()
+        return
+    _queue_previews(job_id)
+
+
+def _queue_previews(job_id: str) -> None:
+    """A finished job's gallery previews, made now on the previews worker so
+    its first viewer waits for none (see web/previews.py). Redis down: the
+    preview routes make them on request instead."""
+    job = get_job(job_id)
+    if job is None:
+        return
+    try:
+        enqueue_to(PREVIEWS_QUEUE, warm_previews, job.id, job.local_paths())
+    except RedisError:
+        logger.warning("could not queue previews of job %s", job_id, exc_info=True)
 
 
 def reopen_job(job_id: str) -> None:
@@ -127,6 +148,19 @@ def list_jobs() -> list[Job]:
     stats every result file of every job, which is wasted on the ones the
     caller is about to slice off."""
     return _heal([Job.model_validate(row) for row in _repository().list_all()])
+
+
+def list_finished_jobs() -> list[Job]:
+    """Every done job, newest first, exactly as stored: never healed. For a
+    background pass over the whole history (web/preview_backfill.py), which
+    must not delete jobs because their files are missing -- a volume not
+    mounted yet at startup, or a database copied without its files (dev on a
+    prod snapshot) would otherwise lose the whole history."""
+    return [
+        job
+        for job in (Job.model_validate(row) for row in _repository().list_all())
+        if job.status == "done"
+    ]
 
 
 def list_jobs_page(

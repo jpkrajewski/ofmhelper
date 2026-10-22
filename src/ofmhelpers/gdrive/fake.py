@@ -15,8 +15,8 @@ It behaves the way the real one does where /drive depends on it
 State lives in memory, or, with `OFM_FAKES_DIR` set, in `drive.json` there
 under an exclusive file lock, so the app under test and the test seeding
 it share one Drive across processes. `trash`, `delete`, `add_file`,
-`seed_folder`, `share`/`unshare`, `fail_on` stand in for what a person (or
-an outage) does in Drive.
+`seed_folder`, `move`, `share`/`unshare`, `fail_on` stand in for what a person
+(or an outage) does in Drive.
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ class FakeDrive:
             if item.mime_type != FOLDER_MIME:
                 msg = f"Folder {folder_id} is trashed or not a folder"
                 raise FolderGoneError(msg)
-            return DriveFolder(id=item.id, name=item.name)
+            return DriveFolder(id=item.id, name=item.name, parents=list(item.parents))
 
     def children(
         self, parent_id: str, *, folders_only: bool = False
@@ -301,6 +301,11 @@ class FakeDrive:
         """Gone for good (emptied trash): everything under it with it."""
         with self._state() as state:
             del state.items[item_id]
+
+    def move(self, item_id: str, parent: str) -> None:
+        """Dragged into another folder (a VA moving a posted video)."""
+        with self._state() as state:
+            state.items[item_id].parents = [parent]
 
     def rename_by_hand(self, item_id: str, name: str) -> None:
         with self._state() as state:

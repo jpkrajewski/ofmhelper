@@ -983,6 +983,9 @@ tbody tr:hover td, table tr:hover td { background: rgba(255, 255, 255, 0.022); }
     text-align: center;
     word-break: break-word;
 }
+.result-file:has(.clone-timer) { flex-wrap: wrap; align-content: center; row-gap: var(--s-3); padding-block: var(--s-5); }
+.clone-timer { flex-basis: 100%; font-variant-numeric: tabular-nums; color: var(--text); }
+.clone-timer.is-slow { color: var(--warn); }
 .source { margin: 0; color: var(--text-muted); font-size: var(--step--1); word-break: break-word; }
 .filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
 .fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
@@ -2383,9 +2386,9 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 
 /* ---------------------------------------------------------------------
-   /drive: a card per Instagram account with what landed in today's Drive
-   folder. Previews are square tiles; an empty day says so in warn color,
-   the thing to chase.
+   /drive: a card per Instagram account with what waits in its Drive folder
+   (square preview tiles) and what was posted. Nothing waiting says so in
+   warn color, the thing to chase.
    --------------------------------------------------------------------- */
 .dr-grid {
     display: grid;
@@ -2413,6 +2416,20 @@ a.ph-login-user:hover { text-decoration: underline; }
 .dr-note { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
 .dr-missing { color: var(--warn); }
 .dr-error { color: var(--fail); }
+/* Pinned to the card's bottom, so the posted lines of a row of cards align. */
+.dr-posted {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px var(--s-3);
+    margin: auto 0 0;
+    padding-top: var(--s-2);
+    border-top: 1px solid var(--border-soft);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.dr-posted a { display: inline-flex; align-items: center; gap: var(--s-1); }
+.dr-posted strong { color: var(--text); }
 .dr-count { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: 0; color: var(--text-muted); font-size: var(--step--1); }
 .dr-files {
     display: grid;

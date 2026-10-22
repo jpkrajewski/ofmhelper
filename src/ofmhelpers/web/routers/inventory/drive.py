@@ -1,11 +1,11 @@
 """
 /drive: the shared Google Drive folder the VA uploads into
 (web/drive_folders.py). A card per Instagram login on an active phone,
-with what is in today's folder: previews for images and videos (proxied
-through `/drive/thumb/{id}`, the account's token never leaves the server),
-a link for the rest. Below, the root's folders no login owns, to clean up.
-Sync makes whatever today is missing now instead of at the next sweep.
-Everyone signed in sees and syncs it.
+with what waits in its folder (previews for images and videos, proxied
+through `/drive/thumb/{id}`: the account's token never leaves the server)
+and what was posted (its POSTED folder: now, today, last 7 days). Below,
+the root's folders no login owns, to clean up. Sync runs the sweep now
+instead of at the next interval. Everyone signed in sees and syncs it.
 """
 
 from typing import Annotated
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/drive", tags=["drive"])
 
 # Drive ids: letters, digits, - and _.
 FileId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{10,128}$")]
-# A day's preview never changes; the browser keeps it, nobody else.
+# A file's preview never changes; the browser keeps it, nobody else.
 _THUMB_CACHE = {"Cache-Control": "private, max-age=86400"}
 
 

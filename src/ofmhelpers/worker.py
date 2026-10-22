@@ -1,5 +1,8 @@
 """
-Entrypoint for the RQ worker container: `python -m ofmhelpers.worker`.
+Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker
+[queue]` -- the default queue (generations, downloads, ...) with
+`rq_workers` processes, or `previews` (gallery previews, web/previews.py)
+with `preview_workers`.
 
 Exists purely so the worker gets the same logging setup the API does. The
 compose file used to invoke `rq worker-pool` directly, which meant job code
@@ -19,6 +22,7 @@ import sys
 from rq import Worker
 from rq.cli import main as rq_main
 
+from ofmhelpers.cache import PREVIEWS_QUEUE, QUEUE_NAME
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 
@@ -47,12 +51,13 @@ def main() -> None:
     configure_logging()
 
     infra = settings.infra
-    workers = infra.rq_workers
-    logger.info(
-        "starting rq worker-pool: %d workers, queue=%r",
-        workers,
-        "default",
-    )
+    queue = sys.argv[1] if len(sys.argv) > 1 else QUEUE_NAME
+    pools = {QUEUE_NAME: infra.rq_workers, PREVIEWS_QUEUE: infra.preview_workers}
+    if queue not in pools:
+        msg = f"unknown queue {queue!r}; one of {sorted(pools)}"
+        raise SystemExit(msg)
+    workers = pools[queue]
+    logger.info("starting rq worker-pool: %d workers, queue=%r", workers, queue)
 
     # Hand off to RQ's own CLI so every flag it supports keeps working, and
     # so we inherit its signal handling / graceful shutdown rather than
@@ -68,6 +73,7 @@ def main() -> None:
         # importing this name in the new process.
         "--worker-class",
         "ofmhelpers.worker.ConfiguredWorker",
+        queue,
     ]
     rq_main()
 

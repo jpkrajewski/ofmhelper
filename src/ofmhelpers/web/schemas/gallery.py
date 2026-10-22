@@ -66,10 +66,28 @@ class TaskCard(JobCard):
     poll_prefix: str
 
 
+class CloneRate(BaseModel):
+    """Seconds of waiting per second of video: typical and slowest normal
+    (web/clone_eta.py)."""
+
+    median: float
+    worst: float
+
+
+class CloneEta(BaseModel):
+    """A running clone's expected seconds, and past which it is slow."""
+
+    eta_s: int
+    slow_s: int
+
+
 class CloneCard(JobCard):
-    """One video's run inside a /clone batch."""
+    """One video's run inside a /clone batch, with how long it took or,
+    while it runs, how long it should take (`clone_eta`)."""
 
     video_name: str
+    took_s: float | None = None
+    eta: CloneEta | None = None
 
 
 class CloneBatch(BaseModel):

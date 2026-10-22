@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ofmhelpers.config import settings
@@ -72,6 +72,21 @@ def render(
     return get_templates().TemplateResponse(
         request, name, context, status_code=status_code
     )
+
+
+def render_polled(request: Request, name: str, **context: Any) -> Response:
+    """`render` for a fragment a page polls (live-gallery.js): an ETag of the
+    rendered body, and an empty 304 while it matches the browser's copy. The
+    browser revalidates on its own (`no-cache`) and hands the poller its
+    cached body, so an unchanged gallery costs a few hundred bytes per poll
+    instead of the whole fragment."""
+    response = render(request, name, **context)
+    etag = f'"{hashlib.sha256(response.body).hexdigest()[:20]}"'
+    headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    response.headers.update(headers)
+    return response
 
 
 def render_partial(name: str, **context: Any) -> str:

@@ -151,7 +151,8 @@ def e2e_backend(_test_environment) -> E2EBackend:
 def base_url(
     e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
 ) -> Iterator[str]:
-    """The app and its worker, up for the whole session."""
+    """The app and its two workers (jobs, previews), up for the whole
+    session."""
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
     env = _app_env(app_dir, fakes_dir, e2e_backend)
@@ -167,6 +168,7 @@ def base_url(
             str(port),
         ],
         [sys.executable, "-m", "ofmhelpers.worker"],
+        [sys.executable, "-m", "ofmhelpers.worker", "previews"],
     ]
     with app_log.open("w") as log:
         procs = [

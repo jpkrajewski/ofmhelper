@@ -24,7 +24,33 @@
         statusEl.appendChild(el);
     }
 
+    function clock(seconds) {
+        const s = Math.max(0, Math.round(seconds));
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    }
+
+    // A running card's time since submit, against the estimate from recent
+    // runs (clone_eta.py) when there is one. Every second, so it counts live.
+    function tickTimers() {
+        const now = Date.now() / 1000;
+        document.querySelectorAll(".clone-timer[data-started-at]").forEach((el) => {
+            const elapsed = now - Number(el.dataset.startedAt);
+            const eta = Number(el.dataset.etaS);
+            // Past the slowest normal run: likely hung, worth a look.
+            const slow = eta && elapsed > Number(el.dataset.slowS);
+            el.classList.toggle("is-slow", Boolean(slow));
+            if (!eta) el.textContent = clock(elapsed);
+            else if (slow) el.textContent = `${clock(elapsed)} · slower than usual (~${clock(eta)}), may be stuck`;
+            else if (elapsed <= eta) el.textContent = `${clock(elapsed)} / ~${clock(eta)}`;
+            else el.textContent = `${clock(elapsed)} (est. ~${clock(eta)})`;
+        });
+    }
+
     function formatTimes(root) {
+        root.querySelectorAll("[data-took-s]").forEach((el) => {
+            el.textContent = clock(Number(el.dataset.tookS));
+        });
+        tickTimers();
         root.querySelectorAll("time[data-ts]").forEach((el) => {
             const date = new Date(Number(el.dataset.ts) * 1000);
             el.dateTime = date.toISOString();
@@ -233,5 +259,6 @@
         initSubmit(form);
         initRecreate(form);
         initPrefill(form);
+        setInterval(tickTimers, 1000);
     });
 })();

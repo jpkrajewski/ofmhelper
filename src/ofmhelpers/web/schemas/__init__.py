@@ -10,7 +10,7 @@
 - `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
 - `accounts.py` -- a tracked social account (/accounts), its list query and history.
 - `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
-- `drive.py` -- an Instagram login's Drive folders (/drive) and what is in today's.
+- `drive.py` -- an Instagram login's Drive folders (/drive): what waits, what was posted.
 
 Import from here; the split is an implementation detail of this package.
 """
@@ -42,15 +42,22 @@ from ofmhelpers.web.schemas.devices import (
     PhoneSort,
 )
 from ofmhelpers.web.schemas.drive import (
+    AccountScan,
     DriveBoard,
     DriveCard,
     DriveTarget,
     StoredFolder,
     SyncReport,
-    day_folder_name,
 )
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
-from ofmhelpers.web.schemas.gallery import CloneBatch, CloneCard, JobCard, TaskCard
+from ofmhelpers.web.schemas.gallery import (
+    CloneBatch,
+    CloneCard,
+    CloneEta,
+    CloneRate,
+    JobCard,
+    TaskCard,
+)
 from ofmhelpers.web.schemas.generation import ModelChoice, ProviderChoice
 from ofmhelpers.web.schemas.jobs import (
     ActionLogEntry,
@@ -79,6 +86,7 @@ __all__ = [
     "AccountHistory",
     "AccountPage",
     "AccountQuery",
+    "AccountScan",
     "AccountSort",
     "AccountStatus",
     "AccountSummary",
@@ -91,7 +99,9 @@ __all__ = [
     "AssignCreator",
     "CloneBatch",
     "CloneCard",
+    "CloneEta",
     "CloneQueued",
+    "CloneRate",
     "Device",
     "DeviceFields",
     "DeviceLogin",
@@ -132,5 +142,4 @@ __all__ = [
     "TrackedAccount",
     "WatchForm",
     "WatchedProfile",
-    "day_folder_name",
 ]
