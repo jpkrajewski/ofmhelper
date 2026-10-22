@@ -2,7 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% block title %}Cookies — Ascend Global LLC{% endblock %}
 {% block content %}
-{{ ui.page_header("Your cookies", 'Upload one cookies.txt from the "Get cookies.txt LOCALLY" extension.') }}
+{{ ui.page_header("Your cookies") }}
 
 {% if message %}{{ ui.notice(message, "ok") }}{% endif %}
 {% if error %}{{ ui.notice(error, "fail") }}{% endif %}
@@ -10,11 +10,19 @@
 <div class="account-grid">
     {% call ui.card("Saved", attrs={"data-cookies": "saved" if saved else "none"}) %}
         {% if saved %}
-        <ul class="account-list">
-            <li><span><strong>File</strong> · {{ saved.file_name }}, uploaded {{ saved.uploaded_at|ago }}</span></li>
-            <li><span><strong>Instagram login</strong> · {% if saved.summary.instagram_login %}yes{% if saved.summary.instagram_expires_at %}, expires {{ saved.summary.instagram_expires_at|utc }}{% endif %}{% else %}none in this file{% endif %}</span></li>
-            <li><span><strong>{{ saved.summary.cookies }} cookies</strong> · {{ saved.summary.domains|join(", ") }}</span></li>
+        <p class="cookies-file"><strong>{{ saved.file_name }}</strong> · uploaded {{ saved.uploaded_at|ago }}</p>
+        <ul class="cookies-sites">
+            {% for site in saved.summary.sites %}
+            <li data-site="{{ site.key }}" {% if site.logged_in %}data-logged-in{% endif %}>
+                <span class="ph-logo" aria-hidden="true">{% if site.icon_url %}<img src="{{ site.icon_url }}" alt="" width="18" height="18" loading="lazy" referrerpolicy="no-referrer">{% endif %}</span>
+                <div class="cookies-site-main">
+                    <span class="cookies-site-name"><strong>{{ site.label }}</strong> · {% if site.logged_in %}logged in{% if site.expires_at %}, expires {{ site.expires_at|utc }}{% endif %}{% elif site.names %}not logged in{% else %}no cookies{% endif %}</span>
+                    {% if site.names %}<span class="cookies-site-names" title="{{ site.names|join(', ') }}">{{ site.names|join(", ") }}</span>{% endif %}
+                </div>
+            </li>
+            {% endfor %}
         </ul>
+        {% if saved.summary.other %}<p class="pending">{{ saved.summary.other }} cookie{{ "" if saved.summary.other == 1 else "s" }} of other sites</p>{% endif %}
         <form method="post" action="/cookies/delete">
             {{ ui.button("Remove", "ghost", type="submit") }}
         </form>
@@ -24,6 +32,7 @@
     {% endcall %}
 
     {% call ui.card("Replace" if saved else "Upload") %}
+        <p class="pending">One cookies.txt from the "Get cookies.txt LOCALLY" extension</p>
         <form action="/cookies" method="post" enctype="multipart/form-data" class="account-form">
             <div class="field">
                 <label for="cookies-file">cookies.txt</label>

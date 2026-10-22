@@ -19,7 +19,9 @@ APP_CSS = [
     CSS_DIR / n for n in ("tokens.css", "base.css", "components.css", "pages.css")
 ]
 LANDING_CSS = CSS_DIR / "landing.css"
-PALETTE = re.compile(r"^\s*--(paper|wash|line|grey|ink|red):\s*(#[0-9a-fA-F]{6});")
+PALETTE = re.compile(
+    r"^\s*--(paper|wash|line|grey|ink|accent-hue|red):\s*(#[0-9a-fA-F]{6});"
+)
 COLOUR = re.compile(
     r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\("
     r"|(?:color|background|border|fill|stroke|outline)[\w-]*\s*[:=]\s*\"?"
@@ -37,13 +39,13 @@ def _hits(text: str) -> list[str]:
     ]
 
 
-def test_palette_is_five_neutrals_and_one_red():
+def test_palette_is_five_neutrals_one_accent_and_one_red():
     values = [
         m.group(1)
         for line in TOKENS.read_text("utf-8").splitlines()
         if (m := PALETTE.match(line))
     ]
-    assert values == ["paper", "wash", "line", "grey", "ink", "red"]
+    assert values == ["paper", "wash", "line", "grey", "ink", "accent-hue", "red"]
 
 
 @pytest.mark.parametrize("path", APP_CSS, ids=lambda p: p.name)

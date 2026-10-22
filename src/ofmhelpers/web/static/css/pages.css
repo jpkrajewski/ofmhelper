@@ -356,8 +356,10 @@ summary:hover { color: var(--accent-soft); }
 .reels-watch-views { color: var(--text); font-weight: 600; }
 .reels-row-group { flex: none; width: 9rem; height: var(--control-h-sm); font-size: var(--step--1); }
 
-/* Compact: three reels a row at every width. */
+/* Compact: three reels a row on a phone, four from a laptop up (five made
+   the captions too small to read). */
 .reels-feed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 900px) { .reels-feed { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .reel-card {
     --tier: var(--border);
     --tier-glow: transparent;
@@ -1178,6 +1180,15 @@ a.ph-login-user:hover { text-decoration: underline; }
 .drive-states { margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--step--1); }
 .drive-states li[data-status="failed"] { color: var(--fail); }
 .drive-states li[data-status="done"] { color: var(--ok); }
+
+/* /cookies: each social site of services.json, logged in or not, with its
+   cookies' names (never a value). */
+.cookies-file { margin: 0 0 var(--s-3); font-size: var(--step--1); }
+.cookies-sites { display: grid; gap: var(--s-2); margin: 0 0 var(--s-3); padding: 0; list-style: none; }
+.cookies-sites li { display: flex; align-items: flex-start; gap: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-soft); }
+.cookies-site-main { display: grid; min-width: 0; font-size: var(--step--1); }
+.cookies-site-names { overflow: hidden; color: var(--text-faint); font-size: var(--step--2); text-overflow: ellipsis; white-space: nowrap; }
+.cookies-sites li:not([data-logged-in]) .cookies-site-name { color: var(--text-muted); }
 
 /* /drive: opened from the last read while the live one loads */
 .dr-asof { margin: 0 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }

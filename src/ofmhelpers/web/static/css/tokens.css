@@ -12,16 +12,18 @@
    1. Tokens
    --------------------------------------------------------------------- */
 :root {
-    /* The palette: five neutrals and one red. These six are the only
-       colour values in this file; everything below is a role pointing at
-       one of them (or a transparency of one). No green, no amber, no
-       accent hue: emphasis is ink, problems are red. */
-    --paper: #ffffff;
-    --wash: #f4f4f5;
-    --line: #e4e4e7;
-    --grey: #71717a;   /* 4.8:1 on white */
-    --ink: #18181b;    /* 17.7:1 on white */
-    --red: #dc2626;
+    /* The palette (2026-10-22): five warm-stone neutrals, one bold accent
+       and one red. These seven are the only colour values in this file;
+       everything below is a role pointing at one of them (or a mix of
+       them). Emphasis -- primary buttons, the current tab, links, focus --
+       is the accent; problems are red. */
+    --paper: #fafaf8;
+    --wash: #ebebe7;
+    --line: #d6d6d0;
+    --grey: #5e5e58;
+    --ink: #151515;
+    --accent-hue: #ff5a1f;  /* signal orange */
+    --red: #c62828;
 
     --bg: var(--wash);
     --bg-2: var(--paper);      /* inputs */
@@ -37,15 +39,15 @@
     --text-faint: var(--grey);
 
     /* Primary actions, current state and links are ink. */
-    --accent: var(--ink);
-    --accent-strong: color-mix(in srgb, var(--ink) 80%, var(--paper));  /* hover */
-    --accent-soft: var(--ink);
+    --accent: var(--accent-hue);
+    --accent-strong: color-mix(in srgb, var(--accent-hue) 85%, var(--ink));  /* hover */
+    --accent-soft: var(--accent-hue);
     --accent-ink: var(--paper);
     --accent-wash: var(--wash);
-    --accent-ring: color-mix(in srgb, var(--ink) 16%, transparent);
+    --accent-ring: color-mix(in srgb, var(--accent-hue) 35%, transparent);
     /* Kept as names so older rules resolve; both are flat. */
-    --gradient: linear-gradient(var(--ink), var(--ink));
-    --gradient-btn: linear-gradient(var(--ink), var(--ink));
+    --gradient: linear-gradient(var(--accent-hue), var(--accent-hue));
+    --gradient-btn: linear-gradient(var(--accent-hue), var(--accent-hue));
 
     /* Statuses: only failure has a colour. Good and "needs attention"
        read from the words, not from green and amber. */
@@ -75,8 +77,8 @@
     --s-7: 48px;
     --s-8: 64px;
 
-    --radius-sm: 8px;
-    --radius: 12px;
+    --radius-sm: 4px;
+    --radius: 6px;
     --radius-lg: var(--radius);   /* alias: one card radius site-wide */
     --radius-pill: 999px;
 
@@ -86,9 +88,10 @@
     --shadow: 0 1px 3px color-mix(in srgb, var(--ink) 6%, transparent), 0 4px 12px color-mix(in srgb, var(--ink) 4%, transparent);
     --shadow-lg: 0 16px 40px color-mix(in srgb, var(--ink) 12%, transparent);
 
-    /* Inter, self-hosted (static/fonts, OFL): one variable file, every
-       weight. The system stack is the fallback while it loads. */
-    --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    /* Archivo, self-hosted (static/fonts, OFL): one variable file, every
+       weight; Inter (also self-hosted) and the system stack are the
+       fallbacks while it loads. */
+    --font: "Archivo", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
         "Helvetica Neue", Arial, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
         "Liberation Mono", monospace;
@@ -151,6 +154,13 @@
     :root { --control-font: 0.875rem; }
 }
 
+@font-face {
+    font-family: "Archivo";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/archivo-latin-var.woff2") format("woff2");
+}
 @font-face {
     font-family: "Inter";
     font-style: normal;

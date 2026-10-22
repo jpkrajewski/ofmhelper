@@ -105,11 +105,6 @@ for router in ROUTERS:
     app.include_router(router)
 
 
-@app.get("/")
-def apply(request: Request):
-    return render(request, "reachmodel.html")
-
-
 @app.get("/home")
 def root(request: Request):
     return render(request, "home.html")

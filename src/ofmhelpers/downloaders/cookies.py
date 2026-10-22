@@ -16,10 +16,11 @@ from http.cookiejar import LoadError, MozillaCookieJar
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ofmhelpers.downloaders.models import CookieJarSummary
+from ofmhelpers.downloaders.models import CookieJarSummary, CookieSite, SiteCookies
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
+    from http.cookiejar import Cookie
 
 _INSTAGRAM = "instagram.com"
 _INSTAGRAM_LOGIN = "sessionid"
@@ -68,9 +69,23 @@ def _is_instagram(domain: str) -> bool:
     return host == _INSTAGRAM or host.endswith(f".{_INSTAGRAM}")
 
 
-def summarize(cookies: str) -> CookieJarSummary:
-    """Which sites `cookies` covers and whether it logs into Instagram.
-    Raises CookieFileError for a file that is not cookies.txt or holds no
+def _site(site: CookieSite, found: list[Cookie]) -> SiteCookies:
+    mine = [c for c in found if site.owns(c.domain)]
+    login = next((c for c in mine if c.name == site.login), None)
+    return SiteCookies(
+        key=site.key,
+        label=site.label,
+        icon_url=site.icon_url,
+        names=sorted({c.name for c in mine}),
+        logged_in=login is not None,
+        expires_at=float(login.expires) if login and login.expires else None,
+    )
+
+
+def summarize(cookies: str, sites: Sequence[CookieSite] = ()) -> CookieJarSummary:
+    """Which sites `cookies` covers, whether it logs into Instagram, and per
+    known site (`sites`) its cookies' names and login. Raises
+    CookieFileError for a file that is not cookies.txt or holds no
     cookie."""
     jar = load_jar(cookies)
     found = list(jar)
@@ -86,4 +101,6 @@ def summarize(cookies: str) -> CookieJarSummary:
         domains=sorted({c.domain.lstrip(".").lower() for c in found}),
         instagram_login=login is not None,
         instagram_expires_at=float(login.expires) if login and login.expires else None,
+        sites=[_site(s, found) for s in sites],
+        other=sum(1 for c in found if not any(s.owns(c.domain) for s in sites)),
     )

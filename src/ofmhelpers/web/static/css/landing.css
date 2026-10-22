@@ -443,6 +443,8 @@ body {
 .rm-input-full { grid-column: 1 / -1; }
 .rm-textarea { resize: vertical; font-family: inherit; margin-bottom: 16px; }
 .rm-form-hint { color: var(--rm-faint); font-size: 12px; margin-bottom: 22px; }
+/* The application form's honeypot: off-screen, never seen by a person. */
+.rm-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .rm-form-note {
   background: var(--rm-bg-alt);
   border: 1px solid var(--rm-border-field);

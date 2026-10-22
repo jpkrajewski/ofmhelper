@@ -74,6 +74,15 @@ class WebSettings(BaseSettings):
         validation_alias="OFM_PUBLIC_PREFIXES",
     )
     kie_ai_api_key_admin: str | None = None
+    # The landing form's bot trap (routers/apply.py): a submit faster than
+    # this after the page was served, or with a token older than the TTL,
+    # is a bot's.
+    apply_min_fill_s: float = Field(
+        default=3.0, ge=0, validation_alias="OFM_APPLY_MIN_FILL_S"
+    )
+    apply_token_ttl_s: int = Field(
+        default=24 * 3600, ge=60, validation_alias="OFM_APPLY_TOKEN_TTL_S"
+    )
 
     max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(

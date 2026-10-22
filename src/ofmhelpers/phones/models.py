@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ofmhelpers.downloaders.models import CookieSite
 from ofmhelpers.socials import get_platform, platforms
 
 _ICONIFY = "https://api.iconify.design"
@@ -28,6 +29,13 @@ class ServiceKind(StrEnum):
     OTHER = "other"
 
 
+class CookieLogin(_Frozen):
+    """Where a service's cookies live and which one means logged in."""
+
+    domains: list[str] = Field(min_length=1)
+    login: str
+
+
 class LoginService(_Frozen):
     # Stored on every login; never rename one in use.
     key: str
@@ -46,6 +54,21 @@ class LoginService(_Frozen):
     tracked_platform: str | None = None
     # `{username}` is replaced; None: no profile page to link.
     profile_url: str | None = None
+    # The cookies that log into it (/cookies shows whether a cookies.txt
+    # does); None: not a site cookies matter for.
+    cookies: CookieLogin | None = None
+
+    @property
+    def cookie_site(self) -> CookieSite | None:
+        if self.cookies is None:
+            return None
+        return CookieSite(
+            key=self.key,
+            label=self.label,
+            icon_url=self.icon_url,
+            domains=self.cookies.domains,
+            login=self.cookies.login,
+        )
 
     def username(self, text: str) -> str:
         """`text` as typed reduced to the stored username: a tracked

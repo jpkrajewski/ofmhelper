@@ -72,9 +72,14 @@ def test_upload_shows_what_it_covers_never_a_value(ann):
     html = r.text
     assert "Cookies saved." in html
     assert 'data-cookies="saved"' in html
-    assert "2 cookies" in html
-    assert "instagram.com, tiktok.com" in html
-    assert "Instagram login</strong> · yes, expires 2030-01-01" in html
+    # Every social site of services.json, logged in or not, cookie names
+    # only; no other domain is listed.
+    assert "<strong>Instagram</strong> · logged in, expires 2030-01-01" in html
+    assert "<strong>TikTok</strong> · not logged in" in html  # sid_tt, no sessionid
+    assert "<strong>Threads</strong> · no cookies" in html
+    assert "<strong>X</strong> · no cookies" in html
+    assert ">sessionid<" in html
+    assert ">sid_tt<" in html
     assert ANN_SECRET not in html
     assert r.headers["cache-control"] == "no-store"
 
@@ -257,3 +262,13 @@ def test_a_download_logs_in_as_whoever_started_it(ann, bob, monkeypatch):
 
     assert ANN_SECRET in (logins[0] or "")
     assert logins[1] is None
+
+
+def test_cookies_of_other_sites_are_only_counted(ann):
+    client, _ = ann
+    other = ".example.org\tTRUE\t/\tTRUE\t0\ttracker\tx\n"
+    jar = _jar(ANN_SECRET) + other.encode()
+    html = _upload(client, jar).text
+    assert "1 cookie of other sites" in html
+    assert "example.org" not in html
+    assert "tracker" not in html

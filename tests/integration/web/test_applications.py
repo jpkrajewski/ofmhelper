@@ -15,14 +15,27 @@ from signin import sign_in
 
 from ofmhelpers.web.db.repositories import ApplicationRepository
 from ofmhelpers.web.main import app
+from ofmhelpers.web.routers.apply import form_token
 from ofmhelpers.web.stores import applications as applications_store
+
+
+@pytest.fixture(autouse=True)
+def _no_fill_wait(monkeypatch):
+    """The form's "too fast" trap off: a test submits in milliseconds."""
+    monkeypatch.setenv("OFM_APPLY_MIN_FILL_S", "0")
+
+
+def _form(**changes) -> dict:
+    """FORM as the served page posts it: with its form token."""
+    return {**FORM, "form_token": form_token(), **changes}
+
 
 FORM = {
     "first_name": "Ada",
     "last_name": "Lovelace",
     "email": "ada@example.com",
     "phone": "+48 123 456 789",
-    "telegram_handle": "@ada",
+    "telegram_handle": "@adalovelace",
     "instagram_handle": "@ada",
     "monthly_revenue": "$5,000 - $10,000",
     "experience_level": "Some Experience",
@@ -47,7 +60,7 @@ def va_client():
 def test_anonymous_submit_stores_every_field():
     anon = TestClient(app)
 
-    r = anon.post("/apply", data=FORM, follow_redirects=False)
+    r = anon.post("/apply", data=_form(), follow_redirects=False)
     assert r.status_code == 303
     assert r.headers["location"] == "/?applied=1"
 
@@ -72,9 +85,10 @@ def test_missing_required_fields_are_rejected():
 
     assert anon.post("/apply", data={"first_name": "Ada"}).status_code == 422
     assert (
-        anon.post("/apply", data={**FORM, "email": "not-an-address"}).status_code == 422
+        anon.post("/apply", data={**_form(), "email": "not-an-address"}).status_code
+        == 422
     )
-    assert anon.post("/apply", data={**FORM, "first_name": "  "}).status_code == 422
+    assert anon.post("/apply", data={**_form(), "first_name": "  "}).status_code == 422
 
 
 def test_optional_fields_may_be_blank():
@@ -87,6 +101,7 @@ def test_optional_fields_may_be_blank():
             "last_name": "Hopper",
             "email": "g@example.com",
             "phone": "+1 555 0100",
+            "form_token": form_token(),
         },
         follow_redirects=False,
     )
@@ -102,7 +117,7 @@ def test_optional_fields_may_be_blank():
 def test_phone_or_telegram_is_required_but_either_one_suffices():
     anon = TestClient(app)
 
-    no_channel = {**FORM, "phone": "", "telegram_handle": ""}
+    no_channel = {**_form(), "phone": "", "telegram_handle": ""}
     assert anon.post("/apply", data=no_channel).status_code == 422
     assert anon.post("/apply", data={**no_channel, "phone": "  "}).status_code == 422
 
@@ -117,7 +132,7 @@ def test_phone_or_telegram_is_required_but_either_one_suffices():
 
 
 def test_crm_page_lists_submissions_and_deletes(client):
-    TestClient(app).post("/apply", data=FORM)
+    TestClient(app).post("/apply", data=_form())
 
     html = client.get("/applications").text
     assert "Ada" in html
@@ -154,3 +169,46 @@ def test_crm_page_lists_a_lead_stored_before_the_contact_rule(client):
 
     assert r.status_code == 200
     assert "old@example.com" in r.text
+
+
+# --- spam bots ------------------------------------------------------------------
+
+
+def _stored() -> int:
+    return len(applications_store.list_applications())
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"website": "http://spam.example"},  # the honeypot
+        {"form_token": ""},
+        {"form_token": "forged"},
+        {"telegram_handle": "coxkskvs tchbop"},
+        {"instagram_handle": "{[url=https://n.example]x[/url]}"},
+        {"goals": "Buy now https://spam.example"},
+        {"phone": "call me maybe"},
+        {"first_name": "A" * 61},
+    ],
+)
+def test_a_bot_is_thanked_and_nothing_is_stored(changes, caplog):
+    with caplog.at_level("WARNING", logger="ofmhelpers.web.routers.apply"):
+        r = TestClient(app).post(
+            "/apply", data=_form(**changes), follow_redirects=False
+        )
+    assert (r.status_code, r.headers["location"]) == (303, "/?applied=1")
+    assert _stored() == 0
+    assert "application dropped as spam" in caplog.text
+
+
+def test_a_form_filled_in_seconds_is_a_bot(monkeypatch):
+    monkeypatch.setenv("OFM_APPLY_MIN_FILL_S", "30")
+    TestClient(app).post("/apply", data=_form(), follow_redirects=False)
+    assert _stored() == 0
+
+
+def test_the_landing_form_carries_the_token_honeypot_and_shapes():
+    html = TestClient(app).get("/").text
+    assert 'name="form_token" value="' in html
+    assert 'name="website" tabindex="-1"' in html
+    assert 'pattern="@?[A-Za-z][A-Za-z0-9_]{4,31}"' in html

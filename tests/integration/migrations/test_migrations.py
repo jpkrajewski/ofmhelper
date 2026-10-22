@@ -256,3 +256,31 @@ def test_without_a_shared_cookies_file_nobody_gets_cookies(db, monkeypatch, tmp_
     command.upgrade(_alembic(), "head")
     with db.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM user_cookies")).scalar() == 0
+
+
+def test_spam_applications_go_and_real_leads_stay(db):
+    """d4e5f6a7b8c0: links in a field or a Telegram handle with spaces (the
+    bots' shapes on prod) go; everything else stays."""
+    cfg = _alembic()
+    command.upgrade(cfg, "c3d4e5f6a7b9")
+    rows = {
+        "spam-link": ("{[url=https://x.example]buy[/url]}", "@realname", ""),
+        "spam-tg": ("", "coxkskvs tchbop", "Szia, meg akartam tudni az árát."),
+        "spam-goals": ("", "@realname", "visit https://spam.example now"),
+        "real": ("@ada.lovelace", "@adalovelace", "Scale to six figures."),
+    }
+    with db.begin() as conn:
+        for row_id, (instagram, telegram, goals) in rows.items():
+            conn.execute(
+                text(
+                    "INSERT INTO applications (id, first_name, last_name, email,"
+                    " phone, telegram_handle, instagram_handle, monthly_revenue,"
+                    " experience_level, goals, created_at) VALUES (:id, 'A', 'B',"
+                    " 'a@b.co', '', :tg, :ig, '', '', :goals, 0)"
+                ),
+                {"id": row_id, "tg": telegram, "ig": instagram, "goals": goals},
+            )
+    command.upgrade(cfg, "head")
+    with db.connect() as conn:
+        kept = conn.execute(text("SELECT id FROM applications")).scalars().all()
+    assert kept == ["real"]

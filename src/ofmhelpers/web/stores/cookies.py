@@ -25,6 +25,7 @@ from functools import lru_cache
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders.cookies import CookieFileError, summarize
 from ofmhelpers.log import get_logger
+from ofmhelpers.phones import cookie_sites
 from ofmhelpers.web.db.repositories import CookieRepository
 from ofmhelpers.web.schemas import SavedCookies
 from ofmhelpers.web.stores.watched_profiles import watchers
@@ -60,7 +61,7 @@ def saved(user_id: int) -> SavedCookies | None:
     if row is None:
         return None
     try:
-        summary = summarize(row["cookies"])
+        summary = summarize(row["cookies"], cookie_sites())
     except CookieFileError:
         # Only a file stored before uploads were checked (the old shared
         # one, moved by alembic) can get here.
@@ -83,7 +84,7 @@ def save(user_id: int, payload: bytes, file_name: str) -> SavedCookies:
     except UnicodeDecodeError as exc:
         msg = "Not a cookies.txt file: it is not text"
         raise CookieFileError(msg) from exc
-    summary = summarize(text)
+    summary = summarize(text, cookie_sites())
     uploaded_at = _repository().save(user_id, text, file_name)
     logger.info(
         "user %s uploaded cookies (%d cookies, Instagram login: %s)",

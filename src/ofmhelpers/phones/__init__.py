@@ -13,6 +13,7 @@ from importlib import resources
 
 from pydantic import TypeAdapter
 
+from ofmhelpers.downloaders.models import CookieSite
 from ofmhelpers.phones.models import (
     CameraLayout,
     Catalog,
@@ -34,6 +35,7 @@ __all__ = [
     "ServiceKind",
     "SizeClass",
     "catalog",
+    "cookie_sites",
     "find_model",
     "get_service",
     "services",
@@ -49,6 +51,12 @@ def services() -> dict[str, LoginService]:
     """Every login service by its stored key, in display order."""
     listed = TypeAdapter(list[LoginService]).validate_json(_read("services.json"))
     return {s.key: s for s in listed}
+
+
+def cookie_sites() -> list[CookieSite]:
+    """The services whose login a cookies.txt may carry (`cookies` in
+    services.json), in display order: what /cookies checks."""
+    return [s.cookie_site for s in services().values() if s.cookie_site]
 
 
 def get_service(key: str) -> LoginService:

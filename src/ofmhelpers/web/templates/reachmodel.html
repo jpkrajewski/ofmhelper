@@ -336,23 +336,31 @@
   </div>
 
   <form class="rm-form-card" method="post" action="/apply">
+    <input type="hidden" name="form_token" value="{{ form_token }}">
+    {# A honeypot: off-screen, out of the tab order, never filled by a person. #}
+    <div class="rm-hp" aria-hidden="true">
+      <label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+    </div>
     <div class="rm-form-step">1. Personal Information</div>
     <div class="rm-form-2col">
-      <input type="text" name="first_name" required placeholder="First name" class="rm-input">
-      <input type="text" name="last_name" required placeholder="Last name" class="rm-input">
+      <input type="text" name="first_name" required maxlength="60" placeholder="First name" class="rm-input">
+      <input type="text" name="last_name" required maxlength="60" placeholder="Last name" class="rm-input">
       <input type="email" name="email" required placeholder="Email address" class="rm-input rm-input-full">
     </div>
 
     <div class="rm-form-step">2. How We Reach You</div>
     <div class="rm-form-2col rm-form-2col-tight">
-      <input type="tel" name="phone" placeholder="Phone number" class="rm-input">
-      <input type="text" name="telegram_handle" placeholder="Telegram handle (@you)" class="rm-input">
+      <input type="tel" name="phone" placeholder="Phone number" class="rm-input"
+             pattern="\+?[0-9\s\(\)\.\-]{7,25}" title="A phone number: digits, spaces, + ( ) -">
+      <input type="text" name="telegram_handle" placeholder="Telegram handle (@you)" class="rm-input"
+             pattern="@?[A-Za-z][A-Za-z0-9_]{4,31}" title="Your Telegram username: 5-32 letters, digits or _">
     </div>
     <div class="rm-form-hint">Give at least one — phone or Telegram. 💬 Get an answer ASAP</div>
 
     <div class="rm-form-step">3. Your Social Handles</div>
     <div class="rm-field-group">
-      <input type="text" name="instagram_handle" placeholder="Instagram handle" class="rm-input">
+      <input type="text" name="instagram_handle" placeholder="Instagram handle" class="rm-input"
+             pattern="@?[A-Za-z0-9\._]{1,30}" title="Your Instagram username: letters, digits, . or _">
     </div>
 
     <div class="rm-form-step">4. Current Status</div>
@@ -375,7 +383,7 @@
     </div>
 
     <div class="rm-form-step">5. Your Goals</div>
-    <textarea name="goals" placeholder="Tell us about your goals — what does success look like for you in the next 6-12 months?" rows="4" class="rm-input rm-textarea"></textarea>
+    <textarea name="goals" maxlength="2000" placeholder="Tell us about your goals — what does success look like for you in the next 6-12 months?" rows="4" class="rm-input rm-textarea"></textarea>
     <div class="rm-form-note">
       <div class="rm-form-note-title">Partnership Model: Commission Split (No upfront cost)</div>
       <div class="rm-form-note-text">Our team operates on a commission basis, aligning their success directly with yours. No hidden fees or upfront costs.</div>

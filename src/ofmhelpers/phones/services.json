@@ -1,20 +1,13 @@
 [
     {"key": "icloud", "label": "iCloud", "kind": "email", "icon": "simple-icons:icloud", "icon_color": "#3693f3"},
-    {
-        "key": "instagram",
-        "label": "Instagram",
-        "kind": "social",
-        "icon": "skill-icons:instagram",
-        "tracked_platform": "instagram",
-        "profile_url": "https://www.instagram.com/{username}/"
-    },
+    {"key": "instagram", "label": "Instagram", "kind": "social", "icon": "skill-icons:instagram", "tracked_platform": "instagram", "profile_url": "https://www.instagram.com/{username}/", "cookies": {"domains": ["instagram.com"], "login": "sessionid"}},
     {"key": "gmail", "label": "Gmail", "kind": "email", "icon": "logos:google-gmail"},
     {"key": "microsoft", "label": "Microsoft", "kind": "email", "icon": "logos:microsoft-icon"},
     {"key": "outlook", "label": "Outlook", "kind": "email", "icon": "vscode-icons:file-type-outlook"},
     {"key": "yahoo", "label": "Yahoo", "kind": "email", "icon": "logos:yahoo"},
     {"key": "work", "label": "Work account", "kind": "email", "icon": "lucide:briefcase", "icon_color": "#a6a6bd", "custom": true},
-    {"key": "threads", "label": "Threads", "kind": "social", "icon": "simple-icons:threads", "icon_color": "#f4f4f8", "profile_url": "https://www.threads.net/@{username}"},
-    {"key": "x","label": "X", "kind": "social", "icon": "simple-icons:x", "icon_color": "#f4f4f8", "profile_url": "https://x.com/{username}"},
-    {"key": "tiktok", "label": "TikTok", "kind": "social", "icon": "logos:tiktok-icon", "profile_url": "https://www.tiktok.com/@{username}"},
+    {"key": "threads", "label": "Threads", "kind": "social", "icon": "simple-icons:threads", "icon_color": "#f4f4f8", "profile_url": "https://www.threads.net/@{username}", "cookies": {"domains": ["threads.net", "threads.com"], "login": "sessionid"}},
+    {"key": "x", "label": "X", "kind": "social", "icon": "simple-icons:x", "icon_color": "#f4f4f8", "profile_url": "https://x.com/{username}", "cookies": {"domains": ["x.com", "twitter.com"], "login": "auth_token"}},
+    {"key": "tiktok", "label": "TikTok", "kind": "social", "icon": "logos:tiktok-icon", "profile_url": "https://www.tiktok.com/@{username}", "cookies": {"domains": ["tiktok.com"], "login": "sessionid"}},
     {"key": "custom", "label": "Other", "kind": "other", "icon": "lucide:globe", "icon_color": "#a6a6bd", "custom": true}
 ]
