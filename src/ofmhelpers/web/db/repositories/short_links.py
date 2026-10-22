@@ -248,8 +248,11 @@ class ShortLinkRepository(CachedRepository):
         updates its row (matched by remote id, else by address: a link whose
         job died after making it), or is added (on `accounts`' Instagram
         account when its slug is one's: slug -> account id); rows it no
-        longer lists are deleted, "creating" ones older than `create_ttl_s`
-        failed. `days` (remote id -> days) replace the stored ones."""
+        longer lists are deleted ("deleting" ones too: their delete went
+        through), "creating" ones older than `create_ttl_s` failed, and
+        "deleting" ones it still lists after `create_ttl_s` (their job was
+        lost) go back to their status. `days` (remote id -> days) replace the
+        stored ones."""
         now = time.time()
         link = ShortLinkRow
         with session_scope() as s:
@@ -283,7 +286,11 @@ class ShortLinkRepository(CachedRepository):
                     s.add(row)
                 elif row.status == "deleting":
                     seen.add(row.id)
-                    continue
+                    if row.updated_at >= now - create_ttl_s:
+                        continue
+                    # Its delete job was lost (a deploy): the link is still
+                    # there, back to what it is with the reason.
+                    row.error = "Delete interrupted: delete it again"
                 row.remote_id = remote["remote_id"]
                 row.slug, row.domain = remote["slug"], remote["domain"]
                 row.url, row.destination = remote["url"], remote["destination"]
@@ -291,14 +298,17 @@ class ShortLinkRepository(CachedRepository):
                 row.status = "active" if remote["active"] else "inactive"
                 if remote["adult"] is not None:
                     row.adult = remote["adult"]
-                row.error, row.updated_at = None, now
+                if row.error != "Delete interrupted: delete it again":
+                    row.error = None
+                row.updated_at = now
                 s.flush()
                 seen.add(row.id)
                 self._replace_days(s, row.id, days.get(remote["remote_id"], []))
             for row in rows:
                 if row.id in seen:
                     continue
-                if row.status in LIVE:
+                if row.status in (*LIVE, "deleting"):
+                    # Gone from the provider (a delete that went through).
                     s.delete(row)
                 elif row.status == "creating" and row.created_at < now - create_ttl_s:
                     row.status = "failed"

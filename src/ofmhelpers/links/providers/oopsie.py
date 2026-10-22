@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from ofmhelpers.links.errors import LinkError, SlugTakenError
+from ofmhelpers.links.errors import LinkError, SlugTakenError, UngatedError
 from ofmhelpers.links.models import DayStat, RemoteLink, Usage
 from ofmhelpers.links.providers.base import LinkProvider
 
@@ -94,7 +94,14 @@ class OopsieProvider(LinkProvider):
             raise self._failed(response, f"make {link.slug}")
         made = _remote(self._data(response, f"make {link.slug}"))
         if not made.adult:
-            self.delete(made.remote_id)
+            try:
+                self.delete(made.remote_id)
+            except LinkError as exc:
+                msg = (
+                    f"Oopsie: {link.slug} is live without the 18+ gate and could"
+                    " not be deleted: Turn on 18+ or delete it"
+                )
+                raise UngatedError(msg, made) from exc
             msg = f"Oopsie did not keep the 18+ gate on {link.slug}: link deleted"
             raise LinkError(msg)
         return made

@@ -4,8 +4,9 @@ ofmhelpers/web/stores/short_links.py
 Links on link providers (/links, routers/tracking/links.py; made, synced
 and deleted by web/link_sync.py). Each belongs to a user: `owner` limits a
 call to theirs (None: everyone's, for the sweeper). Every provider call
-runs on the owner's own key (/account), an admin with none on the .env one
-(`LinkProvider.default_key`); a user never gets the .env key.
+runs on the owner's own key (/account); the agency admin (the password
+account) with none on the .env one (`LinkProvider.default_key`); nobody
+else ever gets the .env key.
 """
 
 from __future__ import annotations
@@ -48,7 +49,9 @@ def api_key(user_id: int, provider: str) -> str | None:
     if saved:
         return saved
     user = users.get_user(user_id)
-    if user is not None and user.is_admin and user.active:
+    # The agency admin only: another admin (added on /users) has data of
+    # their own and would otherwise sync, see and delete the agency's links.
+    if user is not None and user.is_password_account and user.active:
         return get_link_provider(provider).default_key()
     return None
 
@@ -181,6 +184,17 @@ def failed(link_ids: list[int], error: str) -> None:
 
 def set_status(link_ids: list[int], status: str, error: str | None = None) -> None:
     _repository().set_status(link_ids, status, error)
+
+
+def taken_slugs(user_id: int, provider: str, domain: str) -> set[str]:
+    """Slugs of `user_id`'s links a new one on `domain` must not take: on
+    that domain, or anywhere on a provider whose slugs are provider-wide."""
+    per_domain = provider_infos()[provider].slug.unique_per == "domain"
+    return {
+        slug
+        for d, slug in _repository().taken(user_id, provider)
+        if not per_domain or d == domain
+    }
 
 
 def set_slug(link_id: int, slug: str) -> None:

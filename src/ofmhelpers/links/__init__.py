@@ -20,6 +20,7 @@ from ofmhelpers.links.errors import (
     QuotaError,
     RateLimitedError,
     SlugTakenError,
+    UngatedError,
 )
 from ofmhelpers.links.models import (
     DayStat,
@@ -43,6 +44,7 @@ __all__ = [
     "SlugRules",
     "SlugTakenError",
     "Target",
+    "UngatedError",
     "Usage",
     "detect_target",
     "provider_infos",

@@ -6,12 +6,15 @@ its class in `providers/__init__.py`'s `_PROVIDER_TYPES` and its
 
 from __future__ import annotations
 
+import hashlib
 import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import requests
+from redis import RedisError
 
+from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.links import provider_infos
 from ofmhelpers.links.errors import AuthError, LinkError, QuotaError, RateLimitedError
@@ -30,6 +33,17 @@ if TYPE_CHECKING:
     )
 
 logger = get_logger(__name__)
+
+# Reserves the key's next call slot atomically: returns how long to wait
+# for it (seconds) and moves the key's next free slot `gap` past it.
+_TURN_SCRIPT = """
+local now = tonumber(ARGV[1])
+local gap = tonumber(ARGV[2])
+local nxt = tonumber(redis.call('GET', KEYS[1]) or '0')
+local at = math.max(now, nxt)
+redis.call('SET', KEYS[1], tostring(at + gap), 'PX', math.ceil(gap * 1000) + 60000)
+return tostring(at - now)
+"""
 
 _UNAUTHORIZED = 401
 _PAYMENT_REQUIRED = 402
@@ -83,15 +97,37 @@ class LinkProvider(ABC):
                 return ": ".join(dict.fromkeys(parts))
         return str(body)[:200]
 
+    def _wait_turn(self, gap_s: float) -> None:
+        """Waits until this key may call again: one call per `gap_s` per
+        (provider, key), shared through Redis by every job and worker
+        process using the key (Oopsie allows 60 a minute per key). Redis
+        down: spaced within this client only."""
+        if gap_s <= 0:
+            return
+        digest = hashlib.sha256(self.api_key.encode()).hexdigest()[:16]
+        try:
+            wait = float(
+                get_redis().eval(
+                    _TURN_SCRIPT,
+                    1,
+                    f"links:turn:{self.key}:{digest}",
+                    time.time(),
+                    gap_s,
+                )
+            )
+        except RedisError:
+            logger.warning("link throttle: Redis unreachable", exc_info=True)
+            wait = self._last_call + gap_s - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        self._last_call = time.monotonic()
+
     def _call(self, method: str, path: str, **kwargs: Any) -> requests.Response:
         """One call, `min_interval_s` after the previous one. Raises
         AuthError (401), QuotaError (402), RateLimitedError (429) and
         LinkError for no answer at all; other statuses are the caller's."""
         info = self.info()
-        wait = self._last_call + info.min_interval_s - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call = time.monotonic()
+        self._wait_turn(info.min_interval_s)
         try:
             response = self._session.request(
                 method,

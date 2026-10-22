@@ -10,7 +10,12 @@ from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from ofmhelpers.links.errors import LinkError, QuotaError, SlugTakenError
+from ofmhelpers.links.errors import (
+    LinkError,
+    QuotaError,
+    SlugTakenError,
+    UngatedError,
+)
 from ofmhelpers.links.models import DayStat, RemoteLink, Usage
 from ofmhelpers.links.providers.base import LinkProvider
 from ofmhelpers.log import get_logger
@@ -110,7 +115,14 @@ class BouncyProvider(LinkProvider):
             self.enable_adult(made["id"])
         except LinkError:
             logger.warning("bouncy %s: no 18+ gate, deleting it", made["id"])
-            self.delete(made["id"])
+            try:
+                self.delete(made["id"])
+            except LinkError as exc:
+                msg = (
+                    f"Bouncy: {made['id']} is live without the 18+ gate and could"
+                    " not be deleted: Turn on 18+ or delete it"
+                )
+                raise UngatedError(msg, _remote(made, adult=False)) from exc
             raise
         return _remote(made, adult=True)
 

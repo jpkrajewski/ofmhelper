@@ -112,6 +112,9 @@ def _bot_root(user_id: int) -> str | None:
         return None
     if users.refresh_token(user_id):
         return None
+    if service_account_email() is None:
+        logger.warning("drive: OFM_GDRIVE_SERVICE_ACCOUNT is not a usable key")
+        return None
     agency = users.get_user(user_id)
     return s.root_folder_id if agency and agency.is_password_account else None
 

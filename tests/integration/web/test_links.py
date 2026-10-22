@@ -13,7 +13,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from signin import sign_in, sign_in_admin
+from signin import sign_in, sign_in_agency
 
 from ofmhelpers.links.fake import (
     BOUNCY_FAKE_KEY,
@@ -27,6 +27,7 @@ from ofmhelpers.web import link_sync
 from ofmhelpers.web.db.models import ShortLinkRow
 from ofmhelpers.web.db.session import session_scope
 from ofmhelpers.web.main import app
+from ofmhelpers.web.schemas import Role, UserForm
 from ofmhelpers.web.schemas.links import utc_today
 from ofmhelpers.web.stores import short_links, users
 from ofmhelpers.web.stores.tracked_accounts import list_accounts, track
@@ -49,7 +50,8 @@ def client():
 
 @pytest.fixture
 def admin(client):
-    return sign_in_admin(client)
+    """The agency admin: the one the .env keys run for."""
+    return sign_in_agency(client)
 
 
 def _accounts(user_id: int, creator: str, *handles: str) -> list[int]:
@@ -287,9 +289,11 @@ def test_sync_imports_links_matches_accounts_and_stores_days(client, admin):
     assert dany.creator == "Dane"
     assert dany.target == "stacked"
     assert (dany.views(7), dany.clicks(7), dany.clicks(30)) == (10, 8, 48)
-    assert links["ungated"].adult is False
+    # Links are always 18+ gated: the sync turns it on where it is off.
+    assert links["ungated"].adult is True
+    assert fake_oopsie().pages["ungated"]["theme"]["age_gate"] is True
     page = client.get("/links?period=30")
-    assert "1 link without the 18+ confirmation" in page.text
+    assert "without the 18+ confirmation" not in page.text
     assert "48" in page.text
     [usage] = [
         s.usage for s in short_links.provider_states(admin.id) if s.key == "oopsie"
@@ -425,3 +429,138 @@ def test_account_page_takes_link_provider_keys_and_syncs(client):
     assert "Oopsie key saved." in saved.text
     assert users.api_keys(user.id)["oopsie"] == OOPSIE_FAKE_KEY
     assert set(_links(user.id)) == {"mine"}
+
+
+# --- ultrareview fixes ------------------------------------------------------
+
+
+def test_only_the_agency_admin_runs_on_the_env_keys(client, admin):
+    """Another admin (added on /users) has data of their own: the agency's
+    .env keys would sync, show and let them delete the agency's links."""
+    other = users.add_user(UserForm(email="second.admin@example.com", role=Role.ADMIN))
+    assert short_links.api_key(other.id, "bouncy") is None
+    agency = users.agency_id()
+    assert short_links.api_key(agency, "bouncy") == BOUNCY_FAKE_KEY
+    assert (other.id, "bouncy") not in short_links.keyed()
+
+
+def test_a_link_left_ungated_is_recorded_flagged_and_gated_at_the_next_sync(
+    client, admin, monkeypatch
+):
+    """The gate fails and so does deleting the link: it is live without the
+    gate. It is kept, flagged No 18+, and the next sync gates it."""
+    original = FakeBouncy._link
+
+    def broken(self, state, method, link_id, request):
+        if method in ("PUT", "DELETE"):
+            return FakeReply.json_body({"error": "Service unavailable"}, 503)
+        return original(self, state, method, link_id, request)
+
+    monkeypatch.setattr(FakeBouncy, "_link", broken)
+    ids = _accounts(admin.id, "Dane", "dane.walker")
+    _generate(client, ids)
+    # Kept and flagged (the sync's gate failed too while Bouncy is down).
+    [link] = short_links.list_links(admin.id)
+    assert (link.status, link.adult) == ("active", False)
+    assert "No 18+" in client.get("/links").text
+
+    monkeypatch.setattr(FakeBouncy, "_link", original)
+    link_sync.sync_now(admin.id)
+    assert short_links.list_links(admin.id)[0].adult is True
+    assert fake_bouncy().adult == {"dane-walker"}
+
+
+def test_a_numbered_slug_never_lands_on_the_owners_own(client, admin):
+    """'anna' is someone else's on Bouncy; the owner already has 'anna-2'
+    from an earlier Generate: the next one becomes 'anna-3', no crash."""
+    fake_bouncy().add_link("anna", FANVUE)
+    ids = _accounts(admin.id, "Dane", "anna")
+    _generate(client, ids)
+    _generate(client, ids)
+    # (The fake lists the foreign "anna" in this account too.)
+    slugs = {x.slug for x in short_links.list_links(admin.id) if x.account_id}
+    assert slugs - {"anna"} == {"anna-2", "anna-3"}
+
+
+def test_an_unexpected_error_fails_one_link_and_the_rest_go_on(
+    client, admin, monkeypatch
+):
+    from ofmhelpers.links.providers.bouncy import BouncyProvider
+
+    calls = {"n": 0}
+    real = BouncyProvider.create
+
+    def create(self, link):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            msg = "boom"
+            raise RuntimeError(msg)
+        return real(self, link)
+
+    monkeypatch.setattr(BouncyProvider, "create", create)
+    ids = _accounts(admin.id, "Dane", "a.one", "b.two")
+    _generate(client, ids)
+    statuses = sorted(
+        (x.status, x.error or "")
+        for x in short_links.list_links(admin.id)
+        if x.account_id
+    )
+    assert statuses[0] == ("active", "")
+    assert statuses[1] == ("failed", "Failed (RuntimeError): boom")
+
+
+def test_a_sync_on_an_odd_answer_is_recorded_not_lost(client, admin, monkeypatch):
+    from ofmhelpers.links.providers.bouncy import BouncyProvider
+
+    def odd(self):
+        missing = "pagination"
+        raise KeyError(missing)
+
+    monkeypatch.setattr(BouncyProvider, "list_links", odd)
+    link_sync.sync_now(admin.id, "bouncy")
+    [state] = [s for s in short_links.provider_states(admin.id) if s.key == "bouncy"]
+    assert state.error == "Sync failed (KeyError): 'pagination'"
+    assert short_links.claim_due([(admin.id, "bouncy")]) == []  # claim dropped
+
+
+def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
+    client, admin, monkeypatch
+):
+    ids = _accounts(admin.id, "Dane", "a.one", "b.two")
+    _generate(client, ids)
+    links = {x.slug: x for x in short_links.list_links(admin.id) if x.account_id}
+    short_links.set_status([x.id for x in links.values()], "deleting")
+    with session_scope() as s:
+        s.query(ShortLinkRow).update({ShortLinkRow.updated_at: time.time() - 3600})
+    fake_bouncy().remove("b-two")  # its delete went through, the job then died
+
+    link_sync.sync_now(admin.id)
+
+    after = {x.slug: x for x in short_links.list_links(admin.id) if x.account_id}
+    assert set(after) == {"a-one"}
+    assert after["a-one"].status == "active"
+    assert after["a-one"].error == "Delete interrupted: delete it again"
+
+
+def test_one_key_waits_its_turn_across_clients(monkeypatch):
+    """Oopsie allows 60 calls a minute per key: two clients (two jobs) on
+    one key share the spacing."""
+    from ofmhelpers.links.providers.oopsie import OopsieProvider
+
+    waits: list[float] = []
+    monkeypatch.setattr("time.sleep", waits.append)
+    first, second = OopsieProvider(OOPSIE_FAKE_KEY), OopsieProvider(OOPSIE_FAKE_KEY)
+    first._wait_turn(1.05)
+    second._wait_turn(1.05)
+    assert waits
+    assert waits[-1] > 0.9
+    OopsieProvider("gmp_live_another")._wait_turn(1.05)
+    assert len(waits) == 1  # another key: no wait
+
+
+def test_accounts_link_column_says_today_for_one_day(client, admin):
+    ids = _accounts(admin.id, "Dane", "dane.walker")
+    _generate(client, ids)
+    page = client.get("/accounts?period=1").text
+    assert "Links · today" in page
+    assert "Links · 24h" not in page

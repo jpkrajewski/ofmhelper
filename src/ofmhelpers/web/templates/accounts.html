@@ -82,7 +82,7 @@
                 {{ sort_th(sorts.VIEWS, "Views · " ~ period.short) }}
                 <th scope="col">Creator</th>
                 <th scope="col">Phone</th>
-                <th scope="col">Links · {{ period.short }}</th>
+                <th scope="col">Links · {{ link_period.short }}</th>
                 <th scope="col"><span class="sr-only">Analytics</span></th>
             </tr>
         </thead>
@@ -125,7 +125,7 @@
                     </a>
                     {% else %}<span class="pending" data-no-phone>—</span>{% endfor %}
                 </td>
-                <td data-label="Links · {{ period.short }}">
+                <td data-label="Links · {{ link_period.short }}">
                     {% for x in own_links %}
                     <a class="accounts-link" href="/links?account={{ a.id }}#link-{{ x.id }}" title="{{ x.address }}">
                         <span>{{ x.provider_label }}</span> · {% set n = x.clicks(period.days) %}<strong>{{ num.count(n) }}</strong> click{{ "" if n == 1 else "s" }} <small>{{ ln.pct(x.ctr(period.days)) }} CTR</small>

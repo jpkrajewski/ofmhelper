@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 from signin import make_user, make_user_with_password, sign_in, sign_in_admin
 
+from ofmhelpers.signin.passwords import hash_password
 from ofmhelpers.web.main import app
 from ofmhelpers.web.schemas import Role
 from ofmhelpers.web.stores import users
@@ -817,3 +818,23 @@ def test_connecting_google_drive_syncs_that_persons_folders_right_away(
 
     assert synced == [user.id]
     assert apple.id not in synced
+
+
+# --- ultrareview fixes ------------------------------------------------------
+
+
+def test_a_deactivated_agency_admin_stays_out_until_the_admin_password(client):
+    """A wrong password for "admin" must not restore the deactivated
+    account, nor may its own password open it; the admin password does
+    (break-glass)."""
+    agency = users.agency_id()
+    users._repository().set_password_hash(agency, hash_password(PASSWORD))
+    users.set_active(agency, active=False)
+
+    assert _password_login(client, "admin", "not it").status_code == 401
+    assert not users.get_user(agency).active
+    assert _password_login(client, "admin", PASSWORD).status_code == 401
+    assert not users.get_user(agency).active
+
+    assert _password_login(client, "admin", "test-admin").status_code == 303
+    assert users.get_user(agency).active

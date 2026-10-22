@@ -1093,3 +1093,15 @@ def test_only_the_agency_admin_falls_back_to_the_bot(bot_drive):
 
     assert report.not_connected == ["vee@example.com"]
     assert bot_drive.named("vee.ig - Vee 01", BOT_ROOT) == []
+
+
+def test_an_unusable_bot_key_is_no_fallback(bot_drive, monkeypatch):
+    """A key that does not load (mangled env quoting): the agency admin is
+    "not connected" like before, and the sweep goes on for everyone."""
+    monkeypatch.setattr(drive_folders, "service_account_email", lambda: None)
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+
+    report = drive_folders.sync()
+
+    assert report.not_connected == [users.get_user(users.agency_id()).email]
+    assert report.failed == []

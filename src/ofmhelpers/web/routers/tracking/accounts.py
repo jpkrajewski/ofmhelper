@@ -30,6 +30,7 @@ from ofmhelpers.web.schemas import (
     AddAccounts,
     AddResult,
     AssignCreator,
+    LinkPeriod,
     Notes,
     Period,
     SelectedAccounts,
@@ -82,6 +83,8 @@ def index(request: Request, query: Annotated[AccountQuery, Query()]):
         page=page,
         phones=phones_by_account(page.rows, scope),
         links=links_by_account(scope),
+        # Link numbers are per UTC day: "today", not "24h", for period 1.
+        link_period=LinkPeriod(days=period.days),
         summary=AccountSummary.of(matching, period.days),
         query=query,
         period=period,

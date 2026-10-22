@@ -199,14 +199,15 @@ def password_sign_in(email: str, password: str) -> User | None:
     before any Google/Apple sign-in is set up."""
     email = normalized_email(email)
     if email == PASSWORD_ADMIN or is_env_admin(email):
-        # Every admin address is the agency admin: the admin password or
-        # that account's own password opens it.
-        account = _password_admin()
+        # Every admin address is the agency admin. Read without side
+        # effects: only the admin password makes or restores the account
+        # (break-glass); its own password opens it only while it is active.
+        account = _user(_repository().password_account())
         stored = _repository().password_hash(account.id) if account else ""
         own = verify_password(password, stored)
-        if account is not None and (own or _is_admin_password(password)):
-            return _admit(_env_admin(email, "") or account)
-        return None
+        if _is_admin_password(password):
+            return _admit(_env_admin(email, "") or _password_admin())
+        return _admit(account) if own else None
     user = by_email(email)
     stored = _repository().password_hash(user.id) if user else ""
     if verify_password(password, stored) and user is not None:
