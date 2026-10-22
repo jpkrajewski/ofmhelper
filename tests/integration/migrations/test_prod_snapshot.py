@@ -166,16 +166,26 @@ def _row_counts(db: Engine) -> dict[str, int]:
     return {t: _count(db, t) for t in inspect(db).get_table_names()}
 
 
+# Tables a revision deletes rows from on purpose, for good (a downgrade
+# cannot bring them back): d4e5f6a7b8c0 drops the bots' spam leads.
+_DELETES_FOR_GOOD = {"applications"}
+
+
 def test_upgrade_downgrade_upgrade_keeps_every_row(db):
     """Up to head, back to production's revision, up again: every table
-    production has keeps its rows, and head is reached twice the same way."""
+    production has keeps its rows (but those of `_DELETES_FOR_GOOD`), and
+    head is reached twice the same way."""
+
+    def kept(counts: dict[str, int]) -> dict[str, int]:
+        return {t: n for t, n in counts.items() if t not in _DELETES_FOR_GOOD}
+
     start = _revision(db)
     before = _row_counts(db)
     command.upgrade(_alembic(), "head")
     at_head = _row_counts(db)
     command.downgrade(_alembic(), start)
     assert _revision(db) == start
-    assert _row_counts(db) == before
+    assert kept(_row_counts(db)) == kept(before)
     command.upgrade(_alembic(), "head")
     assert _row_counts(db) == at_head
 
@@ -191,6 +201,7 @@ POSTED = "a5b6c7d8e9f0"
 FINISHED_AT = "b6c7d8e9f0a1"
 USERS = "c2d3e4f5a6b7"
 OWNERS = "d3e4f5a6b7c8"
+SPAM = "d4e5f6a7b8c0"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -421,3 +432,21 @@ def test_owners_gives_every_row_to_the_password_admin_and_keeps_it(db):
         ), name
     assert _scalar(db, "SELECT is_password_account FROM users WHERE email = 'admin'")
     assert "drive_root_id" in _columns(db, "users")
+
+
+def test_spam_drops_only_the_bots_leads(db):
+    """Production's leads: the bots' (a link in a field, a Telegram handle
+    with spaces) go, every other lead stays as it was."""
+    needs(SPAM)(db)
+    spam = (
+        r"SELECT id FROM applications WHERE telegram_handle ~ '\s'"
+        " OR concat_ws(' ', first_name, last_name, email, phone, telegram_handle,"
+        r" instagram_handle, goals) ~* '(https?://|www\.|\[/?url|<a\s|\[/?link)'"
+    )
+    with db.connect() as conn:
+        everyone = set(conn.execute(text("SELECT id FROM applications")).scalars())
+        bots = set(conn.execute(text(spam)).scalars())
+    command.upgrade(_alembic(), "head")
+    with db.connect() as conn:
+        left = set(conn.execute(text("SELECT id FROM applications")).scalars())
+    assert left == everyone - bots
