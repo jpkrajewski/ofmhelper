@@ -498,6 +498,46 @@ def test_account_links_google_for_drive_and_refuses_a_taken_one(client):
 
 
 @pytest.mark.usefixtures("providers_on")
+def test_a_failed_connect_goes_back_to_account_still_signed_in(client):
+    me = sign_in(client)
+    started = client.get(
+        "/auth/google/start", params={"link": "1"}, follow_redirects=False
+    )
+    state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
+    client.cookies.delete("ofm_signin")  # back on a host that never saw it
+    r = client.get(
+        "/auth/google/callback",
+        params={"code": "x", "state": state},
+        follow_redirects=False,
+    )
+    assert (r.status_code, r.headers["location"]) == (303, "/account?google=failed")
+    page = client.get(r.headers["location"])
+    assert page.status_code == 400
+    assert "Connecting your Google account failed" in page.text
+    assert not users.get_user(me.id).drive_connected
+
+
+def test_a_drive_connect_started_on_www_keeps_its_state_for_the_callback(
+    monkeypatch,
+):
+    """Prod, 2026-10-22: started on www., the state cookie stayed there while
+    Google sent the person back to APP_BASE_URL's host."""
+    monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "id")
+    monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("APP_BASE_URL", "https://ascendglobal.cash/")
+    www = TestClient(app, base_url="https://www.ascendglobal.cash")
+    sign_in(www)
+    moved = www.get("/auth/google/start", params={"link": "1"}, follow_redirects=False)
+    assert moved.status_code == 301
+    assert urlsplit(moved.headers["location"]).netloc == "ascendglobal.cash"
+    started = www.get(moved.headers["location"], follow_redirects=False)
+    query = parse_qs(urlsplit(started.headers["location"]).query)
+    callback = urlsplit(query["redirect_uri"][0])
+    assert callback.netloc == "ascendglobal.cash"
+    assert www.cookies.get("ofm_signin", domain="ascendglobal.cash")
+
+
+@pytest.mark.usefixtures("providers_on")
 def test_unlinking_the_only_way_in_is_refused(client):
     me = sign_in(client)
     _consent(client, "google", "my.gmail@example.com", link="1")

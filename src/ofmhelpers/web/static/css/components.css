@@ -27,13 +27,13 @@ button,
     min-height: var(--control-h);
     padding: var(--s-1) var(--s-4);
     margin: 0;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--btn-border);
     border-radius: var(--radius-sm);
-    background: var(--surface);
+    background: var(--btn-bg);
     color: var(--text);
     font: inherit;
     font-size: var(--control-font);
-    font-weight: 500;
+    font-weight: var(--btn-weight);
     line-height: 1.2;
     text-align: center;
     text-decoration: none;
@@ -46,8 +46,8 @@ button,
 .btn:hover,
 .root-btn:hover,
 button:hover {
-    background: var(--surface-2);
-    border-color: var(--border-strong);
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
     color: var(--text);
 }
 .btn:active,
@@ -63,31 +63,49 @@ button:disabled,
 /* Primary: the one action a page exists for. */
 .btn-primary,
 .generate-form-col button[type="submit"] {
-    border: 1px solid var(--accent);
-    background: var(--accent);
+    border: 1px solid var(--btn-primary-border);
+    background: var(--btn-primary-bg);
     color: var(--accent-ink);
-    font-weight: 500;
-    box-shadow: var(--shadow-sm);
+    font-weight: var(--btn-primary-weight);
+    box-shadow: var(--btn-primary-shadow);
 }
 .btn-primary:hover,
 .generate-form-col button[type="submit"]:hover {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
+    background: var(--btn-primary-hover-bg);
+    border-color: var(--btn-primary-hover-border);
     color: var(--accent-ink);
+    filter: var(--btn-primary-hover-filter);
+    box-shadow: var(--btn-primary-hover-shadow);
 }
 .btn-primary:disabled:hover,
-.generate-form-col button[type="submit"]:disabled:hover { background: var(--accent); border-color: var(--accent); }
+.generate-form-col button[type="submit"]:disabled:hover {
+    background: var(--btn-primary-bg);
+    border-color: var(--btn-primary-border);
+    filter: none;
+}
 
 /* Outlined accent: secondary actions that still need to read as actions. */
 .recreate-btn {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    color: var(--text);
+    background: var(--btn-recreate-bg);
+    border: 1px solid var(--btn-recreate-border);
+    color: var(--btn-recreate-text);
 }
 .recreate-btn:hover {
-    background: var(--surface-2);
-    border-color: var(--border-strong);
-    color: var(--text);
+    background: var(--btn-recreate-hover-bg);
+    border-color: var(--btn-recreate-hover-border);
+    color: var(--btn-recreate-text);
+}
+/* Download: a plain button in light, the original green in dark. */
+.download-btn {
+    background: var(--btn-download-bg);
+    border-color: var(--btn-download-border);
+    color: var(--btn-download-text);
+    font-weight: var(--btn-download-weight);
+}
+.download-btn:hover {
+    background: var(--btn-download-hover-bg);
+    border-color: var(--btn-download-hover-border);
+    color: var(--btn-download-text);
 }
 
 /* Destructive */
@@ -106,21 +124,23 @@ button:disabled,
 .btn-ghost,
 .logout-form button {
     background: transparent;
-    border-color: transparent;
+    border-color: var(--btn-ghost-border);
+    border-radius: var(--btn-ghost-radius);
     color: var(--text-muted);
 }
 .btn-ghost:hover,
 .logout-form button:hover {
     background: var(--surface-2);
-    border-color: transparent;
-    color: var(--text);
+    border-color: var(--btn-ghost-hover-border);
+    color: var(--btn-ghost-hover-text);
 }
 
 .btn-block { width: 100%; }
 
 /* A gallery card's one row of actions (Download, Recreate, Drive): plain
-   buttons sharing the row equally. .download-btn / .recreate-btn /
-   .drive-upload-btn are JS hooks only, never a look of their own. */
+   buttons sharing the row equally. Download and Recreate take their
+   looks from the --btn-download-* / --btn-recreate-* roles (plain in
+   light, green / violet outline in dark). */
 .result-actions { display: flex; gap: var(--gap-inline); margin-top: auto; }
 .result-actions > * { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); }
 /* Download + ⋯ as one split button: one border, one height, the ⋯ joined
@@ -133,10 +153,10 @@ button:disabled,
     height: 100%;
     min-height: var(--control-h);
     margin-left: -1px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--btn-download-border);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    background: var(--surface);
-    color: var(--text);
+    background: var(--btn-download-bg);
+    color: var(--btn-download-text);
 }
 .result-actions > .download-btn + .menu { display: flex; }
 

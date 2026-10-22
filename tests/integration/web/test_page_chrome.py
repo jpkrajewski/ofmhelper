@@ -105,3 +105,17 @@ def test_every_page_head_links_the_favicon_and_it_loads_signed_out(client, path)
         response = signed_out.get(href)
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("image/")
+
+
+def test_the_header_switches_light_and_dark_and_the_choice_sticks(client):
+    html = client.get("/generate").text
+    assert 'class="icon-btn theme-toggle"' in html
+    assert "js/theme.js" in html
+    assert 'data-theme="dark"' not in html
+
+    client.cookies.set("ofm_theme", "dark")
+    assert '<html lang="en" data-theme="dark">' in client.get("/generate").text
+    client.cookies.set("ofm_theme", "light")
+    assert 'data-theme="dark"' not in client.get("/generate").text
+    client.cookies.set("ofm_theme", '"><script>')
+    assert '<script>"' not in client.get("/generate").text

@@ -12,6 +12,7 @@
    1. Tokens
    --------------------------------------------------------------------- */
 :root {
+    color-scheme: light;
     /* The palette (2026-10-22): five warm-stone neutrals, one bold accent
        and one red. These seven are the only colour values in this file;
        everything below is a role pointing at one of them (or a mix of
@@ -23,6 +24,7 @@
     --grey: #5e5e58;
     --ink: #151515;
     --accent-hue: #ff5a1f;  /* signal orange */
+    --accent-hue-2: #ff5a1f;  /* gradient end: none in light, flat orange */
     --red: #c62828;
 
     --bg: var(--wash);
@@ -45,6 +47,38 @@
     --accent-ink: var(--paper);
     --accent-wash: var(--wash);
     --accent-ring: color-mix(in srgb, var(--accent-hue) 35%, transparent);
+    /* Buttons. Light: one plain look, Download and Recreate included.
+       Dark (the original theme) gives each its own (block below). */
+    --btn-bg: var(--surface);
+    --btn-hover-bg: var(--surface-2);
+    --btn-border: var(--border-strong);
+    --btn-hover-border: var(--border-strong);
+    --btn-weight: 500;
+    --btn-download-bg: var(--btn-bg);
+    --btn-download-hover-bg: var(--btn-hover-bg);
+    --btn-download-border: var(--btn-border);
+    --btn-download-hover-border: var(--btn-hover-border);
+    --btn-download-text: var(--text);
+    --btn-download-weight: var(--btn-weight);
+    --btn-recreate-bg: var(--btn-bg);
+    --btn-recreate-hover-bg: var(--btn-hover-bg);
+    --btn-recreate-border: var(--btn-border);
+    --btn-recreate-hover-border: var(--btn-hover-border);
+    --btn-recreate-text: var(--text);
+    --btn-ghost-border: transparent;
+    --btn-ghost-hover-border: transparent;
+    --btn-ghost-hover-text: var(--text);
+    --btn-ghost-radius: var(--radius-sm);
+    /* The primary button: flat accent in light, the original gradient in
+       dark. */
+    --btn-primary-bg: var(--accent);
+    --btn-primary-hover-bg: var(--accent-strong);
+    --btn-primary-border: var(--accent);
+    --btn-primary-hover-border: var(--accent-strong);
+    --btn-primary-hover-filter: none;
+    --btn-primary-shadow: var(--shadow-sm);
+    --btn-primary-hover-shadow: var(--shadow-sm);
+    --btn-primary-weight: 500;
     /* Kept as names so older rules resolve; both are flat. */
     --gradient: linear-gradient(var(--accent-hue), var(--accent-hue));
     --gradient-btn: linear-gradient(var(--accent-hue), var(--accent-hue));
@@ -99,9 +133,9 @@
     /* Fluid type: one scale for the whole site, so a heading is the same
        size on every page without per-page font-size overrides. */
     --step--2: 0.75rem;       /* micro labels: the smallest text anywhere */
-    --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.84rem);
-    --step-0: clamp(0.94rem, 0.91rem + 0.14vw, 1rem);
-    --step-1: clamp(1.06rem, 1rem + 0.3vw, 1.25rem);
+    --step--1: clamp(0.84rem, 0.82rem + 0.1vw, 0.9rem);
+    --step-0: clamp(1rem, 0.97rem + 0.14vw, 1.06rem);
+    --step-1: clamp(1.12rem, 1.06rem + 0.3vw, 1.31rem);
     --step-2: clamp(1.25rem, 1.13rem + 0.6vw, 1.6rem);
     --step-3: clamp(1.6rem, 1.35rem + 1.2vw, 2.25rem);
     --step-4: clamp(2rem, 1.5rem + 2.4vw, 3.25rem);
@@ -151,7 +185,100 @@
 }
 
 @media (min-width: 720px) {
-    :root { --control-font: 0.875rem; }
+    :root { --control-font: 0.94rem; }
+}
+
+/* Dark (2026-10-22): the original theme, untouched for two months before
+   the light redesign (git e8dc6b2, app.css :root), its values verbatim.
+   Switched from the header (static/js/theme.js, `ofm_theme` cookie ->
+   <html data-theme="dark">). The palette slots are set for the few rules
+   that mix them; every role is the original's own value. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #12121b;
+    --wash: #08080d;
+    --line: #2a2a3d;
+    --grey: #a6a6bd;
+    --ink: #f4f4f8;
+    --accent-hue: #8b5cf6;
+    --accent-hue-2: #db2777;
+    --red: #fb7185;
+
+    --bg: #08080d;
+    --bg-2: #0c0c14;
+    --surface: #12121b;
+    --surface-2: #191924;
+    --surface-3: #21212f;
+    --border: #2a2a3d;
+    --border-soft: #1e1e2b;
+    --border-strong: #3a3a52;
+
+    --text: #f4f4f8;
+    --text-muted: #a6a6bd;
+    --text-faint: #7c7c93;
+
+    --accent: #8b5cf6;
+    --accent-strong: #a78bfa;
+    --accent-soft: #c9b8ff;
+    --accent-ink: #ffffff;
+    --accent-wash: rgba(139, 92, 246, 0.14);
+    --accent-ring: rgba(139, 92, 246, 0.45);
+    --gradient: linear-gradient(115deg, #7dd3fc, #c4b5fd 45%, #f9a8d4);
+    --gradient-btn: linear-gradient(135deg, #7c3aed, #db2777);
+
+    --ok: #4ade80;
+    --ok-wash: rgba(74, 222, 128, 0.12);
+    --fail: #fb7185;
+    --fail-wash: rgba(251, 113, 133, 0.12);
+    --fail-border: #6b2a3a;
+    --warn: #fbbf24;
+    --warn-wash: rgba(251, 191, 36, 0.12);
+
+    --scrim: rgba(4, 4, 8, 0.6);
+    --scrim-strong: rgba(4, 4, 8, 0.85);
+    --glass-bg: rgba(14, 14, 22, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.08);
+
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 18px;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+
+    /* The original buttons. */
+    --btn-bg: #191924;
+    --btn-hover-bg: #21212f;
+    --btn-border: #2a2a3d;
+    --btn-hover-border: #3a3a52;
+    --btn-weight: 600;
+    --btn-primary-bg: linear-gradient(135deg, #7c3aed, #db2777);
+    --btn-primary-hover-bg: linear-gradient(135deg, #7c3aed, #db2777);
+    --btn-primary-border: transparent;
+    --btn-primary-hover-border: transparent;
+    --btn-primary-hover-filter: brightness(1.12);
+    --btn-primary-shadow: 0 6px 20px rgba(124, 58, 237, 0.28);
+    --btn-primary-hover-shadow: 0 10px 28px rgba(124, 58, 237, 0.36);
+    --btn-primary-weight: 700;
+    --btn-download-bg: rgba(74, 222, 128, 0.12);
+    --btn-download-hover-bg: rgba(74, 222, 128, 0.2);
+    --btn-download-border: rgba(74, 222, 128, 0.35);
+    --btn-download-hover-border: #4ade80;
+    --btn-download-text: #4ade80;
+    --btn-download-weight: 700;
+    --btn-recreate-bg: transparent;
+    --btn-recreate-hover-bg: rgba(139, 92, 246, 0.14);
+    --btn-recreate-border: rgba(139, 92, 246, 0.45);
+    --btn-recreate-hover-border: #8b5cf6;
+    --btn-recreate-text: #c9b8ff;
+    --btn-ghost-border: #2a2a3d;
+    --btn-ghost-hover-border: #fb7185;
+    --btn-ghost-hover-text: #fb7185;
+    --btn-ghost-radius: 999px;
 }
 
 @font-face {

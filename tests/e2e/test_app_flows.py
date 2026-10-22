@@ -67,6 +67,20 @@ def test_admin_opens_every_page(admin: Session):
     assert admin.js_errors == []
 
 
+def test_the_header_switches_to_dark_and_back_and_it_sticks(va: Session):
+    va.goto("/generate")
+    html = va.page.locator("html")
+    expect(html).not_to_have_attribute("data-theme", "dark")
+    va.page.click(".theme-toggle")
+    expect(html).to_have_attribute("data-theme", "dark")
+    va.goto("/clone")  # rendered dark by the server from the cookie
+    expect(va.page.locator("html")).to_have_attribute("data-theme", "dark")
+    va.page.click(".theme-toggle")
+    va.goto("/generate")
+    expect(va.page.locator("html")).not_to_have_attribute("data-theme", "dark")
+    assert va.js_errors == []
+
+
 def test_va_sees_only_its_pages_and_none_of_the_admin_ones(va: Session):
     assert _nav_paths(va) == VA_PAGES
 

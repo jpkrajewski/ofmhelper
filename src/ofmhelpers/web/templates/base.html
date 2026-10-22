@@ -1,10 +1,11 @@
 {% import "components/ui.html" as ui -%}
+{% import "_icons.html" as ic -%}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if request.cookies.get("ofm_theme") == "dark" %} data-theme="dark"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light dark">
     <title>{% block title %}Ascend Global LLC — Content Ops{% endblock %}</title>
     {% include "_favicon.html" %}
     {% include "_styles.html" %}
@@ -14,6 +15,7 @@
     <script src="{{ static_url('js/nav.js') }}" defer></script>
     <script src="{{ static_url('js/confirm.js') }}" defer></script>
     <script src="{{ static_url('js/menu.js') }}" defer></script>
+    <script src="{{ static_url('js/theme.js') }}" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -58,6 +60,9 @@
                 {% if signed_in_as %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% endif %}
                 {{ ui.button("Log out", "ghost", type="submit") }}
             </form>
+
+            {# Light / dark (static/js/theme.js): the icon shows the mode a click gives. #}
+            {% call ui.icon_button("moon", "Switch light or dark", hook="theme-toggle") %}{{ ic.icon("moon") }}{{ ic.icon("sun") }}{% endcall %}
 
             <button type="button" class="nav-toggle" aria-expanded="false"
                     aria-controls="site-nav" aria-label="Toggle navigation">
