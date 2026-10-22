@@ -7,7 +7,6 @@ originals (see task_helpers.reference_asset, static/js/file-picker.js).
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -17,6 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from signin import sign_in, sign_in_agency
 
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import refs as refs_router
@@ -190,7 +190,7 @@ def test_list_refs_opens_on_last_used_then_last_uploaded(
     monkeypatch.setattr(
         refs_router.ref_usage,
         "recent",
-        lambda _limit: [(used[0], 20.0), (used[1], 10.0)],
+        lambda _user, _limit: [(used[0], 20.0), (used[1], 10.0)],
     )
 
     entries = client.get("/refs?kind=image").json()
@@ -209,6 +209,31 @@ def test_list_refs_opens_on_last_used_then_last_uploaded(
     assert all(e["used_at"] is None for e in entries[2:])
 
 
+def test_list_refs_opens_on_the_signed_in_users_own_picks(assets_dir):
+    """Usage is kept per user: another user's picks (however many) neither
+    show in the agency's "recently used" nor push the agency's own out."""
+    admin, other = TestClient(app), TestClient(app)
+    admin_id = sign_in_agency(admin).id
+    other_id = sign_in(other, "refs-other@example.com").id
+    names = _write_refs(assets_dir, 3)
+    keys = [refs_router.ref_usage._key(u) for u in (admin_id, other_id)]
+    refs_router.ref_usage.get_redis().delete(*keys)
+    try:
+        refs_router.ref_usage.record_use(admin_id, assets_dir / names[0])
+        for name in names[1:]:
+            refs_router.ref_usage.record_use(other_id, assets_dir / name)
+
+        entries = admin.get("/refs?kind=image").json()
+    finally:
+        refs_router.ref_usage.get_redis().delete(*keys)
+
+    assert [(e["name"], e["used_at"] is not None) for e in entries] == [
+        ("file0.png", True),
+        ("file2.png", False),
+        ("file1.png", False),
+    ]
+
+
 def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
     client, assets_dir, monkeypatch
 ):
@@ -219,7 +244,7 @@ def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
     monkeypatch.setattr(
         refs_router.ref_usage,
         "recent",
-        lambda _limit: [
+        lambda _user, _limit: [
             (str(assets_dir / "gone.png"), 30.0),
             (str(assets_dir / "hashaud__voice.mp3"), 20.0),
         ],
@@ -251,3 +276,38 @@ def test_list_refs_still_filters_by_kind(client, assets_dir):
 @pytest.mark.parametrize("limit", [0, -1, 61, 999])
 def test_list_refs_rejects_an_out_of_range_limit(client, assets_dir, limit):
     assert client.get(f"/refs?limit={limit}").status_code == 422
+
+
+def test_a_burst_for_one_new_thumb_decodes_the_original_once(
+    client, assets_dir, monkeypatch
+):
+    """Recreate clicked over and over asks for the same new thumbnail many
+    times at once: one request makes it, the others wait and reuse it."""
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    original = assets_dir / "abc123__photo.png"
+    original.write_bytes(_png_bytes())
+    made: list[Path] = []
+    real = refs_router.write_image_thumb
+    lock = threading.Lock()
+
+    def slow(source, dest, size):
+        with lock:
+            made.append(dest)
+        time.sleep(0.2)
+        real(source, dest, size)
+
+    monkeypatch.setattr(refs_router, "write_image_thumb", slow)
+
+    def ask(_n: int) -> int:
+        c = TestClient(app)
+        c.post("/login", data={"password": "test-admin", "next": "/"})
+        return c.get(f"/refs/thumb?path={original}&size=100").status_code
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        codes = list(pool.map(ask, range(8)))
+
+    assert codes == [200] * 8
+    assert len(made) == 1

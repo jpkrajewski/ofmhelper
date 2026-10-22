@@ -63,8 +63,9 @@ class Provider(ABC):
 
     @classmethod
     @abstractmethod
-    def default_key(cls, admin: bool) -> str | None:
-        """The key the form pre-fills for an admin or a VA, if configured."""
+    def default_key(cls) -> str | None:
+        """The key an admin's form pre-fills when they saved none of their
+        own (.env), if configured. Users only ever get their own."""
 
     @abstractmethod
     def upload(self, path: Path) -> str:

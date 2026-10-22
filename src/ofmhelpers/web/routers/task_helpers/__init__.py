@@ -18,7 +18,7 @@ Import from this package, not the submodules: every tool router imports from
 here, and which submodule a helper lives in is not their business.
 """
 
-from ofmhelpers.web.routers.task_helpers.download_names import download_name
+from ofmhelpers.web.download_names import download_name
 from ofmhelpers.web.routers.task_helpers.manifests import (
     build_ordered_paths,
     resolve_existing_ref,
@@ -42,9 +42,11 @@ from ofmhelpers.web.routers.task_helpers.uploads import (
     VIDEO_EXTS,
     VIDEO_KINDS,
     assets_root_for,
-    assets_root_for_role,
+    assets_root_for_actor,
+    assets_root_for_user,
     classify_kind,
     convert_heic_upload,
+    in_asset_root,
     make_job_dir,
     register_generated_asset,
     register_grouped_results,
@@ -67,11 +69,13 @@ __all__ = [
     "add_job_routes",
     "asset_card",
     "assets_root_for",
-    "assets_root_for_role",
+    "assets_root_for_actor",
+    "assets_root_for_user",
     "build_ordered_paths",
     "classify_kind",
     "convert_heic_upload",
     "download_name",
+    "in_asset_root",
     "job_assets",
     "job_inputs",
     "job_status_payload",

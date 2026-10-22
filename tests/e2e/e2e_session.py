@@ -14,22 +14,41 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Browser, Response, Route
 
-# The app's Drive root under OFM_FAKE_EXTERNALS (conftest `_app_env`).
-FAKE_DRIVE_ROOT = "fake-root-folder-e2e"
+# A person's "DEV - ALL ACCOUNTS" lives in their own fake My Drive.
+DEV_ROOT = "DEV - ALL ACCOUNTS"
 
 
-def log_in(browser: Browser, base_url: str, password: str, state: Path) -> None:
-    """Logs in once and saves the cookies to `state`: every test of that
-    role starts from them instead of the login form."""
+def connect_google(session: Session, email: str) -> None:
+    """Links a Google account (the fake consent screen) to the signed-in
+    session on /account: their Drive is connected from then on."""
+    session.goto("/account")
+    session.page.click('a[href^="/auth/google/start?link=1"]')
+    session.page.fill("#fake-email", email)
+    with session.page.expect_navigation():
+        session.page.click("button[type=submit]")
+
+
+def my_root(drive, email: str) -> str:
+    """The id of `email`'s "DEV - ALL ACCOUNTS" in the fake Drive."""
+    (root,) = drive.named(DEV_ROOT, f"mydrive-{email}")
+    return root
+
+
+def log_in(
+    browser: Browser, base_url: str, email: str, password: str, state: Path
+) -> None:
+    """Signs in once through the login form and saves the cookies to
+    `state`: every test of that role starts from them."""
     context = browser.new_context(base_url=base_url)
     page = context.new_page()
     page.goto("/login")
+    page.fill("#email", email)
     page.fill("#password", password)
     # Wait for the redirect, not for network idle: the landing page it
     # lands on keeps streaming media, which never goes idle.
     with page.expect_navigation():
         page.click("button[type=submit]")
-    assert "/login" not in page.url, "login failed -- wrong password?"
+    assert "/login" not in page.url, "login failed -- wrong email or password?"
     context.storage_state(path=state)
     context.close()
 

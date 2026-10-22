@@ -2,6 +2,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.web.main import app
 
@@ -9,7 +10,7 @@ from ofmhelpers.web.main import app
 @pytest.fixture
 def client():
     with TestClient(app) as c:
-        c.post("/login", data={"password": "test-va", "next": "/"})
+        sign_in(c)
         yield c
 
 

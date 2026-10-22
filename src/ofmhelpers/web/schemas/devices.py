@@ -179,6 +179,8 @@ def _compact(n: int) -> str:
 
 class Device(BaseModel):
     id: int
+    # Whose phone it is (a user; `owner` is the person who holds it).
+    user_id: int
     label: str
     model_id: str | None
     color_id: str | None

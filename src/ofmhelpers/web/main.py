@@ -14,8 +14,10 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.telemetry import configure_telemetry, instrument_app
 from ofmhelpers.web.account_tracker import account_tracker_loop
 from ofmhelpers.web.drive_folders import drive_loop
+from ofmhelpers.web.link_sync import link_sync_loop
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
     CompressionMiddleware,
@@ -31,6 +33,7 @@ from ofmhelpers.web.templates_config import render
 # Before anything else in the process logs: uvicorn imports this module to
 # find `app`, so this runs ahead of the first request and ahead of uvicorn's
 # own startup records. See ofmhelpers/log.py.
+configure_telemetry("ascend-web")
 configure_logging()
 logger = get_logger(__name__)
 
@@ -52,6 +55,9 @@ async def lifespan(app: FastAPI):
     # Rescans /accounts' tracked social accounts when due -- see
     # ofmhelpers/web/account_tracker.py.
     account_tracker = asyncio.create_task(account_tracker_loop())
+    # Syncs /links' links and their clicks when due -- see
+    # ofmhelpers/web/link_sync.py.
+    link_sync = asyncio.create_task(link_sync_loop())
     # Makes /drive's folders for the day in the shared Google Drive -- see
     # ofmhelpers/web/drive_folders.py.
     drive = asyncio.create_task(drive_loop())
@@ -63,12 +69,14 @@ async def lifespan(app: FastAPI):
     sweeper.cancel()
     reel_watch.cancel()
     account_tracker.cancel()
+    link_sync.cancel()
     drive.cancel()
     backfill.cancel()
     logger.info("shutdown: sweepers cancelled")
 
 
 app = FastAPI(title="Ascend Global LLC — Content Ops", lifespan=lifespan)
+instrument_app(app)
 
 # --- Middleware -------------------------------------------------------
 # Starlette applies middleware outside-in in the order added, so the LAST
@@ -95,11 +103,6 @@ app.mount(
 
 for router in ROUTERS:
     app.include_router(router)
-
-
-@app.get("/")
-def apply(request: Request):
-    return render(request, "reachmodel.html")
 
 
 @app.get("/home")

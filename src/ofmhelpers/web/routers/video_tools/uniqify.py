@@ -86,7 +86,7 @@ def _gallery_card(job: Job) -> JobCard:
 @router.get("")
 def form(request: Request):
     recent, _total = list_jobs_page(
-        {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.visible_actor(request)
+        {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.actor(request)
     )
     return render(
         request,
@@ -131,7 +131,7 @@ def run(
         "metadata": metadata.value,
     }
     job_id = create_job(
-        TASK, {"dir": str(job_dir), **params}, actor=request.session.get("role")
+        TASK, {"dir": str(job_dir), **params}, actor=AuthMiddleware.actor(request)
     )
     enqueue(run_job, job_id, _run_uniqify, {"job_dir": str(job_dir), **params})
     return JobQueued(job_id=job_id)

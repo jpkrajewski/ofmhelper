@@ -15,7 +15,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Engine, create_engine
+import sqlalchemy
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from ofmhelpers.config import settings
@@ -35,7 +36,11 @@ def get_engine() -> Engine:
             _engine.dispose()
         # pool_pre_ping: a long-idle worker's pooled connection may have been
         # dropped by Postgres/network; ping-and-recycle instead of erroring.
-        _engine = create_engine(url, pool_pre_ping=True, future=True)
+        # Looked up on the module at call time, not imported by name: the
+        # telemetry instrumentation (telemetry.py) wraps
+        # `sqlalchemy.create_engine` after this module is imported, and only
+        # an engine made through the wrapper gets a span per query.
+        _engine = sqlalchemy.create_engine(url, pool_pre_ping=True, future=True)
         _engine_url = url
     return _engine
 

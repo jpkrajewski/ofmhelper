@@ -5,7 +5,6 @@ and the picked reels handed to /clone."""
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -17,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import requests
 from fastapi.testclient import TestClient
+from signin import sign_in_agency
 
 from ofmhelpers.instagram import (
     InstagramError,
@@ -59,7 +59,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
     monkeypatch.setattr(reels, "UPLOADS_ROOT", tmp_path / "uploads")
     c = TestClient(app)
-    c.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in_agency(c)
     return c
 
 
@@ -173,11 +173,16 @@ def test_feed_pages(client, monkeypatch):
     monkeypatch.setenv("OFM_IG_FEED_PAGE_SIZE", "2")
     profiles = [
         WatchedProfile(
-            username=f"u{i}", added_at=0, result=_found(f"u{i}", 100_000 - i, f"c{i}")
+            user_id=1,
+            username=f"u{i}",
+            added_at=0,
+            result=_found(f"u{i}", 100_000 - i, f"c{i}"),
         )
         for i in range(5)
     ]
-    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
 
     first = client.get("/reels").text
     assert 'data-code="c0"' in first
@@ -212,9 +217,7 @@ def test_login_only_reel_is_shown_but_not_pickable(client, monkeypatch):
     assert "data-video-url" not in html
 
 
-def test_uploading_cookies_unlocks_stored_login_only_reels(
-    client, tmp_path, monkeypatch
-):
+def test_uploading_cookies_unlocks_stored_login_only_reels(client, monkeypatch):
     def gated(_client, username, *_args):
         found = _found(username)
         found.reels[0] = found.reels[0].model_copy(
@@ -232,9 +235,11 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(
         return ReelMedia(video_url=CDN.format("u"), duration_s=9.0, taken_at=5)
 
     monkeypatch.setattr(reel_watch.InstagramClient, "media_logged_in", logged_in)
-    monkeypatch.setenv("OFM_COOKIES_FILE", str(tmp_path / "cookies.txt"))
     client.post("/login", data={"password": "test-admin", "next": "/"})
-    client.post("/cookies", files={"file": ("cookies.txt", b"# Netscape")})
+    jar = (
+        b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tx\n"
+    )
+    client.post("/cookies", files={"file": ("cookies.txt", jar)})
 
     watched = get_watched("x")
     assert asked == [_found("x").reels[0].pk]
@@ -246,7 +251,7 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(
 def test_feed_is_every_profiles_reels_most_viewed_first():
     def watched(username, views):
         return WatchedProfile(
-            username=username, added_at=0, result=_found(username, views)
+            user_id=1, username=username, added_at=0, result=_found(username, views)
         )
 
     feed = FeedItem.of([watched("a", 60_000), watched("b", 2_000_000), watched("c", 0)])
@@ -499,19 +504,29 @@ def test_a_new_group_is_offered_before_any_profile_is_in_it(client):
 def test_feed_filters_by_rank_and_group_together(client, monkeypatch):
     profiles = [
         WatchedProfile(
-            username="a", group="gay", added_at=0, result=_found("a", 60_000, "small")
+            user_id=1,
+            username="a",
+            group="gay",
+            added_at=0,
+            result=_found("a", 60_000, "small"),
         ),
         WatchedProfile(
-            username="b", group="gay", added_at=0, result=_found("b", 1_200_000, "huge")
+            user_id=1,
+            username="b",
+            group="gay",
+            added_at=0,
+            result=_found("b", 1_200_000, "huge"),
         ),
         WatchedProfile(
-            username="c", added_at=0, result=_found("c", 2_000_000, "other")
+            user_id=1, username="c", added_at=0, result=_found("c", 2_000_000, "other")
         ),
     ]
     monkeypatch.setattr(
         reels,
         "list_watched",
-        lambda group=None: [p for p in profiles if group is None or p.group == group],
+        lambda group=None, _owner=None: [
+            p for p in profiles if group is None or p.group == group
+        ],
     )
     html = client.get("/reels", params={"group": "gay", "rank": "legendary"}).text
     assert 'data-code="huge"' in html
@@ -529,6 +544,7 @@ def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
     views = [150_000, 140_000, 130_000, 120_000, 110_000, 2_000_000, 300_000, 60_000]
     profiles = [
         WatchedProfile(
+            user_id=1,
             username=f"u{i}",
             group="gay",
             added_at=0,
@@ -539,7 +555,9 @@ def test_a_rank_chip_shows_exactly_that_rank_on_every_page(client, monkeypatch):
     monkeypatch.setattr(
         reels,
         "list_watched",
-        lambda group=None: [p for p in profiles if group is None or p.group == group],
+        lambda group=None, _owner=None: [
+            p for p in profiles if group is None or p.group == group
+        ],
     )
     first = client.get("/reels", params={"group": "gay", "rank": "uncommon"}).text
     assert [
@@ -572,7 +590,7 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
         profile = result.profile.model_copy(update={"followers": followers})
         result = result.model_copy(update={"reels": [reel], "profile": profile})
         return WatchedProfile(
-            username=username, added_at=0, scanned_at=1, result=result
+            user_id=1, username=username, added_at=0, scanned_at=1, result=result
         )
 
     profiles = [
@@ -580,7 +598,9 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
         found("mid", 50_000, 160_000),  # 3.2x
         found("big", 1_000_000, 900_000),  # 0.9x
     ]
-    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
 
     def shown(query):
         return [
@@ -601,7 +621,7 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
 
 def test_an_empty_filter_says_so(client):
     html = client.get("/reels", params={"group": "gay", "rank": "legendary"}).text
-    assert "No legendary reels in gay right now." in html
+    assert "No legendary reels in gay." in html
 
 
 def test_rank_chips_are_best_first_with_their_ranges(client):
@@ -663,6 +683,7 @@ def test_watch_list_shows_two_week_views_and_crowns_the_most_viewed(
 ):
     def scanned(username, views):
         return WatchedProfile(
+            user_id=1,
             username=username,
             added_at=0,
             scanned_at=1,
@@ -670,7 +691,9 @@ def test_watch_list_shows_two_week_views_and_crowns_the_most_viewed(
         )
 
     profiles = [scanned("small", [5_000]), scanned("king", [2_000_000, 500_000])]
-    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
     rows = client.get("/reels/watchlist").text
     king = rows.split('data-username="king"', 1)[1].split("</li>", 1)[0]
     small = rows.split('data-username="small"', 1)[1].split("</li>", 1)[0]
@@ -685,6 +708,7 @@ def test_leaderboard_leads_with_most_views_then_most_reels(client, monkeypatch):
     def scanned(username, reel_count, window_views):
         found = _with_recent(_found(username), [window_views])
         return WatchedProfile(
+            user_id=1,
             username=username,
             added_at=0,
             scanned_at=1,
@@ -696,7 +720,7 @@ def test_leaderboard_leads_with_most_views_then_most_reels(client, monkeypatch):
         scanned("few", 3, 1_000_000),
         scanned("sheep_love33", 15, 13_700_000),
         scanned("nnnaomi.chuu", 10, 14_100_000),
-        WatchedProfile(username="new", added_at=0),
+        WatchedProfile(user_id=1, username="new", added_at=0),
     ]
     board = Leaderboard.of(profiles)
     assert [p.username for p in board.rows] == [
@@ -707,7 +731,9 @@ def test_leaderboard_leads_with_most_views_then_most_reels(client, monkeypatch):
     ]
     assert (board.top_views, board.top_reels) == ("nnnaomi.chuu", "sheep_love33")
 
-    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
     rows = client.get("/reels/watchlist?group=asian").text
     sheep = rows.split('data-username="sheep_love33"', 1)[1].split("</li>", 1)[0]
     assert 'data-tier="epic"' in sheep
@@ -716,7 +742,7 @@ def test_leaderboard_leads_with_most_views_then_most_reels(client, monkeypatch):
 
 
 def test_leaderboard_without_scans_outlines_nobody():
-    board = Leaderboard.of([WatchedProfile(username="new", added_at=0)])
+    board = Leaderboard.of([WatchedProfile(user_id=1, username="new", added_at=0)])
     assert (board.top_views, board.top_reels) == (None, None)
 
 
@@ -730,6 +756,7 @@ def test_watch_list_is_most_feed_reels_first():
         ]
         profile = found.profile.model_copy(update={"followers": followers})
         return WatchedProfile(
+            user_id=1,
             username=username,
             added_at=0,
             scanned_at=1,
@@ -738,7 +765,7 @@ def test_watch_list_is_most_feed_reels_first():
 
     profiles = [
         watched("huge_account_one_reel", [60_000], followers=5_000_000),
-        WatchedProfile(username="new", added_at=0),
+        WatchedProfile(user_id=1, username="new", added_at=0),
         watched("three_reels", [60_000, 60_000, 60_000], followers=5_000),
         watched("none", []),
         watched("two_big", [900_000, 900_000]),
@@ -918,6 +945,7 @@ def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
         result = _found(username, code=f"c_{username}")
         reel = result.reels[0].model_copy(update={"duration_s": length})
         return WatchedProfile(
+            user_id=1,
             username=username,
             added_at=0,
             scanned_at=1,
@@ -925,10 +953,107 @@ def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
         )
 
     profiles = [stored("short", 15.0), stored("long", 15.7), stored("gated", None)]
-    monkeypatch.setattr(reels, "list_watched", lambda _group=None: profiles)
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
 
     html = client.get("/reels/feed").text
 
     assert 'data-code="c_short"' in html
     assert 'data-code="c_gated"' in html
     assert 'data-code="c_long"' not in html
+
+
+# --- thumbnails ------------------------------------------------------------------
+
+
+def _jpeg(width: int = 1080, height: int = 1920) -> bytes:
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), "teal").save(out, "JPEG")
+    return out.getvalue()
+
+
+@pytest.fixture
+def cdn(monkeypatch, tmp_path):
+    """Instagram's CDN for covers: the URLs asked, answering a full-size
+    JPEG (or `status`). Previews kept under this test's own uploads root."""
+    from ofmhelpers.web import reel_thumbs
+
+    monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads-root"))
+    asked: list[str] = []
+    state = {"status": 200}
+
+    def get(url, **_kwargs):
+        asked.append(url)
+        response = requests.Response()
+        response.status_code = state["status"]
+        response._content = _jpeg() if state["status"] == 200 else b"no"
+        return response
+
+    monkeypatch.setattr(reel_thumbs.outbound, "get", get)
+    return asked, state
+
+
+def _one_profile(monkeypatch, code: str = "Dekxh8BJYdu") -> None:
+    profiles = [
+        WatchedProfile(
+            user_id=1, username="u", added_at=0, result=_found("u", code=code)
+        )
+    ]
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
+
+
+def test_feed_cards_load_the_kept_thumbnail_not_instagrams(client, monkeypatch):
+    _one_profile(monkeypatch)
+    html = client.get("/reels").text
+    assert 'src="/reels/thumb/Dekxh8BJYdu"' in html
+    assert "scontent.cdninstagram.com/t.jpg" not in html
+
+
+def test_thumbnail_is_fetched_once_shrunk_and_kept(client, monkeypatch, cdn):
+    from PIL import Image
+
+    asked, _state = cdn
+    _one_profile(monkeypatch)
+
+    first = client.get("/reels/thumb/Dekxh8BJYdu")
+    again = client.get("/reels/thumb/Dekxh8BJYdu")
+
+    assert first.status_code == again.status_code == 200
+    assert first.headers["content-type"] == "image/webp"
+    assert "immutable" in first.headers["cache-control"]
+    assert asked == ["https://scontent.cdninstagram.com/t.jpg"]
+    assert len(first.content) < len(_jpeg()) / 5
+    with Image.open(io.BytesIO(first.content)) as img:
+        assert img.width == 270
+
+
+def test_thumbnail_of_a_reel_not_watched_is_404_and_fetches_nothing(
+    client, monkeypatch, cdn
+):
+    asked, _state = cdn
+    _one_profile(monkeypatch)
+    assert client.get("/reels/thumb/NotWatched1").status_code == 404
+    assert asked == []
+
+
+def test_thumbnail_instagram_refuses_is_404_and_retried_later(client, monkeypatch, cdn):
+    """An expired cover URL (403) is not kept: the next scan's fresh URL
+    gets its chance."""
+    asked, state = cdn
+    _one_profile(monkeypatch)
+    state["status"] = 403
+    assert client.get("/reels/thumb/Dekxh8BJYdu").status_code == 404
+    state["status"] = 200
+    assert client.get("/reels/thumb/Dekxh8BJYdu").status_code == 200
+    assert len(asked) == 2
+
+
+def test_thumbnail_rejects_a_bad_code(client, cdn):
+    asked, _state = cdn
+    assert client.get("/reels/thumb/..%2Fetc").status_code in (404, 422)
+    assert asked == []

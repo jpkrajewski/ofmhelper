@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% import "_account_numbers.html" as num %}
+{% import "components/ui.html" as ui %}
 {% block title %}{{ account.name }} — Accounts{% endblock %}
 {% block content %}
 {% set growth = account.growth(period.days) %}
 {% set views = account.views(period.days) %}
-<p class="accounts-back"><a href="{{ query.link(period=query.period) }}">‹ Accounts</a></p>
+{{ ui.back_link(query.link(period=query.period), "Accounts") }}
 
 <div class="accounts-identity">
     {% if account.profile and account.profile.avatar_url %}
@@ -29,54 +30,101 @@
             <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
             {% endfor %}
         </select>
-        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+        <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
     </form>
 </div>
 
 {% if account.untracked_at %}
-<p class="notice notice-warn">Not tracked since {{ account.untracked_at|utc("%b %d, %Y") }}: no longer synced, its history is kept. Add @{{ account.handle }} again to resume it.</p>
+{{ ui.notice("Not tracked since " ~ account.untracked_at|utc("%b %d, %Y"), "warn") }}
 {% endif %}
 {% if account.error %}
-<p class="notice notice-fail">Unreachable: {{ account.error }}{% if account.metrics %} — showing the last successful sync.{% endif %}</p>
+{{ ui.notice("Unreachable: " ~ account.error, "fail") }}
 {% elif account.status == "private" %}
-<p class="notice notice-fail">Private account: only its follower count is visible.</p>
+{{ ui.notice("Private account", "fail") }}
 {% elif account.metrics and account.metrics.limited %}
-<p class="notice notice-warn">Synced without a working Instagram login: reels Instagram hides from logged-out viewers (sensitive, age-restricted) are missing below. Upload a fresh cookies.txt at <a href="/cookies">/cookies</a> (admin).</p>
+{% call ui.notice(kind="warn") %}Synced without an Instagram login: some reels are missing. <a href="/cookies">Upload cookies</a>{% endcall %}
 {% endif %}
 
-<div class="accounts-kpis accounts-kpis-4">
-    <div class="accounts-kpi">
-        <span>Followers</span>
-        <strong>{{ num.count(account.followers, "Not synced yet") }}</strong>
-        <small>Current total</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Views</span>
-        <strong>{{ num.short(views.views if views else none, "The scan does not cover the period") }}</strong>
-        <small>{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Follower growth</span>
-        <strong>{{ num.growth(growth) }}</strong>
-        <small>{% if growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Posts published</span>
-        <strong>{{ num.count(account.posts_in(period.days), "The scan does not cover the period") }}</strong>
-        <small>{{ period.label }}</small>
-    </div>
+{% set views_note %}{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}{% endset %}
+{% set growth_note %}{% if growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}{% endset %}
+<div class="stat-grid">
+    {{ ui.stat("Followers", num.count(account.followers, "Not synced yet"), "Current total") }}
+    {{ ui.stat("Views", num.short(views.views if views else none, "The scan does not cover the period"), views_note) }}
+    {{ ui.stat("Follower growth", num.growth(growth), growth_note) }}
+    {{ ui.stat("Posts published", num.count(account.posts_in(period.days), "The scan does not cover the period"), period.label) }}
 </div>
 
+{# The follower chart (schemas.FollowerChart): server-drawn SVG in a 0..100
+   box stretched to the plot, labels and dots as HTML at the same percents.
+   static/js/account-chart.js adds the crosshair tooltip from the data
+   table's rows (data-x/data-y); without it the table still has every value. #}
 <section class="accounts-card">
     <h2>Followers · {{ period.label|lower }}</h2>
-    {% set line = history.followers_line(period.days) %}
-    {% if line.points %}
-    <div class="accounts-chart-range"><span>{{ "{:,}".format(line.high) }}</span><span>{{ "{:,}".format(line.low) }}</span></div>
-    <svg class="accounts-chart" viewBox="0 -4 {{ line.width }} {{ line.height + 8 }}" preserveAspectRatio="none" role="img" aria-label="Daily followers, {{ period.label|lower }}">
-        <polyline points="{{ line.points }}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
-    </svg>
+    {% set when = "%b %d, %H:%M" %}
+    {% if chart.ready %}
+    <figure class="fchart" data-fchart data-step="{{ "day" if chart.daily else "sync" }}">
+        <div class="fchart-summary">
+            <div class="fchart-stat">
+                <span>Start</span>
+                <strong>{{ "{:,}".format(chart.start.followers) }}</strong>
+                <small>{{ chart.start.taken_at|utc(when) }} UTC</small>
+            </div>
+            <div class="fchart-stat">
+                <span>Now</span>
+                <strong>{{ "{:,}".format(chart.end.followers) }}</strong>
+                <small>{{ chart.end.taken_at|utc(when) }} UTC</small>
+            </div>
+            <div class="fchart-stat">
+                <span>Change</span>
+                <strong class="growth" data-trend="{{ num.trend(chart.delta) }}">{{ "{:+,}".format(chart.delta) }}{% if chart.pct is not none %} <small>({{ num.pct(chart.pct) }})</small>{% endif %}</strong>
+                <small>{% if chart.daily %}{{ chart.span_days }} {{ "day" if chart.span_days == 1 else "days" }}{% else %}{{ chart.points|length }} syncs{% endif %}</small>
+            </div>
+        </div>
+        {# Positions are data: inline --x/--y custom properties. #}
+        {# djlint:off H021 #}
+        <div class="fchart-body">
+            <div class="fchart-y" aria-hidden="true">
+                {% for t in chart.y_ticks %}<span style="--y: {{ '%.2f'|format(t.y) }}%">{{ t.label }}</span>{% endfor %}
+            </div>
+            <div class="fchart-plot" tabindex="0" aria-describedby="fchart-hint">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Followers from {{ '{:,}'.format(chart.start.followers) }} on {{ chart.start.taken_at|utc('%b %d') }} to {{ '{:,}'.format(chart.end.followers) }} on {{ chart.end.taken_at|utc('%b %d') }}">
+                    {% for t in chart.y_ticks %}<line class="fchart-grid" x1="0" x2="100" y1="{{ '%.2f'|format(t.y) }}" y2="{{ '%.2f'|format(t.y) }}"></line>{% endfor %}
+                    {% for d in chart.gaps %}<path class="fchart-gap" d="{{ d }}"></path>{% endfor %}
+                    {% for d in chart.lines %}<path class="fchart-line" d="{{ d }}"></path>{% endfor %}
+                </svg>
+                {% for p in chart.dots %}<span class="fchart-dot" style="--x: {{ '%.2f'|format(p.x) }}%; --y: {{ '%.2f'|format(p.y) }}%"></span>{% endfor %}
+                <span class="fchart-cross" hidden></span>
+                <span class="fchart-dot fchart-focus" hidden></span>
+                <div class="fchart-tip" aria-hidden="true" hidden><strong>{{ "{:,}".format(chart.end.followers) }}</strong><span>{{ chart.end.taken_at|utc(when) }} UTC</span><small>{{ "{:+,}".format(chart.end.change) }} since previous {{ "day" if chart.daily else "sync" }}</small></div>
+            </div>
+            <div class="fchart-x" aria-hidden="true">
+                {% for t in chart.x_ticks %}<span style="--x: {{ '%.2f'|format(t.x) }}%">{{ t.taken_at|utc("%b %d" if chart.daily else "%b %d %H:%M") }}</span>{% endfor %}
+            </div>
+        </div>
+        {# djlint:on #}
+        <figcaption id="fchart-hint" class="fchart-note">
+            {% if chart.daily %}One point per day (its last sync), UTC.{% else %}Every sync, UTC.{% endif %}
+            {% if chart.gaps %}Dashed: no syncs in between.{% endif %}
+        </figcaption>
+        <details class="fchart-table">
+            <summary>Data table</summary>
+            <table>
+                <thead><tr><th scope="col">Synced (UTC)</th><th scope="col" class="num">Followers</th><th scope="col" class="num">Change</th></tr></thead>
+                <tbody>
+                    {% for p in chart.points %}
+                    <tr data-x="{{ '%.2f'|format(p.x) }}" data-y="{{ '%.2f'|format(p.y) }}">
+                        <td>{{ p.taken_at|utc(when) }}</td>
+                        <td class="num">{{ "{:,}".format(p.followers) }}</td>
+                        <td class="num">{% if p.change is not none %}{{ "{:+,}".format(p.change) }}{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </details>
+    </figure>
     {% else %}
-    <p class="accounts-empty">The follower trend appears once there are syncs on two different days. Tracking since {{ account.added_at|utc("%b %d, %Y") }}.</p>
+    <p class="accounts-empty">Not enough history yet: the chart needs {{ "syncs on two different days" if chart.daily else "two syncs" }} in the period.
+        {% if chart.points %}One so far: {{ "{:,}".format(chart.points[0].followers) }} followers on {{ chart.points[0].taken_at|utc(when) }} UTC.{% else %}Tracking since {{ account.added_at|utc("%b %d, %Y") }}.{% endif %}</p>
     {% endif %}
 </section>
 
@@ -105,4 +153,5 @@
 </section>
 
 <script src="{{ static_url('js/accounts.js') }}"></script>
+<script src="{{ static_url('js/account-chart.js') }}"></script>
 {% endblock %}

@@ -1,9 +1,8 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
 {% block content %}
-<div class="page-head">
-    <h1>Clone</h1>
-</div>
+{{ ui.page_header("Clone") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -13,12 +12,11 @@
       data-prefill-videos='{{ prefill_videos|tojson }}'
       data-pricing='{{ pricing|tojson }}' novalidate>
     {% include "_provider_fields.html" %}
-    {{ fp.file_picker('image', 'image', 'Subject', 'Up to ' ~ max_images ~ ' photos of one person', max=max_images, multiple=true) }}
-    {{ fp.file_picker('videos', 'video', 'Videos', 'One run each · 1–' ~ max_reference_s ~ ' s · up to ' ~ max_videos, multiple=true) }}
+    {{ fp.file_picker('image', 'image', 'Subject', max=max_images, multiple=true) }}
+    {{ fp.file_picker('videos', 'video', 'Videos', multiple=true) }}
     <div class="field">
         <label for="clone-prompt">Prompt</label>
         <textarea id="clone-prompt" name="prompt" class="prompt-input" rows="3" required>{{ default_prompt }}</textarea>
-        <p class="form-hint">@Image1, @Image2… are the subject photos, @Video1 the video.</p>
     </div>
     <div class="field clone-output">
         <span class="field-label">Output</span>
@@ -46,7 +44,7 @@
     <section class="cost-panel" id="clone-cost" aria-live="polite" hidden>
         <header class="cost-panel-head">
             <span class="cost-panel-title">Estimated cost</span>
-            <span class="badge badge-neutral" id="clone-cost-rate"></span>
+            <span class="clone-cost-rate" id="clone-cost-rate"></span>
         </header>
         <ol class="cost-lines" id="clone-cost-lines"></ol>
         <footer class="cost-total">
@@ -58,30 +56,72 @@
         </footer>
         <p class="cost-note" id="clone-cost-note"></p>
     </section>
-    <button type="submit" class="btn-primary">Start</button>
+    {{ ui.button("Start", "primary", type="submit") }}
     <div class="generation-status" role="status" aria-live="polite"></div>
 </form>
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Batches</h2>
+{% if not drive_ready %}
+{% call ui.notice(hook="drive-connect") %}
+    <span>Google Drive not connected</span>
+    {{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/clone") }}
+{% endcall %}
+{% endif %}
 
 <div id="results-panel">
-    <div id="clone-batches" data-live-endpoint="/clone/batches" data-live-key="batch"
+    <div class="results" id="clone-gallery" data-gallery-endpoint="/clone/gallery"
+         data-live-endpoint="/clone/gallery/latest" data-live-key="jobId"
          data-live-interval="{{ live_poll_s }}" data-live-empty="clone-empty">
-        {% for batch in batches %}{% include "_clone_batch.html" %}{% endfor %}
+        {% for job in gallery %}{% include "_clone_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
     </div>
-    <p class="empty-state" id="clone-empty" {% if batches %}hidden{% endif %}>
-        No clones yet. Pick an image and some videos, then Start.
-    </p>
+    {{ ui.empty("No clones yet", attrs={"id": "clone-empty", "hidden": gallery|length > 0}) }}
 </div>
 </div>
 </div>
 
+{% if drive_targets %}
+{# What clone.js adds to a card that finishes while the page is open. #}
+<template id="card-drive-item">{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}</template>
+<dialog class="accounts-dialog" id="drive-picker">
+    <form id="drive-picker-form" method="dialog">
+        <h2>Upload to Drive</h2>
+        <div class="drive-picker-tools">
+            <input type="search" id="drive-picker-search" placeholder="Search accounts…" aria-label="Search accounts" autocomplete="off">
+            <select id="drive-picker-model" aria-label="Model">
+                <option value="">All models</option>
+                {% for c in drive_models %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="drive-picker-list" id="drive-picker-list">
+            {% for t in drive_targets %}
+            <label class="drive-pick" data-login="{{ t.login_id }}" data-creator="{{ t.creator or '' }}"
+                   data-folder="{{ t.folder_name }}"
+                   data-search="{{ (t.handle ~ ' ' ~ t.owner ~ ' ' ~ (t.creator or ''))|lower }}">
+                <input type="checkbox" value="{{ t.login_id }}">
+                <span class="drive-pick-name">@{{ t.handle }} <small>{{ t.owner }}</small></span>
+                {% if t.creator %}<span class="accounts-creator-tag">{{ t.creator }}</span>{% endif %}
+                <span class="drive-pick-waiting">{% if t.waiting is none %}<span class="pending" title="Not read yet: Sync on /drive">—</span>{% elif t.waiting == 0 %}empty{% else %}{{ t.waiting }} to post{% endif %}</span>
+                <span class="drive-pick-done" hidden>In Drive</span>
+            </label>
+            {% endfor %}
+        </div>
+        <p class="generation-error" id="drive-picker-error" hidden></p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", attrs={"id": "drive-picker-cancel"}) }}
+            {{ ui.button("Upload", "primary", type="submit", attrs={"id": "drive-picker-submit"}) }}
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
 <script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 <script src="{{ static_url('js/clone.js') }}"></script>
 <script src="{{ static_url('js/clone-cost.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
 {% endblock %}

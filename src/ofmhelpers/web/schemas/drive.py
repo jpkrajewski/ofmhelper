@@ -30,11 +30,58 @@ class DriveTarget(BaseModel):
         return f"{self.handle} - {self.owner}"
 
 
+class UploadTarget(BaseModel):
+    """An account folder clone results can go into: an Instagram login's
+    "<handle> - <owner>", with what the Drive dialog sorts and groups by:
+    its model (the account's /accounts creator), how many files wait there
+    unposted (the folder's last /drive read; None: never read) and its
+    followers."""
+
+    login_id: int
+    folder_name: str
+    handle: str = ""
+    owner: str = ""
+    creator: str | None = None
+    waiting: int | None = None
+    followers: int | None = None
+
+
+class DriveUpload(BaseModel):
+    """A result file's upload into an account folder (`drive_uploads`)."""
+
+    id: int
+    job_id: str
+    file_index: int
+    login_id: int
+    folder_name: str
+    status: str
+    drive_url: str | None = None
+    error: str | None = None
+
+
+class UploadRequest(BaseModel):
+    """/clone "Upload to Drive": these jobs' results into each of these
+    logins' folders."""
+
+    job_ids: list[str] = Field(min_length=1, max_length=200)
+    login_ids: list[int] = Field(min_length=1, max_length=50)
+
+
+class UploadsQueued(BaseModel):
+    queued: int
+    uploads: list[DriveUpload]
+
+
 class StoredFolder(BaseModel):
     login_id: int
     folder_id: str
     name: str
     posted_folder_id: str | None = None
+    # The root it was made in (the owner's `drive_root_id` then).
+    root_folder_id: str = ""
+    # The folder's last read, and when (/drive opens with it).
+    scan: "AccountScan | None" = None
+    scanned_at: float | None = None
 
 
 class SyncReport(BaseModel):
@@ -45,6 +92,9 @@ class SyncReport(BaseModel):
     renamed: list[str] = Field(default_factory=list)
     # POSTED folders made or found (each "<account folder>/<name>").
     posted_folders: list[str] = Field(default_factory=list)
+    # Owners whose phones have Instagram logins but no Google Drive
+    # connected: their folders wait until they connect it on /account.
+    not_connected: list[str] = Field(default_factory=list)
     # Files seen in a POSTED folder for the first time.
     newly_posted: int = 0
     failed: list[str] = Field(default_factory=list)
@@ -77,6 +127,8 @@ class DriveCard(BaseModel):
     posted_today: int = 0
     posted_week: int = 0
     error: str | None = None
+    # Shown from the last read; this folder was never read yet.
+    unread: bool = False
 
     @property
     def account_url(self) -> str | None:
@@ -111,30 +163,19 @@ class DriveBoard(BaseModel):
     other_folders: list[DriveFile] = Field(default_factory=list)
     # Why nothing can be shown (not set up, not shared); None when fine.
     problem: str | None = None
-    bot_email: str | None = None
+    # The viewer has not connected Google Drive: the page offers it.
+    connect_drive: bool = False
+    # False: built from the last reads (`as_of`, the oldest of them), not
+    # from Drive now; the page fetches the live one (`/drive/live`).
+    live: bool = True
+    as_of: float | None = None
+    # The viewer's own root folder, its name, and whether their Google
+    # Drive is connected (Sync and their folders need it).
     root_folder_id: str = ""
+    root_name: str = ""
+    connected: bool = False
     posted_folder_name: str = "POSTED"
 
     @property
     def root_url(self) -> str | None:
         return folder_url(self.root_folder_id) if self.root_folder_id else None
-
-    @property
-    def accounts_waiting(self) -> int:
-        return sum(1 for c in self.cards if c.waiting)
-
-    @property
-    def files_waiting(self) -> int:
-        return sum(len(c.waiting) for c in self.cards)
-
-    @property
-    def posted_today(self) -> int:
-        return sum(c.posted_today for c in self.cards)
-
-    @property
-    def posted_week(self) -> int:
-        return sum(c.posted_week for c in self.cards)
-
-    @property
-    def posted_total(self) -> int:
-        return sum(c.posted_total for c in self.cards)

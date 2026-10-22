@@ -3,7 +3,6 @@
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -15,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.utils.uniqify import (
     PRESETS,
@@ -75,7 +75,7 @@ def _probe(path: Path) -> dict:
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(c)
     return c
 
 

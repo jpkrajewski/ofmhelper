@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.schemas.accounts import ago
+from ofmhelpers.web.schemas.nav import nav
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -59,6 +60,8 @@ def get_templates() -> Jinja2Templates:
         settings.session.session_max_age_s
     )
     templates.env.globals["static_url"] = static_url
+    # The header, its More menu and the home cards all read schemas.nav.NAV.
+    templates.env.globals["nav"] = nav
     templates.env.filters["utc"] = utc
     templates.env.filters["ago"] = ago
     return templates

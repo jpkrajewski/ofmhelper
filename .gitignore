@@ -37,3 +37,6 @@ backlog.txt
 
 # Test reports (scripts/test.sh): local, regenerated every run.
 /reports/
+
+# Logfire project credential (write token), made by `logfire projects use`.
+.logfire/

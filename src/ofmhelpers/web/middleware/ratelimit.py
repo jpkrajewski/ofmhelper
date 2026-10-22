@@ -18,10 +18,11 @@ Redis failures fail *open* (request allowed, warning logged). A broken broker
 already takes the app down -- turning it into a total lockout of a working
 login form would be strictly worse than briefly losing the ceiling.
 
-The client identity is `request.client.host`. Prod publishes the app port
-directly (see docker-compose.yml), so that is the real peer address. If a
-reverse proxy is ever put in front, uvicorn needs `--proxy-headers
---forwarded-allow-ips=<proxy>` or every client collapses into one bucket.
+The client identity is `request.client.host`. Prod sits behind the host's
+nginx, which appends the peer to X-Forwarded-For; uvicorn (`--proxy-headers
+--forwarded-allow-ips`, Dockerfile) trusts only loopback and Docker's private
+range, so `client.host` is the address nginx saw -- never "*", which would
+take the client-written leftmost entry and let anyone pick their bucket.
 """
 
 from __future__ import annotations

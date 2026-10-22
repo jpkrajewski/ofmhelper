@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import AliasChoices, Field, SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ofmhelpers.iphones.models import GeoPoint, Place
@@ -50,19 +50,18 @@ class WebSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_password_admin: str | None = None
-    app_password_va: str | None = None
-
-    # The two roles the shared passwords resolve to -- every role check in the
-    # app compares against these instead of a hand-typed literal (a typo'd
-    # literal silently fails a role check instead of erroring).
-    role_admin: str = Field(default="admin", validation_alias="OFM_ROLE_ADMIN")
-    role_va: str = Field(default="va", validation_alias="OFM_ROLE_VA")
+    # The public address, with a trailing slash (https://ascendglobal.cash/):
+    # what links leaving the app (OAuth redirects) are built from. Empty:
+    # the request's own address.
+    base_url: str = Field(default="", validation_alias="APP_BASE_URL")
 
     # Paths reachable without being logged in. Keep both lists short and
     # explicit -- anything not listed is protected, which is the safe default
     # direction for an allowlist.
     #   /login, /health           -- the way in, and the deploy health probe
     #   /static/                  -- css/js/images
+    #   /auth/, /password/        -- Google/Apple sign-in round trips and
+    #                                set-password links (routers/auth.py)
     #   /apply                    -- the landing page's application form POST,
     #                                see routers/apply.py (rate-limited, not
     #                                unguarded)
@@ -71,16 +70,30 @@ class WebSettings(BaseSettings):
         validation_alias="OFM_PUBLIC_PATHS",
     )
     public_prefixes: tuple[str, ...] = Field(
-        default=("/static/",), validation_alias="OFM_PUBLIC_PREFIXES"
+        default=("/static/", "/auth/", "/password/"),
+        validation_alias="OFM_PUBLIC_PREFIXES",
     )
     kie_ai_api_key_admin: str | None = None
-    kie_ai_api_key_va: str | None = None
+    # The landing form's bot trap (routers/apply.py): a submit faster than
+    # this after the page was served, or with a token older than the TTL,
+    # is a bot's.
+    apply_min_fill_s: float = Field(
+        default=3.0, ge=0, validation_alias="OFM_APPLY_MIN_FILL_S"
+    )
+    apply_token_ttl_s: int = Field(
+        default=24 * 3600, ge=60, validation_alias="OFM_APPLY_TOKEN_TTL_S"
+    )
 
     max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(
         default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
+    # /download-assets cards per page: the first page paints fast, the rest
+    # come in on scroll (gallery-scroll.js).
+    download_gallery_page: int = Field(
+        default=6, ge=1, validation_alias="OFM_DOWNLOAD_GALLERY_PAGE"
+    )
     # How often /generate and /clone ask for the newest jobs (live-gallery.js),
     # so a coworker's run shows up without a reload.
     gallery_live_poll_s: int = Field(
@@ -196,12 +209,6 @@ class WebSettings(BaseSettings):
     clone_probe_workers: int = Field(
         default=8, ge=1, validation_alias="OFM_CLONE_PROBE_WORKERS"
     )
-    clone_gallery_limit: int = Field(
-        default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
-    )
-    # Recent finished runs per provider+resolution the /clone time estimate
-    # takes its median from (web/clone_eta.py).
-    clone_eta_runs: int = Field(default=30, ge=1, validation_alias="OFM_CLONE_ETA_RUNS")
     # The /clone form's live cost estimate: credits one clone run costs per
     # second of its source video, by resolution. Measured from this
     # account's Wan 3.0 history (2026-10-17: 81 runs at 720P, 14 at 1080P;
@@ -293,6 +300,15 @@ class InfraSettings(BaseSettings):
     @property
     def production(self) -> bool:
         return self.environment == "production"
+
+    @model_validator(mode="after")
+    def _no_fakes_in_production(self) -> InfraSettings:
+        """The fakes sign anyone in as any email (/auth/fake-consent):
+        production refuses to start with them."""
+        if self.fake_externals and self.production:
+            msg = "OFM_FAKE_EXTERNALS=1 is refused with OFM_ENV=production"
+            raise ValueError(msg)
+        return self
 
 
 class KieAISettings(BaseSettings):
@@ -419,7 +435,6 @@ class HiggsfieldSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     api_key_admin: str | None = Field(default=None, validation_alias="HF_API_KEY_ADMIN")
-    api_key_va: str | None = Field(default=None, validation_alias="HF_API_KEY_VA")
     base_url: str = Field(
         default="https://api.higgsfield.ai", validation_alias="OFM_HF_BASE_URL"
     )
@@ -451,12 +466,19 @@ class HiggsfieldSettings(BaseSettings):
 
 
 class DownloadersSettings(BaseSettings):
-    """downloaders/cookies.py, downloaders/generic.py, routers/admin/cookies.py."""
+    """downloaders/cookies.py, downloaders/generic.py, routers/cookies.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # The old agency-wide cookies.txt. Read once, by alembic b1c2d3e4f5a7,
+    # which moves it into the password admin's own cookies (user_cookies);
+    # the app never reads it. The file itself is left in place.
     cookies_file: str = Field(
         default="cookies/cookies.txt", validation_alias="OFM_COOKIES_FILE"
+    )
+    # Largest cookies.txt /cookies takes (a browser export is a few KB).
+    cookies_max_bytes: int = Field(
+        default=1_048_576, validation_alias="OFM_COOKIES_MAX_BYTES"
     )
     bgutil_pot_provider_url: str | None = None
     cookies_from_browser: str | None = Field(
@@ -498,9 +520,14 @@ class InstagramSettings(BaseSettings):
     timeline_doc_id: str = Field(
         default="28142289515441884", validation_alias="OFM_IG_TIMELINE_DOC_ID"
     )
-    # /reels feed: cards per page (the rest load on scroll).
+    # /reels feed: cards per page (the rest load on scroll). 24 = a few
+    # screens: a page of full-size covers was megabytes (prod 2026-10-22).
     feed_page_size: int = Field(
-        default=60, ge=1, validation_alias="OFM_IG_FEED_PAGE_SIZE"
+        default=24, ge=1, validation_alias="OFM_IG_FEED_PAGE_SIZE"
+    )
+    # Width of the kept feed thumbnails (web/reel_thumbs.py), px.
+    feed_thumb_px: int = Field(
+        default=270, ge=64, validation_alias="OFM_IG_FEED_THUMB_PX"
     )
     timeout_s: int = Field(default=20, validation_alias="OFM_IG_TIMEOUT_S")
     # Proxies the logged-out Instagram calls go through, comma-separated,
@@ -666,6 +693,167 @@ class AccountsSettings(BaseSettings):
         return self
 
 
+class SignInSettings(BaseSettings):
+    """ofmhelpers/signin, routers/auth.py, stores/users.py: how people sign
+    in -- Google, Apple, or their own email + password -- and who is an
+    admin no matter what /users says."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Comma-separated: these sign in as admins even when no /users row has
+    # them yet (the way in on a fresh install, and back in if every admin
+    # was removed).
+    admin_emails_raw: str = Field(default="", validation_alias="OFM_ADMIN_EMAILS")
+
+    # Google: an OAuth "Web application" client of the Cloud project the
+    # Drive bot lives in. Redirect URI `<APP_BASE_URL>auth/google/callback`.
+    # Its sign-in also grants Drive, which uploads go up as.
+    google_client_id: str = Field(default="", validation_alias="OFM_GOOGLE_CLIENT_ID")
+    google_client_secret: SecretStr | None = Field(
+        default=None, validation_alias="OFM_GOOGLE_CLIENT_SECRET"
+    )
+
+    # Sign in with Apple (Apple Developer account): the Services ID, the
+    # team, and a Sign in with Apple key (.p8 PEM; "\n" for line breaks
+    # in .env). Return URL `<APP_BASE_URL>auth/apple/callback`.
+    apple_services_id: str = Field(default="", validation_alias="OFM_APPLE_SERVICES_ID")
+    apple_team_id: str = Field(default="", validation_alias="OFM_APPLE_TEAM_ID")
+    apple_key_id: str = Field(default="", validation_alias="OFM_APPLE_KEY_ID")
+    apple_private_key: SecretStr | None = Field(
+        default=None, validation_alias="OFM_APPLE_PRIVATE_KEY"
+    )
+
+    # Email + password: the shortest password accepted, and how long a
+    # set-password link (made on /users) stays good.
+    password_min_length: int = Field(
+        default=10, ge=8, validation_alias="OFM_PASSWORD_MIN_LENGTH"
+    )
+    password_link_ttl_s: int = Field(
+        default=7 * 86400, ge=600, validation_alias="OFM_PASSWORD_LINK_TTL_S"
+    )
+    # Password hashes derived at once per process (each ~128 MiB of
+    # scrypt memory): caps what a burst of /login POSTs can allocate.
+    password_hash_concurrency: int = Field(
+        default=4, ge=1, validation_alias="OFM_PASSWORD_HASH_CONCURRENCY"
+    )
+    # How long a Google/Apple consent may take before its state is refused.
+    state_ttl_s: int = Field(
+        default=600, ge=60, validation_alias="OFM_SIGNIN_STATE_TTL_S"
+    )
+
+    @property
+    def admin_emails(self) -> tuple[str, ...]:
+        """In the order given: the first one takes over the password
+        account (and the agency's data) at their first Google sign-in."""
+        found = (p.strip().lower() for p in self.admin_emails_raw.split(","))
+        return tuple(dict.fromkeys(e for e in found if e))
+
+    @property
+    def google_configured(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def apple_configured(self) -> bool:
+        return bool(
+            self.apple_services_id
+            and self.apple_team_id
+            and self.apple_key_id
+            and self.apple_private_key
+        )
+
+
+class TelemetrySettings(BaseSettings):
+    """ofmhelpers/telemetry.py: traces, logs and metrics to Pydantic Logfire.
+    No token: nothing is sent (tests, CI, a fresh checkout)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # A project write token (Logfire: Settings -> Write tokens). Secret.
+    token: SecretStr | None = Field(default=None, validation_alias="LOGFIRE_TOKEN")
+    # What is running (a git sha on deploy); tells releases apart.
+    release: str = Field(default="dev", validation_alias="OFM_RELEASE")
+
+    @field_validator("token", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        """`LOGFIRE_TOKEN=` (blank) is off, like no token at all."""
+        return None if isinstance(value, str) and not value.strip() else value
+
+
+class LinksSettings(BaseSettings):
+    """ofmhelpers/links, web/link_sync.py, routers/tracking/links.py: short
+    links on link providers (Oopsie, Bouncy). A user's own key (/account)
+    wins; an admin with none runs on the `*_API_KEY_ADMIN` one."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    oopsie_api_key_admin: str | None = Field(
+        default=None, validation_alias="OOPSIE_API_KEY_ADMIN"
+    )
+    bouncy_api_key_admin: str | None = Field(
+        default=None, validation_alias="BOUNCY_API_KEY_ADMIN"
+    )
+    request_timeout_s: float = Field(
+        default=30, gt=0, validation_alias="OFM_LINKS_REQUEST_TIMEOUT_S"
+    )
+    # How stale a user's links and their numbers may get, how often the
+    # sweeper looks, and how long a claimed sync may run before another
+    # sweep takes it over.
+    sync_interval_s: int = Field(
+        default=3 * 60 * 60, ge=60, validation_alias="OFM_LINKS_SYNC_INTERVAL_S"
+    )
+    sync_check_interval_s: int = Field(
+        default=300, ge=10, validation_alias="OFM_LINKS_SYNC_CHECK_INTERVAL_S"
+    )
+    claim_ttl_s: int = Field(
+        default=60 * 60, ge=60, validation_alias="OFM_LINKS_CLAIM_TTL_S"
+    )
+    # A link still "creating" this long after it was asked for lost its job
+    # (a deploy): failed, unless the provider lists it by then.
+    create_ttl_s: int = Field(
+        default=30 * 60, ge=60, validation_alias="OFM_LINKS_CREATE_TTL_S"
+    )
+    # Period selector of /links, in days, in selector order (1 = today, UTC);
+    # each sync reads the daily numbers of the longest one.
+    periods_days: list[int] = Field(
+        default=[1, 7, 30, 90], min_length=1, validation_alias="OFM_LINKS_PERIODS_DAYS"
+    )
+    default_period_days: int = Field(
+        default=7, ge=1, validation_alias="OFM_LINKS_DEFAULT_PERIOD_DAYS"
+    )
+    page_sizes: list[int] = Field(
+        default=[25, 50, 100, 200],
+        min_length=1,
+        validation_alias="OFM_LINKS_PAGE_SIZES",
+    )
+    default_page_size: int = Field(
+        default=50, ge=1, validation_alias="OFM_LINKS_DEFAULT_PAGE_SIZE"
+    )
+    # Links one "Generate links" may ask for (one per Instagram account).
+    max_generate: int = Field(
+        default=100, ge=1, validation_alias="OFM_LINKS_MAX_GENERATE"
+    )
+
+    @property
+    def history_days(self) -> int:
+        """How many days back a sync reads: the longest period, and also
+        what /accounts' periods need."""
+        return max(*self.periods_days, 30)
+
+    def admin_key(self, provider: str) -> str | None:
+        return getattr(self, f"{provider}_api_key_admin", None) or None
+
+    @model_validator(mode="after")
+    def _default_period_is_offered(self) -> LinksSettings:
+        if self.default_period_days not in self.periods_days:
+            msg = (
+                f"OFM_LINKS_DEFAULT_PERIOD_DAYS={self.default_period_days} "
+                f"is not in OFM_LINKS_PERIODS_DAYS={self.periods_days}"
+            )
+            raise ValueError(msg)
+        return self
+
+
 class VaultSettings(BaseSettings):
     """web/db/encrypted.py: the Fernet keys the /phones logins and backup
     codes are encrypted with at rest. Comma-separated, newest first: the
@@ -734,13 +922,18 @@ class ExportSettings(BaseSettings):
 
 
 class GDriveSettings(BaseSettings):
-    """/drive (`ofmhelpers.gdrive`, web/drive_folders.py): the shared Google
-    Drive folder the VA uploads into. A service account (its key JSON, one
-    line) works in `root_folder_id`, which its owner shares with the
-    account's `client_email` as Editor. Each Instagram login on an active
-    phone gets a "<handle> - <owner>" folder there, which the VA uploads
-    into, and a `posted_folder_name` folder inside it, which people move a
-    video into once it is posted."""
+    """/drive (`ofmhelpers.gdrive`, web/drive_folders.py): each phone
+    owner's own Google Drive, through their Google sign-in (`SignInSettings`
+    google_*): an "ALL ACCOUNTS" folder ("DEV - ALL ACCOUNTS" outside
+    production) with a "<handle> - <owner>" folder per Instagram login and a
+    `posted_folder_name` folder inside each, which people move a video into
+    once it is posted. No folder id is configured anywhere.
+
+    `service_account` + `root_folder_id`: the live Drive contract tests'
+    sandbox, and on prod the agency admin's fallback: until the password
+    account has a Google token, /drive reads and makes its folders through
+    that account in that root (prod's "ALL ACCOUNTS", shared with it;
+    web/drive_folders.py `_bot_root`)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -748,12 +941,6 @@ class GDriveSettings(BaseSettings):
         default=None, validation_alias="OFM_GDRIVE_SERVICE_ACCOUNT"
     )
     root_folder_id: str = Field(default="", validation_alias="OFM_GDRIVE_ROOT_FOLDER")
-    # The live "ALL ACCOUNTS" folder. Set in every .env (prod and dev) so a
-    # non-production deployment can tell it apart and refuse it
-    # (web/drive_folders.py `root_folder`); not in code, the repo is public.
-    production_root_folder_id: str = Field(
-        default="", validation_alias="OFM_GDRIVE_PRODUCTION_ROOT_FOLDER"
-    )
     # The folder inside each account folder for posted videos. Matched
     # case-insensitively, so one made by hand ("Posted") is adopted.
     posted_folder_name: str = Field(
@@ -784,16 +971,9 @@ class GDriveSettings(BaseSettings):
     )
     # Longest side of a /drive preview, px.
     thumb_px: int = Field(default=400, ge=32, validation_alias="OFM_GDRIVE_THUMB_PX")
-
-    @property
-    def missing(self) -> list[str]:
-        """The settings still empty, by their .env name."""
-        empty = {
-            "OFM_GDRIVE_SERVICE_ACCOUNT": self.service_account is None,
-            "OFM_GDRIVE_ROOT_FOLDER": not self.root_folder_id,
-        }
-        return [name for name, is_empty in empty.items() if is_empty]
-
-    @property
-    def configured(self) -> bool:
-        return not self.missing
+    # A /clone upload still `queued` this long after it was clicked is
+    # stranded (worker killed by a deploy, its job lost): Upload queues it
+    # again. Longer than a full batch takes, so a live one is never doubled.
+    upload_stale_s: int = Field(
+        default=3600, ge=60, validation_alias="OFM_GDRIVE_UPLOAD_STALE_S"
+    )

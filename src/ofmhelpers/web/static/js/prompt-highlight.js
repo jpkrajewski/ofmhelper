@@ -8,7 +8,7 @@
  * with <mark> backgrounds under each reference token, and the textarea sits
  * on top with a transparent background. The backdrop must match the
  * textarea's font/padding/border metrics exactly (see .prompt-backdrop in
- * app.css) or the highlights drift out of alignment.
+ * components.css) or the highlights drift out of alignment.
  *
  * Applies to every `textarea.prompt-input` on the page. Programmatic value
  * changes (e.g. click-to-reuse restoring a prompt) must dispatch an "input"

@@ -1,4 +1,4 @@
-"""What a gallery renders for one job, and /clone's batches of them.
+"""What a gallery renders for one job.
 
 Every tool page with a gallery (/generate, /download-assets, /clone,
 /character-sheet, /uniqify) shows its recent jobs as cards with the same core:
@@ -9,14 +9,13 @@ Data only: the result's asset cards come in already built (`job_assets` in
 `routers/task_helpers`, which owns the file URLs).
 """
 
-import hashlib
 import json
-from collections import defaultdict
-from pathlib import Path
 from typing import Any, Self
 
 from pydantic import BaseModel, computed_field
 
+from ofmhelpers.web.schemas.drive import DriveUpload
+from ofmhelpers.web.schemas.errors import error_reason
 from ofmhelpers.web.schemas.jobs import AssetCard, FailedSource
 from ofmhelpers.web.schemas.persistence import Job
 
@@ -35,6 +34,12 @@ class JobCard(BaseModel):
     @property
     def params_json(self) -> str:
         return json.dumps(self.params)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_reason(self) -> str:
+        """The failure as one short reason ("No credits", ...)."""
+        return error_reason(self.error)
 
     @classmethod
     def from_job(
@@ -64,114 +69,13 @@ class TaskCard(JobCard):
 
     task_label: str
     poll_prefix: str
+    # What its result is while it runs (generation.js draws that kind when
+    # the server does not say).
+    result_kind: str = "image"
 
 
-class CloneRate(BaseModel):
-    """Seconds of waiting per second of video: typical and slowest normal
-    (web/clone_eta.py)."""
+class CloneCard(TaskCard):
+    """A /clone run's card: the shared card, plus where its video was
+    uploaded in Drive (web/drive_uploads.py)."""
 
-    median: float
-    worst: float
-
-
-class CloneEta(BaseModel):
-    """A running clone's expected seconds, and past which it is slow."""
-
-    eta_s: int
-    slow_s: int
-
-
-class CloneCard(JobCard):
-    """One video's run inside a /clone batch, with how long it took or,
-    while it runs, how long it should take (`clone_eta`)."""
-
-    video_name: str
-    took_s: float | None = None
-    eta: CloneEta | None = None
-
-
-class CloneBatch(BaseModel):
-    """One /clone submit: the subject images, its settings, and a card per
-    video in the order the videos were picked."""
-
-    id: str
-    created_at: float
-    cards: list[CloneCard]
-
-    @property
-    def _first(self) -> dict[str, Any]:
-        return self.cards[0].params
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def images(self) -> list[str]:
-        return self._first["reference_images"]
-
-    @property
-    def cover(self) -> str | None:
-        """The first subject image still on disk; None when every one has
-        gone (deleted in the file manager, or a database copied from another
-        server), so the page draws a blank tile instead of a broken image."""
-        return next((p for p in self.images if Path(p).is_file()), None)
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def prompt(self) -> str:
-        return self._first["prompt"]
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def resolution(self) -> str:
-        return self._first["resolution"]
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def hue(self) -> int:
-        """A stable colour per batch, so its cards read as one group at a
-        glance and keep that colour across reloads."""
-        return int(hashlib.sha256(self.id.encode()).hexdigest()[:4], 16) % 360
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def recreate_json(self) -> str:
-        """The whole batch as the form's fields: Recreate on the group puts
-        back every image, every video, and the settings."""
-        return json.dumps(
-            {
-                "prompt": self.prompt,
-                "resolution": self.resolution,
-                "audio": self._first["audio"],
-                "export": self._first.get("export")
-                or ("capcut" if self._first.get("capcut") else "original"),
-                "mirror": self._first.get("mirror", False),
-                "reference_images": self.images,
-                "reference_videos": [
-                    v for c in self.cards for v in c.params["reference_videos"]
-                ],
-            }
-        )
-
-    @classmethod
-    def group(cls, cards: list[CloneCard], page_full: bool) -> list[Self]:
-        """Cards (newest first) regrouped into the batches they were submitted
-        as: every job of one submit carries the same `clone_batch` id and its
-        position in it (`clone_index`), so a batch needs no table of its own.
-
-        When the page of jobs was full, its oldest batch may be cut off at the
-        page boundary, so it is dropped rather than shown with videos
-        missing."""
-        grouped: defaultdict[str, list[CloneCard]] = defaultdict(list)
-        for card in cards:
-            grouped[card.params["clone_batch"]].append(card)
-
-        batches = [
-            cls(
-                id=batch_id,
-                created_at=min(c.created_at for c in members),
-                cards=sorted(members, key=lambda c: c.params["clone_index"]),
-            )
-            for batch_id, members in grouped.items()
-        ]
-        if page_full and len(batches) > 1:
-            batches.pop()
-        return batches
+    drive_uploads: list[DriveUpload] = []

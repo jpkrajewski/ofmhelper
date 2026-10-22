@@ -30,14 +30,15 @@ class DriveFolderRepository(CachedRepository):
     cache_namespace = "drive_folder"
 
     @cached
-    def account_folders(self, root: str) -> list[dict]:
-        """The logins' folders in `root`; rows of any other root are left
-        out (their folders belong to another Drive folder)."""
+    def account_folders(self, roots: list[str]) -> list[dict]:
+        """The logins' folders in any of `roots` (each owner's current
+        "ALL ACCOUNTS"); rows of any other root are left out (an old root,
+        or prod's in a dev copy of its database)."""
         with session_scope() as s:
             rows = (
                 s.execute(
                     select(DriveAccountFolderRow).where(
-                        DriveAccountFolderRow.root_folder_id == root
+                        DriveAccountFolderRow.root_folder_id.in_(roots)
                     )
                 )
                 .scalars()
@@ -48,28 +49,21 @@ class DriveFolderRepository(CachedRepository):
                     "login_id": r.login_id,
                     "folder_id": r.folder_id,
                     "name": r.name,
+                    "root_folder_id": r.root_folder_id,
                     "posted_folder_id": r.posted_folder_id,
+                    "scan": r.scan,
+                    "scanned_at": r.scanned_at,
                 }
                 for r in rows
             ]
 
     @cached
-    def folder_ids(self, root: str) -> list[str]:
-        """Every Drive folder id the app made or adopted in `root` (account
-        and POSTED folders): what /drive may show previews from."""
-        with session_scope() as s:
-            rows = s.execute(
-                select(
-                    DriveAccountFolderRow.folder_id,
-                    DriveAccountFolderRow.posted_folder_id,
-                ).where(DriveAccountFolderRow.root_folder_id == root)
-            ).all()
-            return sorted({i for row in rows for i in row if i})
-
-    @cached
-    def posted_counts(self, root: str, since: list[float]) -> dict[str, list[int]]:
+    def posted_counts(
+        self, roots: list[str], since: list[float]
+    ) -> dict[str, list[int]]:
         """{login id (str: the cache is JSON): [files first seen posted at
-        or after each of `since`]}, for the logins with a folder in `root`."""
+        or after each of `since`]}, for the logins with a folder in `roots`;
+        only files seen in that folder."""
         with session_scope() as s:
             columns = [
                 func.count().filter(DrivePostedFileRow.first_seen_at >= t)
@@ -79,9 +73,10 @@ class DriveFolderRepository(CachedRepository):
                 select(DrivePostedFileRow.login_id, *columns)
                 .join(
                     DriveAccountFolderRow,
-                    DriveAccountFolderRow.login_id == DrivePostedFileRow.login_id,
+                    (DriveAccountFolderRow.login_id == DrivePostedFileRow.login_id)
+                    & (DriveAccountFolderRow.folder_id == DrivePostedFileRow.folder_id),
                 )
-                .where(DriveAccountFolderRow.root_folder_id == root)
+                .where(DriveAccountFolderRow.root_folder_id.in_(roots))
                 .group_by(DrivePostedFileRow.login_id)
             ).all()
             return {str(login_id): list(counts) for login_id, *counts in rows}
@@ -113,22 +108,38 @@ class DriveFolderRepository(CachedRepository):
             "root_folder_id": root,
             "updated_at": time.time(),
         }
-        kept_posted = case(
-            (
-                DriveAccountFolderRow.folder_id == folder_id,
-                DriveAccountFolderRow.posted_folder_id,
-            ),
-            else_=None,
-        )
+        same = DriveAccountFolderRow.folder_id == folder_id
+        kept_posted = case((same, DriveAccountFolderRow.posted_folder_id), else_=None)
         with session_scope() as s:
             s.execute(
                 insert(DriveAccountFolderRow)
                 .values(login_id=login_id, **values)
                 .on_conflict_do_update(
                     index_elements=["login_id"],
-                    set_={**values, "posted_folder_id": kept_posted},
+                    set_={
+                        **values,
+                        "posted_folder_id": kept_posted,
+                    },
                 )
             )
+
+    @invalidates_cache
+    def save_scans(self, scans: dict[int, dict], at: float) -> None:
+        """Each login's account folder as just read (login id -> scan)."""
+        if not scans:
+            return
+        with session_scope() as s:
+            for login_id, scan in scans.items():
+                s.execute(
+                    update(DriveAccountFolderRow)
+                    .where(DriveAccountFolderRow.login_id == login_id)
+                    .values(scan=scan, scanned_at=at)
+                )
+
+    @invalidates_cache
+    def logins_changed(self) -> None:
+        """A login or phone was deleted: the database dropped its folder rows
+        (ON DELETE CASCADE) behind this cache's back."""
 
     @invalidates_cache
     def forget_account_folder(self, login_id: int) -> None:
@@ -153,10 +164,14 @@ class DriveFolderRepository(CachedRepository):
 
     @invalidates_cache
     def record_posted(
-        self, login_id: int, files: list[tuple[str, str, str]], seen_at: float
+        self,
+        login_id: int,
+        folder_id: str,
+        files: list[tuple[str, str, str]],
+        seen_at: float,
     ) -> int:
-        """Adds the (id, name, kind) files not seen before; how many were
-        new. A file already recorded keeps its first time (a re-run, or it
+        """Adds the (id, name, kind) files not seen before, as seen in the
+        account folder `folder_id`; how many were new. A file already recorded keeps its first time (a re-run, or it
         went out and back in, never counts twice)."""
         if not files:
             return 0
@@ -168,6 +183,7 @@ class DriveFolderRepository(CachedRepository):
                         {
                             "file_id": file_id,
                             "login_id": login_id,
+                            "folder_id": folder_id,
                             "name": name[:512],
                             "kind": kind,
                             "first_seen_at": seen_at,

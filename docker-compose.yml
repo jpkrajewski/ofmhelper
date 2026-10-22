@@ -31,6 +31,9 @@ x-app-environment: &app-environment
   # file documents the wiring on any host.
   - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers
   - OFM_REDIS_URL=redis://redis:6379/0
+  # What is running, on every trace (telemetry.py): both deploy paths export
+  # the deployed commit; anything else (dev, a manual `up`) says "dev".
+  - OFM_RELEASE=${OFM_RELEASE:-dev}
 
 x-app-volumes: &app-volumes
   # No ./src mount here -- production runs the code baked into the image, so a
@@ -162,6 +165,10 @@ services:
     environment: *app-environment
     env_file:
       - .env
+    # Read-only: alembic b1c2d3e4f5a7 moves the old shared cookies.txt into
+    # the password admin's own cookies (user_cookies) and leaves the file.
+    volumes:
+      - cookies_data:/app/cookies:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,0 +1,1209 @@
+/* =====================================================================
+   Ascend Global LLC — Content Ops design system, file 4 of 4:
+   tokens.css -> base.css -> components.css -> pages.css, loaded in that
+   order by templates/_styles.html. What only one page has; a page that needs more than its widget here is missing a component.
+
+   Mobile-first: unprefixed rules are the phone layout, `min-width` media
+   queries add the wider ones. Class names used by static/js/*.js are
+   contract -- rename nothing without updating the JS.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   14. Two-column tool pages (/generate, /download-assets)
+   --------------------------------------------------------------------- */
+.generate-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--s-6);
+    align-items: start;
+}
+.generate-form-col, .generate-gallery-col { min-width: 0; }
+/* Every tool page's form column is one card (card role): Gen AI, Clone,
+   Download, Viral, Uniqify, Character Sheet all wear the same wrapper. */
+.generate-form-col {
+    padding: var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+@media (min-width: 1080px) {
+    .generate-layout {
+        grid-template-columns: minmax(380px, 460px) 1fr;
+        gap: var(--s-7);
+    }
+    /* Deliberately NOT sticky/overflow-y: a scroll container inside the
+       page meant two scrollbars and a form that scrolled independently of
+       the gallery. The column just grows with the page. */
+    .generate-form-col {
+        padding-right: var(--s-7);
+        border-right: 1px solid var(--border);
+    }
+}
+.generate-form-col button[type="submit"] { width: 100%; }
+
+/* Job "Inputs" section (prompt/settings/reference files a job ran with). */
+.job-inputs { margin-bottom: var(--s-6); }
+.inputs-table { max-width: 680px; margin-top: 0; }
+.inputs-table th { width: 1%; white-space: nowrap; text-transform: capitalize; letter-spacing: 0; }
+.inputs-table td { word-break: break-word; }
+.inputs-long-text {
+    margin: 0;
+    padding: var(--pad-card);
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--bg-2);
+    font-size: var(--step--1);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.inputs-refs { margin-top: var(--s-2); }
+.inputs-refs.results { grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
+
+details {
+    margin-bottom: var(--s-4);
+    padding: var(--pad-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+summary { cursor: pointer; font-weight: 600; }
+summary:hover { color: var(--accent-soft); }
+
+/* Select + switch pairs on a grid: every select gets the widest one's
+   width, so the switches line up in one column. */
+.clone-output-row { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: var(--s-3) var(--s-5); }
+.clone-output-row select { min-width: 120px; }
+.clone-output-row .check-field { margin: 0; font-weight: 500; color: var(--text-muted); }
+
+/* Live cost estimate above a paid submit (/clone, static/js/clone-cost.js):
+   one line per run, the total as the panel's anchor. Figures use tabular
+   numerals so the prices line up as they recalculate. */
+.cost-panel {
+    margin-bottom: var(--s-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface-2);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+}
+.cost-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+    padding: var(--s-3) var(--s-4);
+    border-bottom: 1px solid var(--border-soft);
+}
+.cost-panel-title {
+    font-size: var(--step-0);
+    font-weight: 600;
+    color: var(--text);
+}
+.cost-lines {
+    max-height: 240px;
+    margin: 0;
+    padding: var(--s-2) 0;
+    overflow-y: auto;
+    list-style: none;
+}
+.cost-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--s-3);
+    padding: var(--s-1) var(--s-4);
+    font-size: var(--step--1);
+}
+.cost-line-name {
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cost-line-detail { grid-column: 1; color: var(--text-faint); }
+.cost-line-price { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 600; }
+.cost-line-flagged .cost-line-detail,
+.cost-line-flagged .cost-line-price { color: var(--warn); }
+.cost-total {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--gap-inline);
+    padding: var(--pad-inset);
+    border-top: 1px solid var(--border-soft);
+    background: var(--accent-wash);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.cost-total-value { display: inline-flex; align-items: baseline; gap: var(--s-2); }
+.cost-total-value strong {
+    color: var(--text);
+    font-size: var(--step-2);
+    letter-spacing: -0.02em;
+}
+.cost-note {
+    margin: 0;
+    padding: var(--s-2) var(--s-4) var(--s-3);
+    color: var(--text-faint);
+    font-size: var(--step--1);
+}
+/* ---------------------------------------------------------------------
+   15. Shared page bits (cookies form, action log, applications, file manager)
+   --------------------------------------------------------------------- */
+.todo-added { color: var(--text-muted); font-size: var(--step--1); white-space: nowrap; }
+.model-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap-inline);
+    margin-bottom: var(--gap-toolbar);
+}
+.model-toolbar form { margin: 0; }
+.model-toolbar-note { max-width: 46ch; color: var(--text-muted); font-size: var(--step--1); }
+.model-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); align-items: stretch; }
+.model-actions form { display: flex; margin: 0; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------------------------------------------------------------------
+   17. Login / standalone card screens
+   --------------------------------------------------------------------- */
+.login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: var(--s-5);
+    background: var(--bg);
+}
+.login-card {
+    width: min(420px, 100%);
+    padding: var(--s-7) var(--s-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    animation: card-in var(--dur-slow) var(--ease);
+}
+@keyframes card-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+.login-logo {
+    text-align: center;
+    font-size: var(--step-1);
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    color: var(--text);
+}
+.login-sub {
+    margin: var(--s-1) 0 var(--s-6);
+    text-align: center;
+    font-size: var(--step--1);
+    color: var(--text-faint);
+}
+.login-error {
+    margin-bottom: var(--s-4);
+    padding: var(--pad-inset);
+    border: 1px solid var(--fail-border);
+    border-left: 3px solid var(--fail);
+    border-radius: var(--radius-control);
+    background: var(--fail-wash);
+    color: var(--text);
+    font-size: var(--step--1);
+}
+
+.login-providers { display: grid; gap: var(--s-3); }
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    margin: var(--s-5) 0 var(--s-3);
+    color: var(--text-faint);
+    font-size: var(--step--1);
+}
+.login-divider::before,
+.login-divider::after { flex: 1; height: 1px; background: var(--border); content: ""; }
+.login-help { margin-top: var(--s-4); color: var(--text-faint); font-size: var(--step--1); }
+.login-card form .btn-block { margin-top: var(--s-4); }
+
+/* Session-expiry overlay -- static/js/session.js drops this in just before
+   redirecting to /login, so being signed out reads as a deliberate step
+   rather than an unexplained page jump. */
+.session-expired-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--s-5);
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    animation: fade-in 160ms ease-out;
+}
+.session-expired-card {
+    width: min(360px, 100%);
+    padding: var(--pad-card);
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+.session-expired-title { margin-bottom: var(--s-2); font-size: var(--step-1); font-weight: 600; }
+.session-expired-card p { margin: 0; color: var(--text-muted); font-size: var(--step--1); line-height: 1.5; }
+
+/* /reels (templates/reels.html, _reel_card.html, _reels_watch_item.html):
+   the watch list in the form column, and one flat feed of every profile's
+   reels -- each a card picked by clicking anywhere on it (aria-pressed, set
+   by static/js/reels.js) that plays on hover. */
+/* Feed filters: one panel, a label column and a chip column, so the three
+   rows line up and share one rhythm. On a phone the label sits above its
+   chips. */
+.reels-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--gap-inline) var(--s-4);
+    align-items: start;
+    margin: 0 0 var(--gap-grid);
+    padding: var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+.reels-filter-label {
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    font-weight: 500;
+}
+@media (min-width: 720px) {
+    .reels-filters { grid-template-columns: max-content 1fr; }
+    /* One chip tall, so a label sits level with its first row of chips. */
+    .reels-filter-label { line-height: 32px; }
+}
+
+/* Selection bar: pinned to the bottom of the reels column while you scroll
+   and pick, so Download / Clone always sit next to what was picked. */
+/* What is picked and what to do with it: the feed's actions, top right
+   above it, like every page's actions. */
+.reels-selection { display: flex; align-items: center; justify-content: flex-end; gap: var(--gap-inline); margin-bottom: var(--gap-grid); }
+.reels-selection-count { color: var(--text-muted); font-size: var(--step--1); }
+.reels-selection button { min-width: var(--control-w-action); }
+/* Group picker: the dropdown and its "+ New group" / "Create" button on one
+   line; the new-name row sits right under it. */
+.reels-group-pick { display: flex; gap: var(--s-2); align-items: stretch; }
+.reels-group-pick > select,
+.reels-group-pick > input { flex: 1 1 auto; min-width: 0; }
+.reels-group-pick > button { flex: none; white-space: nowrap; }
+.reels-group-pick + .reels-group-pick { margin-top: var(--s-2); }
+.reels-group-pick[hidden] { display: none; }
+
+/* The watch list: its own panel, a search box on top, rows that scroll.
+   Every row is the same card with the same three lines (name line, stats,
+   group dropdown), so nothing wraps differently from row to row. Every
+   card carries a 2px border; a leader only recolours it, so outlined rows
+   never grow, shift or overlap their neighbours. */
+/* View tiers (instagram.models.VIEW_TIERS): one ink getting stronger,
+   light grey -> black, so the feed reads as ranked, not as a rainbow. */
+.reels-filters, .reels-watch-list, .reel-card {
+    --tier-common: var(--text-faint);
+    --tier-uncommon: var(--text-muted);
+    --tier-rare: var(--text-muted);
+    --tier-epic: var(--text);
+    --tier-legendary: var(--accent);
+}
+.reels-watch-title { margin-top: var(--s-6); }
+.reels-watch-search { margin-bottom: var(--s-3); }
+.reels-watch-list {
+    max-height: 60vh;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+.reels-watch-list:empty { display: none; }
+/* One watched profile = a list row, like a phone's login row: a line
+   between rows, no box of its own. */
+.reels-watch-item {
+    display: grid;
+    gap: var(--s-1);
+    min-width: 0;
+    padding: var(--s-3) 0;
+    border-top: 1px solid var(--border);
+}
+.reels-watch-item[hidden] { display: none; }
+.reels-row-head, .reels-row-foot { display: flex; align-items: center; gap: var(--gap-inline); min-width: 0; }
+.reels-row-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+}
+.reels-row-name:hover { text-decoration: underline; }
+.reels-watch-error { flex: none; color: var(--fail); }
+.reels-watch-meta { flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: var(--step--1); }
+.reels-watch-views { color: var(--text); font-weight: 600; }
+.reels-row-group { flex: none; width: 9rem; height: var(--control-h-sm); font-size: var(--step--1); }
+
+/* Compact: three reels a row on a phone, four from a laptop up (five made
+   the captions too small to read). */
+.reels-feed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 900px) { .reels-feed { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.reel-card {
+    --tier: var(--border);
+    --tier-glow: transparent;
+    position: relative;
+    gap: var(--s-1);
+    padding: var(--s-1);
+    border: 2px solid var(--tier);
+    box-shadow: 0 0 10px var(--tier-glow);
+    cursor: pointer;
+    user-select: none;
+}
+.reel-card:hover { border-color: var(--tier); box-shadow: var(--shadow); }
+/* The border is the view tier (instagram.models.VIEW_TIERS), coloured like
+   game loot; a pick is shown by a white ring + tick on top of it, so the
+   tier stays readable on a picked card. */
+/* Low tiers keep the plain border; rare and up wear the accent ramp. */
+.reel-card[data-tier="rare"] { --tier: var(--tier-rare); }
+.reel-card[data-tier="epic"] { --tier: var(--tier-epic); }
+.reel-card[data-tier="legendary"] { --tier: var(--tier-legendary); box-shadow: var(--shadow); }
+.reel-views { font-weight: 600; color: var(--text); }
+.reel-card[data-tier="epic"] .reel-views,
+.reel-card[data-tier="legendary"] .reel-views { color: var(--accent); }
+/* The ratio pill: neutral, filled with the accent from epic up. */
+.reel-ratio {
+    padding: var(--pad-pill);
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.reel-card[data-tier="epic"] .reel-ratio,
+.reel-card[data-tier="legendary"] .reel-ratio { background: var(--accent); color: var(--accent-ink); }
+.reel-sub { color: var(--text-muted); }
+/* A reel Instagram shows to logged-in viewers only, with no working login
+   to resolve it: listed for its views, but not pickable. */
+.reel-locked { cursor: default; }
+.reel-locked .reel-thumb { opacity: 0.55; }
+.reel-lock {
+    position: absolute;
+    z-index: 1;
+    top: var(--s-2);
+    left: var(--s-2);
+    padding: var(--pad-pill);
+    border-radius: var(--radius-pill);
+    background: var(--scrim-strong);
+    color: var(--accent-ink);
+    font-size: var(--step--1);
+    font-weight: 600;
+}
+.reel-sub a { color: inherit; }
+.reel-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reel-card[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+.reel-card[aria-pressed="true"]::after {
+    content: "✓";
+    position: absolute;
+    z-index: 1;
+    top: var(--s-2);
+    right: var(--s-2);
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+}
+/* Thumbnail first; the <video> reels.js creates on hover lies on top of it. */
+.reel-media {
+    position: relative;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+.reel-thumb,
+.reel-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+}
+.reels-feed .gallery-sentinel { grid-column: 1 / -1; }
+/* Feed filters: a row of group chips, the rank chips under it. Chips are
+   full-size click targets; a rank chip wears its tier colour. */
+.reels-filter { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.reels-filter a {
+    display: inline-flex;
+    align-items: center;
+    height: var(--control-h-sm);
+    padding: 0 var(--s-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    font-weight: 600;
+    text-decoration: none;
+}
+.reels-filter a:hover { border-color: var(--border-strong); color: var(--text); }
+.reels-filter a[aria-current="page"] { border-color: var(--accent); color: var(--text); background: var(--accent-wash); }
+.reels-ranks a[data-tier="common"] { --tier: var(--tier-common); }
+.reels-ranks a[data-tier="uncommon"] { --tier: var(--tier-uncommon); }
+.reels-ranks a[data-tier="rare"] { --tier: var(--tier-rare); }
+.reels-ranks a[data-tier="epic"] { --tier: var(--tier-epic); }
+.reels-ranks a[data-tier="legendary"] { --tier: var(--tier-legendary); }
+.reels-ranks a[data-tier] { border-color: color-mix(in srgb, var(--tier) 45%, var(--border)); color: var(--tier); }
+.reels-ranks a[data-tier][aria-current="page"] {
+    border-color: var(--tier);
+    background: color-mix(in srgb, var(--tier) 16%, transparent);
+}
+.reel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; font-size: var(--step--2); line-height: 1.3; }
+
+/* ---------------------------------------------------------------------
+   18. Tracked accounts (/accounts, /accounts/{id}; static/js/accounts.js)
+   --------------------------------------------------------------------- */
+/* Hierarchy: page head + KPI cards, one filter row, one compact table.
+   Numbers right-aligned in tabular figures; green/red only for change. */
+.accounts-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); margin: 0 0 var(--gap-toolbar); }
+.accounts-filters input[type="search"] { width: 260px; max-width: 100%; }
+.accounts-filter-form { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin: 0; }
+/* Selection actions: a card of its own above the table, shown only while
+   rows are picked. */
+.accounts-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-inline) var(--s-4);
+    margin-bottom: var(--s-3);
+    padding: var(--pad-inset);
+    border: 1px solid var(--accent-ring);
+    border-radius: var(--radius-card);
+    background: var(--accent-wash);
+}
+.accounts-actions[hidden] { display: none; }
+.accounts-bulk-count { font-weight: 600; }
+.accounts-actions-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
+.accounts-actions-controls input,
+.accounts-actions-controls select { width: 180px; min-height: 34px; }
+.accounts-actions-controls button { min-height: 34px; }
+.accounts-bulk-remove { color: var(--fail); }
+.accounts-table-wrap { border-color: var(--border-soft); }
+.accounts-table th:first-child, .accounts-table td:first-child { width: 1%; padding-right: 0; }
+.accounts-sort { color: inherit; text-decoration: none; }
+.accounts-sort:hover { color: var(--text); }
+th[aria-sort] .accounts-sort { color: var(--text); }
+th[aria-sort="descending"] .accounts-sort::after { content: " \2193"; }
+th[aria-sort="ascending"] .accounts-sort::after { content: " \2191"; }
+th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.accounts-who { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+.accounts-who-text { min-width: 0; }
+.accounts-name { color: var(--text); font-weight: 600; text-decoration: none; }
+.accounts-name:hover { text-decoration: underline; }
+.accounts-verified { display: inline-block; width: 0.95em; height: 0.95em; margin-left: 0.3em; vertical-align: -0.1em; }
+.accounts-avatar {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--surface-3);
+}
+.accounts-avatar-lg { width: 64px; height: 64px; }
+.accounts-sub { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
+.accounts-sub a { color: inherit; }
+/* The phones signed in to the account (/phones logins): drawing + owner. */
+.accounts-phone {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    margin-right: var(--s-3);
+    color: var(--text);
+    font-size: var(--step--1);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.accounts-phone img { width: 20px; height: 38px; }
+.accounts-phone:hover span { text-decoration: underline; }
+.accounts-creator-tag {
+    display: inline-block;
+    padding: var(--pad-pill);
+    border-radius: var(--radius-pill);
+    background: var(--accent-wash);
+    color: var(--accent-soft);
+    font-size: var(--step--1);
+    font-weight: 600;
+    white-space: nowrap;
+}
+/* Unreachable (private, failed sync): the whole row goes red; the reason
+   is its tooltip. */
+.accounts-table tr[hidden] { display: none; }
+.accounts-table tr[data-problem] td { background: var(--fail-wash); }
+.accounts-table tr[data-problem] td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
+.accounts-problem-text { color: var(--fail); font-weight: 600; }
+.accounts-go { white-space: nowrap; text-align: right; }
+.accounts-go a { font-size: var(--step--1); font-weight: 600; text-decoration: none; }
+.growth { white-space: nowrap; }
+.growth small { color: var(--text-faint); font-weight: 400; }
+.growth[data-trend="up"] { color: var(--ok); }
+.growth[data-trend="down"] { color: var(--fail); }
+.accounts-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    margin-top: var(--s-4);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.accounts-per-page { display: inline-flex; align-items: center; gap: var(--s-2); }
+.accounts-per-page select { width: auto; }
+.accounts-dialog {
+    width: min(560px, calc(100vw - 2 * var(--s-4)));
+    padding: var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    color: var(--text);
+}
+.accounts-dialog::backdrop { background: var(--scrim); }
+.accounts-dialog h2 { margin-top: 0; }
+.accounts-dialog-actions { display: flex; justify-content: flex-end; gap: var(--gap-inline); }
+/* Desktop: the table fits without scrolling, so its header can stick to
+   the viewport under the site header. */
+@media (min-width: 1100px) {
+    .accounts-table-wrap, .accounts-table { overflow: visible; }
+    .accounts-table thead th { position: sticky; top: var(--header-h); z-index: 2; }
+}
+/* Phone: one card per account instead of a sideways-scrolling table. */
+@media (max-width: 719px) {
+    .accounts-table-wrap { border: 0; background: none; overflow: visible; }
+    .accounts-table, .accounts-table tbody { display: block; background: none; border: 0; }
+    .accounts-table thead { display: none; }
+    .accounts-table tr[data-problem] { border-color: var(--fail-border); background: var(--fail-wash); }
+    .accounts-table tr[data-problem] td { background: none; box-shadow: none; }
+    .accounts-table tr {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--s-2) var(--s-3);
+        margin-bottom: var(--s-3);
+        padding: var(--s-4);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        background: var(--surface);
+    }
+    .accounts-table td { display: block; padding: 0; border: 0; text-align: left; }
+    .accounts-table td.num, .accounts-table .growth { text-align: left; white-space: normal; }
+    .accounts-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--text-faint);
+        font-size: var(--step--1);
+        font-weight: 500;
+    }
+    .accounts-table td.accounts-pick-cell { position: absolute; top: var(--s-3); right: var(--s-3); width: auto; }
+    .accounts-who-cell { grid-column: 1 / -1; padding-right: var(--s-6); }
+    .accounts-table td[data-label="Last synced"],
+    .accounts-table td[data-label="Creator"],
+    .accounts-table td[data-label="Phone"],
+    .accounts-go { grid-column: 1 / -1; text-align: left; }
+}
+/* Analytics page: identity, four KPIs, trend, top posts, folded extras. */
+/* components/ui.html back_link: a quiet button, flush with the page edge. */
+.back-link { margin: 0 0 var(--gap-stack) calc(-1 * var(--s-3)); padding-inline: var(--s-3); }
+.accounts-identity { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4); margin-bottom: var(--s-5); }
+.accounts-identity-text { flex: 1 1 240px; min-width: 0; }
+.accounts-identity h1 { margin: 0 0 var(--s-1); }
+.accounts-identity .badge { margin-right: var(--s-2); }
+.accounts-period { margin: 0; }
+.accounts-period select { width: auto; }
+.accounts-card {
+    margin-bottom: var(--s-5);
+    padding: var(--pad-card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+.accounts-card h2 { margin: 0 0 var(--s-3); font-size: var(--step-1); }
+.accounts-empty { margin: 0; padding: var(--s-5) 0; color: var(--text-muted); text-align: center; }
+/* ---- Follower chart (account_analytics.html, js/account-chart.js) ------
+   SVG in a 0..100 box stretched over .fchart-plot; dots, labels, crosshair
+   and tooltip are HTML placed with --x/--y percents of the same box, so
+   they stay round and crisp at any width. Line 2px, grid 1px hairlines,
+   gaps dashed in the muted ink. Class names are the script's contract. */
+.fchart { --fchart-line: var(--accent-strong); margin: 0; }
+.fchart-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2) var(--s-4); margin-bottom: var(--s-4); }
+.fchart-stat { display: grid; gap: 2px; min-width: 0; }
+.fchart-stat > span { color: var(--text-muted); font-size: var(--step--1); font-weight: 600; }
+.fchart-stat > strong { font-size: var(--step-1); font-weight: 650; font-variant-numeric: tabular-nums; }
+.fchart-stat > strong.growth { white-space: normal; }
+.fchart-stat > strong small { font-size: var(--step--1); font-weight: 500; color: inherit; }
+.fchart-stat > small { color: var(--text-faint); font-size: var(--step--1); }
+.fchart-body {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: clamp(160px, 38vw, 260px) auto;
+    column-gap: var(--s-2);
+    /* Room for the end dot past the plot's right edge. */
+    padding-right: var(--s-2);
+}
+.fchart-y, .fchart-x { position: relative; color: var(--text-faint); font-size: var(--step--2); font-variant-numeric: tabular-nums; }
+.fchart-y { width: 6ch; }
+.fchart-y span { position: absolute; top: var(--y); right: 0; transform: translateY(-50%); white-space: nowrap; }
+.fchart-x { grid-column: 2; height: 1.6em; margin-top: var(--s-1); }
+.fchart-x span { position: absolute; top: 0; left: var(--x); transform: translateX(-50%); white-space: nowrap; }
+/* Per-sync charts: the ends' labels tuck inside the plot. Daily charts
+   centre every date under its own point (room on the right below). */
+.fchart[data-step="sync"] .fchart-x span:first-child { transform: none; }
+.fchart[data-step="sync"] .fchart-x span:last-child { transform: translateX(-100%); }
+.fchart[data-step="day"] .fchart-body { padding-right: 1.5rem; }
+.fchart-plot { position: relative; min-width: 0; outline: none; touch-action: pan-y; cursor: crosshair; }
+.fchart-plot:focus-visible { box-shadow: 0 0 0 2px var(--accent-ring); border-radius: var(--radius-sm); }
+.fchart-plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.fchart-grid { stroke: var(--border-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.fchart-line, .fchart-gap { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.fchart-line { stroke: var(--fchart-line); stroke-width: 2; }
+.fchart-gap { stroke: var(--text-faint); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.fchart-dot {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fchart-line);
+    box-shadow: 0 0 0 2px var(--surface);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+.fchart-focus { width: 10px; height: 10px; }
+.fchart-cross {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--x);
+    width: 1px;
+    background: var(--border-strong);
+    pointer-events: none;
+}
+.fchart-tip {
+    position: absolute;
+    top: 0;
+    z-index: 2;
+    display: grid;
+    gap: 2px;
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-3);
+    box-shadow: var(--shadow);
+    font-size: var(--step--1);
+    white-space: nowrap;
+    transform: translate(-50%, calc(-100% - var(--s-2)));
+    pointer-events: none;
+}
+.fchart-tip[data-below="1"] { top: 100%; transform: translate(-50%, var(--s-2)); }
+.fchart-tip strong { color: var(--text); font-size: var(--step-0); font-variant-numeric: tabular-nums; }
+.fchart-tip span { color: var(--text-muted); }
+.fchart-tip small { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.fchart-note { margin-top: var(--s-2); color: var(--text-faint); font-size: var(--step--1); }
+.fchart-table { margin: var(--s-3) 0 0; padding: var(--s-2) var(--s-3); border-color: var(--border-soft); font-size: var(--step--1); }
+.fchart-table table { width: 100%; margin-top: var(--s-2); font-variant-numeric: tabular-nums; }
+.fchart-table th, .fchart-table td { padding: var(--s-1) var(--s-2); }
+.fchart-table .num { text-align: right; }
+/* The middle date only where there is room for three. */
+.fchart[data-step="sync"] .fchart-x span:nth-child(2) { display: none; }
+/* A phone fits four dates: past that every other one, the last kept. */
+.fchart[data-step="day"] .fchart-x:has(> span:nth-child(5)) > span:nth-last-child(2n) { display: none; }
+@media (min-width: 720px) {
+    .fchart-summary { grid-template-columns: repeat(3, max-content); column-gap: var(--s-6); }
+    .fchart[data-step="sync"] .fchart-x span:nth-child(2),
+    .fchart[data-step="day"] .fchart-x:has(> span:nth-child(5)) > span:nth-last-child(2n) { display: inline; }
+}
+/* ---- end follower chart ------------------------------------------------ */
+.accounts-posts { margin: 0; padding: 0; list-style: none; }
+.accounts-posts li {
+    display: grid;
+    grid-template-columns: 1.5em 48px 1fr 7ch;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-2) 0;
+    border-bottom: 1px solid var(--border-soft);
+}
+.accounts-posts li:last-child { border-bottom: 0; }
+.accounts-rank { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.accounts-thumb { display: block; width: 48px; height: 64px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); }
+.accounts-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.accounts-post-main { min-width: 0; font-size: var(--step--1); }
+/* A <progress>: the post's views against the top post's. */
+.accounts-bar {
+    display: block;
+    width: 100%;
+    height: 6px;
+    margin-top: var(--s-2);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--surface-3);
+    overflow: hidden;
+    appearance: none;
+}
+.accounts-bar::-webkit-progress-bar { background: var(--surface-3); }
+.accounts-bar::-webkit-progress-value { border-radius: var(--radius-pill); background: var(--accent); }
+.accounts-bar::-moz-progress-bar { border-radius: var(--radius-pill); background: var(--accent); }
+.accounts-fold > summary { cursor: pointer; list-style: none; }
+.accounts-fold > summary::-webkit-details-marker { display: none; }
+.accounts-fold > summary h2 { display: inline; margin: 0; }
+.accounts-fold > summary::before { content: "\25B8  "; color: var(--text-faint); }
+.accounts-fold[open] > summary::before { content: "\25BE  "; }
+.accounts-fold[open] > summary { margin-bottom: var(--s-3); }
+
+/* ---- Links (/links, static/js/links.js; the accounts list classes) ----
+   Same filter row, selection card, table and dialog as /accounts. */
+.links-address { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.links-address .accounts-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-picker { margin: 0; }
+.links-pick-all { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); font-weight: 600; }
+.links-accounts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--s-2) var(--s-3);
+    max-height: 220px;
+    overflow-y: auto;
+}
+.links-accounts label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--step--1); }
+.links-accounts label[hidden] { display: none; }
+/* /accounts' Links column: each link of the account, its clicks and CTR. */
+.accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; white-space: nowrap; }
+.accounts-link:hover span { text-decoration: underline; }
+.accounts-link small { color: var(--text-faint); }
+
+/* ---------------------------------------------------------------------
+   /phones: device-first cards. The product photo anchors each card; the
+   logins are flat rows inside it (no box per login), secrets masked, row
+   tools quiet until hovered or focused.
+   --------------------------------------------------------------------- */
+
+.ph-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap-inline);
+    margin: 0 0 var(--gap-toolbar);
+}
+.ph-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 180px;
+    max-width: 340px;
+    color: var(--text-faint);
+    min-width: 160px;
+}
+.ph-search .icon { position: absolute; left: var(--s-3); pointer-events: none; }
+.ph-search input { width: 100%; padding-left: calc(var(--s-3) * 2 + 16px); }
+.ph-filters { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin: 0; }
+.ph-filters select, .accounts-filters select { width: var(--control-w-filter); }
+/* Grid / list switch: one control-high group on the toolbar, the current
+   view filled. */
+.ph-layout { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); }
+.ph-layout .icon-btn { width: calc(var(--control-h) - 6px); height: calc(var(--control-h) - 6px); color: var(--text-muted); }
+.ph-layout .icon-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
+
+/* Small square icon buttons: row tools, menu trigger, layout switch. */
+/* An icon-only button (components/ui.html icon_button; aria-label says
+   what it does). */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    list-style: none;
+    transition: color var(--dur) var(--ease), background var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.icon-btn::-webkit-details-marker { display: none; }
+.icon-btn:hover, .icon-btn:focus-visible { background: var(--surface-2); color: var(--text); }
+.icon-btn.is-done, .btn.is-done { color: var(--ok); }
+/* "Copied" over a copy button for a moment after its click. */
+.icon-btn { position: relative; }
+.icon-btn.is-done::after {
+    content: "Copied";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%, -4px);
+    padding: var(--pad-pill);
+    border-radius: var(--radius-pill);
+    background: var(--surface-3);
+    color: var(--ok);
+    font-size: var(--step--2);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ph-grid {
+    display: grid;
+    gap: var(--gap-grid);
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+    align-items: stretch;
+}
+.ph-grid[data-layout="list"] { grid-template-columns: 1fr; }
+
+.ph-card {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: var(--s-4);
+    padding: var(--pad-card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    transition: border-color var(--dur) var(--ease);
+}
+.ph-card:hover { border-color: var(--border); }
+.ph-card:target { border-color: var(--accent); }
+.ph-card[hidden] { display: none; }
+.ph-grid[data-layout="list"] .ph-card { grid-template-columns: 88px minmax(0, 1fr); }
+
+/* The phone: its whole back, drawn from the catalog (phones/render.py),
+   on one canvas size for every model, so a mini looks smaller than a Max. */
+.ph-media, .ph-preview {
+    aspect-ratio: 9 / 17;
+    border-radius: var(--radius-card);
+}
+.ph-media img, .ph-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--ink) 18%, transparent));
+}
+
+.ph-body { min-width: 0; }
+.ph-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2); }
+.ph-title { min-width: 0; }
+.ph-title h2 { margin: 0; font-size: var(--step-0); font-weight: 650; letter-spacing: -0.01em; }
+.ph-specs { margin: 2px 0 0; color: var(--text-muted); font-size: var(--step--1); }
+.ph-meta { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: var(--s-2) 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }
+
+/* Logins: flat rows split by a hairline. */
+.ph-logins { margin: 0; padding: 0; list-style: none; }
+.ph-login {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px var(--s-3);
+    padding: var(--s-2) 0;
+    border-top: 1px solid var(--border-soft);
+}
+.ph-login[hidden] { display: none; }
+.ph-no-logins { margin: var(--s-2) 0 0; color: var(--text-faint); font-size: var(--step--1); }
+.ph-logo {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+}
+.ph-logo img { width: 18px; height: 18px; }
+.ph-login-main { display: grid; min-width: 0; }
+.ph-login-service { overflow: hidden; color: var(--text-faint); font-size: var(--step--2); text-overflow: ellipsis; white-space: nowrap; }
+.ph-login-followers { font-variant-numeric: tabular-nums; }
+.ph-login-user {
+    overflow: hidden;
+    color: var(--text);
+    font-size: var(--step--1);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+a.ph-login-user:hover { text-decoration: underline; }
+/* Row tools: fixed in the row's right column, always there (muted until
+   the row is hovered or focused); nothing moves when a row is revealed. */
+.ph-login-tools { display: flex; align-items: center; grid-column: 3; grid-row: 1; }
+.ph-login-tools .icon-btn { opacity: 0.55; }
+.ph-login:hover .ph-login-tools .icon-btn,
+.ph-login:focus-within .ph-login-tools .icon-btn,
+.ph-login-tools .icon-btn[aria-pressed="true"] { opacity: 1; }
+.ph-revealed, .ph-login-notes { grid-column: 2 / -1; }
+.ph-revealed {
+    display: grid;
+    gap: var(--gap-inline);
+    margin-top: var(--s-1);
+    padding: var(--pad-inset);
+    border-radius: var(--radius-control);
+    background: var(--bg-2);
+    font-size: var(--step--2);
+}
+.ph-revealed[hidden] { display: none; }
+.ph-revealed span { display: block; color: var(--text-faint); font-size: var(--step--2); }
+.ph-revealed code, .ph-revealed pre { margin: 0; color: var(--text); font-family: var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.ph-login-notes, .ph-notes { margin: 0; color: var(--text-faint); font-size: var(--step--2); white-space: pre-wrap; }
+.ph-notes { margin-top: var(--s-2); }
+
+.ph-card-foot { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-top: var(--s-2); }
+.ph-card-foot:empty { display: none; }
+.ph-more, .ph-add-login {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    min-height: 0;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+.ph-more:hover, .ph-add-login:hover, .ph-more:focus-visible, .ph-add-login:focus-visible { color: var(--text); }
+
+.ph-retired { margin-top: var(--s-6); }
+.ph-retired .ph-card { opacity: 0.7; }
+
+/* Dialogs */
+.ph-dialog { width: min(600px, calc(100vw - 2 * var(--s-4))); max-height: calc(100vh - 2 * var(--s-4)); overflow-y: auto; }
+.ph-form-grid { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+.ph-fields-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 var(--s-3); }
+.ph-colors { margin: 0 0 var(--s-4); padding: 0; border: 0; }
+.ph-colors legend { margin-bottom: var(--s-2); padding: 0; color: var(--text); font-size: var(--step--1); font-weight: 600; letter-spacing: 0.01em; text-transform: none; }
+.ph-colors[hidden], .ph-dialog .field[hidden] { display: none; }
+.ph-swatches { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.ph-swatch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    padding: 4px var(--s-3) 4px 4px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+.ph-swatch input { position: absolute; opacity: 0; pointer-events: none; }
+.ph-swatch > span:first-of-type { width: 20px; height: 20px; border-radius: 50%; background: var(--finish); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.ph-swatch:has(input:checked) { background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+.ph-swatch:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ph-hint { margin: 0 0 var(--s-3); color: var(--warn); font-size: var(--step--1); }
+
+/* Phone: one column, a smaller photo, filters scroll sideways in one line. */
+@media (max-width: 719px) {
+    .ph-card { grid-template-columns: 84px minmax(0, 1fr); gap: var(--gap-stack); padding: var(--pad-tile); }
+    .ph-search { max-width: none; flex-basis: 100%; }
+    .ph-filters { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
+    .ph-layout { display: none; }
+    .ph-form-grid { grid-template-columns: 72px minmax(0, 1fr); }
+    /* No room beside the login name: the icons get their own line under
+       it, still fixed there. */
+    .ph-login-tools { grid-column: 2 / -1; grid-row: 2; margin-left: -6px; }
+}
+
+/* ---------------------------------------------------------------------
+   /drive: a card per Instagram account with what waits in its Drive folder
+   (square preview tiles) and what was posted. Nothing waiting says so in
+   warn color, the thing to chase.
+   --------------------------------------------------------------------- */
+/* A /drive card is a /phones card (.ph-card): its body stacks the account
+   and its Drive folder where /phones lists logins. */
+.dr-card .ph-media { display: block; }
+.dr-body { display: flex; flex-direction: column; gap: var(--s-2); }
+.dr-body .ph-meta { margin: 0; }
+.dr-account { margin: 0; font-weight: 600; font-size: var(--step--1); }
+.dr-note { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
+.dr-missing { color: var(--warn); }
+.dr-error { color: var(--fail); }
+/* Pinned to the card's bottom, so the posted lines of a row of cards align. */
+.dr-posted {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px var(--s-3);
+    margin: auto 0 0;
+    padding-top: var(--s-2);
+    border-top: 1px solid var(--border-soft);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.dr-posted a { display: inline-flex; align-items: center; gap: var(--s-1); }
+.dr-posted strong { color: var(--text); }
+.dr-count { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: 0; color: var(--text-muted); font-size: var(--step--1); }
+.dr-files {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: var(--s-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.dr-file {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    color: var(--text-faint);
+}
+.dr-file img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dr-file:hover, .dr-file:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Over a preview only a video shows its play mark; without one the icon
+   and the name stand in. */
+.dr-file-icon { position: relative; display: inline-flex; }
+.dr-file:has(img) .dr-file-icon { display: none; }
+.dr-file[data-kind="video"]:has(img) .dr-file-icon {
+    display: inline-flex;
+    padding: var(--s-2);
+    border-radius: 50%;
+    background: var(--scrim-strong);
+    color: var(--accent-ink);
+}
+.dr-file-name {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: var(--pad-pill);
+    overflow: hidden;
+    font-size: var(--step--2);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dr-file:has(img) .dr-file-name { display: none; }
+.dr-others { margin-top: var(--s-5); color: var(--text-muted); font-size: var(--step--1); }
+.dr-others summary { cursor: pointer; }
+.dr-others ul { display: grid; gap: var(--s-1); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
+.dr-others a { display: inline-flex; align-items: center; gap: var(--s-2); }
+
+/* ---------------------------------------------------------------------
+   /users, /account
+   --------------------------------------------------------------------- */
+.signed-in-as {
+    overflow: hidden;
+    max-width: 22ch;
+    color: var(--text-faint);
+    font-size: var(--step--1);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.logout-form { display: flex; align-items: center; gap: var(--s-3); }
+@media (max-width: 720px) { .signed-in-as { display: none; } }
+/* The one-time password link: the whole URL in a read-only field + Copy. */
+.users-link { flex-direction: column; color: var(--text); }
+.users-link p { margin: 0; }
+.users-link-row { display: flex; gap: var(--gap-inline); }
+.users-link-row input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--step--1); }
+/* Add a user: one row of fields + the button, wrapping on a phone. */
+.users-card { margin-bottom: var(--s-5); }
+.users-add { display: flex; flex-wrap: wrap; gap: var(--gap-inline); align-items: flex-end; }
+.users-add .field { flex: 1 1 12rem; margin: 0; }
+.users-add .users-add-email { flex-grow: 2; }
+.users-add .users-add-role { flex: 0 1 9rem; }
+/* As tall as the inputs beside it: their padding, border and line-height. */
+/* The table: every row the same shape -- status badge in Access, the
+   row's buttons right-aligned in the last column. */
+/* Holds the sr-only "Actions" label, which would otherwise escape the
+   .table-wrap scroller and widen the page on a phone. */
+.users-actions-head { position: relative; }
+.users-who strong { margin-right: var(--s-1); }
+.users-who .pending, .users-note { display: block; font-size: var(--step--1); }
+.users-role { width: auto; min-width: 7.5rem; padding: var(--s-1) var(--s-7) var(--s-1) var(--s-3); font-size: var(--step--1); }
+.users-role-text { display: inline-block; padding: var(--s-1) 0; font-size: var(--step--1); }
+.users-table tr[data-inactive] td:not(:last-child) { opacity: 0.55; }
+.users-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: var(--gap-inline); }
+.users-actions form { margin: 0; }
+.users-actions button { min-height: 32px; padding: var(--s-1) var(--s-3); }
+.account-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--s-5);
+}
+.account-list { display: grid; gap: var(--s-2); margin: 0 0 var(--s-4); padding: 0; list-style: none; }
+.account-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.account-form, .account-key { display: grid; gap: var(--s-2); margin-top: var(--s-3); }
+.account-key { gap: var(--s-3); }
+.account-key-row { display: flex; gap: var(--gap-inline); }
+.account-key-row input { flex: 1; min-width: 0; }
+/* Card forms: fields spaced by the grid gap, buttons their own width. */
+.account-form .field, .account-key .field { margin: 0; }
+.account-form > button, .account-key > button { justify-self: start; }
+.account-key > button[type="submit"]:not([name]) { justify-self: start; }
+
+/* "Connect Google Drive" notices (/drive, /clone): the text, then the action. */
+.drive-connect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
+/* /clone "Upload to Drive" picker (clone.html #drive-picker, clone.js):
+   search + model filter, then one row per account folder, fewest files
+   waiting first. */
+.drive-picker-tools { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-bottom: var(--s-3); }
+.drive-picker-tools input[type="search"] { flex: 1 1 180px; min-width: 0; }
+.drive-picker-tools select { width: auto; }
+.drive-picker-list { display: grid; gap: var(--s-1); max-height: 320px; margin-bottom: var(--s-3); overflow-y: auto; }
+.drive-pick {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--radius-sm);
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+.drive-pick:hover { background: var(--surface-3); }
+.drive-pick[hidden] { display: none; }
+.drive-pick small { color: var(--text-faint); }
+.drive-pick-waiting { color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.drive-pick-done { grid-column: 2 / -1; color: var(--ok); }
+.drive-states { margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--step--1); }
+.drive-states li[data-status="failed"] { color: var(--fail); }
+.drive-states li[data-status="done"] { color: var(--ok); }
+
+/* /cookies: each social site of services.json, logged in or not, with its
+   cookies' names (never a value). */
+.cookies-file { margin: 0 0 var(--s-3); font-size: var(--step--1); }
+.cookies-sites { display: grid; gap: var(--s-2); margin: 0 0 var(--s-3); padding: 0; list-style: none; }
+.cookies-sites li { display: flex; align-items: flex-start; gap: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-soft); }
+.cookies-site-main { display: grid; min-width: 0; font-size: var(--step--1); }
+.cookies-site-names { overflow: hidden; color: var(--text-faint); font-size: var(--step--2); text-overflow: ellipsis; white-space: nowrap; }
+.cookies-sites li:not([data-logged-in]) .cookies-site-name { color: var(--text-muted); }
+
+/* /drive: opened from the last read while the live one loads */
+.dr-asof { margin: 0 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }
+
+/* /styleguide (templates/styleguide.html): only its own layout; every
+   element on it is the real component. */
+.styleguide { display: grid; gap: var(--gap-grid); }
+.sg-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); margin-bottom: var(--gap-stack); }
+.sg-swatches { display: flex; flex-wrap: wrap; gap: var(--gap-grid); }
+.sg-swatch { display: grid; justify-items: start; gap: var(--s-1); }
+.sg-chip { width: 72px; height: 48px; border: 1px solid var(--line); border-radius: var(--radius-control); }
+.sg-paper { background: var(--paper); }
+.sg-wash { background: var(--wash); }
+.sg-line { background: var(--line); }
+.sg-grey { background: var(--grey); }
+.sg-ink { background: var(--ink); }
+.sg-red { background: var(--red); }
+.sg-results { grid-template-columns: repeat(auto-fill, minmax(220px, 260px)); }

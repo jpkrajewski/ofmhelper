@@ -1,34 +1,38 @@
+{% import "components/ui.html" as ui %}
 {# One watched profile in /reels' watch list (`watched`:
    schemas.WatchedProfile; `groups`: every group, for the dropdown that
-   moves it; `board`: schemas.Leaderboard, whose `top_views` row gets the
-   legendary border and `top_reels` row the epic one, each with a badge
-   saying why): one fixed layout for every row -- name, badge, ⚠ (the last
-   scan's error), ✕ on the first line; two-week views, feed reels and
-   followers on the second; the group dropdown full width under them. data-pending while its
+   moves it; `board`: schemas.Leaderboard, whose `top_views` and
+   `top_reels` rows get a badge saying why): one list row per profile --
+   name, badge, ! (the last scan's error), remove on the first line;
+   two-week views, reels and followers with the group dropdown on the
+   second. data-pending while its
    first scan runs -- what static/js/reels.js polls on. #}
 {% import "_reel_counts.html" as rc %}
+{% import "_icons.html" as ic %}
 <li class="reels-watch-item" data-username="{{ watched.username }}"
     {% if watched.pending %}data-pending{% endif %}
     {% if watched.username == board.top_views %}data-tier="legendary"{% elif watched.username == board.top_reels %}data-tier="epic"{% endif %}>
     <div class="reels-row-head">
         <a class="reels-row-name" href="https://www.instagram.com/{{ watched.username }}/" target="_blank" rel="noopener">@{{ watched.username }}</a>
-        {% if watched.username == board.top_views %}<span class="reels-leader" title="Most views of every reel in the last two weeks">#1 views</span>
-        {% elif watched.username == board.top_reels %}<span class="reels-leader" title="Most reels in the feed (past the view floor and length cap)">#2 viral reels</span>{% endif %}
-        {% if watched.error %}<span class="reels-watch-error" title="{{ watched.error }}" aria-label="{{ watched.error }}">⚠</span>{% endif %}
-        <button type="button" class="btn-ghost reels-unwatch" aria-label="Stop watching @{{ watched.username }}">✕</button>
+        {% if watched.username == board.top_views %}{{ ui.badge("#1 views", hook="reels-leader") }}
+        {% elif watched.username == board.top_reels %}{{ ui.badge("#2 viral reels", hook="reels-leader") }}{% endif %}
+        {% if watched.error %}<span class="reels-watch-error" title="{{ watched.error }}" aria-label="{{ watched.error }}">!</span>{% endif %}
+        {{ ui.icon_button("x", "Stop watching @" ~ watched.username, hook="reels-unwatch") }}
     </div>
-    <div class="reels-watch-meta">
-        {%- if watched.pending -%}
-        <span class="spinner"></span> scanning…
-        {%- elif watched.result -%}
-        <strong class="reels-watch-views" title="Views of every reel posted in the last {{ watched.result.window_days|round|int }} days">{{ rc.short_count(watched.views_total) }} views</strong>
-        · {{ watched.reel_count }} reels · {{ rc.short_count(watched.result.profile.followers) }} followers
-        {%- endif -%}
+    <div class="reels-row-foot">
+        <div class="reels-watch-meta">
+            {%- if watched.pending -%}
+            <span class="spinner"></span> scanning…
+            {%- elif watched.result -%}
+            <strong class="reels-watch-views">{{ rc.short_count(watched.views_total) }} views</strong>
+            · {{ watched.reel_count }} reels · {{ rc.short_count(watched.result.profile.followers) }} followers
+            {%- endif -%}
+        </div>
+        <select class="reels-row-group" aria-label="Group of @{{ watched.username }}">
+            <option value="" {% if not watched.group %}selected{% endif %}>No group</option>
+            {% for g in groups %}
+            <option value="{{ g }}" {% if g == watched.group %}selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+        </select>
     </div>
-    <select class="reels-row-group" aria-label="Group of @{{ watched.username }}">
-        <option value="" {% if not watched.group %}selected{% endif %}>No group</option>
-        {% for g in groups %}
-        <option value="{{ g }}" {% if g == watched.group %}selected{% endif %}>{{ g }}</option>
-        {% endfor %}
-    </select>
 </li>

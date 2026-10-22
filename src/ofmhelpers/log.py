@@ -161,9 +161,13 @@ def configure_logging(*, force: bool = False) -> None:
     from ofmhelpers.config import settings
 
     cfg = settings.logging
-    logging.config.dictConfig(
-        _config(cfg.level.upper(), cfg.format.lower(), cfg.access_log)
-    )
+    config = _config(cfg.level.upper(), cfg.format.lower(), cfg.access_log)
+    if settings.telemetry.token is not None:
+        # Every record also to Logfire, inside the trace that wrote it
+        # (ofmhelpers/telemetry.py; configure_telemetry() runs first).
+        config["handlers"]["logfire"] = {"()": "ofmhelpers.telemetry.logfire_handler"}
+        config["root"]["handlers"].append("logfire")
+    logging.config.dictConfig(config)
     _configured = True
 
 

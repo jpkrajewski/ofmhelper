@@ -1,0 +1,183 @@
+/* =====================================================================
+   Ascend Global LLC — Content Ops design system, file 1 of 4:
+   tokens.css -> base.css -> components.css -> pages.css, loaded in that
+   order by templates/_styles.html. The palette and every role token: change the look here.
+
+   Mobile-first: unprefixed rules are the phone layout, `min-width` media
+   queries add the wider ones. Class names used by static/js/*.js are
+   contract -- rename nothing without updating the JS.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. Tokens
+   --------------------------------------------------------------------- */
+:root {
+    /* The palette (2026-10-22): five warm-stone neutrals, one bold accent
+       and one red. These seven are the only colour values in this file;
+       everything below is a role pointing at one of them (or a mix of
+       them). Emphasis -- primary buttons, the current tab, links, focus --
+       is the accent; problems are red. */
+    --paper: #fafaf8;
+    --wash: #ebebe7;
+    --line: #d6d6d0;
+    --grey: #5e5e58;
+    --ink: #151515;
+    --accent-hue: #ff5a1f;  /* signal orange */
+    --red: #c62828;
+
+    --bg: var(--wash);
+    --bg-2: var(--paper);      /* inputs */
+    --surface: var(--paper);   /* cards, tables, panels */
+    --surface-2: var(--wash);  /* hover, table head, subtle fills */
+    --surface-3: var(--line);  /* pressed, media letterbox */
+    --border: var(--line);
+    --border-soft: var(--line);
+    --border-strong: var(--line);
+
+    --text: var(--ink);
+    --text-muted: var(--grey);
+    --text-faint: var(--grey);
+
+    /* Primary actions, current state and links are ink. */
+    --accent: var(--accent-hue);
+    --accent-strong: color-mix(in srgb, var(--accent-hue) 85%, var(--ink));  /* hover */
+    --accent-soft: var(--accent-hue);
+    --accent-ink: var(--paper);
+    --accent-wash: var(--wash);
+    --accent-ring: color-mix(in srgb, var(--accent-hue) 35%, transparent);
+    /* Kept as names so older rules resolve; both are flat. */
+    --gradient: linear-gradient(var(--accent-hue), var(--accent-hue));
+    --gradient-btn: linear-gradient(var(--accent-hue), var(--accent-hue));
+
+    /* Statuses: only failure has a colour. Good and "needs attention"
+       read from the words, not from green and amber. */
+    --ok: var(--ink);
+    --ok-wash: var(--wash);
+    --fail: var(--red);
+    --fail-wash: color-mix(in srgb, var(--red) 6%, var(--paper));
+    --fail-border: color-mix(in srgb, var(--red) 25%, var(--paper));
+    --warn: var(--ink);
+    --warn-wash: var(--wash);
+
+    /* Overlay scrims (dialogs, hover captions on media). */
+    --scrim: color-mix(in srgb, var(--ink) 45%, transparent);
+    --scrim-strong: color-mix(in srgb, var(--ink) 72%, transparent);
+
+    /* Glass: only the sticky header. */
+    --glass-bg: color-mix(in srgb, var(--paper) 85%, transparent);
+    --glass-border: var(--line);
+
+    /* Spacing scale (4px base). */
+    --s-1: 4px;
+    --s-2: 8px;
+    --s-3: 12px;
+    --s-4: 16px;
+    --s-5: 24px;
+    --s-6: 32px;
+    --s-7: 48px;
+    --s-8: 64px;
+
+    --radius-sm: 4px;
+    --radius: 6px;
+    --radius-lg: var(--radius);   /* alias: one card radius site-wide */
+    --radius-pill: 999px;
+
+    /* Soft, low shadows: a border does the separating, the shadow only
+       lifts. */
+    --shadow-sm: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
+    --shadow: 0 1px 3px color-mix(in srgb, var(--ink) 6%, transparent), 0 4px 12px color-mix(in srgb, var(--ink) 4%, transparent);
+    --shadow-lg: 0 16px 40px color-mix(in srgb, var(--ink) 12%, transparent);
+
+    /* Archivo, self-hosted (static/fonts, OFL): one variable file, every
+       weight; Inter (also self-hosted) and the system stack are the
+       fallbacks while it loads. */
+    --font: "Archivo", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+        "Liberation Mono", monospace;
+
+    /* Fluid type: one scale for the whole site, so a heading is the same
+       size on every page without per-page font-size overrides. */
+    --step--2: 0.75rem;       /* micro labels: the smallest text anywhere */
+    --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.84rem);
+    --step-0: clamp(0.94rem, 0.91rem + 0.14vw, 1rem);
+    --step-1: clamp(1.06rem, 1rem + 0.3vw, 1.25rem);
+    --step-2: clamp(1.25rem, 1.13rem + 0.6vw, 1.6rem);
+    --step-3: clamp(1.6rem, 1.35rem + 1.2vw, 2.25rem);
+    --step-4: clamp(2rem, 1.5rem + 2.4vw, 3.25rem);
+
+    --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+    --dur: 180ms;
+    --dur-slow: 320ms;
+
+    --header-h: 64px;
+    /* Every control (button, input, select) is one of two heights and one
+       text size, so anything sitting in a row lines up. 16px text on a
+       phone: smaller makes iOS zoom in on focus. */
+    --control-h: 40px;
+    --control-h-sm: 32px;
+    --control-font: 1rem;
+    /* Width of a filter / sort dropdown in a toolbar: one width for all,
+       not each sized to its longest option. */
+    --control-w-filter: 10rem;
+    /* Minimum width of a page's header actions (Export, Add phone, Sync):
+       side by side they come out the same width. */
+    --control-w-action: 8rem;
+
+    /* Roles. Every box on the site is one of these kinds; its spacing and
+       corners come from here, never a value of its own. Change a role
+       here and every element of that kind follows.
+         card   a panel standing on the page (card, KPI, phone,
+                drive account, dialog, filter panel)
+         tile   a small item in a dense grid (gallery result, reuse tile)
+         inset  a strip inside or between cards (notice, error, list row,
+                selection bar, revealed secret)
+         pill   a tag or badge
+         cell   a table cell */
+    --pad-card: var(--s-5);
+    --pad-tile: var(--s-3);
+    --pad-inset: var(--s-3) var(--s-4);
+    --pad-pill: 2px var(--s-2);
+    --pad-cell: 14px var(--s-5);
+    --gap-grid: var(--s-4);      /* between cards / tiles in a grid */
+    --gap-stack: var(--s-3);     /* between blocks inside a card */
+    --gap-inline: var(--s-2);    /* between controls / chips in a row */
+    --gap-section: var(--s-7);   /* between page sections */
+    --gap-toolbar: var(--s-5);   /* under a search/filter toolbar */
+    --radius-card: var(--radius);
+    --radius-control: var(--radius-sm);
+    /* Wide by default: the tool pages are galleries and tables. */
+    --content-max: 1760px;
+}
+
+@media (min-width: 720px) {
+    :root { --control-font: 0.875rem; }
+}
+
+@font-face {
+    font-family: "Archivo";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/archivo-latin-var.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/inter-latin-var.woff2") format("woff2");
+}
+
+/* Respect the OS setting: every transition/animation below is decoration,
+   never the only signal that something changed. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

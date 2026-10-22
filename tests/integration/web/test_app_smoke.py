@@ -8,11 +8,11 @@ checked on every future change instead of evaporating after one manual run.
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.web.main import app
 
@@ -83,7 +83,7 @@ def test_protected_page_loads_once_logged_in(path):
 @pytest.mark.parametrize("path", ADMIN_ONLY_PAGES)
 def test_admin_only_page_returns_403_for_va(path):
     client = TestClient(app)
-    client.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(client)
     assert client.get(path).status_code == 403
 
 
@@ -102,7 +102,7 @@ def test_wrong_password_is_rejected():
 
 def test_va_password_also_logs_in():
     client = TestClient(app)
-    client.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(client)
     assert client.get("/generate").status_code == 200
 
 

@@ -9,11 +9,11 @@ import os
 import re
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.web.main import app
 
@@ -58,26 +58,30 @@ def test_bar_links_then_the_rest_under_more(client):
         "/reels",
         "/download-assets",
         "/accounts",
+        "/links",
         "/phones",
         "/drive",
     ]
     assert more == [
         "/uniqify",
+        "/account",
+        "/cookies",
+        "/users",
         "/character-sheet",
         "/applications",
         "/file-manager",
+        "/styleguide",
         "/action-log",
-        "/cookies",
     ]
     # A page under More marks it.
     assert "<summary data-current>More</summary>" in client.get("/action-log").text
 
 
-def test_va_more_has_no_admin_pages():
+def test_a_users_more_has_no_admin_pages():
     va = TestClient(app)
-    va.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(va)
     _bar, more = _nav(va.get("/generate").text)
-    assert more == ["/uniqify"]
+    assert more == ["/uniqify", "/account", "/cookies"]
 
 
 def test_login_page_is_standalone_but_still_responsive():

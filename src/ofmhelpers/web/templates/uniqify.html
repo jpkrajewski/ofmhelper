@@ -1,8 +1,7 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Uniqify</h1>
-</div>
+{{ ui.page_header("Uniqify") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -46,18 +45,11 @@
             {% endfor %}
         </select>
     </div>
-    <button type="submit" class="btn-primary">Start</button>
-    <p class="form-hint">
-        Every copy gets its own small speed, zoom, colour, grain, trim and
-        mirror changes. Comes back as one zip of H.264 MP4s, at most 720 px
-        wide. Strip removes
-        all metadata; Device writes phone-style tags with a recent date.
-    </p>
+    {{ ui.button("Start", "primary", type="submit") }}
 </form>
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Results</h2>
 
 <div id="results-panel">
     <div class="generation-status"></div>
@@ -84,5 +76,6 @@
 </div>
 </div>
 
+{% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 {% endblock %}

@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from fastapi import HTTPException
 
-from ofmhelpers.web.routers.task_helpers.download_names import download_name
+from ofmhelpers.web.download_names import download_name
 from ofmhelpers.web.routers.task_helpers.uploads import (
     classify_kind,
     strip_asset_hash_prefix,

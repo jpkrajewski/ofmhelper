@@ -2,6 +2,7 @@
 schema is valid, and a new provider is picked up with no other change."""
 
 import json
+from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -9,8 +10,10 @@ from jsonschema import Draft202012Validator
 from ofmhelpers.aigenproviders import base
 from ofmhelpers.aigenproviders.base import Provider, TaskState, provider_names
 from ofmhelpers.aigenproviders.catalog import catalog, get_spec, models_for
+from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 
-# What /generate offered as kie.ai models before /ai: none may go missing.
+# What /generate offered as kie.ai models before /ai: none may go missing
+# (jobs and /clone's CloneTarget name them).
 KIE_MODELS = {
     "nano-banana-pro",
     "bytedance/seedance-2",
@@ -37,7 +40,20 @@ def test_providers_in_select_order():
 
 
 def test_every_kie_model_is_still_offered():
-    assert {s.model_id for s in models_for("kie")} == KIE_MODELS
+    assert {s.model_id for s in models_for("kie")} >= KIE_MODELS
+
+
+def test_kie_catalog_has_its_whole_model_list():
+    """Every image/video model of kie.ai's docs (scripts/sync_kie_catalog.py),
+    each id once: the catalog is keyed by id, so a duplicate would silently
+    replace another entry."""
+    raw = json.loads(Path(KieProvider.catalog_path()).read_text(encoding="utf-8"))
+    ids = [e["model_id"] for e in raw]
+
+    assert len(ids) == len(set(ids))
+    assert len(ids) >= 150
+    assert {s.kind for s in models_for("kie")} == {"image", "video"}
+    assert {"veo-3-1", "runway", "topaz/video-upscale", "google/imagen4"} <= set(ids)
 
 
 def test_higgsfield_catalog_has_its_whole_model_list():
@@ -56,6 +72,22 @@ def test_every_schema_is_valid_and_every_field_classified(spec):
     assert not media & scalars
     # A prompt, where there is one, is a form field.
     assert {"prompt"} & set(spec.properties) <= scalars
+
+
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
+def test_every_required_field_is_one_the_form_fills(spec):
+    """A required field the form cannot render (an array of objects, a URL
+    of no media kind) would make the model impossible to run."""
+    assert spec.required <= {f.name for f in spec.form_fields} | {
+        f.name for f in spec.media_fields
+    }
+
+
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
+def test_no_field_collides_with_the_run_forms_own(spec):
+    """/ai/run posts provider, model and api_key itself: a schema field of
+    that name is sent through `fixed` instead."""
+    assert not {"provider", "model", "api_key"} & set(spec.properties)
 
 
 def test_get_spec_by_key_and_unknown_key():
@@ -98,8 +130,8 @@ def plugin_provider(tmp_path, monkeypatch):
             return path
 
         @classmethod
-        def default_key(cls, admin):
-            return "plugin-key" if admin else None
+        def default_key(cls):
+            return "plugin-key"
 
         def upload(self, path):
             return f"https://plugin/{path.name}"

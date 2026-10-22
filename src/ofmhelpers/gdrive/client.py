@@ -24,6 +24,7 @@ from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.errors import Error as GoogleApiError
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload
 
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive.base import DriveApi, DriveError, FolderGoneError
@@ -31,6 +32,9 @@ from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder
 from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from google.auth.credentials import Credentials
     from googleapiclient.http import HttpRequest
 
 logger = get_logger(__name__)
@@ -41,6 +45,12 @@ SCOPES = ("https://www.googleapis.com/auth/drive",)
 _FILE_FIELDS = "id, name, mimeType, webViewLink, hasThumbnail, createdTime, size"
 _THUMB_SIZE = re.compile(r"=s\d+$")
 _THUMB_TIMEOUT_S = 20
+# Resumable upload chunks: a dropped connection resends one chunk, not the
+# whole video.
+_UPLOAD_CHUNK = 8 * 1024 * 1024
+# Parents per `children_of` query: keeps the `q` string well inside what
+# files.list accepts.
+_PARENTS_PER_QUERY = 40
 
 
 @lru_cache(maxsize=1)
@@ -87,12 +97,23 @@ def _failure(exc: Exception, what: str) -> DriveError:
     return DriveError(f"{what}: {exc}")
 
 
+def _transport(timeout_s: float | None) -> httplib2.Http:
+    """httplib2 counts 308 as a redirect (0.16+), but a resumable upload's
+    308 is "Resume Incomplete": following it failed every upload bigger
+    than one chunk with "Redirected but the response is missing a Location:
+    header" (dev, 2026-10-22). googleapiclient handles the 308 itself.
+    https://github.com/googleapis/google-api-python-client/issues/803"""
+    http = httplib2.Http(timeout=timeout_s)
+    http.redirect_codes = http.redirect_codes - {308}
+    return http
+
+
 class Drive:
     """The real Drive (`DriveApi`)."""
 
     def __init__(
         self,
-        credentials: service_account.Credentials,
+        credentials: Credentials,
         http: Any = None,
         *,
         timeout_s: float | None = None,
@@ -103,8 +124,10 @@ class Drive:
         overrides `OFM_GDRIVE_RETRIES`."""
         self._credentials = credentials
         if http is None:
-            http = AuthorizedHttp(credentials, http=httplib2.Http(timeout=timeout_s))
-        self._files = build("drive", "v3", cache_discovery=False, http=http).files()
+            http = AuthorizedHttp(credentials, http=_transport(timeout_s))
+        service = build("drive", "v3", cache_discovery=False, http=http)
+        self._files = service.files()
+        self._permissions = service.permissions()
         self._retries = settings.gdrive.retries if retries is None else retries
 
     def _run(self, request: HttpRequest, what: str) -> dict[str, Any]:
@@ -168,6 +191,27 @@ class Drive:
             query += f" and mimeType = '{FOLDER_MIME}'"
         rows = self._list(query, _FILE_FIELDS, f"Listing folder {parent_id}")
         return [DriveFile.model_validate(row) for row in rows]
+
+    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+        """What is in each of several folders, newest first, trash left out:
+        one listing per `_PARENTS_PER_QUERY` folders instead of one each.
+        Every id must be a live folder (Drive 404s the whole query
+        otherwise); /drive passes only ids its root listing just returned."""
+        found: dict[str, list[DriveFile]] = {p: [] for p in parent_ids}
+        for start in range(0, len(parent_ids), _PARENTS_PER_QUERY):
+            chunk = parent_ids[start : start + _PARENTS_PER_QUERY]
+            either = " or ".join(f"'{_quoted(p)}' in parents" for p in chunk)
+            rows = self._list(
+                f"({either}) and trashed = false",
+                f"{_FILE_FIELDS}, parents",
+                f"Listing {len(chunk)} folders",
+            )
+            for row in rows:
+                item = DriveFile.model_validate(row)
+                for parent in item.parents:
+                    if parent in found:
+                        found[parent].append(item)
+        return found
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
         """The oldest folder of that name in the parent, so one made by
@@ -243,6 +287,40 @@ class Drive:
             return None
         return response.content, response.headers.get("Content-Type", "image/jpeg")
 
+    def upload(
+        self, parent_id: str, path: Path, name: str, mime_type: str
+    ) -> DriveFile:
+        """`path` into the folder as `name`, resumable. Only an account with
+        storage (a person's, `connect_as`) can: the service account's 403s."""
+        media = MediaFileUpload(
+            str(path), mimetype=mime_type, resumable=True, chunksize=_UPLOAD_CHUNK
+        )
+        made = self._run(
+            self._files.create(
+                body={"name": name, "parents": [parent_id]},
+                media_body=media,
+                fields=f"{_FILE_FIELDS}, parents",
+                supportsAllDrives=True,
+            ),
+            f"Uploading {name!r}",
+        )
+        logger.info("drive: uploaded %r (%s)", name, made["id"])
+        return DriveFile.model_validate(made)
+
+    def grant(self, item_id: str, email: str) -> None:
+        """Editor access to the item for `email`, without Google's email
+        about it. Granting what someone already has changes nothing."""
+        self._run(
+            self._permissions.create(
+                fileId=item_id,
+                body={"type": "user", "role": "writer", "emailAddress": email},
+                sendNotificationEmail=False,
+                supportsAllDrives=True,
+                fields="id",
+            ),
+            f"Sharing {item_id} with {email}",
+        )
+
 
 _THREAD = threading.local()
 
@@ -266,10 +344,37 @@ def connect(*, interactive: bool = False) -> DriveApi:
         if interactive
         else (None, None)
     )
-    cache_key = (key, timeout_s, retries, s.retries)
+    cache_key: tuple = (key, timeout_s, retries, s.retries)
     drives: dict = _THREAD.__dict__.setdefault("drives", {})
     if cache_key not in drives:
         drives[cache_key] = Drive(
             _credentials(key), timeout_s=timeout_s, retries=retries
         )
     return drives[cache_key]
+
+
+def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
+    """This thread's `Drive` acting as a person (their refresh token, from
+    signing in with Google; `signin.google`): everything /drive does goes
+    through the folder owner's own account. `interactive`: a page waits
+    (short timeout, few retries; see `connect`). The fake one, as that
+    person, under OFM_FAKE_EXTERNALS."""
+    if settings.infra.fake_externals:
+        from ofmhelpers.gdrive.fake import fake_person
+
+        return fake_person(refresh_token)
+    from ofmhelpers.signin.google import drive_credentials
+
+    s = settings.gdrive
+    timeout_s, retries = (
+        (s.interactive_timeout_s, s.interactive_retries)
+        if interactive
+        else (None, None)
+    )
+    drives: dict = _THREAD.__dict__.setdefault("people", {})
+    key = (refresh_token, timeout_s, retries, s.retries)
+    if key not in drives:
+        drives[key] = Drive(
+            drive_credentials(refresh_token), timeout_s=timeout_s, retries=retries
+        )
+    return drives[key]

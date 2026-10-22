@@ -1,98 +1,31 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_icons.html" as ic %}
 {% block title %}Drive — Ascend Global LLC{% endblock %}
 {% block content %}
-{% set cards = board.cards %}
+{{ ui.page_header("Drive") }}
 
-<div class="page-head ph-head">
-    <div>
-        <h1>Drive</h1>
-        <p class="lead">{{ board.files_waiting }} file{{ "" if board.files_waiting == 1 else "s" }} waiting to post in {{ board.accounts_waiting }} of {{ cards|length }} account{{ "" if cards|length == 1 else "s" }} · Posted today: {{ board.posted_today }} · Last 7 days: {{ board.posted_week }}</p>
-    </div>
-    <div class="page-head-actions">
-        {% if board.root_url %}<a class="btn-ghost ph-btn" href="{{ board.root_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} Open in Drive</a>{% endif %}
-        <button type="button" class="btn-primary ph-btn" id="dr-sync" {% if not board.root_url or not board.bot_email %}disabled{% endif %}>{{ ic.icon("refresh") }} Sync</button>
-    </div>
-</div>
-
-{% if board.problem %}
-<div class="notice notice-warn" role="alert">{{ board.problem }}</div>
-{% endif %}
 <div class="generation-status" id="dr-status" role="status" aria-live="polite"></div>
 
-{% if cards %}
 <div class="ph-toolbar">
     <label class="ph-search">
         {{ ic.icon("search") }}
         <input type="search" id="dr-search" placeholder="Search accounts, people, phones…" aria-label="Search accounts" autocomplete="off">
     </label>
+    <div class="ph-layout" role="group" aria-label="Layout" data-layout-key="drive-layout">
+        {{ ui.icon_button("grid", "Grid", attrs={"data-layout": "grid", "aria-pressed": "true"}) }}
+        {{ ui.icon_button("list", "List", attrs={"data-layout": "list", "aria-pressed": "false"}) }}
+    </div>
+    <div class="toolbar-actions">
+        {% if board.root_url %}{{ ui.button("Open in Drive", href=board.root_url, icon="folder", attrs={"target": "_blank", "rel": "noopener"}) }}{% endif %}
+        {{ ui.button("Sync", "primary", icon="refresh", attrs={"id": "dr-sync", "disabled": board.problem and not board.cards}) }}
+    </div>
 </div>
 
-<div class="dr-grid" id="dr-grid">
-    {% for c in cards %}
-    {% set t = c.target %}
-    <article class="dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
-        <header class="dr-card-head">
-            <a class="dr-phone" href="/phones#phone-{{ t.device.id }}" title="{{ t.device.label }} · {{ t.device.specs }}">
-                <img src="{{ t.device.drawing_url }}" alt="" width="20" height="38" loading="lazy">
-            </a>
-            <div class="dr-title">
-                <h2>{{ t.handle }}</h2>
-                <p>{{ t.owner }} · {{ t.device.label }}</p>
-            </div>
-            {% if c.account_url %}
-            <a class="ph-icon-btn" href="{{ c.account_url }}" target="_blank" rel="noopener" title="Open the account's folder" aria-label="Open the folder of {{ t.handle }}">{{ ic.icon("folder") }}</a>
-            {% endif %}
-        </header>
-        {% if c.error %}
-        <p class="dr-note dr-error">{{ c.error }}</p>
-        {% elif not c.account_folder_id %}
-        <p class="dr-note">No folder yet: Sync makes it.</p>
-        {% else %}
-        {% if not c.waiting %}
-        <p class="dr-note dr-missing">Nothing waiting to post</p>
-        {% else %}
-        <p class="dr-count">
-            <span>Waiting:</span>{% for kind, label in [("video", "video"), ("image", "image"), ("file", "file")] if c.count(kind) %}<span>{{ c.count(kind) }} {{ label }}{{ "" if c.count(kind) == 1 else "s" }}</span>{% endfor %}
-        </p>
-        <ul class="dr-files">
-            {% for f in c.waiting %}
-            <li>
-                <a class="dr-file" href="{{ f.url }}" target="_blank" rel="noopener" title="{{ f.name }}" data-kind="{{ f.kind }}">
-                    {% if f.has_thumbnail %}<img src="/drive/thumb/{{ f.id }}" alt="{{ f.name }}" loading="lazy">{% endif %}
-                    <span class="dr-file-icon">{{ ic.icon("play" if f.kind == "video" else "file", 20) }}</span>
-                    <span class="dr-file-name">{{ f.name }}</span>
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-        {% if c.scan.extra_posted_folders %}
-        <p class="dr-note dr-missing">{{ c.scan.extra_posted_folders|length }} more "{{ board.posted_folder_name }}" folder{{ "" if c.scan.extra_posted_folders|length == 1 else "s" }} in here (counted too): move their videos into one and delete the rest.</p>
-        {% endif %}
-        <p class="dr-posted">
-            {% if c.posted_url %}<a href="{{ c.posted_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} {{ board.posted_folder_name }}</a>{% else %}<span>{{ board.posted_folder_name }}: not made yet, Sync makes it</span>{% endif %}
-            <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
-            <span>Last 7 days: <strong>{{ c.posted_week }}</strong></span>
-        </p>
-        {% endif %}
-    </article>
-    {% endfor %}
+<div id="dr-board"{% if not board.live %} data-live="/drive/live"{% endif %}>
+{% include "_drive_board.html" %}
 </div>
-{% elif not board.problem %}
-<div class="empty-state">No phone has an Instagram login yet. Add one on <a href="/phones">Phones</a>.</div>
-{% endif %}
 
-{% if board.other_folders %}
-<details class="dr-others">
-    <summary>{{ board.other_folders|length }} other folder{{ "" if board.other_folders|length == 1 else "s" }} in the Drive folder, not linked to any phone</summary>
-    <ul>
-        {% for f in board.other_folders %}
-        <li><a href="{{ f.url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} {{ f.name }}</a></li>
-        {% endfor %}
-    </ul>
-</details>
-{% endif %}
-
+<script src="{{ static_url('js/layout.js') }}"></script>
 <script src="{{ static_url('js/drive.js') }}"></script>
 {% endblock %}

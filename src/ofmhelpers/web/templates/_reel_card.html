@@ -20,7 +20,7 @@
     <span class="reel-lock" aria-hidden="true">🔒 login only</span>
 {% endif %}
     <div class="reel-media">
-        <img class="reel-thumb" src="{{ reel.thumbnail_url }}" alt="Reel {{ reel.code }}" loading="lazy" decoding="async">
+        <img class="reel-thumb" src="/reels/thumb/{{ reel.code }}" alt="Reel {{ reel.code }}" loading="lazy" decoding="async">
     </div>
     <p class="reel-meta">
         <span class="reel-views">{{ rc.short_count(reel.views) }}</span>

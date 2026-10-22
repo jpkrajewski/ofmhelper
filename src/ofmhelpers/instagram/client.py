@@ -10,16 +10,15 @@ from the profile page this client opens first.
 The one exception is a reel Instagram hides from logged-out visitors (some
 accounts' reels all are): its reels-tab entry still has views, but the
 logged-out reel query answers null. For those, `media` falls back to the
-logged-in `/api/v1/media/{pk}/info/` with the uploaded cookies.txt (the
-downloaders' file, `downloaders.cookies`); without a working login there the
-reel stays unresolved (None). The queries are keyed by `doc_id`s
+logged-in `/api/v1/media/{pk}/info/` with the cookies.txt the caller hands
+the client (one user's own, `web/stores/cookies.py`; never a shared file);
+without a working login there the reel stays unresolved (None). The queries are keyed by `doc_id`s
 Instagram rotates every few weeks; they are settings
 (`settings.instagram.*_doc_id`), and a rotated one shows up here as a
 response without data, not as a crash. Undocumented API: when Instagram
 changes it, this file and `models.py` are the whole blast radius.
 """
 
-import http.cookiejar
 import json
 from collections.abc import Iterator
 from functools import cached_property
@@ -33,7 +32,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
-from ofmhelpers.downloaders.cookies import get_cookiefile
+from ofmhelpers.downloaders.cookies import CookieFileError, load_jar
 from ofmhelpers.instagram import pages
 from ofmhelpers.instagram.models import (
     ClipsPage,
@@ -132,9 +131,12 @@ class InstagramClient:
     """One profile's worth of calls: `open_profile` first (it reads the
     token every query after it needs), then the queries."""
 
-    def __init__(self, proxy: str | None = None) -> None:
+    def __init__(self, proxy: str | None = None, cookies: str | None = None) -> None:
         """`proxy`: the URL every logged-out call of this client goes
-        through (`settings.instagram.proxy_urls`), None for direct."""
+        through (`settings.instagram.proxy_urls`), None for direct.
+        `cookies`: the cookies.txt text its logged-in calls send (one
+        user's own login), None: none of them work."""
+        self._cookies = cookies
         self._settings = settings.instagram
         self._session = _retrying(requests.Session())
         self._session.headers["User-Agent"] = self._settings.user_agent
@@ -282,13 +284,16 @@ class InstagramClient:
 
     @cached_property
     def _logged_in(self) -> requests.Session | None:
-        """A session carrying the uploaded cookies.txt, or None without one."""
-        cookiefile = get_cookiefile()
-        if cookiefile is None:
-            logger.warning("no cookies.txt uploaded; gated reels stay login-only")
+        """A session carrying this client's cookies.txt, or None without a
+        readable one."""
+        if not self._cookies:
+            logger.info("no Instagram login for this call; gated reels stay login-only")
             return None
-        jar = http.cookiejar.MozillaCookieJar(cookiefile)
-        jar.load(ignore_discard=True, ignore_expires=True)
+        try:
+            jar = load_jar(self._cookies)
+        except CookieFileError:
+            logger.warning("the Instagram login is not a readable cookies.txt")
+            return None
         session = _retrying(requests.Session())
         session.cookies = jar  # type: ignore[assignment]
         session.headers.update(

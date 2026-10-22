@@ -1,37 +1,68 @@
-"""Simple single-password auth for the whole app: who you are, and which paths
-you may reach without being anyone.
+"""Who is signed in, and which paths may be reached without being anyone.
 
-Design: one password per role (APP_PASSWORD_ADMIN/_VA), one signed session
-cookie (via Starlette's SessionMiddleware), one middleware that checks it on
+One signed session cookie (Starlette's SessionMiddleware) carries the
+signed-in user (`SessionUser`: id, email, role); one middleware checks it on
 every request. New routers need zero changes -- they're protected the moment
 they're mounted on `app`, because this runs before routing.
 
-The allowlist and the role names are deployment config
-(`settings.web.public_paths` / `public_prefixes` / `role_admin` / `role_va`),
-not literals in here.
+Every request re-reads the user (cached, `stores.users.get_user`): a user
+removed or deactivated on /users is signed out at their next click, and a
+role change applies at once. A session holds the user's `credential_stamp`
+from when it signed in: once the password changes, every other session of
+theirs is signed out (the one that changed it is re-remembered). A session
+from before users existed (it holds a role, no user) is sent back to /login.
+
+The allowlist is deployment config (`settings.web.public_paths` /
+`public_prefixes`), not literals in here.
 """
 
-import hmac
-
 from fastapi import HTTPException
+from opentelemetry import trace
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from ofmhelpers.config import settings
+from ofmhelpers.web.schemas import SessionUser, User
+from ofmhelpers.web.stores.users import get_user
+
+_KEYS = ("user_id", "email", "role")
+_STAMP = "stamp"
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if self.is_public(request.url.path) or request.session.get("authenticated"):
+        if self.is_public(request.url.path):
             return await call_next(request)
+        current = self.session_user(request)
+        user = await run_in_threadpool(get_user, current.id) if current else None
+        if (
+            current is None
+            or user is None
+            or not user.active
+            or request.session.get(_STAMP, "") != user.credential_stamp
+        ):
+            request.session.clear()
+            return self._to_login(request)
+        if user.role != current.role or user.email != current.email:
+            self.remember(request, user)
+        # Whose request this trace is (OpenTelemetry's enduser.*).
+        trace.get_current_span().set_attributes(
+            {
+                "enduser.id": str(user.id),
+                "enduser.email": user.email,
+                "enduser.role": str(user.role),
+            }
+        )
+        return await call_next(request)
 
-        # Not logged in and hitting a protected route -- bounce to /login,
-        # remembering where they were headed so login can send them back.
+    def _to_login(self, request: Request) -> Response:
+        """Not signed in and hitting a protected route: to /login,
+        remembering where they were headed so login can send them back."""
         next_url = request.url.path
         if request.url.query:
             next_url += f"?{request.url.query}"
-
         if self.is_fetch(request):
             return JSONResponse(
                 {"detail": "Session expired", "login_url": f"/login?next={next_url}"},
@@ -73,49 +104,78 @@ class AuthMiddleware(BaseHTTPMiddleware):
         accept = request.headers.get("accept", "")
         return "application/json" in accept and "text/html" not in accept
 
-    @staticmethod
-    def check_password(candidate: str) -> str | None:
-        """Returns the matching role (admin / va), or None if it matches neither.
-
-        Two shared passwords instead of one -- there's still no per-user
-        accounts, just two roles, each gating which kie.ai key gets pre-filled
-        (see web/api_keys.py).
-        """
-        s = settings.web
-        if s.app_password_admin is None:
-            msg = "APP_PASSWORD_ADMIN"
-            raise KeyError(msg)  # required -- fail loudly if unset
-        if s.app_password_va is None:
-            msg = "APP_PASSWORD_VA"
-            raise KeyError(msg)  # required -- fail loudly if unset
-
-        if hmac.compare_digest(candidate, s.app_password_admin):
-            return s.role_admin
-        if hmac.compare_digest(candidate, s.app_password_va):
-            return s.role_va
-        return None
+    # --- the session ---------------------------------------------------------
 
     @staticmethod
-    def require_admin(request: Request) -> None:
-        """FastAPI dependency: 403s any request whose session role isn't admin.
+    def remember(request: Request, user: User) -> None:
+        """Writes `user` into the session (keeping the rest of it)."""
+        request.session.update(
+            {
+                "user_id": user.id,
+                "email": user.email,
+                "role": str(user.role),
+                _STAMP: user.credential_stamp,
+            }
+        )
+
+    @classmethod
+    def sign_in(cls, request: Request, user: User) -> None:
+        """A fresh session for `user`: nothing of a previous one carries
+        over (no session fixation)."""
+        request.session.clear()
+        cls.remember(request, user)
+
+    @staticmethod
+    def session_user(request: Request) -> SessionUser | None:
+        session = request.session
+        if not all(k in session for k in _KEYS):
+            return None
+        return SessionUser(
+            id=session["user_id"], email=session["email"], role=session["role"]
+        )
+
+    @classmethod
+    def user(cls, request: Request) -> SessionUser:
+        """The signed-in user of a protected route (the middleware let it
+        through, so there is one)."""
+        found = cls.session_user(request)
+        if found is None:
+            raise HTTPException(status_code=401, detail="Not signed in")
+        return found
+
+    @classmethod
+    def is_admin(cls, request: Request) -> bool:
+        found = cls.session_user(request)
+        return found is not None and found.is_admin
+
+    @classmethod
+    def require_admin(cls, request: Request) -> None:
+        """FastAPI dependency: 403s anyone not an admin.
 
         Use as a router-level `dependencies=[Depends(AuthMiddleware.require_admin)]`
-        for whole pages VAs shouldn't reach at all (file-manager, action-log).
-        For routes where VAs can view but only admins can mutate, check role
-        inline per-route instead.
+        for whole pages users shouldn't reach at all (file-manager, action-log,
+        /users). For routes where users can view but only admins can mutate,
+        check `is_admin` inline per-route instead.
         """
-        if request.session.get("role") != settings.web.role_admin:
+        if not cls.is_admin(request):
             raise HTTPException(status_code=403, detail="Admins only")
 
-    @staticmethod
-    def visible_actor(request: Request) -> str | None:
-        """Whose jobs this session may see: None (everyone's) for an admin, the
-        session's own role otherwise -- a VA never sees what an admin ran.
+    @classmethod
+    def actor(cls, request: Request) -> str:
+        """What a job this request starts stores as its `actor`: the user's id."""
+        return cls.user(request).actor
 
-        A session somehow missing its role is narrowed to the VA's view, never
-        widened to everyone's."""
-        s = settings.web
-        role = request.session.get("role")
-        if role == s.role_admin:
-            return None
-        return role or s.role_va
+    @classmethod
+    def owner_id(cls, request: Request) -> int:
+        """Who a row this request creates (a phone, an account, a watched
+        profile) belongs to: the signed-in user."""
+        return cls.user(request).id
+
+    @classmethod
+    def scope(cls, request: Request) -> int:
+        """Whose rows this request may see and change: the signed-in user's
+        own, admins included -- nobody reads another person's phones,
+        accounts, reels or Drive folders. An admin's extra power is managing
+        people (/users) and the admin-only tools, not other users' work.
+        "Everyone's" (owner None in the stores) is the background sweeps'."""
+        return cls.user(request).id

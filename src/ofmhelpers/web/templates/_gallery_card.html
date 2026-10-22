@@ -1,0 +1,41 @@
+{# The one gallery card every tool page extends (/generate, /download-assets,
+   /clone): media (or the failure reason, or a spinner while it runs), one
+   meta line, one row of actions: a finished one Download and a ⋯ menu
+   (Recreate, then the page's own items, `menu_items`), anything else
+   Recreate.
+   A page's card is `{% extends "_gallery_card.html" %}` overriding only
+   its blocks; it expects `job` (a schemas.TaskCard or a subclass).
+   generation.js's buildResultCard builds the same card for a run that
+   finishes while the page is open -- keep the two in step. #}
+{% import "components/ui.html" as ui %}
+{% import "_asset_media.html" as am %}
+<div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"
+     data-params='{{ job.params_json }}'
+     {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}" data-poll-kind="{{ job.result_kind }}"{% endif %}>
+    {% if job.status == "done" and job.assets %}
+        {{ am.asset_media(job.assets[0]) }}
+        {% if job.assets[0].kind == "audio" %}<p class="filename">{{ job.assets[0].name }}</p>{% endif %}
+    {% elif job.status == "failed" %}
+        <div class="result-file result-failed" title="{{ job.error }}">{{ job.error_reason }}</div>
+    {% elif job.status == "done" %}
+        {% block no_output %}<div class="result-file">No output</div>{% endblock %}
+    {% else %}
+        <div class="result-file"><span class="spinner"></span> {% block pending_label %}generating…{% endblock %}</div>
+    {% endif %}
+    {% block notes %}{% endblock %}
+    <p class="source">{% block meta %}{{ job.task_label }}{% endblock %}</p>
+    {% block below %}{% endblock %}
+    {% if job.status in ("done", "failed") %}
+    <div class="result-actions">
+        {% if job.status == "done" and job.assets %}
+        {{ ui.button("Download", href=job.assets[0].download_url, icon="download", hook="download-btn", attrs={"download": job.assets[0].download_name, "data-local-fallback-url": job.assets[0].local_fallback_url or ""}) }}
+        {% call ui.menu("More actions") %}
+            {{ ui.menu_item("Recreate", "restore", "recreate-btn") }}
+            {% block menu_items %}{% endblock %}
+        {% endcall %}
+        {% else %}
+        {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

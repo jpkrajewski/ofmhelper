@@ -1,0 +1,152 @@
+{# Reusable page elements. A page builds its UI from these macros, never
+   from hand-written markup with classes of its own: the look of each one
+   lives in components.css under its role (card, inset, pill, control), so a
+   change there changes it on every page. Every macro is on /styleguide.
+
+   Import: {% import "components/ui.html" as ui %}
+
+   `attrs` (a dict) adds attributes: ids, data-* hooks for JS, disabled...
+   A None or False value is left out. #}
+{% import "_icons.html" as ic %}
+
+{% macro _attrs(attrs) -%}
+{%- for name, value in attrs.items() if value is not none and value is not false %} {{ name }}{% if value is not true %}="{{ value }}"{% endif %}{% endfor -%}
+{%- endmacro %}
+
+{% set _variants = {
+    "primary": "btn btn-primary",
+    "secondary": "btn",
+    "ghost": "btn btn-ghost",
+    "danger": "btn btn-danger",
+} %}
+
+{# A button, or a link that looks like one when `href` is given.
+   variant: primary (the page's one main action) | secondary | ghost | danger.
+   block: full width (a form's only action on a narrow card).
+   `hook` adds JS-hook classes (they never change the look). #}
+{% macro button(label, variant="secondary", href=None, icon=None, type="button", block=false, hook="", attrs={}) -%}
+{%- set cls = _variants[variant] ~ (" btn-block" if block else "") ~ (" " ~ hook if hook else "") -%}
+{%- if href -%}
+<a class="{{ cls }}" href="{{ href }}"{{ _attrs(attrs) }}>{% if icon %}{{ ic.icon(icon) }} {% endif %}{{ label }}</a>
+{%- else -%}
+<button type="{{ type }}" class="{{ cls }}"{{ _attrs(attrs) }}>{% if icon %}{{ ic.icon(icon) }} {% endif %}{{ label }}</button>
+{%- endif -%}
+{%- endmacro %}
+
+{# An icon-only button (a link when `href` is given); `label` is what a
+   screen reader says. #}
+{% macro icon_button(icon, label, href=None, hook="", attrs={}) -%}
+{%- set cls = "icon-btn" ~ (" " ~ hook if hook else "") -%}
+{%- if href -%}
+<a class="{{ cls }}" href="{{ href }}" aria-label="{{ label }}"{{ _attrs(attrs) }}>{{ ic.icon(icon) }}</a>
+{%- else -%}
+<button type="button" class="{{ cls }}" aria-label="{{ label }}"{{ _attrs(attrs) }}>{% if caller is defined %}{{ caller() }}{% else %}{{ ic.icon(icon) }}{% endif %}</button>
+{%- endif -%}
+{%- endmacro %}
+
+{# The icon button that opens a <details> menu: put it first inside the
+   <details>. #}
+{% macro menu_toggle(icon, label) -%}
+<summary class="icon-btn" aria-label="{{ label }}">{{ ic.icon(icon) }}</summary>
+{%- endmacro %}
+
+{# A ⋯ menu: the icon button, and its items (`menu_item`s) as the call
+   body. One open at a time; outside click, Escape or picking an item closes
+   it (static/js/menu.js). `hook` adds JS-hook classes.
+   {% call ui.menu("Actions for Phone 01") %}{{ ui.menu_item("Edit", "pencil", "ph-edit") }}{% endcall %} #}
+{% macro menu(label, hook="") -%}
+<details class="menu{{ ' ' ~ hook if hook else '' }}">
+    {{ menu_toggle("ellipsis", label) }}
+    <div class="menu-list">{{ caller() }}</div>
+</details>
+{%- endmacro %}
+
+{# One item of a `menu`: icon + label; `danger` for one that destroys. #}
+{% macro menu_item(label, icon, hook="", danger=false, attrs={}) -%}
+<button type="button" class="menu-item{{ ' menu-item-danger' if danger else '' }}{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}>{{ ic.icon(icon) }} {{ label }}</button>
+{%- endmacro %}
+
+{# The top of every page: title, an optional data line under it (counts,
+   who you are -- never an explanation), and its actions on the right:
+   {% call ui.page_header("Phones", "11 phones") %}...buttons...{% endcall %} #}
+{% macro page_header(title, meta=None) -%}
+<div class="page-head">
+    <div>
+        <h1>{{ title }}</h1>
+        {% if meta %}<p class="lead">{{ meta }}</p>{% endif %}
+    </div>
+    {% if caller is defined %}<div class="page-head-actions">{{ caller() }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{# A panel standing on the page (card role), with an optional title:
+   {% call ui.card("Sign-in") %}...{% endcall %} #}
+{% macro card(title=None, hook="", attrs={}) -%}
+<section class="card{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}>
+    {% if title %}<h2 class="card-title">{{ title }}</h2>{% endif %}
+    {{ caller() }}
+</section>
+{%- endmacro %}
+
+{# A message strip (inset role). kind: info | ok | warn | fail. Text as
+   `message`, or markup (a link, a button) as the call body. #}
+{% macro notice(message=None, kind="info", hook="", attrs={}) -%}
+<div class="notice{{ ' notice-' ~ kind if kind != 'info' else '' }}{{ ' ' ~ hook if hook else '' }}" role="{{ 'alert' if kind in ('warn', 'fail') else 'status' }}"{{ _attrs(attrs) }}>{% if caller is defined %}{{ caller() }}{% else %}{{ message }}{% endif %}</div>
+{%- endmacro %}
+
+{# A tag (pill role). kind: neutral | ok | warn | fail. #}
+{% macro badge(text, kind="neutral", hook="") -%}
+<span class="badge badge-{{ kind }}{{ ' ' ~ hook if hook else '' }}">{{ text }}</span>
+{%- endmacro %}
+
+{# A job's status as a badge: done ok, failed fail, anything else neutral. #}
+{% macro status_badge(status) -%}
+{{ badge(status, "ok" if status == "done" else "fail" if status == "failed" else "neutral") }}
+{%- endmacro %}
+
+{# One number with its label and an optional note (KPI). #}
+{% macro stat(label, value, note=None) -%}
+<div class="stat">
+    <span class="stat-label">{{ label }}</span>
+    <strong class="stat-value">{{ value }}</strong>
+    {% if note %}<span class="stat-note">{{ note }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{# Nothing to show yet: one short sentence (or markup as the call body). #}
+{% macro empty(message=None, attrs={}) -%}
+<p class="empty-state"{{ _attrs(attrs) }}>{% if caller is defined %}{{ caller() }}{% else %}{{ message }}{% endif %}</p>
+{%- endmacro %}
+
+{# A data table in its card (scrolls sideways on a phone). The call body
+   is the <thead>/<tbody>; `hook` classes the <table> for page JS/CSS:
+   {% call ui.table(hook="users-table") %}<thead>...</tbody>{% endcall %} #}
+{% macro table(hook="", wrap_hook="", attrs={}) -%}
+<div class="table-wrap{{ ' ' ~ wrap_hook if wrap_hook else '' }}">
+    <table{% if hook %} class="{{ hook }}"{% endif %}{{ _attrs(attrs) }}>
+    {{ caller() }}
+    </table>
+</div>
+{%- endmacro %}
+
+{# A labelled form control; the control itself is the call body:
+   {% call ui.field("Email", "users-email") %}<input id="users-email" ...>{% endcall %} #}
+{% macro field(label, for_id=None) -%}
+<div class="field">
+    <label{% if for_id %} for="{{ for_id }}"{% endif %}>{{ label }}</label>
+    {{ caller() }}
+</div>
+{%- endmacro %}
+
+{# A link back to the page this one belongs to ("‹ Accounts"). #}
+{% macro back_link(href, label) -%}
+<a class="btn btn-ghost back-link" href="{{ href }}">{{ ic.icon("arrow-left") }} {{ label }}</a>
+{%- endmacro %}
+
+{# A card that is one link to a page (home's tool launcher). #}
+{% macro link_card(href, label, icon) -%}
+<a class="link-card" href="{{ href }}">
+    <span class="link-card-icon">{{ ic.icon(icon, 20) }}</span>
+    <span class="link-card-title">{{ label }}</span>
+</a>
+{%- endmacro %}

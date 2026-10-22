@@ -1,7 +1,7 @@
 """Instagram through `ofmhelpers.instagram`'s client: the profile
 (followers, following, avatar; logged out, through the proxies) and the
 newest `track_max_reels` reels with their play counts -- through the
-uploaded login when it works (every reel), else the logged-out reels tab
+account owner's own login (their cookies.txt) when it works (every reel), else the logged-out reels tab
 (which omits reels Instagram hides from visitors; the scan is then marked
 `limited`). A private account still has its profile numbers; it just has no
 reels to read."""
@@ -46,7 +46,7 @@ def _reels(
     """Up to `cap` + 1 newest reels (one past the cap tells a complete read
     from a capped one), and whether they come from the limited logged-out
     view: Instagram hides an account's sensitive/age-restricted reels from
-    logged-out visitors, so the logged-in list is used whenever the uploaded
+    logged-out visitors, so the logged-in list is used whenever the owner's
     login works (OFM_IG_TRACK_LOGGED_IN)."""
     if settings.instagram.track_logged_in:
         try:
@@ -72,9 +72,11 @@ class InstagramPlatform(Platform):
     def proxies(self) -> list[str]:
         return settings.instagram.proxy_urls
 
-    def fetch(self, handle: str, proxy: str | None) -> AccountStats:
+    def fetch(
+        self, handle: str, proxy: str | None, cookies: str | None = None
+    ) -> AccountStats:
         try:
-            return self._fetch(InstagramClient(proxy), handle)
+            return self._fetch(InstagramClient(proxy, cookies), handle)
         except InstagramRateLimitedError as exc:
             raise RateLimitedError(str(exc)) from exc
         except (InstagramUnavailableError, ProfileNotFoundError) as exc:

@@ -20,9 +20,8 @@ class KieProvider(Provider):
         self.client = KieAIClient.from_env(api_key)
 
     @classmethod
-    def default_key(cls, admin: bool) -> str | None:
-        web = settings.web
-        return web.kie_ai_api_key_admin if admin else web.kie_ai_api_key_va
+    def default_key(cls) -> str | None:
+        return settings.web.kie_ai_api_key_admin
 
     def upload(self, path: Path) -> str:
         return self.client.upload_local_file(str(path))

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Account — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("Account", user.email ~ " · " ~ user.role|capitalize) }}
+
+{% if message %}{{ ui.notice(message) }}{% endif %}
+{% if error %}{{ ui.notice(error, "warn") }}{% endif %}
+
+<div class="account-grid">
+    {% call ui.card("Sign-in") %}
+        <ul class="account-list">
+            {% for p in providers %}
+            {% set acc = linked.get(p.name) %}
+            <li data-provider="{{ p.name }}">
+                <span><strong>{{ p.label }}</strong>{% if acc %} · {{ acc.email or "linked" }}{% else %} · not linked{% endif %}</span>
+                {% if acc %}
+                <form method="post" action="/account/unlink/{{ p.name }}">
+                    {{ ui.button("Unlink", "ghost", type="submit") }}
+                </form>
+                {% else %}
+                {{ ui.button("Link " ~ p.label, href="/auth/" ~ p.name ~ "/start?link=1&next=/account") }}
+                {% endif %}
+            </li>
+            {% endfor %}
+            <li><span><strong>Password</strong> · {{ "set" if user.has_password else "not set" }}</span></li>
+        </ul>
+        <form method="post" action="/account/password" class="account-form">
+            {% if user.has_password %}
+            <div class="field">
+                <label for="acc-current">Current password</label>
+                <input type="password" name="current" id="acc-current" required autocomplete="current-password">
+            </div>
+            {% endif %}
+            <div class="field">
+                <label for="acc-new">New password</label>
+                <input type="password" name="password" id="acc-new" required minlength="{{ min_length }}" autocomplete="new-password">
+            </div>
+            <div class="field">
+                <label for="acc-confirm">Again</label>
+                <input type="password" name="confirm" id="acc-confirm" required minlength="{{ min_length }}" autocomplete="new-password">
+            </div>
+            {{ ui.button(("Change" if user.has_password else "Set") ~ " password", "primary", type="submit") }}
+        </form>
+    {% endcall %}
+
+    {% call ui.card("Google Drive uploads") %}
+        <p>{{ "Connected" if user.drive_connected else "Not connected" }}</p>
+        {% if providers|selectattr("name", "equalto", "google")|list %}
+        {{ ui.button(("Reconnect" if user.drive_connected else "Connect") ~ " Google Drive", href="/auth/google/start?link=1&next=/account") }}
+        {% endif %}
+    {% endcall %}
+
+    {% call ui.card("API keys") %}
+        <form method="post" action="/account/keys" class="account-key">
+            {% for name, (label, tail) in keys.items() %}
+            <div class="field" data-provider="{{ name }}">
+                <label for="key-{{ name }}">{{ label }}{% if tail %} <span class="pending">saved …{{ tail }}</span>{% endif %}</label>
+                <div class="account-key-row">
+                    <input type="password" name="key_{{ name }}" id="key-{{ name }}" autocomplete="off"
+                           placeholder="{{ 'Paste a new key to replace it' if tail else 'Paste your key' }}">
+                    {% if tail %}{{ ui.button("Remove", "ghost", type="submit", attrs={"name": "remove", "value": name, "formnovalidate": true}) }}{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {{ ui.button("Save keys", type="submit") }}
+        </form>
+    {% endcall %}
+</div>
+{% endblock %}

@@ -6,7 +6,6 @@ goes through the same router, runner and result handling as a paid run."""
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -151,8 +150,41 @@ def test_a_single_file_field_is_a_one_item_picker(client):
     )
 
 
+@pytest.mark.parametrize("key", list(catalog()), ids=str)
+def test_every_model_renders_its_fields(client, key):
+    """Every catalog entry (all of kie.ai's image/video models) gets a form: each
+    setting an input, each media field a picker of its kind."""
+    spec = catalog()[key]
+    response = client.get("/ai/fields", params={"model": key})
+
+    assert response.status_code == 200
+    html = response.text
+    for field in spec.form_fields:
+        if field.name != "prompt":
+            assert f'name="{field.name}"' in html
+    for media in spec.media_fields:
+        assert f'data-field="{media.name}" data-kind="{media.kind}"' in html
+
+
 def test_fields_of_an_unknown_model_404(client):
     assert client.get("/ai/fields", params={"model": "kie:nope"}).status_code == 404
+
+
+def test_fields_revalidate_to_an_empty_304(client):
+    """Recreate / model switches ask again and again: an unchanged model
+    costs a bodiless 304."""
+    params = {"model": "kie:wan/3-0-video"}
+    first = client.get("/ai/fields", params=params)
+    etag = first.headers["etag"]
+    again = client.get("/ai/fields", params=params, headers={"If-None-Match": etag})
+    assert again.status_code == 304
+    assert again.content == b""
+    other = client.get(
+        "/ai/fields",
+        params={"model": "kie:minimax-h3/image-to-video"},
+        headers={"If-None-Match": etag},
+    )
+    assert other.status_code == 200
 
 
 # --- /ai/run with the fake provider (real jobs, no credits) ---------------
@@ -521,8 +553,8 @@ def plugin(tmp_path, monkeypatch):
             return path
 
         @classmethod
-        def default_key(cls, admin):
-            del admin
+        def default_key(cls):
+            return None
 
         def upload(self, p):
             return str(p)

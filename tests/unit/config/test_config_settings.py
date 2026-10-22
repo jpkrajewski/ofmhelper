@@ -4,6 +4,7 @@ env-var/config layer every other module now reads through instead of
 os.getenv/os.environ directly.
 """
 
+import os
 import re
 
 import pytest
@@ -28,9 +29,7 @@ ALL_ENV_VARS = [
     "SESSION_SECRET",
     "SESSION_HTTPS_ONLY",
     "APP_PASSWORD_ADMIN",
-    "APP_PASSWORD_VA",
     "KIE_AI_API_KEY_ADMIN",
-    "KIE_AI_API_KEY_VA",
     "OFM_JOBS_MAX_ENTRIES",
     "OFM_RECOVERY_SWEEP_INTERVAL_S",
     "OFM_GALLERY_LIMIT",
@@ -117,9 +116,7 @@ def test_web_settings_wrong_type_raises(monkeypatch):
 def test_web_settings_defaults_match_pre_refactor_values(clean_env):
     s = WebSettings(_env_file=None)
     assert s.app_password_admin is None
-    assert s.app_password_va is None
     assert s.kie_ai_api_key_admin is None
-    assert s.kie_ai_api_key_va is None
     assert s.max_jobs == 500
     assert s.recovery_sweep_interval_s == 300
     assert s.gallery_limit == 20
@@ -244,3 +241,66 @@ def test_uploads_root_is_overridable(monkeypatch):
 
 def test_downloader_timeout_defaults_to_the_previous_literal(clean_env):
     assert DownloadersSettings(_env_file=None).image_download_timeout_s == 600
+
+
+# --- the `settings` container: built once per environment ---------------------
+
+
+def test_a_group_is_built_once_while_the_environment_holds(monkeypatch):
+    """Building a group reads .env and validates every field: /reels did it
+    310 times per request (prod, 2026-10-22)."""
+    from ofmhelpers.config import Settings
+
+    monkeypatch.setenv("OFM_GALLERY_LIMIT", "7")
+    s = Settings()
+    assert s.web is s.web
+    assert s.web.gallery_limit == 7
+
+
+def test_a_group_follows_a_changed_environment_at_once(monkeypatch):
+    from ofmhelpers.config import Settings
+
+    s = Settings()
+    monkeypatch.setenv("OFM_GALLERY_LIMIT", "7")
+    first = s.web
+    monkeypatch.setenv("OFM_GALLERY_LIMIT", "9")
+    assert s.web.gallery_limit == 9
+    assert s.web is not first
+    monkeypatch.delenv("OFM_GALLERY_LIMIT")
+    assert s.web.gallery_limit == 20
+
+
+def test_a_group_follows_an_edited_env_file(monkeypatch, tmp_path):
+    from ofmhelpers import config
+    from ofmhelpers.config import Settings
+
+    monkeypatch.delenv("OFM_GALLERY_LIMIT", raising=False)
+    monkeypatch.setattr(config, "_DOTENV_CHECK_S", 0.0)
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("OFM_GALLERY_LIMIT=5\n")
+    monkeypatch.setitem(WebSettings.model_config, "env_file", str(dotenv))
+    s = Settings()
+    assert s.web.gallery_limit == 5
+
+    dotenv.write_text("OFM_GALLERY_LIMIT=6\n")
+    os.utime(dotenv, ns=(1, 10**18))
+    assert s.web.gallery_limit == 6
+
+
+def test_fake_externals_are_refused_in_production(monkeypatch):
+    """The fakes sign anyone in as any email: production must not start."""
+    monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
+    with pytest.raises(ValidationError, match="OFM_FAKE_EXTERNALS"):
+        InfraSettings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("environment", "fakes"),
+    [("production", "0"), ("development", "1"), ("development", "0")],
+)
+def test_fake_externals_are_fine_anywhere_else(monkeypatch, environment, fakes):
+    monkeypatch.setenv("OFM_ENV", environment)
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", fakes)
+    s = InfraSettings(_env_file=None)
+    assert (s.environment, s.fake_externals) == (environment, fakes == "1")

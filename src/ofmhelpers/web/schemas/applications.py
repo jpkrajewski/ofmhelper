@@ -2,6 +2,7 @@
 field names are contract with templates/reachmodel.html) and the stored lead
 (`Application`, what the admin CRM page lists)."""
 
+import re
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, computed_field, field_validator, model_validator
@@ -21,6 +22,21 @@ class ApplicationFields(BaseModel):
     monthly_revenue: str = ""
     experience_level: str = ""
     goals: str = ""
+
+
+# What a real lead never types, and every spam bot so far did (prod,
+# 2026-10-22: BBCode [url=...] links, "telegram" handles of two random
+# words, the same message in a dozen languages).
+_LINK = re.compile(r"https?://|www\.|\[/?url|<a\s|\[/?link", re.IGNORECASE)
+# Telegram: 5-32 letters, digits, underscores, starting with a letter.
+_TELEGRAM = re.compile(r"@?[A-Za-z][A-Za-z0-9_]{4,31}")
+# Instagram: up to 30 letters, digits, dots, underscores.
+_INSTAGRAM = re.compile(r"@?[A-Za-z0-9._]{1,30}")
+# A phone number: digits with the usual separators, 7-20 digits.
+_PHONE = re.compile(r"\+?[\d\s().-]{7,25}")
+_MAX_GOALS = 2000
+_MAX_NAME = 60
+_MAX_PHONE_DIGITS = 20
 
 
 class ApplicationForm(ApplicationFields):
@@ -63,6 +79,31 @@ class ApplicationForm(ApplicationFields):
             msg = "give a phone number or a Telegram handle"
             raise ValueError(msg)
         return self
+
+    def spam_reason(self) -> str | None:
+        """Why this looks like a bot, not a lead; None when it looks real.
+        The landing form checks the same shapes in the browser, so a person
+        is told what to fix; only a bot, which posts past the browser, gets
+        here with them wrong."""
+        values = self.model_dump()
+        if any(_LINK.search(v) for v in values.values()):
+            return "a link in a field"
+        checks = (
+            ("telegram_handle", _TELEGRAM),
+            ("instagram_handle", _INSTAGRAM),
+            ("phone", _PHONE),
+        )
+        for field, pattern in checks:
+            value = values[field]
+            if value and not pattern.fullmatch(value):
+                return f"{field} is not one"
+        if self.phone and sum(c.isdigit() for c in self.phone) > _MAX_PHONE_DIGITS:
+            return "phone is not one"
+        if max(len(self.first_name), len(self.last_name)) > _MAX_NAME:
+            return "name too long"
+        if len(self.goals) > _MAX_GOALS:
+            return "goals too long"
+        return None
 
 
 class Application(ApplicationFields):

@@ -1,8 +1,7 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Gen AI</h1>
-</div>
+{{ ui.page_header("Gen AI") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -25,18 +24,11 @@
 
     <fieldset class="tool-fields" id="model-fields"></fieldset>
 
-    <button type="submit" class="btn-primary">Generate</button>
-    <p class="form-hint">
-        Generating doesn't block the form -- fire several runs and watch them land
-        on the right. Hit ↻ Recreate on any past generation (even a failed one) to
-        reload its prompt, settings, and reference files (reused from the server,
-        nothing re-uploaded).
-    </p>
+    {{ ui.button("Generate", "primary", type="submit") }}
 </form>
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Generations</h2>
 
 <div id="results-panel">
     <div class="generation-status"></div>
@@ -52,6 +44,7 @@
 
 <script id="model-catalog" type="application/json">{{ models|tojson }}</script>
 <script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/ai-form.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>

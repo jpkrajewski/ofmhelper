@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
 
+# Before anything imports the app: the developer's .env holds the Logfire
+# write token, and the test process (the e2e harness included) must never
+# send. An env var outranks .env; blank is off (TelemetrySettings).
+os.environ["LOGFIRE_TOKEN"] = ""
+
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, text
@@ -16,7 +21,10 @@ from ofmhelpers.config.settings import (
     InfraSettings,
     InstagramSettings,
     KieAISettings,
+    LinksSettings,
     SessionSettings,
+    SignInSettings,
+    TelemetrySettings,
     VaultSettings,
     WebSettings,
 )
@@ -216,11 +224,14 @@ def fake_externals(monkeypatch, tmp_path):
     from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
     from ofmhelpers.gdrive.fake import _fake_drive
     from ofmhelpers.instagram.fake import fake_instagram
+    from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
     from ofmhelpers.utils import fake_media, outbound
 
     caches = (
         outbound._routes,
         fake_instagram,
+        _fake_oopsie,
+        _fake_bouncy,
         fake_kie,
         fake_higgsfield,
         _fake_drive,
@@ -246,9 +257,15 @@ _SETTINGS_CLASSES = (
     # Its .env holds the real scan proxies: a test must never go through them.
     InstagramSettings,
     AccountsSettings,
+    # Its .env holds the real Oopsie/Bouncy keys.
+    LinksSettings,
     VaultSettings,
     # Its .env holds the real Drive key: a test must never reach Drive.
     GDriveSettings,
+    # Its .env holds the real Google/Apple sign-in clients and admin emails.
+    SignInSettings,
+    # Its .env holds the Logfire write token: a test must never send data.
+    TelemetrySettings,
 )
 
 

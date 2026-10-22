@@ -21,10 +21,13 @@ lists them in RETIRED_TABLES so autogenerate never proposes dropping them.
 
 from __future__ import annotations
 
+from datetime import date  # noqa: TC003 -- SQLAlchemy reads Mapped[] at runtime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -32,6 +35,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -41,6 +45,96 @@ from ofmhelpers.web.db.encrypted import EncryptedText
 
 class Base(DeclarativeBase):
     pass
+
+
+class UserRow(Base):
+    """Someone who may sign in (ofmhelpers.signin): with Google or Apple
+    (`UserIdentityRow`), or their email + password (`password_hash`,
+    scrypt; "" = none set). An admin adds them on /users (or their email is
+    in `OFM_ADMIN_EMAILS`); the account "admin" also takes
+    `APP_PASSWORD_ADMIN`. Everyone sees only what is theirs; an admin also
+    manages people and the admin tools. The Google refresh token (`EncryptedText`) is what Drive
+    uploads go up as."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    last_login_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    google_refresh_token: Mapped[str] = mapped_column(
+        EncryptedText, nullable=False, default=""
+    )
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Their "ALL ACCOUNTS" folder in their own Drive (web/drive_folders.py
+    # finds or makes it); NULL until Google Drive is connected and swept.
+    drive_root_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # The account `APP_PASSWORD_ADMIN` opens and the agency's data belongs
+    # to; the first `OFM_ADMIN_EMAILS` admin's Google sign-in takes it over.
+    is_password_account: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
+
+class UserIdentityRow(Base):
+    """A Google or Apple account linked to a user, by the provider's stable
+    id (`subject`): an Apple private-relay address or a changed Gmail still
+    finds its user."""
+
+    __tablename__ = "user_identities"
+
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(255), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False, default="")
+    linked_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class PasswordLinkRow(Base):
+    """A one-time link to set a password (made on /users for a new user, or
+    to reset one). Only its SHA-256 is stored."""
+
+    __tablename__ = "password_links"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    expires_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class UserApiKeyRow(Base):
+    """A user's own key for a generation provider (kie.ai, Higgsfield...):
+    what their forms pre-fill, so their runs bill their account."""
+
+    __tablename__ = "user_api_keys"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    api_key: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class UserCookiesRow(Base):
+    """A user's own cookies.txt (alembic b1c2d3e4f5a7): the logins their
+    downloads and their accounts' scans send. Never shared with another
+    user, except the shared watched-profile scan (web/stores/cookies.py)."""
+
+    __tablename__ = "user_cookies"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    cookies: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    uploaded_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class JobRow(Base):
@@ -97,7 +191,12 @@ class WatchedProfileRow(Base):
 
     __tablename__ = "watched_profiles"
 
-    username: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # Whose watch list (alembic d3e4f5a6b7c8). A username two owners watch
+    # is two rows, scanned once: a scan writes every row of its username.
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True, index=True
+    )
+    username: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
     # Free-form label the feed filters by ("asian", "gay", ...); None = none.
     group_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     added_at: Mapped[float] = mapped_column(Float, nullable=False)
@@ -116,6 +215,9 @@ class ProfileGroupRow(Base):
 
     __tablename__ = "profile_groups"
 
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
 
@@ -153,8 +255,16 @@ class CreatorRow(Base):
     __tablename__ = "creators"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # Whose it is (alembic d3e4f5a6b7c8): only they see it (admins too).
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_creators_owner_name"),
+    )
 
 
 class TrackedAccountRow(Base):
@@ -170,6 +280,10 @@ class TrackedAccountRow(Base):
     __tablename__ = "tracked_accounts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Whose it is (alembic d3e4f5a6b7c8): only they see it (admins too).
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     # A `socials.platforms()` key.
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     handle: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -198,10 +312,11 @@ class TrackedAccountRow(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "platform", "handle", name="uq_tracked_accounts_platform_handle"
+            "user_id", "platform", "handle", name="uq_tracked_accounts_platform_handle"
         ),
         # NULLs never collide: only scanned accounts carry an id.
         UniqueConstraint(
+            "user_id",
             "platform",
             "platform_account_id",
             name="uq_tracked_accounts_platform_account",
@@ -268,8 +383,12 @@ class DeviceRow(Base):
     __tablename__ = "devices"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # How the agency calls it ("Phone 07"); unique.
-    label: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    # Whose it is (alembic d3e4f5a6b7c8): only they see it (admins too).
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    # How its owner calls it ("Phone 07"); unique per owner.
+    label: Mapped[str] = mapped_column(String(32), nullable=False)
     model_id: Mapped[str | None] = mapped_column(String(48), nullable=True)
     color_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     custom_model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
@@ -279,6 +398,10 @@ class DeviceRow(Base):
     added_at: Mapped[float] = mapped_column(Float, nullable=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)
     retired_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "label", name="uq_devices_owner_label"),
+    )
 
 
 class LoginRow(Base):
@@ -292,6 +415,11 @@ class LoginRow(Base):
     __tablename__ = "logins"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # The owner of the phones it is on: a login links only to its owner's
+    # phones, so nobody reveals another's password by adding the same handle.
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     service: Mapped[str] = mapped_column(String(32), nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     username: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -302,7 +430,9 @@ class LoginRow(Base):
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("service", "provider", "username", name="uq_logins_identity"),
+        UniqueConstraint(
+            "user_id", "service", "provider", "username", name="uq_logins_identity"
+        ),
     )
 
 
@@ -341,13 +471,51 @@ class DriveAccountFolderRow(Base):
     root_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Its POSTED folder inside it; NULL until the sweep makes or finds one.
     posted_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Its last read (`schemas.AccountScan`), what /drive opens with before
+    # the live read arrives; NULL until read once.
+    scan: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class DriveUploadRow(Base):
+    """A clone result uploaded (or on its way) into an account's Drive
+    folder, as the uploader's Google account (web/drive_uploads.py).
+    `status`: queued, done (`drive_file_id`, `drive_url`) or failed
+    (`error`). One per file and folder: never uploaded twice there."""
+
+    __tablename__ = "drive_uploads"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    file_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    login_id: Mapped[int] = mapped_column(
+        ForeignKey("logins.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    folder_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    drive_file_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    drive_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    finished_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "job_id", "file_index", "login_id", name="uq_drive_uploads_file_folder"
+        ),
+    )
 
 
 class DrivePostedFileRow(Base):
     """A file seen in a login's POSTED folder, from the sweep that first saw
     it: Drive keeps no time a file was moved, so this is what "posted today"
-    counts. Never deleted when the file leaves POSTED (the live count drops,
-    the history stays); deleted with the login."""
+    counts -- only the files seen in the login's current account folder
+    (`folder_id`), so a new folder (a dev copy's own root) starts at zero.
+    Never deleted when the file leaves POSTED (the live count drops, the
+    history stays); deleted with the login."""
 
     __tablename__ = "drive_posted_files"
 
@@ -358,7 +526,84 @@ class DrivePostedFileRow(Base):
     name: Mapped[str] = mapped_column(String(512), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     first_seen_at: Mapped[float] = mapped_column(Float, nullable=False)
+    # The account folder it was seen in (NULL: a login without one then).
+    folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (
         Index("ix_drive_posted_files_login_seen", "login_id", "first_seen_at"),
     )
+
+
+class ShortLinkRow(Base):
+    """A link on a link provider (/links): one we made ("Generate links":
+    one per Instagram account, `account_id`) or one the provider listed on
+    a sync. `remote_id` is the provider's id for it (NULL while still
+    being made); `status`: creating | active | inactive | failed |
+    deleting. `adult`: visitors confirm 18+ first (NULL: the provider does
+    not say). A link the provider no longer lists is deleted here too."""
+
+    __tablename__ = "short_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    remote_id: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    slug: Mapped[str] = mapped_column(String(64), nullable=False)
+    domain: Mapped[str] = mapped_column(String(253), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    destination: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    creator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("creators.id", ondelete="SET NULL"), nullable=True
+    )
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tracked_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "provider", "domain", "slug", name="uq_short_links_address"
+        ),
+        UniqueConstraint(
+            "user_id", "provider", "remote_id", name="uq_short_links_remote"
+        ),
+        Index("ix_short_links_account_id", "account_id"),
+    )
+
+
+class ShortLinkDayRow(Base):
+    """One UTC day of one link's numbers, as its provider reports them:
+    landing views and clicks through. Rewritten by every sync."""
+
+    __tablename__ = "short_link_days"
+
+    link_id: Mapped[int] = mapped_column(
+        ForeignKey("short_links.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    views: Mapped[int] = mapped_column(Integer, nullable=False)
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class LinkSyncRow(Base):
+    """A user's account on a link provider, as the sweeper keeps it: when it
+    was last synced (or claimed by a sync), the last sync's error, and the
+    plan's quota then (`links.Usage`)."""
+
+    __tablename__ = "link_syncs"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    synced_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

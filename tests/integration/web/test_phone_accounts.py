@@ -7,7 +7,6 @@ is the fake (OFM_FAKE_EXTERNALS), so the scan is real code, offline."""
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
@@ -100,7 +99,7 @@ def test_phones_show_followers_and_sort_by_them_by_default(admin):
     assert '<span class="ph-login-followers">200k followers</span>' in html
     order = [html.index(label) for label in ("B big", "A small", "C none")]
     assert order == sorted(order)
-    assert '<option value="followers" selected>Sort: Most followers</option>' in html
+    assert '<option value="followers" selected>Most followers</option>' in html
 
 
 @pytest.mark.parametrize(

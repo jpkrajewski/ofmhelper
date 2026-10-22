@@ -1,0 +1,357 @@
+/* =====================================================================
+   Ascend Global LLC — Content Ops design system, file 2 of 4:
+   tokens.css -> base.css -> components.css -> pages.css, loaded in that
+   order by templates/_styles.html. Element defaults, page layout, header and footer.
+
+   Mobile-first: unprefixed rules are the phone layout, `min-width` media
+   queries add the wider ones. Class names used by static/js/*.js are
+   contract -- rename nothing without updating the JS.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   2. Base
+   --------------------------------------------------------------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+/* Space for the scrollbar is always kept, so a short page and a long one
+   are the same width and nothing shifts between them. */
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scrollbar-gutter: stable; }
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    font-size: var(--step-0);
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--bg);
+    /* Inter: contextual alternates + tabular figures, so numbers in
+       tables and KPIs line up. */
+    font-feature-settings: "cv11", "ss01", "tnum";
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+    margin: 0 0 var(--s-3);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    text-wrap: balance;
+}
+h1 { font-size: var(--step-3); }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); }
+p { margin: 0 0 var(--s-4); }
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--accent-soft); text-decoration-color: color-mix(in srgb, var(--accent-soft) 40%, transparent); }
+a:hover { color: var(--accent-strong); }
+
+/* One visible focus ring for everything, keyboard-only. Removing this
+   drops the accessibility score more than any other single rule here. */
+:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+code, kbd, samp {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    background: var(--surface-2);
+    color: var(--accent-soft);
+    padding: var(--pad-pill);
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border-soft);
+}
+pre { font-family: var(--font-mono); font-size: var(--step--1); }
+
+img, video, audio, canvas, svg { max-width: 100%; }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
+
+.ok { color: var(--ok); }
+.fail { color: var(--fail); }
+.pending { color: var(--text-muted); }
+.muted { color: var(--text-muted); }
+
+/* Screen-reader-only text and the skip link that reveals itself on focus. */
+/* The hidden attribute wins over any component's display (JS toggles it). */
+[hidden] { display: none !important; }
+.inline-form { display: inline; }
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+.skip-link {
+    position: absolute;
+    left: var(--s-4);
+    top: -100px;
+    z-index: 200;
+    padding: var(--s-3) var(--s-4);
+    background: var(--surface-2);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    text-decoration: none;
+    transition: top var(--dur) var(--ease);
+}
+.skip-link:focus { top: var(--s-3); }
+
+/* ---------------------------------------------------------------------
+   3. Layout
+   --------------------------------------------------------------------- */
+.page-content {
+    width: 100%;
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--s-6) var(--s-4) var(--s-8);
+}
+@media (min-width: 720px) {
+    .page-content { padding: var(--s-7) var(--s-7) var(--s-8); }
+}
+
+/* Page title block: heading + optional lead paragraph + optional actions.
+   Every page uses this instead of a bare <h1>, which is what made the old
+   pages start at wildly different vertical rhythms. */
+.page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--s-4);
+    margin-bottom: var(--gap-section);
+}
+.page-head h1 { margin: 0; }
+/* The data line under a page title (counts, who you are). */
+.page-head .lead { margin: var(--s-1) 0 0; color: var(--text-muted); font-size: var(--step--1); }
+.page-head-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
+.page-head-actions > .btn, .page-head-actions > button { min-width: var(--control-w-action); }
+/* A list page's actions (Export, Add phone, Sync, Add account) sit at the
+   right end of its search/filter toolbar, one row with the filters. */
+.toolbar-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-left: auto; }
+.toolbar-actions > .btn, .toolbar-actions > button { min-width: var(--control-w-action); }
+
+.section { margin-top: var(--gap-section); }
+
+/* Small uppercase rule-heading used above columns and sub-sections. */
+.col-title {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    margin: 0 0 var(--s-5);
+    padding-bottom: var(--s-3);
+    font-size: var(--step-1);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+}
+
+/* ---------------------------------------------------------------------
+   4. Site header + navigation
+   --------------------------------------------------------------------- */
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--glass-bg);
+    border-bottom: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+}
+.site-header-inner {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--s-3) var(--s-4);
+    min-height: var(--header-h);
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+}
+@media (min-width: 720px) {
+    .site-header-inner { padding: var(--s-3) var(--s-7); }
+}
+
+.brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-decoration: none;
+    line-height: 1.1;
+    margin-right: auto;
+}
+.brand-name {
+    font-size: var(--step-0);
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    color: var(--text);
+}
+.brand-sub {
+    font-size: var(--step--1);
+    font-weight: 450;
+    color: var(--text-faint);
+}
+
+/* Mobile: the links live in a drawer under the bar, toggled by the
+   button. Desktop (>=980px): the button hides and the drawer is a plain
+   inline row, so no JS is required for the layout that most people use. */
+.nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-2);
+    width: var(--control-h);
+    height: var(--control-h);
+    margin: 0;
+    padding: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+}
+.nav-toggle:hover { border-color: var(--accent); color: var(--accent-soft); }
+.nav-toggle-bars { position: relative; display: block; width: 18px; height: 2px; }
+.nav-toggle-bars,
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+    background: currentColor;
+    border-radius: 2px;
+    transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 18px;
+    height: 2px;
+}
+.nav-toggle-bars::before { top: -6px; }
+.nav-toggle-bars::after { top: 6px; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars { background: transparent; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars::before { transform: translateY(6px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars::after { transform: translateY(-6px) rotate(-45deg); }
+
+.site-nav {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    padding: var(--s-3) var(--s-4) var(--s-4);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+}
+.site-nav.open { display: block; animation: nav-in var(--dur) var(--ease); }
+@keyframes nav-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: none; }
+}
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-1);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.nav-links a {
+    display: block;
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-weight: 500;
+    text-decoration: none;
+    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.nav-links a:hover { background: var(--surface-2); color: var(--text); }
+.nav-links a[aria-current="page"] {
+    background: var(--surface-2);
+    color: var(--text);
+}
+/* "More": the rarely used pages, folded. Phone: opens inline in the drawer;
+   desktop: a dropdown under it. */
+/* Not the card the base `details` rule draws. */
+.nav-more > details { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+.nav-more > details > summary {
+    display: block;
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-weight: 500;
+    list-style: none;
+    cursor: pointer;
+}
+.nav-more > details > summary::-webkit-details-marker { display: none; }
+.nav-more > details > summary::after { content: " ▾"; font-size: 0.8em; }
+.nav-more > details > summary:hover { background: var(--surface-2); color: var(--text); }
+.nav-more > details > summary[data-current] { color: var(--text); background: var(--surface-2); }
+.nav-more-links { list-style: none; margin: 0; padding: 0 0 0 var(--s-4); border-radius: var(--radius-card); }
+/* Log out sits in the header bar next to the menu button, separate from
+   the navigation list -- it is an action, not a destination. */
+.logout-form { margin: 0 0 0 auto; }
+
+@media (min-width: 980px) {
+    .nav-toggle { display: none; }
+    .site-nav {
+        display: block;
+        position: static;
+        padding: 0;
+        background: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        border: 0;
+        box-shadow: none;
+        animation: none;
+    }
+    .nav-links { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
+    .nav-links a { padding: var(--s-2) var(--s-3); font-size: var(--step--1); white-space: nowrap; }
+    .nav-more { position: relative; }
+    .nav-more > details > summary { padding: var(--s-2) var(--s-3); font-size: var(--step--1); white-space: nowrap; }
+    .nav-more-links {
+        position: absolute;
+        top: calc(100% + var(--s-1));
+        left: 0;
+        z-index: 110;
+        min-width: 200px;
+        padding: var(--s-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+    }
+    /* Brand left, nav next to it, log out pinned to the far right. */
+    .brand { margin-right: var(--s-6); }
+    .logout-form { margin-left: auto; padding-left: var(--s-4); border-left: 1px solid var(--border); }
+}
+
+/* ---------------------------------------------------------------------
+   16. Footer
+   --------------------------------------------------------------------- */
+.site-footer {
+    margin-top: var(--s-8);
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+.site-footer-inner {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--s-5) var(--s-4);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+@media (min-width: 720px) {
+    .site-footer-inner { padding: var(--s-5) var(--s-7); }
+}
+.footer-brand strong { margin-right: var(--s-2); color: var(--text); font-weight: 600; }

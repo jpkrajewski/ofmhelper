@@ -11,6 +11,9 @@
 - `accounts.py` -- a tracked social account (/accounts), its list query and history.
 - `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
 - `drive.py` -- an Instagram login's Drive folders (/drive): what waits, what was posted.
+- `users.py` -- who signs in (/users, /login, /account) and their role.
+- `cookies.py` -- a user's own cookies.txt as /cookies shows it (no values).
+- `links.py` -- a link on a link provider (/links), its list query and the Generate form.
 
 Import from here; the split is an implementation detail of this package.
 """
@@ -32,6 +35,7 @@ from ofmhelpers.web.schemas.accounts import (
     TrackedAccount,
 )
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
+from ofmhelpers.web.schemas.cookies import SavedCookies
 from ofmhelpers.web.schemas.devices import (
     Device,
     DeviceFields,
@@ -46,15 +50,16 @@ from ofmhelpers.web.schemas.drive import (
     DriveBoard,
     DriveCard,
     DriveTarget,
+    DriveUpload,
     StoredFolder,
     SyncReport,
+    UploadRequest,
+    UploadsQueued,
+    UploadTarget,
 )
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
 from ofmhelpers.web.schemas.gallery import (
-    CloneBatch,
     CloneCard,
-    CloneEta,
-    CloneRate,
     JobCard,
     TaskCard,
 )
@@ -71,8 +76,31 @@ from ofmhelpers.web.schemas.jobs import (
     JobStatusPayload,
     ReferenceAsset,
 )
+from ofmhelpers.web.schemas.links import (
+    AssignLinkCreator,
+    GenerateLinks,
+    LinkPage,
+    LinkPeriod,
+    LinkQuery,
+    LinkSort,
+    LinksQueued,
+    LinkSummary,
+    ProviderState,
+    SelectedLinks,
+    ShortLink,
+)
 from ofmhelpers.web.schemas.persistence import Job, JobPreview, JobStatus, ResultFile
 from ofmhelpers.web.schemas.tools import Tool
+from ofmhelpers.web.schemas.users import (
+    ApiKeysForm,
+    LinkedAccount,
+    PasswordForm,
+    Role,
+    RoleForm,
+    SessionUser,
+    User,
+    UserForm,
+)
 from ofmhelpers.web.schemas.watched import (
     FeedItem,
     GroupForm,
@@ -93,15 +121,14 @@ __all__ = [
     "ActionLogEntry",
     "AddAccounts",
     "AddResult",
+    "ApiKeysForm",
     "Application",
     "ApplicationForm",
     "AssetCard",
     "AssignCreator",
-    "CloneBatch",
+    "AssignLinkCreator",
     "CloneCard",
-    "CloneEta",
     "CloneQueued",
-    "CloneRate",
     "Device",
     "DeviceFields",
     "DeviceLogin",
@@ -109,9 +136,11 @@ __all__ = [
     "DriveBoard",
     "DriveCard",
     "DriveTarget",
+    "DriveUpload",
     "FailedSource",
     "FeedItem",
     "FileEntry",
+    "GenerateLinks",
     "GroupForm",
     "InputFileGroup",
     "InputSetting",
@@ -123,23 +152,43 @@ __all__ = [
     "JobStatus",
     "JobStatusPayload",
     "Leaderboard",
+    "LinkPage",
+    "LinkPeriod",
+    "LinkQuery",
+    "LinkSort",
+    "LinkSummary",
+    "LinkedAccount",
+    "LinksQueued",
     "LoginFields",
     "LoginSecrets",
     "ModelChoice",
     "Notes",
+    "PasswordForm",
     "Period",
     "PhoneQuery",
     "PhoneSort",
     "ProviderChoice",
+    "ProviderState",
     "RefEntry",
     "ReferenceAsset",
     "ResultFile",
+    "Role",
+    "RoleForm",
+    "SavedCookies",
     "SelectedAccounts",
+    "SelectedLinks",
+    "SessionUser",
+    "ShortLink",
     "StoredFolder",
     "SyncReport",
     "TaskCard",
     "Tool",
     "TrackedAccount",
+    "UploadRequest",
+    "UploadTarget",
+    "UploadsQueued",
+    "User",
+    "UserForm",
     "WatchForm",
     "WatchedProfile",
 ]

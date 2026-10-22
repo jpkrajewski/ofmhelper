@@ -1,0 +1,28 @@
+{% import "components/ui.html" as ui -%}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fake {{ provider }} sign-in</title>
+    {% include "_styles.html" %}
+</head>
+<body>
+    {# OFM_FAKE_EXTERNALS only (e2e): stands in for Google's / Apple's
+       consent screen. #}
+    <main class="login-screen">
+        <div class="login-card">
+            <p class="login-sub">Fake {{ provider }} consent</p>
+            <form method="post" action="/auth/fake-consent">
+                <input type="hidden" name="provider" value="{{ provider }}">
+                <input type="hidden" name="state" value="{{ state }}">
+                <div class="field">
+                    <label for="fake-email">Sign in as</label>
+                    <input type="text" name="email" id="fake-email" required>
+                </div>
+                {{ ui.button("Allow", "primary", type="submit", block=true) }}
+            </form>
+        </div>
+    </main>
+</body>
+</html>

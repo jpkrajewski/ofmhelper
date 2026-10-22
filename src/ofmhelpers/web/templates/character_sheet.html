@@ -1,9 +1,8 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_asset_media.html" as am %}
 {% block content %}
-<div class="page-head">
-    <h1>Character Sheet</h1>
-</div>
+{{ ui.page_header("Character Sheet") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -15,17 +14,11 @@
         <label for="character-sheet-files">Images (2–{{ max_images }}), left to right in the order picked</label>
         <input type="file" id="character-sheet-files" name="files" multiple accept="image/*,.heic,.heif" required>
     </div>
-    <button type="submit" class="btn-primary">Combine</button>
-    <p class="form-hint">
-        Placed side by side with no gap, every image scaled to the tallest one's
-        height. Comes back as a lossless PNG, also added to the reuse picker on
-        Generate.
-    </p>
+    {{ ui.button("Combine", "primary", type="submit") }}
 </form>
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Results</h2>
 
 <div id="results-panel">
     <div class="generation-status"></div>
@@ -52,5 +45,6 @@
 </div>
 </div>
 
+{% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 {% endblock %}

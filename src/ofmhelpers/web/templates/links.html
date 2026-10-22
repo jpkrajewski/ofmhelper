@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_account_numbers.html" as num %}
+{% import "_link_numbers.html" as ln %}
+{% block title %}Links — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("Links") }}
+
+<div class="stat-grid">
+    {{ ui.stat("Clicks · " ~ period.label|lower, num.count(summary.clicks), "CTR " ~ ln.pct(summary.ctr)) }}
+    {{ ui.stat("Views · " ~ period.label|lower, num.count(summary.views), summary.links ~ " link" ~ ("" if summary.links == 1 else "s")) }}
+    {% for p in providers %}
+    {% set quota %}{% if p.usage %}{{ p.usage.used }}{% if p.usage.limit is not none %} / {{ p.usage.limit }}{% endif %}{% else %}—{% endif %}{% endset %}
+    {% set note %}{% if not p.has_key %}No API key{% elif p.usage and p.usage.active_limit is not none %}{{ p.usage.active }} / {{ p.usage.active_limit }} active{% elif p.synced_at %}Synced {{ p.synced_at|ago }}{% else %}Not synced yet{% endif %}{% endset %}
+    {{ ui.stat(p.label ~ " links", quota, note) }}
+    {% endfor %}
+</div>
+
+{% for p in providers %}
+{% if not p.has_key %}
+{% call ui.notice(kind="warn") %}No {{ p.label }} API key. <a href="/account">Add it on Account</a>{% endcall %}
+{% elif p.error %}
+{% call ui.notice(kind="fail") %}{{ p.label }}: {{ p.error }}{% endcall %}
+{% elif p.usage and p.usage.full %}
+{% call ui.notice(kind="warn") %}{{ p.label }} plan is full ({{ p.usage.used }} / {{ p.usage.limit }}): new links will fail{% endcall %}
+{% elif p.usage and p.usage.room == 0 %}
+{% call ui.notice(kind="warn") %}{{ p.label }}: {{ p.usage.active }} / {{ p.usage.active_limit }} links active: new links would start inactive{% endcall %}
+{% endif %}
+{% endfor %}
+{% if summary.ungated %}
+{% call ui.notice(kind="warn") %}{{ summary.ungated }} link{{ "" if summary.ungated == 1 else "s" }} without the 18+ confirmation{% endcall %}
+{% endif %}
+
+<div class="accounts-filters">
+    <input type="search" id="links-search" placeholder="Search links…" aria-label="Search links" autocomplete="off">
+    <form method="get" action="/links" data-autosubmit class="accounts-filter-form">
+        <select name="period" aria-label="Reporting period">
+            {% for p in periods %}
+            <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="provider" aria-label="Provider">
+            <option value="">All providers</option>
+            {% for p in providers %}
+            <option value="{{ p.key }}" {% if p.key == query.provider %}selected{% endif %}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
+        <select name="creator" aria-label="Model">
+            <option value="">All models</option>
+            {% for c in creators %}
+            <option value="{{ c }}" {% if c == query.creator %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+        </select>
+        {% if query.account %}<input type="hidden" name="account" value="{{ query.account }}">{% endif %}
+        {% if query.sort != sorts.CLICKS %}<input type="hidden" name="sort" value="{{ query.sort }}">{% endif %}
+        {% if query.order %}<input type="hidden" name="order" value="{{ query.order }}">{% endif %}
+        {% if query.per_page %}<input type="hidden" name="per_page" value="{{ query.per_page }}">{% endif %}
+        <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
+    </form>
+    <div class="toolbar-actions">
+        {{ ui.button("Sync", icon="refresh", attrs={"id": "links-sync"}) }}
+        {{ ui.button("Generate links", "primary", icon="plus", attrs={"id": "links-generate-open"}) }}
+    </div>
+</div>
+<div class="generation-status" id="links-status" role="status" aria-live="polite"></div>
+
+{% macro sort_th(key, label, numeric=True) -%}
+<th scope="col" {% if numeric %}class="num"{% endif %} {% if query.sort == key %}aria-sort="{{ 'ascending' if query.direction == 'asc' else 'descending' }}"{% endif %}>
+    <a class="accounts-sort" href="{{ query.sort_link(key) }}">{{ label }}</a>
+</th>
+{%- endmacro %}
+
+{% if not page.rows %}
+{% call ui.empty() %}
+    {% if query.creator or query.provider or query.account %}
+    No links match. <a href="{{ query.link(creator='', provider='', account=None) }}">All links</a>
+    {% else %}
+    No links yet
+    {% endif %}
+{% endcall %}
+{% else %}
+<div class="accounts-actions" id="links-bulk" role="region" aria-label="Selected links" hidden>
+    <span class="accounts-bulk-count" id="links-bulk-count" aria-live="polite"></span>
+    <div class="accounts-actions-controls">
+        <select id="links-bulk-creator" aria-label="Model for the selected links">
+            <option value="">No model</option>
+            {% for c in creators %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+        {{ ui.button("Assign model", attrs={"id": "links-bulk-assign"}) }}
+        {{ ui.button("Turn on 18+", attrs={"id": "links-bulk-adult"}) }}
+        {{ ui.button("Copy links", icon="copy", attrs={"id": "links-bulk-copy"}) }}
+        {{ ui.button("Delete", "ghost", hook="accounts-bulk-remove", attrs={"id": "links-bulk-delete"}) }}
+    </div>
+</div>
+{% call ui.table(hook="accounts-table", wrap_hook="accounts-table-wrap", attrs={"id": "links-table"}) %}
+        <thead>
+            <tr>
+                <th scope="col"><input type="checkbox" id="links-pick-all" aria-label="Select all on this page"></th>
+                {{ sort_th(sorts.ADDRESS, "Link", numeric=False) }}
+                <th scope="col">{{ source_label }}</th>
+                <th scope="col">Target</th>
+                <th scope="col">Model</th>
+                {{ sort_th(sorts.VIEWS, "Views · " ~ period.short) }}
+                {{ sort_th(sorts.CLICKS, "Clicks · " ~ period.short) }}
+                {{ sort_th(sorts.CTR, "CTR") }}
+            </tr>
+        </thead>
+        <tbody>
+            {% for x in page.rows %}
+            <tr id="link-{{ x.id }}" data-id="{{ x.id }}" data-status="{{ x.status }}" data-url="{{ x.url }}"
+                data-search="{{ (x.address ~ ' ' ~ x.destination ~ ' ' ~ (x.account_handle or '') ~ ' ' ~ (x.creator or '') ~ ' ' ~ x.provider_label)|lower }}"
+                {% if x.error %}data-problem title="{{ x.error }}"{% endif %}>
+                <td class="accounts-pick-cell"><input type="checkbox" class="links-pick" aria-label="Select {{ x.address }}"></td>
+                <td>
+                    <div class="links-address">
+                        {% if x.url %}
+                        <a class="accounts-name" href="{{ x.url }}" target="_blank" rel="noopener">{{ x.address }}</a>
+                        {{ ui.icon_button("copy", "Copy " ~ x.address, hook="links-copy") }}
+                        {% else %}
+                        <span class="accounts-name">{{ x.address }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="accounts-sub">
+                        {{ x.provider_label }}
+                        {% if x.status == "creating" %} · {{ ui.badge("Making…") }}
+                        {% elif x.status == "deleting" %} · {{ ui.badge("Deleting…") }}
+                        {% elif x.status == "failed" %} · {{ ui.badge("Failed", "fail") }}
+                        {% elif x.status == "inactive" %} · {{ ui.badge("Inactive", "warn") }}
+                        {% endif %}
+                        {% if x.adult is sameas false %} · {{ ui.badge("No 18+", "warn") }}{% endif %}
+                    </div>
+                </td>
+                <td data-label="{{ source_label }}">{% if x.account_id %}<a href="/accounts/{{ x.account_id }}">@{{ x.account_handle }}</a>{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td data-label="Target"><a href="{{ x.destination }}" target="_blank" rel="noopener" title="{{ x.destination }}">{{ x.target_label }}</a></td>
+                <td data-label="Model">{% if x.creator %}<span class="accounts-creator-tag">{{ x.creator }}</span>{% else %}<span class="pending">—</span>{% endif %}</td>
+                <td class="num" data-label="Views · {{ period.short }}">{{ num.count(x.views(period.days)) }}</td>
+                <td class="num" data-label="Clicks · {{ period.short }}"><strong>{{ num.count(x.clicks(period.days)) }}</strong></td>
+                <td class="num" data-label="CTR">{{ ln.pct(x.ctr(period.days)) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+{{ ui.empty("No links match your search", attrs={"id": "links-no-match", "hidden": true}) }}
+{% endif %}
+
+<div class="accounts-pager">
+    <span>Showing {{ page.first }}–{{ page.last }} of {{ page.total }} links</span>
+    <label class="accounts-per-page">Per page
+        <select id="links-per-page">
+            {% for n in page_sizes %}
+            <option value="{{ query.link(per_page=n) }}" {% if n == page.per_page %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% if page.pages > 1 %}
+    <nav class="reels-filter" aria-label="Pages">
+        {% if page.page > 1 %}<a href="{{ query.link(page=page.page - 1) }}" aria-label="Previous page">‹</a>{% endif %}
+        {% for n in range(1, page.pages + 1) %}
+        {% if n == 1 or n == page.pages or (n - page.page)|abs <= 2 %}
+        <a href="{{ query.link(page=n) }}" {% if n == page.page %}aria-current="page"{% endif %}>{{ n }}</a>
+        {% elif (n - page.page)|abs == 3 %}<span class="pending">…</span>{% endif %}
+        {% endfor %}
+        {% if page.page < page.pages %}<a href="{{ query.link(page=page.page + 1) }}" aria-label="Next page">›</a>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+
+<dialog class="accounts-dialog" id="links-generate">
+    <form id="links-generate-form" method="dialog">
+        <h2>Generate links</h2>
+        <div class="field">
+            <label for="links-gen-creator">Model</label>
+            <select id="links-gen-creator" name="creator" required>
+                <option value="">Pick a model</option>
+                {% for c in creators %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="links-gen-provider">Provider</label>
+            <select id="links-gen-provider" name="provider">
+                {% for p in providers %}
+                {% set room = p.usage.room if p.usage else none %}
+                {% set full = room is not none and room == 0 %}
+                <option value="{{ p.key }}" {% if room is not none %}data-room="{{ room }}"{% endif %} {% if not p.has_key or full %}disabled{% endif %}>{{ p.label }}{% if not p.has_key %} (no API key){% elif full %} (plan full){% elif room is not none %} ({{ room }} left){% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="links-gen-domain">Domain</label>
+            <select id="links-gen-domain" name="domain">
+                {% for p in providers %}
+                {% for d in infos[p.key].domains %}<option value="{{ d }}" data-provider="{{ p.key }}">{{ d }}</option>{% endfor %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="links-gen-target">Target page</label>
+            <select id="links-gen-target" name="target">
+                {% for key, t in targets.items() %}<option value="{{ key }}" data-prefix="{{ t.prefix }}" data-hosts="{{ t.hosts|join(' ') }}" data-profile="{{ t.profile }}">{{ t.label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="links-gen-destination">Target link</label>
+            <input type="url" id="links-gen-destination" name="destination" required autocomplete="off">
+            <p class="generation-error" id="links-gen-destination-problem" hidden></p>
+        </div>
+        <fieldset class="field links-picker" data-max="{{ max_generate }}">
+            <legend>{{ source_label }} accounts (up to <span id="links-gen-limit">{{ max_generate }}</span>)</legend>
+            <label class="links-pick-all"><input type="checkbox" id="links-gen-all"> Select all</label>
+            <div class="links-accounts" id="links-gen-accounts">
+                {% for a in accounts %}
+                <label data-creator="{{ a.creator or '' }}" hidden><input type="checkbox" name="account_ids" value="{{ a.id }}"> @{{ a.handle }}</label>
+                {% endfor %}
+            </div>
+            <p class="pending" id="links-gen-none" hidden>No {{ source_label }} accounts of this model on Accounts</p>
+        </fieldset>
+        <div class="generation-status" id="links-generate-status" role="status" aria-live="polite"></div>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", attrs={"id": "links-generate-cancel"}) }}
+            {{ ui.button("Generate", "primary", type="submit") }}
+        </div>
+    </form>
+</dialog>
+
+<script src="{{ static_url('js/links.js') }}"></script>
+{% endblock %}

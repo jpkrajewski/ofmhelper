@@ -10,7 +10,6 @@ request as the last resort. Download still serves the original.
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import json
@@ -297,7 +296,9 @@ def test_backfill_makes_the_previews(tmp_path, no_warming):
 # --- polling and compression ----------------------------------------------
 
 
-@pytest.mark.parametrize("endpoint", ["/generate/gallery/latest", "/clone/batches"])
+@pytest.mark.parametrize(
+    "endpoint", ["/generate/gallery/latest", "/clone/gallery/latest"]
+)
 def test_an_unchanged_live_gallery_answers_304(client, tmp_path, endpoint):
     _done_job(_picture(tmp_path / "r.png", 8, 8))
     first = client.get(endpoint)
@@ -321,7 +322,7 @@ def test_a_new_job_changes_the_live_gallery(client, tmp_path):
 
 
 def test_pages_css_and_json_are_gzipped(client):
-    for url in ("/generate", "/static/css/app.css"):
+    for url in ("/generate", "/static/css/pages.css"):
         r = client.get(url, headers={"Accept-Encoding": "gzip"})
         assert r.headers.get("content-encoding") == "gzip", url
 

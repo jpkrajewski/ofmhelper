@@ -59,12 +59,11 @@ def test_run_job_failure_persists_error():
 
 def test_finish_time_is_stamped_on_done_and_failed_and_cleared_on_rerun():
     done = create_job("clone", {})
-    assert get_job(done).took_s is None
+    assert get_job(done).finished_at is None
     run_job(done, list, {})
     job = get_job(done)
     assert job.finished_at is not None
-    assert job.took_s is not None
-    assert job.took_s >= 0
+    assert job.finished_at >= job.created_at
 
     failed = create_job("clone", {})
     run_job(failed, lambda: 1 / 0, {})

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Users — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("Users") }}
+
+{% if error %}{{ ui.notice(error, "warn") }}{% endif %}
+
+{% if link %}
+{% call ui.notice(hook="users-link") %}
+    <p>Password link for <strong>{{ link_for.email }}</strong> · works once, {{ link_days }} days</p>
+    <div class="users-link-row">
+        <input type="text" readonly value="{{ link }}" id="users-link" aria-label="Password link for {{ link_for.email }}">
+        {{ ui.button("Copy", attrs={"id": "users-link-copy"}) }}
+    </div>
+{% endcall %}
+{% endif %}
+
+{% call ui.card("Add a user", hook="users-card") %}
+    <form class="users-add" method="post" action="/users">
+        <div class="field users-add-email">
+            <label for="users-email">Email</label>
+            <input type="text" name="email" id="users-email" required inputmode="email" autocomplete="off" placeholder="name@gmail.com">
+        </div>
+        <div class="field">
+            <label for="users-name">Name <span class="pending">(optional)</span></label>
+            <input type="text" name="name" id="users-name" maxlength="255" autocomplete="off">
+        </div>
+        <div class="field users-add-role">
+            <label for="users-role">Role</label>
+            <select name="role" id="users-role">
+                {% for r in roles %}<option value="{{ r }}"{% if r == "user" %} selected{% endif %}>{{ r|capitalize }}</option>{% endfor %}
+            </select>
+        </div>
+        {{ ui.button("Add user", "primary", type="submit") }}
+    </form>
+{% endcall %}
+
+{% call ui.table(hook="users-table") %}
+        <thead>
+            <tr>
+                <th scope="col">User</th>
+                <th scope="col">Role</th>
+                <th scope="col">Signs in with</th>
+                <th scope="col">Last sign-in</th>
+                <th scope="col">Access</th>
+                <th scope="col" class="users-actions-head"><span class="sr-only">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            {% set mine = u.id == me %}
+            <tr data-user="{{ u.email }}"{% if not u.active %} data-inactive{% endif %}>
+                <td class="users-who">
+                    <strong>{{ u.label }}</strong>{% if mine %} {{ ui.badge("you") }}{% endif %}
+                    {% if u.name %}<span class="pending">{{ u.email }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if mine %}<span class="users-role-text">{{ u.role|capitalize }}</span>
+                    {% else %}
+                    <form method="post" action="/users/{{ u.id }}/role">
+                        <select name="role" class="users-role" aria-label="Role of {{ u.email }}" onchange="this.form.submit()">
+                            {% for r in roles %}<option value="{{ r }}"{% if r == u.role %} selected{% endif %}>{{ r|capitalize }}</option>{% endfor %}
+                        </select>
+                    </form>
+                    {% endif %}
+                    {% if u.email in env_admins %}<span class="pending users-note">always admin</span>{% endif %}
+                </td>
+                <td>
+                    {%- set ways = [] -%}
+                    {%- if u.has_password %}{% set _ = ways.append("password") %}{% endif -%}
+                    {%- if u.drive_connected %}{% set _ = ways.append("Google + Drive") %}{% endif -%}
+                    {{ ways|join(", ") if ways else "—" }}
+                </td>
+                <td><time data-ts="{{ u.last_login_at or '' }}">{{ "never" if not u.last_login_at }}</time></td>
+                <td>
+                    {% if u.active %}{{ ui.badge("Active", "ok") }}{% else %}{{ ui.badge("Deactivated") }}{% endif %}
+                </td>
+                <td>
+                    <div class="users-actions">
+                        {% if not mine %}
+                        <form method="post" action="/users/{{ u.id }}/active">
+                            <input type="hidden" name="active" value="{{ 'false' if u.active else 'true' }}">
+                            {{ ui.button("Deactivate" if u.active else "Activate", "ghost" if u.active else "secondary", type="submit") }}
+                        </form>
+                        {% endif %}
+                        <form method="post" action="/users/{{ u.id }}/link">
+                            {{ ui.button("Password link", type="submit") }}
+                        </form>
+                        {% if not mine %}
+                        <form method="post" action="/users/{{ u.id }}/delete" data-confirm="Remove {{ u.email }}? What they made stays.">
+                            {{ ui.button("Remove", "ghost", type="submit") }}
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+<script>
+(() => {
+    const link = document.getElementById("users-link");
+    const copy = document.getElementById("users-link-copy");
+    if (link) link.addEventListener("focus", () => link.select());
+    if (copy) {
+        copy.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(link.value);
+                copy.textContent = "Copied";
+            } catch {
+                link.focus();
+                copy.textContent = "Press Ctrl+C";
+            }
+            setTimeout(() => { copy.textContent = "Copy"; }, 2000);
+        });
+    }
+    document.querySelectorAll("time[data-ts]").forEach((t) => {
+        const ts = Number(t.dataset.ts);
+        if (ts) t.textContent = new Date(ts * 1000).toLocaleString();
+    });
+})();
+</script>
+{% endblock %}

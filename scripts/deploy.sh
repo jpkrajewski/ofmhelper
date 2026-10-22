@@ -77,6 +77,9 @@ remote_script='
   # not touch the running container.
   echo "== checking out =="
   git reset --hard origin/main
+  # Tags every trace with the commit (compose passes it to the app).
+  OFM_RELEASE=$(git rev-parse --short HEAD)
+  export OFM_RELEASE
   echo "== building =="
   $compose build ofmhelpers worker preview-worker migrate
   echo "== swapping in the new containers =="

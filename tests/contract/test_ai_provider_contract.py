@@ -73,4 +73,4 @@ def test_the_cheapest_job_runs_end_to_end_on_the_fake(
 def test_the_cheapest_job_runs_end_to_end_for_real(real_env, provider_name):
     """PAID: a few cents per provider. Only `scripts/test.sh paid`."""
     cls, _, _ = PROVIDERS[provider_name]
-    _cheapest_job(cls, cls.default_key(admin=True))
+    _cheapest_job(cls, cls.default_key())

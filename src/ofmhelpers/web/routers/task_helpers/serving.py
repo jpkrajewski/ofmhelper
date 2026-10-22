@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 
 from ofmhelpers.log import get_logger
 from ofmhelpers.web import previews
-from ofmhelpers.web.routers.task_helpers.download_names import download_name
+from ofmhelpers.web.download_names import download_name
 from ofmhelpers.web.routers.task_helpers.uploads import (
     MEDIA_KINDS,
     classify_kind,

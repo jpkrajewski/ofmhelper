@@ -69,8 +69,7 @@ class FakeProvider(Provider):
     needs_key = False
 
     @classmethod
-    def default_key(cls, admin: bool) -> str | None:
-        del admin
+    def default_key(cls) -> str | None:
         return None
 
     def upload(self, path: Path) -> str:

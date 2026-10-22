@@ -77,8 +77,9 @@ def fake_client(monkeypatch):
     def install(**kwargs):
         made = []
 
-        def build(proxy=None):
+        def build(proxy=None, cookies=None):
             client = _FakeClient(proxy, **kwargs)
+            client.cookies = cookies
             made.append(client)
             return client
 
@@ -141,6 +142,14 @@ def test_working_login_lists_every_reel(fake_client):
     assert len(stats.posts) == 15
     assert not stats.limited
     assert not made[0].reels_read
+
+
+def test_the_scan_logs_in_with_the_cookies_it_is_given(fake_client):
+    """The owner's cookies.txt reaches the client; none means logged out."""
+    made = fake_client()
+    get_platform("instagram").fetch("yuki", None, "owner-jar")
+    get_platform("instagram").fetch("yuki", None)
+    assert [c.cookies for c in made] == ["owner-jar", None]
 
 
 @pytest.mark.parametrize("login", [None, requests.ConnectionError("down")])

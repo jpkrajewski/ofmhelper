@@ -1,0 +1,89 @@
+{% import "components/ui.html" as ui %}
+{# /drive's cards, counts and folders: the page renders it from each
+   folder's last read (no Drive call), GET /drive/live from Drive now, and
+   drive.js swaps that in. Expects `board` (schemas.DriveBoard).
+   A card is /phones' card (the phone's drawing, label, model · color,
+   owner) with the Instagram account's Drive folder where /phones lists
+   logins; grid or list (layout.js). #}
+{% import "_icons.html" as ic %}
+{% set cards = board.cards %}
+{% if not board.live %}
+<p class="dr-asof" role="status" hidden></p>
+{% endif %}
+{% if board.problem %}
+{% call ui.notice(kind="warn", hook="drive-connect") %}
+    <span>{{ board.problem }}</span>
+    {% if board.connect_drive %}{{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/drive") }}{% endif %}
+{% endcall %}
+{% endif %}
+
+{% if cards %}
+<div class="ph-grid" id="dr-grid" data-layout="grid">
+    {% for c in cards %}
+    {% set t = c.target %}
+    <article class="ph-card dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
+        <a class="ph-media" href="/phones#phone-{{ t.device.id }}">
+            <img src="{{ t.device.drawing_url }}" alt="{{ t.device.specs }}" loading="lazy">
+        </a>
+        <div class="ph-body dr-body">
+        <div class="ph-title-row">
+            <div class="ph-title">
+                <h2>{{ t.device.label }}</h2>
+                <p class="ph-specs">{{ t.device.specs }}</p>
+            </div>
+            {% if c.account_url %}
+            {{ ui.icon_button("folder", "Open the folder of " ~ t.handle, href=c.account_url, attrs={"target": "_blank", "rel": "noopener"}) }}
+            {% endif %}
+        </div>
+        {% if t.device.owner %}<p class="ph-meta"><span>{{ t.device.owner }}</span></p>{% endif %}
+        <p class="dr-account">@{{ t.handle }}</p>
+        {% if c.error %}
+        <p class="dr-note dr-error">{{ c.error }}</p>
+        {% elif not c.account_folder_id %}
+        <p class="dr-note">No folder yet: Sync makes it.</p>
+        {% elif c.unread %}
+        <p class="dr-note">Reading from Drive…</p>
+        {% else %}
+        {% if not c.waiting %}
+        <p class="dr-note dr-missing">Nothing waiting to post</p>
+        {% else %}
+        <p class="dr-count">
+            <span>Waiting:</span>{% for kind, label in [("video", "video"), ("image", "image"), ("file", "file")] if c.count(kind) %}<span>{{ c.count(kind) }} {{ label }}{{ "" if c.count(kind) == 1 else "s" }}</span>{% endfor %}
+        </p>
+        <ul class="dr-files">
+            {% for f in c.waiting %}
+            <li>
+                <a class="dr-file" href="{{ f.url }}" target="_blank" rel="noopener" title="{{ f.name }}" data-kind="{{ f.kind }}">
+                    {% if f.has_thumbnail %}<img src="/drive/thumb/{{ t.login_id }}/{{ f.id }}" alt="{{ f.name }}" loading="lazy">{% endif %}
+                    <span class="dr-file-icon">{{ ic.icon("play" if f.kind == "video" else "file", 20) }}</span>
+                    <span class="dr-file-name">{{ f.name }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if c.scan.extra_posted_folders %}
+        <p class="dr-note dr-missing">{{ c.scan.extra_posted_folders|length }} more "{{ board.posted_folder_name }}" folder{{ "" if c.scan.extra_posted_folders|length == 1 else "s" }} in here (counted too): move their videos into one and delete the rest.</p>
+        {% endif %}
+        <p class="dr-posted">
+            <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
+        </p>
+        {% endif %}
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% elif not board.problem %}
+{% call ui.empty() %}No Instagram logins yet. <a href="/phones">Add one on Phones</a>{% endcall %}
+{% endif %}
+
+{% if board.other_folders %}
+<details class="dr-others">
+    <summary>{{ board.other_folders|length }} other folder{{ "" if board.other_folders|length == 1 else "s" }} in the Drive folder, not linked to any phone</summary>
+    <ul>
+        {% for f in board.other_folders %}
+        <li><a href="{{ f.url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} {{ f.name }}</a></li>
+        {% endfor %}
+    </ul>
+</details>
+{% endif %}

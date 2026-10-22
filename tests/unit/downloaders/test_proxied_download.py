@@ -64,7 +64,6 @@ def real_externals(monkeypatch):
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "0")
     monkeypatch.setenv("OFM_IG_PROXIES", f"{P1},{P2},{P3}")
     monkeypatch.setenv("OFM_IG_PROXY_RETRIES", "1")
-    monkeypatch.setattr(generic, "get_cookiefile", lambda: COOKIES)
 
 
 def _install(monkeypatch, tmp_path, fails=lambda opts: False) -> FakeYtDlp:
@@ -80,7 +79,7 @@ def test_a_reel_is_read_through_a_proxy_logged_out_and_fetched_direct(
 ):
     fake = _install(monkeypatch, tmp_path)
 
-    result = generic.download(REEL, DownloadConfig(output_dir=tmp_path))
+    result = generic.download(REEL, DownloadConfig(output_dir=tmp_path), COOKIES)
 
     assert result.success
     assert result.output_paths == [tmp_path / "Dejzz26ILDl.mp4"]
@@ -96,7 +95,7 @@ def test_a_reel_is_read_through_a_proxy_logged_out_and_fetched_direct(
 def test_failing_proxies_fall_back_to_the_login_direct(monkeypatch, tmp_path):
     fake = _install(monkeypatch, tmp_path, fails=lambda opts: "proxy" in opts)
 
-    result = generic.download(REEL, DownloadConfig(output_dir=tmp_path))
+    result = generic.download(REEL, DownloadConfig(output_dir=tmp_path), COOKIES)
 
     assert result.success
     proxied = [opts["proxy"] for kind, opts in fake.calls if kind == "info"]
@@ -112,7 +111,7 @@ def test_failing_proxies_fall_back_to_the_login_direct(monkeypatch, tmp_path):
 def test_every_try_failing_reports_the_first_reason(monkeypatch, tmp_path):
     _install(monkeypatch, tmp_path, fails=lambda opts: True)
 
-    result = generic.download(REEL, DownloadConfig(output_dir=tmp_path))
+    result = generic.download(REEL, DownloadConfig(output_dir=tmp_path), COOKIES)
 
     assert not result.success
     assert result.error == "refused proxied"
@@ -122,7 +121,9 @@ def test_other_sites_are_never_proxied(monkeypatch, tmp_path):
     fake = _install(monkeypatch, tmp_path)
 
     result = generic.download(
-        "https://www.youtube.com/shorts/abc", DownloadConfig(output_dir=tmp_path)
+        "https://www.youtube.com/shorts/abc",
+        DownloadConfig(output_dir=tmp_path),
+        COOKIES,
     )
 
     assert result.success
@@ -136,7 +137,7 @@ def test_no_proxies_set_is_the_plain_try(monkeypatch, tmp_path):
     monkeypatch.setenv("OFM_IG_PROXIES", "")
     fake = _install(monkeypatch, tmp_path)
 
-    assert generic.download(REEL, DownloadConfig(output_dir=tmp_path)).success
+    assert generic.download(REEL, DownloadConfig(output_dir=tmp_path), COOKIES).success
     ((kind, opts),) = fake.calls
     assert kind == "extract"
     assert "proxy" not in opts

@@ -6,6 +6,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ofmhelpers.gdrive.models import DriveFile, DriveFolder
 
 
@@ -25,6 +27,8 @@ class DriveApi(Protocol):
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]: ...
 
+    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]: ...
+
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None: ...
 
     def create_folder(self, parent_id: str, name: str) -> DriveFolder: ...
@@ -36,3 +40,9 @@ class DriveApi(Protocol):
     def file(self, file_id: str) -> DriveFile: ...
 
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None: ...
+
+    def upload(
+        self, parent_id: str, path: Path, name: str, mime_type: str
+    ) -> DriveFile: ...
+
+    def grant(self, item_id: str, email: str) -> None: ...

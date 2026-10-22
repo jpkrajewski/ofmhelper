@@ -1,6 +1,8 @@
 /*
  * /drive page controller.
  *
+ *   load       -> the page opened from each folder's last read; fetch
+ *                 /drive/live (Drive now, ~2 s) and swap it in
  *   search box -> filters the cards instantly (their data-search text)
  *   Sync       -> POST /drive/sync (makes missing account and POSTED
  *                 folders, records what was posted), then reload; a
@@ -22,14 +24,38 @@
     }
 
     const search = $("dr-search");
-    if (search) {
-        search.addEventListener("input", () => {
-            const words = search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-            for (const card of document.querySelectorAll(".dr-card")) {
-                const text = card.dataset.search || "";
-                card.hidden = !words.every((w) => text.includes(w));
-            }
-        });
+
+    function applySearch() {
+        const words = search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+        for (const card of document.querySelectorAll(".dr-card")) {
+            const text = card.dataset.search || "";
+            card.hidden = !words.every((w) => text.includes(w));
+        }
+    }
+
+    if (search) search.addEventListener("input", applySearch);
+
+    // The page shows the last read at once and swaps in Drive's live read
+    // silently; only a failed live read says anything.
+    const board = $("dr-board");
+    if (board?.dataset.live) {
+        const asOf = board.querySelector(".dr-asof");
+        fetch(board.dataset.live)
+            .then((r) => {
+                if (!r.ok) throw new Error(`Drive did not answer (${r.status})`);
+                return r.text();
+            })
+            .then((html) => {
+                board.innerHTML = html;
+                delete board.dataset.live;
+                window.Layout?.apply();
+                if (search) applySearch();
+            })
+            .catch((err) => {
+                if (!asOf) return;
+                asOf.textContent = `Showing the last read: ${err.message}`;
+                asOf.hidden = false;
+            });
     }
 
     function summary(report) {
@@ -40,6 +66,9 @@
         if (report.renamed.length) parts.push(`${report.renamed.length} renamed`);
         if (report.posted_folders.length) parts.push(`${report.posted_folders.length} POSTED folders set up`);
         if (report.newly_posted) parts.push(`${report.newly_posted} newly posted`);
+        if (report.not_connected.length) {
+            parts.push(`not connected to Google Drive yet: ${report.not_connected.join(", ")}`);
+        }
         return parts.length ? parts.join(", ") : "Everything was there already";
     }
 

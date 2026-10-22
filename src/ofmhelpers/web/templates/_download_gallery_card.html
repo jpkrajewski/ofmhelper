@@ -1,0 +1,11 @@
+{# One /download-assets gallery card: the shared card, plus the links that
+   failed and a link to every file of a many-file download. #}
+{% extends "_gallery_card.html" %}
+{% block no_output %}{% if not job.failed_sources %}<div class="result-file">No output</div>{% endif %}{% endblock %}
+{% block pending_label %}working…{% endblock %}
+{% block notes %}{% if job.failed_sources %}
+    <div class="result-file result-failed fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">
+        {{ job.failed_sources|length }} link{{ "s" if job.failed_sources|length != 1 }} failed
+    </div>
+{% endif %}{% endblock %}
+{% block meta %}{{ job.task_label }}{% if job.assets|length > 1 %} · <a href="/{{ job.task | replace('_', '-') }}/jobs/{{ job.job_id }}">all {{ job.assets|length }} files</a>{% endif %}{% endblock %}

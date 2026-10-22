@@ -11,7 +11,6 @@ served as an octet-stream attachment with nosniff (media_response).
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -19,6 +18,7 @@ import io
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import (
@@ -35,7 +35,7 @@ IMAGE_AND_VIDEO = IMAGE_KINDS | VIDEO_KINDS
 @pytest.fixture
 def va_client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(c)
     return c
 
 

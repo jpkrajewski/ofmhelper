@@ -22,6 +22,7 @@ from ofmhelpers.aigenproviders.errors import InvalidInputError
 from ofmhelpers.aigenproviders.spec import ModelSpec
 from ofmhelpers.cache import enqueue
 from ofmhelpers.log import get_logger
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
     assets_root_for,
@@ -30,7 +31,7 @@ from ofmhelpers.web.routers.task_helpers import (
 )
 from ofmhelpers.web.schemas import Job, JobPreview, JobQueued, ResultFile
 from ofmhelpers.web.stores.jobs import create_job, run_job, set_job_preview
-from ofmhelpers.web.templates_config import render
+from ofmhelpers.web.templates_config import render_polled
 
 logger = get_logger(__name__)
 
@@ -76,7 +77,9 @@ def _settings(form: FormData, spec: ModelSpec) -> dict[str, Any]:
     return spec.parse_form(raw)
 
 
-def _media(form: FormData, spec: ModelSpec, assets_root: Path) -> dict[str, list[str]]:
+def _media(
+    form: FormData, spec: ModelSpec, assets_root: Path, user_id: int
+) -> dict[str, list[str]]:
     """Each media picker resolved to asset-store paths (always a list, so a
     job's params restore into the same picker). Starlette's `UploadFile`:
     a raw form holds those, not FastAPI's subclass."""
@@ -84,7 +87,7 @@ def _media(form: FormData, spec: ModelSpec, assets_root: Path) -> dict[str, list
     for field in spec.media_fields:
         files = [v for v in form.getlist(field.name) if isinstance(v, UploadFile)]
         manifest = str(form.get(f"{field.name}_manifest") or "[]")
-        paths = build_ordered_paths(manifest, files, assets_root)
+        paths = build_ordered_paths(manifest, files, assets_root, user_id=user_id)
         if paths:
             media[field.name] = paths
     return media
@@ -92,12 +95,14 @@ def _media(form: FormData, spec: ModelSpec, assets_root: Path) -> dict[str, list
 
 @router.get("/fields")
 def fields(request: Request, model: Annotated[str, Query()]):
-    """The picked model's settings and pickers, swapped into the form."""
+    """The picked model's settings and pickers, swapped into the form. With
+    an ETag: the browser revalidates and gets a bodiless 304 while the
+    model's schema is unchanged (ai-form.js also keeps it for the page)."""
     try:
         spec = get_spec(model)
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown model") from None
-    return render(request, "_ai_fields.html", spec=spec)
+    return render_polled(request, "_ai_fields.html", spec=spec)
 
 
 @router.post("/run")
@@ -110,12 +115,15 @@ def run(request: Request, form: Annotated[FormData, Depends(_form)]) -> JobQueue
         raise HTTPException(status_code=400, detail="API key is required")
     assets_root = assets_root_for(request)
     try:
-        values = {**_settings(form, spec), **_media(form, spec, assets_root)}
+        values = {
+            **_settings(form, spec),
+            **_media(form, spec, assets_root, AuthMiddleware.owner_id(request)),
+        }
         spec.check(values)
     except InvalidInputError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     params = {"provider": spec.provider, "model": spec.key, **values}
-    job_id = create_job(TASK, params, actor=request.session.get("role"))
+    job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
     enqueue(
         run_job,
         job_id,

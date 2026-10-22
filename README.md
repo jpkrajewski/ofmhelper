@@ -103,11 +103,10 @@ cookies live in named Docker volumes (`postgres_data`, `redis_data`,
 |---|---|---|
 | `SESSION_SECRET` | yes | Signs the login cookie. `openssl rand -hex 32` |
 | `APP_PASSWORD_ADMIN` | yes | Admin login |
-| `APP_PASSWORD_VA` | yes | VA login |
 | `OFM_VAULT_KEY` | yes, for /phones | Encrypts the stored phone logins and backup codes. See below |
 | `SESSION_HTTPS_ONLY` | recommended | `true` once HTTPS works (step 8): the cookie is never sent over plain HTTP |
-| `KIE_AI_API_KEY_ADMIN` / `_VA` | for kie.ai | Pre-filled kie.ai keys per role |
-| `HF_API_KEY_ADMIN` / `_VA` | for Higgsfield | Pre-filled Higgsfield keys per role |
+| `KIE_AI_API_KEY_ADMIN` | for kie.ai | kie.ai key admins' forms pre-fill (users save their own on /account) |
+| `HF_API_KEY_ADMIN` | for Higgsfield | Higgsfield key admins' forms pre-fill (users save their own on /account) |
 | `OFM_DEFAULT_PROVIDER` | no | Generation provider the pages start on (default `higgsfield`) |
 | `OFM_IG_PROXIES` | for /reels, /accounts | Instagram scan proxies |
 | `OFM_EXPORT_DEFAULT` / `OFM_EXPORT_MIRROR` | no | Default video export and Mirror switch |
@@ -220,8 +219,9 @@ the local hot-reload overlay and must never apply in production.
 `up` runs the `migrate` service first (`alembic upgrade head`); `ofmhelpers` and
 `worker` start only once it has exited successfully. A failed migration leaves
 the app down with the error in `docker compose -f docker-compose.yml logs
-migrate`. Then open `https://example.com`, log in as admin, and upload
-Instagram cookies at `/cookies` if you use /reels or /accounts.
+migrate`. Then open `https://example.com`, log in, and upload your own
+Instagram cookies at `/cookies` if you use /reels or /accounts (each user
+uploads their own; nobody sees or uses another's).
 
 ## 10. Deploying
 

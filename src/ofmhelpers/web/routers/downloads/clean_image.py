@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.utils.metadata_cleaner import clean_metadata
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     UPLOADS_ROOT,
@@ -58,7 +59,7 @@ def run(
     job_id = create_job(
         "clean_images",
         {"dir": str(job_dir), "files": saved_names},
-        actor=request.session.get("role"),
+        actor=AuthMiddleware.actor(request),
     )
     enqueue(
         run_job,

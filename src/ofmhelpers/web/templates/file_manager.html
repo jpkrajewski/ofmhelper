@@ -1,8 +1,7 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Files</h1>
-</div>
+{{ ui.page_header("Files") }}
 
 <div class="model-toolbar">
     <div class="segmented" role="group" aria-label="Storage root">
@@ -14,13 +13,12 @@
     </div>
     <span class="model-toolbar-note">Path: <code>/{{ current_root }}/{{ current_path }}</code></span>
     {% if parent is not none %}
-    <a class="btn" href="/file-manager?root={{ current_root }}&path={{ parent }}">← Up one level</a>
+    {{ ui.back_link("/file-manager?root=" ~ current_root ~ "&path=" ~ parent, "Up one level") }}
     {% endif %}
 </div>
 
 {% if dirs or files %}
-<div class="table-wrap">
-    <table>
+{% call ui.table() %}
         <thead>
             <tr><th scope="col">Name</th><th scope="col">Size</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
         </thead>
@@ -31,10 +29,10 @@
                 <td class="pending">—</td>
                 <td>
                     <form method="post" action="/file-manager/delete" class="inline-form"
-                          onsubmit="return confirm('Delete folder {{ d.name }} and everything in it?')">
+                          data-confirm="Delete folder {{ d.name }} and everything in it?">
                         <input type="hidden" name="root" value="{{ current_root }}">
                         <input type="hidden" name="path" value="{{ d.rel_path }}">
-                        <button type="submit" class="btn-danger">Delete</button>
+                        {{ ui.button("Delete", "danger", type="submit") }}
                     </form>
                 </td>
             </tr>
@@ -44,27 +42,26 @@
                 <td>{{ f.name }}</td>
                 <td>{{ f.size }}</td>
                 <td class="model-actions">
-                    <a class="btn" href="/file-manager/download?root={{ current_root }}&path={{ f.rel_path }}" download>⬇ Download</a>
+                    {{ ui.button("Download", href="/file-manager/download?root=" ~ current_root ~ "&path=" ~ f.rel_path, attrs={"download": true}) }}
                     <form method="post" action="/file-manager/delete"
-                          onsubmit="return confirm('Delete {{ f.name }}?')">
+                          data-confirm="Delete {{ f.name }}?">
                         <input type="hidden" name="root" value="{{ current_root }}">
                         <input type="hidden" name="path" value="{{ f.rel_path }}">
-                        <button type="submit" class="btn-danger">Delete</button>
+                        {{ ui.button("Delete", "danger", type="submit") }}
                     </form>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
-    </table>
-</div>
+    {% endcall %}
 
 <form method="post" action="/file-manager/delete-all" class="section"
-      onsubmit="return confirm('Delete EVERYTHING in this folder? This cannot be undone.')">
+      data-confirm="Delete EVERYTHING in this folder? This cannot be undone.">
     <input type="hidden" name="root" value="{{ current_root }}">
     <input type="hidden" name="path" value="{{ current_path }}">
-    <button type="submit" class="btn-danger">Delete all in this folder</button>
+    {{ ui.button("Delete all in this folder", "danger", type="submit") }}
 </form>
 {% else %}
-<p class="empty-state">This folder is empty.</p>
+{{ ui.empty("This folder is empty") }}
 {% endif %}
 {% endblock %}

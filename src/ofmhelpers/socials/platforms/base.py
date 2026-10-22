@@ -27,6 +27,10 @@ class Platform(ABC):
         """Proxy URLs a scan rotates through; empty: direct."""
 
     @abstractmethod
-    def fetch(self, handle: str, proxy: str | None) -> AccountStats:
-        """The account now, through `proxy` (None: direct). Raises only
+    def fetch(
+        self, handle: str, proxy: str | None, cookies: str | None = None
+    ) -> AccountStats:
+        """The account now, through `proxy` (None: direct), logged in with
+        `cookies` (the account owner's own cookies.txt text, None: logged
+        out) where the platform has use for a login. Raises only
         `socials.errors` exceptions."""

@@ -30,7 +30,7 @@ from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.web.routers.registry import RESUMABLE
-from ofmhelpers.web.routers.task_helpers import assets_root_for_role
+from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
 from ofmhelpers.web.schemas import JobStatus
 from ofmhelpers.web.stores.jobs import fail_job, get_job, reopen_job, run_job
 
@@ -71,7 +71,7 @@ def settle(task: tasks.ProviderTask) -> str:
             **job.params,
             "job_id": job.id,
             "api_key": task.api_key,
-            "assets_root": str(assets_root_for_role(job.actor)),
+            "assets_root": str(assets_root_for_actor(job.actor)),
         },
     )
     logger.info("recovery re-running job %s for task %s", job.id, task.task_id)

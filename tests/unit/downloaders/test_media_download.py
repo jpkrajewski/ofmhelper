@@ -1,6 +1,8 @@
 """One Download tool for any link: each URL tries yt-dlp and gallery-dl in
 the order its kind of post suggests, and keeps the first that gets files."""
 
+from pathlib import Path
+
 import pytest
 
 from ofmhelpers.downloaders import generic, images, media
@@ -13,7 +15,7 @@ def tried(monkeypatch) -> list[str]:
     calls: list[str] = []
 
     def fake(name: str):
-        def run(url: str, config=None) -> DownloadResult:
+        def run(url: str, config=None, cookiefile=None) -> DownloadResult:
             calls.append(name)
             ok = name in url
             return DownloadResult(
@@ -83,3 +85,36 @@ def test_when_both_fail_both_reasons_are_kept(tried):
 def test_download_all_keeps_the_order(tried):
     urls = ["https://a.example/video", "https://www.instagram.com/p/images"]
     assert [r.url for r in media.download_all(urls)] == urls
+
+
+def test_download_all_logs_in_with_the_given_cookies_then_deletes_them(monkeypatch):
+    """Both downloaders get one file holding exactly the user's cookies.txt;
+    it is gone once the run ends."""
+    seen: list[tuple[str, str]] = []
+
+    def fail(url: str, config=None, cookiefile=None) -> DownloadResult:
+        assert cookiefile is not None
+        seen.append((cookiefile, Path(cookiefile).read_text(encoding="utf-8")))
+        return DownloadResult(url=url, success=False, error="no")
+
+    monkeypatch.setattr(generic, "download", fail)
+    monkeypatch.setattr(images, "download", fail)
+    jar = "# Netscape HTTP Cookie File\n"
+
+    media.download_all(["https://example.com/a"], cookies=jar)
+
+    assert [text for _path, text in seen] == [jar, jar]
+    assert len({path for path, _text in seen}) == 1
+    assert not Path(seen[0][0]).exists()
+
+
+def test_download_all_without_cookies_runs_logged_out(monkeypatch):
+    logins: list[str | None] = []
+
+    def run(url: str, config=None, cookiefile=None) -> DownloadResult:
+        logins.append(cookiefile)
+        return DownloadResult(url=url, success=True, output_paths=["/x/v.mp4"])
+
+    monkeypatch.setattr(generic, "download", run)
+    media.download_all(["https://example.com/a"])
+    assert logins == [None]

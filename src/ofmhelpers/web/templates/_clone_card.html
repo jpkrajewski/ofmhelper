@@ -1,0 +1,16 @@
+{# One /clone gallery card: the shared card, plus where its video went in
+   Drive and "Upload to Drive" in its ⋯ menu (static/js/clone.js opens the
+   picker). #}
+{% extends "_gallery_card.html" %}
+{% block below %}
+    <ul class="drive-states">
+        {%- for u in job.drive_uploads %}
+        <li data-status="{{ u.status }}" data-login="{{ u.login_id }}">
+            {% if u.status == "done" %}In Drive: <a href="{{ u.drive_url }}" target="_blank" rel="noopener">{{ u.folder_name }}</a>
+            {% elif u.status == "failed" %}<span title="{{ u.error }}">Drive upload to {{ u.folder_name }} failed</span>
+            {% else %}<span class="spinner"></span> Uploading to {{ u.folder_name }}…{% endif %}
+        </li>
+        {%- endfor -%}
+    </ul>
+{% endblock %}
+{% block menu_items %}{% if drive_targets %}{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}{% endif %}{% endblock %}
