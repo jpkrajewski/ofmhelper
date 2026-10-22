@@ -49,7 +49,7 @@ dependencies = [
     # (ofmhelpers/telemetry.py): web requests, Postgres, Redis, outbound
     # HTTP (kie.ai, Higgsfield, Instagram, Google) and every RQ job.
     # Sends nothing without LOGFIRE_TOKEN.
-    "logfire[fastapi,sqlalchemy,requests,httpx,redis]>=4.41.0",
+    "logfire[fastapi,sqlalchemy,requests,httpx]>=4.41.0",
 ]
 
 [dependency-groups]

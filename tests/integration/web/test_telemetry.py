@@ -139,3 +139,49 @@ def test_only_logfire_token_sends_never_a_credentials_file(monkeypatch, token, s
 def test_a_blank_token_is_off(monkeypatch):
     monkeypatch.setenv("LOGFIRE_TOKEN", "  ")
     assert not telemetry.enabled()
+
+
+def test_a_query_is_a_span_but_a_pool_checkout_is_not(capfire: CaptureLogfire):
+    """Every SQL statement stays visible; the "connect" span the SQLAlchemy
+    instrumentation wraps around each checkout (~7 per request) does not."""
+    import sqlalchemy
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+    from ofmhelpers.config import settings
+
+    telemetry.logfire.instrument_sqlalchemy()
+    telemetry._drop_connect_spans()
+    try:
+        engine = sqlalchemy.create_engine(settings.infra.database_url)
+        with engine.connect() as conn:
+            conn.execute(sqlalchemy.text("SELECT 1"))
+        engine.dispose()
+    finally:
+        SQLAlchemyInstrumentor().uninstrument()
+
+    names = [s["name"] for s in _spans(capfire)]
+    assert any(name.startswith("SELECT") for name in names), names
+    assert "connect" not in names
+
+
+def test_the_apps_own_engine_traces_its_queries(capfire: CaptureLogfire, monkeypatch):
+    """session.get_engine builds through the instrumented create_engine even
+    though web/db/session.py was imported before telemetry was configured."""
+    import sqlalchemy
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+    from ofmhelpers.web.db import session
+
+    telemetry.logfire.instrument_sqlalchemy()
+    telemetry._drop_connect_spans()
+    monkeypatch.setattr(session, "_engine", None)
+    try:
+        with session.session_scope() as s:
+            s.execute(sqlalchemy.text("SELECT 42"))
+    finally:
+        session.get_engine().dispose()
+        monkeypatch.setattr(session, "_engine", None)
+        SQLAlchemyInstrumentor().uninstrument()
+
+    names = [s["name"] for s in _spans(capfire)]
+    assert any(name.startswith("SELECT") for name in names), names

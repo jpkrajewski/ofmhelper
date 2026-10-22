@@ -61,6 +61,7 @@ def configure_telemetry(service: str) -> None:
     # Not Redis: the cache's GET/SET per request were ~40% of all records
     # (2026-10-22) and never what a bug was about.
     logfire.instrument_sqlalchemy()
+    _drop_connect_spans()
     logfire.instrument_requests()
     logfire.instrument_httpx()
     _configured.append(service)
@@ -71,6 +72,17 @@ def flush_telemetry() -> None:
     which skips the exporter's own flush at exit (worker.py)."""
     if enabled():
         logfire.force_flush(timeout_millis=5_000)
+
+
+def _drop_connect_spans() -> None:
+    """The SQLAlchemy instrumentation also wraps every pool checkout in a
+    "connect" span (~7 per request, 2026-10-22), with no option to turn it
+    off: unwrap just that. Each query keeps its span (engines made after
+    `instrument_sqlalchemy` are traced at `create_engine`)."""
+    from opentelemetry.instrumentation.utils import unwrap
+    from sqlalchemy.engine import Engine
+
+    unwrap(Engine, "connect")
 
 
 def instrument_app(app: FastAPI) -> None:

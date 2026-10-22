@@ -54,6 +54,7 @@ Before ssh, psql or reading logs: query Logfire (`src/ofmhelpers/telemetry.py`).
 - Query: `MSYS_NO_PATHCONV=1 $C run --rm --no-deps -v ~/.logfire:/lfhome/.logfire tests python scripts/logfire_query.py "<SQL>"` (CSV out; read token in `~/.logfire/project/.logfire/read_token.json`, 30-day expiry; renew: `logfire --region eu read-tokens --project jakubpkrajewski/starter-project create --save` in the tests image with `-e HOME=/lfhome`).
 - Filter: `service_name` (`ascend-web`, `ascend-worker`), `deployment_environment` (`development`, `production`), `service_version` (`OFM_RELEASE`), `attributes->>'enduser.email'` / `'enduser.id'` (who), `attributes->>'http.route'`, `level >= 17` (errors), `exception_type`, `exception_message`, `trace_id` (a whole request or job).
 - A job is one span `job {task} {job_id}` (attributes `job_id`, `task`, `actor`); a failed one has level error and the exception.
+- SQL: one span per statement (`SELECT ofmhelpers`, ..., text in `attributes->>'db.statement'`) inside its request/job trace; no pool `connect` spans, no Redis spans.
 - Recipes:
   - errors: `SELECT start_timestamp, service_name, span_name, exception_type, exception_message, trace_id FROM records WHERE level >= 17 AND start_timestamp > now() - interval '1 hour' ORDER BY 1 DESC LIMIT 20`
   - slow pages: `SELECT span_name, count(*), percentile_cont(0.95) WITHIN GROUP (ORDER BY duration) p95 FROM records WHERE span_name LIKE 'GET /%' AND start_timestamp > now() - interval '1 day' GROUP BY 1 ORDER BY 3 DESC`

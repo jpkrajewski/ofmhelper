@@ -1071,9 +1071,6 @@ fastapi = [
 httpx = [
     { name = "opentelemetry-instrumentation-httpx" },
 ]
-redis = [
-    { name = "opentelemetry-instrumentation-redis" },
-]
 requests = [
     { name = "opentelemetry-instrumentation-requests" },
 ]
@@ -1256,7 +1253,7 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "jsonschema" },
-    { name = "logfire", extra = ["fastapi", "httpx", "redis", "requests", "sqlalchemy"] },
+    { name = "logfire", extra = ["fastapi", "httpx", "requests", "sqlalchemy"] },
     { name = "openpyxl" },
     { name = "pillow" },
     { name = "pillow-heif" },
@@ -1305,7 +1302,7 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "jsonschema", specifier = ">=4.23" },
-    { name = "logfire", extras = ["fastapi", "sqlalchemy", "requests", "httpx", "redis"], specifier = ">=4.41.0" },
+    { name = "logfire", extras = ["fastapi", "sqlalchemy", "requests", "httpx"], specifier = ">=4.41.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pillow-heif", specifier = ">=1.8.1" },
@@ -1487,21 +1484,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/de/50/41544799b043d14fdfa6fe62fa2518eaba22793fce03e9abde930b92e671/opentelemetry_instrumentation_httpx-0.66b1.tar.gz", hash = "sha256:5865a72c68098c85955a271ab8744b480a36e3ee492d35b8cadb93c7c4dbb618", size = 26637, upload-time = "2026-10-06T17:36:27.265Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4f/c6/e5682b1bfb320b32505e88255c34ae1e99fe9fb220cc465c244e91967eac/opentelemetry_instrumentation_httpx-0.66b1-py3-none-any.whl", hash = "sha256:0342a4002c6dbc6c4bf22cc7e698f50f5c8b77f63325c6f40c94ab87e016bf4d", size = 17723, upload-time = "2026-10-06T17:35:36.501Z" },
-]
-
-[[package]]
-name = "opentelemetry-instrumentation-redis"
-version = "0.66b1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-instrumentation" },
-    { name = "opentelemetry-semantic-conventions" },
-    { name = "wrapt" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/39/f7/8a7f4d2178a79b4cca971836491d75884b8f2b3fcd0dc9a3d521ca65e7bd/opentelemetry_instrumentation_redis-0.66b1.tar.gz", hash = "sha256:d6cc6aa473e23692ae1be9011e2cb3ae5894376158533a71f9710e1fb0906dc7", size = 18060, upload-time = "2026-10-06T17:36:36.289Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/22/19286da994ae57c78ecc3f4bd692855ccedc54cd9b05ce56592ee28964c3/opentelemetry_instrumentation_redis-0.66b1-py3-none-any.whl", hash = "sha256:4e36651d553e63c8e8f4068d8a2362ae35ac5c9bbef53c27a0fcb96d9092dbb1", size = 14885, upload-time = "2026-10-06T17:35:50.394Z" },
 ]
 
 [[package]]
