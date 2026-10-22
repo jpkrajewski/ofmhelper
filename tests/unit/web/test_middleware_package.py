@@ -47,7 +47,7 @@ def test_allowlist_comes_from_settings():
     trips and set-password links are public."""
     s = settings.web
     assert "/login" in s.public_paths
-    assert AuthMiddleware.is_public("/static/css/app.css")
+    assert AuthMiddleware.is_public("/static/css/pages.css")
     assert not AuthMiddleware.is_public("/generate")
     assert AuthMiddleware.is_public("/auth/google/callback")
     assert AuthMiddleware.is_public("/password/some-token")

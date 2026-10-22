@@ -356,7 +356,7 @@ class ReelMedia(BaseModel):
 
 
 # View-count rarity tiers, highest first, named like game loot: the card's
-# border colour on /reels (static/css/app.css keys off these names).
+# border colour on /reels (static/css/pages.css keys off these names).
 VIEW_TIERS = (
     (1_000_000, "legendary"),
     (500_000, "epic"),

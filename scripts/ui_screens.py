@@ -54,6 +54,7 @@ PAGES = [
     Shot(name="applications", path="/applications"),
     Shot(name="file-manager", path="/file-manager"),
     Shot(name="action-log", path="/action-log"),
+    Shot(name="styleguide", path="/styleguide"),
 ]
 
 

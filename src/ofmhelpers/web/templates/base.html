@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +7,7 @@
     <meta name="color-scheme" content="light">
     <title>{% block title %}Ascend Global LLC — Content Ops{% endblock %}</title>
     {% include "_favicon.html" %}
-    <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+    {% include "_styles.html" %}
     <!-- Before every other script: it wraps fetch() so an expired session
          redirects to /login instead of failing opaquely. -->
     <script src="{{ static_url('js/session.js') }}"></script>
@@ -18,28 +19,8 @@
 
     {% set is_admin = request.session.get("role") == "admin" %}
     {% set signed_in_as = request.session.get("email", "") %}
-    {# The bar's links, then the rest folded under "More" (admin pages only
-       for admins). A new page = one entry in the list it belongs to. #}
-    {% set nav_items = [
-        ("/generate", "Gen AI"),
-        ("/clone", "Clone"),
-        ("/reels", "Viral"),
-        ("/download-assets", "Download"),
-        ("/accounts", "Accounts"),
-        ("/phones", "Phones"),
-        ("/drive", "Drive"),
-    ] %}
-    {% set more_items = [
-        ("/uniqify", "Uniqify"),
-        ("/account", "Account"),
-        ("/cookies", "Cookies"),
-    ] + ([
-        ("/users", "Users"),
-        ("/character-sheet", "Character Sheet"),
-        ("/applications", "Leads"),
-        ("/file-manager", "Files"),
-        ("/action-log", "Logs"),
-    ] if is_admin else []) %}
+    {# schemas/nav.py NAV: a new page is one entry there. #}
+    {% set pages = nav(is_admin) %}
     {% set here = request.url.path %}
 
     <header class="site-header">
@@ -51,23 +32,17 @@
 
             <nav class="site-nav" id="site-nav" aria-label="Main">
                 <ul class="nav-links">
-                    {% for href, label in nav_items %}
-                    <li>
-                        <a href="{{ href }}"
-                           {% if here == href or here.startswith(href ~ "/") %}aria-current="page"{% endif %}>{{ label }}</a>
-                    </li>
+                    {% for item in pages if item.place == "bar" %}
+                    <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
                     {% endfor %}
                     {% set more = namespace(current=false) %}
-                    {% for href, _label in more_items if here == href or here.startswith(href ~ "/") %}{% set more.current = true %}{% endfor %}
+                    {% for item in pages if item.place == "more" and item.is_current(here) %}{% set more.current = true %}{% endfor %}
                     <li class="nav-more">
                         <details>
                             <summary {% if more.current %}data-current{% endif %}>More</summary>
                             <ul class="nav-more-links">
-                                {% for href, label in more_items %}
-                                <li>
-                                    <a href="{{ href }}"
-                                       {% if here == href or here.startswith(href ~ "/") %}aria-current="page"{% endif %}>{{ label }}</a>
-                                </li>
+                                {% for item in pages if item.place == "more" %}
+                                <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
                                 {% endfor %}
                             </ul>
                         </details>
@@ -80,7 +55,7 @@
                behind the menu toggle. #}
             <form method="post" action="/logout" class="logout-form">
                 {% if signed_in_as %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% endif %}
-                <button type="submit" class="btn-ghost">Log out</button>
+                {{ ui.button("Log out", "ghost", type="submit") }}
             </form>
 
             <button type="button" class="nav-toggle" aria-expanded="false"
@@ -96,28 +71,7 @@
 
     <footer class="site-footer">
         <div class="site-footer-inner">
-            <div class="footer-brand">
-                <strong>ASCEND GLOBAL LLC</strong>
-                <span>© 2026 — internal content ops toolkit</span>
-            </div>
-            <nav class="footer-links" aria-label="Footer">
-                <a href="/generate">Gen AI</a>
-                <a href="/clone">Clone</a>
-                <a href="/reels">Viral</a>
-                <a href="/download-assets">Download</a>
-                <a href="/accounts">Accounts</a>
-                <a href="/phones">Phones</a>
-                <a href="/uniqify">Uniqify</a>
-                <a href="/account">Account</a>
-                <a href="/cookies">Cookies</a>
-                {% if is_admin %}
-                <a href="/users">Users</a>
-                <a href="/character-sheet">Character Sheet</a>
-                <a href="/applications">Leads</a>
-                <a href="/file-manager">Files</a>
-                <a href="/action-log">Logs</a>
-                {% endif %}
-            </nav>
+            <span class="footer-brand"><strong>ASCEND GLOBAL LLC</strong> © 2026</span>
         </div>
     </footer>
 </body>

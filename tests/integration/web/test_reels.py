@@ -621,7 +621,7 @@ def test_feed_filters_by_follower_multiple(client, monkeypatch):
 
 def test_an_empty_filter_says_so(client):
     html = client.get("/reels", params={"group": "gay", "rank": "legendary"}).text
-    assert "No legendary reels in gay right now." in html
+    assert "No legendary reels in gay." in html
 
 
 def test_rank_chips_are_best_first_with_their_ranges(client):

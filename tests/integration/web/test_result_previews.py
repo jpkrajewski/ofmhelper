@@ -320,7 +320,7 @@ def test_a_new_job_changes_the_live_gallery(client, tmp_path):
 
 
 def test_pages_css_and_json_are_gzipped(client):
-    for url in ("/generate", "/static/css/app.css"):
+    for url in ("/generate", "/static/css/pages.css"):
         r = client.get(url, headers={"Accept-Encoding": "gzip"})
         assert r.headers.get("content-encoding") == "gzip", url
 

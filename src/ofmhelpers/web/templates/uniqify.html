@@ -1,8 +1,7 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Uniqify</h1>
-</div>
+{{ ui.page_header("Uniqify") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -46,7 +45,7 @@
             {% endfor %}
         </select>
     </div>
-    <button type="submit" class="btn-primary">Start</button>
+    {{ ui.button("Start", "primary", type="submit") }}
 </form>
 </div>
 

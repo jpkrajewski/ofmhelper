@@ -1,34 +1,20 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_account_numbers.html" as num %}
 {% import "_icons.html" as ic %}
 {% block title %}Accounts — Ascend Global LLC{% endblock %}
 {% block content %}
-<div class="page-head accounts-head">
-    <div>
-        <h1>Accounts</h1>
-    </div>
-</div>
+{{ ui.page_header("Accounts") }}
 
-<div class="accounts-kpis">
-    <div class="accounts-kpi">
-        <span>Total followers</span>
-        <strong>{{ num.short(summary.followers) }}</strong>
-        <small>Across {{ summary.accounts }} account{{ "" if summary.accounts == 1 else "s" }}</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Views · {{ period.label|lower }}</span>
-        <strong>{{ num.short(summary.views, "No synced account covers the period yet") }}</strong>
-        <small>On posts published in the period</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Tracked accounts</span>
-        <strong>{{ summary.accounts }}</strong>
-        <small>{% if summary.unreachable %}<span class="accounts-problem-text">{{ summary.unreachable }} unreachable</span>{% else %}All reachable{% endif %}</small>
-    </div>
+{% set reach_note %}{% if summary.unreachable %}<span class="accounts-problem-text">{{ summary.unreachable }} unreachable</span>{% else %}All reachable{% endif %}{% endset %}
+<div class="stat-grid">
+    {{ ui.stat("Total followers", num.short(summary.followers), "Across " ~ summary.accounts ~ " account" ~ ("" if summary.accounts == 1 else "s")) }}
+    {{ ui.stat("Views · " ~ period.label|lower, num.short(summary.views, "No synced account covers the period yet"), "On posts published in the period") }}
+    {{ ui.stat("Tracked accounts", summary.accounts, reach_note) }}
 </div>
 
 {% if summary.limited %}
-<p class="notice notice-warn">{{ summary.limited }} account{{ " was" if summary.limited == 1 else "s were" }} synced without a working Instagram login. Instagram hides sensitive and age-restricted reels from logged-out viewers, so those reels are missing and views can be lower than on Instagram. Upload your fresh Instagram cookies.txt at <a href="/cookies">/cookies</a>; your accounts sync again at once and count every reel.</p>
+{% call ui.notice(kind="warn") %}{{ summary.limited }} account{{ "" if summary.limited == 1 else "s" }} synced without an Instagram login: some reels are missing. <a href="/cookies">Upload cookies</a>{% endcall %}
 {% endif %}
 
 <div class="accounts-filters">
@@ -48,10 +34,10 @@
         {% if query.sort != sorts.FOLLOWERS %}<input type="hidden" name="sort" value="{{ query.sort }}">{% endif %}
         {% if query.order %}<input type="hidden" name="order" value="{{ query.order }}">{% endif %}
         {% if query.per_page %}<input type="hidden" name="per_page" value="{{ query.per_page }}">{% endif %}
-        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+        <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
     </form>
     <div class="toolbar-actions">
-        <button type="button" class="btn-primary" id="accounts-add-open">{{ ic.icon("plus") }} Add account</button>
+        {{ ui.button("Add account", "primary", icon="plus", attrs={"id": "accounts-add-open"}) }}
     </div>
 </div>
 <div class="generation-status" id="accounts-status" role="status" aria-live="polite"></div>
@@ -69,24 +55,23 @@
 {%- endmacro %}
 
 {% if not page.rows %}
-<p class="empty-state">
+{% call ui.empty() %}
     {% if query.creator %}
     No accounts for {{ query.creator }}. <a href="{{ query.link(creator='') }}">All creators</a>
     {% else %}
-    No accounts yet. Press <strong>+ Add account</strong> and paste some handles.
+    No accounts yet
     {% endif %}
-</p>
+{% endcall %}
 {% else %}
 <div class="accounts-actions" id="accounts-bulk" role="region" aria-label="Selected accounts" hidden>
     <span class="accounts-bulk-count" id="accounts-bulk-count" aria-live="polite"></span>
     <div class="accounts-actions-controls">
         <input type="text" id="accounts-bulk-creator" list="accounts-creator-names" maxlength="64" placeholder="Creator name" aria-label="Creator for the selected accounts">
-        <button type="button" class="btn-outline" id="accounts-bulk-assign">Assign creator</button>
-        <button type="button" class="btn-ghost accounts-bulk-remove" id="accounts-bulk-delete">Remove</button>
+        {{ ui.button("Assign creator", attrs={"id": "accounts-bulk-assign"}) }}
+        {{ ui.button("Remove", "ghost", hook="accounts-bulk-remove", attrs={"id": "accounts-bulk-delete"}) }}
     </div>
 </div>
-<div class="table-wrap accounts-table-wrap">
-    <table class="accounts-table" id="accounts-table">
+{% call ui.table(hook="accounts-table", wrap_hook="accounts-table-wrap", attrs={"id": "accounts-table"}) %}
         <thead>
             <tr>
                 <th scope="col"><input type="checkbox" id="accounts-pick-all" aria-label="Select all on this page"></th>
@@ -141,9 +126,8 @@
             </tr>
             {% endfor %}
         </tbody>
-    </table>
-</div>
-<p class="empty-state" id="accounts-no-match" hidden>No accounts on this page match your search.</p>
+    {% endcall %}
+{{ ui.empty("No accounts match your search", attrs={"id": "accounts-no-match", "hidden": true}) }}
 {% endif %}
 
 <div class="accounts-pager">
@@ -192,8 +176,8 @@
         </div>
         <div class="generation-status" id="accounts-add-status" role="status" aria-live="polite"></div>
         <div class="accounts-dialog-actions">
-            <button type="button" class="btn-ghost" id="accounts-add-cancel">Cancel</button>
-            <button type="submit" class="btn-primary">Add &amp; sync</button>
+            {{ ui.button("Cancel", "ghost", attrs={"id": "accounts-add-cancel"}) }}
+            {{ ui.button("Add & sync", "primary", type="submit") }}
         </div>
     </form>
 </dialog>

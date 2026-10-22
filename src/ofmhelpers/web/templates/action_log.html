@@ -1,18 +1,16 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Logs</h1>
-</div>
+{{ ui.page_header("Logs") }}
 
 {% if any_running %}
 <meta http-equiv="refresh" content="3">
 {% endif %}
 
 {% if not jobs %}
-<p class="empty-state">Nothing has been run yet.</p>
+{{ ui.empty("Nothing has been run yet") }}
 {% else %}
-<div class="table-wrap">
-    <table>
+{% call ui.table() %}
         <thead>
             <tr>
                 <th scope="col">Time</th>
@@ -29,14 +27,12 @@
                 <td class="todo-added">{{ job.created_at_display }}</td>
                 <td>
                     {% if job.actor %}
-                    <span class="actor-badge actor-{{ job.actor_role }}">{{ job.actor }}</span>
+                    {{ ui.badge(job.actor) }}
                     {% else %}<span class="pending">—</span>{% endif %}
                 </td>
                 <td>{{ job.task }}</td>
                 <td>
-                    <span class="badge {{ 'badge-ok' if job.status == 'done' else 'badge-fail' if job.status == 'failed' else 'badge-neutral' }}">
-                        {{ job.status }}
-                    </span>
+                    {{ ui.status_badge(job.status) }}
                 </td>
                 <td>
                     {% if job.params.prompt %}{{ job.params.prompt[:60] }}
@@ -50,7 +46,6 @@
             </tr>
             {% endfor %}
         </tbody>
-    </table>
-</div>
+    {% endcall %}
 {% endif %}
 {% endblock %}

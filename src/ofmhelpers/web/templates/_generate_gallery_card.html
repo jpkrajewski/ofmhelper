@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui %}
 {# One /generate gallery card. Included from generate_form.html's first page and
    from generate_gallery_fragment.html for every page the infinite scroll loads,
    so the two can't drift. Expects `job` (a _gallery_card dict) in context.
@@ -20,8 +21,8 @@
     <p class="source">{{ job.task_label }}</p>
     {% if job.status == "failed" or (job.status == "done" and job.assets) %}
     <div class="result-actions">
-        {% if job.assets %}<a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].download_name }}" data-local-fallback-url="{{ job.assets[0].local_fallback_url or '' }}" class="btn download-btn">Download</a>{% endif %}
-        <button type="button" class="recreate-btn">Recreate</button>
+        {% if job.assets %}{{ ui.button("Download", href=job.assets[0].download_url, hook="download-btn", attrs={"download": job.assets[0].download_name, "data-local-fallback-url": job.assets[0].local_fallback_url or ""}) }}{% endif %}
+        {{ ui.button("Recreate", hook="recreate-btn") }}
     </div>
     {% endif %}
 </div>

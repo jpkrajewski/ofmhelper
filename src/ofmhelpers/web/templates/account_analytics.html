@@ -30,42 +30,28 @@
             <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
             {% endfor %}
         </select>
-        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+        <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
     </form>
 </div>
 
 {% if account.untracked_at %}
-<p class="notice notice-warn">Not tracked since {{ account.untracked_at|utc("%b %d, %Y") }}: no longer synced, its history is kept. Add @{{ account.handle }} again to resume it.</p>
+{{ ui.notice("Not tracked since " ~ account.untracked_at|utc("%b %d, %Y"), "warn") }}
 {% endif %}
 {% if account.error %}
-<p class="notice notice-fail">Unreachable: {{ account.error }}{% if account.metrics %} — showing the last successful sync.{% endif %}</p>
+{{ ui.notice("Unreachable: " ~ account.error, "fail") }}
 {% elif account.status == "private" %}
-<p class="notice notice-fail">Private account: only its follower count is visible.</p>
+{{ ui.notice("Private account", "fail") }}
 {% elif account.metrics and account.metrics.limited %}
-<p class="notice notice-warn">Synced without a working Instagram login: reels Instagram hides from logged-out viewers (sensitive, age-restricted) are missing below. Upload your fresh cookies.txt at <a href="/cookies">/cookies</a>.</p>
+{% call ui.notice(kind="warn") %}Synced without an Instagram login: some reels are missing. <a href="/cookies">Upload cookies</a>{% endcall %}
 {% endif %}
 
-<div class="accounts-kpis accounts-kpis-4">
-    <div class="accounts-kpi">
-        <span>Followers</span>
-        <strong>{{ num.count(account.followers, "Not synced yet") }}</strong>
-        <small>Current total</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Views</span>
-        <strong>{{ num.short(views.views if views else none, "The scan does not cover the period") }}</strong>
-        <small>{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Follower growth</span>
-        <strong>{{ num.growth(growth) }}</strong>
-        <small>{% if growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}</small>
-    </div>
-    <div class="accounts-kpi">
-        <span>Posts published</span>
-        <strong>{{ num.count(account.posts_in(period.days), "The scan does not cover the period") }}</strong>
-        <small>{{ period.label }}</small>
-    </div>
+{% set views_note %}{{ period.label }}{% if views and views.pct is not none %} · {{ num.views_vs(views, period) }}{% endif %}{% endset %}
+{% set growth_note %}{% if growth is none %}Awaiting historical data{% elif growth.full %}{{ period.label }}{% else %}Tracked for less than {{ period.days }} days{% endif %}{% endset %}
+<div class="stat-grid">
+    {{ ui.stat("Followers", num.count(account.followers, "Not synced yet"), "Current total") }}
+    {{ ui.stat("Views", num.short(views.views if views else none, "The scan does not cover the period"), views_note) }}
+    {{ ui.stat("Follower growth", num.growth(growth), growth_note) }}
+    {{ ui.stat("Posts published", num.count(account.posts_in(period.days), "The scan does not cover the period"), period.label) }}
 </div>
 
 {# The follower chart (schemas.FollowerChart): server-drawn SVG in a 0..100

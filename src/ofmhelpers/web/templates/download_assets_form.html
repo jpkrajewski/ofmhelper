@@ -1,8 +1,7 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Download</h1>
-</div>
+{{ ui.page_header("Download") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -32,7 +31,7 @@
         </div>
     </fieldset>
 
-    <button type="submit" class="btn-primary">Run</button>
+    {{ ui.button("Run", "primary", type="submit") }}
 </form>
 </div>
 

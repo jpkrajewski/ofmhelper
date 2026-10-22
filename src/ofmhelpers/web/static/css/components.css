@@ -1,0 +1,722 @@
+/* =====================================================================
+   Ascend Global LLC — Content Ops design system, file 3 of 4:
+   tokens.css -> base.css -> components.css -> pages.css, loaded in that
+   order by templates/_styles.html. The shared components (templates/components/ui.html) and widgets.
+
+   Mobile-first: unprefixed rules are the phone layout, `min-width` media
+   queries add the wider ones. Class names used by static/js/*.js are
+   contract -- rename nothing without updating the JS.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   6. Buttons
+   --------------------------------------------------------------------- */
+/* One button object. `.btn` is the base; the legacy per-page class names
+   (.root-btn, .download-btn,
+   .recreate-btn, .ref-toggle) are aliased onto it further down instead of
+   each re-declaring padding/border/hover from scratch. */
+.btn,
+.root-btn,
+/* `.btn`: a link that acts as a button looks like one. */
+button,
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-2);
+    min-height: var(--control-h);
+    padding: var(--s-1) var(--s-4);
+    margin: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--control-font);
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+        color var(--dur) var(--ease), transform var(--dur) var(--ease),
+        box-shadow var(--dur) var(--ease);
+}
+.btn:hover,
+.root-btn:hover,
+button:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+.btn:active,
+button:active { transform: translateY(1px); }
+.btn:disabled,
+button:disabled,
+.btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Primary: the one action a page exists for. */
+.btn-primary,
+.generate-form-col button[type="submit"] {
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 500;
+    box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover,
+.generate-form-col button[type="submit"]:hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    color: var(--accent-ink);
+}
+.btn-primary:disabled:hover,
+.generate-form-col button[type="submit"]:disabled:hover { background: var(--accent); border-color: var(--accent); }
+
+/* Outlined accent: secondary actions that still need to read as actions. */
+.recreate-btn {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+}
+.recreate-btn:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+/* Destructive */
+.btn-danger {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--fail);
+}
+.btn-danger:hover {
+    background: var(--fail-wash);
+    border-color: var(--fail);
+    color: var(--fail);
+}
+
+/* Quiet: nav-adjacent / low-emphasis */
+.btn-ghost,
+.logout-form button {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-muted);
+}
+.btn-ghost:hover,
+.logout-form button:hover {
+    background: var(--surface-2);
+    border-color: transparent;
+    color: var(--text);
+}
+
+.btn-block { width: 100%; }
+
+/* A gallery card's one row of actions (Download, Recreate, Drive): plain
+   buttons sharing the row equally. .download-btn / .recreate-btn /
+   .drive-upload-btn are JS hooks only, never a look of their own. */
+.result-actions { display: flex; gap: var(--gap-inline); margin-top: auto; }
+.result-actions > * { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); }
+
+/* Segmented control (file-manager roots, and anything else that is a set
+   of mutually exclusive links). */
+.segmented {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--s-1);
+    padding: var(--s-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+.segmented .root-btn { border-color: transparent; background: transparent; color: var(--text-muted); }
+.segmented .root-btn:hover { background: var(--surface-2); color: var(--text); }
+.segmented .root-btn.active,
+.root-btn.active {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+/* ---------------------------------------------------------------------
+   7. Forms
+   --------------------------------------------------------------------- */
+.field { margin-bottom: var(--s-5); }
+.field > label,
+.field-label {
+    display: block;
+    margin-bottom: var(--s-2);
+    font-size: var(--step--1);
+    font-weight: 500;
+    color: var(--text);
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+input[type="email"],
+input[type="search"],
+input[type="tel"],
+select,
+textarea {
+    width: 100%;
+    height: var(--control-h);
+    padding: 0 var(--s-3);
+    font: inherit;
+    font-size: var(--control-font);
+    color: var(--text);
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-sm);
+    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+        background var(--dur) var(--ease);
+}
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) { border-color: var(--border-strong); }
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-wash);
+    /* background-color, not the shorthand: that would wipe select's caret. */
+    background-color: var(--surface);
+}
+input::placeholder, textarea::placeholder { color: var(--text-faint); }
+
+textarea {
+    height: auto;
+    padding: var(--s-3);
+    min-height: 120px;
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    line-height: 1.55;
+    resize: vertical;
+}
+
+select {
+    appearance: none;
+    padding-right: var(--s-7);
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+        linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 20px) center, calc(100% - 14px) center;
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+}
+
+input[type="checkbox"], input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    vertical-align: -3px;
+}
+.check-field {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    margin-bottom: var(--s-4);
+    font-weight: 500;
+}
+
+input[type="file"] {
+    width: 100%;
+    padding: var(--s-3);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    background: var(--bg-2);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+}
+input[type="file"]:hover { border-color: var(--accent-ring); }
+/* The native "choose file" control is OS chrome that ordinary CSS on the
+   input can't reach -- only ::file-selector-button (and its old -webkit-
+   alias) restyles it. Applied globally so no page has to repeat it. */
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+    height: var(--control-h-sm);
+    margin-right: var(--s-3);
+    padding: 0 var(--s-3);
+    font: inherit;
+    font-size: var(--step--1);
+    font-weight: 500;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover { background: var(--surface-2); }
+
+/* A group of fields is part of the form, not a box inside it: no border,
+   no fill, so every tool form looks the same whether or not its fields
+   are grouped. The legend reads as the group's label. */
+fieldset {
+    min-inline-size: 0;   /* else a long filename widens the whole column */
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+legend {
+    margin-bottom: var(--s-3);
+    padding: 0;
+    font-size: var(--step--1);
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------
+   8. Cards, panels, badges
+   --------------------------------------------------------------------- */
+.card {
+    padding: var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+.card h2, .card h3 { margin-top: 0; }
+
+.card-title { margin: 0 0 var(--gap-stack); font-size: var(--step-1); }
+
+/* stat (components/ui.html): one KPI, a card of its own. */
+.stat-grid { display: grid; gap: var(--gap-grid); grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin-bottom: var(--gap-section); }
+.stat {
+    display: grid;
+    gap: var(--s-1);
+    padding: var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+.stat-label { color: var(--text-muted); font-size: var(--step--1); font-weight: 500; }
+.stat-value { font-size: var(--step-2); font-weight: 600; letter-spacing: -0.01em; }
+.stat-value small { color: var(--text-muted); font-size: var(--step--1); font-weight: 400; }
+.stat-note { color: var(--text-muted); font-size: var(--step--1); }
+
+/* Auto-fitting card grid, used by the home page links, the models edit
+   page and anything else that is "a row of independent panels". */
+.card-grid {
+    display: grid;
+    gap: var(--gap-grid);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    align-items: start;
+}
+
+/* Link cards (home page tool launcher). */
+.link-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-stack);
+    padding: var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    color: inherit;
+    text-decoration: none;
+    transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease),
+        box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.link-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow);
+    color: inherit;
+}
+.link-card-icon { display: inline-flex; color: var(--text-muted); }
+.link-card-title { font-size: var(--step-1); font-weight: 600; letter-spacing: -0.01em; }
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    padding: var(--pad-pill);
+    border-radius: var(--radius-pill);
+    font-size: var(--step--1);
+    font-weight: 500;
+    line-height: 1.5;
+}
+.badge-neutral { background: var(--surface-2); color: var(--text-muted); }
+.badge-ok { background: var(--ok-wash); color: var(--ok); }
+.badge-fail { background: var(--fail-wash); color: var(--fail); }
+.badge-warn { background: var(--warn-wash); color: var(--warn); }
+
+/* Inline notices (cookies page, approve result, form errors). */
+.notice {
+    display: flex;
+    gap: var(--gap-stack);
+    padding: var(--pad-inset);
+    margin-bottom: var(--s-4);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    font-size: var(--step-0);
+}
+.notice-ok { border-left-color: var(--ok); background: var(--ok-wash); }
+.notice-fail { border-left-color: var(--fail); background: var(--fail-wash); }
+.notice-warn { border-left-color: var(--warn); background: var(--warn-wash); }
+
+/* Empty states */
+.empty-state {
+    padding: var(--s-7) var(--pad-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    text-align: center;
+    color: var(--text-muted);
+    background: var(--surface);
+}
+
+/* ---------------------------------------------------------------------
+   9. Tables
+   --------------------------------------------------------------------- */
+/* Tables are the app's densest surface (action log, applications, file
+   manager). On a phone they scroll horizontally inside .table-wrap
+   instead of squashing -- the alternative, reflowing every table to
+   cards, would break the column alignment these pages are read for. */
+.table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    -webkit-overflow-scrolling: touch;
+}
+.table-wrap > table { margin: 0; border: 0; border-radius: 0; }
+
+table {
+    width: 100%;
+    margin: var(--s-4) 0 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+    font-size: var(--step-0);
+}
+th, td {
+    padding: var(--pad-cell);
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-soft);
+}
+th {
+    font-size: var(--step--1);
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg);
+    border-bottom-color: var(--border);
+    white-space: nowrap;
+}
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover td, table tr:hover td { background: var(--bg); }
+
+/* ---------------------------------------------------------------------
+   10. Results grid (generation output, galleries, job pages)
+   --------------------------------------------------------------------- */
+.results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    gap: var(--gap-grid);
+}
+.result-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-inline);
+    padding: var(--pad-tile);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.result-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+.result-video,
+.result-image,
+.result-audio {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-soft);
+    background: var(--surface-2);
+}
+.result-image { transition: transform var(--dur-slow) var(--ease), box-shadow var(--dur-slow) var(--ease); }
+/* Hover-zoom the thumbnail rather than opening a lightbox -- it is the
+   fastest way to check a generation without leaving the grid. */
+.result-image:hover {
+    position: relative;
+    z-index: 20;
+    transform: scale(2.1);
+    box-shadow: var(--shadow-lg);
+}
+.result-audio { width: 100%; }
+.result-file {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-inline);
+    min-height: 110px;
+    padding: var(--pad-inset);
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    text-align: center;
+    word-break: break-word;
+}
+.result-file:has(.clone-timer) { flex-wrap: wrap; align-content: center; row-gap: var(--s-3); padding-block: var(--s-5); }
+.clone-timer { flex-basis: 100%; font-variant-numeric: tabular-nums; color: var(--text); }
+.clone-timer.is-slow { color: var(--warn); }
+.source { margin: 0; color: var(--text-muted); font-size: var(--step--1); word-break: break-word; }
+.filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
+.fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
+.fail-list li { margin-bottom: var(--s-2); }
+/* A failure: its short reason (schemas/errors.py) in red, full message on
+   hover. */
+.result-failed { color: var(--fail); background: var(--fail-wash); font-weight: 500; }
+.fail-note { min-height: 0; }
+.drive-states:empty { display: none; }
+/* What static/js/gallery-scroll.js watches for: spans the grid so it is only
+   reached once the whole current page has been scrolled past. */
+.gallery-sentinel {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--s-4);
+}
+
+/* ---------------------------------------------------------------------
+   11. Ordered file-picker widget (static/js/file-picker.js)
+   --------------------------------------------------------------------- */
+.file-order-list { list-style: none; padding: 0; margin: var(--s-3) 0 0; }
+.file-order-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-stack);
+    margin-bottom: var(--s-2);
+    padding: var(--pad-inset);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    font-size: var(--step--1);
+}
+.file-order-list li .item-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.file-order-list li .reused-badge {
+    flex-shrink: 0;
+    padding: var(--pad-pill);
+    border-radius: var(--radius-pill);
+    background: var(--accent-wash);
+    color: var(--accent-soft);
+    font-size: var(--step--2);
+    font-weight: 600;
+}
+.file-order-list button { min-height: 30px; padding: 0 var(--s-2); font-size: var(--step--1); }
+.file-order-list li .thumb-small {
+    width: 84px;
+    height: 84px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+}
+/* An <audio> player needs ~220px to show its controls at all: Chrome drops
+   them progressively as the element narrows and renders an empty bar well
+   before 150px. As a fixed-width flex item it was sharing a wrapped line with
+   the badge and the three order/remove buttons, got shrunk (flex-shrink
+   defaults to 1) and came out with no usable controls -- while the same file
+   played fine in the reuse grid, which gives it a whole row.
+   So on an audio row every part gets its own full-width line: name, then the
+   player, then the buttons. Nothing competes, nothing shrinks. */
+.file-order-list li[data-kind="audio"] { flex-wrap: wrap; }
+.file-order-list li[data-kind="audio"] .item-name {
+    flex: 1 0 100%;
+    order: -1;
+    white-space: normal;
+    overflow: visible;
+}
+.file-order-list li[data-kind="audio"] .thumb-audio {
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+}
+
+.ref-toggle {
+    width: 100%;
+    margin-top: var(--s-2);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.ref-toggle:hover { border-color: var(--accent-ring); color: var(--accent-soft); }
+.ref-browser {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: var(--gap-inline);
+    margin-top: var(--s-2);
+    padding: var(--pad-tile);
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--bg-2);
+    font-size: var(--step--1);
+    color: var(--text-muted);
+}
+.ref-tile {
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    text-align: left;
+}
+.ref-tile:hover { border-color: var(--accent); }
+.ref-tile.added { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-wash); }
+.ref-tile img, .ref-tile video {
+    display: block;
+    width: 100%;
+    height: 72px;
+    object-fit: cover;
+    background: var(--surface-2);
+}
+.ref-tile .ref-tile-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 72px;
+    font-size: var(--step-3);
+    background: var(--surface-2);
+}
+.ref-tile .ref-tile-name {
+    display: block;
+    padding: var(--pad-pill);
+    font-size: var(--step--2);
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* An audio tile is a player + an add button, not one clickable thumb: a
+   native <audio> is ~220px wide and won't shrink into an 88px cell, so it
+   takes the whole row. The name is the button here (the tile can't be one --
+   see file-picker.js), so it gets button affordances back. */
+.ref-tile--audio {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    grid-column: 1 / -1;
+    padding: var(--s-2);
+}
+.ref-tile--audio .ref-tile-audio { flex: 1 1 220px; min-width: 0; height: 32px; }
+.ref-tile--audio .ref-tile-name {
+    flex: 0 1 auto;
+    max-width: 40%;
+    border: 1px solid var(--accent-ring);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--accent-soft);
+    cursor: pointer;
+}
+.ref-tile--audio .ref-tile-name:hover { background: var(--accent-wash); }
+.ref-empty { grid-column: 1 / -1; }
+/* The browser's own "Show older" button: a full row, not one 88px tile cell. */
+.ref-browser > .ref-toggle { grid-column: 1 / -1; margin-top: 0; }
+/* "Recently used" / "Recently uploaded" -- same full-row treatment, so the
+   two groups the picker opens with read as two rows and not one long grid. */
+.ref-group-label {
+    grid-column: 1 / -1;
+    font-size: var(--step--1);
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------
+   12. Prompt reference highlighting (static/js/prompt-highlight.js)
+   --------------------------------------------------------------------- */
+/* The backdrop mirrors the textarea's text behind it -- its font/padding/
+   border metrics MUST stay identical to the textarea rule above, or the
+   highlights drift out of alignment with the typed text. */
+.prompt-wrap { position: relative; }
+.prompt-wrap textarea {
+    position: relative;
+    z-index: 1;
+    display: block;
+    background: transparent;
+}
+.prompt-wrap textarea:focus { background: transparent; }
+.prompt-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    padding: var(--s-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    color: transparent;
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+.prompt-backdrop mark { color: transparent; border-radius: 3px; }
+/* One highlight for every kind: the reference name says which it is. */
+.prompt-backdrop .ref-mark-image,
+.prompt-backdrop .ref-mark-video,
+.prompt-backdrop .ref-mark-audio { background: var(--accent-ring); }
+/* JSON editor (static/js/json-editor.js). Same backdrop trick, but the
+   backdrop carries the colour and the textarea's own text is transparent --
+   class names here are contract with that file. */
+
+/* ---------------------------------------------------------------------
+   13. Inline job results panel + spinner (static/js/generation.js)
+   --------------------------------------------------------------------- */
+#results-panel { margin-top: 0; }
+
+#results-panel .generation-error,
+.generation-status .generation-error {
+    margin-bottom: var(--s-4);
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--fail-border);
+    border-left: 3px solid var(--fail);
+    border-radius: var(--radius-sm);
+    background: var(--fail-wash);
+    color: var(--fail);
+    white-space: pre-wrap;
+}
+.generation-status:not(:empty) { margin-bottom: var(--s-4); color: var(--text-muted); font-size: var(--step--1); }
+.spinner {
+    display: inline-block;
+    vertical-align: -2px;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

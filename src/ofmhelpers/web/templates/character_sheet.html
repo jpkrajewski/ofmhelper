@@ -1,9 +1,8 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_asset_media.html" as am %}
 {% block content %}
-<div class="page-head">
-    <h1>Character Sheet</h1>
-</div>
+{{ ui.page_header("Character Sheet") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -15,7 +14,7 @@
         <label for="character-sheet-files">Images (2–{{ max_images }}), left to right in the order picked</label>
         <input type="file" id="character-sheet-files" name="files" multiple accept="image/*,.heic,.heif" required>
     </div>
-    <button type="submit" class="btn-primary">Combine</button>
+    {{ ui.button("Combine", "primary", type="submit") }}
 </form>
 </div>
 

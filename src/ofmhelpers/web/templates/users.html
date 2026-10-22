@@ -1,24 +1,22 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block title %}Users — Ascend Global LLC{% endblock %}
 {% block content %}
-<div class="page-head">
-    <h1>Users</h1>
-</div>
+{{ ui.page_header("Users") }}
 
-{% if error %}<div class="notice notice-warn" role="alert">{{ error }}</div>{% endif %}
+{% if error %}{{ ui.notice(error, "warn") }}{% endif %}
 
 {% if link %}
-<div class="notice users-link" role="status">
-    <p>Password link for <strong>{{ link_for.email }}</strong>. Send it to them: it works once, for {{ link_days }} days.</p>
+{% call ui.notice(hook="users-link") %}
+    <p>Password link for <strong>{{ link_for.email }}</strong> · works once, {{ link_days }} days</p>
     <div class="users-link-row">
         <input type="text" readonly value="{{ link }}" id="users-link" aria-label="Password link for {{ link_for.email }}">
-        <button type="button" class="btn-outline" id="users-link-copy">Copy</button>
+        {{ ui.button("Copy", attrs={"id": "users-link-copy"}) }}
     </div>
-</div>
+{% endcall %}
 {% endif %}
 
-<section class="account-card users-card" aria-labelledby="users-add-title">
-    <h2 id="users-add-title">Add a user</h2>
+{% call ui.card("Add a user", hook="users-card") %}
     <form class="users-add" method="post" action="/users">
         <div class="field users-add-email">
             <label for="users-email">Email</label>
@@ -34,12 +32,11 @@
                 {% for r in roles %}<option value="{{ r }}"{% if r == "user" %} selected{% endif %}>{{ r|capitalize }}</option>{% endfor %}
             </select>
         </div>
-        <button type="submit" class="btn-primary">Add user</button>
+        {{ ui.button("Add user", "primary", type="submit") }}
     </form>
-</section>
+{% endcall %}
 
-<div class="table-wrap">
-    <table class="users-table">
+{% call ui.table(hook="users-table") %}
         <thead>
             <tr>
                 <th scope="col">User</th>
@@ -55,7 +52,7 @@
             {% set mine = u.id == me %}
             <tr data-user="{{ u.email }}"{% if not u.active %} data-inactive{% endif %}>
                 <td class="users-who">
-                    <strong>{{ u.label }}</strong>{% if mine %} <span class="badge badge-neutral">you</span>{% endif %}
+                    <strong>{{ u.label }}</strong>{% if mine %} {{ ui.badge("you") }}{% endif %}
                     {% if u.name %}<span class="pending">{{ u.email }}</span>{% endif %}
                 </td>
                 <td>
@@ -77,22 +74,22 @@
                 </td>
                 <td><time data-ts="{{ u.last_login_at or '' }}">{{ "never" if not u.last_login_at }}</time></td>
                 <td>
-                    {% if u.active %}<span class="badge badge-ok">Active</span>{% else %}<span class="badge badge-neutral">Deactivated</span>{% endif %}
+                    {% if u.active %}{{ ui.badge("Active", "ok") }}{% else %}{{ ui.badge("Deactivated") }}{% endif %}
                 </td>
                 <td>
                     <div class="users-actions">
                         {% if not mine %}
                         <form method="post" action="/users/{{ u.id }}/active">
                             <input type="hidden" name="active" value="{{ 'false' if u.active else 'true' }}">
-                            <button type="submit" class="{{ 'btn-ghost' if u.active else 'btn-outline' }}">{{ "Deactivate" if u.active else "Activate" }}</button>
+                            {{ ui.button("Deactivate" if u.active else "Activate", "ghost" if u.active else "secondary", type="submit") }}
                         </form>
                         {% endif %}
                         <form method="post" action="/users/{{ u.id }}/link">
-                            <button type="submit">Password link</button>
+                            {{ ui.button("Password link", type="submit") }}
                         </form>
                         {% if not mine %}
                         <form method="post" action="/users/{{ u.id }}/delete" data-confirm="Remove {{ u.email }}? What they made stays.">
-                            <button type="submit" class="btn-ghost">Remove</button>
+                            {{ ui.button("Remove", "ghost", type="submit") }}
                         </form>
                         {% endif %}
                     </div>
@@ -100,8 +97,7 @@
             </tr>
             {% endfor %}
         </tbody>
-    </table>
-</div>
+    {% endcall %}
 <script>
 (() => {
     const link = document.getElementById("users-link");

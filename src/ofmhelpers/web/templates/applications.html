@@ -1,15 +1,13 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block title %}Leads — Ascend Global LLC{% endblock %}
 {% block content %}
-<div class="page-head">
-    <h1>Leads</h1>
-</div>
+{{ ui.page_header("Leads") }}
 
 {% if not applications %}
-<p class="empty-state">No applications yet.</p>
+{{ ui.empty("No applications yet") }}
 {% else %}
-<div class="table-wrap">
-    <table>
+{% call ui.table() %}
         <thead>
             <tr>
                 <th scope="col">Received</th>
@@ -38,13 +36,12 @@
                 <td>{% if a.goals %}{{ a.goals }}{% else %}<span class="pending">—</span>{% endif %}</td>
                 <td>
                     <form method="post" action="/applications/{{ a.id }}/delete">
-                        <button type="submit" class="btn btn-danger">Delete</button>
+                        {{ ui.button("Delete", "danger", type="submit") }}
                     </form>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
-    </table>
-</div>
+    {% endcall %}
 {% endif %}
 {% endblock %}

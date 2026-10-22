@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui %}
 {# One watched profile in /reels' watch list (`watched`:
    schemas.WatchedProfile; `groups`: every group, for the dropdown that
    moves it; `board`: schemas.Leaderboard, whose `top_views` and
@@ -13,10 +14,10 @@
     {% if watched.username == board.top_views %}data-tier="legendary"{% elif watched.username == board.top_reels %}data-tier="epic"{% endif %}>
     <div class="reels-row-head">
         <a class="reels-row-name" href="https://www.instagram.com/{{ watched.username }}/" target="_blank" rel="noopener">@{{ watched.username }}</a>
-        {% if watched.username == board.top_views %}<span class="badge badge-neutral reels-leader">#1 views</span>
-        {% elif watched.username == board.top_reels %}<span class="badge badge-neutral reels-leader">#2 viral reels</span>{% endif %}
+        {% if watched.username == board.top_views %}{{ ui.badge("#1 views", hook="reels-leader") }}
+        {% elif watched.username == board.top_reels %}{{ ui.badge("#2 viral reels", hook="reels-leader") }}{% endif %}
         {% if watched.error %}<span class="reels-watch-error" title="{{ watched.error }}" aria-label="{{ watched.error }}">!</span>{% endif %}
-        <button type="button" class="icon-btn reels-unwatch" aria-label="Stop watching @{{ watched.username }}">{{ ic.icon("x") }}</button>
+        {{ ui.icon_button("x", "Stop watching @" ~ watched.username, hook="reels-unwatch") }}
     </div>
     <div class="reels-row-foot">
         <div class="reels-watch-meta">

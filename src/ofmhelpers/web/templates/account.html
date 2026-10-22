@@ -1,17 +1,14 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block title %}Account — Ascend Global LLC{% endblock %}
 {% block content %}
-<div class="page-head">
-    <h1>Account</h1>
-    <p class="lead">{{ user.email }} · {{ user.role|capitalize }}</p>
-</div>
+{{ ui.page_header("Account", user.email ~ " · " ~ user.role|capitalize) }}
 
-{% if message %}<div class="notice" role="status">{{ message }}</div>{% endif %}
-{% if error %}<div class="notice notice-warn" role="alert">{{ error }}</div>{% endif %}
+{% if message %}{{ ui.notice(message) }}{% endif %}
+{% if error %}{{ ui.notice(error, "warn") }}{% endif %}
 
 <div class="account-grid">
-    <section class="account-card">
-        <h2>Sign-in</h2>
+    {% call ui.card("Sign-in") %}
         <ul class="account-list">
             {% for p in providers %}
             {% set acc = linked.get(p.name) %}
@@ -19,10 +16,10 @@
                 <span><strong>{{ p.label }}</strong>{% if acc %} · {{ acc.email or "linked" }}{% else %} · not linked{% endif %}</span>
                 {% if acc %}
                 <form method="post" action="/account/unlink/{{ p.name }}">
-                    <button type="submit" class="btn-ghost">Unlink</button>
+                    {{ ui.button("Unlink", "ghost", type="submit") }}
                 </form>
                 {% else %}
-                <a class="btn btn-outline" href="/auth/{{ p.name }}/start?link=1&amp;next=/account">Link {{ p.label }}</a>
+                {{ ui.button("Link " ~ p.label, href="/auth/" ~ p.name ~ "/start?link=1&next=/account") }}
                 {% endif %}
             </li>
             {% endfor %}
@@ -43,25 +40,18 @@
                 <label for="acc-confirm">Again</label>
                 <input type="password" name="confirm" id="acc-confirm" required minlength="{{ min_length }}" autocomplete="new-password">
             </div>
-            <button type="submit" class="btn-primary">{{ "Change" if user.has_password else "Set" }} password</button>
+            {{ ui.button(("Change" if user.has_password else "Set") ~ " password", "primary", type="submit") }}
         </form>
-    </section>
+    {% endcall %}
 
-    <section class="account-card">
-        <h2>Google Drive uploads</h2>
-        {% if user.drive_connected %}
-        <p>Connected: clone results upload to Drive as your Google account.</p>
-        {% else %}
-        <p>Not connected. Drive only takes uploads from a person's Google account, so link yours once (it asks for Drive access).</p>
-        {% endif %}
+    {% call ui.card("Google Drive uploads") %}
+        <p>{{ "Connected" if user.drive_connected else "Not connected" }}</p>
         {% if providers|selectattr("name", "equalto", "google")|list %}
-        <a class="btn btn-outline" href="/auth/google/start?link=1&amp;next=/account">{{ "Reconnect" if user.drive_connected else "Connect" }} Google Drive</a>
+        {{ ui.button(("Reconnect" if user.drive_connected else "Connect") ~ " Google Drive", href="/auth/google/start?link=1&next=/account") }}
         {% endif %}
-    </section>
+    {% endcall %}
 
-    <section class="account-card">
-        <h2>API keys</h2>
-        <p>Your generation forms start with these: your runs bill your own account.</p>
+    {% call ui.card("API keys") %}
         <form method="post" action="/account/keys" class="account-key">
             {% for name, (label, tail) in keys.items() %}
             <div class="field" data-provider="{{ name }}">
@@ -69,12 +59,12 @@
                 <div class="account-key-row">
                     <input type="password" name="key_{{ name }}" id="key-{{ name }}" autocomplete="off"
                            placeholder="{{ 'Paste a new key to replace it' if tail else 'Paste your key' }}">
-                    {% if tail %}<button type="submit" name="remove" value="{{ name }}" class="btn-ghost" formnovalidate>Remove</button>{% endif %}
+                    {% if tail %}{{ ui.button("Remove", "ghost", type="submit", attrs={"name": "remove", "value": name, "formnovalidate": true}) }}{% endif %}
                 </div>
             </div>
             {% endfor %}
-            <button type="submit" class="btn-outline">Save keys</button>
+            {{ ui.button("Save keys", type="submit") }}
         </form>
-    </section>
+    {% endcall %}
 </div>
 {% endblock %}

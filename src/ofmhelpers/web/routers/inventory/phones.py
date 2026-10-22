@@ -29,7 +29,6 @@ from ofmhelpers.web.db.encrypted import VaultError
 from ofmhelpers.web.db.repositories import DuplicateError
 from ofmhelpers.web.middleware.auth import AuthMiddleware
 from ofmhelpers.web.schemas import (
-    Device,
     DeviceFields,
     LoginFields,
     PhoneQuery,
@@ -76,22 +75,6 @@ def _found(ok: bool, what: str) -> _Done:
     return _Done()
 
 
-def _choices(devices: list[Device]) -> dict[str, list[tuple[str, str]]]:
-    """The toolbar's filter options, (value, label): only what some phone
-    has, so no option filters to nothing."""
-    families = {d.family.id: d.family.label for d in devices if d.family}
-    order = [f.id for f in catalog().families]
-    colors = sorted({d.finish.label for d in devices if d.finish})
-    owners = sorted({d.owner for d in devices if d.owner}, key=str.lower)
-    used = {x.service for d in devices for x in d.logins}
-    return {
-        "family": [(f, families[f]) for f in order if f in families],
-        "color": [(c, c) for c in colors],
-        "owner": [(o, o) for o in owners],
-        "service": [(k, s.label) for k, s in services().items() if k in used],
-    }
-
-
 @router.get("")
 def index(request: Request, query: Annotated[PhoneQuery, Query()]):
     devices = store.list_devices(AuthMiddleware.scope(request))
@@ -104,7 +87,8 @@ def index(request: Request, query: Annotated[PhoneQuery, Query()]):
         retired=query.ordered([d for d in devices if d.retired]),
         total=len(active),
         logins=sum(len(d.logins) for d in active),
-        choices=_choices(active),
+        # The add/edit dialog suggests the people already holding a phone.
+        owners=sorted({d.owner for d in active if d.owner}, key=str.lower),
         query=query,
         sorts=PhoneSort,
         default_sort=PhoneQuery().sort,

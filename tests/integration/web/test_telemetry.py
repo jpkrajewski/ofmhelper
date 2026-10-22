@@ -90,7 +90,7 @@ def test_with_a_token_log_records_go_to_logfire_too(monkeypatch):
         log.configure_logging(force=True)
 
 
-@pytest.mark.parametrize("path", ["/health", "/static/css/app.css"])
+@pytest.mark.parametrize("path", ["/health", "/static/css/pages.css"])
 def test_health_checks_and_static_files_make_no_spans(capfire: CaptureLogfire, path):
     TestClient(app).get(path)
     assert not [s for s in _spans(capfire) if s["attributes"].get("http.route")]

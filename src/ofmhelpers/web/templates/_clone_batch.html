@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui %}
 {# One /clone batch: the subject image + "N videos · resolution" as a header,
    then a card per video. Rendered by the page for every recent batch and by
    POST /clone/run for the one just submitted, so a fresh batch and a
@@ -16,14 +17,14 @@
         <span class="clone-batch-thumb" role="img" aria-label="Subject image no longer stored"></span>
         {% endif %}
         <p class="clone-batch-title">{{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }} · {{ batch.resolution }}</p>
-        <button type="button" class="btn-outline batch-recreate-btn">Recreate batch</button>
+        {{ ui.button("Recreate batch", hook="batch-recreate-btn") }}
         {% if drive_targets %}
         <div class="clone-drive">
             <div class="drive-pick">
                 <select class="drive-target" aria-label="Drive folder to upload into">
                     {% for t in drive_targets|sort(attribute="folder_name") %}<option value="{{ t.login_id }}">{{ t.folder_name }}</option>{% endfor %}
                 </select>
-                <button type="button" class="btn-outline drive-upload-btn" data-scope="batch">Upload batch</button>
+                {{ ui.button("Upload batch", hook="drive-upload-btn", attrs={"data-scope": "batch"}) }}
             </div>
             <p class="drive-note" role="status" hidden></p>
         </div>
@@ -58,10 +59,9 @@
             </ul>
             {% if card.status == "failed" or (card.status == "done" and card.assets) %}
             <div class="result-actions">
-                {% if card.assets %}<a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].download_name }}"
-                   data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="btn download-btn">Download</a>{% endif %}
-                <button type="button" class="recreate-btn">Recreate</button>
-                {% if card.assets and drive_targets %}<button type="button" class="drive-upload-btn" data-scope="card">Drive</button>{% endif %}
+                {% if card.assets %}{{ ui.button("Download", href=card.assets[0].download_url, hook="download-btn", attrs={"download": card.assets[0].download_name, "data-local-fallback-url": card.assets[0].local_fallback_url or ""}) }}{% endif %}
+                {{ ui.button("Recreate", hook="recreate-btn") }}
+                {% if card.assets and drive_targets %}{{ ui.button("Drive", hook="drive-upload-btn", attrs={"data-scope": "card"}) }}{% endif %}
             </div>
             {% endif %}
         </div>

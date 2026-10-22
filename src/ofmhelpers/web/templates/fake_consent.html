@@ -1,10 +1,11 @@
+{% import "components/ui.html" as ui -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Fake {{ provider }} sign-in</title>
-    <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+    {% include "_styles.html" %}
 </head>
 <body>
     {# OFM_FAKE_EXTERNALS only (e2e): stands in for Google's / Apple's
@@ -19,7 +20,7 @@
                     <label for="fake-email">Sign in as</label>
                     <input type="text" name="email" id="fake-email" required>
                 </div>
-                <button type="submit" class="login-btn">Allow</button>
+                {{ ui.button("Allow", "primary", type="submit", block=true) }}
             </form>
         </div>
     </main>

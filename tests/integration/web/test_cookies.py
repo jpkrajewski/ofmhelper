@@ -209,8 +209,8 @@ def test_an_upload_resyncs_only_the_uploaders_limited_accounts(ann, bob, fetched
     assert not get_account(_id("anns", ann[1])).metrics.limited
     assert get_account(_id("bobs", bob[1])).metrics.limited
     # Bob's banner still asks him for his own login; Ann's is gone.
-    assert "without a working Instagram login" in bob[0].get("/accounts").text
-    assert "without a working Instagram login" not in ann[0].get("/accounts").text
+    assert "without an Instagram login" in bob[0].get("/accounts").text
+    assert "without an Instagram login" not in ann[0].get("/accounts").text
 
 
 def test_a_watched_profiles_shared_scan_uses_the_earliest_watcher_with_cookies(

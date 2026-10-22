@@ -639,11 +639,9 @@ def test_limited_syncs_warn_to_upload_a_login(client, fetches):
     stats.limited = True
     record_scan(_id("a"), stats)
     html = client.get("/accounts").text
-    assert "1 account was synced without a working Instagram login" in html
+    assert "1 account synced without an Instagram login" in html
     assert 'href="/cookies"' in html
-    assert (
-        "without a working Instagram login" in client.get(f"/accounts/{_id('a')}").text
-    )
+    assert "without an Instagram login" in client.get(f"/accounts/{_id('a')}").text
 
 
 def test_cookie_upload_rescans_limited_accounts_now(fetches):

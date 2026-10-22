@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Styleguide — Ascend Global LLC{% endblock %}
+{% block content %}
+{% call ui.page_header("Styleguide", "Every element of components/ui.html") %}
+    {{ ui.button("Secondary") }}
+    {{ ui.button("Primary", "primary", icon="plus") }}
+{% endcall %}
+
+<div class="styleguide">
+    {% call ui.card("Palette") %}
+    <div class="sg-swatches">
+        {% for name in ["paper", "wash", "line", "grey", "ink", "red"] %}
+        <div class="sg-swatch"><span class="sg-chip sg-{{ name }}"></span><code>--{{ name }}</code></div>
+        {% endfor %}
+    </div>
+    {% endcall %}
+
+    {% call ui.card("Type") %}
+    <h1>Heading 1</h1>
+    <h2>Heading 2</h2>
+    <h3>Heading 3</h3>
+    <p>Body text: the quick brown fox jumps over the lazy dog. 1,234,567.89</p>
+    <p class="muted">Muted text for secondary information.</p>
+    {% endcall %}
+
+    {% call ui.card("Buttons") %}
+    <div class="sg-row">
+        {{ ui.button("Primary", "primary") }}
+        {{ ui.button("Secondary") }}
+        {{ ui.button("Ghost", "ghost") }}
+        {{ ui.button("Danger", "danger") }}
+        {{ ui.button("With icon", icon="download") }}
+        {{ ui.button("Link", href="#") }}
+        {{ ui.button("Disabled", "primary", attrs={"disabled": true}) }}
+    </div>
+    <div class="sg-row">
+        {{ ui.icon_button("pencil", "Edit") }}
+        {{ ui.icon_button("copy", "Copy") }}
+        {{ ui.icon_button("trash", "Delete") }}
+        {{ ui.icon_button("x", "Close") }}
+    </div>
+    {% endcall %}
+
+    {% call ui.card("Form fields") %}
+    {% call ui.field("Text", "sg-text") %}<input type="text" id="sg-text" placeholder="Placeholder">{% endcall %}
+    {% call ui.field("Select", "sg-select") %}<select id="sg-select"><option>One</option><option>Two</option></select>{% endcall %}
+    {% call ui.field("Textarea", "sg-area") %}<textarea id="sg-area" rows="3"></textarea>{% endcall %}
+    <label class="check-field"><input type="checkbox" checked> Checkbox</label>
+    {% endcall %}
+
+    {% call ui.card("Notices and badges") %}
+    {{ ui.notice("Info notice") }}
+    {{ ui.notice("Success notice", "ok") }}
+    {{ ui.notice("Warning notice", "warn") }}
+    {{ ui.notice("Failure notice", "fail") }}
+    <div class="sg-row">
+        {{ ui.badge("Neutral") }}
+        {{ ui.badge("Ok", "ok") }}
+        {{ ui.badge("Warn", "warn") }}
+        {{ ui.badge("Fail", "fail") }}
+    </div>
+    {% endcall %}
+
+    <div class="stat-grid">
+        {{ ui.stat("Total followers", "41k", "Across 10 accounts") }}
+        {{ ui.stat("Views · 7 days", "3.5M") }}
+        {{ ui.stat("Tracked accounts", "10", "All reachable") }}
+    </div>
+
+    {% call ui.card("Table") %}
+    {% call ui.table() %}
+            <thead><tr><th scope="col">Name</th><th scope="col" class="num">Followers</th><th scope="col">Status</th></tr></thead>
+            <tbody>
+                <tr><td>@first</td><td class="num">39,615</td><td>{{ ui.badge("Ok", "ok") }}</td></tr>
+                <tr><td>@second</td><td class="num">788</td><td>{{ ui.badge("Neutral") }}</td></tr>
+            </tbody>
+    {% endcall %}
+    {% endcall %}
+
+    {% call ui.card("Gallery card") %}
+    <div class="results sg-results">
+        <div class="result-item">
+            <div class="result-file result-failed">No credits</div>
+            <p class="source">Nano Banana Pro · kie.ai</p>
+            <div class="result-actions"><button type="button">Recreate</button></div>
+        </div>
+        <div class="result-item">
+            <div class="result-file"><span class="spinner"></span> generating…</div>
+            <p class="source">Seedream 5.0</p>
+        </div>
+    </div>
+    {% endcall %}
+
+    {% call ui.card("Links and empty state") %}
+    {{ ui.back_link("#", "Back") }}
+    {{ ui.empty("Nothing here yet.") }}
+    <div class="card-grid">{{ ui.link_card("#", "Link card", "sparkles") }}</div>
+    {% endcall %}
+</div>
+{% endblock %}

@@ -1,17 +1,14 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block title %}Cookies — Ascend Global LLC{% endblock %}
 {% block content %}
-<div class="page-head">
-    <h1>Your cookies</h1>
-    <p class="lead">Upload one <code>cookies.txt</code> from the "Get cookies.txt LOCALLY" extension.</p>
-</div>
+{{ ui.page_header("Your cookies", 'Upload one cookies.txt from the "Get cookies.txt LOCALLY" extension.') }}
 
-{% if message %}<p class="notice notice-ok" role="status">{{ message }}</p>{% endif %}
-{% if error %}<p class="notice notice-fail" role="alert"><strong>Error:</strong> {{ error }}</p>{% endif %}
+{% if message %}{{ ui.notice(message, "ok") }}{% endif %}
+{% if error %}{{ ui.notice(error, "fail") }}{% endif %}
 
 <div class="account-grid">
-    <section class="account-card" data-cookies="{{ 'saved' if saved else 'none' }}">
-        <h2>Saved</h2>
+    {% call ui.card("Saved", attrs={"data-cookies": "saved" if saved else "none"}) %}
         {% if saved %}
         <ul class="account-list">
             <li><span><strong>File</strong> · {{ saved.file_name }}, uploaded {{ saved.uploaded_at|ago }}</span></li>
@@ -19,22 +16,21 @@
             <li><span><strong>{{ saved.summary.cookies }} cookies</strong> · {{ saved.summary.domains|join(", ") }}</span></li>
         </ul>
         <form method="post" action="/cookies/delete">
-            <button type="submit" class="btn-ghost">Remove</button>
+            {{ ui.button("Remove", "ghost", type="submit") }}
         </form>
         {% else %}
-        <p>None yet: your downloads and syncs run logged out, so Instagram hides login-only posts and reels.</p>
+        <p>None yet</p>
         {% endif %}
-    </section>
+    {% endcall %}
 
-    <section class="account-card">
-        <h2>{{ "Replace" if saved else "Upload" }}</h2>
+    {% call ui.card("Replace" if saved else "Upload") %}
         <form action="/cookies" method="post" enctype="multipart/form-data" class="account-form">
             <div class="field">
                 <label for="cookies-file">cookies.txt</label>
                 <input type="file" name="file" id="cookies-file" accept=".txt" required>
             </div>
-            <button type="submit" class="btn-primary">Upload</button>
+            {{ ui.button("Upload", "primary", type="submit") }}
         </form>
-    </section>
+    {% endcall %}
 </div>
 {% endblock %}

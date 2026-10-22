@@ -91,7 +91,7 @@
         listEl.innerHTML = "";
         picker._items.forEach((item, idx) => {
             const li = document.createElement("li");
-            // Drives the per-kind row layout in app.css: an <audio> player has
+            // Drives the per-kind row layout in components.css: an <audio> player has
             // a wide intrinsic width, so on an audio row the filename gets its
             // own line instead of being ellipsised down to nothing.
             li.dataset.kind = kind;

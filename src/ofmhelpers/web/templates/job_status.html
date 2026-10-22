@@ -2,27 +2,18 @@
 {% import "_asset_media.html" as am %}
 {% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>{{ title|default("Job") }} <code>{{ job.id }}</code></h1>
-    <div class="page-head-actions">
-        <span class="badge {{ 'badge-ok' if job.status == 'done' else 'badge-fail' if job.status == 'failed' else 'badge-neutral' }}">
-            {{ job.status }}
-        </span>
-    </div>
-</div>
+{% call ui.page_header(title|default("Job"), job.id) %}{{ ui.status_badge(job.status) }}{% endcall %}
 
 {% if job_inputs and (job_inputs.settings or job_inputs.long_text or job_inputs.file_groups) %}
 <div class="job-inputs">
     <h2 class="col-title">Inputs</h2>
 
     {% if job_inputs.settings %}
-    <div class="table-wrap">
-        <table class="inputs-table">
+    {% call ui.table(hook="inputs-table") %}
             {% for s in job_inputs.settings %}
             <tr><th scope="row">{{ s.label }}</th><td>{{ s.value }}</td></tr>
             {% endfor %}
-        </table>
-    </div>
+        {% endcall %}
     {% endif %}
 
     {% for t in job_inputs.long_text %}

@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui %}
 {# /drive's cards, counts and folders: the page renders it from each
    folder's last read (no Drive call), GET /drive/live from Drive now, and
    drive.js swaps that in. Expects `board` (schemas.DriveBoard). #}
@@ -7,10 +8,10 @@
 <p class="dr-asof" role="status" hidden></p>
 {% endif %}
 {% if board.problem %}
-<div class="notice notice-warn drive-connect" role="alert">
+{% call ui.notice(kind="warn", hook="drive-connect") %}
     <span>{{ board.problem }}</span>
-    {% if board.connect_drive %}<a class="btn ph-btn" href="/auth/google/start?link=1&amp;next=/drive">Connect Google Drive</a>{% endif %}
-</div>
+    {% if board.connect_drive %}{{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/drive") }}{% endif %}
+{% endcall %}
 {% endif %}
 
 {% if cards %}
@@ -24,10 +25,10 @@
             </a>
             <div class="dr-title">
                 <h2>{{ t.handle }}</h2>
-                <p>{{ t.owner }} · {{ t.device.label }}</p>
+                <p>{{ t.owner }}</p>
             </div>
             {% if c.account_url %}
-            <a class="ph-icon-btn" href="{{ c.account_url }}" target="_blank" rel="noopener" aria-label="Open the folder of {{ t.handle }}">{{ ic.icon("folder") }}</a>
+            {{ ui.icon_button("folder", "Open the folder of " ~ t.handle, href=c.account_url, attrs={"target": "_blank", "rel": "noopener"}) }}
             {% endif %}
         </header>
         {% if c.error %}
@@ -59,7 +60,6 @@
         <p class="dr-note dr-missing">{{ c.scan.extra_posted_folders|length }} more "{{ board.posted_folder_name }}" folder{{ "" if c.scan.extra_posted_folders|length == 1 else "s" }} in here (counted too): move their videos into one and delete the rest.</p>
         {% endif %}
         <p class="dr-posted">
-            {% if c.posted_url %}<a href="{{ c.posted_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} {{ board.posted_folder_name }}</a>{% else %}<span>{{ board.posted_folder_name }}: not made yet, Sync makes it</span>{% endif %}
             <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
         </p>
         {% endif %}
@@ -67,7 +67,7 @@
     {% endfor %}
 </div>
 {% elif not board.problem %}
-<div class="empty-state">No phone has an Instagram login yet. Add one on <a href="/phones">Phones</a>.</div>
+{% call ui.empty() %}No Instagram logins yet. <a href="/phones">Add one on Phones</a>{% endcall %}
 {% endif %}
 
 {% if board.other_folders %}

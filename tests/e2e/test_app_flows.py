@@ -38,6 +38,7 @@ ADMIN_ONLY_PAGES = [
     "/character-sheet",
     "/applications",
     "/file-manager",
+    "/styleguide",
     "/action-log",
 ]
 
@@ -105,13 +106,13 @@ def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
         "newbie@example.com"
     )
     # Signing in asked no Drive access; connecting it is one more consent.
-    drive_card = page.locator(".account-card").nth(1)
+    drive_card = page.locator(".card").nth(1)
     expect(drive_card).to_contain_text("Not connected")
     drive_card.locator('a[href^="/auth/google/start?link=1"]').click()
     page.fill("#fake-email", "newbie@example.com")
     with page.expect_navigation():
         page.click("button[type=submit]")
-    expect(page.locator(".account-card").nth(1)).to_contain_text("Connected")
+    expect(page.locator(".card").nth(1)).to_contain_text("Connected")
     page.click(".logout-form button")
 
     page.goto(link)
@@ -571,7 +572,7 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
     with va.page.expect_navigation():
         row.locator(".accounts-go a").click()
     expect(va.page.locator(".accounts-identity")).to_contain_text(f"@{TRACKED_ACCOUNT}")
-    kpis = va.page.locator(".accounts-kpi")
+    kpis = va.page.locator(".stat")
     expect(kpis).to_have_count(4)
     expect(kpis.first).to_contain_text("Followers")
     # The period selector reloads the page for that period.
@@ -773,7 +774,7 @@ def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
     from ofmhelpers.web.stores.jobs import create_job, run_job
 
     connect_google(va, "va.google@example.com")
-    expect(va.page.locator(".account-card").nth(1)).to_contain_text("Connected")
+    expect(va.page.locator(".card").nth(1)).to_contain_text("Connected")
     jobs_idle()  # the sync connecting starts, before the phone below
 
     va_id = 2  # e2e conftest `_seed_users`

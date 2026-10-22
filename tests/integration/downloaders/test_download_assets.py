@@ -139,8 +139,8 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
 
     html = client.get("/action-log").text
     assert "<h1>Logs</h1>" in html
-    assert 'actor-admin">admin' in html
-    assert f'actor-user">{user.email}' in html
+    assert 'class="badge badge-neutral">admin<' in html
+    assert f'class="badge badge-neutral">{user.email}<' in html
     # An audit row, not the user's work: no link to (or summary of) their job.
     assert f"/jobs/{user_job}" not in html
     assert f"/jobs/{admin_job}" in html

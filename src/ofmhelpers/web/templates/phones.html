@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_icons.html" as ic %}
 {% block title %}Phones — Ascend Global LLC{% endblock %}
 {% block content %}
@@ -8,16 +9,7 @@
    keeps a card short however many logins. #}
 {% set visible_logins = 2 %}
 
-<div class="page-head ph-head">
-    <div>
-        <h1>Phones</h1>
-        <p class="lead">{{ total }} phone{{ "" if total == 1 else "s" }} · {{ logins }} login{{ "" if logins == 1 else "s" }}</p>
-    </div>
-    <div class="ph-layout" role="group" aria-label="Layout">
-        <button type="button" class="ph-icon-btn" data-layout="grid" aria-pressed="true" aria-label="Grid">{{ ic.icon("grid") }}</button>
-        <button type="button" class="ph-icon-btn" data-layout="list" aria-pressed="false" aria-label="List">{{ ic.icon("list") }}</button>
-    </div>
-</div>
+{{ ui.page_header("Phones", total ~ " phone" ~ ("" if total == 1 else "s") ~ " · " ~ logins ~ " login" ~ ("" if logins == 1 else "s")) }}
 
 <div class="ph-toolbar">
     <label class="ph-search">
@@ -25,30 +17,20 @@
         <input type="search" id="ph-search" placeholder="Search phones, people, logins…" aria-label="Search phones" autocomplete="off">
     </label>
     <form method="get" action="/phones" data-autosubmit class="ph-filters">
-        {% macro filter(name, all_label) -%}
-        {% if choices[name] %}
-        <select name="{{ name }}" aria-label="{{ all_label }}">
-            <option value="">{{ all_label }}</option>
-            {% for value, label in choices[name] %}
-            <option value="{{ value }}" {% if query[name] == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-        </select>
-        {% endif %}
-        {%- endmacro %}
-        {{ filter("family", "All models") }}
-        {{ filter("color", "All colors") }}
-        {{ filter("owner", "All people") }}
-        {{ filter("service", "All services") }}
         <select name="sort" aria-label="Sort" data-default="{{ default_sort }}">
             {% for value, label in [(sorts.FOLLOWERS, "Most followers"), (sorts.LABEL, "Name"), (sorts.MODEL, "Model"), (sorts.UPDATED, "Recently updated"), (sorts.LOGINS, "Most logins")] %}
             <option value="{{ value }}" {% if query.sort == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
         </select>
-        <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
+        <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
     </form>
+    <div class="ph-layout" role="group" aria-label="Layout">
+        {{ ui.icon_button("grid", "Grid", attrs={"data-layout": "grid", "aria-pressed": "true"}) }}
+        {{ ui.icon_button("list", "List", attrs={"data-layout": "list", "aria-pressed": "false"}) }}
+    </div>
     <div class="toolbar-actions">
-        <a class="btn ph-btn" href="/phones/export.xlsx" download>{{ ic.icon("download") }} Export</a>
-        {% if can_edit %}<button type="button" class="btn-primary ph-btn" id="ph-add-open">{{ ic.icon("plus") }} Add phone</button>{% endif %}
+        {{ ui.button("Export", href="/phones/export.xlsx", icon="download", attrs={"download": true}) }}
+        {% if can_edit %}{{ ui.button("Add phone", "primary", icon="plus", attrs={"id": "ph-add-open"}) }}{% endif %}
     </div>
 </div>
 <div class="generation-status" id="ph-status" role="status" aria-live="polite"></div>
@@ -66,18 +48,16 @@
     </div>
     {# Fixed in the row's right column: revealing opens below, nothing moves. #}
     <div class="ph-login-tools">
-        {% if x.tracked_account_id %}<a class="ph-icon-btn" href="/accounts/{{ x.tracked_account_id }}" aria-label="Analytics of {{ x.username }}">{{ ic.icon("chart") }}</a>{% endif %}
+        {% if x.tracked_account_id %}{{ ui.icon_button("chart", "Analytics of " ~ x.username, href="/accounts/" ~ x.tracked_account_id) }}{% endif %}
         {% set copy_hint = "Copy login:password:codes" if x.has_codes else ("Copy login:password" if x.has_password else "Copy login") %}
-        <button type="button" class="ph-icon-btn ph-copy-all" aria-label="{{ copy_hint }} ({{ x.label }})">{{ ic.icon("copy") }}</button>
+        {{ ui.icon_button("copy", copy_hint ~ " (" ~ x.label ~ ")", hook="ph-copy-all") }}
         {% if x.has_password or x.has_codes %}
         {% set show_hint = "Show password and recovery codes" if x.has_codes else "Show password" %}
-        <button type="button" class="ph-icon-btn ph-reveal" aria-pressed="false" aria-label="{{ show_hint }} ({{ x.label }})">
-            <span class="ph-when-hidden">{{ ic.icon("eye") }}</span><span class="ph-when-shown" hidden>{{ ic.icon("eye-off") }}</span>
-        </button>
+        {% call ui.icon_button("eye", show_hint ~ " (" ~ x.label ~ ")", hook="ph-reveal", attrs={"aria-pressed": "false"}) %}<span class="ph-when-hidden">{{ ic.icon("eye") }}</span><span class="ph-when-shown" hidden>{{ ic.icon("eye-off") }}</span>{% endcall %}
         {% endif %}
         {% if can_edit %}
-        <button type="button" class="ph-icon-btn ph-login-edit" aria-label="Edit {{ x.label }} login">{{ ic.icon("pencil") }}</button>
-        <button type="button" class="ph-icon-btn ph-login-remove" aria-label="Remove {{ x.label }} login from {{ d.label }}">{{ ic.icon("trash") }}</button>
+        {{ ui.icon_button("pencil", "Edit " ~ x.label ~ " login", hook="ph-login-edit") }}
+        {{ ui.icon_button("trash", "Remove " ~ x.label ~ " login from " ~ d.label, hook="ph-login-remove") }}
         {% endif %}
     </div>
     {% if x.has_password or x.has_codes %}
@@ -104,7 +84,7 @@
             </div>
             {% if can_edit %}
             <details class="ph-menu">
-                <summary class="ph-icon-btn" aria-label="Actions for {{ d.label }}">{{ ic.icon("ellipsis") }}</summary>
+                {{ ui.menu_toggle("ellipsis", "Actions for " ~ d.label) }}
                 <div class="ph-menu-list">
                     {% if d.retired %}
                     <button type="button" class="ph-restore">{{ ic.icon("restore") }} Restore</button>
@@ -142,18 +122,18 @@
 {%- endmacro %}
 
 {% if not devices %}
-<p class="empty-state">
+{% call ui.empty() %}
     {% if query.filtered %}
     No phone matches these filters. <a href="/phones">Show all</a>
     {% else %}
-    No phones yet.{% if can_edit %} Press <strong>Add phone</strong> to add the first one.{% endif %}
+    No phones yet
     {% endif %}
-</p>
+{% endcall %}
 {% else %}
 <div class="ph-grid" id="ph-grid" data-layout="grid">
     {% for d in devices %}{{ phone_card(d) }}{% endfor %}
 </div>
-<p class="empty-state" id="ph-no-match" hidden>No phone matches your search.</p>
+{{ ui.empty("No phone matches your search", attrs={"id": "ph-no-match", "hidden": true}) }}
 {% endif %}
 
 {% if retired %}
@@ -211,15 +191,15 @@
                 <input type="tel" id="ph-number" name="phone_number" maxlength="32">
             </div>
         </div>
-        <datalist id="ph-owners">{% for value, _label in choices.owner %}<option value="{{ value }}"></option>{% endfor %}</datalist>
+        <datalist id="ph-owners">{% for owner in owners %}<option value="{{ owner }}"></option>{% endfor %}</datalist>
         <div class="field">
             <label for="ph-notes">Notes</label>
             <textarea id="ph-notes" name="notes" rows="2" maxlength="5000"></textarea>
         </div>
         <div class="generation-status" id="ph-form-status" role="status" aria-live="polite"></div>
         <div class="accounts-dialog-actions">
-            <button type="button" class="btn-ghost" data-close>Cancel</button>
-            <button type="submit" class="btn-primary">Save</button>
+            {{ ui.button("Cancel", "ghost", attrs={"data-close": true}) }}
+            {{ ui.button("Save", "primary", type="submit") }}
         </div>
     </form>
 </dialog>
@@ -258,8 +238,8 @@
         <p class="ph-hint" id="ph-login-shared" hidden></p>
         <div class="generation-status" id="ph-login-status" role="status" aria-live="polite"></div>
         <div class="accounts-dialog-actions">
-            <button type="button" class="btn-ghost" data-close>Cancel</button>
-            <button type="submit" class="btn-primary">Save</button>
+            {{ ui.button("Cancel", "ghost", attrs={"data-close": true}) }}
+            {{ ui.button("Save", "primary", type="submit") }}
         </div>
     </form>
 </dialog>

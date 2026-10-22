@@ -33,6 +33,7 @@ never touched.
 from ofmhelpers.web.routers import account, apply, auth, cookies, refs
 from ofmhelpers.web.routers.admin import action_log, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
+from ofmhelpers.web.routers.admin import styleguide as admin_styleguide
 from ofmhelpers.web.routers.admin import users as admin_users
 from ofmhelpers.web.routers.downloads import clean_image, reels
 from ofmhelpers.web.routers.downloads import images as download_images
@@ -80,6 +81,7 @@ ROUTERS = [
     # admin/
     admin_users.router,
     admin_applications.router,
+    admin_styleguide.router,
     file_manager.router,
     action_log.router,
 ]

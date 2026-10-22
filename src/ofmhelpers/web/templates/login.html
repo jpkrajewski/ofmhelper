@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +7,7 @@
     <meta name="color-scheme" content="light">
     <title>Sign in — Ascend Global LLC</title>
     {% include "_favicon.html" %}
-    <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+    {% include "_styles.html" %}
 </head>
 <body>
     <main class="login-screen">
@@ -21,8 +22,7 @@
             {% if providers %}
             <div class="login-providers">
                 {% for p in providers %}
-                <a class="login-provider" data-provider="{{ p.name }}"
-                   href="/auth/{{ p.name }}/start?next={{ next|urlencode }}">Continue with {{ p.label }}</a>
+                {{ ui.button("Continue with " ~ p.label, href="/auth/" ~ p.name ~ "/start?next=" ~ next|urlencode, block=true, hook="login-provider", attrs={"data-provider": p.name}) }}
                 {% endfor %}
             </div>
             <p class="login-divider"><span>or with your email</span></p>
@@ -40,7 +40,7 @@
                     <input type="password" name="password" id="password" required
                            autocomplete="current-password" placeholder="••••••••••">
                 </div>
-                <button type="submit" class="login-btn">Sign in</button>
+                {{ ui.button("Sign in", "primary", type="submit", block=true) }}
             </form>
             <p class="login-help">Admins: your email (or <code>admin</code>) and the admin password. Everyone else: the password you set from your link. No access yet? An admin adds your email on Users.</p>
         </div>

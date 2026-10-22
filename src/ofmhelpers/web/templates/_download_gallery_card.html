@@ -1,3 +1,4 @@
+{% import "components/ui.html" as ui %}
 {# One /download-assets gallery card: included by the page's first page and
    by download_gallery_fragment.html for every page the scroll loads, so the
    two can't drift. Expects `job` (a TaskCard). Same shape as every gallery
@@ -24,8 +25,8 @@
     <p class="source">{{ job.task_label }}{% if job.assets|length > 1 %} · <a href="/{{ job.task | replace('_', '-') }}/jobs/{{ job.job_id }}">all {{ job.assets|length }} files</a>{% endif %}</p>
     {% if job.status in ("done", "failed") %}
     <div class="result-actions">
-        {% if job.assets %}<a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].download_name }}" class="btn download-btn">Download</a>{% endif %}
-        <button type="button" class="recreate-btn">Recreate</button>
+        {% if job.assets %}{{ ui.button("Download", href=job.assets[0].download_url, hook="download-btn", attrs={"download": job.assets[0].download_name}) }}{% endif %}
+        {{ ui.button("Recreate", hook="recreate-btn") }}
     </div>
     {% endif %}
 </div>

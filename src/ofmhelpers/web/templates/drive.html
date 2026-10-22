@@ -1,12 +1,9 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% import "_icons.html" as ic %}
 {% block title %}Drive — Ascend Global LLC{% endblock %}
 {% block content %}
-<div class="page-head ph-head">
-    <div>
-        <h1>Drive</h1>
-    </div>
-</div>
+{{ ui.page_header("Drive") }}
 
 <div class="generation-status" id="dr-status" role="status" aria-live="polite"></div>
 
@@ -16,8 +13,8 @@
         <input type="search" id="dr-search" placeholder="Search accounts, people, phones…" aria-label="Search accounts" autocomplete="off">
     </label>
     <div class="toolbar-actions">
-        {% if board.root_url %}<a class="btn ph-btn" href="{{ board.root_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} Open in Drive</a>{% endif %}
-        <button type="button" class="btn-primary ph-btn" id="dr-sync" {% if board.problem and not board.cards %}disabled{% endif %}>{{ ic.icon("refresh") }} Sync</button>
+        {% if board.root_url %}{{ ui.button("Open in Drive", href=board.root_url, icon="folder", attrs={"target": "_blank", "rel": "noopener"}) }}{% endif %}
+        {{ ui.button("Sync", "primary", icon="refresh", attrs={"id": "dr-sync", "disabled": board.problem and not board.cards}) }}
     </div>
 </div>
 

@@ -1,8 +1,7 @@
 {% extends "base.html" %}
+{% import "components/ui.html" as ui %}
 {% block content %}
-<div class="page-head">
-    <h1>Gen AI</h1>
-</div>
+{{ ui.page_header("Gen AI") }}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -25,7 +24,7 @@
 
     <fieldset class="tool-fields" id="model-fields"></fieldset>
 
-    <button type="submit" class="btn-primary">Generate</button>
+    {{ ui.button("Generate", "primary", type="submit") }}
 </form>
 </div>
 
