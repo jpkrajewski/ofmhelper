@@ -47,6 +47,8 @@ class Google:
     name = "google"
     label = "Google"
     callback_method = "GET"
+    local_consent = False
+    linkable = True
 
     def configured(self) -> bool:
         return settings.signin.google_configured

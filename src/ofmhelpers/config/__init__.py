@@ -40,6 +40,7 @@ from ofmhelpers.config.settings import (
     InfraSettings,
     InstagramSettings,
     KieAISettings,
+    LinksSettings,
     LoggingSettings,
     SessionSettings,
     SignInSettings,
@@ -142,6 +143,10 @@ class Settings:
     @property
     def telemetry(self) -> TelemetrySettings:
         return self._group(TelemetrySettings)
+
+    @property
+    def links(self) -> LinksSettings:
+        return self._group(LinksSettings)
 
     @property
     def vault(self) -> VaultSettings:

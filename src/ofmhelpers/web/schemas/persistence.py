@@ -77,14 +77,6 @@ class Job(BaseModel):
     preview: JobPreview | None = None
 
     @property
-    def took_s(self) -> float | None:
-        """Submit to done/failed; None while running or for a job from
-        before finish times were recorded."""
-        if self.finished_at is None:
-            return None
-        return self.finished_at - self.created_at
-
-    @property
     def _entries(self) -> list[dict[str, Any]]:
         """The result as a list of entries, or [] for anything else (still
         running, failed, or a non-file result)."""

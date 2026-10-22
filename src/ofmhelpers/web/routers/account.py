@@ -2,7 +2,9 @@
 /account: the signed-in person's own settings -- how they sign in (Google,
 Apple, a password), whether Drive uploads can go up as them (a Google
 account linked with Drive), and their own API keys per generation
-provider, which their forms pre-fill so their runs bill their account.
+provider, which their forms pre-fill so their runs bill their account, and
+per link provider (/links runs on them; an admin with none on the .env
+one).
 """
 
 from typing import Annotated
@@ -13,7 +15,9 @@ from fastapi.responses import RedirectResponse, Response
 
 from ofmhelpers.aigenproviders.base import provider_classes
 from ofmhelpers.config import settings
-from ofmhelpers.signin import configured, providers
+from ofmhelpers.links.providers import link_providers
+from ofmhelpers.signin import linkable, providers
+from ofmhelpers.web.link_sync import sync_now
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.schemas import ApiKeysForm
 from ofmhelpers.web.stores import users
@@ -27,10 +31,12 @@ _KEY_TAIL = 4
 
 
 def _keyed_providers() -> dict[str, str]:
-    """name -> label of the providers a run needs a key for."""
-    return {
+    """name -> label of the providers a run needs a key for: generation,
+    then link providers."""
+    generation = {
         name: cls.label for name, cls in provider_classes().items() if cls.needs_key
     }
+    return generation | {key: cls.label() for key, cls in link_providers().items()}
 
 
 def _page(
@@ -48,7 +54,7 @@ def _page(
         "account.html",
         user=user,
         linked={a.provider: a for a in users.linked_accounts(me.id)},
-        providers=configured(),
+        providers=linkable(),
         keys={
             name: (label, saved.get(name, "")[-_KEY_TAIL:])
             for name, label in _keyed_providers().items()
@@ -121,6 +127,8 @@ def _save_keys(request: Request, form: ApiKeysForm, known: dict[str, str]) -> Re
         )
     for name, key in form.keys.items():
         users.set_api_key(user_id, name, key)
+    if set(form.keys) & set(link_providers()):
+        sync_now(user_id)
     saved = " and ".join(known[name] for name in form.keys)
     return _page(
         request, message=f"{saved} {'key' if len(form.keys) == 1 else 'keys'} saved."
@@ -131,7 +139,7 @@ def _save_keys(request: Request, form: ApiKeysForm, known: dict[str, str]) -> Re
 def unlink(request: Request, provider: str):
     """Stops signing in with that account (and, for Google, Drive uploads
     as it). Refused when it is the only way left to sign in."""
-    if provider not in providers():
+    if provider not in providers() or not providers()[provider].linkable:
         raise HTTPException(status_code=404, detail="Unknown provider")
     me = AuthMiddleware.user(request)
     user = users.get_user(me.id)

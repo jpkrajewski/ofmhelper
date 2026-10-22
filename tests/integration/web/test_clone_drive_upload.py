@@ -96,7 +96,7 @@ def test_a_run_uploads_into_the_account_folder_once(drive, tmp_path):
     login = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path)
 
-    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
 
     assert r.status_code == 200, r.text
     assert r.json()["queued"] in (0, 1)  # the test worker ran it inline
@@ -110,7 +110,9 @@ def test_a_run_uploads_into_the_account_folder_once(drive, tmp_path):
     (file_id,) = drive.named(uploaded, folder)
     assert drive.item(file_id).owner == "ann@example.com"  # her own Drive
 
-    again = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    again = ann.post(
+        "/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]}
+    )
     assert again.json()["queued"] == 0
     assert len(_files_in(drive, "ann.ig - Anna")) == 1  # never twice
     assert "In Drive:" in ann.get("/clone").text
@@ -120,7 +122,7 @@ def test_without_google_drive_connected_nothing_is_queued(drive, tmp_path):
     ann = _client("ann@example.com", google=False)
     login = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path)
-    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     assert r.status_code == 400
     assert "Connect Google Drive" in r.json()["detail"]
     assert users.by_email("ann@example.com").drive_root_id is None  # nothing made
@@ -134,11 +136,11 @@ def test_nobody_uploads_into_anothers_folder_or_anothers_run(drive, tmp_path):
     bob_job = _finished_run("bob@example.com", tmp_path, "b.mp4")
 
     r = bob.post(
-        "/clone/drive-upload", json={"job_ids": [bob_job], "login_id": ann_login}
+        "/clone/drive-upload", json={"job_ids": [bob_job], "login_ids": [ann_login]}
     )
     assert r.status_code == 400
     r = ann.post(
-        "/clone/drive-upload", json={"job_ids": [bob_job], "login_id": ann_login}
+        "/clone/drive-upload", json={"job_ids": [bob_job], "login_ids": [ann_login]}
     )
     assert r.json()["uploads"] == []
     assert bob.get("/clone/drive-uploads", params={"job": ann_job}).json() == []
@@ -157,7 +159,7 @@ def test_a_failed_upload_says_why_and_can_be_retried(drive, tmp_path, monkeypatc
         raise DriveError(msg)
 
     monkeypatch.setattr(drive_uploads, "connect_as", refused)
-    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert (state["status"], state["error"]) == (
         "failed",
@@ -166,23 +168,43 @@ def test_a_failed_upload_says_why_and_can_be_retried(drive, tmp_path, monkeypatc
     assert "Drive upload to ann.ig - Anna failed" in ann.get("/clone").text
 
     monkeypatch.setattr(drive_uploads, "connect_as", working)
-    retry = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    retry = ann.post(
+        "/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]}
+    )
     assert retry.status_code == 200
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
 
 
-def test_the_batch_header_offers_only_the_users_folders(drive, tmp_path):
+def test_the_drive_picker_offers_only_the_users_folders(drive, tmp_path):
     ann = _client("ann@example.com")
     bob = _client("bob@example.com")
     login = _account_folder(ann)
     _finished_run("ann@example.com", tmp_path, "a.mp4")
     _finished_run("bob@example.com", tmp_path, "b.mp4")
 
-    assert f'<option value="{login}">ann.ig - Anna</option>' in ann.get("/clone").text
+    ann_page = ann.get("/clone").text
+    assert f'data-login="{login}"' in ann_page
+    assert 'data-folder="ann.ig - Anna"' in ann_page
+    assert "Upload to Drive" in ann_page  # in the finished card's menu
     bob_page = bob.get("/clone").text
     assert "ann.ig - Anna" not in bob_page
-    assert "drive-target" not in bob_page  # Bob has no account folder
+    # Bob has no account folder: no picker, no menu item.
+    assert 'id="drive-picker"' not in bob_page
+    assert "Upload to Drive" not in bob_page
+
+
+def test_queueing_into_several_folders_at_once(drive, tmp_path):
+    ann = _client("ann@example.com")
+    first = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path, "a.mp4")
+    r = ann.post(
+        "/clone/drive-upload", json={"job_ids": [job], "login_ids": [first, 999]}
+    )
+    assert r.status_code == 400  # one not hers: nothing queued
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [first]})
+    # The suite runs the upload job inline: it is done by the answer.
+    assert [u["status"] for u in r.json()["uploads"]] == ["done"]
 
 
 def test_queueing_returns_only_the_users_own_runs(drive, tmp_path):
@@ -194,11 +216,13 @@ def test_queueing_returns_only_the_users_own_runs(drive, tmp_path):
     bob_login = _account_folder(bob, "bob.ig")
     ann_job = _finished_run("ann@example.com", tmp_path, "a.mp4")
     bob_job = _finished_run("bob@example.com", tmp_path, "b.mp4")
-    bob.post("/clone/drive-upload", json={"job_ids": [bob_job], "login_id": bob_login})
+    bob.post(
+        "/clone/drive-upload", json={"job_ids": [bob_job], "login_ids": [bob_login]}
+    )
 
     r = ann.post(
         "/clone/drive-upload",
-        json={"job_ids": [ann_job, bob_job], "login_id": ann_login},
+        json={"job_ids": [ann_job, bob_job], "login_ids": [ann_login]},
     )
 
     assert r.status_code == 200, r.text
@@ -218,7 +242,7 @@ def test_an_upload_that_cannot_be_queued_fails_and_can_be_retried(
         raise ConnectionError(msg)
 
     monkeypatch.setattr(drive_uploads, "enqueue", redis_down)
-    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert (state["status"], state["error"]) == (
         "failed",
@@ -226,7 +250,7 @@ def test_an_upload_that_cannot_be_queued_fails_and_can_be_retried(
     )
 
     monkeypatch.setattr(drive_uploads, "enqueue", working)
-    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
 
@@ -242,16 +266,16 @@ def test_a_stranded_queued_upload_is_queued_again_once_stale(
     job = _finished_run("ann@example.com", tmp_path)
     working = drive_uploads.enqueue
     monkeypatch.setattr(drive_uploads, "enqueue", lambda *_a, **_k: None)
-    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     monkeypatch.setattr(drive_uploads, "enqueue", working)
 
-    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "queued"  # not stale yet: never doubled
     assert _files_in(drive, "ann.ig - Anna") == []
 
     with time_machine.travel(time.time() + 120):
-        ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+        ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
         [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
     assert len(_files_in(drive, "ann.ig - Anna")) == 1
@@ -269,7 +293,7 @@ def test_any_error_uploading_a_file_fails_that_upload(drive, tmp_path, monkeypat
         raise FileNotFoundError(msg)
 
     monkeypatch.setattr(drive, "upload", vanished)
-    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
 
     assert r.status_code == 200, r.text
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
@@ -295,7 +319,7 @@ def test_dev_never_uploads_into_a_live_root_kept_from_a_prod_copy(drive, tmp_pat
     users.set_drive_root(ann_id, live)
     drive.clear_calls()
 
-    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
 
     assert r.status_code == 200, r.text
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()

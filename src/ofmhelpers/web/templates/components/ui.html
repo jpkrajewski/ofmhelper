@@ -50,6 +50,22 @@
 <summary class="icon-btn" aria-label="{{ label }}">{{ ic.icon(icon) }}</summary>
 {%- endmacro %}
 
+{# A ⋯ menu: the icon button, and its items (`menu_item`s) as the call
+   body. One open at a time; outside click, Escape or picking an item closes
+   it (static/js/menu.js). `hook` adds JS-hook classes.
+   {% call ui.menu("Actions for Phone 01") %}{{ ui.menu_item("Edit", "pencil", "ph-edit") }}{% endcall %} #}
+{% macro menu(label, hook="") -%}
+<details class="menu{{ ' ' ~ hook if hook else '' }}">
+    {{ menu_toggle("ellipsis", label) }}
+    <div class="menu-list">{{ caller() }}</div>
+</details>
+{%- endmacro %}
+
+{# One item of a `menu`: icon + label; `danger` for one that destroys. #}
+{% macro menu_item(label, icon, hook="", danger=false, attrs={}) -%}
+<button type="button" class="menu-item{{ ' menu-item-danger' if danger else '' }}{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}>{{ ic.icon(icon) }} {{ label }}</button>
+{%- endmacro %}
+
 {# The top of every page: title, an optional data line under it (counts,
    who you are -- never an explanation), and its actions on the right:
    {% call ui.page_header("Phones", "11 phones") %}...buttons...{% endcall %} #}

@@ -2,6 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% import "_account_numbers.html" as num %}
 {% import "_icons.html" as ic %}
+{% import "_link_numbers.html" as ln %}
 {% block title %}Accounts — Ascend Global LLC{% endblock %}
 {% block content %}
 {{ ui.page_header("Accounts") }}
@@ -81,6 +82,7 @@
                 {{ sort_th(sorts.VIEWS, "Views · " ~ period.short) }}
                 <th scope="col">Creator</th>
                 <th scope="col">Phone</th>
+                <th scope="col">Links · {{ period.short }}</th>
                 <th scope="col"><span class="sr-only">Analytics</span></th>
             </tr>
         </thead>
@@ -88,9 +90,10 @@
             {% for a in page.rows %}
             {% set views = a.views(period.days) %}
             {% set on_phones = phones.get(a.id, []) %}
+            {% set own_links = links.get(a.id, []) %}
             {% set problem = a.error or ("Private account" if a.status == "private" else "") %}
             <tr data-id="{{ a.id }}" data-status="{{ a.status }}"
-                data-search="{{ (a.handle ~ ' ' ~ a.name ~ ' ' ~ (a.creator or '') ~ ' ' ~ on_phones|map(attribute="label")|join(' ') ~ ' ' ~ on_phones|map(attribute="owner")|join(' '))|lower }}"
+                data-search="{{ (a.handle ~ ' ' ~ a.name ~ ' ' ~ (a.creator or '') ~ ' ' ~ on_phones|map(attribute="label")|join(' ') ~ ' ' ~ on_phones|map(attribute="owner")|join(' ') ~ ' ' ~ own_links|map(attribute="address")|join(' '))|lower }}"
                 {% if problem %}data-problem title="{{ problem }}"{% endif %}>
                 <td class="accounts-pick-cell"><input type="checkbox" class="accounts-pick" aria-label="Select @{{ a.handle }}"></td>
                 <td class="accounts-who-cell">
@@ -121,6 +124,13 @@
                         <span>{{ d.owner or d.label }}</span>
                     </a>
                     {% else %}<span class="pending" data-no-phone>—</span>{% endfor %}
+                </td>
+                <td data-label="Links · {{ period.short }}">
+                    {% for x in own_links %}
+                    <a class="accounts-link" href="/links?account={{ a.id }}#link-{{ x.id }}" title="{{ x.address }}">
+                        <span>{{ x.provider_label }}</span> · {% set n = x.clicks(period.days) %}<strong>{{ num.count(n) }}</strong> click{{ "" if n == 1 else "s" }} <small>{{ ln.pct(x.ctr(period.days)) }} CTR</small>
+                    </a>
+                    {% else %}<span class="pending" data-no-link>—</span>{% endfor %}
                 </td>
                 <td class="accounts-go"><a href="{{ query.link('/accounts/' ~ a.id) }}" aria-label="Analytics of @{{ a.handle }}">View analytics →</a></td>
             </tr>

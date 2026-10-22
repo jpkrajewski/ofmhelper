@@ -2,10 +2,11 @@
 
 How people sign in (`settings.signin`, `OFM_*` in config/settings.py `SignInSettings`). Used by `web/routers/auth.py`, `web/routers/account.py`, `web/stores/users.py`.
 
-- `base.py` — `Provider` protocol (`consent_url`, `exchange`, `identity`, `callback_method`), `Identity`, `SignInError` (message safe to show), `claims` (id-token payload), `checked` (nonce), `token_request` (via `utils.outbound.post`).
+- `base.py` — `Provider` protocol (`consent_url`, `exchange`, `identity`, `callback_method`, `local_consent`, `linkable`), `Identity`, `SignInError` (message safe to show), `claims` (id-token payload), `checked` (nonce), `token_request` (via `utils.outbound.post`).
 - `google.py` — sign-in asks only `openid email profile` (non-sensitive: no "unverified app" screen); connecting on /account (`connect=True`, `/auth/google/start?link=1`) adds the restricted `drive` scope with `access_type=offline` + `prompt=consent` (Google hands out a refresh token only there; that one step shows the unverified warning until a paid CASA assessment); `drive_credentials(refresh_token)` for `gdrive.connect_as`. A new Drive token queues that person's Drive sync (routers/auth.py `_sync_new_drive`).
 - `apple.py` — Sign in with Apple; `response_mode=form_post` (Apple POSTs the callback); client secret = ES256 JWT signed with the .p8 per exchange (`cryptography`, no JWT lib).
 - `passwords.py` — stdlib `hashlib.scrypt` (n=2^17, r=8, p=1; ~128 MiB, OWASP; params stored in the hash), at most `OFM_PASSWORD_HASH_CONCURRENCY` (4) at once per process, constant-time verify, set-password link tokens (only SHA-256 stored).
+- `owner.py` — "Big G Login" (the app owner, 2026-10-22): `APP_PASSWORD_ADMIN` alone, as a provider. Its consent screen is our own page (`/auth/owner/consent`, `local_consent`: under fake externals too), which on the right password redirects to `/auth/owner/callback` with a signed 60 s code of the sign-in's nonce (from the `ofm_signin` cookie) -- same start/callback/state/next/logging as Google. Wrong password = a failed login (rate limit). Identity `owner`/`app-owner` = the password account; `linkable = False` (never on /account, `link_identity` refuses it). Shown only when `APP_PASSWORD_ADMIN` is set.
 - `fake.py` — token endpoints of both, in process (OFM_FAKE_EXTERNALS); consent screens are `/auth/fake-consent`.
 - New provider = one module + one entry in `providers()`.
 
@@ -13,6 +14,7 @@ How people sign in (`settings.signin`, `OFM_*` in config/settings.py `SignInSett
 - Nobody signs up: an admin adds the email on /users (gets a one-time set-password link, 7 days, a new one voids the old). `OFM_ADMIN_EMAILS` always get in as admins (made on the spot).
 - Google/Apple: linked by the provider's `sub` (`user_identities`); first time by verified email. Apple may give a private-relay email: once linked it no longer matters.
 - Email "admin" + `APP_PASSWORD_ADMIN` = the password admin account (break-glass; owns all pre-users data).
+- Every admin way in is that one account (2026-10-22): App owner, "admin"/any `OFM_ADMIN_EMAILS` address + admin password, Google/Apple with any `OFM_ADMIN_EMAILS` address (linked to it even if the identity was linked elsewhere before). No per-email admin users. Its Drive: the last admin Google sign-in's token; without one, the bot in `OFM_GDRIVE_ROOT_FOLDER` (web/drive_folders.py).
 - Session = signed cookie with user id/email/role + `credential_stamp` (digest of the password hash), re-checked every request (deactivated/removed user is out at the next click; role change applies at once; a password change signs out every other session).
 - `OFM_FAKE_EXTERNALS=1` with `OFM_ENV=production` fails settings validation (fake consent signs in as any email).
 - State + nonce + next + link travel in a signed cookie `ofm_signin` (path /auth/, SameSite=None+Secure in prod: Apple's cross-site POST would drop a Lax cookie).

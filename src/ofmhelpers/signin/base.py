@@ -70,6 +70,11 @@ class Provider(Protocol):
     # How the provider returns to /auth/<name>/callback: "GET" (query) or
     # "POST" (Apple's form_post).
     callback_method: str
+    # Its consent screen is this app's own page (the app owner): used under
+    # OFM_FAKE_EXTERNALS too, instead of /auth/fake-consent.
+    local_consent: bool
+    # May be linked to a signed-in person's account (/account).
+    linkable: bool
 
     def configured(self) -> bool: ...
 

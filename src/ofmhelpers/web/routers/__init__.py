@@ -7,7 +7,8 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
   metadata cleaner, their picker page, and the viral-reel finder.
 - `tracking/`   -- social accounts' numbers over time (/accounts, every
-  platform of `ofmhelpers.socials`).
+  platform of `ofmhelpers.socials`) and their short links' clicks (/links,
+  every provider of `ofmhelpers.links`).
 - `inventory/`  -- what the agency owns and signs in with (/phones: the
   physical phones and their logins; /drive: their Instagram accounts'
   folders in the shared Google Drive).
@@ -45,7 +46,7 @@ from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
 from ofmhelpers.web.routers.inventory import drive, phones
-from ofmhelpers.web.routers.tracking import accounts
+from ofmhelpers.web.routers.tracking import accounts, links
 from ofmhelpers.web.routers.video_tools import uniqify
 
 # Order is presentational only -- FastAPI matches on path and no two routers
@@ -71,6 +72,7 @@ ROUTERS = [
     reels.router,
     # tracking/
     accounts.router,
+    links.router,
     # inventory/
     phones.router,
     drive.router,

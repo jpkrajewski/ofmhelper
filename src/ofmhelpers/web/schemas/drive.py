@@ -32,10 +32,18 @@ class DriveTarget(BaseModel):
 
 class UploadTarget(BaseModel):
     """An account folder clone results can go into: an Instagram login's
-    "<handle> - <owner>"."""
+    "<handle> - <owner>", with what the Drive dialog sorts and groups by:
+    its model (the account's /accounts creator), how many files wait there
+    unposted (the folder's last /drive read; None: never read) and its
+    followers."""
 
     login_id: int
     folder_name: str
+    handle: str = ""
+    owner: str = ""
+    creator: str | None = None
+    waiting: int | None = None
+    followers: int | None = None
 
 
 class DriveUpload(BaseModel):
@@ -52,11 +60,11 @@ class DriveUpload(BaseModel):
 
 
 class UploadRequest(BaseModel):
-    """/clone "Upload to Drive": these jobs' results into that login's
-    folder."""
+    """/clone "Upload to Drive": these jobs' results into each of these
+    logins' folders."""
 
     job_ids: list[str] = Field(min_length=1, max_length=200)
-    login_id: int
+    login_ids: list[int] = Field(min_length=1, max_length=50)
 
 
 class UploadsQueued(BaseModel):

@@ -15,7 +15,15 @@ anywhere else, so a dev copy never touches the live folders -- found by
 name (any case: a hand-made "all accounts" is adopted with everything in
 it) or made, and kept by id (`users.drive_root_id`). An owner who never
 connected Google Drive is listed in `SyncReport.not_connected` and their
-cards say so; nothing is made for them.
+cards say so; nothing is made for them -- except the agency admin (the
+password account), who is read through the Drive bot (the service account,
+`settings.gdrive.service_account`) in the configured root
+(`OFM_GDRIVE_ROOT_FOLDER`, prod's "ALL ACCOUNTS", shared with the bot)
+until they sign in with Google: /drive keeps showing the agency's folders
+however the admin signed in. Only that folder is used then -- none is
+searched for or made in the bot's own Drive -- and outside production only
+when it is named `root_name()`. Uploads still need a Google sign-in (the bot
+has no storage).
 
 The sweep (`sync`: `drive_loop` every `check_interval_s`, and the page's
 Sync button), under one Postgres advisory lock (`store.sync_lock`; a
@@ -59,7 +67,9 @@ from ofmhelpers.gdrive import (
     DriveFile,
     DriveFolder,
     FolderGoneError,
+    connect,
     connect_as,
+    service_account_email,
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.signin import SignInError
@@ -93,10 +103,33 @@ def root_name() -> str:
     return _ROOT_NAME if settings.infra.production else f"{_DEV_PREFIX}{_ROOT_NAME}"
 
 
+def _bot_root(user_id: int) -> str | None:
+    """The configured root the Drive bot reads for `user_id` instead of
+    their own Drive: only the agency admin's, only without a Google token,
+    only when the bot and the root are both configured."""
+    s = settings.gdrive
+    if not (s.service_account and s.root_folder_id):
+        return None
+    if users.refresh_token(user_id):
+        return None
+    agency = users.get_user(user_id)
+    return s.root_folder_id if agency and agency.is_password_account else None
+
+
 def _person_drive(user_id: int, *, interactive: bool = False) -> DriveApi | None:
-    """The owner's own Drive, or None when they never connected Google."""
+    """The owner's own Drive; for the agency admin without Google, the Drive
+    bot in the configured root (`_bot_root`, kept as their root); None when
+    neither."""
     token = users.refresh_token(user_id)
-    return connect_as(token, interactive=interactive) if token else None
+    if token:
+        return connect_as(token, interactive=interactive)
+    root = _bot_root(user_id)
+    if root is None:
+        return None
+    user = users.get_user(user_id)
+    if user is not None and user.drive_root_id != root:
+        users.set_drive_root(user_id, root)
+    return connect(interactive=interactive)
 
 
 def _owner_label(user_id: int) -> str:
@@ -146,6 +179,14 @@ def ensure_root(drive: DriveApi, user_id: int) -> str:
     stored = usable_root(drive, user_id)
     if stored:
         return stored
+    if _bot_root(user_id) is not None:
+        # The bot's own Drive is no place for the agency's folders.
+        msg = (
+            "The Drive bot cannot use OFM_GDRIVE_ROOT_FOLDER: share it with"
+            f" {service_account_email()}"
+            + ("" if settings.infra.production else f" and name it {root_name()}")
+        )
+        raise DriveError(msg)
     wanted = root_name().casefold()
     named = [
         f
@@ -676,7 +717,7 @@ def board(
             " empty in .env."
         )
         return result
-    if me is not None and not me.drive_connected:
+    if me is not None and not me.drive_connected and _bot_root(me.id) is None:
         result.problem = (
             f"Your phones' folders live in your own Google Drive ({root_name()})."
             " Connect it once and they are made for you."

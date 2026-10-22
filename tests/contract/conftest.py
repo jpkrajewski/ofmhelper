@@ -19,21 +19,31 @@ from ofmhelpers.config.settings import (
     HiggsfieldSettings,
     InstagramSettings,
     KieAISettings,
+    LinksSettings,
 )
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.fake import _fake_drive
 from ofmhelpers.instagram.fake import fake_instagram
+from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.utils import fake_media, outbound
 
 FAKE = "fake"
 REAL = "real"
-_REAL_SETTINGS = (GDriveSettings, HiggsfieldSettings, InstagramSettings, KieAISettings)
+_REAL_SETTINGS = (
+    GDriveSettings,
+    HiggsfieldSettings,
+    InstagramSettings,
+    KieAISettings,
+    LinksSettings,
+)
 
 
 def _reset_fakes() -> None:
     for cached in (
         outbound._routes,
         fake_instagram,
+        _fake_oopsie,
+        _fake_bouncy,
         fake_kie,
         fake_higgsfield,
         _fake_drive,

@@ -80,7 +80,7 @@
                 <small>{% if chart.daily %}{{ chart.span_days }} {{ "day" if chart.span_days == 1 else "days" }}{% else %}{{ chart.points|length }} syncs{% endif %}</small>
             </div>
         </div>
-        {# Positions are data: inline --x/--y, like _clone_batch.html's hue. #}
+        {# Positions are data: inline --x/--y custom properties. #}
         {# djlint:off H021 #}
         <div class="fchart-body">
             <div class="fchart-y" aria-hidden="true">

@@ -21,11 +21,13 @@ lists them in RETIRED_TABLES so autogenerate never proposes dropping them.
 
 from __future__ import annotations
 
+from datetime import date  # noqa: TC003 -- SQLAlchemy reads Mapped[] at runtime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     Float,
     ForeignKey,
     Index,
@@ -530,3 +532,78 @@ class DrivePostedFileRow(Base):
     __table_args__ = (
         Index("ix_drive_posted_files_login_seen", "login_id", "first_seen_at"),
     )
+
+
+class ShortLinkRow(Base):
+    """A link on a link provider (/links): one we made ("Generate links":
+    one per Instagram account, `account_id`) or one the provider listed on
+    a sync. `remote_id` is the provider's id for it (NULL while still
+    being made); `status`: creating | active | inactive | failed |
+    deleting. `adult`: visitors confirm 18+ first (NULL: the provider does
+    not say). A link the provider no longer lists is deleted here too."""
+
+    __tablename__ = "short_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    remote_id: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    slug: Mapped[str] = mapped_column(String(64), nullable=False)
+    domain: Mapped[str] = mapped_column(String(253), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    destination: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    creator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("creators.id", ondelete="SET NULL"), nullable=True
+    )
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tracked_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "provider", "domain", "slug", name="uq_short_links_address"
+        ),
+        UniqueConstraint(
+            "user_id", "provider", "remote_id", name="uq_short_links_remote"
+        ),
+        Index("ix_short_links_account_id", "account_id"),
+    )
+
+
+class ShortLinkDayRow(Base):
+    """One UTC day of one link's numbers, as its provider reports them:
+    landing views and clicks through. Rewritten by every sync."""
+
+    __tablename__ = "short_link_days"
+
+    link_id: Mapped[int] = mapped_column(
+        ForeignKey("short_links.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    views: Mapped[int] = mapped_column(Integer, nullable=False)
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class LinkSyncRow(Base):
+    """A user's account on a link provider, as the sweeper keeps it: when it
+    was last synced (or claimed by a sync), the last sync's error, and the
+    plan's quota then (`links.Usage`)."""
+
+    __tablename__ = "link_syncs"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), primary_key=True)
+    synced_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

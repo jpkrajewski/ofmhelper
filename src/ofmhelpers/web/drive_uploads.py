@@ -28,30 +28,65 @@ from ofmhelpers.cache import enqueue
 from ofmhelpers.gdrive import DriveError, connect_as
 from ofmhelpers.log import get_logger
 from ofmhelpers.signin import SignInError
+from ofmhelpers.socials import get_platform
 from ofmhelpers.web.download_names import download_name
 from ofmhelpers.web.drive_folders import root_name, usable_root
 from ofmhelpers.web.schemas import DriveUpload, SessionUser, StoredFolder, UploadTarget
 from ofmhelpers.web.stores import drive_folders
 from ofmhelpers.web.stores import drive_uploads as store
 from ofmhelpers.web.stores.jobs import get_job
+from ofmhelpers.web.stores.tracked_accounts import list_accounts
 from ofmhelpers.web.stores.users import refresh_token
 
 logger = get_logger(__name__)
+
+# The platform an account folder's login is on (its model comes from there).
+_PLATFORM = "instagram"
 
 
 class UploadRefusedError(ValueError):
     """Nothing was queued; the message says why (shown on the page)."""
 
 
+def _creators(owner: int | None) -> dict[str, str]:
+    """handle -> creator of `owner`'s tracked Instagram accounts."""
+    return {
+        a.handle: a.creator
+        for a in list_accounts(owner)
+        if a.platform == _PLATFORM and a.creator
+    }
+
+
+def _handle(username: str) -> str:
+    try:
+        return get_platform(_PLATFORM).handle(username)
+    except (KeyError, ValueError):
+        return username
+
+
 def targets(owner: int | None) -> list[UploadTarget]:
-    """The account folders `owner` may upload into:
-    their phones' Instagram logins that have a folder."""
+    """The account folders `owner` may upload into: their phones' Instagram
+    logins that have a folder, each with its model, waiting files and
+    followers."""
     folders = drive_folders.account_folders()
-    return [
-        UploadTarget(login_id=t.login_id, folder_name=t.folder_name)
-        for t in drive_folders.targets(owner)
-        if t.login_id in folders
-    ]
+    creators = _creators(owner)
+    found = []
+    for t in drive_folders.targets(owner):
+        folder = folders.get(t.login_id)
+        if folder is None:
+            continue
+        found.append(
+            UploadTarget(
+                login_id=t.login_id,
+                folder_name=t.folder_name,
+                handle=t.handle,
+                owner=t.owner,
+                creator=creators.get(_handle(t.handle)),
+                waiting=len(folder.scan.waiting) if folder.scan else None,
+                followers=t.followers,
+            )
+        )
+    return found
 
 
 def _folder_owner(login_id: int) -> int | None:
@@ -73,28 +108,27 @@ def _files(job_id: str, actor: str | None) -> list[tuple[int, Path]]:
 
 
 def queue_uploads(
-    user: SessionUser, job_ids: list[str], login_id: int
+    user: SessionUser, job_ids: list[str], login_ids: list[int]
 ) -> list[DriveUpload]:
-    """Queues every result of `job_ids` into `login_id`'s folder. Raises
-    `UploadRefusedError`."""
-    mine = next(
-        (t for t in drive_folders.targets(user.id) if t.login_id == login_id), None
-    )
-    if mine is not None and not refresh_token(user.id):
+    """Queues every result of `job_ids` into each of `login_ids`' folders,
+    all or nothing. Raises `UploadRefusedError`."""
+    mine = {t.login_id for t in drive_folders.targets(user.id)}
+    if mine & set(login_ids) and not refresh_token(user.id):
         msg = "Connect Google Drive on your Account page first"
         raise UploadRefusedError(msg)
-    target = next((t for t in targets(user.id) if t.login_id == login_id), None)
-    if mine is None or target is None:
+    usable = {t.login_id: t for t in targets(user.id)}
+    if not set(login_ids) <= mine or not set(login_ids) <= set(usable):
         msg = "That account has no Drive folder you can upload into: Sync on /drive"
         raise UploadRefusedError(msg)
     actor = user.actor
     ids = [
         upload_id
+        for login_id in dict.fromkeys(login_ids)
         for job_id in job_ids
         for index, _path in _files(job_id, actor)
         if (
             upload_id := store.queue(
-                job_id, index, login_id, user.id, target.folder_name
+                job_id, index, login_id, user.id, usable[login_id].folder_name
             )
         )
         is not None

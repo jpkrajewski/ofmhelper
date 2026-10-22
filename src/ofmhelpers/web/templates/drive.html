@@ -12,6 +12,10 @@
         {{ ic.icon("search") }}
         <input type="search" id="dr-search" placeholder="Search accounts, people, phones…" aria-label="Search accounts" autocomplete="off">
     </label>
+    <div class="ph-layout" role="group" aria-label="Layout" data-layout-key="drive-layout">
+        {{ ui.icon_button("grid", "Grid", attrs={"data-layout": "grid", "aria-pressed": "true"}) }}
+        {{ ui.icon_button("list", "List", attrs={"data-layout": "list", "aria-pressed": "false"}) }}
+    </div>
     <div class="toolbar-actions">
         {% if board.root_url %}{{ ui.button("Open in Drive", href=board.root_url, icon="folder", attrs={"target": "_blank", "rel": "noopener"}) }}{% endif %}
         {{ ui.button("Sync", "primary", icon="refresh", attrs={"id": "dr-sync", "disabled": board.problem and not board.cards}) }}
@@ -22,5 +26,6 @@
 {% include "_drive_board.html" %}
 </div>
 
+<script src="{{ static_url('js/layout.js') }}"></script>
 <script src="{{ static_url('js/drive.js') }}"></script>
 {% endblock %}

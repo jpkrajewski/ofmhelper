@@ -2,7 +2,8 @@
 /accounts: social accounts of any registered platform (`socials.platforms()`)
 with their followers, follower growth and views over one reporting period
 (`settings.accounts.periods_days`, picked on the page), last sync, a
-creator and the phones signed in to it (/phones logins); KPI totals over the filtered list on top. Search,
+creator, the phones signed in to it (/phones logins) and its short links'
+clicks and CTR (/links); KPI totals over the filtered list on top. Search,
 filters, period, sort and paging are the query string
 (`schemas.AccountQuery`), so every view is a link. `/accounts/{id}` is one
 account's analytics for the same period.
@@ -34,6 +35,7 @@ from ofmhelpers.web.schemas import (
     SelectedAccounts,
 )
 from ofmhelpers.web.stores.devices import phones_by_account
+from ofmhelpers.web.stores.short_links import links_by_account
 from ofmhelpers.web.stores.tracked_accounts import (
     assign_creator,
     get_account,
@@ -79,6 +81,7 @@ def index(request: Request, query: Annotated[AccountQuery, Query()]):
         "accounts.html",
         page=page,
         phones=phones_by_account(page.rows, scope),
+        links=links_by_account(scope),
         summary=AccountSummary.of(matching, period.days),
         query=query,
         period=period,

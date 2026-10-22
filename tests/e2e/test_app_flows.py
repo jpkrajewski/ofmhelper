@@ -1,10 +1,10 @@
 """End to end, in a real browser against the app the suite starts, every
 outside service faked (see conftest.py):
 log in, open every page, make a fake asset and download it, carry picked
-files across providers' models, run a clone batch with a wrong kie.ai key, price a clone pick live,
+files across providers' models, run clones with a wrong kie.ai key, price a clone pick live,
 click through every /reels filter and download three reels, track an
-Instagram account on /accounts end to end, add a phone with a login on
-/phones and export it."""
+Instagram account on /accounts end to end, generate 18+ gated links for it
+on /links, add a phone with a login on /phones and export it."""
 
 import re
 import zipfile
@@ -27,6 +27,7 @@ VA_PAGES = [
     "/reels",
     "/download-assets",
     "/accounts",
+    "/links",
     "/phones",
     "/drive",
     "/uniqify",
@@ -179,7 +180,8 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
     with va.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
         va.page.click('#generate-form button[type="submit"]')
     card = f'.result-item[data-job-id="{run.value.json()["job_id"]}"]'
-    expect(va.page.locator(f"{card} .recreate-btn")).to_be_visible(
+    # A finished card: Download, Recreate in its ⋯ menu.
+    expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
         timeout=RESULT_TIMEOUT_MS
     )
 
@@ -193,12 +195,17 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
         route.continue_()
 
     va.page.route("**/ai/fields?*", slow_fields)
-    va.page.locator(f"{card} .recreate-btn").click()
+
+    def recreate() -> None:
+        va.page.locator(f"{card} .menu summary").click()
+        va.page.locator(f"{card} .recreate-btn").click()
+
+    recreate()
     # While the fields are still on their way: already the job's prompt.
     assert va.page.input_value('textarea[name="prompt"]') == prompt
 
     for _ in range(25):
-        va.page.locator(f"{card} .recreate-btn").click()
+        recreate()
     expect(va.page.locator('#model-fields [name="delay"]')).to_be_visible()
     expect(va.page.locator('textarea[name="prompt"]')).to_have_value(prompt)
     assert va.page.input_value("#model-select") == "fake:image"
@@ -243,7 +250,7 @@ def test_picked_files_survive_a_model_switch(va: Session, subject_images: list[P
     assert va.js_errors == []
 
 
-def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
+def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     va: Session,
     coworker: Session,
     subject_images: list[Path],
@@ -264,27 +271,28 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
         va.page.click('#clone-form button[type="submit"]')
     body = run.value.json()
     assert len(body["job_ids"]) == len(source_videos)
-    batch_id = re.search(r'data-batch="([^"]+)"', body["html"]).group(1)
-
-    batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
-    title = va.page.locator(f"{batch} .clone-batch-title")
-    expect(title).to_contain_text("2 videos")
-    expect(va.page.locator(batch)).to_have_count(1)  # no duplicate batch
-    expect(coworker.page.locator(batch)).to_have_count(1, timeout=LIVE_TIMEOUT_MS)
+    cards = ", ".join(f'#clone-gallery > [data-job-id="{j}"]' for j in body["job_ids"])
+    expect(va.page.locator(cards)).to_have_count(len(source_videos))  # no duplicates
+    expect(coworker.page.locator(cards)).to_have_count(
+        len(source_videos), timeout=LIVE_TIMEOUT_MS
+    )
 
     # kie.ai rejects the key at the first upload: every run fails with it,
     # and nothing is generated or paid for.
     # The card shows the short reason; the provider's message is its title.
-    failed = va.page.locator(
-        f'{batch} .result-failed[title*="kie.ai: wrong API key"]',
-        has_text="Wrong API key",
+    failed = va.page.locator("#clone-gallery .result-failed").filter(
+        has_text="Wrong API key"
     )
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
+    expect(failed.first).to_have_attribute("title", re.compile("kie.ai: wrong API key"))
 
-    # Recreate brings the whole batch back without re-uploading.
-    va.page.locator(f"{batch} .batch-recreate-btn").click()
+    # A failed card's one action is Recreate: the images and its video back,
+    # without re-uploading.
+    first = va.page.locator(f'#clone-gallery > [data-job-id="{body["job_ids"][0]}"]')
+    expect(first.locator(".result-actions .menu")).to_have_count(0)
+    first.locator(".recreate-btn").click()
     expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
-    expect(va.page.locator('.file-picker[data-field="videos"] li')).to_have_count(2)
+    expect(va.page.locator('.file-picker[data-field="videos"] li')).to_have_count(1)
 
     assert va.js_errors == []
     assert coworker.js_errors == []
@@ -429,12 +437,9 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
         va.page.click('#clone-form button[type="submit"]')
     body = run.value.json()
     assert len(body["job_ids"]) == len(picked)
-    batch_id = re.search(r'data-batch="([^"]+)"', body["html"]).group(1)
-
-    batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
     # Higgsfield is the default provider; the wrong key fails on it.
     failed = va.page.locator(
-        f'{batch} .result-failed[title*="Higgsfield: wrong API key"]',
+        '#clone-gallery .result-failed[title*="Higgsfield: wrong API key"]',
         has_text="Wrong API key",
     )
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
@@ -591,6 +596,64 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
     assert va.js_errors == []
 
 
+def test_links_are_generated_for_a_models_accounts_and_deleted(admin: Session):
+    admin.goto("/accounts")
+    admin.page.click("#accounts-add-open")
+    admin.page.fill("#accounts-add-handles", f"@{TRACKED_ACCOUNT}")
+    admin.page.fill("#accounts-add-creator", "e2e model")
+    admin.page.click('#accounts-add-form button[type="submit"]')
+    account = admin.page.locator(
+        "#accounts-table tbody tr", has_text=f"@{TRACKED_ACCOUNT}"
+    )
+    expect(account).to_have_count(1, timeout=SCAN_TIMEOUT_MS)
+
+    admin.goto("/links")
+    admin.page.click("#links-generate-open")
+    picks = admin.page.locator("#links-gen-accounts label:not([hidden])")
+    expect(picks).to_have_count(0)
+    # Picking the model shows and picks its Instagram accounts.
+    admin.page.select_option("#links-gen-creator", "e2e model")
+    expect(picks).to_have_count(1)
+    expect(picks.first.locator("input")).to_be_checked()
+    admin.page.select_option("#links-gen-provider", "bouncy")
+    expect(admin.page.locator("#links-gen-domain")).to_have_value("bouncy.ai")
+    # Picking a target fills in its prefix; anything else is refused as typed.
+    destination = admin.page.locator("#links-gen-destination")
+    problem = admin.page.locator("#links-gen-destination-problem")
+    admin.page.select_option("#links-gen-target", "stacked")
+    expect(destination).to_have_value("https://www.stacked.com/@")
+    admin.page.select_option("#links-gen-target", "fanvue")
+    expect(destination).to_have_value("https://www.fanvue.com/")
+    admin.page.click('#links-generate-form button[type="submit"]')
+    expect(problem).to_have_text("Add the Fanvue profile after https://www.fanvue.com/")
+    destination.fill("https://onlyfans.com/wrong-page")
+    expect(problem).to_have_text("Not a Fanvue link")
+    destination.fill("some bs")
+    expect(problem).to_have_text("Paste the Fanvue profile link")
+    destination.fill("https://www.fanvue.com/e2e")
+    expect(problem).to_be_hidden()
+    admin.page.click('#links-generate-form button[type="submit"]')
+
+    row = admin.page.locator("#links-table tbody tr", has_text=f"@{TRACKED_ACCOUNT}")
+    expect(row).to_have_count(1, timeout=SCAN_TIMEOUT_MS)
+    expect(row).to_have_attribute("data-status", "active", timeout=SCAN_TIMEOUT_MS)
+    expect(row).to_contain_text("bouncy.ai/")
+    expect(row.locator('td[data-label="Model"]')).to_have_text("e2e model")
+    expect(row).not_to_contain_text("No 18+")
+
+    admin.goto("/accounts")
+    expect(account.locator('td[data-label^="Links"]')).to_contain_text("Bouncy")
+
+    admin.goto("/links")
+    row.locator(".links-pick").check()
+    expect(admin.page.locator("#links-bulk")).to_be_visible()
+    admin.page.once("dialog", lambda d: d.accept())
+    admin.page.click("#links-bulk-delete")
+    expect(row).to_have_count(0, timeout=SCAN_TIMEOUT_MS)
+
+    assert admin.js_errors == []
+
+
 def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
     admin: Session, va: Session
 ):
@@ -648,7 +711,7 @@ def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
     # Clean up through the menu: delete the phone (its only login goes too).
     admin.goto("/phones")
     admin.page.on("dialog", lambda d: d.accept())
-    card.locator(".ph-menu summary").click()
+    card.locator(".menu summary").click()
     with admin.page.expect_navigation():
         card.locator(".ph-delete").click()
     expect(admin.page.locator(".ph-card", has_text=label)).to_have_count(0)
@@ -707,7 +770,7 @@ def test_drive_page_lists_accounts_searches_and_syncs(
         admin.page.fill("#dr-search", query)
         expect(visible).to_have_count(len(shown))
         for handle in shown:
-            expect(visible.locator("h2")).to_have_text(handle)
+            expect(visible.locator(".dr-account")).to_have_text(f"@{handle}")
     admin.page.fill("#dr-search", "")
     expect(visible).to_have_count(2)
 
@@ -764,13 +827,13 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     assert admin.js_errors == []
 
 
-def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
+def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     va: Session, fake_drive: FakeDrive, source_videos: list[Path], jobs_idle
 ):
     """Google Drive connected on /account, a phone of theirs with an
     Instagram login (its folder made by Sync), a finished clone run:
-    "Upload batch" puts the video in that folder and the card says
-    where it went."""
+    the card's ⋯ menu -> "Upload to Drive" -> the picker puts the video in
+    that folder, and the card says where it went."""
     from ofmhelpers.web.stores.jobs import create_job, run_job
 
     connect_google(va, "va.google@example.com")
@@ -798,17 +861,25 @@ def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
         "duration": 3,
         "reference_images": [],
         "reference_videos": [str(video)],
-        "clone_batch": "e2e-upload",
-        "clone_index": 0,
     }
     job_id = create_job("clone", params, actor=str(va_id))
     run_job(job_id, lambda: [{"name": video.name, "path": str(video)}], {})
 
     va.goto("/clone")
-    batch = va.page.locator('.clone-batch[data-batch="e2e-upload"]')
-    batch.locator(".drive-target").select_option(label="vee.ig - Vee")
-    batch.locator('.drive-upload-btn[data-scope="batch"]').click()
-    done = batch.locator('.drive-states li[data-status="done"]')
+    card = va.page.locator(f'#clone-gallery > [data-job-id="{job_id}"]')
+    # A finished card: Download first, the rest in its ⋯ menu.
+    expect(card.locator(".result-actions .download-btn")).to_be_visible()
+    card.locator(".menu summary").click()
+    card.locator(".drive-upload-btn").click()
+    picker = va.page.locator("#drive-picker")
+    expect(picker).to_be_visible()
+    submit = picker.locator("#drive-picker-submit")
+    expect(submit).to_be_disabled()
+    picker.locator('.drive-pick:has-text("vee.ig") input').check()
+    expect(submit).to_have_text("Upload to 1 account")
+    submit.click()
+    expect(picker).to_be_hidden()
+    done = card.locator('.drive-states li[data-status="done"]')
     expect(done).to_contain_text("In Drive: vee.ig - Vee", timeout=RESULT_TIMEOUT_MS)
 
     (folder,) = fake_drive.named(

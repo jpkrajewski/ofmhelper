@@ -9,7 +9,7 @@
    keeps a card short however many logins. #}
 {% set visible_logins = 2 %}
 
-{{ ui.page_header("Phones", total ~ " phone" ~ ("" if total == 1 else "s") ~ " · " ~ logins ~ " login" ~ ("" if logins == 1 else "s")) }}
+{{ ui.page_header("Phones (" ~ total ~ ")") }}
 
 <div class="ph-toolbar">
     <label class="ph-search">
@@ -24,7 +24,7 @@
         </select>
         <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
     </form>
-    <div class="ph-layout" role="group" aria-label="Layout">
+    <div class="ph-layout" role="group" aria-label="Layout" data-layout-key="phones-layout">
         {{ ui.icon_button("grid", "Grid", attrs={"data-layout": "grid", "aria-pressed": "true"}) }}
         {{ ui.icon_button("list", "List", attrs={"data-layout": "list", "aria-pressed": "false"}) }}
     </div>
@@ -83,18 +83,15 @@
                 <p class="ph-specs">{{ d.specs }}</p>
             </div>
             {% if can_edit %}
-            <details class="ph-menu">
-                {{ ui.menu_toggle("ellipsis", "Actions for " ~ d.label) }}
-                <div class="ph-menu-list">
-                    {% if d.retired %}
-                    <button type="button" class="ph-restore">{{ ic.icon("restore") }} Restore</button>
-                    {% else %}
-                    <button type="button" class="ph-edit">{{ ic.icon("pencil") }} Edit</button>
-                    <button type="button" class="ph-retire">{{ ic.icon("archive") }} Retire</button>
-                    {% endif %}
-                    <button type="button" class="ph-delete">{{ ic.icon("trash") }} Delete</button>
-                </div>
-            </details>
+            {% call ui.menu("Actions for " ~ d.label) %}
+                {% if d.retired %}
+                {{ ui.menu_item("Restore", "restore", "ph-restore") }}
+                {% else %}
+                {{ ui.menu_item("Edit", "pencil", "ph-edit") }}
+                {{ ui.menu_item("Retire", "archive", "ph-retire") }}
+                {% endif %}
+                {{ ui.menu_item("Delete", "trash", "ph-delete", danger=true) }}
+            {% endcall %}
             {% endif %}
         </div>
         <p class="ph-meta">
@@ -245,5 +242,6 @@
 </dialog>
 {% endif %}
 
+<script src="{{ static_url('js/layout.js') }}"></script>
 <script src="{{ static_url('js/phones.js') }}"></script>
 {% endblock %}

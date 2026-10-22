@@ -72,35 +72,11 @@ details {
 summary { cursor: pointer; font-weight: 600; }
 summary:hover { color: var(--accent-soft); }
 
-/* /clone batches (templates/_clone_batch.html): one card per submit; the
-   card itself groups its runs. */
-.clone-batch {
-    margin-bottom: var(--gap-grid);
-    padding: var(--pad-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-}
-.clone-batch .results { margin-top: var(--gap-stack); }
-.clone-batch-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
-.clone-batch-thumb {
-    width: 56px;
-    height: 56px;
-    flex: none;
-    object-fit: cover;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-}
-.clone-batch-title { flex: 1 1 160px; min-width: 0; margin: 0; font-weight: 600; }
-
 /* Select + switch pairs on a grid: every select gets the widest one's
    width, so the switches line up in one column. */
 .clone-output-row { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: var(--s-3) var(--s-5); }
 .clone-output-row select { min-width: 120px; }
 .clone-output-row .check-field { margin: 0; font-weight: 500; color: var(--text-muted); }
-.clone-batch-uploading progress { width: 100%; margin-top: var(--s-2); accent-color: var(--accent); }
 
 /* Live cost estimate above a paid submit (/clone, static/js/clone-cost.js):
    one line per run, the total as the panel's anchor. Figures use tabular
@@ -521,7 +497,8 @@ summary:hover { color: var(--accent-soft); }
 .accounts-actions[hidden] { display: none; }
 .accounts-bulk-count { font-weight: 600; }
 .accounts-actions-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
-.accounts-actions-controls input { width: 180px; min-height: 34px; }
+.accounts-actions-controls input,
+.accounts-actions-controls select { width: 180px; min-height: 34px; }
 .accounts-actions-controls button { min-height: 34px; }
 .accounts-bulk-remove { color: var(--fail); }
 .accounts-table-wrap { border-color: var(--border-soft); }
@@ -795,6 +772,26 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-fold[open] > summary::before { content: "\25BE  "; }
 .accounts-fold[open] > summary { margin-bottom: var(--s-3); }
 
+/* ---- Links (/links, static/js/links.js; the accounts list classes) ----
+   Same filter row, selection card, table and dialog as /accounts. */
+.links-address { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.links-address .accounts-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-picker { margin: 0; }
+.links-pick-all { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); font-weight: 600; }
+.links-accounts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--s-2) var(--s-3);
+    max-height: 220px;
+    overflow-y: auto;
+}
+.links-accounts label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--step--1); }
+.links-accounts label[hidden] { display: none; }
+/* /accounts' Links column: each link of the account, its clicks and CTR. */
+.accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; white-space: nowrap; }
+.accounts-link:hover span { text-decoration: underline; }
+.accounts-link small { color: var(--text-faint); }
+
 /* ---------------------------------------------------------------------
    /phones: device-first cards. The product photo anchors each card; the
    logins are flat rows inside it (no box per login), secrets masked, row
@@ -909,39 +906,6 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .ph-title h2 { margin: 0; font-size: var(--step-0); font-weight: 650; letter-spacing: -0.01em; }
 .ph-specs { margin: 2px 0 0; color: var(--text-muted); font-size: var(--step--1); }
 .ph-meta { display: flex; flex-wrap: wrap; gap: 2px var(--s-3); margin: var(--s-2) 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }
-
-/* Not the card the base `details` rule draws. */
-.ph-menu { position: relative; flex: none; margin: 0; padding: 0; border: 0; background: none; }
-.ph-menu-list {
-    position: absolute;
-    right: 0;
-    z-index: 5;
-    display: grid;
-    min-width: 160px;
-    margin-top: var(--s-1);
-    padding: var(--s-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    background: var(--surface-2);
-    box-shadow: var(--shadow);
-}
-.ph-menu-list button {
-    display: flex;
-    align-items: center;
-    gap: var(--s-2);
-    height: var(--control-h-sm);
-    min-height: 0;
-    padding: 0 var(--s-3);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text);
-    font-size: var(--step--1);
-    text-align: left;
-    cursor: pointer;
-}
-.ph-menu-list button:hover, .ph-menu-list button:focus-visible { background: var(--surface-3); }
-.ph-menu-list .ph-delete { color: var(--fail); }
 
 /* Logins: flat rows split by a hairline. */
 .ph-logins { margin: 0; padding: 0; list-style: none; }
@@ -1060,28 +1024,12 @@ a.ph-login-user:hover { text-decoration: underline; }
    (square preview tiles) and what was posted. Nothing waiting says so in
    warn color, the thing to chase.
    --------------------------------------------------------------------- */
-.dr-grid {
-    display: grid;
-    gap: var(--gap-grid);
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-    align-items: stretch;
-}
-.dr-card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--gap-stack);
-    padding: var(--pad-card);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius-card);
-    background: var(--surface);
-}
-.dr-card[hidden] { display: none; }
-.dr-card-head { display: flex; align-items: center; gap: var(--s-3); }
-.dr-phone { flex: none; display: inline-flex; }
-.dr-phone img { width: 20px; height: 38px; }
-.dr-title { flex: 1; min-width: 0; }
-.dr-title h2 { margin: 0; overflow: hidden; font-size: var(--step-0); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.dr-title p { margin: 2px 0 0; color: var(--text-faint); font-size: var(--step--1); }
+/* A /drive card is a /phones card (.ph-card): its body stacks the account
+   and its Drive folder where /phones lists logins. */
+.dr-card .ph-media { display: block; }
+.dr-body { display: flex; flex-direction: column; gap: var(--s-2); }
+.dr-body .ph-meta { margin: 0; }
+.dr-account { margin: 0; font-weight: 600; font-size: var(--step--1); }
 .dr-note { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
 .dr-missing { color: var(--warn); }
 .dr-error { color: var(--fail); }
@@ -1203,14 +1151,30 @@ a.ph-login-user:hover { text-decoration: underline; }
 .account-form > button, .account-key > button { justify-self: start; }
 .account-key > button[type="submit"]:not([name]) { justify-self: start; }
 
-/* /clone: "Upload to Drive" (web/drive_uploads.py) */
-.clone-drive { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
 /* "Connect Google Drive" notices (/drive, /clone): the text, then the action. */
 .drive-connect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
-/* Folder picker + upload button: a plain select and a plain button. */
-.drive-pick { display: inline-flex; align-items: center; gap: var(--gap-inline); max-width: 100%; }
-.drive-pick .drive-target { width: auto; min-width: 14ch; max-width: 30ch; text-overflow: ellipsis; }
-.drive-note { flex-basis: 100%; margin: 0; color: var(--fail); font-size: var(--step--1); }
+/* /clone "Upload to Drive" picker (clone.html #drive-picker, clone.js):
+   search + model filter, then one row per account folder, fewest files
+   waiting first. */
+.drive-picker-tools { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-bottom: var(--s-3); }
+.drive-picker-tools input[type="search"] { flex: 1 1 180px; min-width: 0; }
+.drive-picker-tools select { width: auto; }
+.drive-picker-list { display: grid; gap: var(--s-1); max-height: 320px; margin-bottom: var(--s-3); overflow-y: auto; }
+.drive-pick {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--radius-sm);
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+.drive-pick:hover { background: var(--surface-3); }
+.drive-pick[hidden] { display: none; }
+.drive-pick small { color: var(--text-faint); }
+.drive-pick-waiting { color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.drive-pick-done { grid-column: 2 / -1; color: var(--ok); }
 .drive-states { margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--step--1); }
 .drive-states li[data-status="failed"] { color: var(--fail); }
 .drive-states li[data-status="done"] { color: var(--ok); }

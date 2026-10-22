@@ -200,12 +200,6 @@ class WebSettings(BaseSettings):
     clone_probe_workers: int = Field(
         default=8, ge=1, validation_alias="OFM_CLONE_PROBE_WORKERS"
     )
-    clone_gallery_limit: int = Field(
-        default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
-    )
-    # Recent finished runs per provider+resolution the /clone time estimate
-    # takes its median from (web/clone_eta.py).
-    clone_eta_runs: int = Field(default=30, ge=1, validation_alias="OFM_CLONE_ETA_RUNS")
     # The /clone form's live cost estimate: credits one clone run costs per
     # second of its source video, by resolution. Measured from this
     # account's Wan 3.0 history (2026-10-17: 81 runs at 720P, 14 at 1080P;
@@ -777,6 +771,80 @@ class TelemetrySettings(BaseSettings):
         return None if isinstance(value, str) and not value.strip() else value
 
 
+class LinksSettings(BaseSettings):
+    """ofmhelpers/links, web/link_sync.py, routers/tracking/links.py: short
+    links on link providers (Oopsie, Bouncy). A user's own key (/account)
+    wins; an admin with none runs on the `*_API_KEY_ADMIN` one."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    oopsie_api_key_admin: str | None = Field(
+        default=None, validation_alias="OOPSIE_API_KEY_ADMIN"
+    )
+    bouncy_api_key_admin: str | None = Field(
+        default=None, validation_alias="BOUNCY_API_KEY_ADMIN"
+    )
+    request_timeout_s: float = Field(
+        default=30, gt=0, validation_alias="OFM_LINKS_REQUEST_TIMEOUT_S"
+    )
+    # How stale a user's links and their numbers may get, how often the
+    # sweeper looks, and how long a claimed sync may run before another
+    # sweep takes it over.
+    sync_interval_s: int = Field(
+        default=3 * 60 * 60, ge=60, validation_alias="OFM_LINKS_SYNC_INTERVAL_S"
+    )
+    sync_check_interval_s: int = Field(
+        default=300, ge=10, validation_alias="OFM_LINKS_SYNC_CHECK_INTERVAL_S"
+    )
+    claim_ttl_s: int = Field(
+        default=60 * 60, ge=60, validation_alias="OFM_LINKS_CLAIM_TTL_S"
+    )
+    # A link still "creating" this long after it was asked for lost its job
+    # (a deploy): failed, unless the provider lists it by then.
+    create_ttl_s: int = Field(
+        default=30 * 60, ge=60, validation_alias="OFM_LINKS_CREATE_TTL_S"
+    )
+    # Period selector of /links, in days, in selector order (1 = today, UTC);
+    # each sync reads the daily numbers of the longest one.
+    periods_days: list[int] = Field(
+        default=[1, 7, 30, 90], min_length=1, validation_alias="OFM_LINKS_PERIODS_DAYS"
+    )
+    default_period_days: int = Field(
+        default=7, ge=1, validation_alias="OFM_LINKS_DEFAULT_PERIOD_DAYS"
+    )
+    page_sizes: list[int] = Field(
+        default=[25, 50, 100, 200],
+        min_length=1,
+        validation_alias="OFM_LINKS_PAGE_SIZES",
+    )
+    default_page_size: int = Field(
+        default=50, ge=1, validation_alias="OFM_LINKS_DEFAULT_PAGE_SIZE"
+    )
+    # Links one "Generate links" may ask for (one per Instagram account).
+    max_generate: int = Field(
+        default=100, ge=1, validation_alias="OFM_LINKS_MAX_GENERATE"
+    )
+
+    @property
+    def history_days(self) -> int:
+        """How many days back a sync reads: the longest period, and also
+        what /accounts' periods need."""
+        return max(*self.periods_days, 30)
+
+    def admin_key(self, provider: str) -> str | None:
+        return getattr(self, f"{provider}_api_key_admin", None) or None
+
+    @model_validator(mode="after")
+    def _default_period_is_offered(self) -> LinksSettings:
+        if self.default_period_days not in self.periods_days:
+            msg = (
+                f"OFM_LINKS_DEFAULT_PERIOD_DAYS={self.default_period_days} "
+                f"is not in OFM_LINKS_PERIODS_DAYS={self.periods_days}"
+            )
+            raise ValueError(msg)
+        return self
+
+
 class VaultSettings(BaseSettings):
     """web/db/encrypted.py: the Fernet keys the /phones logins and backup
     codes are encrypted with at rest. Comma-separated, newest first: the
@@ -852,9 +920,11 @@ class GDriveSettings(BaseSettings):
     `posted_folder_name` folder inside each, which people move a video into
     once it is posted. No folder id is configured anywhere.
 
-    `service_account` + `root_folder_id` are only what the live Drive
-    contract tests run against (a sandbox folder shared with that account);
-    the app itself never uses them."""
+    `service_account` + `root_folder_id`: the live Drive contract tests'
+    sandbox, and on prod the agency admin's fallback: until the password
+    account has a Google token, /drive reads and makes its folders through
+    that account in that root (prod's "ALL ACCOUNTS", shared with it;
+    web/drive_folders.py `_bot_root`)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -48,6 +48,7 @@
             .then((html) => {
                 board.innerHTML = html;
                 delete board.dataset.live;
+                window.Layout?.apply();
                 if (search) applySearch();
             })
             .catch((err) => {

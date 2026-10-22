@@ -18,7 +18,7 @@ OWNED = {
     "badge", "badge-neutral", "badge-ok", "badge-warn", "badge-fail",
     "empty-state", "page-head", "page-head-actions", "card", "card-title",
     "stat", "stat-label", "stat-value", "stat-note",
-    "table-wrap",
+    "table-wrap", "menu", "menu-list", "menu-item", "menu-item-danger",
 }  # fmt: skip
 CLASS_ATTR = re.compile(r'class="([^"]*)"')
 STYLE_ATTR = re.compile(r'style="(?!--)')

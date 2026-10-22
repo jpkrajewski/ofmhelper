@@ -5,17 +5,18 @@ Who may sign in, and as what. Nobody signs themselves up: an admin adds an
 email on /users. Then it signs in:
 
 - with Google or Apple: by the provider's account id once linked, else by
-  a verified email equal to the user's (linking it); an `OFM_ADMIN_EMAILS`
-  address always gets in, as an admin (made on the spot: the way in on a
-  fresh install, and back in if every admin was removed). The FIRST of
-  them takes over the password account at their first sign-in -- its
-  email becomes theirs, so the agency's phones, accounts and jobs (all
-  the password account's since users exist) are theirs with nothing moved;
+  a verified email equal to the user's (linking it);
 - with email + password: once the user set one through a one-time link
-  (`password_link`, made on /users) or on /account. `APP_PASSWORD_ADMIN`
-  opens the password account (typed as "admin", or by its email once
-  taken over) and every `OFM_ADMIN_EMAILS` admin, for when nothing else
-  works.
+  (`password_link`, made on /users) or on /account;
+- as the app owner (signin/owner.py): `APP_PASSWORD_ADMIN` alone.
+
+The agency admin is ONE user, the password account, however it signs in
+(user decision 2026-10-22): the app owner, "admin" or any `OFM_ADMIN_EMAILS`
+address with the admin password (or the account's own), Google/Apple with
+any `OFM_ADMIN_EMAILS` address. The first address names it at its first
+sign-in (the agency's phones, accounts and jobs stay where they are); no
+separate admin users are made for the others. Several people signed in at
+once that way are the same user: same data, same Drive.
 
 A deactivated user gets in nowhere.
 """
@@ -43,6 +44,8 @@ if TYPE_CHECKING:
 
 # The password account's email (alembic c2d3e4f5a6b7 makes it).
 PASSWORD_ADMIN = "admin"  # noqa: S105 -- an account name, not a password
+# The app owner sign-in (the admin password alone, signin/owner.py).
+OWNER_PROVIDER = "owner"
 
 
 class PasswordRejectedError(ValueError):
@@ -116,22 +119,14 @@ def _claim_password_account(email: str, name: str) -> User | None:
 
 
 def _env_admin(email: str, name: str) -> User | None:
-    """The `OFM_ADMIN_EMAILS` user for `email`, made (or, for the first of
-    them, taken over from the password account) or restored as an active
-    admin; None for any other email."""
+    """The admin every `OFM_ADMIN_EMAILS` address is: the password account
+    (the agency), one user however it signs in -- Google, Apple, an admin
+    email + password, the admin password alone (user decision 2026-10-22).
+    The first address names it at its first sign-in; None for any other
+    email."""
     if not is_env_admin(email):
         return None
-    user = by_email(email)
-    if user is None:
-        claimed = _claim_password_account(email, name)
-        if claimed is not None:
-            return claimed
-        # None: a concurrent first sign-in made them a moment ago.
-        added = _repository().add(normalized_email(email), Role.ADMIN, name)
-        return _user(added) or by_email(email)
-    if not user.is_admin or not user.active:
-        return _user(_repository().update(user.id, role=Role.ADMIN, active=True))
-    return user
+    return _claim_password_account(email, name) or _password_admin()
 
 
 # --- Google / Apple ------------------------------------------------------------
@@ -140,10 +135,22 @@ def _env_admin(email: str, name: str) -> User | None:
 def sign_in_identity(identity: Identity) -> User | None:
     """The user a Google/Apple sign-in is, or None when it may not get in."""
     repo = _repository()
+    if identity.provider == OWNER_PROVIDER:
+        # The admin password (signin/owner.py): the agency admin.
+        return _admit(_password_admin())
+    if identity.email_verified and is_env_admin(identity.email):
+        # An admin address is the agency admin, even if this Google/Apple
+        # account was linked to another user before.
+        user = _env_admin(identity.email, identity.name)
+        if user is not None:
+            repo.link_identity(
+                user.id, identity.provider, identity.subject, identity.email
+            )
+        return _admit(user, identity.name, identity.refresh_token)
     linked = repo.user_for_identity(identity.provider, identity.subject)
     user = get_user(linked) if linked is not None else None
     if user is None and identity.email_verified and identity.email:
-        user = _env_admin(identity.email, identity.name) or by_email(identity.email)
+        user = by_email(identity.email)
         if user is not None:
             repo.link_identity(
                 user.id, identity.provider, identity.subject, identity.email
@@ -156,6 +163,8 @@ def sign_in_identity(identity: Identity) -> User | None:
 def link_identity(user_id: int, identity: Identity) -> bool:
     """Links a Google/Apple account to a signed-in user (/account), keeping
     a Google refresh token for Drive. False when it belongs to someone else."""
+    if identity.provider == OWNER_PROVIDER:
+        return False
     if not _repository().link_identity(
         user_id, identity.provider, identity.subject, identity.email
     ):
@@ -189,15 +198,19 @@ def password_sign_in(email: str, password: str) -> User | None:
     address (as that admin), so an admin gets in with their own email
     before any Google/Apple sign-in is set up."""
     email = normalized_email(email)
+    if email == PASSWORD_ADMIN or is_env_admin(email):
+        # Every admin address is the agency admin: the admin password or
+        # that account's own password opens it.
+        account = _password_admin()
+        stored = _repository().password_hash(account.id) if account else ""
+        own = verify_password(password, stored)
+        if account is not None and (own or _is_admin_password(password)):
+            return _admit(_env_admin(email, "") or account)
+        return None
     user = by_email(email)
     stored = _repository().password_hash(user.id) if user else ""
     if verify_password(password, stored) and user is not None:
         return _admit(user)
-    if _is_admin_password(password):
-        if email == PASSWORD_ADMIN:
-            return _admit(_password_admin())
-        if is_env_admin(email):
-            return _admit(_env_admin(email, ""))
     return None
 
 

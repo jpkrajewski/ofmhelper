@@ -15,6 +15,7 @@ Signing in and out (stores/users.py says who may):
 
 import secrets
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, Response
@@ -26,6 +27,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.signin import Identity, Provider, SignInError, configured, providers
 from ofmhelpers.signin.fake import FakeAccount, fake_code
+from ofmhelpers.signin.owner import owner_code, password_ok
 from ofmhelpers.web import drive_folders
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.middleware.ratelimit import (
@@ -178,7 +180,7 @@ def start(
         next=_safe_next(next_url),
         link_user_id=current.id if link and current else None,
     )
-    if settings.infra.fake_externals:
+    if settings.infra.fake_externals and not provider.local_consent:
         url = f"/auth/fake-consent?provider={name}&state={carried.state}"
     else:
         url = provider.consent_url(
@@ -289,6 +291,46 @@ def callback_post(
 ):
     """Apple's form_post return."""
     return _finish(request, name, code, state, error)
+
+
+@router.get("/auth/owner/consent")
+def owner_consent(request: Request, state: str = ""):
+    """The app owner's consent screen: the admin password."""
+    return render(request, "owner_consent.html", state=state, error=None)
+
+
+@router.post("/auth/owner/consent")
+def owner_consent_submit(
+    request: Request,
+    state: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+):
+    """The right admin password goes on to the callback with a code for
+    this one sign-in; a wrong one is counted like a failed /login."""
+
+    def again(error: str, status_code: int) -> Response:
+        return render(
+            request,
+            "owner_consent.html",
+            state=state,
+            error=error,
+            status_code=status_code,
+        )
+
+    if login_blocked(request):
+        logger.warning("login rate limit hit from %s", client_id(request))
+        return again("Too many failed attempts. Try again later.", 429)
+    try:
+        carried = _carried(request, "owner", state)
+    except SignInError as exc:
+        return again(str(exc), 400)
+    if not password_ok(password):
+        record_failed_login(request)
+        logger.warning("failed app owner sign-in from %s", client_id(request))
+        return again("Wrong admin password", 401)
+    clear_failed_logins(request)
+    query = urlencode({"code": owner_code(carried.nonce), "state": state})
+    return RedirectResponse(url=f"/auth/owner/callback?{query}", status_code=303)
 
 
 @router.get("/auth/fake-consent")

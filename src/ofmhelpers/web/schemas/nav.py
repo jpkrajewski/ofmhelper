@@ -32,6 +32,7 @@ NAV = (
         href="/download-assets", label="Download", icon="download", place=NavPlace.BAR
     ),
     NavItem(href="/accounts", label="Accounts", icon="chart", place=NavPlace.BAR),
+    NavItem(href="/links", label="Links", icon="link", place=NavPlace.BAR),
     NavItem(href="/phones", label="Phones", icon="smartphone", place=NavPlace.BAR),
     NavItem(href="/drive", label="Drive", icon="folder", place=NavPlace.BAR),
     NavItem(href="/uniqify", label="Uniqify", icon="shuffle", place=NavPlace.MORE),

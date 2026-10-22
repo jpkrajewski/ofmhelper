@@ -125,7 +125,7 @@
        corners come from here, never a value of its own. Change a role
        here and every element of that kind follows.
          card   a panel standing on the page (card, KPI, phone,
-                drive account, clone batch, dialog, filter panel)
+                drive account, dialog, filter panel)
          tile   a small item in a dense grid (gallery result, reuse tile)
          inset  a strip inside or between cards (notice, error, list row,
                 selection bar, revealed secret)

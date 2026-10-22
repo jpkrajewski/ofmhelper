@@ -1,0 +1,32 @@
+{% import "components/ui.html" as ui -%}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Big G Login — Ascend Global LLC</title>
+    {% include "_favicon.html" %}
+    {% include "_styles.html" %}
+</head>
+<body>
+    {# The app owner sign-in's consent screen (signin/owner.py): the admin
+       password, then on to /auth/owner/callback like any provider. #}
+    <main class="login-screen">
+        <div class="login-card">
+            <h1 class="login-logo">ASCEND GLOBAL</h1>
+            <p class="login-sub">Big G Login</p>
+            {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+            <form method="post" action="/auth/owner/consent">
+                <input type="hidden" name="state" value="{{ state }}">
+                <div class="field">
+                    <label for="owner-password">Admin password</label>
+                    <input type="password" name="password" id="owner-password" required autofocus
+                           autocomplete="current-password" placeholder="••••••••••">
+                </div>
+                {{ ui.button("Sign in", "primary", type="submit", block=true) }}
+            </form>
+        </div>
+    </main>
+</body>
+</html>

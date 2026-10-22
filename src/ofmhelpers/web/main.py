@@ -17,6 +17,7 @@ from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, instrument_app
 from ofmhelpers.web.account_tracker import account_tracker_loop
 from ofmhelpers.web.drive_folders import drive_loop
+from ofmhelpers.web.link_sync import link_sync_loop
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
     CompressionMiddleware,
@@ -54,6 +55,9 @@ async def lifespan(app: FastAPI):
     # Rescans /accounts' tracked social accounts when due -- see
     # ofmhelpers/web/account_tracker.py.
     account_tracker = asyncio.create_task(account_tracker_loop())
+    # Syncs /links' links and their clicks when due -- see
+    # ofmhelpers/web/link_sync.py.
+    link_sync = asyncio.create_task(link_sync_loop())
     # Makes /drive's folders for the day in the shared Google Drive -- see
     # ofmhelpers/web/drive_folders.py.
     drive = asyncio.create_task(drive_loop())
@@ -65,6 +69,7 @@ async def lifespan(app: FastAPI):
     sweeper.cancel()
     reel_watch.cancel()
     account_tracker.cancel()
+    link_sync.cancel()
     drive.cancel()
     backfill.cancel()
     logger.info("shutdown: sweepers cancelled")

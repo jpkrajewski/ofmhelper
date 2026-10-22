@@ -58,6 +58,7 @@ def test_bar_links_then_the_rest_under_more(client):
         "/reels",
         "/download-assets",
         "/accounts",
+        "/links",
         "/phones",
         "/drive",
     ]

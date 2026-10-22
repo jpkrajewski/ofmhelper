@@ -34,40 +34,29 @@
     const SUBMIT_COOLDOWN_MS = 3000;
 
     // Finished/failed job cards carry the same data-job-id/data-task/
-    // data-params attributes the server-rendered gallery cards do, plus a
-    // "↻ Recreate" button -- so the delegation in the page templates picks
-    // up new cards automatically.
+    // data-params attributes the server-rendered gallery cards do, plus the
+    // same actions row -- so the delegation in the page templates picks up
+    // new cards automatically.
     function attachJobData(div, job) {
         div.dataset.jobId = job.job_id;
         div.dataset.task = job.task;
         div.dataset.params = JSON.stringify(job.params || {});
     }
 
-    function buildRecreateButton() {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "recreate-btn";
-        btn.textContent = "Recreate";
-        return btn;
+    // The card's one row of actions, cloned from the page's templates
+    // (_card_actions.html, from the macros _gallery_card.html uses): a
+    // result gets Download + the ⋯ menu (Recreate), a failure Recreate.
+    function cloneActions(id) {
+        return document.getElementById(id).content.firstElementChild.cloneNode(true);
     }
 
-    // The card's one row of actions (Download, Recreate), same as the
-    // templates' .result-actions.
-    function buildActions(...buttons) {
-        const row = document.createElement("div");
-        row.className = "result-actions";
-        row.append(...buttons);
-        return row;
-    }
-
-    function buildDownloadLink(item) {
-        const dl = document.createElement("a");
+    function buildDoneActions(item) {
+        const row = cloneActions("card-actions-done");
+        const dl = row.querySelector(".download-btn");
         dl.href = item.download_url;
         dl.download = item.download_name || item.name;
         dl.dataset.localFallbackUrl = item.local_fallback_url || "";
-        dl.className = "btn download-btn";
-        dl.textContent = "Download";
-        return dl;
+        return row;
     }
 
     function buildSourceLabel(label) {
@@ -99,7 +88,7 @@
             const file = document.createElement("div");
             file.className = "result-file";
             file.textContent = item.name;
-            div.append(file, buildSourceLabel(label), buildActions(buildDownloadLink(item)));
+            div.append(file, buildSourceLabel(label), buildDoneActions(item));
             return div;
         }
 
@@ -140,7 +129,7 @@
         if (tag === "audio") div.append(buildFilenameLabel(item.name));
         div.append(
             buildSourceLabel(label),
-            buildActions(buildDownloadLink(item), buildRecreateButton())
+            buildDoneActions(item)
         );
         return div;
     }
@@ -196,7 +185,7 @@
         div.append(box, buildSourceLabel(label));
         if (job) {
             attachJobData(div, job);
-            div.appendChild(buildActions(buildRecreateButton()));
+            div.appendChild(cloneActions("card-actions-failed"));
         }
         return div;
     }
@@ -253,6 +242,11 @@
                     cards.push(buildFailedCard(label, "No output produced.", job, "No output"));
                 }
                 card.replaceWith(...cards);
+                // For pages that add their own bits to a finished card
+                // (clone.js: Drive).
+                cards.forEach((c) => c.dispatchEvent(
+                    new CustomEvent("gallery:card-ready", { bubbles: true })
+                ));
             })
             .catch(() => {
                 if (failures + 1 < MAX_CONSECUTIVE_FAILURES) {

@@ -7,7 +7,7 @@
  *
  * Everyone: instant search over the rendered cards (data-search: phone,
  * model, people, login names -- never a secret); filters and sort submit
- * the toolbar form; grid/list layout (remembered in localStorage); copy
+ * the toolbar form; grid/list layout (layout.js); copy
  * login names; reveal / copy passwords; open recovery codes; "N more".
  * Admins (dialogs only rendered for them), posting JSON then reloading:
  *   Add phone / Edit      -> POST /phones/add | /phones/{id}
@@ -20,7 +20,6 @@
 
     const $ = (id) => document.getElementById(id);
     const statusEl = $("ph-status");
-    const LAYOUT_KEY = "phones-layout";
 
     function setStatus(el, text, isError) {
         if (!el) return;
@@ -126,30 +125,6 @@
         });
     });
 
-    // --- layout ---------------------------------------------------------------
-    function setLayout(layout) {
-        document.querySelectorAll(".ph-grid").forEach((grid) => { grid.dataset.layout = layout; });
-        document.querySelectorAll(".ph-layout [data-layout]").forEach((b) => {
-            b.setAttribute("aria-pressed", String(b.dataset.layout === layout));
-        });
-    }
-    try {
-        const saved = window.localStorage.getItem(LAYOUT_KEY);
-        if (saved === "list" || saved === "grid") setLayout(saved);
-    } catch {
-        // storage blocked: grid
-    }
-    document.querySelectorAll(".ph-layout [data-layout]").forEach((button) => {
-        button.addEventListener("click", () => {
-            setLayout(button.dataset.layout);
-            try {
-                window.localStorage.setItem(LAYOUT_KEY, button.dataset.layout);
-            } catch {
-                // not remembered
-            }
-        });
-    });
-
     // --- login rows -----------------------------------------------------------
     // Copy = the whole login in one line: username:password:codes (codes
     // space-joined; parts that are empty are left out).
@@ -209,21 +184,6 @@
             card.querySelectorAll(".ph-login[data-extra]").forEach((row) => { row.hidden = open; });
             button.setAttribute("aria-expanded", String(!open));
             button.textContent = open ? `${more} more` : "Show less";
-        });
-    });
-
-    // --- the ⋯ menu: one open at a time, closes on outside click / Escape -----
-    const menus = [...document.querySelectorAll(".ph-menu")];
-    document.addEventListener("click", (event) => {
-        menus.forEach((menu) => {
-            if (menu.open && !menu.contains(event.target)) menu.open = false;
-        });
-    });
-    document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        menus.filter((m) => m.open).forEach((menu) => {
-            menu.open = false;
-            menu.querySelector("summary").focus();
         });
     });
 

@@ -1,7 +1,10 @@
 {% import "components/ui.html" as ui %}
 {# /drive's cards, counts and folders: the page renders it from each
    folder's last read (no Drive call), GET /drive/live from Drive now, and
-   drive.js swaps that in. Expects `board` (schemas.DriveBoard). #}
+   drive.js swaps that in. Expects `board` (schemas.DriveBoard).
+   A card is /phones' card (the phone's drawing, label, model · color,
+   owner) with the Instagram account's Drive folder where /phones lists
+   logins; grid or list (layout.js). #}
 {% import "_icons.html" as ic %}
 {% set cards = board.cards %}
 {% if not board.live %}
@@ -15,22 +18,25 @@
 {% endif %}
 
 {% if cards %}
-<div class="dr-grid" id="dr-grid">
+<div class="ph-grid" id="dr-grid" data-layout="grid">
     {% for c in cards %}
     {% set t = c.target %}
-    <article class="dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
-        <header class="dr-card-head">
-            <a class="dr-phone" href="/phones#phone-{{ t.device.id }}">
-                <img src="{{ t.device.drawing_url }}" alt="" width="20" height="38" loading="lazy">
-            </a>
-            <div class="dr-title">
-                <h2>{{ t.handle }}</h2>
-                <p>{{ t.owner }}</p>
+    <article class="ph-card dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
+        <a class="ph-media" href="/phones#phone-{{ t.device.id }}">
+            <img src="{{ t.device.drawing_url }}" alt="{{ t.device.specs }}" loading="lazy">
+        </a>
+        <div class="ph-body dr-body">
+        <div class="ph-title-row">
+            <div class="ph-title">
+                <h2>{{ t.device.label }}</h2>
+                <p class="ph-specs">{{ t.device.specs }}</p>
             </div>
             {% if c.account_url %}
             {{ ui.icon_button("folder", "Open the folder of " ~ t.handle, href=c.account_url, attrs={"target": "_blank", "rel": "noopener"}) }}
             {% endif %}
-        </header>
+        </div>
+        {% if t.device.owner %}<p class="ph-meta"><span>{{ t.device.owner }}</span></p>{% endif %}
+        <p class="dr-account">@{{ t.handle }}</p>
         {% if c.error %}
         <p class="dr-note dr-error">{{ c.error }}</p>
         {% elif not c.account_folder_id %}
@@ -63,6 +69,7 @@
             <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
         </p>
         {% endif %}
+        </div>
     </article>
     {% endfor %}
 </div>

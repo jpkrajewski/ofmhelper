@@ -1,4 +1,5 @@
-"""/clone: subject images + N videos -> one batch of Wan 3.0 runs, grouped on the page."""
+"""/clone: subject images + N videos -> one Wan 3.0 run per video, each its
+own card in the gallery (the shared card of every tool page)."""
 
 import os
 
@@ -24,7 +25,7 @@ from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.schemas import CloneBatch, Job, ResultFile
+from ofmhelpers.web.schemas import Job, ResultFile
 from ofmhelpers.web.stores.jobs import get_job, list_jobs
 from ofmhelpers.web.templates_config import render_partial
 
@@ -84,42 +85,56 @@ def test_page_defaults(client):
 
 
 @pytest.mark.usefixtures("fake_runs")
-def test_run_queues_one_batch_in_picked_order(client):
+def test_run_queues_one_card_per_video_newest_first(client):
     r = _post(client, ["b.mp4", "a.mp4"])
 
     assert r.status_code == 200
     jobs = [get_job(j) for j in r.json()["job_ids"]]
     assert {j.task for j in jobs} == {"clone"}
-    assert len({j.params["clone_batch"] for j in jobs}) == 1
-    assert [j.params["clone_index"] for j in jobs] == [0, 1]
     assert [j.params["duration"] for j in jobs] == [4, 3]
     assert {j.params["resolution"] for j in jobs} == {"720P"}
+    assert all("clone_batch" not in j.params for j in jobs)
     html = r.json()["html"]
     assert html.count('class="result-item"') == 2
+    # Newest first, like the gallery: the last picked video's run on top.
     cards = html.split('class="result-item"')[1:]
-    assert ["b.mp4" in cards[0], "a.mp4" in cards[1]] == [True, True]
-    assert "b.mp4" in client.get("/clone").text
+    assert ["a.mp4" in cards[0], "b.mp4" in cards[1]] == [True, True]
+    page = client.get("/clone").text
+    assert "b.mp4" in page
+    assert "clone-batch" not in page
 
 
 @pytest.mark.usefixtures("fake_runs")
-def test_batches_fragment_shows_another_sessions_batch(client, tmp_path):
-    """What live-gallery.js polls: a coworker's batch appears without a reload,
-    and the VA scope still holds (an admin's batch never reaches a VA)."""
+def test_latest_gallery_shows_another_sessions_run(client, tmp_path):
+    """What live-gallery.js polls: a coworker's run appears without a
+    reload, and an admin's never reaches a user."""
     coworker = TestClient(app)
     sign_in(coworker)
-    batch = get_job(_post(coworker, ["a.mp4"]).json()["job_ids"][0]).params[
-        "clone_batch"
-    ]
+    [theirs] = _post(coworker, ["a.mp4"]).json()["job_ids"]
     admin = TestClient(app)
     admin.post("/login", data={"password": "test-admin", "next": "/"})
-    admin_batch = get_job(_post(admin, ["b.mp4"]).json()["job_ids"][0]).params[
-        "clone_batch"
-    ]
+    [admins] = _post(admin, ["b.mp4"]).json()["job_ids"]
 
-    html = client.get("/clone/batches").text
-    assert f'data-batch="{batch}"' in html
-    assert f'data-batch="{admin_batch}"' not in html
-    assert 'data-live-endpoint="/clone/batches"' in client.get("/clone").text
+    html = client.get("/clone/gallery/latest").text
+    assert f'data-job-id="{theirs}"' in html
+    assert f'data-job-id="{admins}"' not in html
+    assert "gallery-sentinel" not in html
+    assert 'data-live-endpoint="/clone/gallery/latest"' in client.get("/clone").text
+
+
+@pytest.mark.usefixtures("fake_runs")
+def test_gallery_pages_like_every_other_gallery(client, monkeypatch):
+    monkeypatch.setenv("OFM_GALLERY_LIMIT", "1")
+    [old] = _post(client, ["a.mp4"]).json()["job_ids"]
+    [new] = _post(client, ["b.mp4"]).json()["job_ids"]
+
+    page = client.get("/clone").text
+    assert f'data-job-id="{new}"' in page
+    assert f'data-job-id="{old}"' not in page
+    assert 'data-next-offset="1"' in page
+    older = client.get("/clone/gallery?offset=1").text
+    assert f'data-job-id="{old}"' in older
+    assert "gallery-sentinel" not in older
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -153,7 +168,7 @@ def test_recreate_resubmits_the_same_files_without_uploading(client):
         (["a.mp4"], {"api_key": " "}, "API key is required"),
     ],
 )
-def test_run_rejects_a_bad_batch(client, videos, data, detail):
+def test_run_rejects_a_bad_submit(client, videos, data, detail):
     r = _post(client, videos, data)
     assert r.status_code == 400
     assert detail in r.json()["detail"]
@@ -176,7 +191,7 @@ def test_every_run_gets_all_the_subject_images(client):
     images = jobs[0].params["reference_images"]
     assert [Path(p).name.split("__", 1)[1] for p in images] == ["front.png", "side.png"]
     assert all(j.params["reference_images"] == images for j in jobs)
-    assert json.dumps(images) in _batches(jobs, page_full=False)[0].recreate_json
+    assert json.dumps(images) in clone._card(jobs[0], []).params_json
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -193,7 +208,7 @@ def test_run_caps_subject_images(client, monkeypatch):
 
 
 @pytest.mark.usefixtures("fake_runs")
-def test_run_caps_videos_per_batch(client, monkeypatch):
+def test_run_caps_videos_per_submit(client, monkeypatch):
     monkeypatch.setenv("OFM_CLONE_MAX_VIDEOS", "2")
     r = _post(client, ["a.mp4", "b.mp4", "c.mp4"])
     assert r.status_code == 400
@@ -225,92 +240,42 @@ def test_one_unreadable_video_queues_nothing(client, monkeypatch):
     assert len(list_jobs()) == before
 
 
-def _batches(jobs, page_full):
-    return CloneBatch.group([clone._card(j, {}) for j in jobs], page_full=page_full)
-
-
-def _job(job_id, batch, index, created_at):
+def _job(job_id, status="running", **extra):
     return Job(
         id=job_id,
         task="clone",
-        status="running",
-        created_at=created_at,
+        status=status,
+        created_at=1.0,
         params={
-            "clone_batch": batch,
-            "clone_index": index,
             "prompt": "p",
             "resolution": "720P",
             "audio": True,
             "duration": 5,
+            "export": "capcut",
             "reference_images": ["/a/img.png"],
             "reference_videos": [f"/a/{job_id}.mp4"],
         },
+        **extra,
     )
 
 
-def test_batches_group_newest_first_and_drop_a_cut_off_tail():
-    # Newest first, as the job store returns them.
-    jobs = [
-        _job("y2", "new", 1, 9.0),
-        _job("y1", "new", 0, 9.0),
-        _job("x1", "old", 1, 1.0),
-    ]
-
-    [new, old] = _batches(jobs, page_full=False)
-    assert [c.job_id for c in new.cards] == ["y1", "y2"]
-    assert json.loads(new.recreate_json)["reference_videos"] == [
-        "/a/y1.mp4",
-        "/a/y2.mp4",
-    ]
-    assert old.id == "old"
-    assert [b.id for b in _batches(jobs, page_full=True)] == ["new"]
+def test_a_running_card_is_the_shared_card_with_no_timer():
+    html = render_partial("_clone_card.html", job=clone._card(_job("r1"), []))
+    assert "generating…" in html
+    assert 'data-poll-prefix="/clone" data-poll-kind="video"' in html
+    assert '<p class="source">CapCut export</p>' in html
+    assert "data-started-at" not in html
+    assert "data-took-s" not in html
+    assert "result-actions" not in html
 
 
-def test_batch_whose_subject_images_are_gone_draws_no_broken_thumb(tmp_path):
-    """A batch kept after its images were deleted (file manager, or a
-    database copied from another server) shows a blank tile, never a
-    /refs/thumb that 404s."""
-    kept = tmp_path / "kept.png"
-    kept.write_bytes(b"png")
-    job = _job("z1", "b", 0, 1.0)
-    job.params["reference_images"] = [str(tmp_path / "gone.png"), str(kept)]
-    [batch] = _batches([job], page_full=False)
-    assert batch.cover == str(kept)
-
-    job.params["reference_images"] = [str(tmp_path / "gone.png")]
-    [batch] = _batches([job], page_full=False)
-    assert batch.cover is None
-    html = render_partial("_clone_batch.html", batch=batch)
-    assert "/refs/thumb" not in html
-    assert "no longer stored" in html
-
-
-def test_cards_show_took_and_count_against_the_estimate():
-    """A finished run shows how long it took; a running one counts from its
-    submit against the median of recent runs, scaled to its clip, and is
-    flagged past the slowest normal one."""
-    slow = _job("t1", "old", 0, 100.0).model_copy(
-        update={"status": "done", "finished_at": 400.0}
-    )
-    fast = _job("t2", "old", 1, 100.0).model_copy(
-        update={"status": "done", "finished_at": 200.0}
-    )
-    running = _job("r1", "new", 0, 500.0)
-    running.params["duration"] = 10
-    for job in (slow, fast, running):
-        job.params["provider"] = "kie"
-    rates = clone.clone_rates([running, slow, fast], runs=30)
-
-    batches = CloneBatch.group(
-        [clone._card(j, rates) for j in (running, slow, fast)], page_full=False
-    )
-    html = "".join(render_partial("_clone_batch.html", batch=b) for b in batches)
-
-    # 300 s and 100 s for 5 s clips: 60 and 20 s per clip second, median 40.
-    assert 'data-started-at="500.0"' in html
-    assert 'data-eta-s="400" data-slow-s="600"' in html
-    assert 'data-took-s="300"' in html
-    assert 'data-took-s="100"' in html
+def test_a_failed_card_offers_recreate_and_nothing_else():
+    job = _job("f1", status="failed", error="Generation failed")
+    html = render_partial("_clone_card.html", job=clone._card(job, []))
+    actions = html.split('class="result-actions"')[1]
+    assert "recreate-btn" in actions
+    assert "download-btn" not in actions
+    assert 'class="menu' not in actions
 
 
 def _clip(dest: Path, seconds: int) -> Path:
@@ -474,8 +439,6 @@ def _run_clone(assets_root, **choice):
         duration=5,
         reference_images=["/x/face.png"],
         reference_videos=["/x/src.mp4"],
-        clone_batch="b",
-        clone_index=0,
         **choice,
     )
 
@@ -506,8 +469,7 @@ def test_export_choice_is_stored_and_recreated(client):
 
     assert (picked.params["export"], picked.params["mirror"]) == ("iphone17", True)
     assert (default.params["export"], default.params["mirror"]) == ("capcut", False)
-    [batch] = _batches([picked], page_full=False)
-    recreated = json.loads(batch.recreate_json)
+    recreated = json.loads(clone._card(picked, []).params_json)
     assert (recreated["export"], recreated["mirror"]) == ("iphone17", True)
 
 

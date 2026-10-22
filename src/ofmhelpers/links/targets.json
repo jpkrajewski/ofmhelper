@@ -1,0 +1,26 @@
+{
+  "onlyfans": {
+    "label": "OnlyFans",
+    "hosts": [
+      "onlyfans.com"
+    ],
+    "prefix": "https://onlyfans.com/",
+    "profile": "^/[A-Za-z0-9._-]+(/.*)?$"
+  },
+  "fanvue": {
+    "label": "Fanvue",
+    "hosts": [
+      "fanvue.com"
+    ],
+    "prefix": "https://www.fanvue.com/",
+    "profile": "^/[A-Za-z0-9._-]+(/.*)?$"
+  },
+  "stacked": {
+    "label": "Stacked",
+    "hosts": [
+      "stacked.com"
+    ],
+    "prefix": "https://www.stacked.com/@",
+    "profile": "^/@[A-Za-z0-9._-]+(/.*)?$"
+  }
+}

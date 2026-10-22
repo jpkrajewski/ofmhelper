@@ -123,6 +123,22 @@ button:disabled,
    .drive-upload-btn are JS hooks only, never a look of their own. */
 .result-actions { display: flex; gap: var(--gap-inline); margin-top: auto; }
 .result-actions > * { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); }
+/* Download + ⋯ as one split button: one border, one height, the ⋯ joined
+   to the right of Download. */
+.result-actions > .menu { flex: none; padding-inline: 0; }
+.result-actions:has(> .download-btn + .menu) { gap: 0; }
+.result-actions > .download-btn:has(+ .menu) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.result-actions > .download-btn + .menu > summary {
+    width: var(--control-h);
+    height: 100%;
+    min-height: var(--control-h);
+    margin-left: -1px;
+    border: 1px solid var(--border-strong);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--surface);
+    color: var(--text);
+}
+.result-actions > .download-btn + .menu { display: flex; }
 
 /* Segmented control (file-manager roots, and anything else that is a set
    of mutually exclusive links). */
@@ -476,9 +492,7 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     text-align: center;
     word-break: break-word;
 }
-.result-file:has(.clone-timer) { flex-wrap: wrap; align-content: center; row-gap: var(--s-3); padding-block: var(--s-5); }
-.clone-timer { flex-basis: 100%; font-variant-numeric: tabular-nums; color: var(--text); }
-.clone-timer.is-slow { color: var(--warn); }
+.result-file progress { width: 80%; accent-color: var(--accent); }
 .source { margin: 0; color: var(--text-muted); font-size: var(--step--1); word-break: break-word; }
 .filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
 .fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
@@ -720,3 +734,41 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- ⋯ menu (ui.menu / ui.menu_item; static/js/menu.js) -----------------
+   Not the card the base `details` rule draws: an icon button and a
+   floating list of items under it, right-aligned. */
+.menu { position: relative; flex: none; margin: 0; padding: 0; border: 0; background: none; }
+.menu > summary { list-style: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-list {
+    position: absolute;
+    right: 0;
+    z-index: 5;
+    display: grid;
+    min-width: 160px;
+    margin-top: var(--s-1);
+    padding: var(--s-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface-2);
+    box-shadow: var(--shadow);
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    height: var(--control-h-sm);
+    min-height: 0;
+    padding: 0 var(--s-3);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-size: var(--step--1);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.menu-item:hover, .menu-item:focus-visible { background: var(--surface-3); }
+.menu-item-danger { color: var(--fail); }

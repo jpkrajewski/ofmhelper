@@ -95,6 +95,77 @@ def test_the_admin_password_opens_no_other_email(client):
     )
 
 
+# --- the app owner: the admin password alone (signin/owner.py) ----------------
+
+
+def _owner(client: TestClient, password: str, next_url: str = "/"):
+    """Start -> the app owner's password page -> its callback."""
+    started = client.get(
+        "/auth/owner/start", params={"next": next_url}, follow_redirects=False
+    )
+    assert started.status_code == 303
+    page = urlsplit(started.headers["location"])
+    assert page.path == "/auth/owner/consent"
+    state = parse_qs(page.query)["state"][0]
+    sent = client.post(
+        "/auth/owner/consent",
+        data={"state": state, "password": password},
+        follow_redirects=False,
+    )
+    if sent.status_code != 303:
+        return sent
+    back = urlsplit(sent.headers["location"])
+    query = {k: v[0] for k, v in parse_qs(back.query).items()}
+    return client.get(back.path, params=query, follow_redirects=False)
+
+
+def test_the_login_page_offers_the_app_owner(client):
+    assert "Continue with Big G Login" in client.get("/login").text
+
+
+def test_no_app_owner_without_an_admin_password(client, monkeypatch):
+    monkeypatch.delenv("APP_PASSWORD_ADMIN")
+    assert "Big G Login" not in client.get("/login").text
+
+
+def test_the_admin_password_alone_opens_the_agency_admin(client):
+    r = _owner(client, "test-admin", "/links")
+    assert (r.status_code, r.headers["location"]) == (303, "/links")
+    assert client.get("/users").status_code == 200
+    assert users.get_user(users.agency_id()).is_password_account
+
+
+def test_a_wrong_owner_password_signs_nobody_in_and_is_counted(client, caplog):
+    with caplog.at_level("WARNING", logger="ofmhelpers.web.routers.auth"):
+        r = _owner(client, "not it")
+    assert r.status_code == 401
+    assert "Wrong admin password" in r.text
+    assert "not it" not in caplog.text
+    assert client.get("/generate", follow_redirects=False).status_code == 303
+
+
+def test_an_owner_code_opens_only_its_own_sign_in(client):
+    """A code from one sign-in replayed against another (other nonce) is
+    refused."""
+    from ofmhelpers.signin.owner import owner_code
+
+    started = client.get("/auth/owner/start", follow_redirects=False)
+    state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
+    r = client.get(
+        "/auth/owner/callback",
+        params={"code": owner_code("someone-elses-nonce"), "state": state},
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    assert client.get("/generate", follow_redirects=False).status_code == 303
+
+
+def test_the_app_owner_is_never_linked_to_an_account(client):
+    sign_in(client)
+    assert "Big G Login" not in client.get("/account").text
+    assert client.post("/account/unlink/owner").status_code == 404
+
+
 def test_a_failed_login_logs_the_email_never_the_password(client, caplog):
     with caplog.at_level("WARNING", logger="ofmhelpers.web.routers.auth"):
         _password_login(client, "who@example.com", "secret-typo-123")
@@ -440,7 +511,7 @@ def test_unlinking_the_only_way_in_is_refused(client):
 
 
 def test_login_page_shows_only_configured_providers(client, monkeypatch):
-    assert "Continue with" not in client.get("/login").text
+    assert "Continue with Google" not in client.get("/login").text
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "id")
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
     html = client.get("/login").text
@@ -581,14 +652,32 @@ def test_the_first_admin_email_takes_over_the_password_account_and_its_data(clie
 
 
 @pytest.mark.usefixtures("providers_on")
-def test_only_the_first_admin_email_takes_it_over(client):
-    """The second listed admin gets an admin account of their own."""
+def test_every_admin_way_in_is_the_one_agency_admin(client):
+    """Google with any admin address, an admin address + the admin
+    password, the app owner: one user (user decision 2026-10-22)."""
     agency = users.agency_id()
     _consent(client, "google", "second@example.com")
-    second = users.by_email("second@example.com")
-    assert second.is_admin
-    assert second.id != agency
-    assert users.by_email("admin") is not None
+    assert _signed_in_as(client) == agency
+    assert users.by_email("second@example.com") is None
+    for way_in in (
+        lambda c: _consent(c, "google", "owner@example.com"),
+        lambda c: _password_login(c, "second@example.com", "test-admin"),
+        lambda c: _password_login(c, "admin", "test-admin"),
+        lambda c: _owner(c, "test-admin"),
+    ):
+        other = TestClient(app)
+        assert way_in(other).status_code == 303
+        assert _signed_in_as(other) == agency
+    assert [u.id for u in users.list_users() if u.is_admin] == [agency]
+
+
+def _signed_in_as(client: TestClient) -> int:
+    """The user id `client`'s session is signed in as (/account shows it)."""
+    page = client.get("/account").text
+    email = page.split('<p class="lead">', 1)[1].split(" · ", 1)[0]
+    found = users.by_email(email)
+    assert found is not None
+    return found.id
 
 
 # --- review fixes: races, sessions after a password change, escaping -----------
@@ -638,8 +727,8 @@ def test_concurrent_links_of_one_account_go_to_one_user_only():
 
 
 def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
-    """The second OFM_ADMIN_EMAILS address (the first would take over the
-    password account), signing in from several tabs at once."""
+    """The second OFM_ADMIN_EMAILS address, signing in from several tabs at
+    once: every tab is the agency admin."""
     from ofmhelpers.signin import Identity
 
     monkeypatch.setenv("OFM_ADMIN_EMAILS", "owner@example.com, racer@example.com")
@@ -650,12 +739,11 @@ def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
         email_verified=True,
     )
     signed = _together(6, lambda: users.sign_in_identity(identity))
-    assert {u.email for u in signed if u is not None} == {"racer@example.com"}
     assert all(u is not None for u in signed)
-    racer = users.by_email("racer@example.com")
-    assert racer is not None
-    assert racer.is_admin
-    assert [a.subject for a in users.linked_accounts(racer.id)] == ["sub-racer"]
+    assert {u.id for u in signed} == {users.agency_id()}
+    assert [a.subject for a in users.linked_accounts(users.agency_id())] == [
+        "sub-racer"
+    ]
 
 
 def test_a_password_change_signs_out_every_other_session(client):

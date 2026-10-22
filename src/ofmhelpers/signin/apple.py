@@ -85,6 +85,8 @@ class Apple:
     name = "apple"
     label = "Apple"
     callback_method = "POST"
+    local_consent = False
+    linkable = True
 
     def configured(self) -> bool:
         return settings.signin.apple_configured

@@ -44,6 +44,7 @@ PAGES = [
     Shot(name="reels", path="/reels"),
     Shot(name="download", path="/download-assets"),
     Shot(name="accounts", path="/accounts"),
+    Shot(name="links", path="/links"),
     Shot(name="phones", path="/phones"),
     Shot(name="drive", path="/drive"),
     Shot(name="uniqify", path="/uniqify"),

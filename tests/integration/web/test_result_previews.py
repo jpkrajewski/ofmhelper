@@ -296,7 +296,9 @@ def test_backfill_makes_the_previews(tmp_path, no_warming):
 # --- polling and compression ----------------------------------------------
 
 
-@pytest.mark.parametrize("endpoint", ["/generate/gallery/latest", "/clone/batches"])
+@pytest.mark.parametrize(
+    "endpoint", ["/generate/gallery/latest", "/clone/gallery/latest"]
+)
 def test_an_unchanged_live_gallery_answers_304(client, tmp_path, endpoint):
     _done_job(_picture(tmp_path / "r.png", 8, 8))
     first = client.get(endpoint)

@@ -70,19 +70,58 @@
 {% endif %}
 
 <div id="results-panel">
-    <div id="clone-batches" data-live-endpoint="/clone/batches" data-live-key="batch"
+    <div class="results" id="clone-gallery" data-gallery-endpoint="/clone/gallery"
+         data-live-endpoint="/clone/gallery/latest" data-live-key="jobId"
          data-live-interval="{{ live_poll_s }}" data-live-empty="clone-empty">
-        {% for batch in batches %}{% include "_clone_batch.html" %}{% endfor %}
+        {% for job in gallery %}{% include "_clone_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
     </div>
-    {{ ui.empty("No clones yet", attrs={"id": "clone-empty", "hidden": batches|length > 0}) }}
+    {{ ui.empty("No clones yet", attrs={"id": "clone-empty", "hidden": gallery|length > 0}) }}
 </div>
 </div>
 </div>
 
+{% if drive_targets %}
+{# What clone.js adds to a card that finishes while the page is open. #}
+<template id="card-drive-item">{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}</template>
+<dialog class="accounts-dialog" id="drive-picker">
+    <form id="drive-picker-form" method="dialog">
+        <h2>Upload to Drive</h2>
+        <div class="drive-picker-tools">
+            <input type="search" id="drive-picker-search" placeholder="Search accounts…" aria-label="Search accounts" autocomplete="off">
+            <select id="drive-picker-model" aria-label="Model">
+                <option value="">All models</option>
+                {% for c in drive_models %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="drive-picker-list" id="drive-picker-list">
+            {% for t in drive_targets %}
+            <label class="drive-pick" data-login="{{ t.login_id }}" data-creator="{{ t.creator or '' }}"
+                   data-folder="{{ t.folder_name }}"
+                   data-search="{{ (t.handle ~ ' ' ~ t.owner ~ ' ' ~ (t.creator or ''))|lower }}">
+                <input type="checkbox" value="{{ t.login_id }}">
+                <span class="drive-pick-name">@{{ t.handle }} <small>{{ t.owner }}</small></span>
+                {% if t.creator %}<span class="accounts-creator-tag">{{ t.creator }}</span>{% endif %}
+                <span class="drive-pick-waiting">{% if t.waiting is none %}<span class="pending" title="Not read yet: Sync on /drive">—</span>{% elif t.waiting == 0 %}empty{% else %}{{ t.waiting }} to post{% endif %}</span>
+                <span class="drive-pick-done" hidden>In Drive</span>
+            </label>
+            {% endfor %}
+        </div>
+        <p class="generation-error" id="drive-picker-error" hidden></p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", attrs={"id": "drive-picker-cancel"}) }}
+            {{ ui.button("Upload", "primary", type="submit", attrs={"id": "drive-picker-submit"}) }}
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
 <script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 <script src="{{ static_url('js/clone.js') }}"></script>
 <script src="{{ static_url('js/clone-cost.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
 {% endblock %}

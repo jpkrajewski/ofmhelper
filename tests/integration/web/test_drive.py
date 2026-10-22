@@ -26,7 +26,7 @@ from ofmhelpers.gdrive import FolderGoneError
 from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web import drive_folders
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas import DeviceFields, LoginFields
+from ofmhelpers.web.schemas import DeviceFields, LoginFields, UserForm
 from ofmhelpers.web.stores import devices, users
 from ofmhelpers.web.stores import drive_folders as store
 
@@ -886,7 +886,7 @@ def test_cards_are_ordered_by_the_accounts_followers(drive):
 
     assert [t.handle for t in store.targets()] == ["big.ig", "small.ig", "new.ig"]
     html = _client().get("/drive/live").text
-    order = [html.index(f"<h2>{h}</h2>") for h in ("big.ig", "small.ig", "new.ig")]
+    order = [html.index(f">@{h}<") for h in ("big.ig", "small.ig", "new.ig")]
     assert order == sorted(order)
     assert "90k" not in html
     assert "90000" not in html
@@ -1032,3 +1032,64 @@ def test_a_404_in_the_batch_keeps_the_root_and_lists_one_by_one(drive, monkeypat
 
     assert users.get_user(users.agency_id()).drive_root_id == ROOT
     assert "new.mp4" in html
+
+
+# --- the agency admin without Google: the Drive bot in the configured root --------
+
+BOT_ROOT = "configured-all-accounts"
+
+
+@pytest.fixture
+def bot_drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
+    """Prod right after users came in: the agency admin signed in with the
+    admin password (no Google token); the bot (service account) and its
+    shared root (`OFM_GDRIVE_ROOT_FOLDER`) configured as before."""
+    monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
+    monkeypatch.setenv("OFM_GDRIVE_SERVICE_ACCOUNT", "{}")
+    monkeypatch.setenv("OFM_GDRIVE_ROOT_FOLDER", BOT_ROOT)
+    fake = fake_drive()  # seeds the configured root, shared with the bot
+    fake.rename_by_hand(BOT_ROOT, "DEV - ALL ACCOUNTS")
+    return fake
+
+
+def test_the_agency_admin_without_google_is_read_through_the_bot(bot_drive):
+    assert users.refresh_token(users.agency_id()) == ""
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+
+    report = drive_folders.sync()
+
+    assert report.not_connected == []
+    assert report.created == ["ann.ig - Anna"]
+    assert bot_drive.named("ann.ig - Anna", BOT_ROOT)
+    assert users.get_user(users.agency_id()).drive_root_id == BOT_ROOT
+    html = _client().get("/drive/live").text
+    assert "Connect it once" not in html
+    assert "has not connected Google Drive" not in html
+    assert "@ann.ig" in html
+
+
+def test_the_bot_never_makes_a_root_of_its_own(bot_drive):
+    """The configured root not usable (outside production: not named
+    "DEV - ALL ACCOUNTS"): the sweep says why and makes nothing anywhere."""
+    bot_drive.rename_by_hand(BOT_ROOT, "ALL ACCOUNTS")
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+
+    report = drive_folders.sync()
+
+    assert report.created == []
+    assert any("cannot use OFM_GDRIVE_ROOT_FOLDER" in f for f in report.failed)
+    assert bot_drive.named("DEV - ALL ACCOUNTS", "root") == []
+
+
+def test_only_the_agency_admin_falls_back_to_the_bot(bot_drive):
+    vee = users.add_user(UserForm(email="vee@example.com"))
+    phone = devices.add_device(
+        DeviceFields(label="Vee 01", model_id="iphone-13", color_id="blue"),
+        user_id=vee.id,
+    )
+    _login(phone, "instagram", "vee.ig")
+
+    report = drive_folders.sync(vee.id)
+
+    assert report.not_connected == ["vee@example.com"]
+    assert bot_drive.named("vee.ig - Vee 01", BOT_ROOT) == []

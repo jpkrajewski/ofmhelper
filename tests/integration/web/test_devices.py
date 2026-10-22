@@ -540,7 +540,7 @@ def test_page_filters_by_query_string(va):
     html = va.get("/phones?family=iphone-15").text
     assert 'data-search="b ' in html
     assert 'data-search="a ' not in html
-    assert "2 phones" in html
+    assert "Phones (2)" in html
     assert "No phone matches these filters" in va.get("/phones?owner=nobody").text
 
 

@@ -1,0 +1,6 @@
+{# Number formats /links and /accounts' link column share. #}
+
+{# A click-through rate, "12.3%"; a dash without views. #}
+{% macro pct(p) -%}
+    {%- if p is none %}<span class="pending" title="No views in the period">—</span>{% else %}{{ "%.1f"|format(p) }}%{% endif -%}
+{%- endmacro %}
