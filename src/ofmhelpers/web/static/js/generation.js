@@ -47,8 +47,27 @@
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "recreate-btn";
-        btn.textContent = "↻ Recreate";
+        btn.textContent = "Recreate";
         return btn;
+    }
+
+    // The card's one row of actions (Download, Recreate), same as the
+    // templates' .result-actions.
+    function buildActions(...buttons) {
+        const row = document.createElement("div");
+        row.className = "result-actions";
+        row.append(...buttons);
+        return row;
+    }
+
+    function buildDownloadLink(item) {
+        const dl = document.createElement("a");
+        dl.href = item.download_url;
+        dl.download = item.download_name || item.name;
+        dl.dataset.localFallbackUrl = item.local_fallback_url || "";
+        dl.className = "btn download-btn";
+        dl.textContent = "Download";
+        return dl;
     }
 
     function buildSourceLabel(label) {
@@ -58,16 +77,14 @@
         return source;
     }
 
-    // An <audio> element shows nothing that identifies the file, so a voice
-    // result was previously indistinguishable from every other voice result.
-    // Same node the server-rendered cards carry (see
-    // _generate_gallery_card.html / _asset_grid.html) so a fresh generation and
-    // a reloaded one look identical.
+    // An <audio> element shows nothing that identifies the file, so an audio
+    // result (only) carries its name. Same node the server-rendered cards
+    // carry (_generate_gallery_card.html) so a fresh generation and a
+    // reloaded one look identical.
     function buildFilenameLabel(name) {
         const el = document.createElement("p");
         el.className = "filename";
         el.textContent = name || "";
-        el.title = name || "";
         return el;
     }
 
@@ -81,13 +98,8 @@
         if (kind !== "video" && kind !== "audio" && kind !== "image") {
             const file = document.createElement("div");
             file.className = "result-file";
-            file.textContent = `📄 ${item.name}`;
-            const dl = document.createElement("a");
-            dl.href = item.download_url;
-            dl.download = item.download_name || item.name;
-            dl.className = "download-btn";
-            dl.textContent = "⬇ Download";
-            div.append(file, buildFilenameLabel(item.name), dl, buildSourceLabel(label));
+            file.textContent = item.name;
+            div.append(file, buildSourceLabel(label), buildActions(buildDownloadLink(item)));
             return div;
         }
 
@@ -124,19 +136,11 @@
             );
         }
 
-        const dl = document.createElement("a");
-        dl.href = item.download_url;
-        dl.download = item.download_name || item.name;
-        dl.dataset.localFallbackUrl = item.local_fallback_url || "";
-        dl.className = "download-btn";
-        dl.textContent = "⬇ Download";
-
+        div.append(media);
+        if (tag === "audio") div.append(buildFilenameLabel(item.name));
         div.append(
-            media,
-            buildFilenameLabel(item.name),
-            dl,
-            buildRecreateButton(),
-            buildSourceLabel(label)
+            buildSourceLabel(label),
+            buildActions(buildDownloadLink(item), buildRecreateButton())
         );
         return div;
     }
@@ -180,19 +184,20 @@
 
     // job is optional: the "lost track of this job" fallback has no params
     // to restore, so that card gets no Recreate button.
-    function buildFailedCard(label, error, job) {
+    // `reason` is the short one (schemas/errors.py, the status payload's
+    // error_reason); the full message stays as the hover text.
+    function buildFailedCard(label, error, job, reason) {
         const div = document.createElement("div");
         div.className = "result-item";
         const box = document.createElement("div");
-        box.className = "result-file";
+        box.className = "result-file result-failed";
         box.title = error;
-        box.textContent = `⚠ ${error.length > 80 ? `${error.slice(0, 80)}…` : error}`;
-        div.appendChild(box);
+        box.textContent = reason || "Failed";
+        div.append(box, buildSourceLabel(label));
         if (job) {
             attachJobData(div, job);
-            div.appendChild(buildRecreateButton());
+            div.appendChild(buildActions(buildRecreateButton()));
         }
-        div.appendChild(buildSourceLabel(label));
         return div;
     }
 
@@ -224,7 +229,7 @@
                 }
                 if (job.status === "failed") {
                     card.replaceWith(
-                        buildFailedCard(label, job.error || "Generation failed.", job)
+                        buildFailedCard(label, job.error || "Generation failed.", job, job.error_reason)
                     );
                     return;
                 }
@@ -241,10 +246,11 @@
                     const msg = job.failed_sources
                         .map((f) => `${f.source}: ${f.error}`)
                         .join("\n");
-                    cards.push(buildFailedCard(label, msg, job));
+                    const n = job.failed_sources.length;
+                    cards.push(buildFailedCard(label, msg, job, `${n} link${n === 1 ? "" : "s"} failed`));
                 }
                 if (!cards.length) {
-                    cards.push(buildFailedCard(label, "No output produced.", job));
+                    cards.push(buildFailedCard(label, "No output produced.", job, "No output"));
                 }
                 card.replaceWith(...cards);
             })
@@ -259,7 +265,9 @@
                 card.replaceWith(
                     buildFailedCard(
                         label,
-                        `Lost track of this job's status -- check /action-log for job ${jobId}.`
+                        `Lost track of this job's status -- check /action-log for job ${jobId}.`,
+                        null,
+                        "Lost track"
                     )
                 );
             });

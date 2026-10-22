@@ -171,23 +171,3 @@ class DriveBoard(BaseModel):
     @property
     def root_url(self) -> str | None:
         return folder_url(self.root_folder_id) if self.root_folder_id else None
-
-    @property
-    def accounts_waiting(self) -> int:
-        return sum(1 for c in self.cards if c.waiting)
-
-    @property
-    def files_waiting(self) -> int:
-        return sum(len(c.waiting) for c in self.cards)
-
-    @property
-    def posted_today(self) -> int:
-        return sum(c.posted_today for c in self.cards)
-
-    @property
-    def posted_week(self) -> int:
-        return sum(c.posted_week for c in self.cards)
-
-    @property
-    def posted_total(self) -> int:
-        return sum(c.posted_total for c in self.cards)

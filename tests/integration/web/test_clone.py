@@ -96,8 +96,9 @@ def test_run_queues_one_batch_in_picked_order(client):
     assert {j.params["resolution"] for j in jobs} == {"720P"}
     html = r.json()["html"]
     assert html.count('class="result-item"') == 2
-    assert html.index("from b.mp4") < html.index("from a.mp4")
-    assert "from b.mp4" in client.get("/clone").text
+    cards = html.split('class="result-item"')[1:]
+    assert ["b.mp4" in cards[0], "a.mp4" in cards[1]] == [True, True]
+    assert "b.mp4" in client.get("/clone").text
 
 
 @pytest.mark.usefixtures("fake_runs")
@@ -175,7 +176,6 @@ def test_every_run_gets_all_the_subject_images(client):
     images = jobs[0].params["reference_images"]
     assert [Path(p).name.split("__", 1)[1] for p in images] == ["front.png", "side.png"]
     assert all(j.params["reference_images"] == images for j in jobs)
-    assert "2 images" in r.json()["html"]
     assert json.dumps(images) in _batches(jobs, page_full=False)[0].recreate_json
 
 
@@ -262,7 +262,6 @@ def test_batches_group_newest_first_and_drop_a_cut_off_tail():
         "/a/y1.mp4",
         "/a/y2.mp4",
     ]
-    assert new.hue == _batches(jobs, page_full=False)[0].hue
     assert old.id == "old"
     assert [b.id for b in _batches(jobs, page_full=True)] == ["new"]
 

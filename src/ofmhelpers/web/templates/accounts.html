@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% import "_account_numbers.html" as num %}
+{% import "_icons.html" as ic %}
 {% block title %}Accounts — Ascend Global LLC{% endblock %}
 {% block content %}
 <div class="page-head accounts-head">
     <div>
         <h1>Accounts</h1>
-        <p class="lead">Monitor performance across your social accounts.</p>
     </div>
-    <button type="button" class="btn-primary" id="accounts-add-open">+ Add account</button>
 </div>
 
 <div class="accounts-kpis">
@@ -51,6 +50,9 @@
         {% if query.per_page %}<input type="hidden" name="per_page" value="{{ query.per_page }}">{% endif %}
         <noscript><button type="submit" class="btn-outline">Apply</button></noscript>
     </form>
+    <div class="toolbar-actions">
+        <button type="button" class="btn-primary" id="accounts-add-open">{{ ic.icon("plus") }} Add account</button>
+    </div>
 </div>
 <div class="generation-status" id="accounts-status" role="status" aria-live="polite"></div>
 
@@ -129,11 +131,11 @@
                 <td data-label="Creator">{% if a.creator %}<span class="accounts-creator-tag">{{ a.creator }}</span>{% else %}<span class="pending">—</span>{% endif %}</td>
                 <td data-label="Phone">
                     {% for d in on_phones %}
-                    <a class="accounts-phone" href="/phones#phone-{{ d.id }}" title="{{ d.label }} · {{ d.specs }}">
-                        <img src="{{ d.drawing_url }}" alt="" width="20" height="38" loading="lazy">
+                    <a class="accounts-phone" href="/phones#phone-{{ d.id }}">
+                        <img src="{{ d.drawing_url }}" alt="{{ d.label }}" width="20" height="38" loading="lazy">
                         <span>{{ d.owner or d.label }}</span>
                     </a>
-                    {% else %}<span class="pending" title="No phone on /phones has this login">—</span>{% endfor %}
+                    {% else %}<span class="pending" data-no-phone>—</span>{% endfor %}
                 </td>
                 <td class="accounts-go"><a href="{{ query.link('/accounts/' ~ a.id) }}" aria-label="Analytics of @{{ a.handle }}">View analytics →</a></td>
             </tr>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_asset_media.html" as am %}
+{% import "components/ui.html" as ui %}
 {% block content %}
 <div class="page-head">
     <h1>{{ title|default("Job") }} <code>{{ job.id }}</code></h1>
@@ -77,5 +78,5 @@
 </div>
 {% endif %}
 
-<p class="section"><a href="{{ back_url }}">← {{ back_label|default("run another") }}</a></p>
+<p class="section">{{ ui.back_link(back_url, back_label|default("Run another")) }}</p>
 {% endblock %}

@@ -52,15 +52,6 @@ def test_download_assets_page_offers_one_download_tool_and_clean(client):
     assert client.get("/clean-images").status_code in (404, 405)
 
 
-def test_both_url_tools_offer_the_manual_download_fallback(client):
-    """A platform that refuses yt-dlp/gallery-dl outright leaves nothing to
-    retry, so the way out is stated on the form rather than buried in a
-    truncated per-URL error tooltip."""
-    html = client.get("/download-assets").text
-    assert html.count("https://snapreels.net/en") == 1
-    assert 'rel="noopener"' in html
-
-
 def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_path):
     out_file = tmp_path / "clip.mp4"
     out_file.write_bytes(b"fake video")

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="dark">
+    <meta name="color-scheme" content="light">
     <title>{% block title %}Ascend Global LLC — Content Ops{% endblock %}</title>
     {% include "_favicon.html" %}
     <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
@@ -79,7 +79,7 @@
                not a destination, and on a phone it must not be hidden
                behind the menu toggle. #}
             <form method="post" action="/logout" class="logout-form">
-                {% if signed_in_as %}<a class="signed-in-as" href="/account" title="Your account">{{ signed_in_as }}</a>{% endif %}
+                {% if signed_in_as %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% endif %}
                 <button type="submit" class="btn-ghost">Log out</button>
             </form>
 

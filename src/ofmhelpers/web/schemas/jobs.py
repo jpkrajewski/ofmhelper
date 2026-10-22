@@ -4,8 +4,9 @@ what the dict versions of these shapes used to carry."""
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
+from ofmhelpers.web.schemas.errors import error_reason
 from ofmhelpers.web.schemas.persistence import JobPreview
 
 
@@ -46,6 +47,12 @@ class JobStatusPayload(BaseModel):
     result: list[AssetCard]
     failed_sources: list[FailedSource]
     preview: JobPreview | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_reason(self) -> str:
+        """The failure as one short reason, as a gallery card shows it."""
+        return error_reason(self.error)
 
 
 class JobQueued(BaseModel):

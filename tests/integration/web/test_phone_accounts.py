@@ -99,7 +99,7 @@ def test_phones_show_followers_and_sort_by_them_by_default(admin):
     assert '<span class="ph-login-followers">200k followers</span>' in html
     order = [html.index(label) for label in ("B big", "A small", "C none")]
     assert order == sorted(order)
-    assert '<option value="followers" selected>Sort: Most followers</option>' in html
+    assert '<option value="followers" selected>Most followers</option>' in html
 
 
 @pytest.mark.parametrize(

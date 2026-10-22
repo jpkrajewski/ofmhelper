@@ -179,7 +179,6 @@
         const panel = row.querySelector(".ph-revealed");
         const password = panel.querySelector("[data-secret]");
         const codes = panel.querySelector("[data-codes]");
-        const hint = button.title;
         button.addEventListener("click", async () => {
             const shown = button.getAttribute("aria-pressed") === "true";
             if (!shown) {
@@ -197,7 +196,6 @@
             }
             panel.hidden = shown;
             button.setAttribute("aria-pressed", String(!shown));
-            button.title = shown ? hint : button.dataset.hintShown;
             button.querySelector(".ph-when-hidden").hidden = !shown;
             button.querySelector(".ph-when-shown").hidden = shown;
         });

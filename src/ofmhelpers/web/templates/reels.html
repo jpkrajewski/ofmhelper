@@ -43,7 +43,6 @@
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Reels</h2>
 <div class="reels-filters">
     <span class="reels-filter-label" id="reels-filter-group">Group</span>
     <nav class="reels-filter" aria-labelledby="reels-filter-group">
@@ -57,12 +56,17 @@
         <a href="{{ href }}" {% if tier %}data-tier="{{ tier }}"{% endif %} {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
     </nav>
-    <span class="reels-filter-label" id="reels-filter-reach" title="A reel's views divided by its account's followers">Views ÷ followers</span>
+    <span class="reels-filter-label" id="reels-filter-reach">Views ÷ followers</span>
     <nav class="reels-filter" aria-labelledby="reels-filter-reach">
         {% for label, href, current in ratio_links %}
         <a href="{{ href }}" {% if current %}aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
     </nav>
+</div>
+<div class="reels-selection" role="region" aria-label="Selected reels">
+    <span class="reels-selection-count" id="reels-picked-count" aria-live="polite">No reels selected</span>
+    <button type="button" class="btn-outline" id="reels-download" disabled>Download</button>
+    <button type="button" class="btn-primary" id="reels-clone" disabled>Clone</button>
 </div>
 <div class="generation-status" id="reels-clone-status" role="status" aria-live="polite"></div>
 
@@ -76,11 +80,6 @@
     No reels yet. Add profiles, then Add &amp; scan.
     {% endif %}
 </p>
-<div class="reels-selection" role="region" aria-label="Selected reels">
-    <span class="reels-selection-count" id="reels-picked-count" aria-live="polite">No reels selected</span>
-    <button type="button" class="btn-outline" id="reels-download" disabled>Download</button>
-    <button type="button" class="btn-primary" id="reels-clone" disabled>Clone</button>
-</div>
 </div>
 </div>
 

@@ -268,13 +268,16 @@ def test_clone_with_a_wrong_key_queues_the_batch_and_fails_cleanly(
     batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
     title = va.page.locator(f"{batch} .clone-batch-title")
     expect(title).to_contain_text("2 videos")
-    expect(title).to_contain_text("2 images")
     expect(va.page.locator(batch)).to_have_count(1)  # no duplicate batch
     expect(coworker.page.locator(batch)).to_have_count(1, timeout=LIVE_TIMEOUT_MS)
 
     # kie.ai rejects the key at the first upload: every run fails with it,
     # and nothing is generated or paid for.
-    failed = va.page.locator(f"{batch} .result-file", has_text="kie.ai: wrong API key")
+    # The card shows the short reason; the provider's message is its title.
+    failed = va.page.locator(
+        f'{batch} .result-failed[title*="kie.ai: wrong API key"]',
+        has_text="Wrong API key",
+    )
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
 
     # Recreate brings the whole batch back without re-uploading.
@@ -430,7 +433,8 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     batch = f'#clone-batches > .clone-batch[data-batch="{batch_id}"]'
     # Higgsfield is the default provider; the wrong key fails on it.
     failed = va.page.locator(
-        f"{batch} .result-file", has_text="Higgsfield: wrong API key"
+        f'{batch} .result-failed[title*="Higgsfield: wrong API key"]',
+        has_text="Wrong API key",
     )
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
 
@@ -746,9 +750,6 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     ann_card = cards.filter(has_text="ann.ig")
     expect(ann_card.locator(".dr-count")).to_have_text("Waiting:1 video")
     expect(ann_card.locator(".dr-file img")).to_be_visible()
-    expect(admin.page.locator(".lead")).to_have_text(
-        "1 file waiting to post in 1 of 2 accounts · Posted today: 0 · Last 7 days: 0"
-    )
 
     # Posted: a person moves it into POSTED; the next Sync counts it.
     fake_drive.move(reel, ann_posted)
@@ -756,10 +757,6 @@ def test_drive_page_lists_accounts_searches_and_syncs(
         admin.page.click("#dr-sync")
     assert reports.pop()["newly_posted"] == 1
     expect(ann_card.locator(".dr-posted")).to_contain_text("Posted today: 1")
-    expect(ann_card.locator(".dr-posted")).to_contain_text("Last 7 days: 1")
-    expect(admin.page.locator(".lead")).to_have_text(
-        "0 files waiting to post in 0 of 2 accounts · Posted today: 1 · Last 7 days: 1"
-    )
 
     # Nothing more was written: the move was the person's, the app only read.
     assert fake_drive.writes == ["create"] * 5

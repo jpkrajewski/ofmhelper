@@ -9,7 +9,6 @@ Data only: the result's asset cards come in already built (`job_assets` in
 `routers/task_helpers`, which owns the file URLs).
 """
 
-import hashlib
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -18,6 +17,7 @@ from typing import Any, Self
 from pydantic import BaseModel, computed_field
 
 from ofmhelpers.web.schemas.drive import DriveUpload
+from ofmhelpers.web.schemas.errors import error_reason
 from ofmhelpers.web.schemas.jobs import AssetCard, FailedSource
 from ofmhelpers.web.schemas.persistence import Job
 
@@ -36,6 +36,12 @@ class JobCard(BaseModel):
     @property
     def params_json(self) -> str:
         return json.dumps(self.params)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_reason(self) -> str:
+        """The failure as one short reason ("No credits", ...)."""
+        return error_reason(self.error)
 
     @classmethod
     def from_job(
@@ -86,7 +92,7 @@ class CloneCard(JobCard):
     """One video's run inside a /clone batch, with how long it took or,
     while it runs, how long it should take (`clone_eta`)."""
 
-    video_name: str
+    export_label: str
     took_s: float | None = None
     eta: CloneEta | None = None
     # Where its result was uploaded in Drive (web/drive_uploads.py).
@@ -126,13 +132,6 @@ class CloneBatch(BaseModel):
     @property
     def resolution(self) -> str:
         return self._first["resolution"]
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def hue(self) -> int:
-        """A stable colour per batch, so its cards read as one group at a
-        glance and keep that colour across reloads."""
-        return int(hashlib.sha256(self.id.encode()).hexdigest()[:4], 16) % 360
 
     @computed_field  # type: ignore[prop-decorator]
     @property

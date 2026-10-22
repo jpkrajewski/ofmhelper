@@ -19,39 +19,24 @@
     </div>
 
     <fieldset class="tool-fields" data-tool="download_media">
-        <legend>Download videos &amp; images</legend>
         <div class="field">
-            <label>URLs (one per line)</label>
-            <textarea name="urls" rows="6" placeholder="https://www.tiktok.com/@user/video/123&#10;https://www.instagram.com/reel/abc123/&#10;https://www.instagram.com/p/abc123/"></textarea>
+            <label for="dl-urls">Links, one per line</label>
+            <textarea id="dl-urls" name="urls" rows="6" required placeholder="https://www.tiktok.com/@user/video/123&#10;https://www.instagram.com/reel/abc123/&#10;https://www.instagram.com/p/abc123/"></textarea>
         </div>
-        <p class="picker-help">
-            Any link: reels, TikToks, YouTube, photo posts and carousels (Instagram,
-            X, Pinterest, TikTok photos) -- each link gets whatever it holds.
-            Login/cookies error on a link? Upload your fresh <code>cookies.txt</code> on the
-            <a href="/cookies">Cookies</a> page first (yours only). Still refusing to download?
-            Grab the file by hand from
-            <a href="https://snapreels.net/en" target="_blank" rel="noopener">snapreels.net</a>.
-        </p>
     </fieldset>
 
     <fieldset class="tool-fields" data-tool="clean_images" disabled hidden>
-        <legend>Clean image metadata</legend>
         <div class="field">
-            <label>Images to clean (EXIF/GPS/location metadata gets stripped)</label>
-            <input type="file" name="files" multiple accept="image/*">
+            <label for="clean-files">Images</label>
+            <input type="file" id="clean-files" name="files" multiple accept="image/*" required>
         </div>
     </fieldset>
 
     <button type="submit" class="btn-primary">Run</button>
-    <p class="form-hint">
-        Running doesn't block the form -- fire several and watch them land on the
-        right. Hit ↻ Recreate on a past run to reload its URLs.
-    </p>
 </form>
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Results</h2>
 
 <div id="results-panel">
     <div class="generation-status"></div>

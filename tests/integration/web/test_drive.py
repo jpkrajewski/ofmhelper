@@ -567,10 +567,9 @@ def test_page_shows_what_waits_and_what_was_posted(drive):
 
     html = _client().get("/drive/live").text
 
-    assert (
-        "2 files waiting to post in 1 of 2 accounts · Posted today: 1 · Last 7 days: 1"
-        in html
-    )
+    # No page-level summary: each card says what waits and what was posted.
+    assert "waiting to post in" not in html
+    assert "Posted today: <strong>1</strong>" in html
     assert f'src="/drive/thumb/{ann}/{video}"' in html
     assert "notes.txt" in html
     assert "Nothing waiting to post" in html
@@ -609,7 +608,7 @@ def test_page_lists_every_account_in_a_fixed_number_of_calls(drive):
 
     html = _client().get("/drive/live").text
 
-    assert "6 files waiting to post in 6 of 6 accounts" in html
+    assert html.count('class="dr-file"') == 6
     # The root's own check runs alongside its listing: order not fixed.
     assert sorted(drive.calls) == ["children", "children_of", "children_of", "folder"]
 
@@ -909,12 +908,12 @@ def test_the_page_opens_with_no_drive_call_from_the_last_read(drive):
 
     assert drive.calls == []
     assert 'data-live="/drive/live"' in html
-    assert "Refreshing from Drive" in html
+    assert 'class="dr-asof"' in html
     assert "Nothing waiting to post" in html  # the sweep saw no file yet
 
     live = _client().get("/drive/live").text
     assert "new.mp4" in live
-    assert "Refreshing from Drive" not in live
+    assert 'class="dr-asof"' not in live
     # The live read is the next page's start.
     drive.clear_calls()
     assert "new.mp4" in _client().get("/drive").text

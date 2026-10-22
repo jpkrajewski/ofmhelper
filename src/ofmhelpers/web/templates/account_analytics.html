@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% import "_account_numbers.html" as num %}
+{% import "components/ui.html" as ui %}
 {% block title %}{{ account.name }} — Accounts{% endblock %}
 {% block content %}
 {% set growth = account.growth(period.days) %}
 {% set views = account.views(period.days) %}
-<p class="accounts-back"><a href="{{ query.link(period=query.period) }}">‹ Accounts</a></p>
+{{ ui.back_link(query.link(period=query.period), "Accounts") }}
 
 <div class="accounts-identity">
     {% if account.profile and account.profile.avatar_url %}

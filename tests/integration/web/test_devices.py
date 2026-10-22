@@ -514,9 +514,9 @@ def test_page_lists_phones_without_any_secret(va):
     assert "pw-123" not in html
     assert "CODE-999" not in html
     # One copy button for the whole login, one Show for password + codes;
-    # every icon says what it does on hover.
-    assert 'title="Copy login:password:codes"' in html
-    assert 'title="Show password and recovery codes"' in html
+    # every icon says what it does to a screen reader.
+    assert 'aria-label="Copy login:password:codes (' in html
+    assert 'aria-label="Show password and recovery codes (' in html
     assert "ph-copy-secret" not in html
     assert "ph-codes-toggle" not in html
     # The viewer's own phones: they edit them.
@@ -795,6 +795,6 @@ def test_accounts_page_shows_the_phone_in_place_of_notes(va):
     assert "/phones/drawing.svg?model=iphone-12&amp;color=green" in html
     assert "<span>Anna</span>" in html
     # The other row has no phone.
-    assert html.count('title="No phone on /phones has this login"') == 1
+    assert html.count("data-no-phone") == 1
     # The phone card is the link's anchor.
     assert f'id="phone-{device}"' in va.get("/phones").text

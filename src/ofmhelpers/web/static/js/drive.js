@@ -35,19 +35,11 @@
 
     if (search) search.addEventListener("input", applySearch);
 
-    // "Last read 3 min ago · refreshing…" while the live read is on its way.
-    function ago(ts) {
-        const minutes = Math.round((Date.now() / 1000 - ts) / 60);
-        if (minutes < 1) return "just now";
-        if (minutes < 60) return `${minutes} min ago`;
-        return `${Math.round(minutes / 60)} h ago`;
-    }
-
+    // The page shows the last read at once and swaps in Drive's live read
+    // silently; only a failed live read says anything.
     const board = $("dr-board");
     if (board?.dataset.live) {
         const asOf = board.querySelector(".dr-asof");
-        const ts = Number(asOf?.dataset.asOf);
-        if (asOf && ts) asOf.textContent = `Last read ${ago(ts)} · refreshing from Drive…`;
         fetch(board.dataset.live)
             .then((r) => {
                 if (!r.ok) throw new Error(`Drive did not answer (${r.status})`);
@@ -59,7 +51,9 @@
                 if (search) applySearch();
             })
             .catch((err) => {
-                if (asOf) asOf.textContent = `Showing the last read: ${err.message}`;
+                if (!asOf) return;
+                asOf.textContent = `Showing the last read: ${err.message}`;
+                asOf.hidden = false;
             });
     }
 

@@ -24,9 +24,14 @@
         statusEl.appendChild(el);
     }
 
+    // "45s", "4m 12s", "43h 48m": readable at a glance at any length.
     function clock(seconds) {
         const s = Math.max(0, Math.round(seconds));
-        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (h) return `${h}h ${m}m`;
+        if (m) return `${m}m ${s % 60}s`;
+        return `${s}s`;
     }
 
     // A running card's time since submit, against the estimate from recent
@@ -40,7 +45,7 @@
             const slow = eta && elapsed > Number(el.dataset.slowS);
             el.classList.toggle("is-slow", Boolean(slow));
             if (!eta) el.textContent = clock(elapsed);
-            else if (slow) el.textContent = `${clock(elapsed)} · slower than usual (~${clock(eta)}), may be stuck`;
+            else if (slow) el.textContent = `${clock(elapsed)} · may be stuck`;
             else if (elapsed <= eta) el.textContent = `${clock(elapsed)} / ~${clock(eta)}`;
             else el.textContent = `${clock(elapsed)} (est. ~${clock(eta)})`;
         });
@@ -203,7 +208,8 @@
         });
     }
 
-    function fillForm(form, params, message) {
+    // The form visibly fills; no message on top of it.
+    function fillForm(form, params) {
         window.FilePicker.setExisting("image", params.reference_images || []);
         window.FilePicker.setExisting("videos", params.reference_videos || []);
         const prompt = form.querySelector('[name="prompt"]');
@@ -219,7 +225,7 @@
         form.querySelector('[name="audio"]').checked = !!params.audio;
         form.querySelector('[name="export"]').value = params.export;
         form.querySelector('[name="mirror"]').checked = !!params.mirror;
-        setStatus(form.querySelector(".generation-status"), message, false);
+        setStatus(form.querySelector(".generation-status"), "", false);
         form.scrollIntoView({ behavior: "smooth" });
     }
 
@@ -227,27 +233,19 @@
         const videos = JSON.parse(form.dataset.prefillVideos || "[]");
         if (!videos.length) return;
         window.FilePicker.setExisting("videos", videos);
-        const n = videos.length;
-        setStatus(
-            form.querySelector(".generation-status"),
-            `Loaded ${n} reel${n === 1 ? "" : "s"}. Add your images, then Start.`,
-            false
-        );
     }
 
     function initRecreate(form) {
         document.getElementById("clone-batches").addEventListener("click", (e) => {
             const batchBtn = e.target.closest(".batch-recreate-btn");
             if (batchBtn) {
-                const params = JSON.parse(batchBtn.closest(".clone-batch").dataset.params);
-                const n = params.reference_videos.length;
-                fillForm(form, params, `Loaded batch: ${n} video${n === 1 ? "" : "s"}. Press Start to run it again.`);
+                fillForm(form, JSON.parse(batchBtn.closest(".clone-batch").dataset.params));
                 return;
             }
             if (!e.target.closest(".recreate-btn")) return;
             const card = e.target.closest(".result-item[data-params]");
             if (!card) return;
-            fillForm(form, JSON.parse(card.dataset.params), "Loaded 1 video. Press Start to run it again.");
+            fillForm(form, JSON.parse(card.dataset.params));
         });
     }
 
@@ -270,7 +268,7 @@
         } else if (upload.status === "failed") {
             const span = document.createElement("span");
             span.title = upload.error || "";
-            span.textContent = `⚠ Drive upload to ${upload.folder_name} failed`;
+            span.textContent = `Drive upload to ${upload.folder_name} failed`;
             li.appendChild(span);
         } else {
             const spinner = document.createElement("span");

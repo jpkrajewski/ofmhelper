@@ -1,0 +1,12 @@
+{# Reusable page elements. A page builds its UI from these macros, never
+   from hand-written markup with classes of its own: the look of each one
+   lives in app.css under its role, so changing it here or there changes
+   it on every page.
+
+   Import: {% import "components/ui.html" as ui %} #}
+{% import "_icons.html" as ic %}
+
+{# A link back to the page this one belongs to ("‹ Accounts"). #}
+{% macro back_link(href, label) -%}
+<a class="btn btn-ghost back-link" href="{{ href }}">{{ ic.icon("arrow-left") }} {{ label }}</a>
+{%- endmacro %}

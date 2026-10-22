@@ -13,12 +13,11 @@
       data-prefill-videos='{{ prefill_videos|tojson }}'
       data-pricing='{{ pricing|tojson }}' novalidate>
     {% include "_provider_fields.html" %}
-    {{ fp.file_picker('image', 'image', 'Subject', 'Up to ' ~ max_images ~ ' photos of one person', max=max_images, multiple=true) }}
-    {{ fp.file_picker('videos', 'video', 'Videos', 'One run each · 1–' ~ max_reference_s ~ ' s · up to ' ~ max_videos, multiple=true) }}
+    {{ fp.file_picker('image', 'image', 'Subject', max=max_images, multiple=true) }}
+    {{ fp.file_picker('videos', 'video', 'Videos', multiple=true) }}
     <div class="field">
         <label for="clone-prompt">Prompt</label>
         <textarea id="clone-prompt" name="prompt" class="prompt-input" rows="3" required>{{ default_prompt }}</textarea>
-        <p class="form-hint">@Image1, @Image2… are the subject photos, @Video1 the video.</p>
     </div>
     <div class="field clone-output">
         <span class="field-label">Output</span>
@@ -64,7 +63,6 @@
 </div>
 
 <div class="generate-gallery-col">
-<h2 class="col-title">Batches</h2>
 {% if not drive_ready %}
 <div class="notice drive-connect" role="status">
     <span>Connect Google Drive to upload results straight into your accounts' folders.</span>

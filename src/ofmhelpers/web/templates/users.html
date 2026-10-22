@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-head">
     <h1>Users</h1>
-    <p class="lead">Who may sign in. Add an email, then send them the password link, or they sign in with {% if providers %}{% for p in providers %}{{ p.label }}{{ " or " if not loop.last }}{% endfor %} under that email{% else %}that email{% endif %}. Everyone sees only their own work; admins also manage this page.</p>
 </div>
 
 {% if error %}<div class="notice notice-warn" role="alert">{{ error }}</div>{% endif %}
@@ -68,7 +67,7 @@
                         </select>
                     </form>
                     {% endif %}
-                    {% if u.email in env_admins %}<span class="pending users-note" title="OFM_ADMIN_EMAILS">always admin</span>{% endif %}
+                    {% if u.email in env_admins %}<span class="pending users-note">always admin</span>{% endif %}
                 </td>
                 <td>
                     {%- set ways = [] -%}

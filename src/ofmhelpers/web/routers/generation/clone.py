@@ -60,7 +60,6 @@ from ofmhelpers.web.routers.task_helpers import (
     job_assets,
     register_generated_asset,
     resolve_existing_ref,
-    strip_asset_hash_prefix,
 )
 from ofmhelpers.web.schemas import (
     CloneBatch,
@@ -322,13 +321,20 @@ def _history_rates() -> dict[Key, CloneRate]:
     return clone_rates(jobs, runs)
 
 
+def _export_label(params: dict[str, Any]) -> str:
+    """What the run was exported as (Original, CapCut, a phone), by its
+    label; runs from before `export` stored only the `capcut` bool."""
+    name = params.get("export") or ("capcut" if params.get("capcut") else "original")
+    choice = exports().get(name)
+    return choice.label if choice else name
+
+
 def _card(job: Job, rates: dict[Key, CloneRate]) -> CloneCard:
-    video = job.params["reference_videos"][0]
     eta = clone_eta(rates, job.params) if job.status == "running" else None
     return CloneCard.from_job(
         job,
         *job_assets(job, FILES_PREFIX),
-        video_name=strip_asset_hash_prefix(Path(video).name),
+        export_label=_export_label(job.params),
         took_s=took_s(job) if job.status == "done" else None,
         eta=eta,
     )

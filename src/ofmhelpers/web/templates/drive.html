@@ -6,10 +6,6 @@
     <div>
         <h1>Drive</h1>
     </div>
-    <div class="page-head-actions">
-        {% if board.root_url %}<a class="btn ph-btn" href="{{ board.root_url }}" target="_blank" rel="noopener" title="{{ board.root_name }} in your Drive">{{ ic.icon("folder") }} Open in Drive</a>{% endif %}
-        <button type="button" class="btn-primary ph-btn" id="dr-sync" {% if board.problem and not board.cards %}disabled{% endif %}>{{ ic.icon("refresh") }} Sync</button>
-    </div>
 </div>
 
 <div class="generation-status" id="dr-status" role="status" aria-live="polite"></div>
@@ -19,6 +15,10 @@
         {{ ic.icon("search") }}
         <input type="search" id="dr-search" placeholder="Search accounts, people, phones…" aria-label="Search accounts" autocomplete="off">
     </label>
+    <div class="toolbar-actions">
+        {% if board.root_url %}<a class="btn ph-btn" href="{{ board.root_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} Open in Drive</a>{% endif %}
+        <button type="button" class="btn-primary ph-btn" id="dr-sync" {% if board.problem and not board.cards %}disabled{% endif %}>{{ ic.icon("refresh") }} Sync</button>
+    </div>
 </div>
 
 <div id="dr-board"{% if not board.live %} data-live="/drive/live"{% endif %}>

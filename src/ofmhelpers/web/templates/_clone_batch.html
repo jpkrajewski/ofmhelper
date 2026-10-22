@@ -1,35 +1,29 @@
-{# One /clone batch: the subject images + settings as a header, then a card per
-   video. Rendered by the page for every recent batch and by POST /clone/run
-   for the one just submitted, so a fresh batch and a reloaded one are
-   identical. Cards carry the same data attributes as a /generate gallery
-   card, so generation.js resumes, polls and rebuilds them unchanged. #}
+{# One /clone batch: the subject image + "N videos · resolution" as a header,
+   then a card per video. Rendered by the page for every recent batch and by
+   POST /clone/run for the one just submitted, so a fresh batch and a
+   reloaded one are identical. Cards carry the same data attributes as a
+   /generate gallery card, so generation.js resumes, polls and rebuilds them
+   unchanged. Card shape as every gallery: media (or the failure reason),
+   one meta line, one row of actions. #}
 {% import "_asset_media.html" as am %}
-<section class="clone-batch" style="--batch-hue: {{ batch.hue }}" data-batch="{{ batch.id }}"
+<section class="clone-batch" data-batch="{{ batch.id }}"
          data-params='{{ batch.recreate_json }}'>
     <header class="clone-batch-head">
         {% if batch.cover %}
         <img class="clone-batch-thumb" alt="Subject image" loading="lazy"
              src="/refs/thumb?path={{ batch.cover|urlencode }}&size=150">
         {% else %}
-        <span class="clone-batch-thumb" title="Subject image no longer stored"></span>
+        <span class="clone-batch-thumb" role="img" aria-label="Subject image no longer stored"></span>
         {% endif %}
-        <div class="clone-batch-meta">
-            <p class="clone-batch-title">
-                {{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }}
-                {%- if batch.images|length > 1 %} · {{ batch.images|length }} images{% endif %} · {{ batch.resolution }}
-                · <time data-ts="{{ batch.created_at }}"></time>
-            </p>
-            <p class="clone-batch-prompt" title="{{ batch.prompt }}">{{ batch.prompt }}</p>
-        </div>
-        <button type="button" class="btn-outline batch-recreate-btn">↻ Recreate batch</button>
+        <p class="clone-batch-title">{{ batch.cards|length }} video{{ "s" if batch.cards|length != 1 }} · {{ batch.resolution }}</p>
+        <button type="button" class="btn-outline batch-recreate-btn">Recreate batch</button>
         {% if drive_targets %}
         <div class="clone-drive">
             <div class="drive-pick">
                 <select class="drive-target" aria-label="Drive folder to upload into">
                     {% for t in drive_targets|sort(attribute="folder_name") %}<option value="{{ t.login_id }}">{{ t.folder_name }}</option>{% endfor %}
                 </select>
-                <button type="button" class="btn-outline drive-upload-btn" data-scope="batch"
-                        {% if not drive_ready %}title="Connect Google Drive on your Account page first"{% endif %}>⇪ Upload batch</button>
+                <button type="button" class="btn-outline drive-upload-btn" data-scope="batch">Upload batch</button>
             </div>
             <p class="drive-note" role="status" hidden></p>
         </div>
@@ -42,32 +36,34 @@
              {% if card.status not in ("done", "failed") %}data-pending data-poll-prefix="/clone" data-poll-kind="video"{% endif %}>
             {% if card.status == "done" and card.assets %}
                 {{ am.asset_media(card.assets[0]) }}
-                <p class="filename">{{ card.assets[0].name }}</p>
-                <a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].download_name }}"
-                   data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
-                <button type="button" class="recreate-btn">↻ Recreate</button>
-                {% if drive_targets %}<button type="button" class="drive-upload-btn" data-scope="card">⇪ Drive</button>{% endif %}
             {% elif card.status == "failed" %}
-                <div class="result-file" title="{{ card.error }}">⚠ {{ card.error|default("generation failed", true)|truncate(80) }}</div>
-                <button type="button" class="recreate-btn">↻ Recreate</button>
+                <div class="result-file result-failed" title="{{ card.error }}">{{ card.error_reason }}</div>
             {% elif card.status == "done" %}
-                <div class="result-file">no output</div>
+                <div class="result-file">No output</div>
             {% else %}
-                <div class="result-file"><span class="spinner"></span> generating…
+                <div class="result-file"><span class="spinner"></span>
                     <span class="clone-timer" data-started-at="{{ card.created_at }}"
                           {% if card.eta %}data-eta-s="{{ card.eta.eta_s }}" data-slow-s="{{ card.eta.slow_s }}"{% endif %}></span></div>
             {% endif %}
+            <p class="source">{{ card.export_label }}
+                {%- if card.took_s %} · <span data-took-s="{{ card.took_s|round|int }}"></span>{% endif %}</p>
             <ul class="drive-states">
-                {% for u in card.drive_uploads %}
+                {%- for u in card.drive_uploads %}
                 <li data-status="{{ u.status }}">
                     {% if u.status == "done" %}In Drive: <a href="{{ u.drive_url }}" target="_blank" rel="noopener">{{ u.folder_name }}</a>
-                    {% elif u.status == "failed" %}<span title="{{ u.error }}">⚠ Drive upload to {{ u.folder_name }} failed</span>
+                    {% elif u.status == "failed" %}<span title="{{ u.error }}">Drive upload to {{ u.folder_name }} failed</span>
                     {% else %}<span class="spinner"></span> Uploading to {{ u.folder_name }}…{% endif %}
                 </li>
-                {% endfor %}
+                {%- endfor -%}
             </ul>
-            <p class="source">from {{ card.video_name }} · {{ card.params.duration }}s
-                {%- if card.took_s %} · took <span data-took-s="{{ card.took_s|round|int }}"></span>{% endif %}</p>
+            {% if card.status == "failed" or (card.status == "done" and card.assets) %}
+            <div class="result-actions">
+                {% if card.assets %}<a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].download_name }}"
+                   data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="btn download-btn">Download</a>{% endif %}
+                <button type="button" class="recreate-btn">Recreate</button>
+                {% if card.assets and drive_targets %}<button type="button" class="drive-upload-btn" data-scope="card">Drive</button>{% endif %}
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

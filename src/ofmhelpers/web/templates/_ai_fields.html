@@ -31,7 +31,6 @@
     <input type="text" name="{{ f.name }}" id="{{ id }}"
            {% if f.default is not none %}value="{{ f.default }}"{% endif %}{% if f.required %} required{% endif %}>
     {% endif %}
-    {% if f.description %}<p class="picker-help">{{ f.description }}</p>{% endif %}
 </div>
 {% endif %}
 {% endfor %}

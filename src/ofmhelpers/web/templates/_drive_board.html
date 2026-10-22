@@ -3,9 +3,8 @@
    drive.js swaps that in. Expects `board` (schemas.DriveBoard). #}
 {% import "_icons.html" as ic %}
 {% set cards = board.cards %}
-<p class="lead dr-lead">{{ board.files_waiting }} file{{ "" if board.files_waiting == 1 else "s" }} waiting to post in {{ board.accounts_waiting }} of {{ cards|length }} account{{ "" if cards|length == 1 else "s" }} · Posted today: {{ board.posted_today }} · Last 7 days: {{ board.posted_week }}</p>
 {% if not board.live %}
-<p class="dr-asof" role="status" data-as-of="{{ board.as_of or '' }}">Refreshing from Drive…</p>
+<p class="dr-asof" role="status" hidden></p>
 {% endif %}
 {% if board.problem %}
 <div class="notice notice-warn drive-connect" role="alert">
@@ -20,7 +19,7 @@
     {% set t = c.target %}
     <article class="dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
         <header class="dr-card-head">
-            <a class="dr-phone" href="/phones#phone-{{ t.device.id }}" title="{{ t.device.label }} · {{ t.device.specs }}">
+            <a class="dr-phone" href="/phones#phone-{{ t.device.id }}">
                 <img src="{{ t.device.drawing_url }}" alt="" width="20" height="38" loading="lazy">
             </a>
             <div class="dr-title">
@@ -28,7 +27,7 @@
                 <p>{{ t.owner }} · {{ t.device.label }}</p>
             </div>
             {% if c.account_url %}
-            <a class="ph-icon-btn" href="{{ c.account_url }}" target="_blank" rel="noopener" title="Open the account's folder" aria-label="Open the folder of {{ t.handle }}">{{ ic.icon("folder") }}</a>
+            <a class="ph-icon-btn" href="{{ c.account_url }}" target="_blank" rel="noopener" aria-label="Open the folder of {{ t.handle }}">{{ ic.icon("folder") }}</a>
             {% endif %}
         </header>
         {% if c.error %}
@@ -62,7 +61,6 @@
         <p class="dr-posted">
             {% if c.posted_url %}<a href="{{ c.posted_url }}" target="_blank" rel="noopener">{{ ic.icon("folder") }} {{ board.posted_folder_name }}</a>{% else %}<span>{{ board.posted_folder_name }}: not made yet, Sync makes it</span>{% endif %}
             <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
-            <span>Last 7 days: <strong>{{ c.posted_week }}</strong></span>
         </p>
         {% endif %}
     </article>
