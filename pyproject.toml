@@ -45,6 +45,11 @@ dependencies = [
     # service account. google-auth also gives the authorised thumbnail fetch.
     "google-api-python-client>=2.201.0",
     "google-auth>=2.40.0",
+    # Traces, logs and metrics (OpenTelemetry) to Pydantic Logfire
+    # (ofmhelpers/telemetry.py): web requests, Postgres, Redis, outbound
+    # HTTP (kie.ai, Higgsfield, Instagram, Google) and every RQ job.
+    # Sends nothing without LOGFIRE_TOKEN.
+    "logfire[fastapi,sqlalchemy,requests,httpx,redis]>=4.41.0",
 ]
 
 [dependency-groups]

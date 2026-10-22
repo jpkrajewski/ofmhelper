@@ -26,27 +26,31 @@ def test_request_passes_session_then_rate_limit_then_auth():
 
 
 def test_auth_policy_lives_on_the_middleware():
-    """web/auth.py is gone: the allowlist check, the password check and the
+    """web/auth.py is gone: the allowlist check, the session's user and the
     admin dependency are all reachable off AuthMiddleware, so there is one
-    place to look for anything auth-shaped."""
+    place to look for anything auth-shaped (who may sign in is
+    stores/users.py)."""
     import importlib
 
     assert callable(AuthMiddleware.is_public)
     assert callable(AuthMiddleware.is_fetch)
-    assert callable(AuthMiddleware.check_password)
+    assert callable(AuthMiddleware.sign_in)
+    assert callable(AuthMiddleware.visible_actor)
     assert callable(AuthMiddleware.require_admin)
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("ofmhelpers.web.auth")
 
 
-def test_allowlist_and_roles_come_from_settings():
-    """Both are deployment knobs now, not literals in the middleware."""
+def test_allowlist_comes_from_settings():
+    """A deployment knob, not literals in the middleware; the sign-in round
+    trips and set-password links are public."""
     s = settings.web
     assert "/login" in s.public_paths
     assert AuthMiddleware.is_public("/static/css/app.css")
     assert not AuthMiddleware.is_public("/generate")
-    assert (s.role_admin, s.role_va) == ("admin", "va")
+    assert AuthMiddleware.is_public("/auth/google/callback")
+    assert AuthMiddleware.is_public("/password/some-token")
 
 
 def test_api_key_prefills_are_not_in_the_auth_module():

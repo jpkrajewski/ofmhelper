@@ -249,3 +249,15 @@ def test_connect_keeps_one_drive_per_thread_and_bounds_interactive_calls(
     assert page is not first
     assert drive_client.connect(interactive=True) is page
     assert made == [(None, None), (7.0, 1)]
+
+
+def test_a_resumable_uploads_308_is_not_followed_as_a_redirect():
+    """Drive answers each unfinished chunk with 308 Resume Incomplete;
+    httplib2 following it failed every real upload ("Redirected but the
+    response is missing a Location: header", dev 2026-10-22)."""
+    from ofmhelpers.gdrive.client import _transport
+
+    http = _transport(10)
+    assert 308 not in http.redirect_codes
+    assert {301, 302, 303, 307} <= http.redirect_codes
+    assert http.timeout == 10

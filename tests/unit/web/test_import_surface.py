@@ -22,7 +22,7 @@ TASK_HELPERS = (
     "VIDEO_EXTS",
     "VIDEO_KINDS",
     "assets_root_for",
-    "assets_root_for_role",
+    "assets_root_for_actor",
     "IMAGE_KINDS",
     "MEDIA_KINDS",
     "convert_heic_upload",

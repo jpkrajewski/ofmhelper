@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from e2e_session import FAKE_DRIVE_ROOT, Session
+from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
 from ofmhelpers.gdrive.fake import FakeDrive
@@ -20,7 +20,7 @@ from ofmhelpers.web.stores import devices, watched_profiles
 
 pytestmark = pytest.mark.e2e
 
-# Header order: the bar, then "More" (Uniqify, then the admin pages).
+# Header order: the bar, then "More" (Uniqify, Account, then the admin pages).
 VA_PAGES = [
     "/generate",
     "/clone",
@@ -30,8 +30,10 @@ VA_PAGES = [
     "/phones",
     "/drive",
     "/uniqify",
+    "/account",
 ]
 ADMIN_ONLY_PAGES = [
+    "/users",
     "/character-sheet",
     "/applications",
     "/file-manager",
@@ -77,6 +79,52 @@ def test_va_sees_only_its_pages_and_none_of_the_admin_ones(va: Session):
         assert va.goto(path) == 403, path
 
 
+def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
+    admin: Session, browser, base_url
+):
+    """The whole way in for a new person: added on /users, then signing in
+    with Google (the fake consent screen stands in for Google's), then
+    setting a password from the link and signing in with it."""
+    admin.goto("/users")
+    admin.page.fill("#users-email", "newbie@example.com")
+    admin.page.click(".users-add button[type=submit]")
+    link = admin.page.input_value("#users-link")
+    assert "/password/" in link
+
+    newbie = browser.new_context(base_url=base_url)
+    page = newbie.new_page()
+    page.goto("/login")
+    page.click('.login-provider[data-provider="google"]')
+    page.fill("#fake-email", "newbie@example.com")
+    with page.expect_navigation():
+        page.click("button[type=submit]")
+    assert "/auth/" not in page.url  # a refusal stays on the callback
+    page.goto("/account")
+    assert page.url.endswith("/account")
+    expect(page.locator('[data-provider="google"]')).to_contain_text(
+        "newbie@example.com"
+    )
+    expect(page.locator(".account-card").nth(1)).to_contain_text("Connected")
+    page.click(".logout-form button")
+
+    page.goto(link)
+    page.fill("#password", "a long new password")
+    page.fill("#confirm", "a long new password")
+    with page.expect_navigation():
+        page.click("button[type=submit]")
+    page.goto("/account")  # signed in by the link
+    expect(page.locator(".account-list")).to_contain_text("Password · set")
+    page.click(".logout-form button")
+    page.goto("/login")
+    page.fill("#email", "newbie@example.com")
+    page.fill("#password", "a long new password")
+    with page.expect_navigation():
+        page.click("button[type=submit]")
+    assert "/login" not in page.url
+    newbie.close()
+    assert admin.js_errors == []
+
+
 def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
     va: Session, coworker: Session
 ):
@@ -106,6 +154,48 @@ def test_fake_asset_is_generated_shown_live_and_downloads_as_img(
 
     assert va.js_errors == []
     assert coworker.js_errors == []
+
+
+def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Session):
+    """Recreate used to drop the model's default prompt in first and the
+    job's own a second later (once /ai/fields answered), and fetched the
+    fields again on every click. Now: the job's prompt at once, one fetch
+    per model, the form ends up holding the job however often it is
+    clicked."""
+    prompt = "e2e: recreate me exactly"
+    va.goto("/generate")
+    va.page.select_option("#provider-select", "fake")
+    va.page.select_option("#model-select", "fake:image")
+    va.page.fill('#model-fields [name="delay"]', "0")
+    va.page.fill('textarea[name="prompt"]', prompt)
+    with va.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
+        va.page.click('#generate-form button[type="submit"]')
+    card = f'.result-item[data-job-id="{run.value.json()["job_id"]}"]'
+    expect(va.page.locator(f"{card} .recreate-btn")).to_be_visible(
+        timeout=RESULT_TIMEOUT_MS
+    )
+
+    va.goto("/generate")  # the provider's default model, its own prompt box
+    _swap_fields(va, lambda: va.page.select_option("#provider-select", "kie"))
+    fields_asked: list[str] = []
+
+    def slow_fields(route):
+        fields_asked.append(route.request.url)
+        va.page.wait_for_timeout(800)
+        route.continue_()
+
+    va.page.route("**/ai/fields?*", slow_fields)
+    va.page.locator(f"{card} .recreate-btn").click()
+    # While the fields are still on their way: already the job's prompt.
+    assert va.page.input_value('textarea[name="prompt"]') == prompt
+
+    for _ in range(25):
+        va.page.locator(f"{card} .recreate-btn").click()
+    expect(va.page.locator('#model-fields [name="delay"]')).to_be_visible()
+    expect(va.page.locator('textarea[name="prompt"]')).to_have_value(prompt)
+    assert va.page.input_value("#model-select") == "fake:image"
+    assert len(fields_asked) == 1
+    assert va.js_errors == []
 
 
 def _swap_fields(session: Session, pick) -> None:
@@ -487,7 +577,9 @@ def test_tracked_account_is_scanned_annotated_and_removed(va: Session):
     assert va.js_errors == []
 
 
-def test_admin_adds_a_phone_and_login_va_views_and_exports(admin: Session, va: Session):
+def test_admin_adds_a_phone_and_login_exports_it_and_a_user_never_sees_it(
+    admin: Session, va: Session
+):
     stamp = "4242"
     label = f"e2e {stamp}"
     username = f"e2e{stamp}@gmail.com"
@@ -527,16 +619,13 @@ def test_admin_adds_a_phone_and_login_va_views_and_exports(admin: Session, va: S
     row.locator(".ph-reveal").click()
     expect(secret).to_be_hidden()
 
-    # A VA sees it, cannot change it, and downloads the Excel file.
+    # A user never sees the admin's phone; the admin exports it.
     va.goto("/phones")
-    va_card = va.page.locator(".ph-card", has_text=label)
-    expect(va_card).to_contain_text(username)
-    expect(va.page.locator("#ph-add-open")).to_have_count(0)
-    expect(va_card.locator(".ph-menu")).to_have_count(0)
-    va.page.fill("#ph-search", stamp)
-    expect(va.page.locator("#ph-grid .ph-card:visible")).to_have_count(1)
-    with va.page.expect_download() as download:
-        va.page.click('a[href="/phones/export.xlsx"]')
+    expect(va.page.locator(".ph-card", has_text=label)).to_have_count(0)
+    admin.page.fill("#ph-search", stamp)
+    expect(admin.page.locator("#ph-grid .ph-card:visible")).to_have_count(1)
+    with admin.page.expect_download() as download:
+        admin.page.click('a[href="/phones/export.xlsx"]')
     assert re.fullmatch(
         r"phones-\d{4}-\d{2}-\d{2}\.xlsx", download.value.suggested_filename
     )
@@ -580,37 +669,40 @@ def _capture_json(session: Session, pattern: str) -> list[dict]:
 
 
 def test_drive_page_lists_accounts_searches_and_syncs(
-    va: Session, fake_drive: FakeDrive
+    admin: Session, fake_drive: FakeDrive
 ):
+    # The agency's folders live in its admin's own Drive: connect it.
+    connect_google(admin, "agency.google@example.com")
     _seed_phone("Phone 01", "Anna", ("instagram", "ann.ig"), ("gmail", "ann@gmail.com"))
     _seed_phone("Phone 02", "Bob", ("instagram", "bob.ig"))
     retired = _seed_phone("Phone 03", "Old", ("instagram", "old.ig"))
     devices.retire_device(retired)
 
-    va.goto("/drive")
-    expect(va.page.locator("h1")).to_have_text("Drive")
-    cards = va.page.locator("#dr-grid .dr-card")
-    visible = va.page.locator("#dr-grid .dr-card:visible")
+    admin.goto("/drive")
+    expect(admin.page.locator("h1")).to_have_text("Drive")
+    cards = admin.page.locator("#dr-grid .dr-card")
+    visible = admin.page.locator("#dr-grid .dr-card:visible")
     expect(cards).to_have_count(2)  # Instagram logins on active phones only
     expect(cards.filter(has_text="No folder yet")).to_have_count(2)
 
     # Search: handle, owner, phone label; instantly, no reload.
     for query, shown in (("bob", ["bob.ig"]), ("phone 01", ["ann.ig"]), ("zzz", [])):
-        va.page.fill("#dr-search", query)
+        admin.page.fill("#dr-search", query)
         expect(visible).to_have_count(len(shown))
         for handle in shown:
             expect(visible.locator("h2")).to_have_text(handle)
-    va.page.fill("#dr-search", "")
+    admin.page.fill("#dr-search", "")
     expect(visible).to_have_count(2)
 
-    reports = _capture_json(va, "**/drive/sync")
-    with va.page.expect_navigation():  # the page reloads itself once done
-        va.page.click("#dr-sync")
+    reports = _capture_json(admin, "**/drive/sync")
+    with admin.page.expect_navigation():  # the page reloads itself once done
+        admin.page.click("#dr-sync")
     assert reports.pop() == {
         "created": ["ann.ig - Anna", "bob.ig - Bob"],
         "adopted": [],
         "renamed": [],
         "posted_folders": ["ann.ig - Anna/POSTED", "bob.ig - Bob/POSTED"],
+        "not_connected": [],
         "newly_posted": 0,
         "failed": [],
         "busy": False,
@@ -618,37 +710,92 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     expect(cards.filter(has_text="Nothing waiting to post")).to_have_count(2)
 
     # Exactly one folder per account and one POSTED in each, nothing else.
-    root = fake_drive.children(FAKE_DRIVE_ROOT)
+    root = fake_drive.children(my_root(fake_drive, "agency.google@example.com"))
     assert sorted(f.name for f in root) == ["ann.ig - Anna", "bob.ig - Bob"]
     for folder in root:
         assert [f.name for f in fake_drive.children(folder.id)] == ["POSTED"]
-    assert fake_drive.writes == ["create"] * 4
+    assert fake_drive.writes == ["create"] * 5  # the root + 2 x (folder, POSTED)
 
     # What the VA uploads waits, with its preview through the app.
-    (ann,) = fake_drive.named("ann.ig - Anna", FAKE_DRIVE_ROOT)
+    (ann,) = fake_drive.named(
+        "ann.ig - Anna", my_root(fake_drive, "agency.google@example.com")
+    )
     (ann_posted,) = fake_drive.named("POSTED", ann)
     reel = fake_drive.add_file(ann, "reel1.mp4", "video/mp4", thumbnail=True)
-    with va.page.expect_response(re.compile(r"/drive/thumb/")) as preview:
-        va.page.reload()
+    with admin.page.expect_response(re.compile(r"/drive/thumb/")) as preview:
+        admin.page.reload()
     assert preview.value.ok
     ann_card = cards.filter(has_text="ann.ig")
     expect(ann_card.locator(".dr-count")).to_have_text("Waiting:1 video")
     expect(ann_card.locator(".dr-file img")).to_be_visible()
-    expect(va.page.locator(".lead")).to_have_text(
+    expect(admin.page.locator(".lead")).to_have_text(
         "1 file waiting to post in 1 of 2 accounts · Posted today: 0 · Last 7 days: 0"
     )
 
     # Posted: a person moves it into POSTED; the next Sync counts it.
     fake_drive.move(reel, ann_posted)
-    with va.page.expect_navigation():
-        va.page.click("#dr-sync")
+    with admin.page.expect_navigation():
+        admin.page.click("#dr-sync")
     assert reports.pop()["newly_posted"] == 1
     expect(ann_card.locator(".dr-posted")).to_contain_text("Posted today: 1")
     expect(ann_card.locator(".dr-posted")).to_contain_text("Last 7 days: 1")
-    expect(va.page.locator(".lead")).to_have_text(
+    expect(admin.page.locator(".lead")).to_have_text(
         "0 files waiting to post in 0 of 2 accounts · Posted today: 1 · Last 7 days: 1"
     )
 
     # Nothing more was written: the move was the person's, the app only read.
-    assert fake_drive.writes == ["create"] * 4
+    assert fake_drive.writes == ["create"] * 5
+    assert admin.js_errors == []
+
+
+def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
+    va: Session, admin: Session, fake_drive: FakeDrive, source_videos: list[Path]
+):
+    """Google Drive connected on /account, a phone of theirs with an
+    Instagram login (its folder made by Sync), a finished clone run:
+    "Upload batch" puts the video in that folder and the card says
+    where it went."""
+    from ofmhelpers.web.stores.jobs import create_job, run_job
+
+    connect_google(va, "va.google@example.com")
+    expect(va.page.locator(".account-card").nth(1)).to_contain_text("Connected")
+
+    va_id = 2  # e2e conftest `_seed_users`
+    phone = devices.add_device(
+        DeviceFields(
+            label="Vee 01", model_id="iphone-13", color_id="blue", owner="Vee"
+        ),
+        user_id=va_id,
+    )
+    assert devices.add_login(phone, LoginFields(service="instagram", username="vee.ig"))
+    admin.goto("/drive")
+    with admin.page.expect_navigation():
+        admin.page.click("#dr-sync")
+
+    video = source_videos[0]
+    params = {
+        "prompt": "e2e upload",
+        "resolution": "720P",
+        "audio": False,
+        "duration": 3,
+        "reference_images": [],
+        "reference_videos": [str(video)],
+        "clone_batch": "e2e-upload",
+        "clone_index": 0,
+    }
+    job_id = create_job("clone", params, actor=str(va_id))
+    run_job(job_id, lambda: [{"name": video.name, "path": str(video)}], {})
+
+    va.goto("/clone")
+    batch = va.page.locator('.clone-batch[data-batch="e2e-upload"]')
+    batch.locator(".drive-target").select_option(label="vee.ig - Vee")
+    batch.locator('.drive-upload-btn[data-scope="batch"]').click()
+    done = batch.locator('.drive-states li[data-status="done"]')
+    expect(done).to_contain_text("In Drive: vee.ig - Vee", timeout=RESULT_TIMEOUT_MS)
+
+    (folder,) = fake_drive.named(
+        "vee.ig - Vee", my_root(fake_drive, "va.google@example.com")
+    )
+    uploaded = [n for n in fake_drive.names_in(folder) if n.startswith("VID_")]
+    assert len(uploaded) == 1
     assert va.js_errors == []

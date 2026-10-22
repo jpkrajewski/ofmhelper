@@ -7,7 +7,6 @@ exports, only an admin changes anything."""
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from io import BytesIO
@@ -17,6 +16,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from pydantic import ValidationError
+from signin import sign_in, sign_in_agency
 from sqlalchemy import func, select, table, text
 
 from ofmhelpers.phones import (
@@ -50,7 +50,11 @@ def admin() -> TestClient:
 
 @pytest.fixture
 def va() -> TestClient:
-    return _login("test-va")
+    """An admin by Google (sees every phone, the agency's included): the
+    page's features. Who sees whose phones: test_ownership.py."""
+    c = TestClient(app)
+    sign_in_agency(c)
+    return c
 
 
 def _phone(label: str = "Phone 01", **extra) -> int:
@@ -515,10 +519,8 @@ def test_page_lists_phones_without_any_secret(va):
     assert 'title="Show password and recovery codes"' in html
     assert "ph-copy-secret" not in html
     assert "ph-codes-toggle" not in html
-    # View only: no edit controls, no dialogs, no catalog payload.
-    assert "ph-dialog" not in html
-    assert "ph-login-edit" not in html
-    assert 'id="ph-add-open"' not in html
+    # The viewer's own phones: they edit them.
+    assert 'id="ph-add-open"' in html
 
 
 def test_admin_page_has_dialogs_menu_and_catalog(admin):
@@ -597,7 +599,7 @@ def test_secret_route_is_for_everyone_and_logged(va, caplog):
     assert r.status_code == 200
     assert r.json() == {"password": "pw", "backup_codes": "c1"}
     assert r.headers["cache-control"] == "no-store"
-    assert f"Login {login_id} revealed by va" in caplog.text
+    assert f"Login {login_id} revealed by admin" in caplog.text
     assert "pw" not in caplog.text.replace("phones", "")
     assert va.get("/phones/logins/999/secret").status_code == 404
 
@@ -615,13 +617,19 @@ def test_secret_route_is_for_everyone_and_logged(va, caplog):
         ("/phones/{d}/logins/{l}/delete", None),
     ],
 )
-def test_a_va_changes_nothing(va, path, body):
+def test_a_user_changes_nothing_of_anothers_phone(path, body):
+    """The agency's phone (an admin's): a user reaches none of it."""
     device = _phone()
     login_id = _add_login(device, "icloud", "keep@icloud.com")
-    r = va.post(path.format(d=device, l=login_id), json=body)
-    assert r.status_code == 403
-    d = store.list_devices()[0]
-    assert (d.label, d.retired, len(d.logins)) == ("Phone 01", False, 1)
+    user = TestClient(app)
+    sign_in(user)
+    r = user.post(path.format(d=device, l=login_id), json=body)
+    if path == "/phones/add":
+        assert r.status_code == 200  # their own new phone
+    else:
+        assert r.status_code == 404
+    d = next(d for d in store.list_devices() if d.label == "Phone 01")
+    assert (d.retired, len(d.logins)) == (False, 1)
 
 
 def test_admin_flow(admin):
@@ -753,7 +761,7 @@ def test_export_logs_who_and_how_many_never_a_value(va, caplog):
     _add_login(_phone(), "gmail", "a@b.c", password="log-must-not-see")
     with caplog.at_level("INFO", logger="ofmhelpers.web.routers.inventory.phones"):
         _workbook(va)
-    assert "Phones export by va: 1 phones, 1 logins" in caplog.text
+    assert "Phones export by admin: 1 phones, 1 logins" in caplog.text
     assert "log-must-not-see" not in caplog.text
     assert "a@b.c" not in caplog.text
 

@@ -8,11 +8,11 @@ who was actually using the tool and when -- not just what jobs they ran.
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import make_user_with_password, sign_in
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.web.main import app
@@ -36,13 +36,18 @@ def test_session_max_age_is_five_hours_not_fourteen_days():
     assert _session_middleware_kwargs()["max_age"] == 5 * 60 * 60
 
 
-def test_va_login_is_recorded_with_va_actor(client_factory):
+def test_a_login_is_recorded_with_who_and_how(client_factory):
+    user = make_user_with_password(password="correct horse battery")
     client = client_factory()
-    client.post("/login", data={"password": "test-va", "next": "/"})
+    client.post(
+        "/login",
+        data={"email": user.email, "password": "correct horse battery", "next": "/"},
+    )
 
     login_events = [j for j in list_jobs() if j.task == "login"]
     latest = max(login_events, key=lambda j: j.created_at)
-    assert latest.actor == "va"
+    assert latest.actor == str(user.id)
+    assert latest.params == {"email": user.email, "with": "password"}
 
 
 def test_failed_login_does_not_record_a_login_event(client_factory):
@@ -83,7 +88,7 @@ def test_login_form_honors_next_query_param_when_already_authenticated(client_fa
 
 def test_logout_is_recorded_with_the_actor_that_was_logged_in(client_factory):
     client = client_factory()
-    client.post("/login", data={"password": "test-va", "next": "/"})
+    user = sign_in(client)
 
     r = client.post("/logout", follow_redirects=False)
     assert r.status_code == 303
@@ -91,7 +96,7 @@ def test_logout_is_recorded_with_the_actor_that_was_logged_in(client_factory):
     logout_events = [j for j in list_jobs() if j.task == "logout"]
     assert logout_events, "no logout event was recorded"
     latest = max(logout_events, key=lambda j: j.created_at)
-    assert latest.actor == "va", (
+    assert latest.actor == str(user.id), (
         "logout must capture the actor before the session is cleared"
     )
 
@@ -115,10 +120,13 @@ def test_logout_while_unauthenticated_is_blocked_before_logging_anything(
 
 
 def test_login_and_logout_appear_in_the_action_log_page(client_factory):
-    # Only VA login/logout are recorded (see routers/auth.py), so drive a VA
-    # session to populate the log...
+    # A user's login and logout populate the log...
+    user = make_user_with_password(password="correct horse battery")
     va = client_factory()
-    va.post("/login", data={"password": "test-va", "next": "/"})
+    va.post(
+        "/login",
+        data={"email": user.email, "password": "correct horse battery", "next": "/"},
+    )
     va.post("/logout")
 
     # ...then view the page as admin (it's admin-only).

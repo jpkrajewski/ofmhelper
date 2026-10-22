@@ -10,7 +10,6 @@ test shares one client host; these tests turn it back on explicitly.
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest

@@ -4,7 +4,6 @@ and the reuse picker's asset store. An admin still sees everything."""
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -13,9 +12,11 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from signin import USER_EMAIL, sign_in
 
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
+from ofmhelpers.web.stores import users
 
 
 def _login(password: str) -> TestClient:
@@ -37,7 +38,9 @@ def admin():
 
 @pytest.fixture
 def va():
-    return _login("test-va")
+    c = TestClient(app)
+    sign_in(c)
+    return c
 
 
 @pytest.fixture
@@ -93,7 +96,7 @@ def test_va_reuse_picker_excludes_admin_uploads(admin, va, assets_dir):
 def test_va_uploads_land_in_the_va_folder_and_admin_sees_them(admin, va, assets_dir):
     _fake_ai_job(va, "v")
 
-    [stored] = (assets_dir / "va").iterdir()
+    [stored] = (assets_dir / "users" / str(users.by_email(USER_EMAIL).id)).iterdir()
     assert [e["path"] for e in va.get("/refs?kind=image").json()] == [str(stored)]
     assert str(stored) in [e["path"] for e in admin.get("/refs?kind=image").json()]
 

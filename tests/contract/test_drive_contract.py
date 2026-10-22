@@ -1,6 +1,7 @@
 """Google Drive: what /drive relies on, on `FakeDrive` and on the real
 Drive. The real half works only in a sandbox folder (OFM_GDRIVE_ROOT_FOLDER
-in the dev .env; `drive_folders.root_folder` refuses the production one),
+in the dev .env, shared with OFM_GDRIVE_SERVICE_ACCOUNT; the app itself
+never uses either),
 inside a fresh "contract-<id>" folder per test; nothing is deleted."""
 
 import uuid
@@ -8,9 +9,9 @@ from collections.abc import Iterator
 
 import pytest
 
+from ofmhelpers.config import settings
 from ofmhelpers.gdrive import DriveApi, FolderGoneError, connect
 from ofmhelpers.gdrive.fake import FakeDrive
-from ofmhelpers.web import drive_folders
 
 FAKE_ROOT = "contract-root"
 
@@ -26,7 +27,7 @@ def drive(backend, monkeypatch) -> DriveApi:
 
 @pytest.fixture
 def parent(drive, backend) -> Iterator[str]:
-    root = FAKE_ROOT if backend == "fake" else drive_folders.root_folder()
+    root = FAKE_ROOT if backend == "fake" else settings.gdrive.root_folder_id
     assert root, "set OFM_GDRIVE_ROOT_FOLDER to a sandbox folder in .env"
     return drive.create_folder(root, f"contract-{uuid.uuid4().hex[:8]}").id
 
@@ -48,6 +49,23 @@ def test_children_are_newest_first(drive, parent):
         newer.id,
         older.id,
     ]
+
+
+def test_children_of_lists_several_folders_at_once(drive, parent):
+    """/drive lists every account folder in one query."""
+    one = drive.create_folder(parent, "one")
+    two = drive.create_folder(parent, "two")
+    empty = drive.create_folder(parent, "empty")
+    inner_old = drive.create_folder(one.id, "inner old")
+    inner_new = drive.create_folder(one.id, "inner new")
+    other = drive.create_folder(two.id, "other")
+
+    found = drive.children_of([one.id, two.id, empty.id])
+
+    assert [f.id for f in found[one.id]] == [inner_new.id, inner_old.id]
+    assert [f.id for f in found[two.id]] == [other.id]
+    assert found[empty.id] == []
+    assert drive.children_of([]) == {}
 
 
 def test_find_folder_is_none_for_a_name_not_there(drive, parent):

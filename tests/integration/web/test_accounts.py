@@ -5,7 +5,6 @@ batch rotating through the platform's proxies."""
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import time
@@ -14,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from signin import sign_in_agency
 
 from ofmhelpers.config.settings import AccountsSettings
 from ofmhelpers.socials import (
@@ -41,7 +41,7 @@ from ofmhelpers.web.schemas import (
     AccountSummary,
     AddAccounts,
 )
-from ofmhelpers.web.schemas.accounts import Sparkline, ago
+from ofmhelpers.web.schemas.accounts import FollowerChart, Snapshot, ago, tick_label
 from ofmhelpers.web.stores.tracked_accounts import (
     claim_due,
     get_account,
@@ -64,8 +64,10 @@ def _no_retry_pause(monkeypatch):
 
 @pytest.fixture
 def client():
+    """An admin (sees the agency's accounts, which `track` makes):
+    ownership is test_ownership.py's."""
     c = TestClient(app)
-    c.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in_agency(c)
     return c
 
 
@@ -756,15 +758,13 @@ def test_add_form_parses_handles():
     assert form.parsed() == ["a", "b"]
 
 
-def test_ago_and_sparkline():
+def test_ago():
     assert [ago(t, now=100_000) for t in (100_000, 99_000, 90_000, 0)] == [
         "just now",
         "16 min ago",
         "2 h ago",
         "1 d ago",
     ]
-    assert Sparkline.of([1]).points == ""
-    assert Sparkline.of([0, 10], width=100, height=10).points == "0.0,10.0 100.0,0.0"
 
 
 # --- analytics ----------------------------------------------------------------
@@ -781,7 +781,7 @@ def test_analytics_page(client, fetches):
     assert "Posted 1 d ago" in html
     assert "https://x/old" not in html  # outside the period
     assert "History" not in html
-    assert "<polyline" in html
+    assert "data-fchart" in html
     assert "main" in html
     # A period with no posts falls back to the latest synced ones.
     track("instagram", "quiet")
@@ -790,7 +790,7 @@ def test_analytics_page(client, fetches):
     record_scan(_id("quiet"), stats)
     html = client.get(f"/accounts/{_id('quiet')}").text
     assert "latest synced" in html
-    assert "trend appears once" in html
+    assert "Not enough history yet" in html
     assert client.get("/accounts/999999").status_code == 404
 
 
@@ -818,6 +818,173 @@ def test_history_daily_rows_oldest_first():
         ("1970-01-01", 12, None),
         ("1970-01-02", 20, 8),
     ]
+
+
+# --- follower chart ------------------------------------------------------------
+
+
+def _snaps(*pairs: tuple[float, int]) -> list[Snapshot]:
+    """Snapshots from (taken_at, followers), oldest first."""
+    return [
+        Snapshot(taken_at=t, followers=f, metrics={"followers": f}) for t, f in pairs
+    ]
+
+
+def _history(*pairs: tuple[float, int]) -> AccountHistory:
+    return AccountHistory(snapshots=_snaps(*pairs))
+
+
+def test_chart_needs_two_points():
+    assert not FollowerChart.of([], daily=True, gap_s=DAY).ready
+    one = FollowerChart.of(_snaps((0, 5)), daily=True, gap_s=DAY)
+    assert not one.ready
+    assert [p.followers for p in one.points] == [5]
+    assert one.lines == []
+
+
+def test_chart_lays_out_points_and_rounds_the_y_range_to_nice_steps():
+    chart = FollowerChart.of(
+        _snaps((0, 35_287), (DAY, 36_000), (2 * DAY, 38_900)), daily=True, gap_s=2 * DAY
+    )
+    assert chart.ready
+    assert (chart.start.followers, chart.end.followers, chart.delta) == (
+        35_287,
+        38_900,
+        3_613,
+    )
+    assert round(chart.pct, 1) == 10.2
+    assert [p.x for p in chart.points] == [0, 50, 100]
+    assert [p.change for p in chart.points] == [None, 713, 2_900]
+    # 35,287..38,900 over ~3 gridlines: 2,000 steps from 34k to 40k.
+    assert [t.label for t in chart.y_ticks] == ["34k", "36k", "38k", "40k"]
+    assert [t.y for t in chart.y_ticks] == [
+        100,
+        pytest.approx(66.67, abs=0.01),
+        pytest.approx(33.33, abs=0.01),
+        0,
+    ]
+    # Every point sits inside the plot, the highest nearest the top.
+    assert all(0 <= p.y <= 100 for p in chart.points)
+    assert chart.points[2].y < chart.points[1].y < chart.points[0].y
+    assert len(chart.lines) == 1
+    assert chart.gaps == []
+    # Dots only at the ends.
+    assert [d.followers for d in chart.dots] == [35_287, 38_900]
+    assert [t.x for t in chart.x_ticks] == [0, 50, 100]
+
+
+def test_flat_line_sits_mid_plot():
+    chart = FollowerChart.of(_snaps((0, 1000), (DAY, 1000)), daily=True, gap_s=2 * DAY)
+    assert [p.y for p in chart.points] == [50, 50]
+    assert [t.label for t in chart.y_ticks] == ["980", "1,000", "1,020"]
+    assert chart.delta == 0
+    assert chart.pct == 0
+    zero = FollowerChart.of(_snaps((0, 0), (DAY, 0)), daily=True, gap_s=2 * DAY)
+    assert all(0 <= p.y <= 100 for p in zero.points)  # never a range below 0
+    assert zero.pct is None
+
+
+def test_big_jump_keeps_every_point_in_the_plot():
+    chart = FollowerChart.of(
+        _snaps((0, 100), (DAY, 120), (2 * DAY, 2_500_000)), daily=True, gap_s=2 * DAY
+    )
+    # Scaled to the jump: 0..3M, the small start flat on the floor.
+    assert [round(p.y) for p in chart.points] == [100, 100, 17]
+    assert [t.label for t in chart.y_ticks][-1] == "3M"
+    assert chart.points[-1].change == 2_499_880
+
+
+def test_missed_syncs_break_the_line_with_a_dashed_gap():
+    chart = FollowerChart.of(
+        _snaps((0, 10), (DAY, 11), (5 * DAY, 15), (6 * DAY, 16), (10 * DAY, 20)),
+        daily=True,
+        gap_s=1.5 * DAY,
+    )
+    assert len(chart.lines) == 2
+    assert len(chart.gaps) == 2
+    # The last point is alone after its gap: it gets a dot (and is the end).
+    assert [d.followers for d in chart.dots] == [10, 20]
+    lone = FollowerChart.of(
+        _snaps((0, 10), (5 * DAY, 15), (10 * DAY, 20)), daily=True, gap_s=1.5 * DAY
+    )
+    assert lone.lines == []
+    assert [d.followers for d in lone.dots] == [10, 15, 20]
+
+
+def test_tick_labels_carry_the_decimals_the_step_needs():
+    assert tick_label(9_500, 500, 9_500) == "9,500"
+    assert tick_label(38_850, 50, 39_000) == "38.85k"
+    assert tick_label(38_800, 200, 39_000) == "38.8k"
+    assert tick_label(1_200_000, 100_000, 1_500_000) == "1.2M"
+    assert tick_label(2_000_000, 1_000_000, 3_000_000) == "2M"
+
+
+def test_history_chart_starts_at_the_growth_baseline_and_is_daily_past_two_days():
+    now = 100 * DAY
+    history = _history(
+        (now - 9 * DAY, 1),  # older than the baseline: left out
+        (now - 8 * DAY, 100),  # newest a full period old: the baseline
+        (now - 3 * DAY, 110),
+        (now - 3 * DAY + 3600, 120),  # same UTC day: the day's last counts
+        (now - 1, 150),
+    )
+    chart = history.follower_chart(7, rescan_s=6 * 3600, now=now)
+    assert chart.daily
+    assert [p.followers for p in chart.points] == [100, 120, 150]
+    assert chart.delta == 50
+    # 24 hours: every sync, no daily folding.
+    short = history.follower_chart(1, rescan_s=6 * 3600, now=now)
+    assert not short.daily
+    assert [p.followers for p in short.points] == [120, 150]
+    assert len(short.gaps) == 1  # three days apart, rescans every 6 h
+
+
+def test_chart_delta_matches_the_growth_kpi(client, fetches):
+    client.post("/accounts/add", json={"platform": "instagram", "handles": "yuki"})
+    _snapshot("yuki", 900, 8 * DAY)
+    _snapshot("yuki", 950, 3 * DAY)
+    account = get_account(_id("yuki"))
+    chart = get_history(_id("yuki")).follower_chart(7, rescan_s=6 * 3600)
+    assert chart.delta == account.growth(7).delta == 100
+
+
+def test_analytics_page_draws_the_follower_chart(client, fetches):
+    client.post("/accounts/add", json={"platform": "instagram", "handles": "yuki"})
+    _snapshot("yuki", 900, 8 * DAY)
+    _snapshot("yuki", 950, 2 * DAY)
+    _snapshot("yuki", 980, DAY)
+    html = client.get(f"/accounts/{_id('yuki')}").text
+    assert "data-fchart" in html
+    assert 'data-step="day"' in html
+    assert 'class="fchart-line"' in html
+    # Start, now and change, and a data table row per point.
+    assert ">900<" in html
+    assert ">1,000<" in html
+    assert "+100" in html
+    assert "(+11.1%)" in html
+    assert html.count("<tr data-x=") == 4
+    assert ">+50<" in html  # 900 -> 950
+    assert "Not enough history yet" not in html
+    assert 'src="/static/js/account-chart.js' in html
+    assert 'class="fchart-gap"' in html  # nothing between 8 and 2 days ago
+    # 24 hours: every sync, from the baseline a day back.
+    html = client.get(f"/accounts/{_id('yuki')}", params={"period": 1}).text
+    assert 'data-step="sync"' in html
+    assert html.count("<tr data-x=") == 2
+    assert "Dashed: no syncs in between." in html  # 24 h apart, rescans every 6 h
+
+
+def test_analytics_page_without_enough_history_says_so(client):
+    track("instagram", "fresh")
+    html = client.get(f"/accounts/{_id('fresh')}").text
+    assert "Not enough history yet: the chart needs syncs on two different days" in html
+    assert "Tracking since" in html
+    assert "data-fchart" not in html
+    record_scan(_id("fresh"), _stats("fresh"))
+    html = client.get(f"/accounts/{_id('fresh')}", params={"period": 1}).text
+    assert "Not enough history yet: the chart needs two syncs" in html
+    assert "One so far: 1,000 followers" in html
+    assert "data-fchart" not in html
 
 
 # --- tracker ----------------------------------------------------------------

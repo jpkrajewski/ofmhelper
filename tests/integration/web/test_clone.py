@@ -3,7 +3,6 @@
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import html as html_lib
@@ -14,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 import ofmhelpers.exports as exports_module
 from ofmhelpers.aigenproviders.base import TaskState
@@ -39,7 +39,7 @@ def _new(n: int) -> str:
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path)
     c = TestClient(app)
-    c.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(c)
     return c
 
 
@@ -105,7 +105,7 @@ def test_batches_fragment_shows_another_sessions_batch(client, tmp_path):
     """What live-gallery.js polls: a coworker's batch appears without a reload,
     and the VA scope still holds (an admin's batch never reaches a VA)."""
     coworker = TestClient(app)
-    coworker.post("/login", data={"password": "test-va", "next": "/"})
+    sign_in(coworker)
     batch = get_job(_post(coworker, ["a.mp4"]).json()["job_ids"][0]).params[
         "clone_batch"
     ]

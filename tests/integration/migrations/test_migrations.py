@@ -105,25 +105,52 @@ def test_migrating_in_process_leaves_the_apps_loggers_on(db):
 def test_phone_logins_already_saved_are_tracked_once(db):
     """f4a5b6c7d8e9: Instagram logins on active phones become /accounts
     accounts (handle as Instagram writes it); a retired phone's do not, an
-    account removed by hand stays removed, other services track nothing."""
-    from ofmhelpers.web.schemas import DeviceFields, LoginFields
-    from ofmhelpers.web.stores import devices
-    from ofmhelpers.web.stores import tracked_accounts as accounts
-
+    account removed by hand stays removed, other services track nothing.
+    Seeded in SQL: today's stores speak today's schema, not that revision's."""
     cfg = _alembic()
     command.upgrade(cfg, "e3f4a5b6c7d8")
 
-    def phone(label: str) -> int:
-        return devices.add_device(DeviceFields(label=label, model_id="iphone-13"))
+    with db.begin() as conn:
 
-    active, retired = phone("Active"), phone("Retired")
-    for service, username in (("instagram", "@Dany.Walking"), ("gmail", "a@b.c")):
-        devices.add_login(active, LoginFields(service=service, username=username))
-    devices.add_login(active, LoginFields(service="instagram", username="removed_one"))
-    devices.add_login(retired, LoginFields(service="instagram", username="old_phone"))
-    devices.retire_device(retired)
-    accounts.track("instagram", "removed_one")
-    accounts.untrack([a.id for a in accounts.list_accounts()])
+        def phone(label: str, *, retired: bool = False) -> int:
+            return conn.execute(
+                text(
+                    "INSERT INTO devices (label, model_id, custom_model, owner,"
+                    " phone_number, notes, added_at, updated_at, retired_at)"
+                    " VALUES (:label, 'iphone-13', '', '', '', '', 0, 0, :retired)"
+                    " RETURNING id"
+                ),
+                {"label": label, "retired": 1.0 if retired else None},
+            ).scalar_one()
+
+        def login(device: int, service: str, username: str) -> None:
+            login_id = conn.execute(
+                text(
+                    "INSERT INTO logins (service, provider, username, password,"
+                    " backup_codes, notes, added_at, updated_at)"
+                    " VALUES (:service, '', :username, '', '', '', 0, 0) RETURNING id"
+                ),
+                {"service": service, "username": username},
+            ).scalar_one()
+            conn.execute(
+                text(
+                    "INSERT INTO device_logins (device_id, login_id, linked_at)"
+                    " VALUES (:device, :login, 0)"
+                ),
+                {"device": device, "login": login_id},
+            )
+
+        active, retired = phone("Active"), phone("Retired", retired=True)
+        for service, username in (("instagram", "@Dany.Walking"), ("gmail", "a@b.c")):
+            login(active, service, username)
+        login(active, "instagram", "removed_one")
+        login(retired, "instagram", "old_phone")
+        conn.execute(
+            text(
+                "INSERT INTO tracked_accounts (platform, handle, notes, added_at,"
+                " untracked_at) VALUES ('instagram', 'removed_one', '', 0, 1)"
+            )
+        )
 
     command.upgrade(cfg, "head")
 

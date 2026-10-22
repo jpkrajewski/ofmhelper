@@ -15,7 +15,6 @@ looks signed in. The fix has two halves, both covered here:
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from fastapi.testclient import TestClient

@@ -193,5 +193,94 @@ def test_catalog_rejects_what_kie_would(key, values):
         get_spec(key).check(values)
 
 
-def test_every_kie_model_has_a_prompt():
-    assert all("prompt" in s.required for s in models_for("kie"))
+def _value(field):
+    """A valid value for one scalar setting, as the form would send it."""
+    if field.default is not None:
+        return field.default
+    if field.enum:
+        return field.enum[0]
+    if field.type == "boolean":
+        return False
+    if field.type in ("integer", "number"):
+        low = field.minimum if field.minimum is not None else 1
+        return int(low) if field.type == "integer" else float(low)
+    return "a red fox at dawn"
+
+
+def _minimal(spec):
+    """The required fields (and those of the first input variant, where the
+    schema has `anyOf`), each with a valid value: local paths for files."""
+    variants = spec.input_schema.get("anyOf") or [{}]
+    names = spec.required | set(variants[0].get("required") or [])
+    media = {f.name: f for f in spec.media_fields}
+    ext = {"image": "png", "video": "mp4", "audio": "mp3"}
+    values = {}
+    for field in spec.form_fields:
+        if field.name in names:
+            values[field.name] = _value(field)
+    for name in names & media.keys():
+        values[name] = [f"/in/{name}.{ext[media[name].kind]}"]
+    return values
+
+
+@pytest.mark.parametrize("spec", models_for("kie"), ids=lambda s: s.model_id)
+def test_every_kie_model_submits_its_catalog_body(provider, spec):
+    """Each model, from its required fields, passes its own schema and goes
+    to createTask as `{model, input}`: fixed values in, files uploaded, the
+    form's own field names never inside the input."""
+    values = _minimal(spec)
+    spec.check(values)
+    body = spec.request(values, lambda p: f"https://up/{p.name}")
+
+    for name, field in {f.name: f for f in spec.media_fields}.items():
+        if name in body:
+            urls = body[name] if field.multiple else [body[name]]
+            assert all(str(u).startswith("https://up/") for u in urls)
+    assert spec.fixed.items() <= body.items()
+    with kie_http() as http:
+        http.request.return_value = response({"code": 200, "data": {"taskId": "t"}})
+        provider.submit(spec, body, idempotency_key="job")
+
+    assert http.request.call_args.kwargs["json"] == {
+        "model": spec.model_id,
+        "input": body,
+    }
+
+
+@pytest.mark.parametrize(
+    ("key", "values", "body"),
+    [
+        (
+            "kie:veo-3-1",
+            {"prompt": "p", "image_urls": ["/a.png"]},
+            {"model": "veo3_fast", "prompt": "p", "image_urls": ["https://up/a.png"]},
+        ),
+        (
+            "kie:recraft/remove-background",
+            {"image": ["/a.png"]},
+            {"image": "https://up/a.png"},
+        ),
+        (
+            "kie:wan/2-6-text-to-video",
+            {"prompt": "line one\nline two"},
+            {"nsfw_checker": False, "prompt": "line one\nline two"},
+        ),
+    ],
+)
+def test_generated_models_build_kies_body(key, values, body):
+    """What the sync script decides: a `model` input is fixed, a bare
+    `image` field is a file, nsfw_checker is off, multi-line prompts pass."""
+    spec = get_spec(key)
+    spec.check(values)
+
+    assert spec.request(values, lambda p: f"https://up/{p.name}") == body
+
+
+def test_input_variants_are_one_form_validated_per_variant():
+    """Kling 3.0 Omni Image to Video: first frame alone or first + last
+    frame -- one picker, each variant's limits still checked."""
+    spec = get_spec("kie:kling-3.0-omni/image-to-video")
+    spec.check({"prompt": "p", "image_urls": ["/a.png"]})
+
+    with pytest.raises(ValueError):  # InvalidInputError
+        spec.check({"prompt": "p", "image_urls": [f"/{i}.png" for i in range(9)]})

@@ -8,7 +8,6 @@ downloaders are stubbed).
 import os
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ["APP_PASSWORD_VA"] = "test-va"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import io
@@ -18,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.downloaders.generic import DownloadResult
 from ofmhelpers.web.main import app
@@ -25,6 +25,7 @@ from ofmhelpers.web.routers.downloads import clean_image as clean_image_router
 from ofmhelpers.web.routers.downloads import images as download_images_router
 from ofmhelpers.web.routers.downloads import videos as download_reels_router
 from ofmhelpers.web.stores import jobs as jobs_store
+from ofmhelpers.web.stores import users
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
@@ -134,19 +135,19 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     # admin runs one
     r = client.post("/download-videos/run", data={"urls": "https://a.example/1"})
     admin_job = r.json()["job_id"]
-    assert get_job(admin_job).actor == "admin"
+    assert get_job(admin_job).actor == str(users.by_email("admin").id)
 
-    # va runs one
-    va_client = TestClient(app)
-    va_client.post("/login", data={"password": "test-va", "next": "/"})
-    r = va_client.post("/download-videos/run", data={"urls": "https://a.example/2"})
-    va_job = r.json()["job_id"]
-    assert get_job(va_job).actor == "va"
+    # a user runs one
+    user_client = TestClient(app)
+    user = sign_in(user_client)
+    r = user_client.post("/download-videos/run", data={"urls": "https://a.example/2"})
+    user_job = r.json()["job_id"]
+    assert get_job(user_job).actor == str(user.id)
 
     html = client.get("/action-log").text
     assert "<h1>Logs</h1>" in html
     assert 'actor-admin">admin' in html
-    assert 'actor-va">va' in html
+    assert f'actor-user">{user.email}' in html
 
 
 def test_still_running_card_carries_poll_attributes_on_page_reload(client):

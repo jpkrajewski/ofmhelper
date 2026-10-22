@@ -189,6 +189,8 @@ DEVICES = "c1d2e3f4a5b6"
 DRIVE = "d2e3f4a5b6c7"
 POSTED = "a5b6c7d8e9f0"
 FINISHED_AT = "b6c7d8e9f0a1"
+USERS = "c2d3e4f5a6b7"
+OWNERS = "d3e4f5a6b7c8"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -373,3 +375,49 @@ def test_a_revision_on_production_is_no_longer_pending(db):
     head = _revision(db)
     assert not _pending(db, head)
     assert not _pending(db, TRACKED_POSTS)
+
+
+def _rows(db: Engine, sql: str) -> list:
+    with db.connect() as conn:
+        return [tuple(r) for r in conn.execute(text(sql))]
+
+
+def _scalar(db: Engine, sql: str) -> object:
+    with db.connect() as conn:
+        return conn.execute(text(sql)).scalar_one()
+
+
+def test_users_gives_every_admin_and_va_job_to_the_password_admin(db):
+    needs(USERS)(db)
+    roles = dict(_rows(db, "SELECT actor, count(*) FROM jobs GROUP BY actor"))
+    command.upgrade(_alembic(), USERS)
+    admin_id = _scalar(db, "SELECT id FROM users WHERE email = 'admin'")
+    after = dict(_rows(db, "SELECT actor, count(*) FROM jobs GROUP BY actor"))
+    assert _scalar(db, "SELECT role FROM users WHERE email = 'admin'") == "admin"
+    assert after.get(str(admin_id), 0) == roles.get("admin", 0) + roles.get("va", 0)
+    assert "va" not in after
+    assert "admin" not in after
+    assert after.get(None) == roles.get(None)
+
+
+def test_owners_gives_every_row_to_the_password_admin_and_keeps_it(db):
+    needs(OWNERS)(db)
+    owned = (
+        "devices",
+        "logins",
+        "tracked_accounts",
+        "creators",
+        "watched_profiles",
+        "profile_groups",
+    )
+    before = {t: _count(db, t) for t in owned}
+    command.upgrade(_alembic(), OWNERS)
+    admin_id = _scalar(db, "SELECT id FROM users WHERE email = 'admin'")
+    for name in owned:
+        assert _count(db, name) == before[name], name
+        assert (
+            _scalar(db, f"SELECT count(*) FROM {name} WHERE user_id <> {admin_id}")  # noqa: S608 -- constants
+            == 0
+        ), name
+    assert _scalar(db, "SELECT is_password_account FROM users WHERE email = 'admin'")
+    assert "drive_root_id" in _columns(db, "users")

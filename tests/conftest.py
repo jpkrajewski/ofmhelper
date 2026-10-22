@@ -17,6 +17,8 @@ from ofmhelpers.config.settings import (
     InstagramSettings,
     KieAISettings,
     SessionSettings,
+    SignInSettings,
+    TelemetrySettings,
     VaultSettings,
     WebSettings,
 )
@@ -249,6 +251,10 @@ _SETTINGS_CLASSES = (
     VaultSettings,
     # Its .env holds the real Drive key: a test must never reach Drive.
     GDriveSettings,
+    # Its .env holds the real Google/Apple sign-in clients and admin emails.
+    SignInSettings,
+    # Its .env holds the Logfire write token: a test must never send data.
+    TelemetrySettings,
 )
 
 

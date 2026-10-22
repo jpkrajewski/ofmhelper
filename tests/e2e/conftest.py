@@ -23,13 +23,14 @@ import socket
 import subprocess
 import sys
 import time
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import allure
 import pytest
 import requests
 from alembic.config import Config
-from e2e_session import FAKE_DRIVE_ROOT, Session, log_in
+from e2e_session import Session, log_in
 from PIL import Image
 from playwright.sync_api import Browser, sync_playwright
 from pydantic import BaseModel
@@ -44,7 +45,12 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-PASSWORDS = {"ADMIN": "e2e-admin-password", "VA": "e2e-va-password"}
+# Who each role signs in as, through the real login form: the admin
+# password account, and a user with a password of their own.
+ACCOUNTS = {
+    "ADMIN": ("admin", "e2e-admin-password"),
+    "VA": ("va@example.com", "e2e-va-password"),
+}
 _STARTUP_TIMEOUT_S = 60
 _REPORTS = pytest.StashKey[dict]()
 
@@ -82,15 +88,35 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "OFM_KIEAI_TASK_LOG": str(workdir / "kieai_out" / "tasks.jsonl"),
         "OFM_KIEAI_COMPLETIONS_LOG": str(workdir / "kieai_out" / "completions.jsonl"),
         "OFM_COOKIES_FILE": str(workdir / "cookies.txt"),
-        "APP_PASSWORD_ADMIN": PASSWORDS["ADMIN"],
-        "APP_PASSWORD_VA": PASSWORDS["VA"],
+        "APP_PASSWORD_ADMIN": ACCOUNTS["ADMIN"][1],
         "SESSION_SECRET": "e2e-session-secret",
         "OFM_GDRIVE_SERVICE_ACCOUNT": "{}",
-        "OFM_GDRIVE_ROOT_FOLDER": FAKE_DRIVE_ROOT,
         # Sweeps only when a test asks (the Sync button), never between.
         "OFM_GDRIVE_CHECK_INTERVAL_S": "86400",
         "OFM_LOG_ACCESS": "true",
+        # Both sign-in providers set up; under OFM_FAKE_EXTERNALS their
+        # consent is /auth/fake-consent and their token endpoints fakes.
+        "OFM_GOOGLE_CLIENT_ID": "e2e-google-client",
+        "OFM_GOOGLE_CLIENT_SECRET": "e2e-google-secret",
+        "OFM_APPLE_SERVICES_ID": "e2e.apple.services",
+        "OFM_APPLE_TEAM_ID": "E2ETEAM001",
+        "OFM_APPLE_KEY_ID": "E2EKEY0001",
+        "OFM_APPLE_PRIVATE_KEY": _apple_key_pem(),
     }
+
+
+def _apple_key_pem() -> str:
+    """A throwaway Sign in with Apple key: the fake token endpoint never
+    checks the client secret, but the app still signs one."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    return key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
 
 
 def _wait_healthy(url: str, procs: list[subprocess.Popen], log: Path) -> None:
@@ -206,15 +232,43 @@ def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
     stale = [k for k in redis.scan_iter("*") if not k.startswith(b"rq:")]
     if stale:
         redis.delete(*stale)
+    _seed_users(e2e_backend.database_url)
+
+
+@lru_cache(maxsize=1)
+def _va_password_hash() -> str:
+    from ofmhelpers.signin.passwords import hash_password
+
+    return hash_password(ACCOUNTS["VA"][1])
+
+
+def _seed_users(database_url: str) -> None:
+    """The signed-in roles' users with fixed ids (1: the password admin, 2:
+    the user), so the session cookies saved once (`auth_states`) keep
+    pointing at them after every truncate. Plain SQL: the test process's
+    repositories cache in whichever Redis they first met, not the app's."""
+    va_email, _password = ACCOUNTS["VA"]
+    with create_engine(database_url).begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, email, name, role, active, created_at,"
+                " google_refresh_token, password_hash, is_password_account)"
+                " VALUES"
+                " (1, 'admin', 'Admin (password)', 'admin', true, 0, '', '', true),"
+                " (2, :va, '', 'user', true, 0, '', :hash, false)"
+                " ON CONFLICT (id) DO NOTHING"
+            ),
+            {"va": va_email, "hash": _va_password_hash()},
+        )
+        conn.execute(text("SELECT setval('users_id_seq', (SELECT max(id) FROM users))"))
 
 
 @pytest.fixture
 def fake_drive(fakes_dir: Path, base_url) -> FakeDrive:
-    """The app's Drive, emptied: just the configured root, shared."""
+    """The app's Drive, emptied: each person's My Drive appears when their
+    Google account first uses it (`FakePersonDrive`)."""
     (fakes_dir / "drive.json").unlink(missing_ok=True)
-    drive = FakeDrive(fakes_dir)
-    drive.seed_folder("ALL ACCOUNTS", item_id=FAKE_DRIVE_ROOT, shared=True)
-    return drive
+    return FakeDrive(fakes_dir)
 
 
 @pytest.fixture(scope="session")
@@ -226,13 +280,19 @@ def browser() -> Iterator[Browser]:
 
 
 @pytest.fixture(scope="session")
-def auth_states(browser: Browser, base_url: str, tmp_path_factory) -> dict[str, Path]:
-    """One login per role for the whole session."""
+def auth_states(
+    browser: Browser, base_url: str, tmp_path_factory, e2e_backend: E2EBackend
+) -> dict[str, Path]:
+    """One login per role for the whole session, from users made in a fixed
+    order (`_seed_users`; every test's truncate makes them again)."""
     root = tmp_path_factory.mktemp("e2e-auth")
     states = {}
-    for role, password in PASSWORDS.items():
+    with create_engine(e2e_backend.database_url).begin() as conn:
+        conn.execute(text("TRUNCATE users RESTART IDENTITY CASCADE"))
+    _seed_users(e2e_backend.database_url)
+    for role, (email, password) in ACCOUNTS.items():
         states[role] = root / f"{role.lower()}.json"
-        log_in(browser, base_url, password, states[role])
+        log_in(browser, base_url, email, password, states[role])
     return states
 
 
