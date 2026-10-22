@@ -246,7 +246,14 @@ def _finish(request: Request, name: str, code: str, state: str, error: str) -> R
         carried, identity = _identity(request, provider, code, state, error)
     except SignInError as exc:
         logger.warning("sign-in with %s failed: %s", name, exc)
-        response = _login_page(request, _HOME, str(exc), 400)
+        # Someone already signed in was connecting an account (Drive): back to
+        # /account to try again, not a login page that invites a plain
+        # sign-in, which never asks for Drive (prod, 2026-10-22).
+        response: Response
+        if AuthMiddleware.session_user(request) is not None:
+            response = RedirectResponse(url=f"/account?{name}=failed", status_code=303)
+        else:
+            response = _login_page(request, _HOME, str(exc), 400)
         response.delete_cookie(_STATE_COOKIE, path="/auth/")
         return response
     if carried.link_user_id is not None:

@@ -301,6 +301,10 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
 /* Log out sits in the header bar next to the menu button, separate from
    the navigation list -- it is an action, not a destination. */
 .logout-form { margin: 0 0 0 auto; }
+.theme-toggle { margin-left: var(--gap-inline); }
+.theme-toggle .icon:last-child,
+:root[data-theme="dark"] .theme-toggle .icon:first-child { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon:last-child { display: inline; }
 
 @media (min-width: 980px) {
     .nav-toggle { display: none; }

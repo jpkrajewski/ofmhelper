@@ -20,6 +20,7 @@ from ofmhelpers.web.drive_folders import drive_loop
 from ofmhelpers.web.link_sync import link_sync_loop
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
+    CanonicalHostMiddleware,
     CompressionMiddleware,
     WriteRateLimitMiddleware,
 )
@@ -94,6 +95,8 @@ app.add_middleware(
 )
 # Outermost: compresses what everything inside produced (pages, JSON, CSS/JS).
 app.add_middleware(CompressionMiddleware)
+# Before all of it: www. of APP_BASE_URL redirects to the one public host.
+app.add_middleware(CanonicalHostMiddleware)
 
 app.mount(
     "/static",

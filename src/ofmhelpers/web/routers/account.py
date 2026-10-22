@@ -73,10 +73,13 @@ def account_page(request: Request, google: str = "", apple: str = ""):
     notes = {
         "linked": "{} account linked.",
         "taken": "That {} account is already linked to someone else.",
+        "failed": "Connecting your {} account failed: try again.",
     }
     for label, outcome in (("Google", google), ("Apple", apple)):
         if outcome == "taken":
             return _page(request, error=notes["taken"].format(label), status_code=409)
+        if outcome == "failed":
+            return _page(request, error=notes["failed"].format(label), status_code=400)
         if outcome == "linked":
             return _page(request, message=notes["linked"].format(label))
     return _page(request)
