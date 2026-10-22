@@ -41,7 +41,7 @@ def add_job_routes(
 
     @router.get("/jobs/{job_id}")
     def job_status(request: Request, job_id: str):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        job = get_job(job_id, AuthMiddleware.actor(request))
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         assets, failed_sources = job_assets(job, files_prefix)
@@ -60,22 +60,22 @@ def add_job_routes(
 
     @router.get("/jobs/{job_id}/status")
     def job_status_json(request: Request, job_id: str):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        job = get_job(job_id, AuthMiddleware.actor(request))
         return job_status_payload(job, files_prefix)
 
     @router.get("/files/{job_id}/{index}")
     def download_file(
         request: Request, job_id: str, index: int, dl: Annotated[int, Query()] = 0
     ):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        job = get_job(job_id, AuthMiddleware.actor(request))
         return serve_job_file(job, index, as_attachment=bool(dl))
 
     @router.get("/files/{job_id}/{index}/preview")
     def preview_file(request: Request, job_id: str, index: int):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        job = get_job(job_id, AuthMiddleware.actor(request))
         return serve_job_preview(job, index)
 
     @router.get("/files/{job_id}/{index}/poster")
     def poster_file(request: Request, job_id: str, index: int):
-        job = get_job(job_id, AuthMiddleware.visible_actor(request))
+        job = get_job(job_id, AuthMiddleware.actor(request))
         return serve_job_poster(job, index)

@@ -1,11 +1,13 @@
 """
-/drive: the shared Google Drive folder the VA uploads into
-(web/drive_folders.py). A card per Instagram login on an active phone,
+/drive: each phone owner's own Google Drive "ALL ACCOUNTS" folder
+(web/drive_folders.py). A card per Instagram login on an active phone (a
+signed-in person's own phones, admins included),
 with what waits in its folder (previews for images and videos, proxied
-through `/drive/thumb/{id}`: the account's token never leaves the server)
+through `/drive/thumb/{login}/{id}`: the owner's token never leaves the
+server)
 and what was posted (its POSTED folder: now, today, last 7 days). Below,
-the root's folders no login owns, to clean up. Sync runs the sweep now
-instead of at the next interval. Everyone signed in sees and syncs it.
+the root's folders no login owns, to clean up. Sync runs the
+sweep now instead of at the next interval.
 """
 
 from typing import Annotated
@@ -14,7 +16,9 @@ from fastapi import APIRouter, HTTPException, Path, Request, Response
 
 from ofmhelpers.gdrive import DriveError
 from ofmhelpers.log import get_logger
+from ofmhelpers.signin import SignInError
 from ofmhelpers.web import drive_folders
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.schemas import SyncReport
 from ofmhelpers.web.templates_config import render
 
@@ -30,22 +34,41 @@ _THUMB_CACHE = {"Cache-Control": "private, max-age=86400"}
 
 @router.get("")
 def drive_page(request: Request):
-    return render(request, "drive.html", board=drive_folders.board())
+    """At once, from each folder's last read: no Drive call. drive.js then
+    swaps in `/drive/live`."""
+    board = drive_folders.board(
+        owner=AuthMiddleware.scope(request),
+        viewer=AuthMiddleware.user(request).id,
+        live=False,
+    )
+    return render(request, "drive.html", board=board)
+
+
+@router.get("/live")
+def drive_live(request: Request):
+    """The cards read from Drive now (~3 Google round trips), as the
+    fragment the page swaps in."""
+    board = drive_folders.board(
+        owner=AuthMiddleware.scope(request), viewer=AuthMiddleware.user(request).id
+    )
+    return render(request, "_drive_board.html", board=board)
 
 
 @router.post("/sync")
-def sync() -> SyncReport:
-    try:
-        return drive_folders.sync()
-    except DriveError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+def sync(request: Request) -> SyncReport:
+    """The session's own folders now, admins included (the background sweep
+    does everyone's); `not_connected` names them if their Google Drive is
+    not connected. The report names only their own folders."""
+    return drive_folders.sync(AuthMiddleware.scope(request))
 
 
-@router.get("/thumb/{file_id}")
-def thumb(file_id: FileId) -> Response:
+@router.get("/thumb/{login_id}/{file_id}")
+def thumb(request: Request, login_id: int, file_id: FileId) -> Response:
     try:
-        found = drive_folders.thumbnail(file_id)
-    except DriveError as exc:
+        found = drive_folders.thumbnail(
+            login_id, file_id, AuthMiddleware.scope(request)
+        )
+    except (DriveError, SignInError) as exc:
         logger.warning("drive: preview of %s failed: %s", file_id, exc)
         raise HTTPException(status_code=404, detail="No preview") from exc
     if found is None:

@@ -8,8 +8,10 @@ per period (posts published in it, compared with the period before). A
 number is shown only from data that covers it: 0 is a confirmed zero, None
 (a dash) is "no data for that yet", a failed sync is its own warning."""
 
+import itertools
+import math
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from enum import StrEnum
 from typing import Annotated, Any, Self
 from urllib.parse import urlencode
@@ -129,6 +131,8 @@ class TopPosts(BaseModel):
 
 class TrackedAccount(BaseModel):
     id: int
+    # Whose it is.
+    user_id: int
     platform: str
     handle: str
     creator: str | None = None
@@ -410,28 +414,224 @@ class DailyRow(BaseModel):
     delta: int | None
 
 
-class Sparkline(BaseModel):
-    """An inline SVG polyline over `values` in a `width` x `height` box,
-    with the range it spans."""
+# Periods up to this many days chart every snapshot; longer ones one point
+# per UTC day (its last snapshot).
+CHART_RAW_MAX_DAYS = 2
+# Most horizontal gridlines the y-axis draws (3-5 come out).
+CHART_MAX_TICKS = 5
+# Headroom above the highest and below the lowest value, as a share of the
+# range, so neither touches the plot edge.
+CHART_PAD = 0.08
+# Most date labels under a daily chart; past that every n-th day.
+CHART_MAX_X_LABELS = 8
+_DAY_S = 86400
 
-    width: int = 600
-    height: int = 120
-    points: str = ""
-    low: int = 0
-    high: int = 0
+
+def _nice_step(raw: float) -> int:
+    """The smallest 1/2/5 x 10^n step >= `raw`, at least 1."""
+    if raw <= 1:
+        return 1
+    magnitude = 10 ** math.floor(math.log10(raw))
+    return int(next(m * magnitude for m in (1, 2, 5, 10) if m * magnitude >= raw))
+
+
+def tick_label(value: int, step: int, top: int) -> str:
+    """A y-axis label: "9,500" below 10k, "38.85k" below 1M, else "1.2M", with as
+    many decimals as `step` needs to tell neighbours apart."""
+    if value == 0:
+        return "0"
+    for unit, suffix, floor in ((1_000_000, "M", 1_000_000), (1_000, "k", 10_000)):
+        if top >= floor:
+            decimals = 0 if step >= unit else min(3, math.ceil(math.log10(unit / step)))
+            return f"{value / unit:,.{decimals}f}{suffix}"
+    return f"{value:,}"
+
+
+class ChartPoint(BaseModel):
+    """One sync on the follower chart: where it sits (percent of the plot,
+    y from the top) and the change from the point before (None: first)."""
+
+    taken_at: float
+    followers: int
+    change: int | None
+    x: float
+    y: float
+
+
+class YTick(BaseModel):
+    label: str
+    y: float
+
+
+class XTick(BaseModel):
+    taken_at: float
+    x: float
+
+
+class FollowerChart(BaseModel):
+    """Followers over a period, laid out for an inline SVG in a 0..100 box
+    (stretched to the plot; labels and dots are HTML at the same percents).
+
+    The first point is the newest sync a full period old when there is one,
+    the Follower growth KPI's baseline, so start -> end is that KPI's
+    change. x is linear in time: daily charts place each point on its UTC
+    day (evenly spaced, the day's label right under it), the others at
+    the sync's own time. Missed syncs read as gaps: two points further
+    apart than `gap_s` are joined by a dashed connector (`gaps`) instead of
+    the line (`lines`). The y-range is the data padded a little and rounded
+    to 1/2/2.5/5 steps; a flat line sits mid-plot."""
+
+    daily: bool
+    points: list[ChartPoint] = []
+    lines: list[str] = []
+    gaps: list[str] = []
+    dots: list[ChartPoint] = []
+    y_ticks: list[YTick] = []
+    x_ticks: list[XTick] = []
+
+    @property
+    def ready(self) -> bool:
+        return len(self.points) >= 2  # noqa: PLR2004 -- a line needs two points
+
+    @property
+    def start(self) -> ChartPoint:
+        return self.points[0]
+
+    @property
+    def end(self) -> ChartPoint:
+        return self.points[-1]
+
+    @property
+    def span_days(self) -> int:
+        """Calendar days (UTC) from the first point to the last."""
+        return _day(self.end.taken_at) - _day(self.start.taken_at)
+
+    @property
+    def delta(self) -> int:
+        return self.end.followers - self.start.followers
+
+    @property
+    def pct(self) -> float | None:
+        return pct_change(self.end.followers, self.start.followers)
 
     @classmethod
-    def of(cls, values: list[int], width: int = 600, height: int = 120) -> Self:
-        if len(values) < 2:  # noqa: PLR2004 -- a line needs two points
-            return cls(width=width, height=height)
-        low, high = min(values), max(values)
-        span = (high - low) or 1
-        step = width / (len(values) - 1)
-        points = " ".join(
-            f"{i * step:.1f},{height - (v - low) / span * height:.1f}"
-            for i, v in enumerate(values)
+    def of(cls, snaps: list[Snapshot], daily: bool, gap_s: float) -> Self:
+        """`snaps` oldest first."""
+        if len(snaps) < 2:  # noqa: PLR2004 -- a line needs two points
+            return cls(
+                daily=daily,
+                points=[_point(s, None, 0, 0) for s in snaps],
+            )
+        values = [s.followers for s in snaps]
+        low, high, step = _y_domain(min(values), max(values))
+        # Where each point sits on the time axis: its UTC day's start
+        # (daily), else the sync itself.
+        slot = [_day(s.taken_at) * _DAY_S if daily else s.taken_at for s in snaps]
+        t0 = slot[0]
+        span_t = (slot[-1] - t0) or 1
+
+        def x(t: float) -> float:
+            return (t - t0) / span_t * 100
+
+        def y(v: float) -> float:
+            return (high - v) / (high - low) * 100
+
+        points = [
+            _point(
+                s,
+                s.followers - prev.followers if prev else None,
+                x(t),
+                y(s.followers),
+            )
+            for prev, s, t in zip([None, *snaps], snaps, slot, strict=False)
+        ]
+        runs: list[list[ChartPoint]] = [[points[0]]]
+        gaps: list[str] = []
+        for i, (prev, p) in enumerate(itertools.pairwise(points)):
+            if slot[i + 1] - slot[i] > gap_s:
+                gaps.append(f"M{prev.x:.2f} {prev.y:.2f}L{p.x:.2f} {p.y:.2f}")
+                runs.append([p])
+            else:
+                runs[-1].append(p)
+        # The ends, and any point a gap leaves alone (it has no line).
+        dotted = {0, len(points) - 1} | {
+            points.index(r[0]) for r in runs if len(r) == 1
+        }
+        return cls(
+            daily=daily,
+            points=points,
+            lines=[
+                "M" + "L".join(f"{p.x:.2f} {p.y:.2f}" for p in run)
+                for run in runs
+                if len(run) > 1
+            ],
+            gaps=gaps,
+            dots=[points[i] for i in sorted(dotted)],
+            y_ticks=[
+                YTick(label=tick_label(v, step, high), y=y(v))
+                for v in range(-(-low // step) * step, high + 1, step)
+            ],
+            x_ticks=(
+                _day_ticks(t0, span_t)
+                if daily
+                else [XTick(taken_at=t0 + span_t * f, x=f * 100) for f in (0, 0.5, 1)]
+            ),
         )
-        return cls(width=width, height=height, points=points, low=low, high=high)
+
+
+def _point(snap: Snapshot, change: int | None, x: float, y: float) -> ChartPoint:
+    return ChartPoint(
+        taken_at=snap.taken_at, followers=snap.followers, change=change, x=x, y=y
+    )
+
+
+def _day(t: float) -> int:
+    return int(t // _DAY_S)
+
+
+def _day_ticks(t0: float, span_t: float) -> list[XTick]:
+    """A label under every day of a daily chart, every n-th past
+    CHART_MAX_X_LABELS, counted back from the last day so it is always
+    labelled."""
+    days = max(1, round(span_t / _DAY_S))
+    every = -(-(days + 1) // CHART_MAX_X_LABELS)
+    return [
+        XTick(taken_at=t0 + d * _DAY_S, x=d / days * 100)
+        for d in range(days % every, days + 1, every)
+    ]
+
+
+def _steps() -> Iterator[int]:
+    """1, 2, 5, 10, 20, 25, 50, 100, ... -- gridline steps that read well."""
+    yield from (1, 2, 5)
+    for magnitude in itertools.count(1):
+        yield from (int(m * 10**magnitude) for m in (1, 2, 2.5, 5))
+
+
+def _y_domain(low: int, high: int) -> tuple[int, int, int]:
+    """(bottom, top, step): `low..high` padded by CHART_PAD of the range
+    (never below 0), with the coarsest-needed step that still draws at most
+    CHART_MAX_TICKS gridlines, and the ends rounded to a quarter or half
+    step so the data fills the plot. A flat line gets one step either
+    side."""
+    if low == high:
+        step = _nice_step(max(1, high * 0.02))
+        bottom = max(0, low - step)
+        return bottom, bottom + 2 * step, step
+    pad = (high - low) * CHART_PAD
+    lo, hi = max(0.0, low - pad) if low >= 0 else low - pad, high + pad
+    return next(fit for step in _steps() if (fit := _y_fit(lo, hi, step)))
+
+
+def _y_fit(lo: float, hi: float, step: int) -> tuple[int, int, int] | None:
+    """`lo..hi` rounded out to a quarter (else half, else whole) `step`, or
+    None when that draws more than CHART_MAX_TICKS gridlines."""
+    unit = next((step // n for n in (4, 2) if step % n == 0), step)
+    bottom = math.floor(lo / unit) * unit
+    top = math.ceil(hi / unit) * unit
+    if top // step - -(-bottom // step) + 1 > CHART_MAX_TICKS:
+        return None
+    return bottom, top, step
 
 
 class AccountHistory(BaseModel):
@@ -451,14 +651,24 @@ class AccountHistory(BaseModel):
             previous = snap
         return rows
 
-    def last_days(self, days: int, now: float | None = None) -> list[DailyRow]:
-        """The daily rows of the last `days` days, oldest first."""
-        since = (now or time.time()) - days * 86400
-        return [r for r in self.daily if r.snapshot.taken_at >= since]
-
-    def followers_line(self, days: int) -> Sparkline:
-        """Daily follower totals over the last `days` days."""
-        return Sparkline.of([r.snapshot.followers for r in self.last_days(days)])
+    def follower_chart(
+        self, days: int, rescan_s: float, now: float | None = None
+    ) -> FollowerChart:
+        """Followers over the last `days` days, from the newest snapshot a
+        period old (the growth baseline) when there is one: every sync for
+        short periods, else each day's last. A gap is more than two rescan
+        intervals (or a day and a half, daily) without a point."""
+        since = (now or time.time()) - days * _DAY_S
+        base = [s for s in self.snapshots if s.taken_at <= since][-1:]
+        inside = [s for s in self.snapshots if s.taken_at > since]
+        daily = days > CHART_RAW_MAX_DAYS
+        if daily:
+            # One point per UTC day, its last sync; the baseline's day too
+            # (a sync later that day replaces it).
+            by_day = {_day(s.taken_at): s for s in base + inside}
+            base, inside = [], list(by_day.values())
+        gap_s = max(2 * rescan_s, 1.5 * _DAY_S if daily else 0)
+        return FollowerChart.of(base + inside, daily=daily, gap_s=gap_s)
 
 
 class AddAccounts(BaseModel):

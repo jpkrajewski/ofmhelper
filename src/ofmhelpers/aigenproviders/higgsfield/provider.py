@@ -101,9 +101,8 @@ class HiggsfieldProvider(Provider):
             install(self.client)
 
     @classmethod
-    def default_key(cls, admin: bool) -> str | None:
-        s = settings.higgsfield
-        return s.api_key_admin if admin else s.api_key_va
+    def default_key(cls) -> str | None:
+        return settings.higgsfield.api_key_admin
 
     def _upload_cache_key(self, path: Path) -> str:
         """Per account (uploads are), without the key itself in Redis."""

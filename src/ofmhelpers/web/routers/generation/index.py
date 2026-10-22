@@ -31,7 +31,7 @@ def _gallery_page(request: Request, offset: int) -> tuple[list[TaskCard], int | 
         set(GENERATE_TOOLS),
         offset,
         GALLERY_LIMIT,
-        AuthMiddleware.visible_actor(request),
+        AuthMiddleware.actor(request),
     )
     next_offset = offset + GALLERY_LIMIT
     return (

@@ -4,6 +4,7 @@ only into folders they may use, only their own runs, and a failure is
 shown and may be retried."""
 
 import os
+import time
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
@@ -11,6 +12,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 from pathlib import Path
 
 import pytest
+import time_machine
 from fastapi.testclient import TestClient
 from signin import sign_in
 
@@ -18,6 +20,7 @@ from ofmhelpers.gdrive import DriveError
 from ofmhelpers.gdrive.fake import fake_drive
 from ofmhelpers.web import drive_folders, drive_uploads
 from ofmhelpers.web.main import app
+from ofmhelpers.web.stores import drive_folders as folder_store
 from ofmhelpers.web.stores import users
 from ofmhelpers.web.stores.jobs import create_job, run_job
 from ofmhelpers.web.stores.users import _repository as user_repository
@@ -180,3 +183,141 @@ def test_the_batch_header_offers_only_the_users_folders(drive, tmp_path):
     bob_page = bob.get("/clone").text
     assert "ann.ig - Anna" not in bob_page
     assert "drive-target" not in bob_page  # Bob has no account folder
+
+
+def test_queueing_returns_only_the_users_own_runs(drive, tmp_path):
+    """Another user's run id in the request: its upload rows (folder,
+    Drive link, error) are not in the answer."""
+    ann = _client("ann@example.com")
+    bob = _client("bob@example.com")
+    ann_login = _account_folder(ann)
+    bob_login = _account_folder(bob, "bob.ig")
+    ann_job = _finished_run("ann@example.com", tmp_path, "a.mp4")
+    bob_job = _finished_run("bob@example.com", tmp_path, "b.mp4")
+    bob.post("/clone/drive-upload", json={"job_ids": [bob_job], "login_id": bob_login})
+
+    r = ann.post(
+        "/clone/drive-upload",
+        json={"job_ids": [ann_job, bob_job], "login_id": ann_login},
+    )
+
+    assert r.status_code == 200, r.text
+    assert [u["job_id"] for u in r.json()["uploads"]] == [ann_job]
+
+
+def test_an_upload_that_cannot_be_queued_fails_and_can_be_retried(
+    drive, tmp_path, monkeypatch
+):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path)
+    working = drive_uploads.enqueue
+
+    def redis_down(*_args, **_kwargs):
+        msg = "redis down"
+        raise ConnectionError(msg)
+
+    monkeypatch.setattr(drive_uploads, "enqueue", redis_down)
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert (state["status"], state["error"]) == (
+        "failed",
+        "Could not queue the upload: redis down",
+    )
+
+    monkeypatch.setattr(drive_uploads, "enqueue", working)
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert state["status"] == "done"
+
+
+def test_a_stranded_queued_upload_is_queued_again_once_stale(
+    drive, tmp_path, monkeypatch
+):
+    """The worker died mid-batch (deploy): the row stays `queued`. Upload
+    leaves it while it may still run, and queues it again once stale."""
+    monkeypatch.setenv("OFM_GDRIVE_UPLOAD_STALE_S", "60")
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path)
+    working = drive_uploads.enqueue
+    monkeypatch.setattr(drive_uploads, "enqueue", lambda *_a, **_k: None)
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    monkeypatch.setattr(drive_uploads, "enqueue", working)
+
+    ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert state["status"] == "queued"  # not stale yet: never doubled
+    assert _files_in(drive, "ann.ig - Anna") == []
+
+    with time_machine.travel(time.time() + 120):
+        ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+        [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert state["status"] == "done"
+    assert len(_files_in(drive, "ann.ig - Anna")) == 1
+
+
+def test_any_error_uploading_a_file_fails_that_upload(drive, tmp_path, monkeypatch):
+    """Not only Drive errors: a file removed after the check, a bug -- the
+    row says why instead of staying `queued`."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path)
+
+    def vanished(*_args, **_kwargs):
+        msg = "clone.mp4 is gone"
+        raise FileNotFoundError(msg)
+
+    monkeypatch.setattr(drive, "upload", vanished)
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+
+    assert r.status_code == 200, r.text
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert (state["status"], state["error"]) == (
+        "failed",
+        "Upload failed: clone.mp4 is gone",
+    )
+
+
+def test_dev_never_uploads_into_a_live_root_kept_from_a_prod_copy(drive, tmp_path):
+    """A dev database copied from prod, before any sweep: the stored root is
+    the live "ALL ACCOUNTS" and the account folder sits in it. The worker
+    checks the root by name and refuses; nothing is written to Drive."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path)
+    ann_id = users.by_email("ann@example.com").id
+    live = drive.seed_folder(
+        "ALL ACCOUNTS", "mydrive-ann@example.com", owner="ann@example.com"
+    )
+    live_account = drive.seed_folder("ann.ig - Anna", live, owner="ann@example.com")
+    folder_store.save_account_folder(login, live_account, "ann.ig - Anna", live)
+    users.set_drive_root(ann_id, live)
+    drive.clear_calls()
+
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_id": login})
+
+    assert r.status_code == 200, r.text
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert (state["status"], state["error"]) == (
+        "failed",
+        (
+            "The account's folder is not in its owner's DEV - ALL ACCOUNTS folder:"
+            " Sync on /drive, then upload again"
+        ),
+    )
+    assert drive.names_in(live_account) == []
+    assert drive.writes == []
+
+
+def test_clone_and_drive_offer_connecting_google_drive_until_it_is(drive):
+    """Sign-in asks no Drive access: /clone and /drive link straight to the
+    one consent that does, and stop once it is given."""
+    connect = "/auth/google/start?link=1&amp;next="
+    ann = _client("ann@example.com", google=False)
+    assert f"{connect}/clone" in ann.get("/clone").text
+    assert f"{connect}/drive" in ann.get("/drive/live").text
+
+    connected = _client("bob@example.com")
+    assert connect not in connected.get("/clone").text
+    assert connect not in connected.get("/drive/live").text

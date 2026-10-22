@@ -54,6 +54,8 @@ class FakeItem(BaseModel):
     created: int = 0
     trashed: bool = False
     has_thumbnail: bool = False
+    # Who else may edit it (`grant`), besides the bot.
+    editors: list[str] = Field(default_factory=list)
 
 
 class FakeDriveState(BaseModel):
@@ -68,7 +70,9 @@ class FakeDriveState(BaseModel):
     fail_on: list[str] = Field(default_factory=list)
 
 
-_WRITES = frozenset({"create", "rename"})
+_WRITES = frozenset({"create", "rename", "upload", "grant"})
+# A person's uploads, as `connect_as` makes them.
+UPLOADER = "uploader@example.com"
 
 
 @lru_cache(maxsize=1)
@@ -201,6 +205,19 @@ class FakeDrive:
             found.sort(key=lambda i: i.created, reverse=True)
             return [self._as_file(i) for i in found]
 
+    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+        found: dict[str, list[DriveFile]] = {}
+        if not parent_ids:
+            return found
+        for parent_id in parent_ids:
+            found[parent_id] = self.children(parent_id)
+        with self._state() as state:
+            # One query, as the real one: the per-parent listings above are
+            # an implementation detail, not calls a test should count.
+            del state.calls[-len(parent_ids) :]
+            state.calls.append("children_of")
+        return found
+
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
         with self._state("find") as state:
             self._live(state, parent_id, f"Finding {name!r}")
@@ -217,15 +234,15 @@ class FakeDrive:
             oldest = min(found, key=lambda i: i.created)
             return DriveFolder(id=oldest.id, name=oldest.name)
 
-    def create_folder(self, parent_id: str, name: str) -> DriveFolder:
+    def create_folder(
+        self, parent_id: str, name: str, *, owner: str = FAKE_BOT_EMAIL
+    ) -> DriveFolder:
         with self._state("create") as state:
             if name in state.fail_on:
                 msg = f"Creating {name!r}: Drive refused (fake outage)"
                 raise DriveError(msg)
             self._live(state, parent_id, f"Creating {name!r}")
-            made = self._new(
-                state, name=name, parents=[parent_id], owner=FAKE_BOT_EMAIL
-            )
+            made = self._new(state, name=name, parents=[parent_id], owner=owner)
             return DriveFolder(id=made.id, name=made.name)
 
     def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:
@@ -246,6 +263,40 @@ class FakeDrive:
             if not item.thumbnail_link:
                 return None
             return _thumb_jpeg(), "image/jpeg"
+
+    def upload(
+        self,
+        parent_id: str,
+        path: Path,
+        name: str,
+        mime_type: str,
+        *,
+        owner: str = UPLOADER,
+    ) -> DriveFile:
+        size = path.stat().st_size
+        with self._state("upload") as state:
+            if name in state.fail_on:
+                msg = f"Uploading {name!r}: Drive refused (fake outage)"
+                raise DriveError(msg)
+            parent = self._live(state, parent_id, f"Uploading {name!r}")
+            if parent.mime_type != FOLDER_MIME:
+                msg = f"Uploading {name!r}: {parent_id} is not a folder"
+                raise DriveError(msg)
+            made = self._new(
+                state,
+                name=name,
+                mime_type=mime_type,
+                parents=[parent_id],
+                owner=owner,
+            )
+            found = self._as_file(made)
+        return found.model_copy(update={"size": size})
+
+    def grant(self, item_id: str, email: str) -> None:
+        with self._state("grant") as state:
+            item = self._live(state, item_id, f"Sharing {item_id} with {email}")
+            if email not in item.editors:
+                item.editors.append(email)
 
     # --- what a person does in Drive (tests, seeding) ------------------------
 
@@ -336,6 +387,14 @@ class FakeDrive:
             ]
             return [i.id for i in sorted(found, key=lambda i: i.created)]
 
+    def names_in(self, parent: str) -> list[str]:
+        """Names of the live items directly in `parent`, oldest first."""
+        with self._state() as state:
+            found = [
+                i for i in state.items.values() if parent in i.parents and not i.trashed
+            ]
+            return [i.name for i in sorted(found, key=lambda i: i.created)]
+
     def item(self, item_id: str) -> FakeItem | None:
         with self._state() as state:
             found = state.items.get(item_id)
@@ -367,3 +426,70 @@ def fake_drive() -> FakeDrive:
     """The process's fake Drive (`connect()` under OFM_FAKE_EXTERNALS), its
     root the configured one, shared with the bot."""
     return _fake_drive(settings.infra.fakes_dir, settings.gdrive.root_folder_id)
+
+
+class FakePersonDrive:
+    """The fake Drive as one person (`connect_as` under OFM_FAKE_EXTERNALS):
+    "root" is their own My Drive (a folder of theirs, made on first use),
+    and what they make or upload is theirs. Everything else is the shared
+    fake's, so a test reads back through `FakeDrive` as usual."""
+
+    def __init__(self, drive: FakeDrive, email: str) -> None:
+        self._drive = drive
+        self.email = email
+        self.my_drive = f"mydrive-{email}"
+
+    def _id(self, item_id: str) -> str:
+        if item_id != "root":
+            return item_id
+        if self._drive.item(self.my_drive) is None:
+            self._drive.seed_folder(
+                "My Drive", item_id=self.my_drive, owner=self.email, shared=True
+            )
+        return self.my_drive
+
+    def folder(self, folder_id: str) -> DriveFolder:
+        return self._drive.folder(self._id(folder_id))
+
+    def children(
+        self, parent_id: str, *, folders_only: bool = False
+    ) -> list[DriveFile]:
+        return self._drive.children(self._id(parent_id), folders_only=folders_only)
+
+    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+        return self._drive.children_of([self._id(p) for p in parent_ids])
+
+    def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
+        return self._drive.find_folder(self._id(parent_id), name)
+
+    def create_folder(self, parent_id: str, name: str) -> DriveFolder:
+        return self._drive.create_folder(self._id(parent_id), name, owner=self.email)
+
+    def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:
+        return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
+
+    def rename(self, folder_id: str, name: str) -> DriveFolder:
+        return self._drive.rename(folder_id, name)
+
+    def file(self, file_id: str) -> DriveFile:
+        return self._drive.file(file_id)
+
+    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
+        return self._drive.thumbnail(item, px)
+
+    def upload(
+        self, parent_id: str, path: Path, name: str, mime_type: str
+    ) -> DriveFile:
+        return self._drive.upload(
+            self._id(parent_id), path, name, mime_type, owner=self.email
+        )
+
+    def grant(self, item_id: str, email: str) -> None:
+        self._drive.grant(item_id, email)
+
+
+def fake_person(refresh_token: str) -> FakePersonDrive:
+    """The fake Drive as whoever `refresh_token` is ("fake-refresh:<email>",
+    what the fake token endpoint hands out; any other token is its own
+    person)."""
+    return FakePersonDrive(fake_drive(), refresh_token.removeprefix("fake-refresh:"))

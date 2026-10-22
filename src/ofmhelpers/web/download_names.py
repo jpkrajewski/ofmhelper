@@ -14,7 +14,7 @@ import hashlib
 from pathlib import Path
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.routers.task_helpers.uploads import classify_kind
+from ofmhelpers.web.media_kinds import classify_kind
 
 
 def download_name(name: str) -> str:

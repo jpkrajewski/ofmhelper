@@ -12,7 +12,9 @@ profile due for its 12 h rescan, web/reel_watch.py), so no request waits on
 Instagram; the page polls `GET /reels/watchlist` until none is pending.
 
 Reels play on the page straight from Instagram's CDN (it allows cross-origin
-embedding); nothing is downloaded until Clone or Download selected.
+embedding); their covers come shrunk and kept from `GET /reels/thumb/{code}`
+(web/reel_thumbs.py). Nothing is downloaded until Clone or Download
+selected.
 """
 
 import shutil
@@ -24,6 +26,7 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, TypeAdapter, ValidationError
 from starlette.background import BackgroundTask
@@ -36,6 +39,8 @@ from ofmhelpers.instagram import (
     ReelDownload,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.reel_thumbs import reel_thumb, thumb_path
 from ofmhelpers.web.reel_watch import queue_due_scans
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
@@ -67,6 +72,11 @@ RankQuery = Annotated[str | None, Query(max_length=16)]
 # account's followers in views.
 RatioQuery = Annotated[int | None, Query(ge=1, le=1000)]
 
+# A shortcode: Instagram's base64 alphabet.
+ReelCode = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9_-]{5,64}$")]
+# A kept thumbnail never changes.
+_THUMB_CACHE = {"Cache-Control": "private, max-age=2592000, immutable"}
+
 # The follower multiples offered as chips.
 _RATIO_STEPS = (2, 3, 5, 10)
 
@@ -96,24 +106,27 @@ class _Filters(BaseModel):
         return path + (f"?{urlencode(query)}" if query else "")
 
 
-def _feed_page(filters: _Filters, offset: int) -> tuple[list[FeedItem], int | None]:
+def _feed_page(
+    filters: _Filters, offset: int, owner: int | None
+) -> tuple[list[FeedItem], int | None]:
     """One page of the feed plus the next page's offset, None on the last --
     the absence of a next offset is what ends the scroll. The filters apply
     before paging, so every page holds only reels they keep."""
     size = settings.instagram.feed_page_size
     feed = [
         item
-        for item in FeedItem.of(list_watched(filters.group))
+        for item in FeedItem.of(list_watched(filters.group, owner))
         if filters.includes(item)
     ]
     next_offset = offset + size
     return feed[offset:next_offset], next_offset if next_offset < len(feed) else None
 
 
-def _group_links(filters: _Filters) -> list[tuple[str, str, bool]]:
+def _group_links(filters: _Filters, owner: int | None) -> list[tuple[str, str, bool]]:
     """The feed's group chips (label, href, current)."""
     return [("All", filters.url("/reels", group=None), not filters.group)] + [
-        (g, filters.url("/reels", group=g), g == filters.group) for g in list_groups()
+        (g, filters.url("/reels", group=g), g == filters.group)
+        for g in list_groups(owner)
     ]
 
 
@@ -162,18 +175,19 @@ def form(
     ratio: RatioQuery = None,
 ):
     filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
-    feed, next_offset = _feed_page(filters, 0)
+    scope = AuthMiddleware.scope(request)
+    feed, next_offset = _feed_page(filters, 0, scope)
     return render(
         request,
         "reels.html",
-        board=Leaderboard.of(list_watched(filters.group)),
+        board=Leaderboard.of(list_watched(filters.group, scope)),
         feed=feed,
         next_offset=next_offset,
         feed_endpoint=filters.url("/reels/feed"),
-        group_links=_group_links(filters),
+        group_links=_group_links(filters, scope),
         rank_links=_rank_links(filters),
         ratio_links=_ratio_links(filters),
-        groups=list_groups(),
+        groups=list_groups(scope),
         group=group or "",
         rank=rank or "",
         ratio=ratio,
@@ -191,34 +205,55 @@ def feed_page(
 ):
     """The next page of cards, as the fragment gallery-scroll.js appends."""
     filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
-    feed, next_offset = _feed_page(filters, offset)
+    feed, next_offset = _feed_page(filters, offset, AuthMiddleware.scope(request))
     return render(request, "_reels_feed_page.html", feed=feed, next_offset=next_offset)
+
+
+@router.get("/thumb/{code}")
+def thumb(code: ReelCode) -> FileResponse:
+    """A feed card's cover, small and kept (web/reel_thumbs.py). Only reels
+    of the watch list: the source URL comes from the stored scan, never
+    from the request."""
+    path: Path | None = thumb_path(code)
+    if path is None or not path.is_file():
+        found = next(
+            (i.reel for i in FeedItem.of(list_watched()) if i.reel.code == code), None
+        )
+        path = reel_thumb(code, str(found.thumbnail_url)) if found else None
+    if path is None:
+        raise HTTPException(status_code=404, detail="No thumbnail")
+    return FileResponse(path, media_type="image/webp", headers=_THUMB_CACHE)
 
 
 @router.get("/watchlist")
 def watchlist(request: Request, group: GroupQuery = None):
     """The watch list rows, as the page polls them while scans run."""
+    scope = AuthMiddleware.scope(request)
     return render(
         request,
         "_reels_watch_rows.html",
-        board=Leaderboard.of(list_watched(group or None)),
-        groups=list_groups(),
+        board=Leaderboard.of(list_watched(group or None, scope)),
+        groups=list_groups(scope),
     )
 
 
 @router.post("/groups")
-def new_group(name: Annotated[str, Form()] = ""):
+def new_group(request: Request, name: Annotated[str, Form()] = ""):
     """ "+ New group": a group every dropdown offers before any profile is in
     it. Answers the stored name (trimmed, lower case)."""
     group = GroupForm(group=name).group
     if not group:
         raise HTTPException(status_code=400, detail="Name the group")
-    create_group(group)
+    create_group(group, AuthMiddleware.owner_id(request))
     return {"group": group}
 
 
 @router.post("/watch")
-def add(profiles: Annotated[str, Form()] = "", group: Annotated[str, Form()] = ""):
+def add(
+    request: Request,
+    profiles: Annotated[str, Form()] = "",
+    group: Annotated[str, Form()] = "",
+):
     """Adds every profile on its own line to `group` and queues the first
     scan of the new ones. A profile already watched is only moved to
     `group` (when one is given) and left to its 12 h rescan. One bad line
@@ -230,7 +265,8 @@ def add(profiles: Annotated[str, Form()] = "", group: Annotated[str, Form()] = "
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not usernames:
         raise HTTPException(status_code=400, detail="Add at least one profile")
-    added = [u for u in usernames if watch(u, form.group or None)]
+    user_id = AuthMiddleware.owner_id(request)
+    added = [u for u in usernames if watch(u, form.group or None, user_id=user_id)]
     queue_due_scans()
     return {"added": added, "already_watched": len(usernames) - len(added)}
 
@@ -243,19 +279,19 @@ def _handle(username: str) -> str:
 
 
 @router.post("/group/{username}")
-def move(username: str, group: Annotated[str, Form()] = ""):
+def move(request: Request, username: str, group: Annotated[str, Form()] = ""):
     """A watch-list row's group dropdown: moves the profile ("" = no group)."""
     handle = _handle(username)
     target = GroupForm(group=group).group
-    if not set_group(handle, target or None):
+    if not set_group(handle, target or None, AuthMiddleware.owner_id(request)):
         raise HTTPException(status_code=404, detail=f"@{handle} is not watched")
     return {"username": handle, "group": target}
 
 
 @router.post("/unwatch/{username}")
-def remove(username: str):
+def remove(request: Request, username: str):
     handle = _handle(username)
-    if not unwatch(handle):
+    if not unwatch(handle, AuthMiddleware.owner_id(request)):
         raise HTTPException(status_code=404, detail=f"@{handle} is not watched")
     return {"removed": handle}
 

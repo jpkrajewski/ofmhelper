@@ -55,6 +55,9 @@ from ofmhelpers.web.stores.tracked_accounts import (
 )
 
 DAY = 86400
+COOKIES_TXT = (
+    b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tx\n"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -95,7 +98,7 @@ def fetches(monkeypatch):
     pairs fetched, in order. Enqueued jobs run inline in the test suite."""
     seen: list[tuple[str, str | None]] = []
 
-    def fake_fetch(_self, handle, proxy):
+    def fake_fetch(_self, handle, proxy, cookies=None):
         seen.append((handle, proxy))
         return _stats(handle)
 
@@ -643,8 +646,7 @@ def test_limited_syncs_warn_to_upload_a_login(client, fetches):
     )
 
 
-def test_cookie_upload_rescans_limited_accounts_now(fetches, monkeypatch, tmp_path):
-    monkeypatch.setenv("OFM_COOKIES_FILE", str(tmp_path / "cookies.txt"))
+def test_cookie_upload_rescans_limited_accounts_now(fetches):
     for handle in ("limited", "full"):
         track("instagram", handle)
         stats = _stats(handle)
@@ -653,7 +655,7 @@ def test_cookie_upload_rescans_limited_accounts_now(fetches, monkeypatch, tmp_pa
     fetches.clear()
     admin = TestClient(app)
     admin.post("/login", data={"password": "test-admin", "next": "/"})
-    r = admin.post("/cookies", files={"file": ("cookies.txt", b"# Netscape")})
+    r = admin.post("/cookies", files={"file": ("cookies.txt", COOKIES_TXT)})
     assert r.status_code == 200
     assert [h for h, _ in fetches] == ["limited"]
     assert not get_account(_id("limited")).metrics.limited
@@ -855,14 +857,11 @@ def test_chart_lays_out_points_and_rounds_the_y_range_to_nice_steps():
     assert round(chart.pct, 1) == 10.2
     assert [p.x for p in chart.points] == [0, 50, 100]
     assert [p.change for p in chart.points] == [None, 713, 2_900]
-    # 35,287..38,900 over ~3 gridlines: 2,000 steps from 34k to 40k.
-    assert [t.label for t in chart.y_ticks] == ["34k", "36k", "38k", "40k"]
-    assert [t.y for t in chart.y_ticks] == [
-        100,
-        pytest.approx(66.67, abs=0.01),
-        pytest.approx(33.33, abs=0.01),
-        0,
-    ]
+    # 35,287..38,900 padded to 34,750..39,250: five 1,000 gridlines.
+    assert [t.label for t in chart.y_ticks] == ["35k", "36k", "37k", "38k", "39k"]
+    assert [t.y for t in chart.y_ticks] == pytest.approx(
+        [94.44, 72.22, 50, 27.78, 5.56], abs=0.01
+    )
     # Every point sits inside the plot, the highest nearest the top.
     assert all(0 <= p.y <= 100 for p in chart.points)
     assert chart.points[2].y < chart.points[1].y < chart.points[0].y
@@ -888,10 +887,42 @@ def test_big_jump_keeps_every_point_in_the_plot():
     chart = FollowerChart.of(
         _snaps((0, 100), (DAY, 120), (2 * DAY, 2_500_000)), daily=True, gap_s=2 * DAY
     )
-    # Scaled to the jump: 0..3M, the small start flat on the floor.
-    assert [round(p.y) for p in chart.points] == [100, 100, 17]
-    assert [t.label for t in chart.y_ticks][-1] == "3M"
+    # Scaled to the jump: 0..2.75M, the small start flat on the floor.
+    assert [round(p.y) for p in chart.points] == [100, 100, 9]
+    assert [t.label for t in chart.y_ticks] == ["0", "1M", "2M"]
     assert chart.points[-1].change == 2_499_880
+
+
+def test_daily_chart_puts_each_day_under_its_own_label():
+    """Points sit on their UTC day, not their sync time: a late-evening
+    sync is not drawn next to the following day's label."""
+    day0 = 300 * DAY
+    chart = FollowerChart.of(
+        _snaps(
+            (day0 + 23 * 3600, 352),  # Oct 20-ish, 23:00
+            (2 * DAY + day0 - 3 * 3600 + 3360, 600),  # next day, 20:56
+            (2 * DAY + day0 + 3600, 788),  # the day after, 01:00
+        ),
+        daily=True,
+        gap_s=1.5 * DAY,
+    )
+    assert [p.x for p in chart.points] == [0, 50, 100]
+    assert [t.x for t in chart.x_ticks] == [0, 50, 100]
+    assert [t.taken_at // DAY for t in chart.x_ticks] == [300, 301, 302]
+    assert chart.span_days == 2
+    assert chart.gaps == []
+    # The y-range hugs the data: 300..850, gridlines at 400/600/800.
+    assert [t.label for t in chart.y_ticks] == ["400", "600", "800"]
+    assert all(0 < p.y < 100 for p in chart.points)
+
+
+def test_long_daily_chart_labels_at_most_eight_days_ending_on_the_last():
+    chart = FollowerChart.of(
+        _snaps(*((d * DAY, 1000 + d) for d in range(30))), daily=True, gap_s=1.5 * DAY
+    )
+    assert len(chart.x_ticks) == 8
+    assert chart.x_ticks[-1].x == 100
+    assert 3 <= len(chart.y_ticks) <= 5
 
 
 def test_missed_syncs_break_the_line_with_a_dashed_gap():
@@ -931,6 +962,8 @@ def test_history_chart_starts_at_the_growth_baseline_and_is_daily_past_two_days(
     chart = history.follower_chart(7, rescan_s=6 * 3600, now=now)
     assert chart.daily
     assert [p.followers for p in chart.points] == [100, 120, 150]
+    # UTC days 92, 97, 99: placed by day, not by sync time.
+    assert [p.x for p in chart.points] == pytest.approx([0, 500 / 7, 100])
     assert chart.delta == 50
     # 24 hours: every sync, no daily folding.
     short = history.follower_chart(1, rescan_s=6 * 3600, now=now)
@@ -963,6 +996,7 @@ def test_analytics_page_draws_the_follower_chart(client, fetches):
     assert "+100" in html
     assert "(+11.1%)" in html
     assert html.count("<tr data-x=") == 4
+    assert "<small>8 days</small>" in html  # first point to last, not the count
     assert ">+50<" in html  # 900 -> 950
     assert "Not enough history yet" not in html
     assert 'src="/static/js/account-chart.js' in html
@@ -1022,7 +1056,7 @@ def _failing(monkeypatch, outcomes):
     used: list[str | None] = []
     it = iter(outcomes)
 
-    def fetch(_self, handle, proxy):
+    def fetch(_self, handle, proxy, cookies=None):
         used.append(proxy)
         outcome = next(it)
         if isinstance(outcome, BaseException):

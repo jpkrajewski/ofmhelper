@@ -10,6 +10,8 @@ from ofmhelpers.instagram import ProfileHandle, ProfileReels, Reel
 
 
 class WatchedProfile(BaseModel):
+    # Whose watch list it is on.
+    user_id: int
     username: str
     group: str | None = None
     added_at: float

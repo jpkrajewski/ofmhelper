@@ -17,6 +17,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel, computed_field
 
+from ofmhelpers.web.schemas.drive import DriveUpload
 from ofmhelpers.web.schemas.jobs import AssetCard, FailedSource
 from ofmhelpers.web.schemas.persistence import Job
 
@@ -88,6 +89,8 @@ class CloneCard(JobCard):
     video_name: str
     took_s: float | None = None
     eta: CloneEta | None = None
+    # Where its result was uploaded in Drive (web/drive_uploads.py).
+    drive_uploads: list[DriveUpload] = []
 
 
 class CloneBatch(BaseModel):

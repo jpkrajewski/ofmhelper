@@ -90,3 +90,20 @@ class YtDlpInfo(BaseModel):
             for rd in self.requested_downloads
             if (fp := rd.filepath or rd.filename)
         ]
+
+
+class CookieJarSummary(BaseModel):
+    """What /cookies shows about an uploaded cookies.txt: never a value,
+    only which sites it covers and whether it holds an Instagram login."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cookies: int
+    # Registrable-ish hosts, leading dot dropped, sorted.
+    domains: list[str]
+    # A `sessionid` cookie for instagram.com: what every logged-in
+    # Instagram call needs.
+    instagram_login: bool
+    # When that login cookie expires (epoch s); None without one, or a
+    # session cookie.
+    instagram_expires_at: float | None = None

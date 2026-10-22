@@ -29,7 +29,7 @@ def test_a_login_wall_asks_for_fresh_cookies(monkeypatch, tmp_path):
 
     assert not result.success
     assert result.error == (
-        "This post needs a login: upload a fresh cookies.txt at /cookies (admin)"
+        "This post needs a login: upload your fresh cookies.txt at /cookies"
     )
 
 

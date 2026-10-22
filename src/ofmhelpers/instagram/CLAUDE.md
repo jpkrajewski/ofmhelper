@@ -2,7 +2,7 @@
 
 Profiles' reels (play counts, length, mp4) via logged-out web GraphQL.
 
-- `client.py` — `InstagramClient`, the only code calling Instagram: `open_profile`, `reels`, `reels_logged_in` (same GraphQL query as the uploaded login; `_query(..., login=LoginTokens)`), `timeline`, `media` (falls back to logged-in `media/{pk}/info/` with cookies.txt for gated reels), `download_video`. `doc_id`s are settings; they rotate every few weeks ("Instagram changed its ... query").
+- `client.py` — `InstagramClient`, the only code calling Instagram: `open_profile`, `reels`, `reels_logged_in` (same GraphQL query as the uploaded login; `_query(..., login=LoginTokens)`), `timeline`, `media` (falls back to logged-in `media/{pk}/info/` with cookies.txt for gated reels); logged-in calls use `InstagramClient(proxy, cookies)` -- one user's cookies.txt text from the caller, no shared file, `download_video`. `doc_id`s are settings; they rotate every few weeks ("Instagram changed its ... query").
 - `models.py` — response shapes, `ProfileHandle`, `ReelSummary.posted_at` (from the id), `Reel.tier` (`VIEW_TIERS`), `ReelDownload`.
 - `pages.py` — HTML parsing only: `reels_page` (profile id + `lsd`), `login_tokens`, `is_profile_page`, `crawler_sees_a_profile`. The client fetches, `pages`/`models` parse (offline tests on `tests/fixtures/scraper/`).
 - `fake.py` + `fake_profiles.json` — Instagram + CDN at the wire for OFM_FAKE_EXTERNALS/tests (via `utils/outbound.py`): the real client parses it. `FakeInstagram.proxy_modes` = dead/timeout/rate_limited/banned per proxy; `calls` log. Kept honest by `tests/contract/test_instagram_contract.py`.

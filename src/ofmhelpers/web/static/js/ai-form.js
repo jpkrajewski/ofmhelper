@@ -8,7 +8,10 @@
  * shared prompt box is required / optional / hidden per model, and a model's
  * default prompt fills the box only while it holds no text of the user's.
  * "↻ Recreate" on a gallery card restores provider, model, settings and
- * reference files (reused from the server, nothing re-uploaded).
+ * reference files (reused from the server, nothing re-uploaded). The job's
+ * prompt goes in first, so the model's default never flashes in before it;
+ * each model's fields are fetched once per page (`fieldsHtml`), and only the
+ * last click fills the form, however fast someone clicks.
  */
 (() => {
     const form = document.getElementById("generate-form");
@@ -27,6 +30,25 @@
     // Whatever default this file last put in the prompt box: still holding
     // it means the user typed nothing, so a new default may replace it.
     let lastPromptDefault = "";
+    // model key -> its fields' HTML (a promise): fetched once per page.
+    const fieldsCache = new Map();
+    // The newest model switch, which Recreate waits on.
+    let currentLoad = Promise.resolve();
+    // Bumped by every Recreate click: an older click's fill is dropped.
+    let recreateSeq = 0;
+
+    function fieldsHtml(model) {
+        if (!fieldsCache.has(model.key)) {
+            const pending = fetch(`/ai/fields?model=${encodeURIComponent(model.key)}`).then((r) => {
+                if (!r.ok) throw new Error(`Could not load ${model.label}'s settings`);
+                return r.text();
+            });
+            // A failed fetch is not kept: the next switch tries again.
+            pending.catch(() => fieldsCache.delete(model.key));
+            fieldsCache.set(model.key, pending);
+        }
+        return fieldsCache.get(model.key);
+    }
 
     function fillModels(provider, wanted) {
         modelSelect.innerHTML = "";
@@ -66,11 +88,7 @@
         form.dataset.resultKind = model.kind;
         form.dataset.toolLabel = model.label;
         applyPrompt(model);
-        return fetch(`/ai/fields?model=${encodeURIComponent(model.key)}`)
-            .then((r) => {
-                if (!r.ok) throw new Error(`Could not load ${model.label}'s settings`);
-                return r.text();
-            })
+        currentLoad = fieldsHtml(model)
             .then((html) => {
                 if (modelSelect.value !== model.key) return; // switched again meanwhile
                 const next = document.createElement("fieldset");
@@ -91,6 +109,7 @@
                 p.textContent = err.message;
                 fieldset.appendChild(p);
             });
+        return currentLoad;
     }
 
     providerSelect.addEventListener("provider:change", () => {
@@ -124,21 +143,29 @@
         const card = e.target.closest(".result-item[data-task]");
         if (!card) return;
         const params = JSON.parse(card.dataset.params || "{}");
+        const seq = ++recreateSeq;
+        // The job's own prompt first. A model switch keeps whatever is not
+        // the last default it put in, so none flashes in before it.
+        fill({ prompt: params.prompt || "" });
+        if (params.prompt) lastPromptDefault = null;
         const model = byKey[params.model];
         // A job from before /ai (or of a model no longer listed): only its
         // prompt carries over.
         if (!model) {
-            fill({ prompt: params.prompt || "" });
             form.scrollIntoView({ behavior: "smooth" });
             return;
         }
+        lastModel[model.provider] = model.key;
         if (providerSelect.value !== model.provider) {
+            // provider:change refills the models and loads lastModel's.
             providerSelect.value = model.provider;
             providerSelect.dispatchEvent(new Event("change"));
+        } else if (modelSelect.value !== model.key) {
+            fillModels(model.provider, model.key);
+            loadModel();
         }
-        fillModels(model.provider, model.key);
-        lastPromptDefault = promptBox.value; // let the job's prompt replace it
-        loadModel().then(() => {
+        currentLoad.then(() => {
+            if (seq !== recreateSeq) return; // another card was clicked since
             fill(params);
             form.scrollIntoView({ behavior: "smooth" });
         });

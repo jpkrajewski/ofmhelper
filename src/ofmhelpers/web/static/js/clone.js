@@ -251,6 +251,102 @@
         });
     }
 
+    // "Upload to Drive": a batch's (or one card's) finished videos into the
+    // account folder picked in the batch header, on the worker; each card
+    // lists where its video went, polled until no upload is on its way.
+    const DRIVE_POLL_MS = 3000;
+
+    function driveStateItem(upload) {
+        const li = document.createElement("li");
+        li.dataset.status = upload.status;
+        if (upload.status === "done") {
+            li.append("In Drive: ");
+            const a = document.createElement("a");
+            a.href = upload.drive_url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.textContent = upload.folder_name;
+            li.appendChild(a);
+        } else if (upload.status === "failed") {
+            const span = document.createElement("span");
+            span.title = upload.error || "";
+            span.textContent = `⚠ Drive upload to ${upload.folder_name} failed`;
+            li.appendChild(span);
+        } else {
+            const spinner = document.createElement("span");
+            spinner.className = "spinner";
+            li.append(spinner, ` Uploading to ${upload.folder_name}…`);
+        }
+        return li;
+    }
+
+    function showDriveStates(uploads) {
+        const byJob = {};
+        for (const upload of uploads) {
+            if (!byJob[upload.job_id]) byJob[upload.job_id] = [];
+            byJob[upload.job_id].push(upload);
+        }
+        for (const [jobId, list] of Object.entries(byJob)) {
+            const card = document.querySelector(`.result-item[data-job-id="${jobId}"]`);
+            const states = card?.querySelector(".drive-states");
+            if (states) states.replaceChildren(...list.map(driveStateItem));
+        }
+    }
+
+    function pollDrive(jobIds) {
+        const query = jobIds.map((id) => `job=${encodeURIComponent(id)}`).join("&");
+        fetch(`/clone/drive-uploads?${query}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((uploads) => {
+                showDriveStates(uploads);
+                if (uploads.some((u) => u.status === "queued")) {
+                    setTimeout(() => pollDrive(jobIds), DRIVE_POLL_MS);
+                }
+            })
+            .catch(() => setTimeout(() => pollDrive(jobIds), DRIVE_POLL_MS));
+    }
+
+    function initDriveUpload() {
+        document.getElementById("clone-batches").addEventListener("click", (e) => {
+            const btn = e.target.closest(".drive-upload-btn");
+            if (!btn) return;
+            const batch = btn.closest(".clone-batch");
+            const select = batch.querySelector(".drive-target");
+            const note = batch.querySelector(".drive-note");
+            const cards = btn.dataset.scope === "card"
+                ? [btn.closest(".result-item")]
+                : [...batch.querySelectorAll(".result-item[data-job-id]")];
+            const jobIds = cards
+                .filter((c) => c.querySelector(".download-btn"))
+                .map((c) => c.dataset.jobId);
+            if (!select || !jobIds.length) return;
+            btn.disabled = true;
+            note.hidden = true;
+            fetch("/clone/drive-upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ job_ids: jobIds, login_id: Number(select.value) }),
+            })
+                .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
+                .then(({ ok, body }) => {
+                    if (!ok) throw new Error(body.detail || "Upload refused");
+                    showDriveStates(body.uploads);
+                    pollDrive(jobIds);
+                })
+                .catch((err) => {
+                    note.textContent = err.message;
+                    note.hidden = false;
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                });
+        });
+        // Uploads still on their way when the page opened.
+        const pending = [...document.querySelectorAll('.drive-states li[data-status="queued"]')]
+            .map((li) => li.closest(".result-item").dataset.jobId);
+        if (pending.length) pollDrive([...new Set(pending)]);
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         const form = document.getElementById("clone-form");
         formatTimes(document);
@@ -259,6 +355,7 @@
         initSubmit(form);
         initRecreate(form);
         initPrefill(form);
+        initDriveUpload();
         setInterval(tickTimers, 1000);
     });
 })();

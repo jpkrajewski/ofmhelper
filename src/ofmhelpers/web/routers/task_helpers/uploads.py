@@ -25,6 +25,7 @@ from ofmhelpers.web.media_kinds import (
     VIDEO_EXTS,
     classify_kind,
 )
+from ofmhelpers.web.middleware import AuthMiddleware
 
 logger = get_logger(__name__)
 
@@ -43,25 +44,55 @@ ASSETS_ROOT = UPLOADS_ROOT / "assets"
 
 
 def assets_root_for(request: Request) -> Path:
-    """The part of the asset store this session writes into and reads from.
-
-    An admin keeps the store root, which also holds every VA file (the VA
-    folder sits inside it); a VA gets only its own folder, so nothing an admin
-    uploads or generates ever reaches a VA's reuse picker. Anything that isn't
-    the admin role -- a missing one included -- gets the VA folder, never the
-    whole store. Reads ASSETS_ROOT at call time: it is the seam tests move.
-
-    Request-side only: a worker job is handed the resolved path as a kwarg."""
-    return assets_root_for_role(request.session.get("role"))
+    """The part of the asset store this session writes into and reads from
+    (`assets_root_for_user`). Request-side only: a worker job is handed the
+    resolved path as a kwarg."""
+    return assets_root_for_user(AuthMiddleware.user(request).id)
 
 
-def assets_root_for_role(role: str | None) -> Path:
-    """`assets_root_for` by role name: what a job re-run without its session
-    (recovery) resolves from the job's actor."""
-    s = settings.web
-    if role == s.role_admin:
+def assets_root_for_user(user_id: int) -> Path:
+    """A person's part of the asset store: their own `users/<id>/` folder,
+    admins included, so nobody's reuse picker shows anyone else's files.
+    The agency (the password account) keeps the store root, where its files
+    lived before per-user folders -- minus `users/` (`in_asset_root`).
+    Reads ASSETS_ROOT at call time: it is the seam tests move."""
+    from ofmhelpers.web.stores.users import get_user
+
+    user = get_user(user_id)
+    if user is not None and user.is_password_account:
         return ASSETS_ROOT
-    return ASSETS_ROOT / s.role_va
+    return _user_root(user_id)
+
+
+def _user_root(user_id: int | str) -> Path:
+    return _users_dir() / str(user_id)
+
+
+def _users_dir() -> Path:
+    return ASSETS_ROOT / "users"
+
+
+def in_asset_root(root: Path, path: Path) -> bool:
+    """Whether `path` is inside `root`, a part of the asset store from
+    `assets_root_for*`. The store root (the agency's) excludes `users/`:
+    the agency does not read anyone else's files either."""
+    resolved = path.resolve()
+    resolved_root = root.resolve()
+    if resolved_root not in resolved.parents:
+        return False
+    users = _users_dir().resolve()
+    return resolved_root != ASSETS_ROOT.resolve() or users not in resolved.parents
+
+
+def assets_root_for_actor(actor: str | None) -> Path:
+    """`assets_root_for` from a job's actor (a user id): what a job re-run
+    without its session (recovery) resolves. A job with no actor (system
+    work) gets the store root."""
+    if actor is None:
+        return ASSETS_ROOT
+    if actor.isdigit():
+        return assets_root_for_user(int(actor))
+    return _user_root(actor)
 
 
 IMAGE_KINDS = frozenset({"image"})

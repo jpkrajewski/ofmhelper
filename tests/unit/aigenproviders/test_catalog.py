@@ -130,8 +130,8 @@ def plugin_provider(tmp_path, monkeypatch):
             return path
 
         @classmethod
-        def default_key(cls, admin):
-            return "plugin-key" if admin else None
+        def default_key(cls):
+            return "plugin-key"
 
         def upload(self, path):
             return f"https://plugin/{path.name}"

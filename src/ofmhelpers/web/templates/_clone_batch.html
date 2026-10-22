@@ -22,6 +22,18 @@
             <p class="clone-batch-prompt" title="{{ batch.prompt }}">{{ batch.prompt }}</p>
         </div>
         <button type="button" class="btn-outline batch-recreate-btn">↻ Recreate batch</button>
+        {% if drive_targets %}
+        <div class="clone-drive">
+            <div class="drive-pick">
+                <select class="drive-target" aria-label="Drive folder to upload into">
+                    {% for t in drive_targets|sort(attribute="folder_name") %}<option value="{{ t.login_id }}">{{ t.folder_name }}</option>{% endfor %}
+                </select>
+                <button type="button" class="btn-outline drive-upload-btn" data-scope="batch"
+                        {% if not drive_ready %}title="Connect Google Drive on your Account page first"{% endif %}>⇪ Upload batch</button>
+            </div>
+            <p class="drive-note" role="status" hidden></p>
+        </div>
+        {% endif %}
     </header>
     <div class="results">
         {% for card in batch.cards %}
@@ -34,6 +46,7 @@
                 <a href="{{ card.assets[0].download_url }}" download="{{ card.assets[0].download_name }}"
                    data-local-fallback-url="{{ card.assets[0].local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
                 <button type="button" class="recreate-btn">↻ Recreate</button>
+                {% if drive_targets %}<button type="button" class="drive-upload-btn" data-scope="card">⇪ Drive</button>{% endif %}
             {% elif card.status == "failed" %}
                 <div class="result-file" title="{{ card.error }}">⚠ {{ card.error|default("generation failed", true)|truncate(80) }}</div>
                 <button type="button" class="recreate-btn">↻ Recreate</button>
@@ -44,6 +57,15 @@
                     <span class="clone-timer" data-started-at="{{ card.created_at }}"
                           {% if card.eta %}data-eta-s="{{ card.eta.eta_s }}" data-slow-s="{{ card.eta.slow_s }}"{% endif %}></span></div>
             {% endif %}
+            <ul class="drive-states">
+                {% for u in card.drive_uploads %}
+                <li data-status="{{ u.status }}">
+                    {% if u.status == "done" %}In Drive: <a href="{{ u.drive_url }}" target="_blank" rel="noopener">{{ u.folder_name }}</a>
+                    {% elif u.status == "failed" %}<span title="{{ u.error }}">⚠ Drive upload to {{ u.folder_name }} failed</span>
+                    {% else %}<span class="spinner"></span> Uploading to {{ u.folder_name }}…{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
             <p class="source">from {{ card.video_name }} · {{ card.params.duration }}s
                 {%- if card.took_s %} · took <span data-took-s="{{ card.took_s|round|int }}"></span>{% endif %}</p>
         </div>

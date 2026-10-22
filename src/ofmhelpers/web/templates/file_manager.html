@@ -31,7 +31,7 @@
                 <td class="pending">—</td>
                 <td>
                     <form method="post" action="/file-manager/delete" class="inline-form"
-                          onsubmit="return confirm('Delete folder {{ d.name }} and everything in it?')">
+                          data-confirm="Delete folder {{ d.name }} and everything in it?">
                         <input type="hidden" name="root" value="{{ current_root }}">
                         <input type="hidden" name="path" value="{{ d.rel_path }}">
                         <button type="submit" class="btn-danger">Delete</button>
@@ -46,7 +46,7 @@
                 <td class="model-actions">
                     <a class="btn" href="/file-manager/download?root={{ current_root }}&path={{ f.rel_path }}" download>⬇ Download</a>
                     <form method="post" action="/file-manager/delete"
-                          onsubmit="return confirm('Delete {{ f.name }}?')">
+                          data-confirm="Delete {{ f.name }}?">
                         <input type="hidden" name="root" value="{{ current_root }}">
                         <input type="hidden" name="path" value="{{ f.rel_path }}">
                         <button type="submit" class="btn-danger">Delete</button>
@@ -59,7 +59,7 @@
 </div>
 
 <form method="post" action="/file-manager/delete-all" class="section"
-      onsubmit="return confirm('Delete EVERYTHING in this folder? This cannot be undone.')">
+      data-confirm="Delete EVERYTHING in this folder? This cannot be undone.">
     <input type="hidden" name="root" value="{{ current_root }}">
     <input type="hidden" name="path" value="{{ current_path }}">
     <button type="submit" class="btn-danger">Delete all in this folder</button>

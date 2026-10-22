@@ -35,7 +35,7 @@ def test_auth_policy_lives_on_the_middleware():
     assert callable(AuthMiddleware.is_public)
     assert callable(AuthMiddleware.is_fetch)
     assert callable(AuthMiddleware.sign_in)
-    assert callable(AuthMiddleware.visible_actor)
+    assert callable(AuthMiddleware.actor)
     assert callable(AuthMiddleware.require_admin)
 
     with pytest.raises(ModuleNotFoundError):

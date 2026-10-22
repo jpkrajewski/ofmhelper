@@ -14,6 +14,7 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import URL, make_url
 
 from alembic import command
+from ofmhelpers.web.db.encrypted import decrypt
 from ofmhelpers.web.db.models import Base
 
 
@@ -162,3 +163,96 @@ def test_phone_logins_already_saved_are_tracked_once(db):
             )
         ).all()
     assert rows == [("dany.walking", False), ("removed_one", True)]
+
+
+def test_posted_files_belong_to_the_folder_their_login_has_now(db):
+    """a1c2e3f4b5d6: posted files already recorded are tagged with their
+    login's account folder (on prod: the one they were seen in); a login
+    without a folder leaves them untagged, so they never count."""
+    cfg = _alembic()
+    command.upgrade(cfg, "f5a6b7c8d9e0")
+
+    with db.begin() as conn:
+
+        def login(username: str) -> int:
+            return conn.execute(
+                text(
+                    "INSERT INTO logins (user_id, service, provider, username,"
+                    " password, backup_codes, notes, added_at, updated_at)"
+                    " VALUES (1, 'instagram', '', :username, '', '', '', 0, 0)"
+                    " RETURNING id"
+                ),
+                {"username": username},
+            ).scalar_one()
+
+        with_folder, without = login("ann"), login("bob")
+        conn.execute(
+            text(
+                "INSERT INTO drive_account_folders (login_id, folder_id, name,"
+                " updated_at) VALUES (:login, 'live-folder', 'ann - Anna', 0)"
+            ),
+            {"login": with_folder},
+        )
+        for file_id, login_id in (("f1", with_folder), ("f2", without)):
+            conn.execute(
+                text(
+                    "INSERT INTO drive_posted_files (file_id, login_id, name, kind,"
+                    " first_seen_at) VALUES (:file, :login, 'v.mp4', 'video', 0)"
+                ),
+                {"file": file_id, "login": login_id},
+            )
+
+    command.upgrade(cfg, "head")
+
+    with db.connect() as conn:
+        rows = conn.execute(
+            text("SELECT file_id, folder_id FROM drive_posted_files ORDER BY file_id")
+        ).all()
+    assert rows == [("f1", "live-folder"), ("f2", None)]
+
+
+def test_the_shared_cookies_file_becomes_the_password_admins_own(
+    db, monkeypatch, tmp_path
+):
+    """b1c2d3e4f5a7: the old agency-wide cookies.txt is stored, encrypted,
+    as the password admin's cookies; the file stays; running it again
+    (downgrade + upgrade) stores it once, and a user's cookies saved since
+    are never overwritten."""
+    shared = tmp_path / "cookies.txt"
+    jar = "# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tagency\n"
+    shared.write_text(jar, encoding="utf-8")
+    monkeypatch.setenv("OFM_COOKIES_FILE", str(shared))
+    cfg = _alembic()
+    command.upgrade(cfg, "a1c2e3f4b5d6")
+
+    command.upgrade(cfg, "head")
+
+    def stored() -> list[tuple[int, str, str]]:
+        with db.connect() as conn:
+            return [
+                tuple(r)
+                for r in conn.execute(
+                    text(
+                        "SELECT c.user_id, c.cookies, c.file_name FROM user_cookies c"
+                        " JOIN users u ON u.id = c.user_id AND u.is_password_account"
+                    )
+                ).all()
+            ]
+
+    ((_admin, token, name),) = stored()
+    assert name == "cookies.txt"
+    assert token != jar
+    assert "agency" not in token
+    assert decrypt(token) == jar
+    assert shared.read_text(encoding="utf-8") == jar
+
+    command.downgrade(cfg, "a1c2e3f4b5d6")
+    command.upgrade(cfg, "head")
+    assert len(stored()) == 1
+
+
+def test_without_a_shared_cookies_file_nobody_gets_cookies(db, monkeypatch, tmp_path):
+    monkeypatch.setenv("OFM_COOKIES_FILE", str(tmp_path / "missing.txt"))
+    command.upgrade(_alembic(), "head")
+    with db.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM user_cookies")).scalar() == 0

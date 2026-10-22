@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
 
+# Before anything imports the app: the developer's .env holds the Logfire
+# write token, and the test process (the e2e harness included) must never
+# send. An env var outranks .env; blank is off (TelemetrySettings).
+os.environ["LOGFIRE_TOKEN"] = ""
+
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, text

@@ -1,0 +1,4 @@
+{# One page of /download-assets cards plus the next sentinel, fetched by
+   gallery-scroll.js. #}
+{% for job in gallery %}{% include "_download_gallery_card.html" %}{% endfor %}
+{% include "_generate_gallery_sentinel.html" %}

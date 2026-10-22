@@ -26,8 +26,7 @@ def test_info_reads_every_playlist_entry_and_skips_missing_ones():
     assert YtDlpInfo.model_validate(info).output_paths() == [Path("/d/1.mp4")]
 
 
-def test_options_dict_keeps_yt_dlp_defaults_for_unset_options(monkeypatch):
-    monkeypatch.setattr("ofmhelpers.downloaders.generic.get_cookiefile", lambda: None)
+def test_options_dict_keeps_yt_dlp_defaults_for_unset_options():
     config = DownloadConfig(
         cookies_from_browser=None, youtube_player_clients=["ios"], extractor_args={}
     )
@@ -40,10 +39,7 @@ def test_options_dict_keeps_yt_dlp_defaults_for_unset_options(monkeypatch):
     assert "cookiesfrombrowser" not in opts
 
 
-def test_options_merge_pot_provider_args_over_player_clients(monkeypatch):
-    monkeypatch.setattr(
-        "ofmhelpers.downloaders.generic.get_cookiefile", lambda: "/c/cookies.txt"
-    )
+def test_options_merge_pot_provider_args_over_player_clients():
     pot = {"youtubepot-bgutilhttp": {"base_url": ["http://pot:4416"]}}
     config = DownloadConfig(
         cookies_from_browser="firefox",
@@ -51,7 +47,7 @@ def test_options_merge_pot_provider_args_over_player_clients(monkeypatch):
         extractor_args=pot,
     )
 
-    opts = config.ydl_opts().to_ydl()
+    opts = config.ydl_opts("/c/cookies.txt").to_ydl()
 
     assert opts["extractor_args"] == {"youtube": {"player_client": ["ios"]}, **pot}
     assert opts["cookiefile"] == "/c/cookies.txt"  # the file wins over a browser

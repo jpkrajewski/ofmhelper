@@ -217,9 +217,7 @@ def test_login_only_reel_is_shown_but_not_pickable(client, monkeypatch):
     assert "data-video-url" not in html
 
 
-def test_uploading_cookies_unlocks_stored_login_only_reels(
-    client, tmp_path, monkeypatch
-):
+def test_uploading_cookies_unlocks_stored_login_only_reels(client, monkeypatch):
     def gated(_client, username, *_args):
         found = _found(username)
         found.reels[0] = found.reels[0].model_copy(
@@ -237,9 +235,11 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(
         return ReelMedia(video_url=CDN.format("u"), duration_s=9.0, taken_at=5)
 
     monkeypatch.setattr(reel_watch.InstagramClient, "media_logged_in", logged_in)
-    monkeypatch.setenv("OFM_COOKIES_FILE", str(tmp_path / "cookies.txt"))
     client.post("/login", data={"password": "test-admin", "next": "/"})
-    client.post("/cookies", files={"file": ("cookies.txt", b"# Netscape")})
+    jar = (
+        b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tx\n"
+    )
+    client.post("/cookies", files={"file": ("cookies.txt", jar)})
 
     watched = get_watched("x")
     assert asked == [_found("x").reels[0].pk]

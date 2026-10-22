@@ -14,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.telemetry import configure_telemetry, instrument_app
 from ofmhelpers.web.account_tracker import account_tracker_loop
 from ofmhelpers.web.drive_folders import drive_loop
 from ofmhelpers.web.middleware import (
@@ -31,6 +32,7 @@ from ofmhelpers.web.templates_config import render
 # Before anything else in the process logs: uvicorn imports this module to
 # find `app`, so this runs ahead of the first request and ahead of uvicorn's
 # own startup records. See ofmhelpers/log.py.
+configure_telemetry("ascend-web")
 configure_logging()
 logger = get_logger(__name__)
 
@@ -69,6 +71,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ascend Global LLC — Content Ops", lifespan=lifespan)
+instrument_app(app)
 
 # --- Middleware -------------------------------------------------------
 # Starlette applies middleware outside-in in the order added, so the LAST

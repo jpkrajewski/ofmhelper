@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.web import ref_usage
-from ofmhelpers.web.routers.task_helpers.uploads import save_asset
+from ofmhelpers.web.routers.task_helpers.uploads import in_asset_root, save_asset
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
@@ -24,9 +24,8 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     Pure: it reads the store and never writes to it. "This file was just
     picked" is recorded by the caller (`web/ref_usage.record_use`), which is
     the only place that knows a resolve meant a real reuse."""
-    allowed_root = allowed_root.resolve()
     resolved = Path(raw_path).resolve()
-    if allowed_root != resolved and allowed_root not in resolved.parents:
+    if not in_asset_root(allowed_root, resolved):
         raise HTTPException(status_code=400, detail="Invalid reference path")
     if not resolved.is_file():
         raise HTTPException(
@@ -39,12 +38,14 @@ def build_ordered_paths(
     manifest_json: str,
     new_files: Sequence[UploadFile],
     allowed_root: Path,
+    *,
+    user_id: int,
 ) -> list[str]:
     """Reconstructs an ordered list of file paths from a JSON manifest like
     [{"kind": "new"}, {"kind": "existing", "path": "..."}]. Genuinely new
     uploads go through save_asset (content-deduped); existing refs are
     resolved by path, never re-uploaded -- together this is what prevents
-    duplicate files on disk."""
+    duplicate files on disk. Each file counts as used by `user_id`."""
     try:
         manifest = json.loads(manifest_json)
     except json.JSONDecodeError:
@@ -65,6 +66,6 @@ def build_ordered_paths(
         # upload counts too: save_asset dedupes by content, so re-uploading a
         # file you already had keeps its old mtime and would sink it in
         # "Recently uploaded".
-        ref_usage.record_use(resolved)
+        ref_usage.record_use(user_id, resolved)
         paths.append(str(resolved))
     return paths

@@ -1,11 +1,19 @@
-"""Instagram profiles /reels rescans, and each one's latest scan."""
+"""Instagram profiles /reels rescans, and each one's latest scan.
+
+A row per owner and username: each user has their own watch list and
+groups (`owner` limits a read to theirs; None: everyone's, for the
+sweeper; a write on a row always names its user, never all of them).
+A username is scanned once whoever watches it -- the scan-side methods
+(`claim_due`, `record_scan`, `replace_result`) act on every row of it --
+and a user adding a profile someone already watches gets its scan at
+once."""
 
 from __future__ import annotations
 
 import time
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.web.db.models import (
@@ -18,11 +26,13 @@ from ofmhelpers.web.db.repositories.cached_repository import (
     cached,
     invalidates_cache,
 )
+from ofmhelpers.web.db.repositories.owner_scope import mine
 from ofmhelpers.web.db.session import session_scope
 
 
 def _to_dict(row: WatchedProfileRow) -> dict:
     return {
+        "user_id": row.user_id,
         "username": row.username,
         "group": row.group_name,
         "added_at": row.added_at,
@@ -36,30 +46,54 @@ class WatchedProfileRepository(CachedRepository):
     cache_namespace = "watched_profile"
 
     @invalidates_cache
-    def add(self, username: str, group: str | None) -> bool:
-        """True when the profile is new. Adding one already watched only moves
-        it to `group`, when a group is given."""
+    def add(self, username: str, group: str | None, user_id: int) -> bool:
+        """True when the profile is new to `user_id`'s list. Adding one
+        already on it only moves it to `group`, when a group is given. A
+        profile someone else watches comes with its latest scan."""
+        row = WatchedProfileRow
         with session_scope() as s:
-            existing = s.get(WatchedProfileRow, username)
+            existing = s.get(row, (user_id, username))
             if existing is not None:
                 if group is not None:
                     existing.group_name = group
                 return False
+            other = s.execute(
+                select(row).where(row.username == username).limit(1)
+            ).scalar_one_or_none()
+            # Only a scan there is: a None would store JSON null, not NULL.
+            scan = (
+                {
+                    "scanned_at": other.scanned_at,
+                    "error": other.error,
+                    "result": other.result,
+                }
+                if other is not None and other.result is not None
+                else {}
+            )
             added = s.execute(
-                insert(WatchedProfileRow)
-                .values(username=username, group_name=group, added_at=time.time())
-                .on_conflict_do_nothing(index_elements=["username"])
-                .returning(WatchedProfileRow.username)
+                insert(row)
+                .values(
+                    user_id=user_id,
+                    username=username,
+                    group_name=group,
+                    added_at=time.time(),
+                    **scan,
+                )
+                .on_conflict_do_nothing(index_elements=["user_id", "username"])
+                .returning(row.username)
             )
             return added.scalar_one_or_none() is not None
 
     @cached
-    def list_all(self) -> list[dict]:
-        """Oldest first, so a newly added profile lands at the bottom."""
+    def list_all(self, owner: int | None = None) -> list[dict]:
+        """`owner`'s watch list, oldest first, so a newly added profile
+        lands at the bottom."""
         with session_scope() as s:
             rows = (
                 s.execute(
-                    select(WatchedProfileRow).order_by(WatchedProfileRow.added_at)
+                    select(WatchedProfileRow)
+                    .where(*mine(WatchedProfileRow.user_id, owner))
+                    .order_by(WatchedProfileRow.added_at, WatchedProfileRow.user_id)
                 )
                 .scalars()
                 .all()
@@ -67,24 +101,36 @@ class WatchedProfileRepository(CachedRepository):
             return [_to_dict(r) for r in rows]
 
     @invalidates_cache
-    def create_group(self, name: str) -> None:
-        """Creating a group that exists already is a no-op."""
+    def create_group(self, name: str, user_id: int) -> None:
+        """Creating a group the user has already is a no-op."""
         with session_scope() as s:
             s.execute(
                 insert(ProfileGroupRow)
-                .values(name=name, created_at=time.time())
-                .on_conflict_do_nothing(index_elements=["name"])
+                .values(user_id=user_id, name=name, created_at=time.time())
+                .on_conflict_do_nothing(index_elements=["user_id", "name"])
             )
 
     @cached
-    def list_groups(self) -> list[str]:
-        """Every group: created ones, empty or not, and any a profile is in."""
+    def list_groups(self, owner: int | None = None) -> list[str]:
+        """`owner`'s groups: created ones, empty or not, and any of their
+        profiles is in."""
         with session_scope() as s:
-            created = s.execute(select(ProfileGroupRow.name)).scalars().all()
+            created = (
+                s.execute(
+                    select(ProfileGroupRow.name).where(
+                        *mine(ProfileGroupRow.user_id, owner)
+                    )
+                )
+                .scalars()
+                .all()
+            )
             used = (
                 s.execute(
                     select(WatchedProfileRow.group_name)
-                    .where(WatchedProfileRow.group_name.is_not(None))
+                    .where(
+                        WatchedProfileRow.group_name.is_not(None),
+                        *mine(WatchedProfileRow.user_id, owner),
+                    )
                     .distinct()
                 )
                 .scalars()
@@ -93,24 +139,46 @@ class WatchedProfileRepository(CachedRepository):
             return sorted({*created, *(g for g in used if g)})
 
     @invalidates_cache
-    def set_group(self, username: str, group: str | None) -> bool:
+    def set_group(self, username: str, group: str | None, user_id: int) -> bool:
+        """Moves `user_id`'s row only: another user's same profile keeps
+        its group, whoever (an admin too) moves this one."""
         with session_scope() as s:
             moved = s.execute(
                 update(WatchedProfileRow)
-                .where(WatchedProfileRow.username == username)
+                .where(
+                    WatchedProfileRow.username == username,
+                    WatchedProfileRow.user_id == user_id,
+                )
                 .values(group_name=group)
                 .returning(WatchedProfileRow.username)
             )
-            return moved.scalar_one_or_none() is not None
+            return bool(moved.all())
 
     @invalidates_cache
-    def delete(self, username: str) -> bool:
+    def delete(self, username: str, user_id: int) -> bool:
+        """Off `user_id`'s list only: an admin removing a profile leaves
+        everyone else watching it."""
+        row = WatchedProfileRow
         with session_scope() as s:
-            row = s.get(WatchedProfileRow, username)
-            if row is None:
-                return False
-            s.delete(row)
-            return True
+            removed = s.execute(
+                delete(row)
+                .where(row.username == username, row.user_id == user_id)
+                .returning(row.username)
+            )
+            return bool(removed.all())
+
+    @invalidates_cache
+    def delete_unscanned(self, username: str) -> bool:
+        """Off every list that no scan of it ever filled (a just-added
+        profile that can't be read)."""
+        row = WatchedProfileRow
+        with session_scope() as s:
+            removed = s.execute(
+                delete(row)
+                .where(row.username == username, row.result.is_(None))
+                .returning(row.username)
+            )
+            return bool(removed.all())
 
     @invalidates_cache
     def claim_due(self, interval_s: float, claim_ttl_s: float) -> list[str]:
@@ -134,7 +202,7 @@ class WatchedProfileRepository(CachedRepository):
                 .values(claimed_at=now)
                 .returning(WatchedProfileRow.username)
             )
-            return sorted(claimed.scalars().all())
+            return sorted(set(claimed.scalars().all()))
 
     @invalidates_cache
     def replace_result(self, username: str, result: dict[str, Any]) -> None:
@@ -166,7 +234,8 @@ class WatchedProfileRepository(CachedRepository):
                 .values(**values)
                 .returning(WatchedProfileRow.group_name)
             )
-            group = updated.scalar_one_or_none()
+            # The stats row carries a group: the first owner's.
+            group = next(iter(updated.scalars().all()), None)
             if result is not None:
                 s.add(
                     ProfileScanStatRow(

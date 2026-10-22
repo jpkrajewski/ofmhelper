@@ -29,7 +29,7 @@
                 <td class="todo-added">{{ job.created_at_display }}</td>
                 <td>
                     {% if job.actor %}
-                    <span class="actor-badge actor-{{ job.actor }}">{{ job.actor }}</span>
+                    <span class="actor-badge actor-{{ job.actor_role }}">{{ job.actor }}</span>
                     {% else %}<span class="pending">—</span>{% endif %}
                 </td>
                 <td>{{ job.task }}</td>

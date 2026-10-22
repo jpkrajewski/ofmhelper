@@ -22,6 +22,10 @@ Each generated video is then exported as the job's `export`
 default `settings.exports.default`); the exported copy becomes the result
 and the provider's hosted original is dropped from it. A failed export
 keeps the generated video.
+
+A finished batch (or one video) can be uploaded into an Instagram account's
+Drive folder, picked in the batch header (`/clone/drive-upload`,
+web/drive_uploads.py); each card says where its video went.
 """
 
 import subprocess
@@ -44,6 +48,8 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.clone_eta import CloneRate, Key, clone_eta, clone_rates, took_s
+from ofmhelpers.web.drive_uploads import UploadRefusedError, queue_uploads
+from ofmhelpers.web.drive_uploads import targets as drive_targets
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.generation.ai import run_ai
 from ofmhelpers.web.routers.task_helpers import (
@@ -60,11 +66,16 @@ from ofmhelpers.web.schemas import (
     CloneBatch,
     CloneCard,
     CloneQueued,
+    DriveUpload,
     Job,
     ProviderChoice,
     ResultFile,
+    UploadRequest,
+    UploadsQueued,
 )
+from ofmhelpers.web.stores import drive_uploads as upload_store
 from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
+from ofmhelpers.web.stores.users import refresh_token
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
 logger = get_logger(__name__)
@@ -276,11 +287,30 @@ def _require_kind(paths: list[str], kind: str, label: str) -> None:
 
 def _recent_batches(request: Request) -> list[CloneBatch]:
     limit = settings.web.clone_gallery_limit
-    jobs, total = list_jobs_page(
-        {TASK}, 0, limit, AuthMiddleware.visible_actor(request)
-    )
+    jobs, total = list_jobs_page({TASK}, 0, limit, AuthMiddleware.actor(request))
+    return _batches(jobs, page_full=total > limit)
+
+
+def _batches(jobs: list[Job], *, page_full: bool) -> list[CloneBatch]:
     rates = _history_rates()
-    return CloneBatch.group([_card(j, rates) for j in jobs], page_full=total > limit)
+    uploads: dict[str, list[DriveUpload]] = {}
+    for upload in upload_store.for_jobs([j.id for j in jobs]):
+        uploads.setdefault(upload.job_id, []).append(upload)
+    cards = [
+        _card(j, rates).model_copy(update={"drive_uploads": uploads.get(j.id, [])})
+        for j in jobs
+    ]
+    return CloneBatch.group(cards, page_full=page_full)
+
+
+def _drive_context(request: Request) -> dict[str, Any]:
+    """What the batches' "Upload to Drive" needs: the folders this person
+    may upload into, and whether Google Drive is connected."""
+    user = AuthMiddleware.user(request)
+    return {
+        "drive_targets": drive_targets(user.id),
+        "drive_ready": bool(refresh_token(user.id)),
+    }
 
 
 def _history_rates() -> dict[Key, CloneRate]:
@@ -341,6 +371,7 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
         exports=list(exports().values()),
         default_export=settings.exports.default,
         default_mirror=settings.exports.mirror,
+        **_drive_context(request),
     )
 
 
@@ -349,14 +380,43 @@ def batches(request: Request):
     """The recent batches as a fragment: what live-gallery.js polls to show
     batches started in other sessions."""
     return render_polled(
-        request, "clone_batches_fragment.html", batches=_recent_batches(request)
+        request,
+        "clone_batches_fragment.html",
+        batches=_recent_batches(request),
+        **_drive_context(request),
     )
+
+
+@router.post("/drive-upload")
+def drive_upload(request: Request, body: UploadRequest) -> UploadsQueued:
+    """These runs' videos into that account's Drive folder, on the worker,
+    as the clicker's Google account."""
+    try:
+        uploads = queue_uploads(
+            AuthMiddleware.user(request), body.job_ids, body.login_id
+        )
+    except UploadRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return UploadsQueued(
+        queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
+    )
+
+
+@router.get("/drive-uploads")
+def drive_upload_states(
+    request: Request, job: Annotated[list[str], Query(max_length=200)]
+) -> list[DriveUpload]:
+    """Where these runs' videos are in Drive: what clone.js polls while
+    uploads run. Only runs this session may see."""
+    actor = AuthMiddleware.actor(request)
+    mine = [j for j in job if get_job(j, actor) is not None]
+    return upload_store.for_jobs(mine)
 
 
 def _queue(request: Request, api_key: str, params: dict[str, Any]) -> str:
     """One run's job. The key goes to the worker only, never into the
     params its page shows."""
-    job_id = create_job(TASK, params, actor=request.session.get("role"))
+    job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
     enqueue(
         run_job,
         job_id,
@@ -400,8 +460,13 @@ def run(
     if resolution.upper() not in RESOLUTIONS:
         raise HTTPException(status_code=400, detail="Unknown resolution")
     assets_root = assets_root_for(request)
-    image_paths = build_ordered_paths(image_manifest, image or [], assets_root)
-    video_paths = build_ordered_paths(videos_manifest, videos or [], assets_root)
+    user_id = AuthMiddleware.owner_id(request)
+    image_paths = build_ordered_paths(
+        image_manifest, image or [], assets_root, user_id=user_id
+    )
+    video_paths = build_ordered_paths(
+        videos_manifest, videos or [], assets_root, user_id=user_id
+    )
 
     max_images = settings.web.clone_max_images
     if not 1 <= len(image_paths) <= max_images:
@@ -458,11 +523,10 @@ def run(
         )
     ]
 
-    actor = AuthMiddleware.visible_actor(request)
+    actor = AuthMiddleware.actor(request)
     jobs = [job for j in job_ids if (job := get_job(j, actor)) is not None]
-    rates = _history_rates()
-    [batch] = CloneBatch.group([_card(j, rates) for j in jobs], page_full=False)
-    html = render_partial("_clone_batch.html", batch=batch)
+    [batch] = _batches(jobs, page_full=False)
+    html = render_partial("_clone_batch.html", batch=batch, **_drive_context(request))
     return CloneQueued(job_ids=job_ids, html=html)
 
 

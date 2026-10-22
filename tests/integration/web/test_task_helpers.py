@@ -29,6 +29,9 @@ from ofmhelpers.web.routers.task_helpers import (
 )
 from ofmhelpers.web.schemas import Job
 
+# Whose picks build_ordered_paths records.
+USER = 1
+
 
 def make_upload(name: str, content: bytes = b"hello") -> UploadFile:
     return UploadFile(file=io.BytesIO(content), filename=name)
@@ -80,7 +83,7 @@ def test_build_ordered_paths_new_only_saves_each_file_once(tmp_path):
     manifest = json.dumps([{"kind": "new"}, {"kind": "new"}])
     files = [make_upload("one.png", b"one"), make_upload("two.png", b"two")]
 
-    paths = build_ordered_paths(manifest, files, assets_root)
+    paths = build_ordered_paths(manifest, files, assets_root, user_id=USER)
 
     assert len(paths) == 2
     assert paths[0].endswith("__one.png")
@@ -93,13 +96,16 @@ def test_build_ordered_paths_reuses_existing_ref_without_duplicating(tmp_path):
 
     # First job uploads a genuinely new file.
     first_paths = build_ordered_paths(
-        json.dumps([{"kind": "new"}]), [make_upload("ref.png")], assets_root
+        json.dumps([{"kind": "new"}]),
+        [make_upload("ref.png")],
+        assets_root,
+        user_id=USER,
     )
     existing_path = first_paths[0]
 
     # Second job reuses it by path -- no bytes attached, nothing to save.
     manifest = json.dumps([{"kind": "existing", "path": existing_path}])
-    second_paths = build_ordered_paths(manifest, [], assets_root)
+    second_paths = build_ordered_paths(manifest, [], assets_root, user_id=USER)
 
     assert second_paths == [existing_path]
     # still exactly one file in the shared store
@@ -110,12 +116,15 @@ def test_build_ordered_paths_mixed_manifest_preserves_order(tmp_path):
     assets_root = tmp_path / "assets"
 
     existing = build_ordered_paths(
-        json.dumps([{"kind": "new"}]), [make_upload("first.png", b"first")], assets_root
+        json.dumps([{"kind": "new"}]),
+        [make_upload("first.png", b"first")],
+        assets_root,
+        user_id=USER,
     )[0]
 
     manifest = json.dumps([{"kind": "existing", "path": existing}, {"kind": "new"}])
     paths = build_ordered_paths(
-        manifest, [make_upload("second.png", b"second")], assets_root
+        manifest, [make_upload("second.png", b"second")], assets_root, user_id=USER
     )
 
     assert paths[0] == existing
@@ -126,7 +135,9 @@ def test_build_ordered_paths_mixed_manifest_preserves_order(tmp_path):
 def test_build_ordered_paths_malformed_manifest_treats_everything_as_new(tmp_path):
     assets_root = tmp_path / "assets"
 
-    paths = build_ordered_paths("not json", [make_upload("a.png")], assets_root)
+    paths = build_ordered_paths(
+        "not json", [make_upload("a.png")], assets_root, user_id=USER
+    )
 
     assert len(paths) == 1
     assert paths[0].endswith("__a.png")
@@ -176,13 +187,18 @@ def test_reusing_a_ref_records_it_as_used(tmp_path, monkeypatch):
     existing = uploads / "hash__face.png"
     existing.write_bytes(b"x")
     recorded = []
-    monkeypatch.setattr(ref_usage, "record_use", recorded.append)
-
-    build_ordered_paths(
-        json.dumps([{"kind": "existing", "path": str(existing)}]), [], uploads
+    monkeypatch.setattr(
+        ref_usage, "record_use", lambda user, path: recorded.append((user, path))
     )
 
-    assert recorded == [existing.resolve()]
+    build_ordered_paths(
+        json.dumps([{"kind": "existing", "path": str(existing)}]),
+        [],
+        uploads,
+        user_id=USER,
+    )
+
+    assert recorded == [(USER, existing.resolve())]
 
 
 def test_a_new_upload_is_recorded_as_used_too(tmp_path, monkeypatch):
@@ -190,19 +206,25 @@ def test_a_new_upload_is_recorded_as_used_too(tmp_path, monkeypatch):
     (content-deduped), so only "used" can bring it to the picker's front."""
     assets_root = tmp_path / "assets"
     first = build_ordered_paths(
-        json.dumps([{"kind": "new"}]), [make_upload("face.png")], assets_root
+        json.dumps([{"kind": "new"}]),
+        [make_upload("face.png")],
+        assets_root,
+        user_id=USER,
     )
     recorded = []
-    monkeypatch.setattr(ref_usage, "record_use", recorded.append)
+    monkeypatch.setattr(
+        ref_usage, "record_use", lambda user, path: recorded.append((user, path))
+    )
 
     again = build_ordered_paths(
         json.dumps([{"kind": "new"}, {"kind": "existing", "path": first[0]}]),
         [make_upload("face-copy.png")],
         assets_root,
+        user_id=USER,
     )
 
     assert again == [first[0], first[0]]
-    assert recorded == [Path(first[0]), Path(first[0])]
+    assert recorded == [(USER, Path(first[0])), (USER, Path(first[0]))]
 
 
 # ---------------------------------------------------------------------------

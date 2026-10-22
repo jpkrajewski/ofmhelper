@@ -2,7 +2,8 @@
 {% import "_icons.html" as ic %}
 {% block title %}Phones — Ascend Global LLC{% endblock %}
 {% block content %}
-{% set is_admin = request.session.get("role") == "admin" %}
+{# Every phone listed is the viewer's to change: a user sees only theirs, an admin all. #}
+{% set can_edit = true %}
 {# Rows shown before "N more" (iCloud + Instagram, services.json order):
    keeps a card short however many logins. #}
 {% set visible_logins = 2 %}
@@ -13,8 +14,8 @@
         <p class="lead">{{ total }} phone{{ "" if total == 1 else "s" }} · {{ logins }} login{{ "" if logins == 1 else "s" }}</p>
     </div>
     <div class="page-head-actions">
-        <a class="btn-ghost ph-btn" href="/phones/export.xlsx" download>{{ ic.icon("download") }} Export</a>
-        {% if is_admin %}<button type="button" class="btn-primary ph-btn" id="ph-add-open">{{ ic.icon("plus") }} Add phone</button>{% endif %}
+        <a class="btn ph-btn" href="/phones/export.xlsx" download>{{ ic.icon("download") }} Export</a>
+        {% if can_edit %}<button type="button" class="btn-primary ph-btn" id="ph-add-open">{{ ic.icon("plus") }} Add phone</button>{% endif %}
     </div>
 </div>
 
@@ -74,7 +75,7 @@
             <span class="ph-when-hidden">{{ ic.icon("eye") }}</span><span class="ph-when-shown" hidden>{{ ic.icon("eye-off") }}</span>
         </button>
         {% endif %}
-        {% if is_admin %}
+        {% if can_edit %}
         <button type="button" class="ph-icon-btn ph-login-edit" title="Edit login" aria-label="Edit {{ x.label }} login">{{ ic.icon("pencil") }}</button>
         <button type="button" class="ph-icon-btn ph-login-remove" title="Remove from this phone" aria-label="Remove {{ x.label }} login from {{ d.label }}">{{ ic.icon("trash") }}</button>
         {% endif %}
@@ -91,7 +92,7 @@
 
 {% macro phone_card(d) -%}
 <article class="ph-card" id="phone-{{ d.id }}" data-id="{{ d.id }}" data-search="{{ d.search_text }}"
-         {% if is_admin %}data-phone='{{ {"label": d.label, "model_id": d.model_id or "", "color_id": d.color_id or "", "custom_model": d.custom_model, "owner": d.owner, "phone_number": d.phone_number, "notes": d.notes}|tojson }}'{% endif %}>
+         {% if can_edit %}data-phone='{{ {"label": d.label, "model_id": d.model_id or "", "color_id": d.color_id or "", "custom_model": d.custom_model, "owner": d.owner, "phone_number": d.phone_number, "notes": d.notes}|tojson }}'{% endif %}>
     <div class="ph-media">
         <img src="{{ d.drawing_url }}" alt="{{ d.specs }}" loading="lazy">
     </div>
@@ -101,7 +102,7 @@
                 <h2>{{ d.label }}</h2>
                 <p class="ph-specs">{{ d.specs }}</p>
             </div>
-            {% if is_admin %}
+            {% if can_edit %}
             <details class="ph-menu">
                 <summary class="ph-icon-btn" title="Edit, retire or delete" aria-label="Actions for {{ d.label }}">{{ ic.icon("ellipsis") }}</summary>
                 <div class="ph-menu-list">
@@ -131,7 +132,7 @@
             {% if d.logins|length > visible_logins %}
             <button type="button" class="ph-more" aria-expanded="false" data-more="{{ d.logins|length - visible_logins }}">{{ d.logins|length - visible_logins }} more</button>
             {% endif %}
-            {% if is_admin and not d.retired %}
+            {% if can_edit and not d.retired %}
             <button type="button" class="ph-add-login">{{ ic.icon("plus", 14) }} Add login</button>
             {% endif %}
         </div>
@@ -145,7 +146,7 @@
     {% if query.filtered %}
     No phone matches these filters. <a href="/phones">Show all</a>
     {% else %}
-    No phones yet.{% if is_admin %} Press <strong>Add phone</strong> to add the first one.{% endif %}
+    No phones yet.{% if can_edit %} Press <strong>Add phone</strong> to add the first one.{% endif %}
     {% endif %}
 </p>
 {% else %}
@@ -164,7 +165,7 @@
 </details>
 {% endif %}
 
-{% if is_admin %}
+{% if can_edit %}
 <script type="application/json" id="ph-catalog">{{ catalog.model_dump(mode="json")|tojson }}</script>
 
 <dialog class="accounts-dialog ph-dialog" id="ph-dialog">

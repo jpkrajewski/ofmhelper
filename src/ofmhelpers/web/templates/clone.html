@@ -65,6 +65,12 @@
 
 <div class="generate-gallery-col">
 <h2 class="col-title">Batches</h2>
+{% if not drive_ready %}
+<div class="notice drive-connect" role="status">
+    <span>Connect Google Drive to upload results straight into your accounts' folders.</span>
+    <a class="btn ph-btn" href="/auth/google/start?link=1&amp;next=/clone">Connect Google Drive</a>
+</div>
+{% endif %}
 
 <div id="results-panel">
     <div id="clone-batches" data-live-endpoint="/clone/batches" data-live-key="batch"

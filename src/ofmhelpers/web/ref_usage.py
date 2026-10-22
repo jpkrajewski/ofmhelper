@@ -12,6 +12,10 @@ Not a Postgres table: this is picker ordering, not a noun the app owns.
 Losing it (a flushed Redis, a fresh deploy) degrades the picker to
 "most recently uploaded", which is exactly what it did before.
 
+Kept per user (one key each): with per-user asset roots, one user's picks
+would otherwise push everyone else's out of the window the picker reads.
+An admin's list is their own picks, like anyone's.
+
 Redis failures are swallowed, like ratelimit.py's: a broker that can't record
 "you picked this file" is no reason to fail a generation that has every file
 it needs.
@@ -33,29 +37,34 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_KEY = "refs:used"
+_KEY_PREFIX = "refs:used:"
 # Bounded so a long-lived deployment doesn't grow one key forever. The picker
 # asks for a handful; anything past this is older than "recently used" means.
 _MAX_TRACKED = settings.web.ref_usage_max_tracked
 
 
-def record_use(path: Path) -> None:
-    """Remember that this file was just picked."""
+def _key(user_id: int) -> str:
+    return f"{_KEY_PREFIX}{user_id}"
+
+
+def record_use(user_id: int, path: Path) -> None:
+    """Remember that `user_id` just picked this file."""
+    key = _key(user_id)
     try:
         redis = get_redis()
-        redis.zadd(_KEY, {str(path): time.time()})
+        redis.zadd(key, {str(path): time.time()})
         # Trim to the newest _MAX_TRACKED by rank (0 = oldest).
-        redis.zremrangebyrank(_KEY, 0, -(_MAX_TRACKED + 1))
+        redis.zremrangebyrank(key, 0, -(_MAX_TRACKED + 1))
     except RedisError:
         logger.warning("could not record use of %s", path, exc_info=True)
 
 
-def recent(limit: int) -> list[tuple[str, float]]:
-    """The `limit` most recently used paths, newest first, each with the
-    timestamp it was used at. Empty when Redis is unreachable."""
+def recent(user_id: int, limit: int) -> list[tuple[str, float]]:
+    """`user_id`'s `limit` most recently used paths, newest first, each with
+    the timestamp it was used at. Empty when Redis is unreachable."""
     try:
         # withscores=True narrows the stubs' union to (member, score) pairs.
-        rows: Any = get_redis().zrevrange(_KEY, 0, limit - 1, withscores=True)
+        rows: Any = get_redis().zrevrange(_key(user_id), 0, limit - 1, withscores=True)
     except RedisError:
         logger.warning("could not read recently-used refs", exc_info=True)
         return []

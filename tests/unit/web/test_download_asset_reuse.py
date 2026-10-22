@@ -47,7 +47,7 @@ def test_downloaded_videos_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
     monkeypatch.setattr(
         download_reels,
         "download_all",
-        lambda urls: [
+        lambda urls, **_login: [
             DownloadResult(url=urls[0], success=True, output_paths=[downloaded])
         ],
     )
@@ -64,7 +64,7 @@ def test_downloaded_images_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
     monkeypatch.setattr(
         download_images,
         "download_all",
-        lambda urls: [
+        lambda urls, **_login: [
             DownloadResult(url=urls[0], success=True, output_paths=[downloaded])
         ],
     )

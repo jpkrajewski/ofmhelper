@@ -11,6 +11,8 @@
 - `accounts.py` -- a tracked social account (/accounts), its list query and history.
 - `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
 - `drive.py` -- an Instagram login's Drive folders (/drive): what waits, what was posted.
+- `users.py` -- who signs in (/users, /login, /account) and their role.
+- `cookies.py` -- a user's own cookies.txt as /cookies shows it (no values).
 
 Import from here; the split is an implementation detail of this package.
 """
@@ -32,6 +34,7 @@ from ofmhelpers.web.schemas.accounts import (
     TrackedAccount,
 )
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
+from ofmhelpers.web.schemas.cookies import SavedCookies
 from ofmhelpers.web.schemas.devices import (
     Device,
     DeviceFields,
@@ -46,8 +49,12 @@ from ofmhelpers.web.schemas.drive import (
     DriveBoard,
     DriveCard,
     DriveTarget,
+    DriveUpload,
     StoredFolder,
     SyncReport,
+    UploadRequest,
+    UploadsQueued,
+    UploadTarget,
 )
 from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
 from ofmhelpers.web.schemas.gallery import (
@@ -73,6 +80,16 @@ from ofmhelpers.web.schemas.jobs import (
 )
 from ofmhelpers.web.schemas.persistence import Job, JobPreview, JobStatus, ResultFile
 from ofmhelpers.web.schemas.tools import Tool
+from ofmhelpers.web.schemas.users import (
+    ApiKeysForm,
+    LinkedAccount,
+    PasswordForm,
+    Role,
+    RoleForm,
+    SessionUser,
+    User,
+    UserForm,
+)
 from ofmhelpers.web.schemas.watched import (
     FeedItem,
     GroupForm,
@@ -93,6 +110,7 @@ __all__ = [
     "ActionLogEntry",
     "AddAccounts",
     "AddResult",
+    "ApiKeysForm",
     "Application",
     "ApplicationForm",
     "AssetCard",
@@ -109,6 +127,7 @@ __all__ = [
     "DriveBoard",
     "DriveCard",
     "DriveTarget",
+    "DriveUpload",
     "FailedSource",
     "FeedItem",
     "FileEntry",
@@ -123,10 +142,12 @@ __all__ = [
     "JobStatus",
     "JobStatusPayload",
     "Leaderboard",
+    "LinkedAccount",
     "LoginFields",
     "LoginSecrets",
     "ModelChoice",
     "Notes",
+    "PasswordForm",
     "Period",
     "PhoneQuery",
     "PhoneSort",
@@ -134,12 +155,21 @@ __all__ = [
     "RefEntry",
     "ReferenceAsset",
     "ResultFile",
+    "Role",
+    "RoleForm",
+    "SavedCookies",
     "SelectedAccounts",
+    "SessionUser",
     "StoredFolder",
     "SyncReport",
     "TaskCard",
     "Tool",
     "TrackedAccount",
+    "UploadRequest",
+    "UploadTarget",
+    "UploadsQueued",
+    "User",
+    "UserForm",
     "WatchForm",
     "WatchedProfile",
 ]

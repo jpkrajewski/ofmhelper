@@ -14,6 +14,7 @@ import re
 from typing import TYPE_CHECKING
 
 from ofmhelpers.downloaders import generic, images
+from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import DownloadResult
 from ofmhelpers.log import get_logger
 
@@ -34,24 +35,27 @@ _IMAGES_FIRST = re.compile(
 )
 
 
-def _video(url: str) -> DownloadResult:
-    return generic.download(url)
+def _video(url: str, cookiefile: str | None) -> DownloadResult:
+    return generic.download(url, cookiefile=cookiefile)
 
 
-def _images(url: str) -> DownloadResult:
-    return images.download(url)
+def _images(url: str, cookiefile: str | None) -> DownloadResult:
+    return images.download(url, cookiefile=cookiefile)
 
 
-def _order(url: str) -> list[tuple[str, Callable[[str], DownloadResult]]]:
+def _order(
+    url: str,
+) -> list[tuple[str, Callable[[str, str | None], DownloadResult]]]:
     video, pictures = ("video", _video), ("images", _images)
     return [pictures, video] if _IMAGES_FIRST.search(url) else [video, pictures]
 
 
-def download(url: str) -> DownloadResult:
-    """The first downloader's files; when none gets any, both reasons."""
+def download(url: str, cookiefile: str | None = None) -> DownloadResult:
+    """The first downloader's files, logged in as `cookiefile` (None:
+    logged out); when none gets any, both reasons."""
     errors: list[str] = []
     for name, fetch in _order(url):
-        result = fetch(url)
+        result = fetch(url, cookiefile)
         if result.success:
             return result
         logger.info("download %s: %s gave nothing: %s", url, name, result.error)
@@ -59,5 +63,8 @@ def download(url: str) -> DownloadResult:
     return DownloadResult(url=url, success=False, error=" | ".join(errors))
 
 
-def download_all(urls: list[str]) -> list[DownloadResult]:
-    return [download(url) for url in urls]
+def download_all(urls: list[str], cookies: str | None = None) -> list[DownloadResult]:
+    """Every URL, logged in with `cookies`: the downloading user's own
+    cookies.txt text (`web/stores/cookies.py`), never anyone else's."""
+    with cookie_file(cookies) as cookiefile:
+        return [download(url, cookiefile) for url in urls]

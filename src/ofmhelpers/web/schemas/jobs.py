@@ -95,6 +95,8 @@ class ActionLogEntry(BaseModel):
 
     task: str
     actor: str | None
+    # admin / user: the badge's colour.
+    actor_role: str = "user"
     status: str
     params: dict[str, Any]
     status_url: str | None

@@ -102,4 +102,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # trusts them from 127.0.0.1 by default and the proxy reaches us as the Docker
 # bridge gateway. Without this, url_for() builds http:// links on an https page
 # (mixed content) and every client collapses into one rate-limit bucket.
-CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Only loopback + Docker's private range, never "*": nginx APPENDS the peer
+# to X-Forwarded-For ($proxy_add_x_forwarded_for), and with "*" uvicorn takes
+# the leftmost entry -- whatever the client sent -- so a made-up header per
+# request escaped the failed-login limit. With a list, uvicorn takes the
+# rightmost untrusted hop: the address nginx saw (prod net 172.18.0.0/16).
+CMD ["uvicorn", "ofmhelpers.web.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1,172.16.0.0/12"]

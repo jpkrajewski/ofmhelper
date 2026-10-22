@@ -19,11 +19,11 @@ list, or a bare id string) -- there is no separate file-reference table.
 
 from __future__ import annotations
 
-import traceback
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import logfire
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 
@@ -32,6 +32,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.previews import warm_previews
 from ofmhelpers.web.schemas import Job, JobPreview, ResultFile
+from ofmhelpers.web.stores.users import agency_id
 
 logger = get_logger(__name__)
 
@@ -52,36 +53,51 @@ def load_jobs() -> None:
 
 
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
-    """actor is the logged-in role ("admin" / "va") -- recorded so the Action
-    log can show who ran what."""
+    """`actor`: the id (as a string) of the user who ran it -- whose job it
+    is (only they see it), and who the action log names. None (scripts,
+    tests): the agency's, like every store call without an owner."""
+    if actor is None:
+        actor = str(agency_id())
     return _repository().create(task_name, params, actor=actor, status="running")
 
 
-def log_event(task_name: str, actor: str | None) -> str:
+def log_event(task_name: str, actor: str | None, params: dict | None = None) -> str:
     """For instantaneous audit events (login/logout) rather than background
     work -- recorded straight into the Action log already "done", no
-    background task involved."""
-    return _repository().create(task_name, {}, actor=actor, status="done")
+    background task involved. `params`: what the log shows with it (who,
+    signed in how)."""
+    return _repository().create(task_name, params or {}, actor=actor, status="done")
 
 
 def run_job(job_id: str, fn, kwargs: dict):
     """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
     endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
     status transition straight to Postgres so the API process sees it even
-    when this runs in a separate worker."""
-    try:
-        result = fn(**kwargs)
-        _repository().update_status(job_id, "done", result=_stored(result))
-    except Exception as exc:
-        # The status pages show this directly to whoever is running the job --
-        # a raw traceback isn't useful to them, just the exception's own
-        # message (e.g. "Wrong API Key"). Full detail still goes to the
-        # server's stdout/logs for whoever's actually debugging it.
-        _repository().update_status(
-            job_id, "failed", error=str(exc) or exc.__class__.__name__
-        )
-        traceback.print_exc()
-        return
+    when this runs in a separate worker. One trace per run (telemetry.py):
+    the job, who started it, and every call it makes inside."""
+    row = _repository().get(job_id) or {}
+    with logfire.span(
+        "job {task} {job_id}",
+        job_id=job_id,
+        task=row.get("task", fn.__name__),
+        actor=row.get("actor"),
+        function=fn.__qualname__,
+    ) as span:
+        try:
+            result = fn(**kwargs)
+            _repository().update_status(job_id, "done", result=_stored(result))
+        except Exception as exc:
+            # The status pages show this directly to whoever is running the
+            # job -- a raw traceback isn't useful to them, just the
+            # exception's own message (e.g. "Wrong API Key"). Full detail
+            # goes to the logs and the trace for whoever is debugging it.
+            _repository().update_status(
+                job_id, "failed", error=str(exc) or exc.__class__.__name__
+            )
+            span.record_exception(exc)
+            span.set_level("error")
+            logger.exception("job %s failed", job_id)
+            return
     _queue_previews(job_id)
 
 
@@ -125,8 +141,8 @@ def _stored_entry(item: Any) -> Any:
 
 def get_job(job_id: str, actor: str | None = None) -> Job | None:
     """The job, or None if it doesn't exist -- or, when `actor` is given, if
-    someone else ran it (see AuthMiddleware.visible_actor). None is "no
-    restriction": the worker and an admin session pass nothing."""
+    someone else ran it (a session passes its own, AuthMiddleware.actor --
+    an admin's too). None is "no restriction": the worker only."""
     row = _repository().get(job_id)
     if row is None or (actor is not None and row["actor"] != actor):
         return None

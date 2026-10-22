@@ -11,11 +11,13 @@
          redirects to /login instead of failing opaquely. -->
     <script src="{{ static_url('js/session.js') }}"></script>
     <script src="{{ static_url('js/nav.js') }}" defer></script>
+    <script src="{{ static_url('js/confirm.js') }}" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
 
     {% set is_admin = request.session.get("role") == "admin" %}
+    {% set signed_in_as = request.session.get("email", "") %}
     {# The bar's links, then the rest folded under "More" (admin pages only
        for admins). A new page = one entry in the list it belongs to. #}
     {% set nav_items = [
@@ -29,12 +31,14 @@
     ] %}
     {% set more_items = [
         ("/uniqify", "Uniqify"),
+        ("/account", "Account"),
+        ("/cookies", "Cookies"),
     ] + ([
+        ("/users", "Users"),
         ("/character-sheet", "Character Sheet"),
         ("/applications", "Leads"),
         ("/file-manager", "Files"),
         ("/action-log", "Logs"),
-        ("/cookies", "Cookies"),
     ] if is_admin else []) %}
     {% set here = request.url.path %}
 
@@ -75,6 +79,7 @@
                not a destination, and on a phone it must not be hidden
                behind the menu toggle. #}
             <form method="post" action="/logout" class="logout-form">
+                {% if signed_in_as %}<a class="signed-in-as" href="/account" title="Your account">{{ signed_in_as }}</a>{% endif %}
                 <button type="submit" class="btn-ghost">Log out</button>
             </form>
 
@@ -103,12 +108,14 @@
                 <a href="/accounts">Accounts</a>
                 <a href="/phones">Phones</a>
                 <a href="/uniqify">Uniqify</a>
+                <a href="/account">Account</a>
+                <a href="/cookies">Cookies</a>
                 {% if is_admin %}
+                <a href="/users">Users</a>
                 <a href="/character-sheet">Character Sheet</a>
                 <a href="/applications">Leads</a>
                 <a href="/file-manager">Files</a>
                 <a href="/action-log">Logs</a>
-                <a href="/cookies">Cookies</a>
                 {% endif %}
             </nav>
         </div>

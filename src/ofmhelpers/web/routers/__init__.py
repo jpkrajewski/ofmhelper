@@ -14,11 +14,13 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
 - `video_tools/` -- local video edits with no external service (uniqify).
-- `admin/`      -- admin-only surfaces: landing-page applications, file
-  manager, action log, cookie upload.
+- `admin/`      -- admin-only surfaces: who may sign in (/users), landing-page
+  applications, file manager, action log.
 
-Four modules sit at this level because they belong to no single feature:
-`auth` (login/logout), `apply` (the public landing-page application form's
+Six modules sit at this level because they belong to no single feature:
+`auth` (signing in and out: Google, Apple, password), `account` (your own
+sign-ins, Drive connection and API keys), `cookies` (your own cookies.txt),
+`apply` (the public landing-page application form's
 POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
 reference-file browser every generation form uses), and `task_helpers` (the
 upload/job/serve plumbing those routers are built out of).
@@ -28,9 +30,10 @@ it, so **adding a page means one import and one entry here**, and main.py is
 never touched.
 """
 
-from ofmhelpers.web.routers import apply, auth, refs
-from ofmhelpers.web.routers.admin import action_log, cookies, file_manager
+from ofmhelpers.web.routers import account, apply, auth, cookies, refs
+from ofmhelpers.web.routers.admin import action_log, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
+from ofmhelpers.web.routers.admin import users as admin_users
 from ofmhelpers.web.routers.downloads import clean_image, reels
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
@@ -49,6 +52,8 @@ from ofmhelpers.web.routers.video_tools import uniqify
 # reads like the directory listing.
 ROUTERS = [
     auth.router,
+    account.router,
+    cookies.router,
     apply.router,
     refs.router,
     # generation/
@@ -73,8 +78,8 @@ ROUTERS = [
     # video_tools/
     uniqify.router,
     # admin/
+    admin_users.router,
     admin_applications.router,
     file_manager.router,
     action_log.router,
-    cookies.router,
 ]

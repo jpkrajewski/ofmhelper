@@ -10,6 +10,11 @@ the same profile) and queues one worker job that scans them one after
 another -- Instagram rate-limits logged-out bursts, so ten parallel workers
 would only buy ten 429s. A claim that never completes (worker killed by a
 deploy) expires after `rescan_claim_ttl_s` and the profile is picked up again.
+
+A username is scanned once for every user watching it, so its logged-in
+calls (gated reels, the "really gone?" check) use the cookies of the
+earliest-added watcher who has uploaded any (`stores.cookies.for_watched`),
+else none -- the one place a user's login works for others' lists too.
 """
 
 import asyncio
@@ -33,13 +38,14 @@ from ofmhelpers.instagram import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.proxy_pool import ProxyPool
+from ofmhelpers.web.stores import cookies as login_cookies
 from ofmhelpers.web.stores.watched_profiles import (
     claim_due,
     get_watched,
     list_watched,
     record_scan,
     replace_result,
-    unwatch,
+    unwatch_unscanned,
 )
 
 logger = get_logger(__name__)
@@ -78,7 +84,7 @@ def _reject(username: str, reason: str) -> None:
     """A just-added profile that can never be scanned leaves the list: a
     watch list of dead and private accounts helps nobody. The page tells the
     user which ones were not added (static/js/reels.js)."""
-    unwatch(username)
+    unwatch_unscanned(username)
     logger.info("@%s not added: %s", username, reason)
 
 
@@ -88,7 +94,8 @@ def _confirmed_gone(username: str, answered: list[BaseException]) -> bool:
     login to ask)."""
     if not all(isinstance(f, ProfileNotFoundError) for f in answered):
         return False
-    return InstagramClient().exists_logged_in(username) is not True
+    client = InstagramClient(cookies=login_cookies.for_watched(username))
+    return client.exists_logged_in(username) is not True
 
 
 def scan_watched(username: str, proxy: str | None = None) -> ProfileReels | None:
@@ -99,7 +106,7 @@ def scan_watched(username: str, proxy: str | None = None) -> ProfileReels | None
     s = settings.instagram
     try:
         found = scan_profile(
-            InstagramClient(proxy),
+            InstagramClient(proxy, login_cookies.for_watched(username)),
             username,
             s.min_views,
             s.max_duration_s,
@@ -218,17 +225,18 @@ def _unlocked(client: InstagramClient, reel: Reel) -> Reel:
     )
 
 
-def unlock_gated() -> None:
-    """The worker job a cookies.txt upload queues: every stored login-only
-    reel resolved through the new login now, not at its profile's next
-    rescan. One unlocked past `max_duration_s` drops out, as a scan would
-    have dropped it."""
-    client = InstagramClient()
+def unlock_gated(user_id: int) -> None:
+    """The worker job `user_id`'s cookies.txt upload queues: the login-only
+    reels stored for profiles they watch, resolved now (not at the next
+    rescan) through each profile's scan login (`for_watched`: theirs, unless
+    an earlier watcher has one). One unlocked past `max_duration_s` drops
+    out, as a scan would have dropped it."""
     max_s = settings.instagram.max_duration_s
-    for watched in list_watched():
+    for watched in list_watched(owner=user_id):
         result = watched.result
         if result is None or all(r.video_url for r in result.reels):
             continue
+        client = InstagramClient(cookies=login_cookies.for_watched(watched.username))
         try:
             reels = [_unlocked(client, r) for r in result.reels]
         except requests.RequestException:

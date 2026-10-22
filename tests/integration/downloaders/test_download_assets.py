@@ -65,7 +65,7 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
     out_file = tmp_path / "clip.mp4"
     out_file.write_bytes(b"fake video")
 
-    def fake_downloads(urls, assets_root):
+    def fake_downloads(urls, assets_root, user_id=None):
         return [
             {
                 "url": urls[0],
@@ -129,7 +129,9 @@ def test_empty_submissions_rejected_cleanly(client):
 
 def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     monkeypatch.setattr(
-        download_reels_router, "_run_downloads", lambda urls, assets_root: []
+        download_reels_router,
+        "_run_downloads",
+        lambda urls, assets_root, user_id=None: [],
     )
 
     # admin runs one
@@ -148,6 +150,9 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     assert "<h1>Logs</h1>" in html
     assert 'actor-admin">admin' in html
     assert f'actor-user">{user.email}' in html
+    # An audit row, not the user's work: no link to (or summary of) their job.
+    assert f"/jobs/{user_job}" not in html
+    assert f"/jobs/{admin_job}" in html
 
 
 def test_still_running_card_carries_poll_attributes_on_page_reload(client):
@@ -175,7 +180,7 @@ def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
     out_file = tmp_path / "clip.mp4"
     out_file.write_bytes(b"fake video")
 
-    def fake_download_all(urls):
+    def fake_download_all(urls, **_login):
         return [DownloadResult(url=urls[0], success=True, output_paths=[out_file])]
 
     monkeypatch.setattr(download_reels_router, "download_all", fake_download_all)
@@ -193,7 +198,7 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
     out_file = tmp_path / "pic.png"
     out_file.write_bytes(b"fake image")
 
-    def fake_download_all(urls):
+    def fake_download_all(urls, **_login):
         return [DownloadResult(url=urls[0], success=True, output_paths=[out_file])]
 
     monkeypatch.setattr(download_images_router, "download_all", fake_download_all)

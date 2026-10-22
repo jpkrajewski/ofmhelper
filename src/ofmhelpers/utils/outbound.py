@@ -5,7 +5,8 @@ session `mount`ed here, or through `get` / `head`. Normally that changes
 nothing. Under OFM_FAKE_EXTERNALS (`settings.infra.fake_externals`, e2e) every
 such request is answered in-process by the fake of its host -- Instagram and
 its CDN (`instagram/fake.py`), kie.ai (`aigenproviders/kaiai/fake.py`),
-Higgsfield's file host (`aigenproviders/higgsfield/fake.py`) -- and a
+Higgsfield's file host (`aigenproviders/higgsfield/fake.py`), Google's and
+Apple's sign-in token endpoints (`signin/fake.py`) -- and a
 host without a fake is refused with a connection error: nothing reaches the
 internet. Higgsfield's API (httpx, its SDK) and Drive (googleapiclient)
 are switched in their own clients.
@@ -66,8 +67,9 @@ def _routes() -> dict[str, FakeHandler]:
     from ofmhelpers.aigenproviders.higgsfield.fake import routes as hf_routes
     from ofmhelpers.aigenproviders.kaiai.fake import routes as kie_routes
     from ofmhelpers.instagram.fake import routes as instagram_routes
+    from ofmhelpers.signin.fake import routes as signin_routes
 
-    return {**instagram_routes(), **kie_routes(), **hf_routes()}
+    return {**instagram_routes(), **kie_routes(), **hf_routes(), **signin_routes()}
 
 
 class FakeAdapter(BaseAdapter):
@@ -118,6 +120,13 @@ def get(url: str, **kwargs: Any) -> requests.Response:
     if settings.infra.fake_externals:
         return mount(requests.Session()).get(url, **kwargs)
     return requests.get(url, **kwargs)  # noqa: S113 -- the caller passes timeout
+
+
+def post(url: str, **kwargs: Any) -> requests.Response:
+    """`requests.post`, through the fakes when they are on."""
+    if settings.infra.fake_externals:
+        return mount(requests.Session()).post(url, **kwargs)
+    return requests.post(url, **kwargs)  # noqa: S113 -- the caller passes timeout
 
 
 def head(url: str, **kwargs: Any) -> requests.Response:

@@ -210,13 +210,8 @@ def test_calls_retry_drops_and_5xx_with_backoff_and_jitter(monkeypatch):
     assert retry.backoff_jitter > 0
 
 
-def test_unreachable_login_leaves_the_reel_login_only(monkeypatch, tmp_path):
-    cookies = tmp_path / "cookies.txt"
-    cookies.write_text("# Netscape HTTP Cookie File\n")
-    monkeypatch.setattr(
-        "ofmhelpers.instagram.client.get_cookiefile", lambda: str(cookies)
-    )
-    client = InstagramClient()
+def test_unreachable_login_leaves_the_reel_login_only(monkeypatch):
+    client = InstagramClient(cookies="# Netscape HTTP Cookie File\n")
 
     def drop(*_a, **_k):
         raise requests.exceptions.ConnectionError
@@ -234,18 +229,14 @@ def test_unreachable_login_leaves_the_reel_login_only(monkeypatch, tmp_path):
     ],
 )
 def test_login_tells_a_real_profile_from_a_deleted_one(monkeypatch, page, exists):
-    monkeypatch.setattr(
-        "ofmhelpers.instagram.client.get_cookiefile", lambda: "cookies.txt"
-    )
-    client = InstagramClient()
+    client = InstagramClient(cookies="# Netscape HTTP Cookie File\n")
     monkeypatch.setattr(
         type(client), "_logged_in", property(lambda _self: _FakeSession(page))
     )
     assert client.exists_logged_in("someone") is exists
 
 
-def test_without_a_login_existence_is_unknown(monkeypatch):
-    monkeypatch.setattr("ofmhelpers.instagram.client.get_cookiefile", lambda: None)
+def test_without_a_login_existence_is_unknown():
     assert InstagramClient().exists_logged_in("someone") is None
 
 
@@ -257,9 +248,22 @@ class _FakeSession:
         return _Page(self.text)
 
 
-def test_gated_reel_without_cookies_stays_unresolved(monkeypatch):
-    monkeypatch.setattr("ofmhelpers.instagram.client.get_cookiefile", lambda: None)
+def test_gated_reel_without_cookies_stays_unresolved():
     assert InstagramClient().media_logged_in("1") is None
+
+
+def test_unreadable_cookies_are_no_login():
+    assert InstagramClient(cookies="not a cookies file").media_logged_in("1") is None
+
+
+def test_the_login_sends_the_cookies_it_was_given():
+    jar = (
+        "# Netscape HTTP Cookie File\n"
+        ".instagram.com\tTRUE\t/\tTRUE\t0\tcsrftoken\tabc\n"
+    )
+    session = InstagramClient(cookies=jar)._logged_in
+    assert session is not None
+    assert session.headers["X-CSRFToken"] == "abc"
 
 
 def test_unresolvable_viral_reel_is_listed_not_dropped():

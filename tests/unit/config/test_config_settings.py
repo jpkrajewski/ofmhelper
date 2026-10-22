@@ -29,9 +29,7 @@ ALL_ENV_VARS = [
     "SESSION_SECRET",
     "SESSION_HTTPS_ONLY",
     "APP_PASSWORD_ADMIN",
-    "APP_PASSWORD_VA",
     "KIE_AI_API_KEY_ADMIN",
-    "KIE_AI_API_KEY_VA",
     "OFM_JOBS_MAX_ENTRIES",
     "OFM_RECOVERY_SWEEP_INTERVAL_S",
     "OFM_GALLERY_LIMIT",
@@ -287,3 +285,22 @@ def test_a_group_follows_an_edited_env_file(monkeypatch, tmp_path):
     dotenv.write_text("OFM_GALLERY_LIMIT=6\n")
     os.utime(dotenv, ns=(1, 10**18))
     assert s.web.gallery_limit == 6
+
+
+def test_fake_externals_are_refused_in_production(monkeypatch):
+    """The fakes sign anyone in as any email: production must not start."""
+    monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
+    with pytest.raises(ValidationError, match="OFM_FAKE_EXTERNALS"):
+        InfraSettings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("environment", "fakes"),
+    [("production", "0"), ("development", "1"), ("development", "0")],
+)
+def test_fake_externals_are_fine_anywhere_else(monkeypatch, environment, fakes):
+    monkeypatch.setenv("OFM_ENV", environment)
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", fakes)
+    s = InfraSettings(_env_file=None)
+    assert (s.environment, s.fake_externals) == (environment, fakes == "1")

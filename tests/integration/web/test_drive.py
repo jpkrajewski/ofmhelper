@@ -22,6 +22,7 @@ import time_machine
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
+from ofmhelpers.gdrive import FolderGoneError
 from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.web import drive_folders
 from ofmhelpers.web.main import app
@@ -52,8 +53,8 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
 
 
 def _client() -> TestClient:
-    """An admin: every login's card (the phones `_phone` makes are the
-    agency's). A user's own cards: test_ownership.py."""
+    """The agency (an admin): its own cards -- the phones `_phone` makes are
+    the agency's. Nobody sees another person's: test_ownership.py."""
     c = TestClient(app)
     sign_in_agency(c)
     return c
@@ -405,6 +406,23 @@ def test_a_file_moved_back_out_keeps_its_history(drive):
     assert card.posted_total == 0
     assert card.posted_today == 1
     assert [f.id for f in card.waiting] == [reel]
+
+
+def test_a_new_account_folder_starts_its_posted_history_at_zero(drive):
+    """Posted counts follow the folder the files were seen in: a dev copy of
+    the prod database must not show prod's history on its own new folders."""
+    login = _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    drive.add_file(_posted(drive, "ann.ig"), "reel.mp4", "video/mp4")
+    drive_folders.sync()
+    assert drive_folders.board().cards[0].posted_today == 1
+
+    store.forget_account_folder(login)
+    drive.rename_by_hand(drive.named("ann.ig - Anna", ROOT)[0], "old ann")
+    assert drive_folders.sync().created == ["ann.ig - Anna"]
+
+    card = drive_folders.board().cards[0]
+    assert (card.posted_total, card.posted_today, card.posted_week) == (0, 0, 0)
 
 
 def test_a_second_posted_folder_counts_and_is_flagged(drive):
@@ -759,8 +777,10 @@ def test_the_agencys_hand_made_root_is_adopted_in_any_case(
     fake_externals, tmp_path, monkeypatch
 ):
     """Prod's "all accounts" (lower case, made by hand, with folders in it)
-    is the owner's root from the first sweep on: nothing is made beside it."""
-    monkeypatch.setenv("OFM_ENV", "production")
+    is the owner's root from the first sweep on: nothing is made beside it.
+    Production's root name without claiming production (fake externals
+    refuse OFM_ENV=production)."""
+    monkeypatch.setattr(drive_folders, "_DEV_PREFIX", "")
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
@@ -811,7 +831,7 @@ def test_a_root_trashed_by_hand_is_found_or_made_again(drive):
 
 
 def test_an_owner_without_google_drive_gets_nothing_made_and_is_told(drive):
-    from signin import make_user
+    from signin import make_user, sign_in
 
     vee = make_user("vee@example.com")
     phone = devices.add_device(
@@ -827,7 +847,9 @@ def test_an_owner_without_google_drive_gets_nothing_made_and_is_told(drive):
 
     assert report.not_connected == ["vee@example.com"]
     assert drive.writes == []
-    html = _client().get("/drive/live").text
+    vee_client = TestClient(app)
+    sign_in(vee_client, "vee@example.com")
+    html = vee_client.get("/drive/live").text
     assert "vee@example.com has not connected Google Drive" in html
 
 
@@ -909,3 +931,105 @@ def test_a_folder_never_read_says_so_until_the_live_read(drive):
     html = _client().get("/drive").text
     assert "Reading from Drive" in html
     assert "Reading from Drive" not in _client().get("/drive/live").text
+
+
+# --- review fixes: scope, the live root in a dev copy, batch 404s ----------------------
+
+
+def _user_phone(email: str, handle: str, owner: str, *, google: bool = True) -> int:
+    """A user with a phone holding one Instagram login; Google connected."""
+    from signin import make_user
+
+    user = make_user(email)
+    if google:
+        users._repository().signed_in(user.id, "", f"fake-refresh:{email}")
+    phone = devices.add_device(
+        DeviceFields(
+            label=f"{owner} 01", model_id="iphone-13", color_id="blue", owner=owner
+        ),
+        user_id=user.id,
+    )
+    return _login(phone, "instagram", handle)
+
+
+def test_a_users_sync_does_and_reports_only_their_own_folders(drive):
+    from signin import sign_in
+
+    _user_phone("ann@example.com", "ann.ig", "Ann")
+    _user_phone("bob@example.com", "bob.ig", "Bob")
+    _user_phone("cy@example.com", "cy.ig", "Cy", google=False)
+    ann = TestClient(app)
+    sign_in(ann, "ann@example.com")
+
+    body = ann.post("/drive/sync").json()
+
+    assert body["created"] == ["ann.ig - Ann"]
+    assert body["posted_folders"] == ["ann.ig - Ann/POSTED"]
+    assert body["not_connected"] == []
+    assert body["failed"] == []
+    assert users.by_email("bob@example.com").drive_root_id is None  # untouched
+
+    admin = _client().post("/drive/sync").json()  # an admin's: their own too
+    assert admin["created"] == []
+    assert admin["not_connected"] == []
+    assert users.by_email("bob@example.com").drive_root_id is None
+
+    sweep = drive_folders.sync()  # the background loop: everyone's
+    assert sweep.created == ["bob.ig - Bob"]
+    assert sweep.not_connected == ["cy@example.com"]
+
+
+def test_dev_never_uses_a_stored_live_root_from_a_prod_copy(drive):
+    """A dev database copied from prod keeps the live "ALL ACCOUNTS" id and
+    its folder rows: dev finds its own root by name, never writes or reads
+    in the live one, and the live rows are not used."""
+    login = _login(_phone("Phone 01"), "instagram", "ann.ig")
+    live = drive.seed_folder("ALL ACCOUNTS", MY_DRIVE, owner=AGENCY)
+    live_account = drive.seed_folder("ann.ig - hand named", live, owner=AGENCY)
+    live_posted = drive.seed_folder(POSTED, live_account, owner=AGENCY)
+    store.save_account_folder(login, live_account, "ann.ig - Anna", live)
+    store.save_posted_folder(login, live_posted)
+    users.set_drive_root(users.agency_id(), live)
+
+    report = drive_folders.sync()
+
+    assert users.get_user(users.agency_id()).drive_root_id == ROOT
+    assert report.created == ["ann.ig - Anna"]
+    assert _stored().folder_id == _account(drive, "ann.ig")
+    assert drive.item(live).name == "ALL ACCOUNTS"
+    assert drive.names_in(live) == ["ann.ig - hand named"]  # not renamed back
+    assert drive.names_in(live_account) == [POSTED]
+
+
+def test_the_page_forgets_a_stored_live_root_in_dev(drive):
+    login = _login(_phone("Phone 01"), "instagram", "ann.ig")
+    live = drive.seed_folder("ALL ACCOUNTS", MY_DRIVE, owner=AGENCY)
+    live_account = drive.seed_folder("ann.ig - Anna", live, owner=AGENCY)
+    drive.add_file(live_account, "live.mp4", "video/mp4")
+    store.save_account_folder(login, live_account, "ann.ig - Anna", live)
+    users.set_drive_root(users.agency_id(), live)
+
+    html = _client().get("/drive/live").text
+
+    assert "live.mp4" not in html
+    assert users.get_user(users.agency_id()).drive_root_id is None
+    assert store.account_folders() == {}
+
+
+def test_a_404_in_the_batch_keeps_the_root_and_lists_one_by_one(drive, monkeypatch):
+    """An account folder deleted between the root listing and the batch
+    404s the whole `children_of` query: the healthy root stays."""
+    _login(_phone("Phone 01"), "instagram", "ann.ig")
+    drive_folders.sync()
+    drive.add_file(_account(drive, "ann.ig"), "new.mp4", "video/mp4")
+
+    def gone(_parent_ids):
+        msg = "Folder x: not found"
+        raise FolderGoneError(msg)
+
+    monkeypatch.setattr(drive, "children_of", gone)
+
+    html = _client().get("/drive/live").text
+
+    assert users.get_user(users.agency_id()).drive_root_id == ROOT
+    assert "new.mp4" in html

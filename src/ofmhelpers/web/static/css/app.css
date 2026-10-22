@@ -233,9 +233,11 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
 }
 .page-head h1 { margin: 0; }
 .page-head .lead {
+    /* Its own line under the title: a max-width would clamp the 100% basis
+       and let a lead sit beside the h1, so the measure is padding instead. */
     flex-basis: 100%;
     margin: 0;
-    max-width: 68ch;
+    padding-right: max(0px, 100% - 68ch);
     color: var(--text-muted);
     font-size: var(--step-1);
     line-height: 1.5;
@@ -501,7 +503,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
    each re-declaring padding/border/hover from scratch. */
 .btn,
 .root-btn,
-button {
+/* `.btn`: a link that acts as a button looks like one. */
+button,
+.btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -855,7 +859,7 @@ legend {
 .actor-badge { display: inline-flex; padding: 3px var(--s-3); border-radius: var(--radius-pill);
     font-size: var(--step--1); font-weight: 700; }
 .actor-admin { background: rgba(139, 92, 246, 0.18); color: var(--accent-soft); }
-.actor-va { background: var(--ok-wash); color: var(--ok); }
+.actor-user { background: var(--ok-wash); color: var(--ok); }
 
 /* Inline notices (cookies page, approve result, form errors). */
 .notice {
@@ -1558,7 +1562,35 @@ summary:hover { color: var(--accent-soft); }
     color: var(--fail);
     font-size: var(--step--1);
 }
-.login-card input[type="password"] { min-height: 46px; }
+.login-card input[type="password"],
+.login-card input[type="text"] { min-height: 46px; }
+.login-providers { display: grid; gap: var(--s-3); }
+.login-provider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font-weight: 700;
+    text-decoration: none;
+}
+.login-provider:hover { border-color: var(--accent-soft); }
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    margin: var(--s-5) 0 var(--s-3);
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.login-divider::before,
+.login-divider::after { flex: 1; height: 1px; background: var(--glass-border); content: ""; }
+.login-help { margin-top: var(--s-4); color: var(--text-faint); font-size: var(--step--1); }
 .login-btn { width: 100%; min-height: 48px; margin-top: var(--s-4); font-size: var(--step-0); }
 
 /* Session-expiry overlay -- static/js/session.js drops this in just before
@@ -2086,8 +2118,101 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 }
 .accounts-card h2 { margin: 0 0 var(--s-3); font-size: var(--step-1); }
 .accounts-empty { margin: 0; padding: var(--s-5) 0; color: var(--text-muted); text-align: center; }
-.accounts-chart-range { display: flex; justify-content: space-between; color: var(--text-faint); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
-.accounts-chart { display: block; width: 100%; height: 160px; margin-top: var(--s-2); color: var(--accent-strong); }
+/* ---- Follower chart (account_analytics.html, js/account-chart.js) ------
+   SVG in a 0..100 box stretched over .fchart-plot; dots, labels, crosshair
+   and tooltip are HTML placed with --x/--y percents of the same box, so
+   they stay round and crisp at any width. Line 2px, grid 1px hairlines,
+   gaps dashed in the muted ink. Class names are the script's contract. */
+.fchart { --fchart-line: var(--accent-strong); margin: 0; }
+.fchart-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2) var(--s-4); margin-bottom: var(--s-4); }
+.fchart-stat { display: grid; gap: 2px; min-width: 0; }
+.fchart-stat > span { color: var(--text-muted); font-size: var(--step--1); font-weight: 600; }
+.fchart-stat > strong { font-size: var(--step-1); font-weight: 650; font-variant-numeric: tabular-nums; }
+.fchart-stat > strong.growth { white-space: normal; }
+.fchart-stat > strong small { font-size: var(--step--1); font-weight: 500; color: inherit; }
+.fchart-stat > small { color: var(--text-faint); font-size: var(--step--1); }
+.fchart-body {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: clamp(160px, 38vw, 260px) auto;
+    column-gap: var(--s-2);
+    /* Room for the end dot past the plot's right edge. */
+    padding-right: var(--s-2);
+}
+.fchart-y, .fchart-x { position: relative; color: var(--text-faint); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.fchart-y { width: 6ch; }
+.fchart-y span { position: absolute; top: var(--y); right: 0; transform: translateY(-50%); white-space: nowrap; }
+.fchart-x { grid-column: 2; height: 1.6em; margin-top: var(--s-1); }
+.fchart-x span { position: absolute; top: 0; left: var(--x); transform: translateX(-50%); white-space: nowrap; }
+/* Per-sync charts: the ends' labels tuck inside the plot. Daily charts
+   centre every date under its own point (room on the right below). */
+.fchart[data-step="sync"] .fchart-x span:first-child { transform: none; }
+.fchart[data-step="sync"] .fchart-x span:last-child { transform: translateX(-100%); }
+.fchart[data-step="day"] .fchart-body { padding-right: 1.5rem; }
+.fchart-plot { position: relative; min-width: 0; outline: none; touch-action: pan-y; cursor: crosshair; }
+.fchart-plot:focus-visible { box-shadow: 0 0 0 2px var(--accent-ring); border-radius: var(--radius-sm); }
+.fchart-plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.fchart-grid { stroke: var(--border-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.fchart-line, .fchart-gap { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.fchart-line { stroke: var(--fchart-line); stroke-width: 2; }
+.fchart-gap { stroke: var(--text-faint); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.fchart-dot {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fchart-line);
+    box-shadow: 0 0 0 2px var(--surface);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+.fchart-focus { width: 10px; height: 10px; }
+.fchart-cross {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--x);
+    width: 1px;
+    background: var(--border-strong);
+    pointer-events: none;
+}
+.fchart-tip {
+    position: absolute;
+    top: 0;
+    z-index: 2;
+    display: grid;
+    gap: 2px;
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-3);
+    box-shadow: var(--shadow);
+    font-size: var(--step--1);
+    white-space: nowrap;
+    transform: translate(-50%, calc(-100% - var(--s-2)));
+    pointer-events: none;
+}
+.fchart-tip[data-below="1"] { top: 100%; transform: translate(-50%, var(--s-2)); }
+.fchart-tip strong { color: var(--text); font-size: var(--step-0); font-variant-numeric: tabular-nums; }
+.fchart-tip span { color: var(--text-muted); }
+.fchart-tip small { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.fchart-note { margin-top: var(--s-2); color: var(--text-faint); font-size: var(--step--1); }
+.fchart-table { margin: var(--s-3) 0 0; padding: var(--s-2) var(--s-3); border-color: var(--border-soft); font-size: var(--step--1); }
+.fchart-table table { width: 100%; margin-top: var(--s-2); font-variant-numeric: tabular-nums; }
+.fchart-table th, .fchart-table td { padding: var(--s-1) var(--s-2); }
+.fchart-table .num { text-align: right; }
+/* The middle date only where there is room for three. */
+.fchart[data-step="sync"] .fchart-x span:nth-child(2) { display: none; }
+/* A phone fits four dates: past that every other one, the last kept. */
+.fchart[data-step="day"] .fchart-x:has(> span:nth-child(5)) > span:nth-last-child(2n) { display: none; }
+@media (min-width: 720px) {
+    .fchart-summary { grid-template-columns: repeat(3, max-content); column-gap: var(--s-6); }
+    .fchart[data-step="sync"] .fchart-x span:nth-child(2),
+    .fchart[data-step="day"] .fchart-x:has(> span:nth-child(5)) > span:nth-last-child(2n) { display: inline; }
+}
+/* ---- end follower chart ------------------------------------------------ */
 .accounts-posts { margin: 0; padding: 0; list-style: none; }
 .accounts-posts li {
     display: grid;
@@ -2479,3 +2604,96 @@ a.ph-login-user:hover { text-decoration: underline; }
 .dr-others summary { cursor: pointer; }
 .dr-others ul { display: grid; gap: var(--s-1); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .dr-others a { display: inline-flex; align-items: center; gap: var(--s-2); }
+
+/* ---------------------------------------------------------------------
+   /users, /account
+   --------------------------------------------------------------------- */
+.signed-in-as {
+    overflow: hidden;
+    max-width: 22ch;
+    color: var(--text-faint);
+    font-size: var(--step--1);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.logout-form { display: flex; align-items: center; gap: var(--s-3); }
+@media (max-width: 720px) { .signed-in-as { display: none; } }
+/* The one-time password link: the whole URL in a read-only field + Copy. */
+.users-link { flex-direction: column; color: var(--text); }
+.users-link p { margin: 0; }
+.users-link-row { display: flex; gap: var(--s-2); }
+.users-link-row input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--step--1); }
+/* Add a user: one row of fields + the button, wrapping on a phone. */
+.users-card { margin-bottom: var(--s-5); }
+.users-add { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-end; }
+.users-add .field { flex: 1 1 12rem; margin: 0; }
+.users-add .users-add-email { flex-grow: 2; }
+.users-add .users-add-role { flex: 0 1 9rem; }
+/* As tall as the inputs beside it: their padding, border and line-height. */
+.users-add button { flex: 0 0 auto; min-height: 0; padding: calc(var(--s-3) + 1px) var(--s-5); font-size: var(--step-0); line-height: inherit; }
+/* The table: every row the same shape -- status badge in Access, the
+   row's buttons right-aligned in the last column. */
+.users-table td { vertical-align: middle; }
+/* Holds the sr-only "Actions" label, which would otherwise escape the
+   .table-wrap scroller and widen the page on a phone. */
+.users-actions-head { position: relative; }
+.users-who strong { margin-right: var(--s-1); }
+.users-who .pending, .users-note { display: block; font-size: var(--step--1); }
+.users-role { width: auto; min-width: 7.5rem; padding: var(--s-1) var(--s-7) var(--s-1) var(--s-3); font-size: var(--step--1); }
+.users-role-text { display: inline-block; padding: var(--s-1) 0; font-size: var(--step--1); }
+.users-table tr[data-inactive] td:not(:last-child) { opacity: 0.55; }
+.users-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: var(--s-2); }
+.users-actions form { margin: 0; }
+.users-actions button { min-height: 32px; padding: var(--s-1) var(--s-3); }
+.account-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--s-5);
+}
+.account-card {
+    padding: var(--s-5);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+}
+.account-card h2 { margin-bottom: var(--s-3); font-size: var(--step-1); }
+.account-list { display: grid; gap: var(--s-2); margin: 0 0 var(--s-4); padding: 0; list-style: none; }
+.account-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.account-form, .account-key { display: grid; gap: var(--s-2); margin-top: var(--s-3); }
+.account-key { gap: var(--s-3); }
+.account-key-row { display: flex; gap: var(--s-2); }
+.account-key-row input { flex: 1; min-width: 0; }
+/* Card forms: fields spaced by the grid gap, buttons their own width. */
+.account-form .field, .account-key .field { margin: 0; }
+.account-form > button, .account-key > button { justify-self: start; }
+.account-key > button[type="submit"]:not([name]) { justify-self: start; }
+
+/* /clone: "Upload to Drive" (web/drive_uploads.py) */
+.clone-drive { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+/* "Connect Google Drive" notices (/drive, /clone): the text, then the action. */
+.drive-connect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
+/* Folder picker and its upload button joined into one control, one height. */
+.drive-pick { display: inline-flex; align-items: stretch; max-width: 100%; }
+.drive-pick .drive-target {
+    width: auto;
+    min-width: 14ch;
+    max-width: 30ch;
+    min-height: 40px;
+    padding: var(--s-2) var(--s-7) var(--s-2) var(--s-3);
+    font-size: var(--step--1);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    background-color: var(--surface-2);
+    border-color: var(--accent-ring);
+    border-right: 0;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.drive-pick .drive-target option { background: var(--bg-2); color: var(--text); }
+.drive-pick .drive-upload-btn { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; white-space: nowrap; }
+.drive-note { flex-basis: 100%; margin: 0; color: var(--fail); font-size: var(--step--1); }
+.drive-states { margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--step--1); }
+.drive-states li[data-status="failed"] { color: var(--fail); }
+.drive-states li[data-status="done"] { color: var(--ok); }
+
+/* /drive: opened from the last read while the live one loads */
+.dr-asof { margin: 0 0 var(--s-3); color: var(--text-faint); font-size: var(--step--1); }

@@ -102,3 +102,50 @@ def test_id_token_claims_apples_string_true_and_the_nonce_check():
         checked(found, "other")
     with pytest.raises(SignInError):
         claims("not-a-jwt")
+
+
+def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
+    """A /login burst waits for a slot instead of allocating 128 MiB each."""
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ofmhelpers.signin import passwords
+
+    monkeypatch.setenv("OFM_PASSWORD_HASH_CONCURRENCY", "2")
+    passwords._slots.cache_clear()
+    lock = threading.Lock()
+    running = 0
+    peak = 0
+
+    def scrypt(*args, **kwargs):
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+        time.sleep(0.05)
+        with lock:
+            running -= 1
+        return b"\0" * 32
+
+    monkeypatch.setattr(passwords.hashlib, "scrypt", scrypt)
+    try:
+        with ThreadPoolExecutor(12) as pool:
+            list(pool.map(lambda _: verify_password("x", ""), range(12)))
+    finally:
+        passwords._slots.cache_clear()
+
+    assert peak == 2
+
+
+def test_a_hash_made_with_other_parameters_still_verifies():
+    """Stored hashes carry their own n/r/p: changing the defaults (or the
+    concurrency cap) never locks anyone out."""
+    import base64 as b64
+    import hashlib
+
+    salt = b"0123456789abcdef"
+    key = hashlib.scrypt(b"older password", salt=salt, n=2**14, r=8, p=1, dklen=32)
+    stored = f"scrypt${2**14}$8$1${b64.b64encode(salt).decode()}${b64.b64encode(key).decode()}"
+    assert verify_password("older password", stored)
+    assert not verify_password("other password", stored)

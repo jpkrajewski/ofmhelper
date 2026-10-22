@@ -114,7 +114,22 @@ def test_a_deactivated_user_cannot_sign_in(client):
 def test_after_sign_in_only_a_path_on_this_site(client, target):
     make_user_with_password(password=PASSWORD)
     r = _password_login(client, "user@example.com", PASSWORD, target)
-    assert r.headers["location"] == "/"
+    assert r.headers["location"] == "/home"
+
+
+@pytest.mark.parametrize("target", ["", "/"])
+def test_a_sign_in_without_a_page_to_return_to_lands_on_home(client, target):
+    """ "/" is the public landing page; the app starts at /home."""
+    make_user_with_password(password=PASSWORD)
+    r = _password_login(client, "user@example.com", PASSWORD, target)
+    assert (r.status_code, r.headers["location"]) == (303, "/home")
+
+
+@pytest.mark.usefixtures("providers_on")
+def test_a_provider_sign_in_without_a_page_lands_on_home(client):
+    make_user("friend@example.com")
+    r = _consent(client, "apple", "friend@example.com")
+    assert (r.status_code, r.headers["location"]) == (303, "/home")
 
 
 # --- the session follows /users ------------------------------------------------
@@ -318,59 +333,52 @@ def test_an_env_admin_gets_in_on_a_fresh_install_and_stays_admin(client):
 
 
 @pytest.mark.usefixtures("providers_on")
-def test_google_keeps_the_drive_token(client):
+def test_a_google_sign_in_asks_only_who_you_are_and_connecting_adds_drive(client):
+    """Sign-in: openid/email/profile only (no "unverified app" screen, no
+    Drive token). Connecting on /account asks for Drive with offline access
+    on a consent screen, and keeps the token."""
     user = make_user("friend@example.com")
-    _consent(client, "google", "friend@example.com")
+    started = client.get("/auth/google/start", follow_redirects=False)
+    assert started.status_code == 303
+
+    r = _consent(client, "google", "friend@example.com", next="/reels")
+    assert r.headers["location"] == "/reels"  # straight in, no detour
+    assert not users.get_user(user.id).drive_connected
+
+    _consent(client, "google", "friend@example.com", link="1", next="/drive")
     assert users.get_user(user.id).drive_connected
     assert users.refresh_token(user.id) == "fake-refresh:friend@example.com"
 
-
-@pytest.mark.usefixtures("providers_on")
-def test_a_google_sign_in_without_a_drive_token_asks_consent_once_more(client):
-    """Google waves an account that consented before through without a
-    refresh token: signed in, then straight back for consent, ending
-    signed in with Drive connected -- no second sign-in by hand."""
-    from ofmhelpers.signin.fake import FakeAccount, fake_code
-
-    user = make_user("friend@example.com")
-    started = client.get(
-        "/auth/google/start", params={"next": "/drive"}, follow_redirects=False
-    )
-    state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
-    nonce = client.cookies.get("ofm_signin")
-    assert nonce  # the round trip's cookie
-    # The state cookie carries the nonce: read it the way the app does.
-    from ofmhelpers.web.routers.auth import _serializer
-
-    carried = _serializer().loads(nonce)
-    code = fake_code(
-        FakeAccount(
-            email="friend@example.com", nonce=carried["nonce"], refresh_token=False
-        )
-    )
-    r = client.get(
-        "/auth/google/callback",
-        params={"code": code, "state": state},
-        follow_redirects=False,
-    )
-
-    assert r.status_code == 303
-    assert r.headers["location"] == "/auth/google/start?link=1&next=/drive"
-    assert client.get("/generate").status_code == 200  # already signed in
-    assert not users.get_user(user.id).drive_connected
-
-    r = _consent(client, "google", "friend@example.com", link="1", next="/drive")
+    # Signing in again later keeps the Drive token on file.
+    _consent(TestClient(app), "google", "friend@example.com")
     assert users.get_user(user.id).drive_connected
 
 
-@pytest.mark.usefixtures("providers_on")
-def test_a_google_sign_in_with_the_drive_token_on_file_goes_straight_in(client):
-    user = make_user("friend@example.com")
-    _consent(client, "google", "friend@example.com")
-    assert users.get_user(user.id).drive_connected
-    other = TestClient(app)
-    r = _consent(other, "google", "friend@example.com", next="/reels")
-    assert r.headers["location"] == "/reels"
+def test_googles_consent_url_asks_drive_only_when_connecting(monkeypatch):
+    from ofmhelpers.signin.google import Google
+
+    monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "client")
+    monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
+
+    def query(*, connect: bool) -> dict[str, str]:
+        url = Google().consent_url("https://x/cb", "s", "n", connect=connect)
+        return {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
+
+    sign_in_query = query(connect=False)
+    assert sign_in_query["scope"] == "openid email profile"
+    assert "access_type" not in sign_in_query
+    assert sign_in_query["prompt"] == "select_account"
+    connect_query = query(connect=True)
+    assert connect_query["scope"].split() == [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    assert (connect_query["access_type"], connect_query["prompt"]) == (
+        "offline",
+        "consent",
+    )
 
 
 @pytest.mark.usefixtures("providers_on")
@@ -423,6 +431,7 @@ def test_unlinking_the_only_way_in_is_refused(client):
     _consent(client, "google", "my.gmail@example.com", link="1")
     assert client.post("/account/unlink/google").status_code == 400
     make_user_with_password(me.email, PASSWORD)
+    sign_in(client)  # a new password signs every session out
     assert (
         client.post("/account/unlink/google", follow_redirects=False).status_code == 303
     )
@@ -439,7 +448,9 @@ def test_login_page_shows_only_configured_providers(client, monkeypatch):
     assert "Continue with Apple" not in html
 
 
-def test_google_consent_url_asks_for_drive_and_a_nonce(client, monkeypatch):
+def test_google_sign_in_url_has_the_callback_and_a_nonce_but_no_drive(
+    client, monkeypatch
+):
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "id")
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "secret")
     monkeypatch.setenv("APP_BASE_URL", "https://ascendglobal.cash/")
@@ -448,8 +459,7 @@ def test_google_consent_url_asks_for_drive_and_a_nonce(client, monkeypatch):
     query = {k: v[0] for k, v in parse_qs(url.query).items()}
     assert url.netloc == "accounts.google.com"
     assert query["redirect_uri"] == "https://ascendglobal.cash/auth/google/callback"
-    assert "https://www.googleapis.com/auth/drive" in query["scope"].split()
-    assert query["access_type"] == "offline"
+    assert query["scope"] == "openid email profile"
     assert query["nonce"]
     assert query["state"]
     assert "ofm_signin=" in r.headers["set-cookie"]
@@ -463,10 +473,8 @@ def test_a_users_saved_key_prefills_their_forms_and_nobody_elses(client, monkeyp
     sign_in(client)
     assert "env-admin-key" not in client.get("/generate").text
 
-    r = client.post(
-        "/account/keys", data={"provider": "kie", "api_key": " user-key-1234 "}
-    )
-    assert "Key saved." in r.text
+    r = client.post("/account/keys", data={"key_kie": " user-key-1234 "})
+    assert "kie.ai key saved." in r.text
     assert "…1234" in r.text
     assert "user-key-1234" in client.get("/generate").text
 
@@ -478,8 +486,40 @@ def test_a_users_saved_key_prefills_their_forms_and_nobody_elses(client, monkeyp
     sign_in_admin(admin)
     assert "env-admin-key" in admin.get("/generate").text
 
-    client.post("/account/keys", data={"provider": "kie", "api_key": ""})
+    client.post("/account/keys", data={"remove": "kie"})
     assert "user-key-1234" not in client.get("/generate").text
+
+
+def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
+    """Both keys typed, one click: both saved. A blank field later leaves its
+    saved key alone; only Remove removes."""
+    user = sign_in(client)
+
+    r = client.post(
+        "/account/keys",
+        data={"key_kie": "kie-key-1111", "key_higgsfield": "hf-key-2222"},
+    )
+    assert "kie.ai and Higgsfield keys saved." in r.text
+    assert users.api_keys(user.id) == {
+        "kie": "kie-key-1111",
+        "higgsfield": "hf-key-2222",
+    }
+
+    r = client.post(
+        "/account/keys", data={"key_kie": "kie-key-3333", "key_higgsfield": ""}
+    )
+    assert users.api_keys(user.id) == {
+        "kie": "kie-key-3333",
+        "higgsfield": "hf-key-2222",
+    }
+
+    r = client.post("/account/keys", data={"key_kie": "", "key_higgsfield": ""})
+    assert r.status_code == 400
+    assert "Nothing to save" in r.text
+
+    client.post("/account/keys", data={"remove": "higgsfield", "key_kie": ""})
+    assert users.api_keys(user.id) == {"kie": "kie-key-3333"}
+    assert client.post("/account/keys", data={"remove": "nope"}).status_code == 404
 
 
 def test_account_password_change_needs_the_current_one(client):
@@ -549,3 +589,143 @@ def test_only_the_first_admin_email_takes_it_over(client):
     assert second.is_admin
     assert second.id != agency
     assert users.by_email("admin") is not None
+
+
+# --- review fixes: races, sessions after a password change, escaping -----------
+
+
+def _together(count: int, call):
+    """`call()` from `count` threads released at the same instant."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    barrier = Barrier(count)
+
+    def run():
+        barrier.wait()
+        return call()
+
+    with ThreadPoolExecutor(count) as pool:
+        return [f.result() for f in [pool.submit(run) for _ in range(count)]]
+
+
+def test_concurrent_adds_of_one_email_make_one_user_and_never_raise():
+    repo = users._repository()
+    found = _together(8, lambda: repo.add("race@example.com", "user"))
+    made = [f for f in found if f is not None]
+    assert len(made) == 1
+    assert made[0]["email"] == "race@example.com"
+    assert [u.email for u in users.list_users()].count("race@example.com") == 1
+
+
+def test_concurrent_links_of_one_account_go_to_one_user_only():
+    first = make_user("one@example.com")
+    second = make_user("two@example.com")
+    repo = users._repository()
+    results = _together(
+        8,
+        lambda: (
+            repo.link_identity(first.id, "google", "sub-race", "one@example.com"),
+            repo.link_identity(second.id, "google", "sub-race", "two@example.com"),
+        ),
+    )
+    owner = repo.user_for_identity("google", "sub-race")
+    assert owner in {first.id, second.id}
+    winner_won = [r[0] if owner == first.id else r[1] for r in results]
+    loser_won = [r[1] if owner == first.id else r[0] for r in results]
+    assert all(winner_won)
+    assert not any(loser_won)
+
+
+def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
+    """The second OFM_ADMIN_EMAILS address (the first would take over the
+    password account), signing in from several tabs at once."""
+    from ofmhelpers.signin import Identity
+
+    monkeypatch.setenv("OFM_ADMIN_EMAILS", "owner@example.com, racer@example.com")
+    identity = Identity(
+        provider="google",
+        subject="sub-racer",
+        email="racer@example.com",
+        email_verified=True,
+    )
+    signed = _together(6, lambda: users.sign_in_identity(identity))
+    assert {u.email for u in signed if u is not None} == {"racer@example.com"}
+    assert all(u is not None for u in signed)
+    racer = users.by_email("racer@example.com")
+    assert racer is not None
+    assert racer.is_admin
+    assert [a.subject for a in users.linked_accounts(racer.id)] == ["sub-racer"]
+
+
+def test_a_password_change_signs_out_every_other_session(client):
+    make_user_with_password(password=PASSWORD)
+    other = TestClient(app)
+    assert _password_login(client, "user@example.com", PASSWORD).status_code == 303
+    assert _password_login(other, "user@example.com", PASSWORD).status_code == 303
+    assert other.get("/generate").status_code == 200
+
+    r = client.post(
+        "/account/password",
+        data={
+            "current": PASSWORD,
+            "password": "a brand new pass",
+            "confirm": "a brand new pass",
+        },
+    )
+
+    assert r.status_code == 200
+    assert "Password saved" in r.text
+    assert client.get("/generate").status_code == 200
+    gone = other.get("/generate", follow_redirects=False)
+    assert (gone.status_code, gone.headers["location"]) == (
+        303,
+        "/login?next=/generate",
+    )
+
+
+def test_a_password_set_from_a_link_signs_out_the_old_sessions(client):
+    user = make_user_with_password(password=PASSWORD)
+    assert _password_login(client, user.email, PASSWORD).status_code == 303
+    link = f"/password/{users.password_link(user.id)}"
+
+    done = TestClient(app).post(
+        link,
+        data={"password": "a brand new pass", "confirm": "a brand new pass"},
+        follow_redirects=False,
+    )
+
+    assert done.status_code == 303
+    assert client.get("/generate", follow_redirects=False).status_code == 303
+
+
+def test_an_email_with_a_quote_never_reaches_inline_script(client):
+    sign_in_admin(client)
+    evil = "x');alert(1);('@example.com"
+    make_user(evil)
+    page = client.get("/users")
+    assert page.status_code == 200
+    assert "onsubmit" not in page.text
+    assert 'data-confirm="Remove x&#39;);alert(1);(&#39;@example.com?' in page.text
+
+
+@pytest.mark.usefixtures("providers_on")
+def test_connecting_google_drive_syncs_that_persons_folders_right_away(
+    client, monkeypatch
+):
+    """No wait for the next sweep: the Drive token arriving builds the root
+    and account folders at once, so /clone's upload works straight away."""
+    from ofmhelpers.web import drive_folders
+
+    synced: list[int | None] = []
+    monkeypatch.setattr(drive_folders, "sync", synced.append)
+    user = make_user("friend@example.com")
+    apple = make_user("apple@example.com")
+
+    _consent(client, "google", "friend@example.com")  # sign-in: no Drive yet
+    assert synced == []
+    _consent(client, "google", "friend@example.com", link="1")
+    _consent(TestClient(app), "apple", "apple@example.com")  # no Drive token
+
+    assert synced == [user.id]
+    assert apple.id not in synced

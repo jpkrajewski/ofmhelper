@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders import fake
-from ofmhelpers.downloaders.cookies import get_cookiefile
+from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import (
     DownloadResult,
     ExtractorArgs,
@@ -84,7 +84,7 @@ class DownloadConfig(BaseModel):
     filename_template: str = "%(uploader)s_%(id)s%(playlist_index)s.%(ext)s"
 
     # Cookie source for authenticated sites (Instagram etc). Only used as a
-    # fallback if no cookies.txt file is present (see get_cookiefile()).
+    # fallback when the download runs without the user's own cookies.txt.
     # Defaults to None -- "firefox" only makes sense on a machine that
     # actually has a real Firefox profile, i.e. NOT inside Docker. Set via
     # env var if you need it for local/non-container use.
@@ -112,11 +112,9 @@ class DownloadConfig(BaseModel):
     # Extra per-extractor arguments, merged over youtube_player_clients'.
     extractor_args: ExtractorArgs = Field(default_factory=_default_extractor_args)
 
-    def ydl_opts(self) -> YtDlpOptions:
-        """The yt-dlp options this config means. A method, not a computed
-        field: it reads the uploaded cookies.txt off disk, which can change
-        between two downloads sharing one config."""
-        cookiefile = get_cookiefile()
+    def ydl_opts(self, cookiefile: str | None = None) -> YtDlpOptions:
+        """The yt-dlp options this config means, logged in as `cookiefile`
+        (the downloading user's own cookies.txt, `cookies.cookie_file`)."""
         browser = (
             None
             if cookiefile or not self.cookies_from_browser
@@ -207,8 +205,11 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
     return tmp_dst
 
 
-def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
-    """Download a single URL. TikTok URLs get re-encoded to H.264; everything else doesn't."""
+def download(
+    url: str, config: DownloadConfig | None = None, cookiefile: str | None = None
+) -> DownloadResult:
+    """Download a single URL, logged in as `cookiefile` (None: logged out).
+    TikTok URLs get re-encoded to H.264; everything else doesn't."""
     config = config or DownloadConfig()
     if settings.infra.fake_externals:
         return fake.video(url, config.output_dir)
@@ -223,7 +224,7 @@ def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
         )
 
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    opts = config.ydl_opts()
+    opts = config.ydl_opts(cookiefile)
     attempts: list[str | None] = [*_proxies_for(url), None]
     errors: list[str] = []
     for proxy in attempts:
@@ -275,7 +276,9 @@ def _fetch(yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None) -> Any:
 
 
 def download_all(
-    urls: list[str], config: DownloadConfig | None = None
+    urls: list[str], config: DownloadConfig | None = None, cookies: str | None = None
 ) -> list[DownloadResult]:
+    """Every URL, logged in with `cookies` (the user's cookies.txt text)."""
     config = config or DownloadConfig()
-    return [download(url, config) for url in urls]
+    with cookie_file(cookies) as cookiefile:
+        return [download(url, config, cookiefile) for url in urls]

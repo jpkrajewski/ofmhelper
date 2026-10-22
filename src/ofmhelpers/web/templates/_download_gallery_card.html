@@ -1,0 +1,31 @@
+{# One /download-assets gallery card: included by the page's first page and
+   by download_gallery_fragment.html for every page the scroll loads, so the
+   two can't drift. Expects `job` (a TaskCard). #}
+{% import "_asset_media.html" as am %}
+<div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"
+     data-params='{{ job.params_json }}'
+     {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}"{% endif %}>
+    {% if job.status == "done" and (job.assets or job.failed_sources) %}
+        {% if job.assets %}
+            {{ am.asset_media(job.assets[0]) }}
+            {% if job.assets[0].source %}<p class="source">{{ job.assets[0].source }}</p>{% endif %}
+            <p class="filename">{{ job.assets[0].name }}</p>
+            <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].download_name }}" class="download-btn">⬇ Download</a>
+        {% endif %}
+        {% if job.failed_sources %}
+            <div class="result-file fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">
+                ⚠ {{ job.failed_sources|length }} source(s) failed
+            </div>
+        {% endif %}
+        <button type="button" class="recreate-btn">↻ Recreate</button>
+    {% elif job.status == "failed" %}
+        <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
+        <button type="button" class="recreate-btn">↻ Recreate</button>
+    {% elif job.status == "done" %}
+        <div class="result-file">no output</div>
+        <button type="button" class="recreate-btn">↻ Recreate</button>
+    {% else %}
+        <div class="result-file"><span class="spinner"></span> working…</div>
+    {% endif %}
+    <p class="source">{{ job.task_label }}{% if job.assets|length > 1 %} · <a href="/{{ job.task | replace('_', '-') }}/jobs/{{ job.job_id }}">all {{ job.assets|length }} files →</a>{% endif %}</p>
+</div>

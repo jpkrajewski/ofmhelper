@@ -50,7 +50,12 @@ def make_user_with_password(
 
 
 def session_cookie(user: User) -> str:
-    data = {"user_id": user.id, "email": user.email, "role": str(user.role)}
+    data = {
+        "user_id": user.id,
+        "email": user.email,
+        "role": str(user.role),
+        "stamp": user.credential_stamp,
+    }
     payload = b64encode(json.dumps(data).encode())
     signer = TimestampSigner(str(settings.session.session_secret))
     return signer.sign(payload).decode()

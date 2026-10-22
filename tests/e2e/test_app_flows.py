@@ -20,7 +20,7 @@ from ofmhelpers.web.stores import devices, watched_profiles
 
 pytestmark = pytest.mark.e2e
 
-# Header order: the bar, then "More" (Uniqify, Account, then the admin pages).
+# Header order: the bar, then "More" (Uniqify, Account, Cookies, then the admin pages).
 VA_PAGES = [
     "/generate",
     "/clone",
@@ -31,6 +31,7 @@ VA_PAGES = [
     "/drive",
     "/uniqify",
     "/account",
+    "/cookies",
 ]
 ADMIN_ONLY_PAGES = [
     "/users",
@@ -38,7 +39,6 @@ ADMIN_ONLY_PAGES = [
     "/applications",
     "/file-manager",
     "/action-log",
-    "/cookies",
 ]
 
 # A generation is polled with backoff; a fake one takes ~1 s plus the poll.
@@ -104,6 +104,13 @@ def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
     expect(page.locator('[data-provider="google"]')).to_contain_text(
         "newbie@example.com"
     )
+    # Signing in asked no Drive access; connecting it is one more consent.
+    drive_card = page.locator(".account-card").nth(1)
+    expect(drive_card).to_contain_text("Not connected")
+    drive_card.locator('a[href^="/auth/google/start?link=1"]').click()
+    page.fill("#fake-email", "newbie@example.com")
+    with page.expect_navigation():
+        page.click("button[type=submit]")
     expect(page.locator(".account-card").nth(1)).to_contain_text("Connected")
     page.click(".logout-form button")
 
@@ -473,7 +480,9 @@ def _chip_key(label: str, href: str) -> str:
 
 def test_every_reels_filter_chip_shows_exactly_its_reels(va: Session):
     _add_viral_profiles(va)
-    watched_profiles.set_group("brookslockvip", "vip")
+    watched_profiles.set_group(
+        "brookslockvip", "vip", user_id=2
+    )  # the VA (conftest _seed_users)
     for nav, expected in CHIP_COUNTS.items():
         va.goto("/reels")
         chips = va.page.locator(f'nav[aria-labelledby="{nav}"] a')
@@ -669,10 +678,13 @@ def _capture_json(session: Session, pattern: str) -> list[dict]:
 
 
 def test_drive_page_lists_accounts_searches_and_syncs(
-    admin: Session, fake_drive: FakeDrive
+    admin: Session, fake_drive: FakeDrive, jobs_idle
 ):
-    # The agency's folders live in its admin's own Drive: connect it.
+    # The agency's folders live in its admin's own Drive: connect it. That
+    # syncs on the worker; done before the phones below, so every count
+    # from here on is the Sync button's.
     connect_google(admin, "agency.google@example.com")
+    jobs_idle()
     _seed_phone("Phone 01", "Anna", ("instagram", "ann.ig"), ("gmail", "ann@gmail.com"))
     _seed_phone("Phone 02", "Bob", ("instagram", "bob.ig"))
     retired = _seed_phone("Phone 03", "Old", ("instagram", "old.ig"))
@@ -722,9 +734,15 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     )
     (ann_posted,) = fake_drive.named("POSTED", ann)
     reel = fake_drive.add_file(ann, "reel1.mp4", "video/mp4", thumbnail=True)
-    with admin.page.expect_response(re.compile(r"/drive/thumb/")) as preview:
+    # The page's own live read must be done before the move below: one still
+    # in flight would see the file in POSTED and count it before Sync does.
+    with (
+        admin.page.expect_response(re.compile(r"/drive/thumb/")) as preview,
+        admin.page.expect_response(re.compile(r"/drive/live")) as live,
+    ):
         admin.page.reload()
     assert preview.value.ok
+    assert live.value.ok
     ann_card = cards.filter(has_text="ann.ig")
     expect(ann_card.locator(".dr-count")).to_have_text("Waiting:1 video")
     expect(ann_card.locator(".dr-file img")).to_be_visible()
@@ -749,7 +767,7 @@ def test_drive_page_lists_accounts_searches_and_syncs(
 
 
 def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
-    va: Session, admin: Session, fake_drive: FakeDrive, source_videos: list[Path]
+    va: Session, fake_drive: FakeDrive, source_videos: list[Path], jobs_idle
 ):
     """Google Drive connected on /account, a phone of theirs with an
     Instagram login (its folder made by Sync), a finished clone run:
@@ -759,6 +777,7 @@ def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
 
     connect_google(va, "va.google@example.com")
     expect(va.page.locator(".account-card").nth(1)).to_contain_text("Connected")
+    jobs_idle()  # the sync connecting starts, before the phone below
 
     va_id = 2  # e2e conftest `_seed_users`
     phone = devices.add_device(
@@ -768,9 +787,10 @@ def test_a_user_uploads_a_finished_clone_batch_into_their_accounts_drive(
         user_id=va_id,
     )
     assert devices.add_login(phone, LoginFields(service="instagram", username="vee.ig"))
-    admin.goto("/drive")
-    with admin.page.expect_navigation():
-        admin.page.click("#dr-sync")
+    # Their own Sync: nobody else's (an admin's) touches their folders.
+    va.goto("/drive")
+    with va.page.expect_navigation():
+        va.page.click("#dr-sync")
 
     video = source_videos[0]
     params = {

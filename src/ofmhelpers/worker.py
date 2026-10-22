@@ -25,6 +25,7 @@ from rq.cli import main as rq_main
 from ofmhelpers.cache import PREVIEWS_QUEUE, QUEUE_NAME
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
 
 # Not __name__: under `python -m ofmhelpers.worker` that's "__main__", which
 # tells you nothing in a log line.
@@ -43,11 +44,22 @@ class ConfiguredWorker(Worker):
     """
 
     def work(self, *args, **kwargs) -> bool:
+        configure_telemetry("ascend-worker")
         configure_logging()
         return super().work(*args, **kwargs)
 
+    def perform_job(self, job, queue) -> bool:
+        """Runs in the forked work horse, which rq ends with `os._exit` --
+        no atexit, so the job's buffered spans and logs are sent here or
+        never."""
+        try:
+            return super().perform_job(job, queue)
+        finally:
+            flush_telemetry()
+
 
 def main() -> None:
+    configure_telemetry("ascend-worker")
     configure_logging()
 
     infra = settings.infra

@@ -1,28 +1,47 @@
 {% extends "base.html" %}
-
+{% block title %}Cookies — Ascend Global LLC{% endblock %}
 {% block content %}
 <div class="page-head">
-    <h1>Upload Cookies</h1>
+    <h1>Your cookies</h1>
     <p class="lead">
-        Export one <code>cookies.txt</code> covering every logged-in platform
-        (TikTok, YouTube, Instagram, …) with the
+        Your own logins for downloads and your accounts' syncs. Export one
+        <code>cookies.txt</code> covering every platform you are logged in to
+        (Instagram, TikTok, YouTube, …) with the
         <strong>"Get cookies.txt LOCALLY"</strong> browser extension, then upload it here.
+        Nobody else sees or uses it, except that a profile several people watch on
+        Viral Reels is scanned once, with the login of whoever added it first.
     </p>
 </div>
 
-{% if uploaded %}
-<p class="notice notice-ok" role="status"><strong>Cookies updated successfully.</strong></p>
-{% endif %}
+{% if message %}<p class="notice notice-ok" role="status">{{ message }}</p>{% endif %}
+{% if error %}<p class="notice notice-fail" role="alert"><strong>Error:</strong> {{ error }}</p>{% endif %}
 
-{% if error %}
-<p class="notice notice-fail" role="alert"><strong>Error:</strong> {{ error }}</p>
-{% endif %}
+<div class="account-grid">
+    <section class="account-card" data-cookies="{{ 'saved' if saved else 'none' }}">
+        <h2>Saved</h2>
+        {% if saved %}
+        <ul class="account-list">
+            <li><span><strong>File</strong> · {{ saved.file_name }}, uploaded {{ saved.uploaded_at|ago }}</span></li>
+            <li><span><strong>Instagram login</strong> · {% if saved.summary.instagram_login %}yes{% if saved.summary.instagram_expires_at %}, expires {{ saved.summary.instagram_expires_at|utc }}{% endif %}{% else %}none in this file{% endif %}</span></li>
+            <li><span><strong>{{ saved.summary.cookies }} cookies</strong> · {{ saved.summary.domains|join(", ") }}</span></li>
+        </ul>
+        <form method="post" action="/cookies/delete">
+            <button type="submit" class="btn-ghost">Remove</button>
+        </form>
+        {% else %}
+        <p>None yet: your downloads and syncs run logged out, so Instagram hides login-only posts and reels.</p>
+        {% endif %}
+    </section>
 
-<form action="/cookies" method="post" enctype="multipart/form-data" class="card todo-add-form">
-    <div class="field">
-        <label for="cookies-file">cookies.txt</label>
-        <input type="file" name="file" id="cookies-file" accept=".txt" required>
-    </div>
-    <button type="submit" class="btn-primary">Upload</button>
-</form>
+    <section class="account-card">
+        <h2>{{ "Replace" if saved else "Upload" }}</h2>
+        <form action="/cookies" method="post" enctype="multipart/form-data" class="account-form">
+            <div class="field">
+                <label for="cookies-file">cookies.txt</label>
+                <input type="file" name="file" id="cookies-file" accept=".txt" required>
+            </div>
+            <button type="submit" class="btn-primary">Upload</button>
+        </form>
+    </section>
+</div>
 {% endblock %}

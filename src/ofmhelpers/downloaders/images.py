@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders import fake
-from ofmhelpers.downloaders.cookies import get_cookiefile
+from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import DownloadResult
 
 # gallery-dl errors that mean "this site wants a login", as the message the
@@ -17,7 +17,7 @@ from ofmhelpers.downloaders.models import DownloadResult
 # through OFM_IG_PROXIES). A new site = one entry.
 _LOGIN_WALLS = {
     "redirect to login page": (
-        "This post needs a login: upload a fresh cookies.txt at /cookies (admin)"
+        "This post needs a login: upload your fresh cookies.txt at /cookies"
     ),
 }
 
@@ -42,7 +42,7 @@ class ImageDownloadConfig(BaseModel):
     filename_template: str = "{category}_{post_shortcode}_{num}.{extension}"
     extra_args: list[str] = []
 
-    def gallery_dl_cmd(self, url: str) -> list[str]:
+    def gallery_dl_cmd(self, url: str, cookiefile: str | None = None) -> list[str]:
         cmd = [
             "gallery-dl",
             "-D",
@@ -53,7 +53,6 @@ class ImageDownloadConfig(BaseModel):
             "--no-skip",  # overwrite existing files instead of silently skipping them
         ]
 
-        cookiefile = get_cookiefile()
         if cookiefile:
             cmd += ["--cookies", cookiefile]
 
@@ -62,7 +61,10 @@ class ImageDownloadConfig(BaseModel):
         return cmd
 
 
-def download(url: str, config: ImageDownloadConfig | None = None) -> DownloadResult:
+def download(
+    url: str, config: ImageDownloadConfig | None = None, cookiefile: str | None = None
+) -> DownloadResult:
+    """`url`'s files, logged in as `cookiefile` (None: logged out)."""
     config = config or ImageDownloadConfig()
     if settings.infra.fake_externals:
         return fake.images(url, config.output_dir)
@@ -73,7 +75,7 @@ def download(url: str, config: ImageDownloadConfig | None = None) -> DownloadRes
     }
     start_time = time.time()
 
-    cmd = config.gallery_dl_cmd(url)
+    cmd = config.gallery_dl_cmd(url, cookiefile)
 
     try:
         result = subprocess.run(
@@ -112,7 +114,11 @@ def download(url: str, config: ImageDownloadConfig | None = None) -> DownloadRes
 
 
 def download_all(
-    urls: list[str], config: ImageDownloadConfig | None = None
+    urls: list[str],
+    config: ImageDownloadConfig | None = None,
+    cookies: str | None = None,
 ) -> list[DownloadResult]:
+    """Every URL, logged in with `cookies` (the user's cookies.txt text)."""
     config = config or ImageDownloadConfig()
-    return [download(url, config) for url in urls]
+    with cookie_file(cookies) as cookiefile:
+        return [download(url, config, cookiefile) for url in urls]

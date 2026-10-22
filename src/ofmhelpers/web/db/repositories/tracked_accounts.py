@@ -1,4 +1,6 @@
-"""Social accounts /accounts tracks, their scan history, and creators."""
+"""Social accounts /accounts tracks, their scan history, and creators.
+Each account and creator belongs to a user; `owner` limits a call to that
+user's rows (None: everyone's, for system work). Scans run per row."""
 
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ from ofmhelpers.web.db.repositories.cached_repository import (
     cached,
     invalidates_cache,
 )
+from ofmhelpers.web.db.repositories.owner_scope import mine
 from ofmhelpers.web.db.session import session_scope
 
 if TYPE_CHECKING:
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
 def _to_dict(row: TrackedAccountRow, creator: str | None) -> dict:
     return {
         "id": row.id,
+        "user_id": row.user_id,
         "platform": row.platform,
         "handle": row.handle,
         "creator": creator,
@@ -46,16 +50,21 @@ def _to_dict(row: TrackedAccountRow, creator: str | None) -> dict:
     }
 
 
-def _creator_id(s: Session, name: str | None) -> int | None:
-    """The creator called `name`, created on first use; None for none."""
+def _creator_id(s: Session, name: str | None, user_id: int) -> int | None:
+    """`user_id`'s creator called `name`, created on first use; None for
+    none."""
     if not name:
         return None
     s.execute(
         insert(CreatorRow)
-        .values(name=name, created_at=time.time())
-        .on_conflict_do_nothing(index_elements=["name"])
+        .values(name=name, user_id=user_id, created_at=time.time())
+        .on_conflict_do_nothing(constraint="uq_creators_owner_name")
     )
-    return s.execute(select(CreatorRow.id).where(CreatorRow.name == name)).scalar_one()
+    return s.execute(
+        select(CreatorRow.id).where(
+            CreatorRow.name == name, CreatorRow.user_id == user_id
+        )
+    ).scalar_one()
 
 
 def _baselines(
@@ -165,6 +174,7 @@ def _merge_rename(
     older = s.execute(
         select(acc)
         .where(
+            acc.user_id == row.user_id,
             acc.platform == row.platform,
             acc.platform_account_id == platform_account_id,
             acc.id != row.id,
@@ -252,19 +262,25 @@ class TrackedAccountRepository(CachedRepository):
 
     @invalidates_cache
     def add(
-        self, platform: str, handle: str, creator: str | None, revive: bool = True
+        self,
+        platform: str,
+        handle: str,
+        creator: str | None,
+        user_id: int,
+        revive: bool = True,
     ) -> bool:
-        """True when the account is new, or was untracked and is tracked
-        again -- the same row, its whole history kept, due for a scan now.
-        Adding one already tracked only assigns it to `creator`, when one
-        is given."""
+        """True when the account is new to `user_id`, or was untracked and is
+        tracked again -- the same row, its whole history kept, due for a
+        scan now. Adding one already tracked only assigns it to `creator`,
+        when one is given."""
         acc = TrackedAccountRow
-        same = (acc.platform == platform, acc.handle == handle)
+        same = (acc.user_id == user_id, acc.platform == platform, acc.handle == handle)
         with session_scope() as s:
-            creator_id = _creator_id(s, creator)
+            creator_id = _creator_id(s, creator, user_id)
             added = s.execute(
                 insert(TrackedAccountRow)
                 .values(
+                    user_id=user_id,
                     platform=platform,
                     handle=handle,
                     creator_id=creator_id,
@@ -293,12 +309,15 @@ class TrackedAccountRepository(CachedRepository):
             return restored is not None
 
     @cached
-    def list_all(self, periods_days: list[int]) -> list[dict]:
-        """Every tracked account, newest first, with its growth baselines
-        and its posts' views (see `_with_baselines`)."""
+    def list_all(self, periods_days: list[int], owner: int | None = None) -> list[dict]:
+        """`owner`'s tracked accounts, newest first, with their growth
+        baselines and their posts' views (see `_with_baselines`)."""
         with session_scope() as s:
             rows = s.execute(
-                _ACCOUNTS.where(TrackedAccountRow.untracked_at.is_(None)).order_by(
+                _ACCOUNTS.where(
+                    TrackedAccountRow.untracked_at.is_(None),
+                    *mine(TrackedAccountRow.user_id, owner),
+                ).order_by(
                     TrackedAccountRow.added_at.desc(), TrackedAccountRow.id.desc()
                 )
             ).all()
@@ -346,39 +365,53 @@ class TrackedAccountRepository(CachedRepository):
             return [{"taken_at": t, "followers": f, "metrics": m} for t, f, m in rows]
 
     @cached
-    def list_creators(self) -> list[str]:
+    def list_creators(self, owner: int | None = None) -> list[str]:
         with session_scope() as s:
-            return list(
-                s.execute(select(CreatorRow.name).order_by(CreatorRow.name)).scalars()
+            return sorted(
+                set(
+                    s.execute(
+                        select(CreatorRow.name).where(*mine(CreatorRow.user_id, owner))
+                    ).scalars()
+                )
             )
 
     @invalidates_cache
-    def set_creator(self, account_ids: list[int], creator: str | None) -> int:
-        """Assigns the accounts to `creator` (None: unassigned); how many
-        exist."""
+    def set_creator(
+        self, account_ids: list[int], creator: str | None, owner: int | None = None
+    ) -> int:
+        """Assigns the accounts (of `owner`) to `creator` (None: unassigned),
+        a creator of each account's own owner; how many exist."""
+        acc = TrackedAccountRow
         with session_scope() as s:
-            creator_id = _creator_id(s, creator)
-            moved = s.execute(
-                update(TrackedAccountRow)
-                .where(TrackedAccountRow.id.in_(account_ids))
-                .values(creator_id=creator_id)
-                .returning(TrackedAccountRow.id)
-            )
-            return len(moved.all())
+            rows = s.execute(
+                select(acc.id, acc.user_id).where(
+                    acc.id.in_(account_ids), *mine(acc.user_id, owner)
+                )
+            ).all()
+            for account_id, user_id in rows:
+                s.execute(
+                    update(acc)
+                    .where(acc.id == account_id)
+                    .values(creator_id=_creator_id(s, creator, user_id))
+                )
+            return len(rows)
 
     @invalidates_cache
-    def set_notes(self, account_id: int, notes: str) -> bool:
+    def set_notes(self, account_id: int, notes: str, owner: int | None = None) -> bool:
         with session_scope() as s:
             updated = s.execute(
                 update(TrackedAccountRow)
-                .where(TrackedAccountRow.id == account_id)
+                .where(
+                    TrackedAccountRow.id == account_id,
+                    *mine(TrackedAccountRow.user_id, owner),
+                )
                 .values(notes=notes)
                 .returning(TrackedAccountRow.id)
             )
             return updated.scalar_one_or_none() is not None
 
     @invalidates_cache
-    def untrack(self, account_ids: list[int]) -> int:
+    def untrack(self, account_ids: list[int], owner: int | None = None) -> int:
         """Stops scanning the accounts and hides them from the list; every
         record (profile, posts, snapshots, notes) stays, and adding the
         handle again resumes the same account. How many were tracked."""
@@ -386,7 +419,11 @@ class TrackedAccountRepository(CachedRepository):
         with session_scope() as s:
             untracked = s.execute(
                 update(acc)
-                .where(acc.id.in_(account_ids), acc.untracked_at.is_(None))
+                .where(
+                    acc.id.in_(account_ids),
+                    acc.untracked_at.is_(None),
+                    *mine(acc.user_id, owner),
+                )
                 .values(untracked_at=time.time(), claimed_at=None)
                 .returning(acc.id)
             )

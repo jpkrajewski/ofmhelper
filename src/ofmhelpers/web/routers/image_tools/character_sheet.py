@@ -97,7 +97,7 @@ def run(
         saved.append(dest.name)
 
     job_id = create_job(
-        TASK, {"dir": str(job_dir), "files": saved}, actor=request.session.get("role")
+        TASK, {"dir": str(job_dir), "files": saved}, actor=AuthMiddleware.actor(request)
     )
     enqueue(run_job, job_id, _run_combine, {"job_dir": str(job_dir), "files": saved})
     return JobQueued(job_id=job_id)

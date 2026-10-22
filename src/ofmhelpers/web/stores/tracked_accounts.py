@@ -3,7 +3,9 @@ ofmhelpers/web/stores/tracked_accounts.py
 
 The social accounts /accounts tracks (routers/tracking/accounts.py adds,
 assigns and removes them; web/account_tracker.py rescans them), each with
-its latest numbers, growth and history.
+its latest numbers, growth and history. Each belongs to a user: `owner`
+limits a call to theirs (None: everyone's, for the sweeper; a session
+always passes its own id, admins included).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.socials import platforms
 from ofmhelpers.web.db.repositories import TrackedAccountRepository
 from ofmhelpers.web.schemas import AccountHistory, TrackedAccount
+from ofmhelpers.web.stores.users import agency_id
 
 if TYPE_CHECKING:
     from ofmhelpers.socials import AccountStats
@@ -28,9 +31,9 @@ def _repository() -> TrackedAccountRepository:
     return TrackedAccountRepository()
 
 
-def list_accounts() -> list[TrackedAccount]:
-    """Every tracked account of a registered platform, newest first."""
-    rows = _repository().list_all(settings.accounts.periods_days)
+def list_accounts(owner: int | None = None) -> list[TrackedAccount]:
+    """`owner`'s tracked accounts of a registered platform, newest first."""
+    rows = _repository().list_all(settings.accounts.periods_days, owner)
     return [
         TrackedAccount.model_validate(row)
         for row in rows
@@ -38,9 +41,11 @@ def list_accounts() -> list[TrackedAccount]:
     ]
 
 
-def get_account(account_id: int) -> TrackedAccount | None:
+def get_account(account_id: int, owner: int | None = None) -> TrackedAccount | None:
     row = _repository().get(account_id, settings.accounts.periods_days)
     if row is None or row["platform"] not in platforms():
+        return None
+    if owner is not None and row["user_id"] != owner:
         return None
     return TrackedAccount.model_validate(row)
 
@@ -53,30 +58,39 @@ def get_history(account_id: int) -> AccountHistory:
     return AccountHistory.model_validate({"snapshots": rows})
 
 
-def list_creators() -> list[str]:
-    return _repository().list_creators()
+def list_creators(owner: int | None = None) -> list[str]:
+    return _repository().list_creators(owner)
 
 
 def track(
-    platform: str, handle: str, creator: str | None = None, *, revive: bool = True
+    platform: str,
+    handle: str,
+    creator: str | None = None,
+    *,
+    user_id: int | None = None,
+    revive: bool = True,
 ) -> bool:
-    """True when the account is new or tracked again (an untracked one comes
-    back with its history -- unless `revive` is False); one already tracked
-    is only assigned to `creator` (when given)."""
-    return _repository().add(platform, handle, creator, revive)
+    """True when the account is new to `user_id` (None: the agency's,
+    `users.agency_id`) or tracked again (an untracked one comes back with
+    its history -- unless `revive` is False); one already tracked is only
+    assigned to `creator` (when given)."""
+    owner = agency_id() if user_id is None else user_id
+    return _repository().add(platform, handle, creator, owner, revive)
 
 
-def assign_creator(account_ids: list[int], creator: str | None) -> int:
-    return _repository().set_creator(account_ids, creator)
+def assign_creator(
+    account_ids: list[int], creator: str | None, owner: int | None = None
+) -> int:
+    return _repository().set_creator(account_ids, creator, owner)
 
 
-def set_notes(account_id: int, notes: str) -> bool:
-    return _repository().set_notes(account_id, notes)
+def set_notes(account_id: int, notes: str, owner: int | None = None) -> bool:
+    return _repository().set_notes(account_id, notes, owner)
 
 
-def untrack(account_ids: list[int]) -> int:
+def untrack(account_ids: list[int], owner: int | None = None) -> int:
     """Stops tracking the accounts; nothing of theirs is deleted."""
-    return _repository().untrack(account_ids)
+    return _repository().untrack(account_ids, owner)
 
 
 def mark_due(account_ids: list[int]) -> None:

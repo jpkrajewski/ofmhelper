@@ -162,6 +162,10 @@ services:
     environment: *app-environment
     env_file:
       - .env
+    # Read-only: alembic b1c2d3e4f5a7 moves the old shared cookies.txt into
+    # the password admin's own cookies (user_cookies) and leaves the file.
+    volumes:
+      - cookies_data:/app/cookies:ro
     depends_on:
       postgres:
         condition: service_healthy

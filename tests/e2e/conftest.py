@@ -42,7 +42,7 @@ from alembic import command
 from ofmhelpers.gdrive.fake import FakeDrive
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 # Who each role signs in as, through the real login form: the admin
@@ -91,6 +91,8 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "APP_PASSWORD_ADMIN": ACCOUNTS["ADMIN"][1],
         "SESSION_SECRET": "e2e-session-secret",
         "OFM_GDRIVE_SERVICE_ACCOUNT": "{}",
+        # The developer's .env holds the Logfire write token: never send.
+        "LOGFIRE_TOKEN": "",
         # Sweeps only when a test asks (the Sync button), never between.
         "OFM_GDRIVE_CHECK_INTERVAL_S": "86400",
         "OFM_LOG_ACCESS": "true",
@@ -261,6 +263,29 @@ def _seed_users(database_url: str) -> None:
             {"va": va_email, "hash": _va_password_hash()},
         )
         conn.execute(text("SELECT setval('users_id_seq', (SELECT max(id) FROM users))"))
+
+
+@pytest.fixture
+def jobs_idle(e2e_backend: E2EBackend) -> Callable[[], None]:
+    """Waits until the app's RQ worker has nothing queued or running: work
+    the app starts by itself (e.g. the Drive sync on connecting Google)
+    must be over before a test changes what it would see."""
+    from redis import Redis
+    from rq import Queue
+    from rq.registry import StartedJobRegistry
+
+    from ofmhelpers.cache import QUEUE_NAME
+
+    def wait(timeout_s: float = 30) -> None:
+        redis = Redis.from_url(e2e_backend.redis_url)
+        queue = Queue(QUEUE_NAME, connection=redis)
+        started = StartedJobRegistry(QUEUE_NAME, connection=redis)
+        deadline = time.monotonic() + timeout_s
+        while queue.count or started.count:
+            assert time.monotonic() < deadline, "the app's jobs never finished"
+            time.sleep(0.1)
+
+    return wait
 
 
 @pytest.fixture

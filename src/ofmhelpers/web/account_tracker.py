@@ -13,6 +13,11 @@ through the platform's proxies from its own starting point, so parallel
 jobs spread over the IPs. A claim that never completes (worker killed by a
 deploy, batch stopped by a rate limit) expires after `claim_ttl_s` and the
 account is picked up again.
+
+Each account is scanned with its owner's own cookies.txt
+(`stores.cookies.for_user`), never another user's; an owner without one gets
+the logged-out view, marked `limited` (the /accounts banner asks them for
+their login).
 """
 
 import asyncio
@@ -32,6 +37,7 @@ from ofmhelpers.socials import (
 )
 from ofmhelpers.utils.proxy_pool import ProxyPool
 from ofmhelpers.web.schemas import TrackedAccount
+from ofmhelpers.web.stores import cookies as login_cookies
 from ofmhelpers.web.stores.tracked_accounts import (
     claim_due,
     get_account,
@@ -72,15 +78,16 @@ def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
         return None
 
 
-def track_login(service: str, username: str, *, revive: bool) -> bool:
+def track_login(service: str, username: str, *, user_id: int, revive: bool) -> bool:
     """A login added to a phone shows on /accounts (with that phone): its
-    account is tracked and its first scan queued. `revive`: also bring back
+    account is tracked for the phone's owner (`user_id`) and its first scan
+    queued. `revive`: also bring back
     one removed by hand (an add does; an edit does not). True when newly
     tracked. Never raises: the login is saved already, and tracking it is a
     side effect that must not fail that save -- a failure is logged."""
     try:
         key = tracked_handle(service, username)
-        if key is None or not track(*key, revive=revive):
+        if key is None or not track(*key, user_id=user_id, revive=revive):
             return False
         queue_due_scans()
     except Exception:
@@ -90,10 +97,15 @@ def track_login(service: str, username: str, *, revive: bool) -> bool:
 
 
 def scan_account(
-    account: TrackedAccount, platform: Platform, pool: ProxyPool, tries: int
+    account: TrackedAccount,
+    platform: Platform,
+    pool: ProxyPool,
+    tries: int,
+    cookies: str | None = None,
 ) -> None:
     """One account, up to `tries` times, each through the pool's next proxy
-    after a jittered pause; a dead proxy leaves the pool. Raises
+    after a jittered pause, logged in with `cookies` (its owner's); a dead
+    proxy leaves the pool. Raises
     RateLimitedError when every try was rate-limited and _OfflineError when
     a direct connection fails -- the batch stops on both. Tries that never
     reached the platform record nothing (not the account's fault): it stays
@@ -104,7 +116,7 @@ def scan_account(
             time.sleep(random.uniform(0, settings.accounts.retry_jitter_s))  # noqa: S311 -- jitter, not crypto
         proxy = pool.next()
         try:
-            stats = platform.fetch(account.handle, proxy)
+            stats = platform.fetch(account.handle, proxy, cookies)
         except RetryableError as exc:
             failures.append(exc)
             if not exc.reached and proxy is None:
@@ -137,17 +149,21 @@ def scan_accounts(platform_key: str, account_ids: list[int], start: int = 0) -> 
     """The worker job: one platform's claimed accounts, one at a time, each
     tried on up to 1 + `proxy_retries` of the platform's proxies (direct
     without any), starting at proxy `start`. An account removed since it
-    was claimed (or untracked) is skipped."""
+    was claimed (or untracked) is skipped. Each is scanned with its own
+    owner's cookies, read once per owner per job."""
     platform = get_platform(platform_key)
     pool = ProxyPool(platform.proxies(), start)
     retries = settings.accounts.proxy_retries
+    owners: dict[int, str | None] = {}
     for done, account_id in enumerate(account_ids):
         account = get_account(account_id)
         if account is None or account.untracked_at is not None:
             continue
+        if account.user_id not in owners:
+            owners[account.user_id] = login_cookies.for_user(account.user_id)
         tries = 1 + min(retries, max(len(pool) - 1, 0))
         try:
-            scan_account(account, platform, pool, tries)
+            scan_account(account, platform, pool, tries, owners[account.user_id])
         except RateLimitedError:
             logger.warning(
                 "%s rate-limited after %d of %d accounts; the rest retry later",
@@ -191,11 +207,12 @@ def queue_due_scans() -> list[int]:
     return due
 
 
-def rescan_limited() -> list[int]:
-    """Queues every account last synced from a restricted (logged-out) view
-    -- what a fresh login upload is for: their numbers now, not at the next
-    rescan."""
-    limited = [a.id for a in list_accounts() if a.metrics and a.metrics.limited]
+def rescan_limited(user_id: int) -> list[int]:
+    """Queues every account of `user_id`'s last synced from a restricted
+    (logged-out) view -- what their fresh login upload is for: their
+    numbers now, not at the next rescan. Nobody else's: those scans would
+    not use this login."""
+    limited = [a.id for a in list_accounts(user_id) if a.metrics and a.metrics.limited]
     mark_due(limited)
     queue_due_scans()
     return limited
