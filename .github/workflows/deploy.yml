@@ -133,7 +133,7 @@ jobs:
             git reset --hard "$target"
 
             echo "== building =="
-            $compose build ofmhelpers worker migrate
+            $compose build ofmhelpers worker preview-worker migrate
 
             echo "== swapping in the new containers =="
             $compose up -d postgres redis pot-provider
@@ -147,9 +147,9 @@ jobs:
             # while reporting success is the worst possible outcome. --no-deps
             # so this does not bounce the database underneath them.
             echo "== stopping the app =="
-            $compose stop ofmhelpers worker
+            $compose stop ofmhelpers worker preview-worker
             echo "== migrating, then starting the app =="
-            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker
+            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker preview-worker
             $compose logs migrate
 
             # Every deploy leaves the previous image dangling; unreaped they
@@ -207,7 +207,7 @@ jobs:
             echo "== docker compose ps =="
             $compose ps -a
             echo "== last 100 log lines =="
-            $compose logs --tail=100 migrate ofmhelpers worker
+            $compose logs --tail=100 migrate ofmhelpers worker preview-worker
           '
           # Delivered as a file for the same reason as the deploy step: piping
           # into `bash -s` lets the first stdin-reading command swallow the

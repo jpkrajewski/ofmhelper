@@ -35,10 +35,15 @@ def client():
     return c
 
 
-def test_download_assets_page_renders_all_three_tools(client):
+def test_download_assets_page_offers_one_download_tool_and_clean(client):
+    """Nobody picks between videos and images: one Download tool takes any
+    link (see test_download_media.py)."""
     html = client.get("/download-assets").text
-    for tool in ("download_videos", "download_images", "clean_images"):
+    for tool in ("download_media", "clean_images"):
         assert f'data-tool="{tool}"' in html
+    for gone in ("download_videos", "download_images"):
+        assert f'data-tool="{gone}"' not in html
+    assert 'action="/download-media/run"' in html
     assert 'id="tool-select"' in html
     # old standalone form pages are gone
     assert client.get("/download-videos").status_code in (404, 405)
@@ -51,7 +56,7 @@ def test_both_url_tools_offer_the_manual_download_fallback(client):
     retry, so the way out is stated on the form rather than buried in a
     truncated per-URL error tooltip."""
     html = client.get("/download-assets").text
-    assert html.count("https://snapreels.net/en") == 2  # videos + images
+    assert html.count("https://snapreels.net/en") == 1
     assert 'rel="noopener"' in html
 
 

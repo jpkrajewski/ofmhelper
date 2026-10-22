@@ -40,9 +40,12 @@
             {% elif card.status == "done" %}
                 <div class="result-file">no output</div>
             {% else %}
-                <div class="result-file"><span class="spinner"></span> generating…</div>
+                <div class="result-file"><span class="spinner"></span> generating…
+                    <span class="clone-timer" data-started-at="{{ card.created_at }}"
+                          {% if card.eta %}data-eta-s="{{ card.eta.eta_s }}" data-slow-s="{{ card.eta.slow_s }}"{% endif %}></span></div>
             {% endif %}
-            <p class="source">from {{ card.video_name }} · {{ card.params.duration }}s</p>
+            <p class="source">from {{ card.video_name }} · {{ card.params.duration }}s
+                {%- if card.took_s %} · took <span data-took-s="{{ card.took_s|round|int }}"></span>{% endif %}</p>
         </div>
         {% endfor %}
     </div>

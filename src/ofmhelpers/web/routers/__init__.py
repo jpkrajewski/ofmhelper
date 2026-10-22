@@ -34,6 +34,7 @@ from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.downloads import clean_image, reels
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
+from ofmhelpers.web.routers.downloads import media as download_media
 from ofmhelpers.web.routers.downloads import videos as download_videos
 from ofmhelpers.web.routers.generation import ai, clone
 from ofmhelpers.web.routers.generation import index as generation_index
@@ -57,6 +58,7 @@ ROUTERS = [
     *(router for _label, router in LEGACY_TOOLS.values()),
     # downloads/
     downloads_index.router,
+    download_media.router,
     download_videos.router,
     download_images.router,
     clean_image.router,

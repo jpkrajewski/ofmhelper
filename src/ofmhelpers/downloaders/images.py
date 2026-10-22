@@ -11,6 +11,25 @@ from ofmhelpers.downloaders import fake
 from ofmhelpers.downloaders.cookies import get_cookiefile
 from ofmhelpers.downloaders.models import DownloadResult
 
+# gallery-dl errors that mean "this site wants a login", as the message the
+# person downloading can act on. Instagram shows a logged-out visitor only a
+# post's cover image, so gallery-dl gets nothing (verified 2026-10-22, also
+# through OFM_IG_PROXIES). A new site = one entry.
+_LOGIN_WALLS = {
+    "redirect to login page": (
+        "This post needs a login: upload a fresh cookies.txt at /cookies (admin)"
+    ),
+}
+
+
+def _error(stderr: str) -> str:
+    """gallery-dl's stderr as the job's error: a known login wall in plain
+    words, anything else as gallery-dl said it."""
+    for marker, message in _LOGIN_WALLS.items():
+        if marker in stderr:
+            return message
+    return stderr.strip() or "gallery-dl finished but no files were written"
+
 
 class ImageDownloadConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -87,12 +106,7 @@ def download(url: str, config: ImageDownloadConfig | None = None) -> DownloadRes
     changed_files.sort(key=lambda p: p.stat().st_mtime)
 
     if not changed_files:
-        return DownloadResult(
-            url=url,
-            success=False,
-            error=result.stderr.strip()
-            or "gallery-dl finished but no files were written",
-        )
+        return DownloadResult(url=url, success=False, error=_error(result.stderr))
 
     return DownloadResult(url=url, success=True, output_paths=changed_files)
 

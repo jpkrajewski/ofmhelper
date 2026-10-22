@@ -93,10 +93,22 @@
 
         const tag = kind === "video" ? "video" : kind === "audio" ? "audio" : "img";
         const media = document.createElement(tag);
-        media.src = item.view_url;
+        // Images and videos show their small preview, a video behind a
+        // poster frame (same as _asset_media.html): a grid of 4K results must
+        // not load every original.
+        media.src = item.preview_url || item.view_url;
         media.className = `result-${tag === "img" ? "image" : tag}`;
         if (tag === "video" || tag === "audio") media.controls = true;
-        else media.alt = item.name;
+        else {
+            media.alt = item.name;
+            media.loading = "lazy";
+            media.decoding = "async";
+        }
+        if (tag === "video") {
+            media.playsInline = true;
+            media.preload = item.poster_url ? "none" : "metadata";
+            if (item.poster_url) media.poster = item.poster_url;
+        }
         // item.local_fallback_url is only set when view_url points at kie.ai
         // and a local copy also exists -- swap to it once the hosted URL
         // goes stale (kie.ai's result URLs are only reliably valid ~24h)

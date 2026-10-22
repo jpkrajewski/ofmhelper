@@ -73,7 +73,16 @@ class Job(BaseModel):
     result: list[Any] | dict[str, Any] | str | None = None
     error: str | None = None
     created_at: float
+    finished_at: float | None = None
     preview: JobPreview | None = None
+
+    @property
+    def took_s(self) -> float | None:
+        """Submit to done/failed; None while running or for a job from
+        before finish times were recorded."""
+        if self.finished_at is None:
+            return None
+        return self.finished_at - self.created_at
 
     @property
     def _entries(self) -> list[dict[str, Any]]:
@@ -97,6 +106,14 @@ class Job(BaseModel):
         if self.is_grouped:
             return []
         return [ResultFile.model_validate(f) for f in self._entries]
+
+    def local_paths(self) -> list[str | None]:
+        """Every result file's local path, in the order `/files/{job}/{i}`
+        numbers them: across every group for a grouped download job, one
+        entry per file otherwise. None for a file only kie.ai hosts."""
+        if self.is_grouped:
+            return [str(p) for r in self.download_results() for p in r.output_paths]
+        return [f.path for f in self.result_files()]
 
     def download_results(self) -> list[DownloadResult]:
         """A grouped download job's per-URL results; [] for anything else."""

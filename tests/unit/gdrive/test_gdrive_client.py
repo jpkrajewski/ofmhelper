@@ -84,6 +84,14 @@ def test_folder_missing_or_not_shared_is_gone():
         drive.folder("root")
 
 
+def test_folder_reports_its_parents():
+    drive, http = _drive(
+        (_OK, {"id": "f", "name": "POSTED", "mimeType": FOLDER_MIME, "parents": ["a"]})
+    )
+    assert drive.folder("f").parents == ["a"]
+    assert "parents" in _query(http)["fields"][0]
+
+
 def test_trashed_folder_is_gone():
     drive, _ = _drive(
         (_OK, {"id": "f", "name": "x", "mimeType": FOLDER_MIME, "trashed": True})

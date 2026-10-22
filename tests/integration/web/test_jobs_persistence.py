@@ -19,6 +19,7 @@ from ofmhelpers.web.stores.jobs import (
     list_jobs,
     list_jobs_page,
     log_event,
+    reopen_job,
     run_job,
 )
 
@@ -54,6 +55,23 @@ def test_run_job_failure_persists_error():
     job = get_job(job_id)
     assert job.status == "failed"
     assert job.error == "Wrong API Key"
+
+
+def test_finish_time_is_stamped_on_done_and_failed_and_cleared_on_rerun():
+    done = create_job("clone", {})
+    assert get_job(done).took_s is None
+    run_job(done, list, {})
+    job = get_job(done)
+    assert job.finished_at is not None
+    assert job.took_s is not None
+    assert job.took_s >= 0
+
+    failed = create_job("clone", {})
+    run_job(failed, lambda: 1 / 0, {})
+    assert get_job(failed).finished_at is not None
+
+    reopen_job(failed)
+    assert get_job(failed).finished_at is None
 
 
 def test_jobs_survive_a_simulated_restart():

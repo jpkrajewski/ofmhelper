@@ -15,7 +15,6 @@ from e2e_session import FAKE_DRIVE_ROOT, Session
 from playwright.sync_api import expect
 
 from ofmhelpers.gdrive.fake import FakeDrive
-from ofmhelpers.web import drive_folders
 from ofmhelpers.web.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.stores import devices, watched_profiles
 
@@ -587,14 +586,13 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     _seed_phone("Phone 02", "Bob", ("instagram", "bob.ig"))
     retired = _seed_phone("Phone 03", "Old", ("instagram", "old.ig"))
     devices.retire_device(retired)
-    day = drive_folders.today().isoformat()
 
     va.goto("/drive")
-    expect(va.page.locator("h1")).to_have_text(f"Drive · {day}")
+    expect(va.page.locator("h1")).to_have_text("Drive")
     cards = va.page.locator("#dr-grid .dr-card")
     visible = va.page.locator("#dr-grid .dr-card:visible")
     expect(cards).to_have_count(2)  # Instagram logins on active phones only
-    expect(cards.filter(has_text="No folder for today yet")).to_have_count(2)
+    expect(cards.filter(has_text="No folder yet")).to_have_count(2)
 
     # Search: handle, owner, phone label; instantly, no reload.
     for query, shown in (("bob", ["bob.ig"]), ("phone 01", ["ann.ig"]), ("zzz", [])):
@@ -612,36 +610,45 @@ def test_drive_page_lists_accounts_searches_and_syncs(
         "created": ["ann.ig - Anna", "bob.ig - Bob"],
         "adopted": [],
         "renamed": [],
-        "days": 2,
+        "posted_folders": ["ann.ig - Anna/POSTED", "bob.ig - Bob/POSTED"],
+        "newly_posted": 0,
         "failed": [],
         "busy": False,
     }
-    expect(cards.filter(has_text="Nothing uploaded today")).to_have_count(2)
+    expect(cards.filter(has_text="Nothing waiting to post")).to_have_count(2)
 
-    # Exactly one folder per account and one day folder in each, nothing else.
+    # Exactly one folder per account and one POSTED in each, nothing else.
     root = fake_drive.children(FAKE_DRIVE_ROOT)
     assert sorted(f.name for f in root) == ["ann.ig - Anna", "bob.ig - Bob"]
     for folder in root:
-        assert [f.name for f in fake_drive.children(folder.id)] == [day]
+        assert [f.name for f in fake_drive.children(folder.id)] == ["POSTED"]
     assert fake_drive.writes == ["create"] * 4
 
-    # What the VA uploads shows up, with its preview through the app.
+    # What the VA uploads waits, with its preview through the app.
     (ann,) = fake_drive.named("ann.ig - Anna", FAKE_DRIVE_ROOT)
-    (ann_day,) = fake_drive.named(day, ann)
-    fake_drive.add_file(ann_day, "reel1.mp4", "video/mp4", thumbnail=True)
+    (ann_posted,) = fake_drive.named("POSTED", ann)
+    reel = fake_drive.add_file(ann, "reel1.mp4", "video/mp4", thumbnail=True)
     with va.page.expect_response(re.compile(r"/drive/thumb/")) as preview:
         va.page.reload()
     assert preview.value.ok
     ann_card = cards.filter(has_text="ann.ig")
-    expect(ann_card.locator(".dr-count")).to_have_text("1 video")
+    expect(ann_card.locator(".dr-count")).to_have_text("Waiting:1 video")
     expect(ann_card.locator(".dr-file img")).to_be_visible()
     expect(va.page.locator(".lead")).to_have_text(
-        "1 of 2 accounts uploaded today · 1 file"
+        "1 file waiting to post in 1 of 2 accounts · Posted today: 0 · Last 7 days: 0"
     )
 
-    # A second Sync finds everything there and writes nothing.
+    # Posted: a person moves it into POSTED; the next Sync counts it.
+    fake_drive.move(reel, ann_posted)
     with va.page.expect_navigation():
         va.page.click("#dr-sync")
-    assert reports.pop()["created"] == []
+    assert reports.pop()["newly_posted"] == 1
+    expect(ann_card.locator(".dr-posted")).to_contain_text("Posted today: 1")
+    expect(ann_card.locator(".dr-posted")).to_contain_text("Last 7 days: 1")
+    expect(va.page.locator(".lead")).to_have_text(
+        "0 files waiting to post in 0 of 2 accounts · Posted today: 1 · Last 7 days: 1"
+    )
+
+    # Nothing more was written: the move was the person's, the app only read.
     assert fake_drive.writes == ["create"] * 4
     assert va.js_errors == []

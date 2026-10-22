@@ -145,6 +145,27 @@ class WebSettings(BaseSettings):
     )
     # Bounds the ffprobe/ffmpeg call behind a video reference thumbnail.
     ffmpeg_timeout_s: int = Field(default=20, validation_alias="OFM_FFMPEG_TIMEOUT_S")
+    # What galleries show instead of a result (web/previews.py): a video's
+    # height cap, bitrate cap and encode bound, its poster frame's box, and
+    # an image's box (2x a card, so the hover zoom stays sharp).
+    preview_height: int = Field(
+        default=720, ge=144, validation_alias="OFM_PREVIEW_HEIGHT"
+    )
+    preview_maxrate: str = Field(
+        default="1500k", validation_alias="OFM_PREVIEW_MAXRATE"
+    )
+    preview_timeout_s: int = Field(
+        default=180, validation_alias="OFM_PREVIEW_TIMEOUT_S"
+    )
+    poster_size: int = Field(default=480, ge=16, validation_alias="OFM_POSTER_SIZE")
+    image_preview_px: int = Field(
+        default=1024, ge=64, validation_alias="OFM_IMAGE_PREVIEW_PX"
+    )
+    # How long one startup's preview backfill (web/preview_backfill.py) keeps
+    # other processes starting at the same time from running it too.
+    preview_backfill_guard_s: int = Field(
+        default=3600, ge=1, validation_alias="OFM_PREVIEW_BACKFILL_GUARD_S"
+    )
     # /uniqify (routers/video_tools/uniqify.py): copies per run, encoded one
     # after another on one worker, and the bound on each copy's ffmpeg encode.
     uniqify_max_copies: int = Field(
@@ -178,6 +199,9 @@ class WebSettings(BaseSettings):
     clone_gallery_limit: int = Field(
         default=60, validation_alias="OFM_CLONE_GALLERY_LIMIT"
     )
+    # Recent finished runs per provider+resolution the /clone time estimate
+    # takes its median from (web/clone_eta.py).
+    clone_eta_runs: int = Field(default=30, ge=1, validation_alias="OFM_CLONE_ETA_RUNS")
     # The /clone form's live cost estimate: credits one clone run costs per
     # second of its source video, by resolution. Measured from this
     # account's Wan 3.0 history (2026-10-17: 81 runs at 720P, 14 at 1080P;
@@ -237,6 +261,11 @@ class InfraSettings(BaseSettings):
     # Worker-pool size. >=10 so at least 10 upload/poll/download jobs run
     # concurrently; read by ofmhelpers/worker.py, the worker entrypoint.
     rq_workers: int = Field(default=10, validation_alias="OFM_RQ_WORKERS")
+    # The preview worker's pool (`python -m ofmhelpers.worker previews`): each
+    # one is an ffmpeg encode, kept off the generation workers' CPUs.
+    preview_workers: int = Field(
+        default=1, ge=1, validation_alias="OFM_PREVIEW_WORKERS"
+    )
 
     # Everything the app writes on behalf of a user lives under one root:
     # uploads/assets (the shared reference store), plus a subdir per tool.
@@ -709,8 +738,9 @@ class GDriveSettings(BaseSettings):
     Drive folder the VA uploads into. A service account (its key JSON, one
     line) works in `root_folder_id`, which its owner shares with the
     account's `client_email` as Editor. Each Instagram login on an active
-    phone gets a "<handle> - <owner>" folder there and, every day in
-    `timezone`, a day folder ("2026-10-21") inside it."""
+    phone gets a "<handle> - <owner>" folder there, which the VA uploads
+    into, and a `posted_folder_name` folder inside it, which people move a
+    video into once it is posted."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -724,12 +754,17 @@ class GDriveSettings(BaseSettings):
     production_root_folder_id: str = Field(
         default="", validation_alias="OFM_GDRIVE_PRODUCTION_ROOT_FOLDER"
     )
-    # IANA: the day starts at midnight here, DST included.
+    # The folder inside each account folder for posted videos. Matched
+    # case-insensitively, so one made by hand ("Posted") is adopted.
+    posted_folder_name: str = Field(
+        default="POSTED", min_length=1, validation_alias="OFM_GDRIVE_POSTED_FOLDER"
+    )
+    # IANA: "posted today" starts at midnight here, DST included.
     timezone: str = Field(
         default="Europe/Warsaw", validation_alias="OFM_GDRIVE_TIMEZONE"
     )
-    # How often the sweeper checks for missing folders (a DB query; Drive
-    # is called only for what is missing).
+    # How often the sweeper runs: makes missing folders, and lists every
+    # POSTED folder to record what was posted (a few list calls per account).
     check_interval_s: int = Field(
         default=300, ge=30, validation_alias="OFM_GDRIVE_CHECK_INTERVAL_S"
     )

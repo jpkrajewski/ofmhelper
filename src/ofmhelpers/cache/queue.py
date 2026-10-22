@@ -21,9 +21,12 @@ from ofmhelpers.config import settings
 # The queue name both the API (enqueue) and the worker (rq worker-pool, which
 # defaults to this queue) agree on.
 QUEUE_NAME = "default"
+# Gallery previews (web/previews.py): ffmpeg encodes, consumed by their own
+# low-priority worker so they never hold a generation worker.
+PREVIEWS_QUEUE = "previews"
 
 
-def get_queue() -> Queue:
+def get_queue(name: str = QUEUE_NAME) -> Queue:
     """A Queue bound to the shared Redis connection, with the generous default
     job timeout our long-polling generation jobs need (see settings).
 
@@ -31,7 +34,7 @@ def get_queue() -> Queue:
     forces synchronous execution so enqueue() runs the job inline, matching the
     old BackgroundTasks behavior TestClient relied on."""
     return Queue(
-        QUEUE_NAME,
+        name,
         connection=get_redis(),
         default_timeout=settings.infra.rq_job_timeout_s,
         is_async=settings.infra.rq_async,
@@ -39,6 +42,11 @@ def get_queue() -> Queue:
 
 
 def enqueue(fn, *args, **kwargs):
+    """`enqueue_to` the default queue (see below)."""
+    return enqueue_to(QUEUE_NAME, fn, *args, **kwargs)
+
+
+def enqueue_to(queue: str, fn, *args, **kwargs):
     """Swap `background_tasks.add_task(fn, ...)` for `enqueue(fn, ...)` with the
     least possible delta.
 
@@ -52,6 +60,6 @@ def enqueue(fn, *args, **kwargs):
     # RQ's default description -- what the worker logs for every job it
     # starts -- is the call with its arguments, and those carry the kie.ai
     # API key a job runs with. The function name is all the log needs.
-    return get_queue().enqueue(
+    return get_queue(queue).enqueue(
         fn, *args, description=f"{fn.__module__}.{fn.__qualname__}", **kwargs
     )

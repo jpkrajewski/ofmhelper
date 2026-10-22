@@ -117,6 +117,37 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
+  # Gallery previews (src/ofmhelpers/web/previews.py): one ffmpeg encode at a
+  # time, at low CPU priority and capped at two cores, so a backlog (every old
+  # result after a deploy) never slows the app or the generation workers.
+  preview-worker:
+    build: .
+    container_name: ofmhelpers-preview-worker
+    restart: unless-stopped
+    command: ["nice", "-n", "15", "python", "-m", "ofmhelpers.worker", "previews"]
+    cpus: 2.0
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    volumes: *app-volumes
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
   # Brings the database to the newest Alembic revision, then exits. The app
   # and the worker depend on it completing successfully, so every `up` --
   # dev, a deploy, a fresh server -- migrates first and never starts new

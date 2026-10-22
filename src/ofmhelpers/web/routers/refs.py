@@ -1,8 +1,6 @@
 import heapq
 import os
-import shutil
 import subprocess
-import tempfile
 from operator import itemgetter
 from pathlib import Path
 from typing import Annotated
@@ -14,6 +12,10 @@ from PIL import Image
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.web import ref_usage
+from ofmhelpers.web.previews import (
+    write_image_thumb,
+    write_video_thumb,
+)
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     assets_root_for,
@@ -26,10 +28,6 @@ from ofmhelpers.web.schemas import RefEntry
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/refs", tags=["refs"])
-
-# A first frame is enough to recognise a clip in a ~100-200px tile, and
-# seeking costs nothing at position 0.
-_FFMPEG_TIMEOUT_S = settings.web.ffmpeg_timeout_s
 
 # Reuse-picker/inputs previews only ever need a small box (see .ref-tile /
 # .thumb-small CSS) -- serving the full original (multi-MB) just to paint
@@ -135,62 +133,6 @@ def get_ref_file(request: Request, path: Annotated[str, Query()]):
     return media_response(file_path, strip_asset_hash_prefix(file_path.name))
 
 
-def write_image_thumb(source: Path, dest: Path, size: int) -> None:
-    with Image.open(source) as img:
-        img.thumbnail((size, size))
-        img.convert("RGB").save(dest, "WEBP")
-
-
-def _write_video_thumb(source: Path, dest: Path, size: int) -> None:
-    """First frame, scaled to fit a `size` box, as webp.
-
-    Extracted with ffmpeg rather than served as a <video preload="metadata">
-    tile: the old client-side approach made the browser range-request every
-    clip in the grid just to paint a poster frame, which only got worse as
-    downloaded reels started landing in the asset store. A cached frame is a
-    few KB instead.
-
-    `scale` keeps the aspect ratio (-1) and `force_original_aspect_ratio`
-    guards the portrait case, so a 9:16 reel isn't stretched.
-    """
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        msg = "ffmpeg not available"
-        raise FileNotFoundError(msg)
-
-    # Write via a temp file in the same dir: a killed/timed-out ffmpeg must
-    # not leave a truncated .webp behind that every later request then treats
-    # as a valid cache hit.
-    with tempfile.NamedTemporaryFile(
-        dir=dest.parent, suffix=".webp", delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        subprocess.run(
-            [
-                ffmpeg,
-                "-y",
-                "-loglevel",
-                "error",
-                "-i",
-                str(source),
-                "-frames:v",
-                "1",
-                "-vf",
-                f"scale={size}:{size}:force_original_aspect_ratio=decrease",
-                "-f",
-                "webp",
-                str(tmp_path),
-            ],
-            check=True,
-            capture_output=True,
-            timeout=_FFMPEG_TIMEOUT_S,
-        )
-        tmp_path.replace(dest)
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-
 @router.get("/thumb")
 def get_ref_thumb(
     request: Request,
@@ -217,7 +159,7 @@ def get_ref_thumb(
             if kind == "image":
                 write_image_thumb(file_path, thumb_path, size)
             else:
-                _write_video_thumb(file_path, thumb_path, size)
+                write_video_thumb(file_path, thumb_path, size)
         except (
             OSError,
             ValueError,

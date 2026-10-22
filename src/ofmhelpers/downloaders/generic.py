@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import random
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +17,45 @@ from ofmhelpers.downloaders.models import (
     YtDlpInfo,
     YtDlpOptions,
 )
+from ofmhelpers.log import get_logger
+from ofmhelpers.utils.proxy_pool import ProxyPool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+logger = get_logger(__name__)
+
+
+class _ProxySettings(Protocol):
+    @property
+    def proxy_urls(self) -> list[str]: ...
+
+    proxy_retries: int
+
+
+# Sites that refuse a datacenter IP's logged-out requests (Instagram sends the
+# server's IP to its login page; an uploaded login that went bad answers 400,
+# verified 2026-10-21). Their metadata goes logged out through the site's
+# proxies first; the media file itself comes from the CDN directly (signed
+# URLs, any IP), so a proxy carries a few KB, not the video. The login + no
+# proxy try stays last. A new site = one entry: domain -> its settings group.
+_PROXIED_SITES: dict[str, Callable[[], _ProxySettings]] = {
+    "instagram.com": lambda: settings.instagram,
+}
+
+
+def _proxies_for(url: str) -> list[str]:
+    """The proxies a URL is tried through before the plain try: up to
+    1 + proxy_retries, starting at a random one so parallel downloads spread
+    over the pool. [] for a site not listed, or with no proxies set."""
+    host = (urlsplit(url).hostname or "").lower()
+    for domain, group in _PROXIED_SITES.items():
+        if host == domain or host.endswith(f".{domain}"):
+            cfg = group()
+            pool = ProxyPool(cfg.proxy_urls, start=random.randrange(1 << 16))  # noqa: S311 -- spread, not crypto
+            tries = min(len(pool), 1 + cfg.proxy_retries)
+            return [p for _ in range(tries) if (p := pool.next())]
+    return []
 
 
 def _default_extractor_args() -> ExtractorArgs:
@@ -181,12 +223,26 @@ def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
         )
 
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    opts = config.ydl_opts().to_ydl()
+    opts = config.ydl_opts()
+    attempts: list[str | None] = [*_proxies_for(url), None]
+    errors: list[str] = []
+    for proxy in attempts:
+        try:
+            info = _fetch(yt_dlp, url, opts, proxy)
+            break
+        except Exception as exc:
+            # Never the proxy URL: it carries the proxy's credentials.
+            logger.warning(
+                "download %s failed (%s)",
+                url,
+                "via proxy" if proxy else "direct",
+                exc_info=True,
+            )
+            errors.append(str(exc))
+    else:
+        return DownloadResult(url=url, success=False, error=errors[0])
 
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-
         paths = YtDlpInfo.model_validate(info).output_paths()
         if not paths:
             return DownloadResult(
@@ -203,6 +259,19 @@ def download(url: str, config: DownloadConfig | None = None) -> DownloadResult:
         return DownloadResult(url=url, success=True, output_paths=paths)
     except Exception as exc:
         return DownloadResult(url=url, success=False, error=str(exc))
+
+
+def _fetch(yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None) -> Any:
+    """yt-dlp's info for `url`, files written. Through `proxy`: metadata
+    logged out via the proxy, then the files direct (see _PROXIED_SITES)."""
+    if proxy is None:
+        with yt_dlp.YoutubeDL(opts.to_ydl()) as ydl:
+            return ydl.extract_info(url, download=True)
+    anon = opts.model_copy(update={"cookiefile": None, "cookiesfrombrowser": None})
+    with yt_dlp.YoutubeDL(anon.model_copy(update={"proxy": proxy}).to_ydl()) as ydl:
+        info = ydl.sanitize_info(ydl.extract_info(url, download=False))
+    with yt_dlp.YoutubeDL(anon.to_ydl()) as ydl:
+        return ydl.process_ie_result(info, download=True)
 
 
 def download_all(

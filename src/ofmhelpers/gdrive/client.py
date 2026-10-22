@@ -126,7 +126,7 @@ class Drive:
         found = self._run(
             self._files.get(
                 fileId=folder_id,
-                fields="id, name, mimeType, trashed",
+                fields="id, name, mimeType, trashed, parents",
                 supportsAllDrives=True,
             ),
             f"Folder {folder_id}",
@@ -134,7 +134,9 @@ class Drive:
         if found.get("trashed") or found.get("mimeType") != FOLDER_MIME:
             msg = f"Folder {folder_id} is trashed or not a folder"
             raise FolderGoneError(msg)
-        return DriveFolder(id=found["id"], name=found["name"])
+        return DriveFolder(
+            id=found["id"], name=found["name"], parents=found.get("parents", [])
+        )
 
     def _list(self, query: str, fields: str, what: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []

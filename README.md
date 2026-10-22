@@ -112,7 +112,8 @@ cookies live in named Docker volumes (`postgres_data`, `redis_data`,
 | `OFM_IG_PROXIES` | for /reels, /accounts | Instagram scan proxies |
 | `OFM_EXPORT_DEFAULT` / `OFM_EXPORT_MIRROR` | no | Default video export and Mirror switch |
 | `OFM_GDRIVE_SERVICE_ACCOUNT` / `OFM_GDRIVE_ROOT_FOLDER` | for /drive | Google service account key (JSON on one line, in single quotes) and the shared folder's id. See below |
-| `OFM_GDRIVE_TIMEZONE` | no | Where /drive's day starts (default `Europe/Warsaw`) |
+| `OFM_GDRIVE_POSTED_FOLDER` | no | Name of the folder inside each account folder for posted videos (default `POSTED`) |
+| `OFM_GDRIVE_TIMEZONE` | no | Where /drive's "posted today" starts (default `Europe/Warsaw`) |
 
 Every other knob has a default; `src/ofmhelpers/config/settings.py` lists them
 all with their env names.

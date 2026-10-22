@@ -12,20 +12,19 @@ raw type is the least-invasive, behaviour-preserving choice.
 File references are NOT a separate table: a job's result files live inside
 its `result` JSONB payload exactly as they do in uploads/jobs.json.
 
-The todo / model-roster / Instagram-stats / competitor / approval-token
-tables still exist in Postgres with their data, but are no longer mapped:
+The todo / model-roster / Instagram-stats / competitor / approval-token /
+Drive day-folder tables still exist in Postgres with their data, but are no
+longer mapped:
 those features were removed and the data kept on purpose. alembic/env.py
 lists them in RETIRED_TABLES so autogenerate never proposes dropping them.
 """
 
 from __future__ import annotations
 
-import datetime  # noqa: TC003 -- SQLAlchemy reads Mapped[...] at runtime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
-    Date,
     Float,
     ForeignKey,
     Index,
@@ -52,6 +51,8 @@ class JobRow(Base):
     actor: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    # Set when the job reaches done/failed, cleared when it is run again.
+    finished_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     params: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     # result/preview are free-form per task type -- see module docstring.
@@ -338,17 +339,26 @@ class DriveAccountFolderRow(Base):
     # The root folder it was made or found in: a row of another root (dev
     # once pointed at the live folder) is ignored, never written into.
     root_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Its POSTED folder inside it; NULL until the sweep makes or finds one.
+    posted_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
-class DriveDayFolderRow(Base):
-    """One day's folder ("2026-10-21") inside a login's Drive folder: its row
-    is what tells the sweeper the day is done."""
+class DrivePostedFileRow(Base):
+    """A file seen in a login's POSTED folder, from the sweep that first saw
+    it: Drive keeps no time a file was moved, so this is what "posted today"
+    counts. Never deleted when the file leaves POSTED (the live count drops,
+    the history stays); deleted with the login."""
 
-    __tablename__ = "drive_day_folders"
+    __tablename__ = "drive_posted_files"
 
+    file_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     login_id: Mapped[int] = mapped_column(
-        ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("logins.id", ondelete="CASCADE"), nullable=False
     )
-    day: Mapped[datetime.date] = mapped_column(Date, primary_key=True)
-    folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    name: Mapped[str] = mapped_column(String(512), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    first_seen_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        Index("ix_drive_posted_files_login_seen", "login_id", "first_seen_at"),
+    )

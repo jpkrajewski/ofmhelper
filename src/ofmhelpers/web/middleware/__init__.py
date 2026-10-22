@@ -9,10 +9,12 @@ Order matters and is decided in `web/main.py`, not here: Starlette applies
 middleware outside-in in *added* order, so the last `add_middleware` call ends
 up outermost. A request passes SessionMiddleware (reads/signs the cookie) ->
 WriteRateLimitMiddleware (drops a flood before any auth work) -> AuthMiddleware
-(gates everything not on the public allowlist).
+(gates everything not on the public allowlist). `compression.py` is outermost:
+it gzips whatever the rest produced.
 """
 
 from ofmhelpers.web.middleware.auth import AuthMiddleware
+from ofmhelpers.web.middleware.compression import CompressionMiddleware
 from ofmhelpers.web.middleware.ratelimit import WriteRateLimitMiddleware
 
-__all__ = ["AuthMiddleware", "WriteRateLimitMiddleware"]
+__all__ = ["AuthMiddleware", "CompressionMiddleware", "WriteRateLimitMiddleware"]

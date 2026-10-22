@@ -78,12 +78,12 @@ remote_script='
   echo "== checking out =="
   git reset --hard origin/main
   echo "== building =="
-  $compose build ofmhelpers worker migrate
+  $compose build ofmhelpers worker preview-worker migrate
   echo "== swapping in the new containers =="
   $compose up -d postgres redis pot-provider
   # Seconds of downtime, so old code never sees the new schema.
   echo "== stopping the app =="
-  $compose stop ofmhelpers worker
+  $compose stop ofmhelpers worker preview-worker
   # --force-recreate: a deploy that leaves the old containers running while
   # reporting success is the worst outcome. --no-deps so the database is not
   # bounced with them. Compose waits for `migrate` to exit 0 before starting
@@ -91,7 +91,7 @@ remote_script='
   echo "== migrating, then starting the app =="
   # A failed migration exits non-zero here (and leaves the app down): print
   # why before `set -e` ends the deploy.
-  if ! $compose up -d --no-deps --force-recreate migrate ofmhelpers worker; then
+  if ! $compose up -d --no-deps --force-recreate migrate ofmhelpers worker preview-worker; then
     $compose logs migrate
     exit 1
   fi

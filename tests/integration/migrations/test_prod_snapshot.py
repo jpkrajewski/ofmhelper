@@ -187,6 +187,8 @@ UNTRACKED = "a9b0c1d2e3f4"
 IDENTITY = "b0c1d2e3f4a5"
 DEVICES = "c1d2e3f4a5b6"
 DRIVE = "d2e3f4a5b6c7"
+POSTED = "a5b6c7d8e9f0"
+FINISHED_AT = "b6c7d8e9f0a1"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -319,6 +321,49 @@ def test_drive_folders_follow_their_login_and_drop_only_themselves(db):
     assert _count(db, "drive_day_folders") == 0
     command.downgrade(_alembic(), DEVICES)
     assert _row_counts(db) == before
+
+
+def test_posted_folders_keep_every_account_folder_and_day_folder(db):
+    """Every account folder keeps its row with no POSTED id yet (the first
+    sweep finds or makes one); the day folders' rows stay for a rollback."""
+    needs(POSTED)(db)
+    command.upgrade(_alembic(), "f4a5b6c7d8e9")
+    with db.connect() as conn:
+        accounts = conn.execute(
+            text("SELECT login_id, folder_id, name FROM drive_account_folders")
+        ).all()
+    days = _count(db, "drive_day_folders")
+
+    command.upgrade(_alembic(), POSTED)
+
+    with db.connect() as conn:
+        after = conn.execute(
+            text(
+                "SELECT login_id, folder_id, name, posted_folder_id"
+                " FROM drive_account_folders"
+            )
+        ).all()
+    assert {(a, f, n) for a, f, n, _ in after} == set(accounts)
+    assert all(p is None for *_, p in after)
+    assert _count(db, "drive_day_folders") == days
+    assert _count(db, "drive_posted_files") == 0
+
+
+def test_finished_at_keeps_every_job_untimed(db):
+    """Old jobs never recorded a finish time: every row stays, with NULL
+    (no duration, so no estimate from them)."""
+    needs(FINISHED_AT)(db)
+    command.upgrade(_alembic(), POSTED)
+    jobs = _count(db, "jobs")
+
+    command.upgrade(_alembic(), FINISHED_AT)
+
+    with db.connect() as conn:
+        timed = conn.execute(
+            text("SELECT count(*) FROM jobs WHERE finished_at IS NOT NULL")
+        ).scalar()
+    assert _count(db, "jobs") == jobs
+    assert timed == 0
 
 
 def test_a_revision_on_production_is_no_longer_pending(db):

@@ -39,6 +39,7 @@ class YtDlpOptions(BaseModel):
     cookiefile: str | None = None
     # yt-dlp wants (browser, profile, keyring, container).
     cookiesfrombrowser: tuple[str, None, None, None] | None = None
+    proxy: str | None = None
     extractor_args: ExtractorArgs = {}
 
     def to_ydl(self) -> dict[str, Any]:

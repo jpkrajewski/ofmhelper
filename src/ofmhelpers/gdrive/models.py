@@ -15,6 +15,8 @@ def folder_url(folder_id: str) -> str:
 class DriveFolder(BaseModel):
     id: str
     name: str
+    # The folders it sits in: tells a folder dragged somewhere else.
+    parents: list[str] = Field(default_factory=list)
 
     @property
     def url(self) -> str:

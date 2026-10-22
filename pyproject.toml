@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "bgutil-ytdlp-pot-provider>=2.0.2",
     "fastapi>=0.143.3",
-    "gallery-dl>=1.32.16",
+    "gallery-dl>=1.32.17",
     # Not imported directly: Starlette's SessionMiddleware (web/main.py) signs
     # the session cookie with it, and Jinja2Templates (web/templates_config.py)
     # renders every page. Both fail at runtime, not import time, if dropped.
@@ -20,7 +20,10 @@ dependencies = [
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
     "uvicorn>=0.54.0",
-    "yt-dlp>=2026.8.19",
+    # Nightly on purpose (yt-dlp's own advice): site extractors break and get
+    # fixed between stable releases, months apart. A pre-release in the
+    # specifier is what lets uv pick nightlies for this package only.
+    "yt-dlp>=2026.10.21.202512.dev0",
     # Ships the JS runtime yt-dlp's "ejs:github" remote component needs
     # (downloaders/generic.py); imported by yt-dlp, never by us.
     "yt-dlp-ejs>=0.8.0",

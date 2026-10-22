@@ -43,6 +43,7 @@ from ofmhelpers.exports import ExportOptions, exports, get_export
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.api_keys import get_api_keys
+from ofmhelpers.web.clone_eta import CloneRate, Key, clone_eta, clone_rates, took_s
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.generation.ai import run_ai
 from ofmhelpers.web.routers.task_helpers import (
@@ -64,7 +65,7 @@ from ofmhelpers.web.schemas import (
     ResultFile,
 )
 from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
-from ofmhelpers.web.templates_config import render, render_partial
+from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
 logger = get_logger(__name__)
 
@@ -278,15 +279,28 @@ def _recent_batches(request: Request) -> list[CloneBatch]:
     jobs, total = list_jobs_page(
         {TASK}, 0, limit, AuthMiddleware.visible_actor(request)
     )
-    return CloneBatch.group([_card(j) for j in jobs], page_full=total > limit)
+    rates = _history_rates()
+    return CloneBatch.group([_card(j, rates) for j in jobs], page_full=total > limit)
 
 
-def _card(job: Job) -> CloneCard:
+def _history_rates() -> dict[Key, CloneRate]:
+    """Every session's recent runs: how long a run takes does not depend on
+    who started it. Three times the runs kept, so failed runs and other
+    providers still leave enough of each."""
+    runs = settings.web.clone_eta_runs
+    jobs, _ = list_jobs_page({TASK}, 0, runs * 3)
+    return clone_rates(jobs, runs)
+
+
+def _card(job: Job, rates: dict[Key, CloneRate]) -> CloneCard:
     video = job.params["reference_videos"][0]
+    eta = clone_eta(rates, job.params) if job.status == "running" else None
     return CloneCard.from_job(
         job,
         *job_assets(job, FILES_PREFIX),
         video_name=strip_asset_hash_prefix(Path(video).name),
+        took_s=took_s(job) if job.status == "done" else None,
+        eta=eta,
     )
 
 
@@ -334,7 +348,7 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
 def batches(request: Request):
     """The recent batches as a fragment: what live-gallery.js polls to show
     batches started in other sessions."""
-    return render(
+    return render_polled(
         request, "clone_batches_fragment.html", batches=_recent_batches(request)
     )
 
@@ -446,7 +460,8 @@ def run(
 
     actor = AuthMiddleware.visible_actor(request)
     jobs = [job for j in job_ids if (job := get_job(j, actor)) is not None]
-    [batch] = CloneBatch.group([_card(j) for j in jobs], page_full=False)
+    rates = _history_rates()
+    [batch] = CloneBatch.group([_card(j, rates) for j in jobs], page_full=False)
     html = render_partial("_clone_batch.html", batch=batch)
     return CloneQueued(job_ids=job_ids, html=html)
 

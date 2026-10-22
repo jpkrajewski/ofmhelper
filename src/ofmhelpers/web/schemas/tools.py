@@ -23,6 +23,9 @@ class Tool(BaseModel):
     # A card label read off the job itself, for a tool whose jobs differ
     # (/ai: the model and provider); `label` otherwise.
     describe: Callable[[Any], str] | None = None
+    # The job's params as the /generate form's fields, for Recreate, when
+    # they are stored under other names (an old per-model tool's).
+    form_params: Callable[[Any], dict[str, Any]] | None = None
 
     @property
     def prefix(self) -> str:

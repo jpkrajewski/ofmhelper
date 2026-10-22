@@ -7,7 +7,13 @@ reference-file usage set, the kie.ai upload cache) goes through `get_redis()`,
 so there is one URL, one pool, one place a test points at a test broker.
 """
 
-from ofmhelpers.cache.queue import QUEUE_NAME, enqueue, get_queue
+from ofmhelpers.cache.queue import (
+    PREVIEWS_QUEUE,
+    QUEUE_NAME,
+    enqueue,
+    enqueue_to,
+    get_queue,
+)
 from ofmhelpers.cache.redis import (
     delete_text,
     get_redis,
@@ -16,9 +22,11 @@ from ofmhelpers.cache.redis import (
 )
 
 __all__ = [
+    "PREVIEWS_QUEUE",
     "QUEUE_NAME",
     "delete_text",
     "enqueue",
+    "enqueue_to",
     "get_queue",
     "get_redis",
     "get_text",

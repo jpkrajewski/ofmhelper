@@ -1,0 +1,66 @@
+"""/download-media end to end on the fake downloaders (OFM_FAKE_EXTERNALS):
+a reel comes back as its video, a photo post as its images, in one run,
+without anyone picking a tool."""
+
+import os
+
+os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
+os.environ["APP_PASSWORD_VA"] = "test-va"
+os.environ.setdefault("SESSION_SECRET", "test-secret")
+
+import pytest
+from fastapi.testclient import TestClient
+
+from ofmhelpers.web.main import app
+
+
+@pytest.fixture
+def client(monkeypatch, tmp_path):
+    monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
+    monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path / "fakes"))
+    c = TestClient(app)
+    c.post("/login", data={"password": "test-va", "next": "/"})
+    return c
+
+
+def test_one_run_gets_a_reels_video_and_a_posts_images(client):
+    reel = "https://www.instagram.com/reel/abc/"
+    post = "https://www.instagram.com/p/xyz/"
+
+    r = client.post("/download-media/run", data={"urls": f"{reel}\n{post}"})
+    assert r.status_code == 200
+    status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
+
+    assert status["status"] == "done"
+    kinds = [(a["source"], a["kind"]) for a in status["result"]]
+    assert kinds == [(reel, "video"), (post, "image"), (post, "image")]
+    assert status["failed_sources"] == []
+    for asset in status["result"]:
+        assert client.get(asset["view_url"]).status_code == 200
+
+
+def test_a_dead_link_reports_both_downloaders(client):
+    r = client.post(
+        "/download-media/run", data={"urls": "https://www.tiktok.com/fake-fail"}
+    )
+    status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
+
+    (failed,) = status["failed_sources"]
+    assert failed["error"].startswith("video: ERROR: Video unavailable")
+    assert "images: gallery-dl: 404 Not Found" in failed["error"]
+
+
+def test_an_empty_form_is_refused(client):
+    assert client.post("/download-media/run", data={"urls": " \n "}).status_code == 400
+
+
+def test_a_download_run_shows_on_the_page_and_reopens_in_the_one_tool(client):
+    r = client.post(
+        "/download-media/run", data={"urls": "https://www.instagram.com/reel/abc/"}
+    )
+    html = client.get("/download-assets").text
+
+    assert f'data-job-id="{r.json()["job_id"]}"' in html
+    assert 'data-task="download_media"' in html
+    # Old runs of the two tools it replaced map onto it for Recreate.
+    assert 'data-tasks="download_media download_videos download_images"' in html

@@ -2,8 +2,9 @@
  * /drive page controller.
  *
  *   search box -> filters the cards instantly (their data-search text)
- *   Sync       -> POST /drive/sync (makes today's missing folders), then
- *                 reload; a failure stays on screen
+ *   Sync       -> POST /drive/sync (makes missing account and POSTED
+ *                 folders, records what was posted), then reload; a
+ *                 failure stays on screen
  *   a preview Drive has no image for (yet) -> its icon instead
  */
 (() => {
@@ -37,7 +38,8 @@
         if (report.created.length) parts.push(`${report.created.length} folders created`);
         if (report.adopted.length) parts.push(`${report.adopted.length} found`);
         if (report.renamed.length) parts.push(`${report.renamed.length} renamed`);
-        if (report.days) parts.push(`${report.days} day folders`);
+        if (report.posted_folders.length) parts.push(`${report.posted_folders.length} POSTED folders set up`);
+        if (report.newly_posted) parts.push(`${report.newly_posted} newly posted`);
         return parts.length ? parts.join(", ") : "Everything was there already";
     }
 

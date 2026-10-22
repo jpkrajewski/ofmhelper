@@ -1,5 +1,6 @@
 """/drive: the Instagram logins that get a folder in the shared Drive
-folder, and what the page shows of each one's day."""
+folder, and what the page shows of each: what waits to be posted (the files
+in the account folder) and what was posted (its POSTED folder)."""
 
 import datetime
 
@@ -7,12 +8,6 @@ from pydantic import BaseModel, Field
 
 from ofmhelpers.gdrive import DriveFile, folder_url
 from ofmhelpers.web.schemas.devices import Device
-
-
-def day_folder_name(day: datetime.date) -> str:
-    """ "2026-10-21": the year in it, so a folder found by this name is
-    never last year's, and Drive sorts them by date."""
-    return day.isoformat()
 
 
 class DriveTarget(BaseModel):
@@ -39,25 +34,48 @@ class StoredFolder(BaseModel):
     login_id: int
     folder_id: str
     name: str
+    posted_folder_id: str | None = None
 
 
 class SyncReport(BaseModel):
-    """One sweep: what it made, found, renamed, and could not do."""
+    """One sweep: what it made, found, renamed, recorded, and could not do."""
 
     created: list[str] = Field(default_factory=list)
     adopted: list[str] = Field(default_factory=list)
     renamed: list[str] = Field(default_factory=list)
-    days: int = 0
+    # POSTED folders made or found (each "<account folder>/<name>").
+    posted_folders: list[str] = Field(default_factory=list)
+    # Files seen in a POSTED folder for the first time.
+    newly_posted: int = 0
     failed: list[str] = Field(default_factory=list)
     # Another sweep held the lock: this one did nothing.
     busy: bool = False
 
 
+class AccountScan(BaseModel):
+    """One account folder as Drive has it now."""
+
+    # Its name in Drive (renamed by hand, it differs from the login's).
+    name: str = ""
+    # Files directly in the account folder: uploaded, not posted yet.
+    waiting: list[DriveFile] = Field(default_factory=list)
+    # Files in its POSTED folder(s).
+    posted: list[DriveFile] = Field(default_factory=list)
+    # Its POSTED folders: the one the app keeps (under whatever name it has
+    # now) and any other POSTED-named one, whose files count too.
+    posted_folders: list[DriveFile] = Field(default_factory=list)
+    # The POSTED-named ones beyond the kept one.
+    extra_posted_folders: list[DriveFile] = Field(default_factory=list)
+
+
 class DriveCard(BaseModel):
     target: DriveTarget
     account_folder_id: str | None = None
-    day_folder_id: str | None = None
-    files: list[DriveFile] = Field(default_factory=list)
+    posted_folder_id: str | None = None
+    scan: AccountScan = Field(default_factory=AccountScan)
+    # From the sweeps' record of when files first showed up in POSTED.
+    posted_today: int = 0
+    posted_week: int = 0
     error: str | None = None
 
     @property
@@ -65,11 +83,19 @@ class DriveCard(BaseModel):
         return folder_url(self.account_folder_id) if self.account_folder_id else None
 
     @property
-    def day_url(self) -> str | None:
-        return folder_url(self.day_folder_id) if self.day_folder_id else None
+    def posted_url(self) -> str | None:
+        return folder_url(self.posted_folder_id) if self.posted_folder_id else None
+
+    @property
+    def waiting(self) -> list[DriveFile]:
+        return self.scan.waiting
+
+    @property
+    def posted_total(self) -> int:
+        return len(self.scan.posted)
 
     def count(self, kind: str) -> int:
-        return sum(1 for f in self.files if f.kind == kind)
+        return sum(1 for f in self.waiting if f.kind == kind)
 
     @property
     def search_text(self) -> str:
@@ -78,6 +104,7 @@ class DriveCard(BaseModel):
 
 
 class DriveBoard(BaseModel):
+    # Today in the Drive timezone: what "posted today" means.
     day: datetime.date
     cards: list[DriveCard] = Field(default_factory=list)
     # Folders in the root no login owns: hand-made, old, misspelt.
@@ -86,19 +113,28 @@ class DriveBoard(BaseModel):
     problem: str | None = None
     bot_email: str | None = None
     root_folder_id: str = ""
-
-    @property
-    def day_label(self) -> str:
-        return day_folder_name(self.day)
+    posted_folder_name: str = "POSTED"
 
     @property
     def root_url(self) -> str | None:
         return folder_url(self.root_folder_id) if self.root_folder_id else None
 
     @property
-    def filled(self) -> int:
-        return sum(1 for c in self.cards if c.files)
+    def accounts_waiting(self) -> int:
+        return sum(1 for c in self.cards if c.waiting)
 
     @property
-    def uploads(self) -> int:
-        return sum(len(c.files) for c in self.cards)
+    def files_waiting(self) -> int:
+        return sum(len(c.waiting) for c in self.cards)
+
+    @property
+    def posted_today(self) -> int:
+        return sum(c.posted_today for c in self.cards)
+
+    @property
+    def posted_week(self) -> int:
+        return sum(c.posted_week for c in self.cards)
+
+    @property
+    def posted_total(self) -> int:
+        return sum(c.posted_total for c in self.cards)
