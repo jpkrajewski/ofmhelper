@@ -25,7 +25,7 @@ import mimetypes
 from pathlib import Path
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.gdrive import DriveError, connect_as
+from ofmhelpers.gdrive import DriveError, FolderGoneError, connect_as
 from ofmhelpers.log import get_logger
 from ofmhelpers.signin import SignInError
 from ofmhelpers.socials import get_platform
@@ -188,6 +188,37 @@ def _upload_one(upload: DriveUpload, owner_id: int, folder: StoredFolder) -> Non
         return
     store.finish(upload.id, drive_file_id=made.id, drive_url=made.url)
     logger.info("drive upload %s: %s -> %s", upload.id, path.name, upload.folder_name)
+
+
+def remove_upload(user: SessionUser, upload_id: int) -> DriveUpload:
+    """Takes one uploaded video back out of its account folder: into the
+    uploader's Drive trash (restorable there), then off the card. Only the
+    run's owner may; already gone in Drive counts as removed. Raises
+    `UploadRefusedError` (not theirs, not uploaded) or `DriveError`."""
+    found = store.get(upload_id)
+    if found is None or get_job(found.job_id, user.actor) is None:
+        msg = "No such upload"
+        raise UploadRefusedError(msg)
+    if found.status != "done":
+        msg = "Only an uploaded video can be removed"
+        raise UploadRefusedError(msg)
+    file_id = store.file_id(upload_id)
+    uploader = store.uploader(upload_id)
+    token = refresh_token(uploader) if uploader is not None else ""
+    if not file_id or not token:
+        msg = "Connect Google Drive on your Account page first"
+        raise UploadRefusedError(msg)
+    try:
+        connect_as(token).trash_file(file_id)
+    except FolderGoneError:
+        logger.info("drive upload %s was already gone in Drive", upload_id)
+    except SignInError as exc:
+        logger.warning("drive upload %s: sign-in refused: %s", upload_id, exc)
+        msg = "Connect Google Drive on your Account page first"
+        raise UploadRefusedError(msg) from exc
+    store.remove(upload_id)
+    logger.info("drive upload %s removed from %s", upload_id, found.folder_name)
+    return found.model_copy(update={"status": "removed"})
 
 
 def upload_files(upload_ids: list[int]) -> None:

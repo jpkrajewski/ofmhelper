@@ -149,6 +149,7 @@ def run_ai(
     assets_root: str,
     provider: str,
     model: str,
+    part: int = 0,
     **values: Any,
 ) -> list[ResultFile]:
     """The worker side of a job: upload its references, generate, register
@@ -169,7 +170,9 @@ def run_ai(
             set_job_preview(job_id, JobPreview(remote_url=remote[0], kind=spec.kind))
 
     try:
-        paths = runner.generate(client, spec, payload, job_id, on_result_urls)
+        paths = runner.generate(
+            client, spec, payload, job_id, on_result_urls, part=part
+        )
     except Exception:
         if not remote:
             raise

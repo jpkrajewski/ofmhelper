@@ -241,6 +241,9 @@ class ProviderState(BaseModel):
     label: str
     has_key: bool
     synced_at: float | None = None
+    # A sync is due or running now (asked for after Generate / Delete /
+    # Sync, or the sweep's turn): the page says so and reloads when done.
+    syncing: bool = False
     error: str | None = None
     usage: Usage | None = None
 

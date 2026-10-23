@@ -8,7 +8,11 @@ single calls; this decides what to do with each answer:
 - a status check that fails transiently is retried until the deadline, a
   finished request is downloaded, a failed one fails the job;
 - past the deadline the request stays remembered and the job fails with
-  `ProviderTimeoutError`, which recovery later finishes.
+  `ProviderTimeoutError`, which recovery later finishes;
+- a finished request stays remembered until its job is saved
+  (`stores.jobs.run_job` forgets it): the tool's tail (CapCut export,
+  asset store) can still be cut off by a restart, and a re-run then
+  downloads the same result again instead of paying (prod, 2026-10-22).
 """
 
 import time
@@ -34,15 +38,19 @@ OnResultUrls = Callable[[list[str]], None]
 _DEFAULT_EXT: dict[OutputKind, str] = {"image": "png", "video": "mp4"}
 
 
-def _task_id(provider: Provider, spec: ModelSpec, payload: Payload, job_id: str) -> str:
-    task = tasks.recall(job_id)
+def _task_id(
+    provider: Provider, spec: ModelSpec, payload: Payload, job_id: str, part: int
+) -> str:
+    task = tasks.recall(job_id, part)
     if task is not None and task.provider == provider.name and task.model == spec.key:
         logger.info("job %s resumes %s task %s", job_id, provider.name, task.task_id)
         return task.task_id
-    task_id = provider.submit(spec, payload, idempotency_key=job_id)
+    key = job_id if part == 0 else f"{job_id}:{part}"
+    task_id = provider.submit(spec, payload, idempotency_key=key)
     tasks.remember(
         tasks.ProviderTask(
             job_id=job_id,
+            part=part,
             provider=provider.name,
             model=spec.key,
             task_id=task_id,
@@ -96,11 +104,13 @@ def generate(
     payload: Payload,
     job_id: str,
     on_result_urls: OnResultUrls | None = None,
+    part: int = 0,
 ) -> list[Path]:
     """Run `payload` on `spec` for `job_id` and save every result locally.
     `on_result_urls` gets the hosted results the moment they exist, before
-    the download -- the page shows them while it runs."""
-    task_id = _task_id(provider, spec, payload, job_id)
+    the download -- the page shows them while it runs. `part`: which of
+    the job's requests this is, when it makes several (`tasks`)."""
+    task_id = _task_id(provider, spec, payload, job_id, part)
     state = wait(provider, task_id, spec.kind)
     if state.state == "failed" or not state.urls:
         tasks.forget(job_id)
@@ -109,11 +119,9 @@ def generate(
     if on_result_urls is not None:
         on_result_urls(state.urls)
     count = len(state.urls)
-    paths = [
+    return [
         provider.download(
             url, _result_path(task_id, provider.name, url, i, count, spec.kind)
         )
         for i, url in enumerate(state.urls)
     ]
-    tasks.forget(job_id)
-    return paths

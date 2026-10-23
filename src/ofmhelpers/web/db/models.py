@@ -428,6 +428,10 @@ class LoginRow(Base):
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     added_at: Mapped[float] = mapped_column(Float, nullable=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+    # Set: the account was removed everywhere (/accounts, or its Drive folder
+    # deleted by hand) -- hidden from every phone, password kept, restorable
+    # (alembic e5f6a7b8c9d1). Its phone links stay for the restore.
+    archived_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(

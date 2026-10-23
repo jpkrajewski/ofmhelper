@@ -127,6 +127,21 @@ class JobRepository(CachedRepository):
         with session_scope() as s:
             s.execute(delete(JobRow).where(JobRow.id == job_id))
 
+    def list_running(self) -> list[dict]:
+        """Jobs still marked running, oldest first. Uncached: recovery
+        decides from it which were cut off."""
+        with session_scope() as s:
+            rows = (
+                s.execute(
+                    select(JobRow)
+                    .where(JobRow.status == "running")
+                    .order_by(JobRow.created_at)
+                )
+                .scalars()
+                .all()
+            )
+            return [_job_to_dict(r) for r in rows]
+
     @cached
     def list_all(self) -> list[dict]:
         """Newest first."""
@@ -139,8 +154,32 @@ class JobRepository(CachedRepository):
             return [_job_to_dict(r) for r in rows]
 
     @cached
+    def counts(self, tasks: tuple[str, ...]) -> dict[str, dict[str, int]]:
+        """actor -> task -> how many done jobs, for `tasks` (sorted tuple:
+        stable cache key). The admin file manager's per-user totals."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(JobRow.actor, JobRow.task, func.count())
+                .where(
+                    JobRow.task.in_(tasks),
+                    JobRow.actor.is_not(None),
+                    JobRow.status == "done",
+                )
+                .group_by(JobRow.actor, JobRow.task)
+            ).all()
+        found: dict[str, dict[str, int]] = {}
+        for actor, task, n in rows:
+            found.setdefault(actor, {})[task] = n
+        return found
+
+    @cached
     def list_page(
-        self, tasks: tuple[str, ...], actor: str | None, offset: int, limit: int
+        self,
+        tasks: tuple[str, ...],
+        actor: str | None,
+        offset: int,
+        limit: int,
+        status: str | None = None,
     ) -> dict:
         """One page of the jobs whose task is in `tasks` (and that `actor` ran,
         unless None), newest first, plus how many match in total. Filtered and
@@ -149,6 +188,8 @@ class JobRepository(CachedRepository):
         where: list[ColumnElement[bool]] = [JobRow.task.in_(tasks)]
         if actor is not None:
             where.append(JobRow.actor == actor)
+        if status is not None:
+            where.append(JobRow.status == status)
         with session_scope() as s:
             rows = (
                 s.execute(

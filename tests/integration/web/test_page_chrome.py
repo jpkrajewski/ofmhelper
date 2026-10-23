@@ -55,14 +55,16 @@ def test_bar_links_then_the_rest_under_more(client):
     assert bar == [
         "/generate",
         "/clone",
-        "/reels",
+        "/clone-long",
         "/download-assets",
         "/accounts",
         "/links",
         "/phones",
         "/drive",
     ]
+    # Viral retired from the bar (2026-10-23).
     assert more == [
+        "/reels",
         "/uniqify",
         "/account",
         "/cookies",
@@ -81,7 +83,7 @@ def test_a_users_more_has_no_admin_pages():
     va = TestClient(app)
     sign_in(va)
     _bar, more = _nav(va.get("/generate").text)
-    assert more == ["/uniqify", "/account", "/cookies"]
+    assert more == ["/reels", "/uniqify", "/account", "/cookies"]
 
 
 def test_login_page_is_standalone_but_still_responsive():

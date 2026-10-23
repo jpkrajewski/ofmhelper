@@ -75,6 +75,9 @@ class Provider(Protocol):
     local_consent: bool
     # May be linked to a signed-in person's account (/account).
     linkable: bool
+    # Its connect step hands out the Drive token: a sign-in on an account
+    # without one goes straight on to it (routers/auth.py).
+    connects_drive: bool
 
     def configured(self) -> bool: ...
 

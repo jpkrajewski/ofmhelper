@@ -24,7 +24,12 @@ import requests
 from higgsfield_client import Completed, HiggsfieldClientError, SyncClient
 from higgsfield_client.types_ import NSFW, Cancelled, Failed
 
-from ofmhelpers.aigenproviders.base import Provider, TaskState, register_provider
+from ofmhelpers.aigenproviders.base import (
+    Provider,
+    TaskState,
+    register_provider,
+    upload_lock,
+)
 from ofmhelpers.aigenproviders.errors import (
     ProviderAuthError,
     ProviderError,
@@ -126,15 +131,16 @@ class HiggsfieldProvider(Provider):
             settings.higgsfield.ref_image_limits,
         )
         cache_key = self._upload_cache_key(path)
-        cached = get_text(cache_key)
-        if cached is not None and _live(cached):
-            return cached
-        delete_text(cache_key)
-        with _mapped_errors("upload"):
-            url = self.client.upload_file(path)
-        logger.info("higgsfield upload done: %s -> %s", path, url)
-        set_text(cache_key, url, settings.higgsfield.upload_cache_ttl_s)
-        return url
+        with upload_lock(cache_key):
+            cached = get_text(cache_key)
+            if cached is not None and _live(cached):
+                return cached
+            delete_text(cache_key)
+            with _mapped_errors("upload"):
+                url = self.client.upload_file(path)
+            logger.info("higgsfield upload done: %s -> %s", path, url)
+            set_text(cache_key, url, settings.higgsfield.upload_cache_ttl_s)
+            return url
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
         del idempotency_key  # the SDK's submit takes no headers; see module doc

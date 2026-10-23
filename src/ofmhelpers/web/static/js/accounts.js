@@ -149,7 +149,7 @@
         });
         $("accounts-bulk-delete").addEventListener("click", async () => {
             const ids = picks().map(rowId);
-            if (!window.confirm(`Stop tracking ${ids.length} account(s)? Their history is kept: add them again to resume.`)) return;
+            if (!window.confirm(`Remove ${ids.length} account(s) everywhere? They leave their phones (password kept under Archived on Phones) and their Drive folders go to the trash.`)) return;
             try {
                 await postJson("/accounts/delete", { ids });
                 window.location.reload();

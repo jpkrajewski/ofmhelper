@@ -5,6 +5,7 @@ uses the earliest-added watcher's who has any. No value ever reaches a
 page, a log line or Redis."""
 
 import os
+import re
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
@@ -130,11 +131,32 @@ def test_a_file_that_is_not_cookies_txt_is_refused_and_keeps_the_old(
     assert ANN_SECRET in (cookies.for_user(user_id) or "")
 
 
-def test_a_too_big_file_is_refused(ann, monkeypatch):
-    monkeypatch.setenv("OFM_COOKIES_MAX_BYTES", "10")
-    r = _upload(ann[0], _jar(ANN_SECRET))
+def _all_sites_export(secret: str, size: int) -> bytes:
+    """A browser's "all cookies" export: the Instagram login among
+    thousands of other sites' cookies."""
+    filler = "".join(
+        f".site{i}.example\tTRUE\t/\tFALSE\t1893456000\tid\t{'x' * 60}\n"
+        for i in range(size // 100)
+    )
+    return _jar(secret) + filler.encode()
+
+
+def test_an_all_sites_browser_export_is_taken(ann):
+    """2026-10-23: a real 1.4 MB export was refused at the old 1 MB limit."""
+    payload = _all_sites_export(ANN_SECRET, 1_400_000)
+    assert len(payload) > 1_048_576
+
+    r = _upload(ann[0], payload)
+
+    assert r.status_code == 200
+    assert ANN_SECRET in (cookies.for_user(ann[1]) or "")
+
+
+def test_a_too_big_file_is_refused_with_both_sizes(ann, monkeypatch):
+    monkeypatch.setenv("OFM_COOKIES_MAX_BYTES", str(1024 * 1024))
+    r = _upload(ann[0], _all_sites_export(ANN_SECRET, 1_400_000))
     assert r.status_code == 400
-    assert "too big" in r.text
+    assert re.search(r"That file is 1\.\d MB; a cookies\.txt may be up to 1 MB", r.text)
     assert cookies.for_user(ann[1]) is None
 
 

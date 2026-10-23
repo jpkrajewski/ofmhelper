@@ -44,10 +44,15 @@ from ofmhelpers.aigenproviders.spec import ModelSpec
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.exports import ExportOptions, exports, get_export
+from ofmhelpers.gdrive import DriveError
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.drive_uploads import UploadRefusedError, queue_uploads
+from ofmhelpers.web.drive_uploads import (
+    UploadRefusedError,
+    queue_uploads,
+    remove_upload,
+)
 from ofmhelpers.web.drive_uploads import targets as drive_targets
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.generation.ai import run_ai
@@ -310,7 +315,6 @@ def _drive_context(request: Request) -> dict[str, Any]:
             found,
             key=lambda t: (t.waiting is None, t.waiting or 0, -(t.followers or 0)),
         ),
-        "drive_models": sorted({t.creator for t in found if t.creator}),
         "drive_ready": bool(refresh_token(user.id)),
     }
 
@@ -417,6 +421,17 @@ def drive_upload(request: Request, body: UploadRequest) -> UploadsQueued:
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
     )
+
+
+@router.post("/drive-uploads/{upload_id}/remove")
+def drive_upload_remove(request: Request, upload_id: int) -> DriveUpload:
+    """Takes an uploaded video back out of its account folder (Drive trash)."""
+    try:
+        return remove_upload(AuthMiddleware.user(request), upload_id)
+    except UploadRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DriveError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/drive-uploads")

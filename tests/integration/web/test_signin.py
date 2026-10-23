@@ -377,7 +377,12 @@ def _consent(client: TestClient, provider: str, email: str, **start):
 def test_an_added_email_signs_in_with_a_provider(client, provider):
     user = make_user("friend@example.com")
     r = _consent(client, provider, "friend@example.com", next="/reels")
-    assert (r.status_code, r.headers["location"]) == (303, "/reels")
+    assert r.status_code == 303
+    # Google goes on to connect Drive first (no token yet), Apple straight in.
+    assert r.headers["location"] in (
+        "/reels",
+        "/auth/google/start?link=1&next=%2Freels",
+    )
     assert client.get("/generate").status_code == 200
     linked = users.linked_accounts(user.id)
     assert [a.provider for a in linked] == [provider]
@@ -405,25 +410,35 @@ def test_an_env_admin_gets_in_on_a_fresh_install_and_stays_admin(client):
 
 
 @pytest.mark.usefixtures("providers_on")
-def test_a_google_sign_in_asks_only_who_you_are_and_connecting_adds_drive(client):
-    """Sign-in: openid/email/profile only (no "unverified app" screen, no
-    Drive token). Connecting on /account asks for Drive with offline access
-    on a consent screen, and keeps the token."""
+def test_a_google_sign_in_without_drive_goes_straight_on_to_connecting_it(client):
+    """Prod, 2026-10-22: the VA signed in with the admin Google account and
+    then had to find "Connect Google Drive". Sign-in asks only who you are;
+    an account without a Drive token is sent on to the Drive consent at
+    once, then lands where it was going. With the token on file, a later
+    sign-in goes straight in."""
     user = make_user("friend@example.com")
-    started = client.get("/auth/google/start", follow_redirects=False)
-    assert started.status_code == 303
 
     r = _consent(client, "google", "friend@example.com", next="/reels")
-    assert r.headers["location"] == "/reels"  # straight in, no detour
+    assert r.headers["location"] == "/auth/google/start?link=1&next=%2Freels"
+    assert client.get("/generate").status_code == 200  # signed in already
     assert not users.get_user(user.id).drive_connected
 
-    _consent(client, "google", "friend@example.com", link="1", next="/drive")
+    r = _consent(client, "google", "friend@example.com", link="1", next="/reels")
+    assert r.headers["location"] == "/reels"  # back where it was going
     assert users.get_user(user.id).drive_connected
     assert users.refresh_token(user.id) == "fake-refresh:friend@example.com"
 
-    # Signing in again later keeps the Drive token on file.
-    _consent(TestClient(app), "google", "friend@example.com")
+    again = TestClient(app)
+    r = _consent(again, "google", "friend@example.com", next="/reels")
+    assert r.headers["location"] == "/reels"  # Drive on file: no detour
     assert users.get_user(user.id).drive_connected
+
+
+@pytest.mark.usefixtures("providers_on")
+def test_an_apple_sign_in_never_detours_to_drive(client):
+    make_user("friend@example.com")
+    r = _consent(client, "apple", "friend@example.com", next="/reels")
+    assert r.headers["location"] == "/reels"
 
 
 def test_googles_consent_url_asks_drive_only_when_connecting(monkeypatch):
@@ -787,7 +802,7 @@ def test_concurrent_first_sign_ins_of_an_admin_email_all_get_in(monkeypatch):
     ]
 
 
-def test_a_password_change_signs_out_every_other_session(client):
+def test_a_password_change_signs_out_every_other_session(client, caplog):
     make_user_with_password(password=PASSWORD)
     other = TestClient(app)
     assert _password_login(client, "user@example.com", PASSWORD).status_code == 303
@@ -806,11 +821,13 @@ def test_a_password_change_signs_out_every_other_session(client):
     assert r.status_code == 200
     assert "Password saved" in r.text
     assert client.get("/generate").status_code == 200
-    gone = other.get("/generate", follow_redirects=False)
+    with caplog.at_level("WARNING", logger="ofmhelpers.web.middleware.auth"):
+        gone = other.get("/generate", follow_redirects=False)
     assert (gone.status_code, gone.headers["location"]) == (
         303,
         "/login?next=/generate",
     )
+    assert "refused (password changed)" in caplog.text
 
 
 def test_a_password_set_from_a_link_signs_out_the_old_sessions(client):

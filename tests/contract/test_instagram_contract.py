@@ -13,6 +13,7 @@ from ofmhelpers.instagram import (
     InstagramClient,
     InstagramRateLimitedError,
     ProfileNotFoundError,
+    scan_profile,
 )
 from ofmhelpers.instagram.models import GLOBAL_CDN_HOST, Profile
 
@@ -50,14 +51,24 @@ def test_its_reels_tab_lists_codes_views_and_post_times(backend):
         assert _INSTAGRAM_LAUNCH < reel.posted_at <= time.time() + 60
 
 
-def test_its_timeline_has_mp4s_with_a_length_on_the_global_cdn(backend):
+def test_a_scan_gets_mp4s_with_a_length_on_the_global_cdn(backend):
+    """What /reels and /accounts need of a profile: its recent reels' mp4s
+    and lengths -- from the posts timeline when Instagram answers it, else
+    reel by reel (it throttles the logged-out posts query on its own,
+    answering 200 with "Rate limit exceeded": 2026-10-23)."""
     client, profile = _open(PROFILE[backend])
-    media = [
-        m for _, m, _, _ in itertools.islice(client.timeline(profile.username), 12) if m
-    ]
-    assert media
-    assert all(f"//{GLOBAL_CDN_HOST}/" in m.video_url for m in media)
-    assert all(m.duration_s > 0 for m in media)
+    found = scan_profile(
+        client,
+        profile.username,
+        min_views=0,
+        max_duration_s=3600,
+        max_age_s=10 * 365 * 86400,
+        limit=3,
+    )
+    videos = [r for r in found.reels if r.video_url]
+    assert videos
+    assert all(f"//{GLOBAL_CDN_HOST}/" in str(r.video_url) for r in videos)
+    assert all((r.duration_s or 0) > 0 for r in videos)
 
 
 def test_a_missing_profile_is_not_found(backend):

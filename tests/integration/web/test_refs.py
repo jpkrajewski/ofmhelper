@@ -311,3 +311,31 @@ def test_a_burst_for_one_new_thumb_decodes_the_original_once(
 
     assert codes == [200] * 8
     assert len(made) == 1
+
+
+def test_missing_names_exactly_the_files_a_restore_can_no_longer_use(
+    client, assets_dir, tmp_path
+):
+    """Recreate restores a past run's files; /refs/missing says which are
+    gone, in one request (2026-10-23: they filled the boxes and 404ed)."""
+    kept = assets_dir / "a1__face.png"
+    kept.write_bytes(_png_bytes())
+    deleted = assets_dir / "b2__clip.mp4"  # never written: deleted since
+    someone_elses = assets_dir / "users" / "99" / "c3__theirs.png"
+    someone_elses.parent.mkdir(parents=True)
+    someone_elses.write_bytes(_png_bytes())
+    outside = tmp_path / "secret.png"
+    outside.write_bytes(_png_bytes())
+
+    r = client.get(
+        "/refs/missing",
+        params={"path": [str(kept), str(deleted), str(someone_elses), str(outside)]},
+    )
+
+    assert r.status_code == 200
+    assert r.json() == {"missing": [str(deleted), str(someone_elses), str(outside)]}
+
+
+def test_missing_takes_a_bounded_list(client, assets_dir):
+    r = client.get("/refs/missing", params={"path": ["x"] * 51})
+    assert r.status_code == 422

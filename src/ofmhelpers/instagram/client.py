@@ -36,6 +36,7 @@ from ofmhelpers.downloaders.cookies import CookieFileError, load_jar
 from ofmhelpers.instagram import pages
 from ofmhelpers.instagram.models import (
     ClipsPage,
+    GraphQLErrors,
     LoginTokens,
     MediaInfo,
     MediaPage,
@@ -474,11 +475,18 @@ class InstagramClient:
         )
         self._raise_for(r)
         try:
-            return model.model_validate(r.json())
+            body = r.json()
+            answer = model.model_validate(body)
+            errors = GraphQLErrors.model_validate(body)
         except ValueError as exc:
             logger.warning("instagram %s answered no usable JSON", name, exc_info=True)
             msg = f"Instagram changed its {name} query"
             raise InstagramError(msg) from exc
+        if errors.rate_limited:
+            logger.warning("instagram %s refused: %s", name, errors.errors[0].message)
+            msg = "Instagram is rate-limiting — wait a few minutes"
+            raise InstagramRateLimitedError(msg)
+        return answer
 
     @staticmethod
     def _raise_for(r: requests.Response) -> None:

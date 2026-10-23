@@ -33,6 +33,7 @@ from pydantic_settings import BaseSettings
 from ofmhelpers.config.settings import (
     AccountsSettings,
     AigenSettings,
+    CloneLongSettings,
     DownloadersSettings,
     ExportSettings,
     GDriveSettings,
@@ -135,6 +136,10 @@ class Settings:
     @property
     def exports(self) -> ExportSettings:
         return self._group(ExportSettings)
+
+    @property
+    def clone_long(self) -> CloneLongSettings:
+        return self._group(CloneLongSettings)
 
     @property
     def signin(self) -> SignInSettings:

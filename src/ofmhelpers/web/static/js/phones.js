@@ -402,6 +402,13 @@
             }
         });
     });
+    document.querySelectorAll(".ph-login-restore").forEach((button) => {
+        button.addEventListener("click", () => {
+            const id = button.closest("[data-login-id]").dataset.loginId;
+            act(`/phones/logins/${id}/restore`);
+        });
+    });
+
     document.querySelectorAll(".ph-login-remove").forEach((button) => {
         button.addEventListener("click", () => {
             const row = rowOf(button);
@@ -409,7 +416,7 @@
             const name = JSON.parse(row.dataset.login).username;
             act(
                 `/phones/${card.dataset.id}/logins/${row.dataset.loginId}/delete`,
-                `Remove ${name} from this phone? If no other phone has it, its password and recovery codes are deleted for good.`,
+                `Remove ${name} from this phone? If no other phone has it, its password and recovery codes are deleted for good, it leaves Accounts and its Drive folder goes to the trash.`,
             );
         });
     });

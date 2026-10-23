@@ -149,7 +149,7 @@ button:disabled,
 .result-actions:has(> .download-btn + .menu) { gap: 0; }
 .result-actions > .download-btn:has(+ .menu) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .result-actions > .download-btn + .menu > summary {
-    width: var(--control-h);
+    width: 52px;
     height: 100%;
     min-height: var(--control-h);
     margin-left: -1px;
@@ -760,15 +760,17 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
    floating list of items under it, right-aligned. */
 .menu { position: relative; flex: none; margin: 0; padding: 0; border: 0; background: none; }
 .menu > summary { list-style: none; }
+/* The ⋯ itself big enough to hit. */
+.menu > summary .icon { width: 22px; height: 22px; }
 .menu > summary::-webkit-details-marker { display: none; }
 .menu-list {
     position: absolute;
     right: 0;
     z-index: 5;
     display: grid;
-    min-width: 160px;
+    min-width: 220px;
     margin-top: var(--s-1);
-    padding: var(--s-1);
+    padding: var(--s-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-card);
     background: var(--surface-2);
@@ -777,18 +779,19 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .menu-item {
     display: flex;
     align-items: center;
-    gap: var(--s-2);
-    height: var(--control-h-sm);
+    gap: var(--s-3);
+    height: 48px;
     min-height: 0;
-    padding: 0 var(--s-3);
+    padding: 0 var(--s-4);
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text);
-    font-size: var(--step--1);
+    font-size: var(--step-0);
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
 }
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface-3); }
+.menu-item .icon { width: 20px; height: 20px; }
 .menu-item-danger { color: var(--fail); }

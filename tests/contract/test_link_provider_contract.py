@@ -67,8 +67,31 @@ def test_usage_is_a_quota(provider):
     assert usage.limit is None or usage.limit > 0
 
 
-def test_links_are_listed_with_address_destination_and_gate(provider):
-    links = provider.list_links()
+@pytest.fixture
+def listed(provider, backend):
+    """`provider` with at least one link of the test's own. The fakes are
+    seeded; the real Bouncy account may have none (2026-10-23: it had none),
+    so a throwaway link is made there and deleted after (free per link).
+    The real Oopsie account keeps its own pages: its plan has a page quota."""
+    if backend == "fake" or provider.key == "oopsie":
+        yield provider
+        return
+    made = provider.create(
+        NewLink(
+            slug=f"ofmh-contract-{uuid.uuid4().hex[:8]}",
+            domain=provider_infos()[provider.key].default_domain,
+            destination="https://example.com/",
+            title="contract test",
+        )
+    )
+    try:
+        yield provider
+    finally:
+        provider.delete(made.remote_id)
+
+
+def test_links_are_listed_with_address_destination_and_gate(listed):
+    links = listed.list_links()
     assert links
     for link in links:
         assert link.url == f"https://{link.domain}/{link.slug}"

@@ -16,6 +16,7 @@ written once, in `runner.py`.
 import importlib
 import inspect
 import pkgutil
+import threading
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
@@ -144,3 +145,13 @@ def provider_class(name: str) -> type[Provider]:
 
 def get_provider(name: str, api_key: str) -> Provider:
     return provider_class(name)(api_key)
+
+
+@lru_cache(maxsize=1024)
+def upload_lock(cache_key: str) -> threading.Lock:  # noqa: ARG001 -- the cache key
+    """One lock per uploaded file (its upload-cache key): requests that start
+    together -- a long /clone-long video's pieces, all with the same subject
+    image -- upload it once, the others wait and take the cached URL
+    (2026-10-23: the image went up three times, ~15 s each). In-process only;
+    a different worker uploads its own copy at worst."""
+    return threading.Lock()

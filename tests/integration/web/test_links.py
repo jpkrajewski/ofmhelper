@@ -364,6 +364,45 @@ def test_delete_removes_links_on_the_provider_and_here(client, admin):
     assert short_links.list_links(admin.id) == []
 
 
+def _oopsie_state(user_id: int):
+    [state] = [s for s in short_links.provider_states(user_id) if s.key == "oopsie"]
+    return state
+
+
+def test_quota_counts_our_own_rows_before_the_next_sync(client, admin):
+    """2026-10-22: "50 / 50" stayed after a delete until the provider's
+    next answer. The limit comes from the provider, the count from here."""
+    fake_oopsie().add_page("one", "https://onlyfans.com/x")
+    fake_oopsie().add_page("two", "https://onlyfans.com/y")
+    link_sync.sync_now(admin.id)
+    assert (
+        _oopsie_state(admin.id).usage.used,
+        _oopsie_state(admin.id).usage.limit,
+    ) == (2, 50)
+
+    [one] = [x for x in short_links.list_links(admin.id) if x.slug == "one"]
+    short_links.removed([one.id])  # gone here, provider not asked again yet
+
+    usage = _oopsie_state(admin.id).usage
+    assert (usage.used, usage.limit) == (1, 50)
+
+
+def test_a_due_sync_shows_syncing_until_it_finishes(client, admin):
+    fake_oopsie().add_page("one", "https://onlyfans.com/x")
+    link_sync.sync_now(admin.id)
+    assert _oopsie_state(admin.id).syncing is False
+    assert 'id="links-syncing"' not in client.get("/links").text
+
+    short_links.mark_due(admin.id, "oopsie")
+    assert _oopsie_state(admin.id).syncing is True
+    page = client.get("/links").text
+    assert "Syncing…" in page
+    assert 'id="links-syncing"' in page
+
+    link_sync.sync_now(admin.id)
+    assert _oopsie_state(admin.id).syncing is False
+
+
 def test_a_failed_link_is_only_removed_here(client, admin):
     fake_bouncy().set_limit(0)
     ids = _accounts(admin.id, "Dane", "dane.walker")

@@ -129,3 +129,16 @@ def test_a_trashed_folder_still_lists_but_is_gone_as_a_folder(drive, backend, pa
     assert [f.id for f in drive.children(trashed.id)] == [child.id]
     with pytest.raises(FolderGoneError):
         drive.folder(trashed.id)
+
+
+def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
+    """What /clone's remove does with an uploaded video: Drive trash, so it
+    no longer lists and is gone as an item; trashing what is missing is
+    `FolderGoneError`."""
+    child = drive.create_folder(parent, "to-trash")
+    drive.trash_file(child.id)
+    assert child.id not in [c.id for c in drive.children(parent)]
+    with pytest.raises(FolderGoneError):
+        drive.folder(child.id)
+    with pytest.raises(FolderGoneError):
+        drive.trash_file("1" + uuid.uuid4().hex * 2)

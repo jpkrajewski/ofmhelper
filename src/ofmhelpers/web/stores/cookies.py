@@ -76,8 +76,13 @@ def save(user_id: int, payload: bytes, file_name: str) -> SavedCookies:
     """Stores (or replaces) `user_id`'s cookies. Raises CookieFileError,
     with a message for the uploader, when `payload` is not a cookies.txt
     holding at least one cookie, or is too big."""
-    if len(payload) > settings.downloaders.cookies_max_bytes:
-        msg = "That file is too big for a cookies.txt"
+    limit = settings.downloaders.cookies_max_bytes
+    if len(payload) > limit:
+        mb = 1024 * 1024
+        msg = (
+            f"That file is {len(payload) / mb:.1f} MB; "
+            f"a cookies.txt may be up to {limit / mb:.0f} MB"
+        )
         raise CookieFileError(msg)
     try:
         text = payload.decode("utf-8")

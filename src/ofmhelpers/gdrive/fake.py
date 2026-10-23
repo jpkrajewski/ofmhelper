@@ -344,7 +344,13 @@ class FakeDrive:
                 has_thumbnail=thumbnail,
             ).id
 
+    def trash_file(self, item_id: str) -> None:
+        """The API call (the app trashing what it uploaded)."""
+        with self._state("trash_file") as state:
+            self._live(state, item_id, f"File {item_id}").trashed = True
+
     def trash(self, item_id: str) -> None:
+        """Trashed by hand in Drive (a test's doing, not the app's)."""
         with self._state() as state:
             state.items[item_id].trashed = True
 
@@ -486,6 +492,9 @@ class FakePersonDrive:
 
     def grant(self, item_id: str, email: str) -> None:
         self._drive.grant(item_id, email)
+
+    def trash_file(self, item_id: str) -> None:
+        self._drive.trash_file(item_id)
 
 
 def fake_person(refresh_token: str) -> FakePersonDrive:

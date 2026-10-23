@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block content %}
+{{ ui.page_header("Files on disk") }}
+{{ ui.back_link("/file-manager", "Files by user") }}
+
+<div class="model-toolbar">
+    <div class="segmented" role="group" aria-label="Storage root">
+        {% for r in roots %}
+        <a href="/file-manager/disk?root={{ r }}"
+           class="root-btn {{ 'active' if r == current_root else '' }}"
+           {% if r == current_root %}aria-current="page"{% endif %}>{{ r }}</a>
+        {% endfor %}
+    </div>
+    <span class="model-toolbar-note">Path: <code>/{{ current_root }}/{{ current_path }}</code></span>
+    <form method="post" action="/file-manager/upload" enctype="multipart/form-data" class="inline-form">
+        <input type="hidden" name="root" value="{{ current_root }}">
+        <input type="hidden" name="path" value="{{ current_path }}">
+        <input type="file" name="files" multiple required aria-label="Files to upload">
+        {{ ui.button("Upload here", "primary", type="submit") }}
+    </form>
+    {% if parent is not none %}
+    {{ ui.back_link("/file-manager/disk?root=" ~ current_root ~ "&path=" ~ parent, "Up one level") }}
+    {% endif %}
+</div>
+
+{% if dirs or files %}
+{% call ui.table() %}
+        <thead>
+            <tr><th scope="col"><span class="sr-only">Preview</span></th><th scope="col">Name</th><th scope="col">Modified</th><th scope="col">Size</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
+        </thead>
+        <tbody>
+            {% for d in dirs %}
+            <tr>
+                <td></td>
+                <td>📁 <a href="/file-manager/disk?root={{ current_root }}&path={{ d.rel_path }}">{{ d.name }}/</a></td>
+                <td>{{ d.mtime|ago }}</td>
+                <td class="pending">—</td>
+                <td>
+                    <form method="post" action="/file-manager/delete" class="inline-form"
+                          data-confirm="Delete folder {{ d.name }} and everything in it?">
+                        <input type="hidden" name="root" value="{{ current_root }}">
+                        <input type="hidden" name="path" value="{{ d.rel_path }}">
+                        {{ ui.button("Delete", "danger", type="submit") }}
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            {% for f in files %}
+            {% set q = "?root=" ~ current_root ~ "&path=" ~ f.rel_path|urlencode %}
+            <tr>
+                <td>{% if f.kind in ("image", "video") %}<a class="fm-thumb" href="/file-manager/view{{ q }}" target="_blank" rel="noopener"><img src="/file-manager/thumb{{ q }}" alt="" loading="lazy"></a>{% endif %}</td>
+                <td><a href="/file-manager/view{{ q }}" target="_blank" rel="noopener">{{ f.name }}</a></td>
+                <td>{{ f.mtime|ago }}</td>
+                <td>{{ f.size }}</td>
+                <td class="model-actions">
+                    {{ ui.button("Download", href="/file-manager/download" ~ q, attrs={"download": true}) }}
+                    <form method="post" action="/file-manager/delete"
+                          data-confirm="Delete {{ f.name }}?">
+                        <input type="hidden" name="root" value="{{ current_root }}">
+                        <input type="hidden" name="path" value="{{ f.rel_path }}">
+                        {{ ui.button("Delete", "danger", type="submit") }}
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    {% endcall %}
+
+<form method="post" action="/file-manager/delete-all" class="section"
+      data-confirm="Delete EVERYTHING in this folder? This cannot be undone.">
+    <input type="hidden" name="root" value="{{ current_root }}">
+    <input type="hidden" name="path" value="{{ current_path }}">
+    {{ ui.button("Delete all in this folder", "danger", type="submit") }}
+</form>
+{% else %}
+{{ ui.empty("This folder is empty") }}
+{% endif %}
+{% endblock %}

@@ -19,7 +19,12 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.signin import SignInError
 from ofmhelpers.web import drive_folders
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.schemas import SyncReport
+from ofmhelpers.web.routers.generation.clone import FILES_PREFIX as CLONE_FILES
+from ofmhelpers.web.routers.generation.clone import TASK as CLONE_TASK
+from ofmhelpers.web.routers.task_helpers import job_assets
+from ofmhelpers.web.schemas import SyncReport, UploadPick
+from ofmhelpers.web.stores import drive_uploads as upload_store
+from ofmhelpers.web.stores.jobs import get_job
 from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)
@@ -32,16 +37,41 @@ FileId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{10,128}$")]
 _THUMB_CACHE = {"Cache-Control": "private, max-age=86400"}
 
 
+def _upload_pick(request: Request, job_id: str) -> UploadPick | None:
+    """The /clone video `?upload=` names, when it is the session's own
+    finished run."""
+    job = get_job(job_id, AuthMiddleware.actor(request))
+    if job is None or job.task != CLONE_TASK or job.status != "done":
+        return None
+    assets, _failed = job_assets(job, CLONE_FILES)
+    if not assets:
+        return None
+    first = assets[0]
+    return UploadPick(
+        job_id=job.id,
+        name=first.download_name,
+        preview_url=first.preview_url or first.view_url,
+        poster_url=first.poster_url,
+        already=[
+            u.login_id
+            for u in upload_store.for_jobs([job.id])
+            if u.status in ("done", "queued")
+        ],
+    )
+
+
 @router.get("")
-def drive_page(request: Request):
+def drive_page(request: Request, upload: str = ""):
     """At once, from each folder's last read: no Drive call. drive.js then
-    swaps in `/drive/live`."""
+    swaps in `/drive/live`. `upload`: a /clone run whose video goes into
+    the account card clicked (drive.js)."""
     board = drive_folders.board(
         owner=AuthMiddleware.scope(request),
         viewer=AuthMiddleware.user(request).id,
         live=False,
     )
-    return render(request, "drive.html", board=board)
+    pick = _upload_pick(request, upload) if upload else None
+    return render(request, "drive.html", board=board, pick=pick)
 
 
 @router.get("/live")

@@ -43,11 +43,17 @@ class RepositoryCache:
     repository (e.g. "job", "application")."""
 
     def __init__(
-        self, redis: Redis, namespace: str, ttl_s: int = _DEFAULT_TTL_S
+        self, redis: Redis | None, namespace: str, ttl_s: int = _DEFAULT_TTL_S
     ) -> None:
-        self._redis = redis
+        """`redis` None: the process's connection (`get_redis()`) at each
+        call, for the URL in force then."""
+        self._fixed = redis
         self._namespace = namespace
         self._ttl_s = ttl_s
+
+    @property
+    def _redis(self) -> Redis:
+        return self._fixed if self._fixed is not None else get_redis()
 
     def _version(self) -> int:
         v = self._redis.get(f"cache:{self._namespace}:v")
@@ -120,11 +126,11 @@ class CachedRepository:
         if self.cache_namespace is None:
             msg = f"{type(self).__name__} must define cache_namespace"
             raise ValueError(msg)
-        # Binding the Redis connection here is safe because no repository is
-        # built at import any more -- each one comes from an lru_cache'd
-        # accessor in web/stores/, so construction happens on first use, by
-        # which point OFM_REDIS_URL is whatever the process (or a test
-        # fixture) finally set it to.
+        # The connection is looked up per call, never bound here: each
+        # repository is an lru_cache'd singleton, and one first built under
+        # another OFM_REDIS_URL (an e2e test seeding the e2e app's Redis)
+        # kept reading that app's cache in every later test on the same
+        # worker -- its user ids, not the suite's (2026-10-23).
         self._cache: RepositoryCacheLike = cache or RepositoryCache(
-            get_redis(), self.cache_namespace
+            None, self.cache_namespace
         )

@@ -210,8 +210,8 @@
     }
 
     // Poll the watch list while any first scan runs; reload once none is left.
-    function pollPending(watchList, statusEl, applySearch) {
-        if (!watchList.querySelector("[data-pending]")) return;
+    function pollPending(watchList, statusEl, applySearch, once = false) {
+        if (!once && !watchList.querySelector("[data-pending]")) return;
         const tick = async () => {
             try {
                 const response = await fetch(watchList.dataset.endpoint);
@@ -298,7 +298,10 @@
                 const rows = await fetch(watchList.dataset.endpoint);
                 if (rows.ok) watchList.innerHTML = await rows.text();
                 applySearch();
-                pollPending(watchList, statusEl, applySearch);
+                // At least one tick when profiles were added: scans that
+                // finished before the rows came back leave nothing pending,
+                // and the reload that brings their reels is still due.
+                pollPending(watchList, statusEl, applySearch, added.length > 0);
             } catch {
                 setStatus(statusEl, ["Network error — try again."], true);
             } finally {

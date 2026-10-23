@@ -37,6 +37,7 @@ from ofmhelpers.web.schemas.accounts import (
 from ofmhelpers.web.schemas.applications import Application, ApplicationForm
 from ofmhelpers.web.schemas.cookies import SavedCookies
 from ofmhelpers.web.schemas.devices import (
+    ArchivedLogin,
     Device,
     DeviceFields,
     DeviceLogin,
@@ -53,11 +54,19 @@ from ofmhelpers.web.schemas.drive import (
     DriveUpload,
     StoredFolder,
     SyncReport,
+    UploadPick,
     UploadRequest,
     UploadsQueued,
     UploadTarget,
 )
-from ofmhelpers.web.schemas.files import DirEntry, FileEntry, RefEntry
+from ofmhelpers.web.schemas.files import (
+    DirEntry,
+    FileEntry,
+    FileTile,
+    MissingRefs,
+    RefEntry,
+    UserFiles,
+)
 from ofmhelpers.web.schemas.gallery import (
     CloneCard,
     JobCard,
@@ -124,6 +133,7 @@ __all__ = [
     "ApiKeysForm",
     "Application",
     "ApplicationForm",
+    "ArchivedLogin",
     "AssetCard",
     "AssignCreator",
     "AssignLinkCreator",
@@ -140,6 +150,7 @@ __all__ = [
     "FailedSource",
     "FeedItem",
     "FileEntry",
+    "FileTile",
     "GenerateLinks",
     "GroupForm",
     "InputFileGroup",
@@ -161,6 +172,7 @@ __all__ = [
     "LinksQueued",
     "LoginFields",
     "LoginSecrets",
+    "MissingRefs",
     "ModelChoice",
     "Notes",
     "PasswordForm",
@@ -184,10 +196,12 @@ __all__ = [
     "TaskCard",
     "Tool",
     "TrackedAccount",
+    "UploadPick",
     "UploadRequest",
     "UploadTarget",
     "UploadsQueued",
     "User",
+    "UserFiles",
     "UserForm",
     "WatchForm",
     "WatchedProfile",

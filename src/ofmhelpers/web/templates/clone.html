@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
+{% import "_icons.html" as ic %}
 {% block content %}
 {{ ui.page_header("Clone") }}
 
@@ -84,36 +85,7 @@
 {% if drive_targets %}
 {# What clone.js adds to a card that finishes while the page is open. #}
 <template id="card-drive-item">{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}</template>
-<dialog class="accounts-dialog" id="drive-picker">
-    <form id="drive-picker-form" method="dialog">
-        <h2>Upload to Drive</h2>
-        <div class="drive-picker-tools">
-            <input type="search" id="drive-picker-search" placeholder="Search accounts…" aria-label="Search accounts" autocomplete="off">
-            <select id="drive-picker-model" aria-label="Model">
-                <option value="">All models</option>
-                {% for c in drive_models %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="drive-picker-list" id="drive-picker-list">
-            {% for t in drive_targets %}
-            <label class="drive-pick" data-login="{{ t.login_id }}" data-creator="{{ t.creator or '' }}"
-                   data-folder="{{ t.folder_name }}"
-                   data-search="{{ (t.handle ~ ' ' ~ t.owner ~ ' ' ~ (t.creator or ''))|lower }}">
-                <input type="checkbox" value="{{ t.login_id }}">
-                <span class="drive-pick-name">@{{ t.handle }} <small>{{ t.owner }}</small></span>
-                {% if t.creator %}<span class="accounts-creator-tag">{{ t.creator }}</span>{% endif %}
-                <span class="drive-pick-waiting">{% if t.waiting is none %}<span class="pending" title="Not read yet: Sync on /drive">—</span>{% elif t.waiting == 0 %}empty{% else %}{{ t.waiting }} to post{% endif %}</span>
-                <span class="drive-pick-done" hidden>In Drive</span>
-            </label>
-            {% endfor %}
-        </div>
-        <p class="generation-error" id="drive-picker-error" hidden></p>
-        <div class="accounts-dialog-actions">
-            {{ ui.button("Cancel", "ghost", attrs={"id": "drive-picker-cancel"}) }}
-            {{ ui.button("Upload", "primary", type="submit", attrs={"id": "drive-picker-submit"}) }}
-        </div>
-    </form>
-</dialog>
+<template id="card-drive-remove">{{ ui.icon_button("x", "Remove from Drive", hook="drive-remove") }}</template>
 {% endif %}
 
 <script src="{{ static_url('js/file-picker.js') }}"></script>

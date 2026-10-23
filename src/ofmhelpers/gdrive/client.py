@@ -321,6 +321,20 @@ class Drive:
             f"Sharing {item_id} with {email}",
         )
 
+    def trash_file(self, item_id: str) -> None:
+        """Into Drive's trash (restorable there for 30 days), never deleted
+        for good. Raises `FolderGoneError` when it is already gone."""
+        self._run(
+            self._files.update(
+                fileId=item_id,
+                body={"trashed": True},
+                supportsAllDrives=True,
+                fields="id",
+            ),
+            f"File {item_id}",
+        )
+        logger.info("drive: trashed %s", item_id)
+
 
 _THREAD = threading.local()
 

@@ -21,11 +21,19 @@ from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response
+from starlette.responses import (
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.web.schemas import SessionUser, User
 from ofmhelpers.web.stores.users import get_user
+
+logger = get_logger(__name__)
 
 _KEYS = ("user_id", "email", "role")
 _STAMP = "stamp"
@@ -37,12 +45,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         current = self.session_user(request)
         user = await run_in_threadpool(get_user, current.id) if current else None
-        if (
-            current is None
-            or user is None
-            or not user.active
-            or request.session.get(_STAMP, "") != user.credential_stamp
-        ):
+        reason = self._refused(request, current, user)
+        # (`current`/`user` restated: the reason already covers them.)
+        if reason is not None or current is None or user is None:
+            # A session that ends by itself says why (2026-10-23: one ended
+            # between two clicks on dev and nothing told which check it was).
+            if reason != "no session" or request.cookies.get("ofm_session"):
+                logger.warning(
+                    "auth: %s refused (%s), user %s",
+                    request.url.path,
+                    reason,
+                    current.id if current else "-",
+                )
             request.session.clear()
             return self._to_login(request)
         if user.role != current.role or user.email != current.email:
@@ -57,6 +71,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
         )
         return await call_next(request)
 
+    @staticmethod
+    def _refused(
+        request: Request, current: SessionUser | None, user: User | None
+    ) -> str | None:
+        """Why this session may not go on, or None when it may."""
+        if current is None:
+            return "no session"
+        if user is None:
+            return "user gone"
+        if not user.active:
+            return "deactivated"
+        if request.session.get(_STAMP, "") != user.credential_stamp:
+            return "password changed"
+        return None
+
     def _to_login(self, request: Request) -> Response:
         """Not signed in and hitting a protected route: to /login,
         remembering where they were headed so login can send them back."""
@@ -67,6 +96,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 {"detail": "Session expired", "login_url": f"/login?next={next_url}"},
                 status_code=401,
+            )
+        if "dl" in request.query_params:
+            # A Download click: the browser would save the login page under
+            # the video's name (2026-10-23: a 2.5 KB "VID_8121.mp4" that
+            # "crashed"). A 401 shows as a failed download instead.
+            return PlainTextResponse(
+                "Signed out: sign in again, then download", status_code=401
             )
         return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
 

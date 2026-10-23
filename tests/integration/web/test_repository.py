@@ -5,7 +5,10 @@ old JSON file's documented read-modify-write race: two near-simultaneous status
 updates must never leave a torn/half-written row.
 """
 
+import os
 import threading
+
+from redis import Redis
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.web.db.repositories import JobRepository
@@ -107,3 +110,21 @@ def test_repository_cache_bump_invalidates_all_prior_reads():
     third = cache.get_or_set("get", ("x",), loader)
     assert len(calls) == 2  # bump() forced a fresh load
     assert third != first
+
+
+def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):
+    """A repository is a singleton built on first use. Built under another
+    OFM_REDIS_URL (an e2e test seeding the e2e app's Redis), it once kept
+    reading that cache in every later test on the worker: the app's user
+    ids, not the suite's (2026-10-23). Each call takes the URL in force."""
+    suite_url = os.environ["OFM_REDIS_URL"]
+    other_url = suite_url.rsplit("/", 1)[0] + "/14"
+    monkeypatch.setenv("OFM_REDIS_URL", other_url)
+    cache = RepositoryCache(None, "test-follows-url")
+    assert cache.get_or_set("get", ("x",), lambda: "other") == "other"
+
+    monkeypatch.setenv("OFM_REDIS_URL", suite_url)
+
+    assert cache.get_or_set("get", ("x",), lambda: "suite") == "suite"
+    other = Redis.from_url(other_url)
+    other.delete(*other.scan_iter("cache:test-follows-url:*"))

@@ -87,6 +87,7 @@ class Apple:
     callback_method = "POST"
     local_consent = False
     linkable = True
+    connects_drive = False
 
     def configured(self) -> bool:
         return settings.signin.apple_configured

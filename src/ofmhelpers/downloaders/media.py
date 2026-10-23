@@ -1,22 +1,31 @@
 """Any link, whatever it holds: a video, a photo post, a carousel.
 
 The person pasting links should not have to know which tool a post needs.
-Each URL goes to both downloaders in turn and keeps the first that gets
-files: yt-dlp (`generic.py`, videos) or gallery-dl (`images.py`, photos and
-mixed posts). Which one goes first is decided by the link: kinds of posts
-that are usually photos or carousels (`_IMAGES_FIRST`) start with
-gallery-dl, everything else with yt-dlp. A new site = one entry there.
+Each URL goes to the downloaders in turn and keeps the first that gets
+files that really are what they claim: yt-dlp (`generic.py`, videos), the
+KVS player reader (`kvs.py`, tube sites yt-dlp gets wrong) and gallery-dl
+(`images.py`, photos and mixed posts). Which goes first is decided by the
+link: kinds of posts that are usually photos or carousels (`_IMAGES_FIRST`)
+start with gallery-dl, everything else with yt-dlp. A new site = one entry
+there; a new tool = one entry in `_order`.
+
+A "video" that ffprobe cannot read (a site's web page saved as .mp4,
+2026-10-23) is deleted and counts as that tool failing, so the next one
+gets its turn -- never a broken file reported as downloaded.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 from typing import TYPE_CHECKING
 
-from ofmhelpers.downloaders import generic, images
+from ofmhelpers.config import settings
+from ofmhelpers.downloaders import generic, images, kvs
 from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import DownloadResult
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils.video_probe import duration_s
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,11 +52,36 @@ def _images(url: str, cookiefile: str | None) -> DownloadResult:
     return images.download(url, cookiefile=cookiefile)
 
 
+def _kvs(url: str, cookiefile: str | None) -> DownloadResult:
+    del cookiefile  # a KVS video is public
+    return kvs.download(url, generic.DownloadConfig().output_dir)
+
+
 def _order(
     url: str,
 ) -> list[tuple[str, Callable[[str, str | None], DownloadResult]]]:
-    video, pictures = ("video", _video), ("images", _images)
-    return [pictures, video] if _IMAGES_FIRST.search(url) else [video, pictures]
+    video, player, pictures = ("video", _video), ("kvs", _kvs), ("images", _images)
+    if _IMAGES_FIRST.search(url):
+        return [pictures, video]
+    return [video, player, pictures]
+
+
+def _broken_video(result: DownloadResult) -> str | None:
+    """Why one of `result`'s videos is not a video, deleting the broken
+    files; None when every one plays."""
+    broken = []
+    for path in result.output_paths:
+        if not generic.is_video_file(path):
+            continue
+        try:
+            duration_s(path, settings.downloaders.probe_timeout_s)
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+            logger.warning("download %s: %s is not a video", result.url, path.name)
+            path.unlink(missing_ok=True)
+            broken.append(path.name)
+    if not broken:
+        return None
+    return "the site sent a web page, not the video"
 
 
 def download(url: str, cookiefile: str | None = None) -> DownloadResult:
@@ -56,11 +90,18 @@ def download(url: str, cookiefile: str | None = None) -> DownloadResult:
     errors: list[str] = []
     for name, fetch in _order(url):
         result = fetch(url, cookiefile)
-        if result.success:
+        reason = _broken_video(result) if result.success else None
+        if result.success and reason is None:
             return result
+        if reason is not None:
+            result = DownloadResult(url=url, success=False, error=reason)
         logger.info("download %s: %s gave nothing: %s", url, name, result.error)
         errors.append(f"{name}: {result.error or 'no files'}")
-    return DownloadResult(url=url, success=False, error=" | ".join(errors))
+    # A tool that does not know the site at all says nothing useful next to
+    # the other's real reason (prod, 2026-10-22: PornHub's 403 was shown as
+    # gallery-dl's "Unsupported URL").
+    known = [e for e in errors if "unsupported url" not in e.lower()]
+    return DownloadResult(url=url, success=False, error=" | ".join(known or errors))
 
 
 def download_all(urls: list[str], cookies: str | None = None) -> list[DownloadResult]:

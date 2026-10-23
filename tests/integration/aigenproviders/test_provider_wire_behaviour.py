@@ -90,7 +90,9 @@ def test_kie_three_pending_polls_then_done_saves_the_result_and_pays_once(kie):
     assert path.read_bytes() == PNG
     assert _calls(kie, "createTask") == 1
     assert _calls(kie, "recordInfo") == 4
-    assert tasks.recall("job-1") is None  # done: nothing left to resume
+    # Kept until the job is saved (stores.jobs.run_job forgets it): a tail
+    # cut off by a restart re-downloads instead of paying again.
+    assert tasks.recall("job-1") is not None
 
 
 def test_kie_rejected_input_tells_kies_reason_and_is_not_remembered(kie):
@@ -244,7 +246,7 @@ def test_higgsfield_three_pending_polls_then_done_saves_the_result_and_pays_once
 
     assert path.read_bytes() == PNG
     assert hf.count("POST", SUBMIT) == 1
-    assert tasks.recall("job-1") is None
+    assert tasks.recall("job-1") is not None  # until its job is saved
 
 
 @pytest.mark.parametrize(

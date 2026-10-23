@@ -17,6 +17,7 @@ timed-out ffmpeg never leaves a truncated file that later requests take for a
 finished one.
 """
 
+import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -187,6 +188,24 @@ def make_poster(source: Path, job_id: str, index: int) -> Path:
     dest = poster_path(job_id, index)
     if not dest.is_file():
         write_video_thumb(source, dest, settings.web.poster_size)
+    return dest
+
+
+def file_thumb(source: Path) -> Path:
+    """Any stored image or video as a small webp, for the admin file manager
+    (prod, 2026-10-22: a finished run with no card buttons could not even
+    be told apart there). Keyed by path, size and mtime: a replaced file
+    gets a new one. Raises one of PREVIEW_ERRORS when it can't be made."""
+    st = source.stat()
+    key = f"{source}:{st.st_size}:{st.st_mtime_ns}".encode()
+    dest = previews_dir() / "files" / f"{hashlib.sha256(key).hexdigest()[:32]}.webp"
+    if dest.is_file():
+        return dest
+    size = settings.web.poster_size
+    if classify_kind(source.name) == "video":
+        write_video_thumb(source, dest, size)
+    else:
+        write_atomic(dest, lambda tmp: write_image_thumb(source, tmp, size))
     return dest
 
 

@@ -113,7 +113,7 @@ def _devices(s: Session, logins: dict[int, dict], owner: int | None) -> list[dic
                 DeviceLoginRow.linked_at, DeviceLoginRow.login_id
             )
         ).all()
-        if device_id in labels
+        if device_id in labels and login_id in logins
     ]
     on: dict[int, list[str]] = {}
     for device_id, login_id in links:
@@ -144,7 +144,9 @@ def _phones_of(s: Session, login_id: int) -> list[int]:
 def _drop_orphans(s: Session) -> None:
     """Deletes every login no phone links any more."""
     linked = exists().where(DeviceLoginRow.login_id == LoginRow.id)
-    s.execute(delete(LoginRow).where(~linked))
+    # An archived login is kept even with no phone left: its password is
+    # what archiving keeps.
+    s.execute(delete(LoginRow).where(~linked, LoginRow.archived_at.is_(None)))
 
 
 class DeviceRepository(CachedRepository):
@@ -159,7 +161,9 @@ class DeviceRepository(CachedRepository):
         read or decrypted, only `has_password` / `has_codes`."""
         with session_scope() as s:
             rows = s.execute(
-                select(*_login_columns()).where(*mine(LoginRow.user_id, owner))
+                select(*_login_columns()).where(
+                    *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_(None)
+                )
             ).mappings()
             return _devices(s, {r["id"]: dict(r) for r in rows}, owner)
 
@@ -175,7 +179,9 @@ class DeviceRepository(CachedRepository):
                     "has_codes": bool(r.backup_codes),
                 }
                 for r in s.execute(
-                    select(LoginRow).where(*mine(LoginRow.user_id, owner))
+                    select(LoginRow).where(
+                        *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_(None)
+                    )
                 ).scalars()
             }
             return _devices(s, logins, owner)
@@ -256,6 +262,9 @@ class DeviceRepository(CachedRepository):
                 select(LoginRow).where(*same, LoginRow.user_id == device.user_id)
             ).scalar_one_or_none()
             existed = row is not None
+            revived = row is not None and row.archived_at is not None
+            if row is not None:
+                row.archived_at = None
             if row is None:
                 row = LoginRow(
                     **fields, user_id=device.user_id, added_at=now, updated_at=now
@@ -278,11 +287,79 @@ class DeviceRepository(CachedRepository):
                 .on_conflict_do_nothing()
                 .returning(DeviceLoginRow.login_id)
             ).scalar_one_or_none()
-            if linked is None:
+            if linked is None and not revived:
                 msg = f"{row.username} is already on this phone"
                 raise DuplicateError(msg)
             _touch(s, [device_id], now)
             return row.id, existed
+
+    def archive_logins(self, login_ids: list[int], owner: int | None = None) -> int:
+        """Hides the logins from every phone, password kept (see
+        `LoginRow.archived_at`); how many."""
+        if not login_ids:
+            return 0
+        now = time.time()
+        with session_scope() as s:
+            done = s.execute(
+                update(LoginRow)
+                .where(
+                    LoginRow.id.in_(login_ids),
+                    *mine(LoginRow.user_id, owner),
+                    LoginRow.archived_at.is_(None),
+                )
+                .values(archived_at=now)
+                .returning(LoginRow.id)
+            ).scalars()
+            ids = list(done)
+            for login_id in ids:
+                _touch(s, _phones_of(s, login_id), now)
+            return len(ids)
+
+    def restore_login(self, login_id: int, owner: int | None = None) -> dict | None:
+        """Back on its phones; the login (service, username), or None when
+        it is not an archived one of `owner`'s."""
+        now = time.time()
+        with session_scope() as s:
+            row = s.get(LoginRow, login_id)
+            if (
+                row is None
+                or row.archived_at is None
+                or (owner is not None and row.user_id != owner)
+            ):
+                return None
+            row.archived_at = None
+            _touch(s, _phones_of(s, login_id), now)
+            return {"service": row.service, "username": row.username}
+
+    def archived(self, owner: int | None = None) -> list[dict]:
+        """`owner`'s archived logins, newest first, with the phones they
+        come back on."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(LoginRow)
+                .where(
+                    *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_not(None)
+                )
+                .order_by(LoginRow.archived_at.desc())
+            ).scalars()
+            found = []
+            for row in rows:
+                labels = s.execute(
+                    select(DeviceRow.label)
+                    .join(DeviceLoginRow, DeviceLoginRow.device_id == DeviceRow.id)
+                    .where(DeviceLoginRow.login_id == row.id)
+                    .order_by(DeviceRow.label)
+                ).scalars()
+                found.append(
+                    {
+                        "id": row.id,
+                        "service": row.service,
+                        "username": row.username,
+                        "archived_at": row.archived_at,
+                        "on": list(labels),
+                    }
+                )
+            return found
 
     def update_login(
         self, login_id: int, fields: dict, owner: int | None = None

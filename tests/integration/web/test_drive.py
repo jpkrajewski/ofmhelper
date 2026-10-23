@@ -12,7 +12,6 @@ import datetime
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from zoneinfo import ZoneInfo
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
@@ -24,11 +23,12 @@ from signin import sign_in_agency
 
 from ofmhelpers.gdrive import FolderGoneError
 from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.web import drive_folders
+from ofmhelpers.web import drive_folders, posting
 from ofmhelpers.web.main import app
 from ofmhelpers.web.schemas import DeviceFields, LoginFields, UserForm
 from ofmhelpers.web.stores import devices, users
 from ofmhelpers.web.stores import drive_folders as store
+from ofmhelpers.web.stores.tracked_accounts import list_accounts, track
 
 # The agency's Google account (the password admin's, who owns the phones
 # `_phone` makes): its My Drive, and the "DEV - ALL ACCOUNTS" in it.
@@ -280,30 +280,44 @@ def test_a_posted_folder_dragged_out_is_left_there_and_a_new_one_made(drive):
     assert drive.item(posted).parents == [ROOT]
 
 
-def test_a_trashed_account_folder_is_made_again_with_its_posted_folder(drive):
-    _login(_phone("Phone 01"), "instagram", "ann.ig")
+@pytest.mark.parametrize("how", ["trash", "delete"])
+def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive, how):
+    """Prod, 2026-10-22: a VA deleted folders in Drive and the sweep made
+    them again every 5 minutes. Now the account goes everywhere -- off the
+    phone (password archived), off /accounts -- and the folder stays gone;
+    restoring it on /phones brings all of it back."""
+    phone = _phone("Phone 01")
+    added = devices.add_login(
+        phone, LoginFields(service="instagram", username="ann.ig", password="pw")
+    )
+    assert added is not None
+    login = added[0]
+    track("instagram", "ann.ig", user_id=users.agency_id())
     drive_folders.sync()
     account = _account(drive, "ann.ig")
-    drive.trash(account)
+    getattr(drive, how)(account)
 
     report = drive_folders.sync()
 
-    assert report.created == ["ann.ig - Anna"]
-    new = _account(drive, "ann.ig")
-    assert new != account
-    assert drive.named(POSTED, new) == [_stored().posted_folder_id]
-    assert drive.item(account).trashed
+    assert report.created == []
+    assert drive.named("ann.ig - Anna", ROOT) == []
+    assert drive_folders.sync().created == []  # and never again
+    assert [x.username for d in devices.list_devices() for x in d.logins] == []
+    [archived] = devices.archived_logins()
+    assert (archived.id, archived.username, archived.on) == (
+        login,
+        "ann.ig",
+        ["Phone 01"],
+    )
+    assert devices.secrets(login).password == "pw"  # kept
+    assert "ann.ig" not in [a.handle for a in list_accounts()]
 
-
-def test_a_deleted_account_folder_is_made_again(drive):
-    _login(_phone("Phone 01"), "instagram", "ann.ig")
-    drive_folders.sync()
-    drive.delete(_account(drive, "ann.ig"))
-
-    report = drive_folders.sync()
-
-    assert report.created == ["ann.ig - Anna"]
-    assert _posted(drive, "ann.ig") == _stored().posted_folder_id
+    client = _client()
+    assert "Archived accounts (1)" in client.get("/phones").text
+    assert client.post(f"/phones/logins/{login}/restore").status_code == 200
+    assert [x.username for d in devices.list_devices() for x in d.logins] == ["ann.ig"]
+    assert "ann.ig" in [a.handle for a in list_accounts()]
+    assert drive_folders.sync().created == ["ann.ig - Anna"]
 
 
 def test_state_before_posted_folders_heals_on_the_first_sweep(drive):
@@ -443,32 +457,119 @@ def test_a_second_posted_folder_counts_and_is_flagged(drive):
     assert drive.item(extra).name == "posted"
 
 
-def test_posted_today_turns_at_warsaw_midnight(drive):
-    """23:59 and 00:01 Warsaw time (CEST, UTC+2) are different days; the
-    week still has both."""
+def test_posted_today_turns_at_the_posting_windows_start(drive):
+    """Posting is 19:45 UTC, from an hour before to five after (2026-10-22):
+    a posting day starts 18:45 UTC. 18:44 and 18:46 are different days;
+    the week has both; 23:00 the same evening is still that day."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     posted = _posted(drive, "ann.ig")
-    late = datetime.datetime(2026, 10, 21, 21, 59, tzinfo=datetime.UTC)
-    with time_machine.travel(late, tick=False):
-        drive.add_file(posted, "late.mp4", "video/mp4")
-        drive_folders.sync()
-    with time_machine.travel(late + datetime.timedelta(minutes=2), tick=False):
-        drive.add_file(posted, "early.mp4", "video/mp4")
-        drive_folders.sync()
-        card = drive_folders.board().cards[0]
+    before = datetime.datetime(2026, 10, 21, 18, 44, tzinfo=datetime.UTC)
+    for at, name in (
+        (before, "before.mp4"),
+        (before + datetime.timedelta(minutes=2), "in-window.mp4"),
+        (before + datetime.timedelta(hours=4), "late.mp4"),
+    ):
+        with time_machine.travel(at, tick=False):
+            drive.add_file(posted, name, "video/mp4")
+            drive_folders.sync()
+            card = drive_folders.board().cards[0]
 
-    assert (card.posted_today, card.posted_week, card.posted_total) == (1, 2, 2)
+    assert (card.posted_today, card.posted_week, card.posted_total) == (2, 3, 3)
 
 
-def test_the_week_spans_the_dst_change():
-    """Seven Warsaw days back from Monday 2026-10-26 (CET) start on Tuesday
-    2026-10-20 at local midnight (CEST, UTC+2)."""
-    at = datetime.datetime(2026, 10, 26, 12, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
-    today, week = drive_folders._period_starts(at)
-    assert datetime.datetime.fromtimestamp(today, datetime.UTC).hour == 23  # CET
-    start = datetime.datetime.fromtimestamp(week, datetime.UTC)
-    assert (start.date(), start.hour) == (datetime.date(2026, 10, 19), 22)  # CEST
+@pytest.mark.parametrize(
+    ("at", "start"),
+    [
+        # Summer and winter alike: UTC, no daylight saving shift.
+        ("2026-07-01T20:00:00+00:00", "2026-07-01T18:45:00+00:00"),
+        ("2026-12-01T20:00:00+00:00", "2026-12-01T18:45:00+00:00"),
+        # After midnight UTC, inside the window: still the evening's day.
+        ("2026-12-02T00:30:00+00:00", "2026-12-01T18:45:00+00:00"),
+        # Morning: the day that started last evening.
+        ("2026-12-02T10:00:00+00:00", "2026-12-01T18:45:00+00:00"),
+        ("2026-12-02T18:45:00+00:00", "2026-12-02T18:45:00+00:00"),
+    ],
+)
+def test_a_posting_day_starts_at_18_45_utc_all_year(at, start):
+    found = drive_folders.posting_day_start(datetime.datetime.fromisoformat(at))
+    assert found == datetime.datetime.fromisoformat(start)
+
+
+def test_the_posting_time_is_a_setting(monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_POSTING_TIME_UTC", "16:00")
+    monkeypatch.setenv("OFM_GDRIVE_POSTING_BEFORE_H", "2")
+    at = datetime.datetime(2026, 12, 1, 15, 0, tzinfo=datetime.UTC)
+    assert drive_folders.posting_day_start(at).hour == 14
+
+
+def _utc(text: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(text)
+
+
+@pytest.mark.parametrize(
+    ("at", "start", "end", "is_open"),
+    [
+        # Before: the evening's window, not open yet.
+        (
+            "2026-12-01T18:44:00+00:00",
+            "2026-12-01T18:45:00+00:00",
+            "2026-12-02T00:45:00+00:00",
+            False,
+        ),
+        (
+            "2026-12-01T18:45:00+00:00",
+            "2026-12-01T18:45:00+00:00",
+            "2026-12-02T00:45:00+00:00",
+            True,
+        ),
+        # Past midnight UTC, still open.
+        (
+            "2026-12-02T00:44:00+00:00",
+            "2026-12-01T18:45:00+00:00",
+            "2026-12-02T00:45:00+00:00",
+            True,
+        ),
+        # Closed: rolls to the next evening.
+        (
+            "2026-12-02T00:45:00+00:00",
+            "2026-12-02T18:45:00+00:00",
+            "2026-12-03T00:45:00+00:00",
+            False,
+        ),
+        (
+            "2026-12-02T10:00:00+00:00",
+            "2026-12-02T18:45:00+00:00",
+            "2026-12-03T00:45:00+00:00",
+            False,
+        ),
+    ],
+)
+def test_the_posting_window_is_open_18_45_to_00_45_utc(at, start, end, is_open):
+    found = posting.window(_utc(at))
+    assert found.start == _utc(start).timestamp()
+    assert found.end == _utc(end).timestamp()
+    assert found.open is is_open
+
+
+def test_the_posting_window_follows_its_settings(monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_POSTING_TIME_UTC", "12:00")
+    monkeypatch.setenv("OFM_GDRIVE_POSTING_BEFORE_H", "0.5")
+    monkeypatch.setenv("OFM_GDRIVE_POSTING_AFTER_H", "2")
+    found = posting.window(_utc("2026-12-01T11:30:00+00:00"))
+    assert found.open is True
+    assert found.end == _utc("2026-12-01T14:00:00+00:00").timestamp()
+
+
+def test_every_page_carries_the_posting_window_hidden(fake_externals):
+    client = TestClient(app)
+    sign_in_agency(client)
+    with time_machine.travel(_utc("2026-12-01T20:00:00+00:00"), tick=False):
+        page = client.get("/home").text
+    start = int(_utc("2026-12-01T18:45:00+00:00").timestamp())
+    end = int(_utc("2026-12-02T00:45:00+00:00").timestamp())
+    assert f'data-start="{start}" data-end="{end}" hidden' in page
+    assert "Start posting content" in page
 
 
 def test_one_account_failing_to_list_does_not_stop_the_tally(drive, monkeypatch):
@@ -627,9 +728,9 @@ def test_a_trashed_account_folder_is_still_told_on_the_page(drive):
     assert "Nothing waiting to post" in html  # bea's, from the batch
 
 
-def test_page_forgets_a_trashed_account_folder_that_still_lists(drive):
+def test_page_sees_a_trashed_account_folder_that_still_lists(drive):
     """Drive still lists a trashed folder's files; the page checks the
-    folder itself, so it is forgotten and the next sweep makes it again."""
+    folder itself, so the account is removed and nothing made again."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     account = _account(drive, "ann.ig")
@@ -643,7 +744,7 @@ def test_page_forgets_a_trashed_account_folder_that_still_lists(drive):
 
     assert "The account&#39;s folder was deleted" in html
     assert store.account_folders() == {}
-    assert drive_folders.sync().created == ["ann.ig - Anna"]
+    assert drive_folders.sync().created == []
 
 
 def test_drive_is_in_the_nav():
@@ -886,10 +987,11 @@ def test_cards_are_ordered_by_the_accounts_followers(drive):
 
     assert [t.handle for t in store.targets()] == ["big.ig", "small.ig", "new.ig"]
     html = _client().get("/drive/live").text
-    order = [html.index(f">@{h}<") for h in ("big.ig", "small.ig", "new.ig")]
+    order = [html.index(f">@{h}") for h in ("big.ig", "small.ig", "new.ig")]
     assert order == sorted(order)
-    assert "90k" not in html
-    assert "90000" not in html
+    # Followers next to the handle (2026-10-22), a tracked one only.
+    assert '@big.ig <span class="dr-followers">· 90k followers</span>' in html
+    assert ">@new.ig</p>" in html
 
 
 # --- the page opens from the last read ---------------------------------------------
@@ -1105,3 +1207,140 @@ def test_an_unusable_bot_key_is_no_fallback(bot_drive, monkeypatch):
 
     assert report.not_connected == [users.get_user(users.agency_id()).email]
     assert report.failed == []
+
+
+# --- one account is one thing: /accounts, /phones, Drive ---------------------
+
+
+def _tracked_login(phone: int, handle: str = "ann.ig") -> tuple[int, int]:
+    """(login id, /accounts id) of an Instagram login with a password."""
+    added = devices.add_login(
+        phone, LoginFields(service="instagram", username=handle, password="pw")
+    )
+    assert added is not None
+    track("instagram", handle, user_id=users.agency_id())
+    (account,) = [a.id for a in list_accounts() if a.handle == handle]
+    return added[0], account
+
+
+def test_removed_on_accounts_it_leaves_the_phones_and_drive_password_kept(drive):
+    """Prod, 2026-10-22: removed on /accounts, they stayed on the phones."""
+    login, account = _tracked_login(_phone("Phone 01"))
+    other_login, _ = _tracked_login(_phone("Phone 02", owner="Bea"), "bea.ig")
+    drive_folders.sync()
+    folder = _account(drive, "ann.ig")
+
+    r = _client().post("/accounts/delete", json={"ids": [account]})
+
+    assert r.json()["count"] == 1
+    assert drive.item(folder).trashed  # restorable in Drive
+    assert [x.id for d in devices.list_devices() for x in d.logins] == [other_login]
+    assert [a.id for a in devices.archived_logins()] == [login]
+    assert devices.secrets(login).password == "pw"
+    assert "ann.ig" not in [a.handle for a in list_accounts()]
+    assert drive_folders.sync().created == []  # not made again
+
+
+def test_off_its_last_phone_it_leaves_accounts_and_drive(drive):
+    phone = _phone("Phone 01")
+    login, _ = _tracked_login(phone)
+    drive_folders.sync()
+    folder = _account(drive, "ann.ig")
+
+    r = _client().post(f"/phones/{phone}/logins/{login}/delete")
+
+    assert r.status_code == 200
+    assert drive.item(folder).trashed
+    assert "ann.ig" not in [a.handle for a in list_accounts()]
+    assert devices.archived_logins() == []  # deleted on purpose, as /phones says
+
+
+def test_off_one_of_two_phones_it_stays_everywhere(drive):
+    one, two = _phone("Phone 01"), _phone("Phone 02")
+    login, _ = _tracked_login(one)
+    assert devices.add_login(two, LoginFields(service="instagram", username="ann.ig"))
+    drive_folders.sync()
+    folder = _account(drive, "ann.ig")
+
+    _client().post(f"/phones/{one}/logins/{login}/delete")
+
+    assert not drive.item(folder).trashed
+    assert "ann.ig" in [a.handle for a in list_accounts()]
+
+
+def test_a_deleted_phone_takes_only_its_own_accounts_along(drive):
+    one, two = _phone("Phone 01"), _phone("Phone 02", owner="Bea")
+    _tracked_login(one)
+    _tracked_login(two, "bea.ig")
+    drive_folders.sync()
+    ann, bea = _account(drive, "ann.ig"), _account(drive, "bea.ig", owner="Bea")
+
+    _client().post(f"/phones/{one}/delete")
+
+    assert drive.item(ann).trashed
+    assert not drive.item(bea).trashed
+    assert [a.handle for a in list_accounts()] == ["bea.ig"]
+
+
+def test_adding_an_archived_account_again_brings_it_back(drive):
+    phone = _phone("Phone 01")
+    login, account = _tracked_login(phone)
+    drive_folders.sync()
+    _client().post("/accounts/delete", json={"ids": [account]})
+
+    again = devices.add_login(
+        phone, LoginFields(service="instagram", username="ann.ig")
+    )
+
+    assert again == (login, True)
+    assert devices.archived_logins() == []
+    assert devices.secrets(login).password == "pw"
+
+
+def test_a_posted_folder_gone_mid_scan_never_removes_the_account(drive, monkeypatch):
+    """Only POSTED went between the account's listing and POSTED's own:
+    the account folder is still there, so nothing is archived."""
+    _tracked_login(_phone("Phone 01"))
+    drive_folders.sync()
+    posted = _posted(drive, "ann.ig")
+    real_children = drive.children
+
+    def children(parent_id, *, folders_only=False):
+        if parent_id == posted:
+            raise FolderGoneError(posted)
+        return real_children(parent_id, folders_only=folders_only)
+
+    monkeypatch.setattr(drive, "children", children)
+
+    drive_folders.sync()
+
+    assert devices.archived_logins() == []
+    assert "ann.ig" in [a.handle for a in list_accounts()]
+
+
+def test_an_archived_account_with_no_phone_left_is_not_restored(drive):
+    """Restored onto no phone, the next phone change would delete it,
+    password included."""
+    phone = _phone("Phone 01")
+    login, account = _tracked_login(phone)
+    _client().post("/accounts/delete", json={"ids": [account]})
+    _client().post(f"/phones/{phone}/delete")
+
+    r = _client().post(f"/phones/logins/{login}/restore")
+
+    assert r.status_code == 409
+    assert [a.id for a in devices.archived_logins()] == [login]
+    assert devices.secrets(login).password == "pw"
+
+
+def test_an_archived_account_is_restored_onto_its_phone(drive):
+    phone = _phone("Phone 01")
+    login, account = _tracked_login(phone)
+    _client().post("/accounts/delete", json={"ids": [account]})
+
+    r = _client().post(f"/phones/logins/{login}/restore")
+
+    assert r.status_code == 200
+    assert devices.archived_logins() == []
+    assert [x.id for d in devices.list_devices() for x in d.logins] == [login]
+    assert "ann.ig" in [a.handle for a in list_accounts()]

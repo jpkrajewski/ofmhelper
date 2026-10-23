@@ -126,3 +126,26 @@ def test_pages_expose_the_session_deadline_to_the_client():
 
     assert f'data-session-max-age="{60 * 60 * 5}"' in body
     assert "/static/js/session.js" in body
+
+
+def test_a_signed_out_download_fails_instead_of_saving_the_login_page():
+    """2026-10-23: Download while signed out saved the login page's HTML
+    as "VID_8121.mp4", which then "crashed" every player."""
+    r = _request(
+        "/download-media/files/abc12345/0?dl=1", {"sec-fetch-mode": "navigate"}
+    )
+
+    assert r.status_code == 401
+    assert r.headers["content-type"].startswith("text/plain")
+    assert "<html" not in r.text
+
+
+def test_a_session_that_ends_says_why(caplog):
+    signed_in = TestClient(app)
+    signed_in.post("/login", data={"password": "test-admin", "next": "/"})
+    signed_in.cookies.set("ofm_session", "garbage")
+
+    with caplog.at_level("WARNING", logger="ofmhelpers.web.middleware.auth"):
+        signed_in.get(PROTECTED_PAGE, follow_redirects=False)
+
+    assert "refused (no session)" in caplog.text

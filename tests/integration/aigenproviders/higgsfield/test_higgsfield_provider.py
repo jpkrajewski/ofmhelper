@@ -271,3 +271,38 @@ def test_an_image_over_the_limits_goes_up_as_a_shrunk_copy(
     with Image.open(sent) as img:
         assert img.size == (500, 100)
     assert sheet.read_bytes() == original
+
+
+def test_one_file_asked_for_at_once_is_uploaded_once(monkeypatch, image):
+    """2026-10-23: a /clone-long run's 3 pieces started together and each
+    uploaded the same subject image (3 x ~15 s). Now the first uploads, the
+    others wait and take its URL."""
+    import threading
+    import time
+
+    fake = Wire(_upload_routes())
+
+    def slow(client, method, url, **kwargs):
+        time.sleep(0.2)  # long enough for all three to be in flight
+        return fake(client, method, url, **kwargs)
+
+    monkeypatch.setattr(httpx.Client, "request", slow)
+    monkeypatch.setattr(
+        "ofmhelpers.aigenproviders.higgsfield.provider._live", lambda _url: True
+    )
+    urls = []
+    threads = [
+        threading.Thread(
+            target=lambda: urls.append(
+                HiggsfieldProvider("key-id:key-secret").upload(image)
+            )
+        )
+        for _ in range(3)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert urls == ["https://cdn/input/face.png"] * 3
+    assert len(fake.calls) == 2, "one presign + one PUT for all three"

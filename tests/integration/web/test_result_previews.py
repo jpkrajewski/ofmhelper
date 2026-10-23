@@ -193,6 +193,30 @@ def test_a_preview_that_cannot_be_made_serves_the_original(client, tmp_path):
     assert r.content == b"not a png"
 
 
+def test_a_video_whose_preview_is_not_made_yet_plays_the_original_now(
+    client, tmp_path, no_warming, monkeypatch
+):
+    """2026-10-23: a 75 s 4K download's preview takes the worker about a
+    minute; the card was blank all that time while the route made a second
+    one. Now the original plays at once, uncached, and nothing is encoded."""
+    clip = tmp_path / "long.mp4"
+    clip.write_bytes(b"original video bytes")
+    job_id = _done_job(clip)
+
+    def never(*_args):
+        msg = "the route must not encode a video"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(previews, "write_video_preview", never)
+
+    r = client.get(f"{PREFIX}/files/{job_id}/0/preview")
+
+    assert r.status_code == 200
+    assert r.content == b"original video bytes"
+    assert r.headers["cache-control"] == "no-store"
+    assert list(previews.previews_dir().glob("*.mp4")) == []
+
+
 def test_an_image_has_no_poster_and_audio_no_preview(client, tmp_path):
     pic = _picture(tmp_path / "r.png", 8, 8)
     voice = tmp_path / "v.mp3"
@@ -344,11 +368,13 @@ def test_media_and_downloads_are_never_gzipped(client, tmp_path):
 def test_video_preview_is_720p_smaller_faststart(client, tmp_path, no_warming):
     clip = _clip(tmp_path / "big.mp4", 1080, 1920)
     job_id = _done_job(clip)
+    previews.make_preview(clip, job_id, 0)  # what the preview worker does
 
     r = client.get(f"{PREFIX}/files/{job_id}/0/preview")
 
     assert r.status_code == 200
     assert r.headers["content-type"] == "video/mp4"
+    assert r.headers["cache-control"].endswith("immutable")
     (cached,) = previews.previews_dir().glob("*.mp4")
     assert _probe_height(cached) == 720
     assert cached.stat().st_size < clip.stat().st_size / 3
@@ -360,8 +386,7 @@ def test_video_preview_is_720p_smaller_faststart(client, tmp_path, no_warming):
 def test_a_small_video_is_never_upscaled(client, tmp_path, no_warming):
     clip = _clip(tmp_path / "small.mp4", 320, 568)
     job_id = _done_job(clip)
-
-    assert client.get(f"{PREFIX}/files/{job_id}/0/preview").status_code == 200
+    previews.make_preview(clip, job_id, 0)
 
     (cached,) = previews.previews_dir().glob("*.mp4")
     assert _probe_height(cached) == 568

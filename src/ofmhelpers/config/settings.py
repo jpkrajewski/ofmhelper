@@ -17,6 +17,7 @@ config/__init__.py's docstring for why.
 
 from __future__ import annotations
 
+import datetime
 from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -87,6 +88,12 @@ class WebSettings(BaseSettings):
     max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(
         default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
+    )
+    # A running job no worker holds and the queue does not hold is taken as
+    # cut off (a deploy killed its worker) once it is at least this old --
+    # never one created a moment ago and not enqueued yet.
+    recovery_orphan_grace_s: int = Field(
+        default=120, ge=0, validation_alias="OFM_RECOVERY_ORPHAN_GRACE_S"
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
     # /download-assets cards per page: the first page paints fast, the rest
@@ -476,9 +483,19 @@ class DownloadersSettings(BaseSettings):
     cookies_file: str = Field(
         default="cookies/cookies.txt", validation_alias="OFM_COOKIES_FILE"
     )
-    # Largest cookies.txt /cookies takes (a browser export is a few KB).
+    # One page fetch or one video stream's connect/read wait (downloaders/kvs.py).
+    http_timeout_s: int = Field(
+        default=60, ge=1, validation_alias="OFM_DOWNLOAD_HTTP_TIMEOUT_S"
+    )
+    # ffprobe on a downloaded video, to refuse a web page saved as one.
+    probe_timeout_s: int = Field(
+        default=30, ge=1, validation_alias="OFM_DOWNLOAD_PROBE_TIMEOUT_S"
+    )
+    # Largest cookies.txt /cookies takes. One site's export is a few KB, but
+    # an "all cookies" browser export runs to megabytes (2026-10-23: a real
+    # one was refused at the old 1 MB).
     cookies_max_bytes: int = Field(
-        default=1_048_576, validation_alias="OFM_COOKIES_MAX_BYTES"
+        default=20 * 1024 * 1024, validation_alias="OFM_COOKIES_MAX_BYTES"
     )
     bgutil_pot_provider_url: str | None = None
     cookies_from_browser: str | None = Field(
@@ -578,9 +595,14 @@ class InstagramSettings(BaseSettings):
     max_duration_s: float = Field(
         default=15.0, gt=0, validation_alias="OFM_IG_MAX_DURATION_S"
     )
-    # web/reel_watch.py: how stale a watched profile's scan may get, how
-    # often the sweeper looks for stale ones, and how long a claimed scan
-    # may run before another sweep takes it over.
+    # web/reel_watch.py: whether watched profiles are rescanned at all (off
+    # since 2026-10-23, /reels retired to More: only a just-added profile's
+    # first scan runs), how stale a scan may get, how often the sweeper
+    # looks, and how long a claimed scan may run before another sweep takes
+    # it over.
+    rescan_enabled: bool = Field(
+        default=False, validation_alias="OFM_IG_RESCAN_ENABLED"
+    )
     rescan_interval_s: int = Field(
         default=12 * 60 * 60, validation_alias="OFM_IG_RESCAN_INTERVAL_S"
     )
@@ -921,6 +943,31 @@ class ExportSettings(BaseSettings):
     )
 
 
+class CloneLongSettings(BaseSettings):
+    """/clone-long (`web/clone_long`): one image + one long video through
+    Wan 3.0 in pieces of at most 15 s."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # The longest video taken: a mistaken hour-long upload must not spend
+    # for 240 pieces.
+    max_video_s: int = Field(default=600, ge=1, validation_alias="OFM_CLONE_LONG_MAX_S")
+    # Pieces of one video generating at the same time: 5 makes 75 s one round.
+    parallel_pieces: int = Field(
+        default=5, ge=1, validation_alias="OFM_CLONE_LONG_PARALLEL"
+    )
+    # One cut or the join (re-encodes: minutes for a long 1080p video).
+    ffmpeg_timeout_s: int = Field(
+        default=900, ge=1, validation_alias="OFM_CLONE_LONG_FFMPEG_TIMEOUT_S"
+    )
+    # A cut piece's short side at most (Wan 3.0 makes 1080P at most): a 4K
+    # phone video's pieces re-encoded at full size would be uploaded at
+    # several times the original's bitrate, once per piece.
+    piece_max_side: int = Field(
+        default=1080, ge=2, validation_alias="OFM_CLONE_LONG_PIECE_MAX_SIDE"
+    )
+
+
 class GDriveSettings(BaseSettings):
     """/drive (`ofmhelpers.gdrive`, web/drive_folders.py): each phone
     owner's own Google Drive, through their Google sign-in (`SignInSettings`
@@ -946,9 +993,23 @@ class GDriveSettings(BaseSettings):
     posted_folder_name: str = Field(
         default="POSTED", min_length=1, validation_alias="OFM_GDRIVE_POSTED_FOLDER"
     )
-    # IANA: "posted today" starts at midnight here, DST included.
+    # IANA: the zone /drive's times are shown in.
     timezone: str = Field(
         default="Europe/Warsaw", validation_alias="OFM_GDRIVE_TIMEZONE"
+    )
+    # When the team posts, in UTC (fixed all year: no daylight saving shift).
+    # Posting runs from `posting_window_before_h` before it to
+    # `posting_window_after_h` after it; a posting day -- what "Posted today"
+    # counts -- starts at the window's start (2026-10-22: 19:45 UTC, so
+    # 18:45-00:45 UTC, every day).
+    posting_time_utc: datetime.time = Field(
+        default=datetime.time(19, 45), validation_alias="OFM_GDRIVE_POSTING_TIME_UTC"
+    )
+    posting_window_before_h: float = Field(
+        default=1, ge=0, le=23, validation_alias="OFM_GDRIVE_POSTING_BEFORE_H"
+    )
+    posting_window_after_h: float = Field(
+        default=5, ge=0, le=23, validation_alias="OFM_GDRIVE_POSTING_AFTER_H"
     )
     # How often the sweeper runs: makes missing folders, and lists every
     # POSTED folder to record what was posted (a few list calls per account).

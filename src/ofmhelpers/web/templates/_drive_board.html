@@ -21,7 +21,8 @@
 <div class="ph-grid" id="dr-grid" data-layout="grid">
     {% for c in cards %}
     {% set t = c.target %}
-    <article class="ph-card dr-card" data-search="{{ c.search_text }}" {% if not c.waiting %}data-empty{% endif %}>
+    <article class="ph-card dr-card" data-search="{{ c.search_text }}" data-login="{{ t.login_id }}"
+             data-folder="{{ t.folder_name }}" {% if not c.waiting %}data-empty{% endif %}>
         <a class="ph-media" href="/phones#phone-{{ t.device.id }}">
             <img src="{{ t.device.drawing_url }}" alt="{{ t.device.specs }}" loading="lazy">
         </a>
@@ -36,7 +37,7 @@
             {% endif %}
         </div>
         {% if t.device.owner %}<p class="ph-meta"><span>{{ t.device.owner }}</span></p>{% endif %}
-        <p class="dr-account">@{{ t.handle }}</p>
+        <p class="dr-account">@{{ t.handle }}{% if t.followers_label %} <span class="dr-followers">· {{ t.followers_label }}</span>{% endif %}</p>
         {% if c.error %}
         <p class="dr-note dr-error">{{ c.error }}</p>
         {% elif not c.account_folder_id %}

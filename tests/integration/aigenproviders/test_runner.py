@@ -66,7 +66,7 @@ def test_submits_once_waits_and_saves_the_result(tmp_path):
     assert seen == ["https://cdn/x/out.mp4"]
     assert path == tmp_path / "kie_task-1.mp4"
     assert path.read_bytes() == b"result"
-    assert tasks.recall("job1") is None, "a saved result needs no resuming"
+    assert tasks.recall("job1") is not None, "forgotten once its job is saved"
 
 
 def test_a_rerun_resumes_the_remembered_request_instead_of_paying_again():

@@ -22,6 +22,7 @@ def _to_dict(row: DriveUploadRow) -> dict:
         "user_id": row.user_id,
         "folder_name": row.folder_name,
         "status": row.status,
+        "drive_file_id": row.drive_file_id,
         "drive_url": row.drive_url,
         "error": row.error,
     }
@@ -65,7 +66,7 @@ class DriveUploadRepository(CachedRepository):
                         "finished_at": None,
                     },
                     where=or_(
-                        row.status == "failed",
+                        row.status.in_(("failed", "removed")),
                         and_(row.status == "queued", row.created_at < stale_before),
                     ),
                 )
@@ -89,6 +90,32 @@ class DriveUploadRepository(CachedRepository):
                 .order_by(DriveUploadRow.id)
             ).scalars()
             return [_to_dict(r) for r in rows]
+
+    def remove(self, upload_id: int, reason: str) -> None:
+        """No longer in its folder (trashed from /clone, or gone in Drive)."""
+        with session_scope() as s:
+            s.execute(
+                update(DriveUploadRow)
+                .where(DriveUploadRow.id == upload_id)
+                .values(status="removed", error=reason)
+            )
+
+    def gone_from(self, login_id: int, present: set[str], before: float) -> int:
+        """Marks this login's done uploads, finished before `before`, whose
+        file is not in `present` as removed; how many."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(DriveUploadRow).where(
+                    DriveUploadRow.login_id == login_id,
+                    DriveUploadRow.status == "done",
+                    DriveUploadRow.finished_at < before,
+                )
+            ).scalars()
+            gone = [r for r in rows if r.drive_file_id not in present]
+            for row in gone:
+                row.status = "removed"
+                row.error = "Removed in Drive"
+            return len(gone)
 
     def finish(
         self,

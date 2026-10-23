@@ -4,6 +4,7 @@ only into folders they may use, only their own runs, and a failure is
 shown and may be retried."""
 
 import os
+import re
 import time
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
@@ -16,13 +17,16 @@ import time_machine
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.gdrive import DriveError
+from ofmhelpers.gdrive import DriveError, DriveFile
 from ofmhelpers.gdrive.fake import fake_drive
+from ofmhelpers.signin import SignInError
+from ofmhelpers.socials import AccountProfile, AccountStats
 from ofmhelpers.web import drive_folders, drive_uploads
 from ofmhelpers.web.main import app
 from ofmhelpers.web.stores import drive_folders as folder_store
 from ofmhelpers.web.stores import users
 from ofmhelpers.web.stores.jobs import create_job, run_job
+from ofmhelpers.web.stores.tracked_accounts import list_accounts, record_scan
 from ofmhelpers.web.stores.users import _repository as user_repository
 
 ROOT = "upload-root-folder"
@@ -184,9 +188,8 @@ def test_the_drive_picker_offers_only_the_users_folders(drive, tmp_path):
     _finished_run("bob@example.com", tmp_path, "b.mp4")
 
     ann_page = ann.get("/clone").text
-    assert f'data-login="{login}"' in ann_page
-    assert 'data-folder="ann.ig - Anna"' in ann_page
     assert "Upload to Drive" in ann_page  # in the finished card's menu
+    assert f'data-login="{login}"' in ann.get("/drive").text
     bob_page = bob.get("/clone").text
     assert "ann.ig - Anna" not in bob_page
     # Bob has no account folder: no picker, no menu item.
@@ -345,3 +348,171 @@ def test_clone_and_drive_offer_connecting_google_drive_until_it_is(drive):
     connected = _client("bob@example.com")
     assert connect not in connected.get("/clone").text
     assert connect not in connected.get("/drive/live").text
+
+
+def _file(name: str) -> DriveFile:
+    return DriveFile(id=name, name=f"{name}.mp4", mime_type="video/mp4")
+
+
+def _upload(client: TestClient, job: str, login: int) -> dict:
+    client.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
+    [state] = client.get("/clone/drive-uploads", params={"job": job}).json()
+    assert state["status"] == "done"
+    return state
+
+
+def test_a_video_put_in_the_wrong_folder_is_taken_back_out_from_the_card(
+    drive, tmp_path
+):
+    """Prod, 2026-10-22: the VA sent one video to two accounts and could
+    only fix it in Drive itself."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path)
+    state = _upload(ann, job, login)
+    (folder,) = drive.named("ann.ig - Anna", _root_of("ann@example.com"))
+    (file_id,) = drive.named(_files_in(drive, "ann.ig - Anna")[0], folder)
+    page = ann.get("/clone").text
+    assert 'class="icon-btn drive-remove"' in page
+    assert f'data-upload="{state["id"]}"' in page
+
+    r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "removed"
+    assert drive.item(file_id).trashed  # in Drive's trash: restorable
+    assert _files_in(drive, "ann.ig - Anna") == []
+    assert "In Drive:" not in ann.get("/clone").text
+    # And it may go into that folder again.
+    assert _upload(ann, job, login)["status"] == "done"
+
+
+def test_nobody_removes_anothers_upload(drive, tmp_path):
+    ann = _client("ann@example.com")
+    bob = _client("bob@example.com")
+    login = _account_folder(ann)
+    state = _upload(ann, _finished_run("ann@example.com", tmp_path), login)
+
+    r = bob.post(f"/clone/drive-uploads/{state['id']}/remove")
+
+    assert r.status_code == 400
+    assert len(_files_in(drive, "ann.ig - Anna")) == 1
+
+
+def test_an_upload_already_gone_in_drive_is_removed_quietly(drive, tmp_path):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    state = _upload(ann, _finished_run("ann@example.com", tmp_path), login)
+    (folder,) = drive.named("ann.ig - Anna", _root_of("ann@example.com"))
+    (file_id,) = drive.named(_files_in(drive, "ann.ig - Anna")[0], folder)
+    drive.delete(file_id)
+
+    r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
+    assert (r.status_code, r.json()["status"]) == (200, "removed")
+
+
+def test_a_revoked_google_token_refuses_the_remove_with_a_reason(
+    drive, tmp_path, monkeypatch
+):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    state = _upload(ann, _finished_run("ann@example.com", tmp_path), login)
+
+    def revoked(_token):
+        msg = "Token has been expired or revoked"
+        raise SignInError(msg)
+
+    monkeypatch.setattr(drive_uploads, "connect_as", revoked)
+
+    r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
+    assert r.status_code == 400
+    assert r.json()["detail"] == "Connect Google Drive on your Account page first"
+
+
+def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
+    drive, tmp_path
+):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    posted_job = _finished_run("ann@example.com", tmp_path, "a.mp4")
+    deleted_job = _finished_run("ann@example.com", tmp_path, "b.mp4")
+    _upload(ann, posted_job, login)
+    _upload(ann, deleted_job, login)
+    (folder,) = drive.named("ann.ig - Anna", _root_of("ann@example.com"))
+    (posted,) = drive.named("POSTED", folder)
+    first, second = sorted(
+        (drive.item(i).name, i)
+        for name in _files_in(drive, "ann.ig - Anna")
+        for i in drive.named(name, folder)
+    )
+    by_job = {
+        s["job_id"]: s
+        for s in ann.get(
+            "/clone/drive-uploads", params={"job": [posted_job, deleted_job]}
+        ).json()
+    }
+    file_of = {
+        j: next(i for _n, i in (first, second) if i in by_job[j]["drive_url"])
+        for j in (posted_job, deleted_job)
+    }
+    drive.move(file_of[posted_job], posted)  # the VA posted it
+    drive.trash(file_of[deleted_job])  # deleted by hand in Drive
+
+    with time_machine.travel(time.time() + 5):
+        drive_folders.sync()
+
+    states = {
+        s["job_id"]: s["status"]
+        for s in ann.get(
+            "/clone/drive-uploads", params={"job": [posted_job, deleted_job]}
+        ).json()
+    }
+    assert states == {posted_job: "done", deleted_job: "removed"}
+
+
+def test_upload_to_drive_opens_drive_with_the_video_and_followers(drive, tmp_path):
+    """/clone "Upload to Drive" -> /drive?upload=<job>: the video on top,
+    each account card (handle + followers) is where a click puts it."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    owner = users.by_email("ann@example.com").id
+    (account,) = [a for a in list_accounts(owner) if a.handle == "ann.ig"]
+    record_scan(
+        account.id,
+        AccountStats(
+            profile=AccountProfile(handle="ann.ig", followers=12300),
+            posts=[],
+            scanned_at=time.time(),
+        ),
+    )
+    job = _finished_run("ann@example.com", tmp_path)
+
+    page = ann.get("/drive", params={"upload": job}).text
+
+    assert f'data-job="{job}"' in page
+    assert "<h2>Click phone to upload reel there</h2>" in page
+    assert 'data-name="VID_' in page
+    # Its video plays on top: the page's source is one the server serves.
+    (src,) = re.findall(r'<video src="([^"]+)"', page)
+    assert src.startswith(f"/clone/files/{job}/0")
+    played = ann.get(src)
+    assert played.status_code == 200
+    assert played.headers["content-type"].startswith("video/")
+    assert 'data-already=""' in page
+    assert '@ann.ig <span class="dr-followers">· 12.3k followers</span>' in page
+    assert f'data-login="{login}"' in page
+    assert 'data-folder="ann.ig - Anna"' in page
+
+    _upload(ann, job, login)
+    page = ann.get("/drive", params={"upload": job}).text
+    assert f'data-already="{login}"' in page  # greyed, not a target again
+
+
+def test_upload_mode_only_for_the_sessions_own_finished_run(drive, tmp_path):
+    ann = _client("ann@example.com")
+    _client("bob@example.com")
+    _account_folder(ann)
+    bob_job = _finished_run("bob@example.com", tmp_path, "b.mp4")
+    assert 'id="dr-pick"' not in ann.get("/drive", params={"upload": bob_job}).text
+    assert 'id="dr-pick"' not in ann.get("/drive", params={"upload": "nope"}).text
+    assert 'id="dr-pick"' not in ann.get("/drive").text

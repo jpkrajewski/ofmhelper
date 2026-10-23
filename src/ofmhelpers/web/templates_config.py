@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ofmhelpers.config import settings
+from ofmhelpers.web.posting import window as posting_window
 from ofmhelpers.web.schemas.accounts import ago
 from ofmhelpers.web.schemas.nav import nav
 
@@ -62,6 +63,8 @@ def get_templates() -> Jinja2Templates:
     templates.env.globals["static_url"] = static_url
     # The header, its More menu and the home cards all read schemas.nav.NAV.
     templates.env.globals["nav"] = nav
+    # The daily posting window: base.html's "Start posting content".
+    templates.env.globals["posting_window"] = posting_window
     templates.env.filters["utc"] = utc
     templates.env.filters["ago"] = ago
     return templates

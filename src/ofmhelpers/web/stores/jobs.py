@@ -26,7 +26,10 @@ from typing import Any
 import logfire
 from pydantic import BaseModel
 from redis.exceptions import RedisError
+from rq.timeouts import JobTimeoutException
 
+from ofmhelpers.aigenproviders import tasks
+from ofmhelpers.aigenproviders.errors import ProviderError
 from ofmhelpers.cache import PREVIEWS_QUEUE, enqueue_to
 from ofmhelpers.log import get_logger
 from ofmhelpers.web.db.repositories import JobRepository
@@ -69,6 +72,16 @@ def log_event(task_name: str, actor: str | None, params: dict | None = None) -> 
     return _repository().create(task_name, params or {}, actor=actor, status="done")
 
 
+def resumable(exc: BaseException) -> bool:
+    """Whether a job failing with `exc` keeps its provider request(s) for
+    recovery to finish: a provider error (timed out, download failed) or RQ
+    ending the job at its time limit -- paid pieces of a long clone
+    included. Anything else failed after the result was in (CapCut export,
+    asset store): recovery re-running it would fail the same way every
+    sweep."""
+    return isinstance(exc, (ProviderError, JobTimeoutException))
+
+
 def run_job(job_id: str, fn, kwargs: dict):
     """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
     endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
@@ -86,6 +99,8 @@ def run_job(job_id: str, fn, kwargs: dict):
         try:
             result = fn(**kwargs)
             _repository().update_status(job_id, "done", result=_stored(result))
+            # Saved: its provider request (if any) needs no resuming.
+            tasks.forget(job_id)
         except Exception as exc:
             # The status pages show this directly to whoever is running the
             # job -- a raw traceback isn't useful to them, just the
@@ -94,6 +109,8 @@ def run_job(job_id: str, fn, kwargs: dict):
             _repository().update_status(
                 job_id, "failed", error=str(exc) or exc.__class__.__name__
             )
+            if not resumable(exc):
+                tasks.forget(job_id)
             span.record_exception(exc)
             span.set_level("error")
             logger.exception("job %s failed", job_id)
@@ -112,6 +129,11 @@ def _queue_previews(job_id: str) -> None:
         enqueue_to(PREVIEWS_QUEUE, warm_previews, job.id, job.local_paths())
     except RedisError:
         logger.warning("could not queue previews of job %s", job_id, exc_info=True)
+
+
+def running_jobs() -> list[Job]:
+    """Every job still marked running (recovery: which were cut off)."""
+    return [Job.model_validate(row) for row in _repository().list_running()]
 
 
 def reopen_job(job_id: str) -> None:
@@ -180,7 +202,11 @@ def list_finished_jobs() -> list[Job]:
 
 
 def list_jobs_page(
-    tasks: set[str], offset: int, limit: int, actor: str | None = None
+    tasks: set[str],
+    offset: int,
+    limit: int,
+    actor: str | None = None,
+    status: str | None = None,
 ) -> tuple[list[Job], int]:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that it ran -- same meaning as get_job's), newest first, plus how
@@ -190,9 +216,14 @@ def list_jobs_page(
     Filtered and sliced in SQL (`JobRepository.list_page`), and only the page
     is self-healed, so rendering 20 cards costs 20 jobs' worth of rows and
     disk checks instead of the whole history's."""
-    page = _repository().list_page(tuple(sorted(tasks)), actor, offset, limit)
+    page = _repository().list_page(tuple(sorted(tasks)), actor, offset, limit, status)
     jobs = [Job.model_validate(row) for row in page["jobs"]]
     return _heal(jobs), page["total"]
+
+
+def job_counts(tasks: set[str]) -> dict[str, dict[str, int]]:
+    """actor -> task -> how many done jobs, for `tasks`."""
+    return _repository().counts(tuple(sorted(tasks)))
 
 
 def _heal(jobs: list[Job]) -> list[Job]:
