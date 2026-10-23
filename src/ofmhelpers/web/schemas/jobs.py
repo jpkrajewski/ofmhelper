@@ -61,6 +61,19 @@ class JobQueued(BaseModel):
     job_id: str
 
 
+class JobsQueued(BaseModel):
+    """`POST /ai/run`: one job id per image queued (one for a batch of one),
+    each drawn and polled as its own gallery card."""
+
+    job_ids: list[str]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def job_id(self) -> str:
+        """The first job, so a single-job caller reads `job_id` as before."""
+        return self.job_ids[0]
+
+
 class CloneQueued(BaseModel):
     """`POST /clone/run`: every run's job id, plus the batch already rendered
     as the page's own partial."""

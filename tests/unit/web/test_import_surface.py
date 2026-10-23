@@ -36,6 +36,7 @@ TASK_HELPERS = (
     "add_job_routes",
     "job_inputs",
     "job_status_payload",
+    "keep_videos",
     "make_job_dir",
     "media_response",
     "reference_asset",

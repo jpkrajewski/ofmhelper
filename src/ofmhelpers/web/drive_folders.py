@@ -69,11 +69,11 @@ from ofmhelpers.gdrive import (
     FolderGoneError,
     connect,
     connect_as,
+    read_live_mode,
     service_account_email,
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.signin import SignInError
-from ofmhelpers.web.posting import posting_day_start
 from ofmhelpers.web.previews import previews_dir, write_atomic
 from ofmhelpers.web.schemas import (
     AccountScan,
@@ -101,8 +101,10 @@ _DEV_PREFIX = "DEV - "
 def root_name() -> str:
     """ "ALL ACCOUNTS" in production; "DEV - ALL ACCOUNTS" anywhere else, so
     dev and tests never adopt or write into the live folders, even in the
-    same Google account."""
-    return _ROOT_NAME if settings.infra.production else f"{_DEV_PREFIX}{_ROOT_NAME}"
+    same Google account. In live-read mode dev reads the live "ALL ACCOUNTS"
+    (every write blocked, `gdrive.ReadOnlyDrive`)."""
+    live = settings.infra.production or read_live_mode()
+    return _ROOT_NAME if live else f"{_DEV_PREFIX}{_ROOT_NAME}"
 
 
 def _bot_root(user_id: int) -> str | None:
@@ -145,8 +147,9 @@ def _owner_label(user_id: int) -> str:
 def _is_root(folder: DriveFolder) -> bool:
     """Whether a stored root may be used. Outside production only a folder
     named `root_name()`: a dev copy of the prod database carries the live
-    "ALL ACCOUNTS" id, which dev must never write into."""
-    if settings.infra.production:
+    "ALL ACCOUNTS" id, which dev must never write into -- except in live-read
+    mode, where it is read (never written, `gdrive.ReadOnlyDrive`)."""
+    if settings.infra.production or read_live_mode():
         return True
     return folder.name.strip().casefold() == root_name().casefold()
 
@@ -219,9 +222,12 @@ def now() -> datetime.datetime:
 
 
 def _period_starts(at: datetime.datetime) -> list[float]:
-    """[start of today's posting day, start of the last 7 posting days], as
-    timestamps: what "Posted today / Last 7 days" count from."""
-    today = posting_day_start(at)
+    """[start of today, start of the last 7 days] in the Drive timezone, as
+    timestamps: what "Posted today / Last 7 days" count from. By the local
+    calendar day, not the posting window -- the team posts in the evening, so
+    a window starting mid-evening would count those posts as yesterday's."""
+    local = at.astimezone(ZoneInfo(settings.gdrive.timezone))
+    today = local.replace(hour=0, minute=0, second=0, microsecond=0)
     first = today - datetime.timedelta(days=_WEEK_DAYS - 1)
     return [today.timestamp(), first.timestamp()]
 
@@ -531,6 +537,11 @@ def sync(owner: int | None = None) -> SyncReport:
     tallies and heals every account. One owner or login failing is reported; the
     others still go. The report names only the owners swept."""
     report = SyncReport()
+    if read_live_mode():
+        # Live-read mode only reads the live folders (the page's /drive/live);
+        # the sweep makes and renames folders, so it never runs here.
+        logger.info("drive: live-read mode, sweep skipped (no writes to live)")
+        return report
     with store.sync_lock() as held:
         if not held:
             report.busy = True

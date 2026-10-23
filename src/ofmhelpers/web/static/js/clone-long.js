@@ -84,6 +84,9 @@
         picker.addEventListener("filepicker:change", update);
         provider.addEventListener("change", render);
         resolution.addEventListener("change", render);
+        // A download sent its video here (?video=): open with it picked.
+        const prefill = JSON.parse(form.dataset.prefillVideo || "[]");
+        if (prefill.length) window.FilePicker.setExisting("video", prefill);
         update();
     }
 

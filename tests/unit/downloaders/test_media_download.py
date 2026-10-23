@@ -106,7 +106,7 @@ def test_a_tool_that_does_not_know_the_site_does_not_hide_the_real_reason(
     """Prod, 2026-10-22: PornHub's 403 was shown as "Unsupported URL"."""
 
     def fails(error):
-        return lambda url, cookiefile=None: DownloadResult(
+        return lambda url, config=None, cookiefile=None: DownloadResult(
             url=url, success=False, error=error
         )
 
@@ -225,7 +225,9 @@ def test_when_every_tool_gets_a_web_page_it_fails_saying_so(monkeypatch, tmp_pat
     monkeypatch.setattr(
         images,
         "download",
-        lambda url, cookiefile=None: DownloadResult(url=url, success=False, error="no"),
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=False, error="no"
+        ),
     )
 
     result = media.download("https://example.com/v")

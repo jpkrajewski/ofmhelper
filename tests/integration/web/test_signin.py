@@ -197,6 +197,14 @@ def test_a_sign_in_without_a_page_to_return_to_lands_on_home(client, target):
     assert (r.status_code, r.headers["location"]) == (303, "/home")
 
 
+@pytest.mark.parametrize("signs_in", [sign_in, sign_in_admin])
+def test_signed_in_the_landing_page_sends_you_home(client, signs_in):
+    signs_in(client)
+    for path in ("/", "/?applied=1"):
+        r = client.get(path, follow_redirects=False)
+        assert (r.status_code, r.headers["location"]) == (303, "/home"), path
+
+
 @pytest.mark.usefixtures("providers_on")
 def test_a_provider_sign_in_without_a_page_lands_on_home(client):
     make_user("friend@example.com")

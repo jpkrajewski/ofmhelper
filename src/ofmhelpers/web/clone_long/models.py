@@ -18,9 +18,13 @@ class Piece(BaseModel):
 
 
 class Plan(BaseModel):
-    """A video as the fewest pieces the model takes, whole seconds and as
-    equal as they can be (50 s at 15 s: 13 + 13 + 12 + 12, never
-    15 + 15 + 15 + 5 -- a short tail would look unlike the rest)."""
+    """A video as the fewest pieces the model takes (<= max_s each), each
+    piece as long as it can be so the join has the fewest seams (35 s at
+    15 s: 14 + 14 + 7, not 12 + 12 + 11 -- short pieces stutter at every
+    cut). Pieces fill to just under the cap; the last takes what is left.
+    Only when that remainder would be a stuttering sliver (under a third of
+    a full piece) are the pieces evened out instead, so none looks unlike
+    the rest (32 s: 11 + 11 + 10, not 14 + 14 + 4)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -31,16 +35,39 @@ class Plan(BaseModel):
         if seconds <= max_s:
             return cls(pieces=(Piece(start=0, length=seconds),))
         count = math.ceil(seconds / max_s)
+        # Fill the front pieces just under the cap (a piece sitting exactly on
+        # the cap glitched), but no shorter than what still leaves the last
+        # piece within the cap.
+        front = min(
+            float(max_s), max(float(max_s - 1), (seconds - max_s) / (count - 1))
+        )
+        tail = seconds - front * (count - 1)
+        if tail < max_s / 3:
+            return cls._even(seconds, count, max_s)
+        return cls._from_lengths(seconds, [front] * (count - 1) + [tail], max_s)
+
+    @classmethod
+    def _even(cls, seconds: float, count: int, max_s: int) -> Plan:
+        """`count` pieces as equal as whole seconds allow -- the fallback when
+        filling to the cap would leave a sliver."""
         base, extra = divmod(round(seconds), count)
+        lengths = [float(base + (1 if i < extra else 0)) for i in range(count)]
+        return cls._from_lengths(seconds, lengths, max_s)
+
+    @classmethod
+    def _from_lengths(cls, seconds: float, lengths: list[float], max_s: int) -> Plan:
         pieces = []
-        start = 0
-        for i in range(count):
-            length = base + (1 if i < extra else 0)
+        start = 0.0
+        for length in lengths:
             pieces.append(Piece(start=start, length=length))
             start += length
-        # The fraction rounding dropped or added belongs to the last piece.
+        # Any rounding or float drift belongs to the last piece, so the pieces
+        # cover the source exactly once; clamped to the cap, since a remainder
+        # that lands exactly on it can drift a hair past in float.
         last = pieces[-1]
-        pieces[-1] = Piece(start=last.start, length=seconds - last.start)
+        pieces[-1] = Piece(
+            start=last.start, length=min(float(max_s), seconds - last.start)
+        )
         return cls(pieces=tuple(pieces))
 
     @property

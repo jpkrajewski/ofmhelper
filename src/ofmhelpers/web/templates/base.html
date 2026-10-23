@@ -29,7 +29,7 @@
 
     <header class="site-header">
         <div class="site-header-inner">
-            <a class="brand" href="/">
+            <a class="brand" href="{{ '/home' if signed_in_as else '/' }}">
                 <span class="brand-name">ASCEND GLOBAL</span>
                 <span class="brand-sub">Content Ops</span>
             </a>

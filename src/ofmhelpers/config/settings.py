@@ -988,6 +988,12 @@ class GDriveSettings(BaseSettings):
         default=None, validation_alias="OFM_GDRIVE_SERVICE_ACCOUNT"
     )
     root_folder_id: str = Field(default="", validation_alias="OFM_GDRIVE_ROOT_FOLDER")
+    # Dev only (ignored in production): read the live "ALL ACCOUNTS" folders
+    # to debug prod's Drive state, instead of the "DEV - ALL ACCOUNTS"
+    # sandbox. Every write to Drive is blocked while it is on
+    # (gdrive.client.ReadOnlyDrive), and the sweep does not run, so the live
+    # folders can only be read, never changed.
+    read_live: bool = Field(default=False, validation_alias="OFM_DRIVE_READ_LIVE")
     # The folder inside each account folder for posted videos. Matched
     # case-insensitively, so one made by hand ("Posted") is adopted.
     posted_folder_name: str = Field(

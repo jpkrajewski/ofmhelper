@@ -40,6 +40,10 @@ _STAMP = "stamp"
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
+    # Where a signed-in person lands without a page to return to: the app's
+    # home ("/" is the public landing page, never shown to them).
+    HOME = "/home"
+
     async def dispatch(self, request: Request, call_next):
         if self.is_public(request.url.path):
             return await call_next(request)

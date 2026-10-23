@@ -12,6 +12,7 @@ import datetime
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from zoneinfo import ZoneInfo
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
@@ -457,25 +458,27 @@ def test_a_second_posted_folder_counts_and_is_flagged(drive):
     assert drive.item(extra).name == "posted"
 
 
-def test_posted_today_turns_at_the_posting_windows_start(drive):
-    """Posting is 19:45 UTC, from an hour before to five after (2026-10-22):
-    a posting day starts 18:45 UTC. 18:44 and 18:46 are different days;
-    the week has both; 23:00 the same evening is still that day."""
+def test_posted_today_turns_at_local_midnight_in_the_drive_timezone(drive):
+    """Posted today / last 7 days turn at midnight in the Drive timezone
+    (Europe/Warsaw), the team's calendar day -- not the posting window, which
+    starts mid-evening and would count an evening's posts as yesterday's."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     posted = _posted(drive, "ann.ig")
-    before = datetime.datetime(2026, 10, 21, 18, 44, tzinfo=datetime.UTC)
+    tz = ZoneInfo("Europe/Warsaw")
+    # Two posted yesterday evening (the posting window would call "today"),
+    # one this morning: only the last is today by the calendar day.
     for at, name in (
-        (before, "before.mp4"),
-        (before + datetime.timedelta(minutes=2), "in-window.mp4"),
-        (before + datetime.timedelta(hours=4), "late.mp4"),
+        (datetime.datetime(2026, 10, 21, 21, 0, tzinfo=tz), "y1.mp4"),
+        (datetime.datetime(2026, 10, 21, 23, 30, tzinfo=tz), "y2.mp4"),
+        (datetime.datetime(2026, 10, 22, 9, 0, tzinfo=tz), "today.mp4"),
     ):
         with time_machine.travel(at, tick=False):
             drive.add_file(posted, name, "video/mp4")
             drive_folders.sync()
             card = drive_folders.board().cards[0]
 
-    assert (card.posted_today, card.posted_week, card.posted_total) == (2, 3, 3)
+    assert (card.posted_today, card.posted_week, card.posted_total) == (1, 3, 3)
 
 
 @pytest.mark.parametrize(
@@ -492,7 +495,7 @@ def test_posted_today_turns_at_the_posting_windows_start(drive):
     ],
 )
 def test_a_posting_day_starts_at_18_45_utc_all_year(at, start):
-    found = drive_folders.posting_day_start(datetime.datetime.fromisoformat(at))
+    found = posting.posting_day_start(datetime.datetime.fromisoformat(at))
     assert found == datetime.datetime.fromisoformat(start)
 
 
@@ -500,7 +503,7 @@ def test_the_posting_time_is_a_setting(monkeypatch):
     monkeypatch.setenv("OFM_GDRIVE_POSTING_TIME_UTC", "16:00")
     monkeypatch.setenv("OFM_GDRIVE_POSTING_BEFORE_H", "2")
     at = datetime.datetime(2026, 12, 1, 15, 0, tzinfo=datetime.UTC)
-    assert drive_folders.posting_day_start(at).hour == 14
+    assert posting.posting_day_start(at).hour == 14
 
 
 def _utc(text: str) -> datetime.datetime:

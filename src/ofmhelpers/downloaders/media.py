@@ -17,6 +17,7 @@ gets its turn -- never a broken file reported as downloaded.
 from __future__ import annotations
 
 import re
+import secrets
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -29,8 +30,12 @@ from ofmhelpers.utils.video_probe import duration_s
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
 logger = get_logger(__name__)
+
+# Where each URL's own download directory is made under (the tools' default).
+_OUTPUT_ROOT = generic.DownloadConfig().output_dir
 
 # Links whose posts are mostly photos or carousels: an Instagram post (a
 # reel is /reel/), an X/Twitter status, a Pinterest pin, a TikTok photo post.
@@ -44,22 +49,26 @@ _IMAGES_FIRST = re.compile(
 )
 
 
-def _video(url: str, cookiefile: str | None) -> DownloadResult:
-    return generic.download(url, cookiefile=cookiefile)
+def _video(url: str, cookiefile: str | None, out: Path) -> DownloadResult:
+    return generic.download(
+        url, config=generic.DownloadConfig(output_dir=out), cookiefile=cookiefile
+    )
 
 
-def _images(url: str, cookiefile: str | None) -> DownloadResult:
-    return images.download(url, cookiefile=cookiefile)
+def _images(url: str, cookiefile: str | None, out: Path) -> DownloadResult:
+    return images.download(
+        url, config=images.ImageDownloadConfig(output_dir=out), cookiefile=cookiefile
+    )
 
 
-def _kvs(url: str, cookiefile: str | None) -> DownloadResult:
+def _kvs(url: str, cookiefile: str | None, out: Path) -> DownloadResult:
     del cookiefile  # a KVS video is public
-    return kvs.download(url, generic.DownloadConfig().output_dir)
+    return kvs.download(url, out)
 
 
 def _order(
     url: str,
-) -> list[tuple[str, Callable[[str, str | None], DownloadResult]]]:
+) -> list[tuple[str, Callable[[str, str | None, Path], DownloadResult]]]:
     video, player, pictures = ("video", _video), ("kvs", _kvs), ("images", _images)
     if _IMAGES_FIRST.search(url):
         return [pictures, video]
@@ -86,10 +95,16 @@ def _broken_video(result: DownloadResult) -> str | None:
 
 def download(url: str, cookiefile: str | None = None) -> DownloadResult:
     """The first downloader's files, logged in as `cookiefile` (None:
-    logged out); when none gets any, both reasons."""
+    logged out); when none gets any, both reasons.
+
+    Each URL downloads into its own fresh directory: the tools name files
+    from the post (and some extractors have no unique id -- every titleless
+    X video is `twitter_None_1.mp4`), so a shared folder let one download
+    overwrite another's file (prod, 2026-10-23). Isolated, no two collide."""
+    out = _OUTPUT_ROOT / secrets.token_hex(8)
     errors: list[str] = []
     for name, fetch in _order(url):
-        result = fetch(url, cookiefile)
+        result = fetch(url, cookiefile, out)
         reason = _broken_video(result) if result.success else None
         if result.success and reason is None:
             return result

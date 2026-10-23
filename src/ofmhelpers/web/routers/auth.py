@@ -48,9 +48,7 @@ router = APIRouter(tags=["auth"])
 _STATE_COOKIE = "ofm_signin"
 
 
-# Where a sign-in lands without a page to return to: the app's home ("/" is
-# the public landing page).
-_HOME = "/home"
+_HOME = AuthMiddleware.HOME
 
 
 class _SignInState(BaseModel):

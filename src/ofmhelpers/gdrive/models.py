@@ -1,5 +1,6 @@
 """What Drive answers, as models: a folder, and any item in one."""
 
+import mimetypes
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +52,13 @@ class DriveFile(BaseModel):
         if self.is_folder:
             return "folder"
         major = self.mime_type.split("/", 1)[0]
+        if major in ("image", "video"):
+            return major
+        # Drive often reports a phone's upload as application/octet-stream;
+        # the name's own type then says whether it is a video or an image, so
+        # a reel still gets the play icon rather than the generic file one.
+        guessed, _ = mimetypes.guess_type(self.name)
+        major = guessed.split("/", 1)[0] if guessed else ""
         return major if major in ("image", "video") else "file"
 
     @property

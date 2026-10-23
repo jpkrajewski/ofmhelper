@@ -21,6 +21,7 @@ here, and which submodule a helper lives in is not their business.
 from ofmhelpers.web.download_names import download_name
 from ofmhelpers.web.routers.task_helpers.manifests import (
     build_ordered_paths,
+    keep_videos,
     resolve_existing_ref,
 )
 from ofmhelpers.web.routers.task_helpers.responses import (
@@ -79,6 +80,7 @@ __all__ = [
     "job_assets",
     "job_inputs",
     "job_status_payload",
+    "keep_videos",
     "make_job_dir",
     "media_response",
     "reference_asset",

@@ -82,6 +82,7 @@ from ofmhelpers.web.schemas.jobs import (
     InputSetting,
     JobInputs,
     JobQueued,
+    JobsQueued,
     JobStatusPayload,
     ReferenceAsset,
 )
@@ -162,6 +163,7 @@ __all__ = [
     "JobQueued",
     "JobStatus",
     "JobStatusPayload",
+    "JobsQueued",
     "Leaderboard",
     "LinkPage",
     "LinkPeriod",

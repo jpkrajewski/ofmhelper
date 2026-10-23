@@ -44,6 +44,14 @@
 {%- endif -%}
 {%- endmacro %}
 
+{# Two or more buttons joined edge to edge into one control (a segmented
+   button). Put the `button`s in the call body; `label` is what a screen
+   reader calls the group.
+   {% call ui.segmented("Send this download") %}{{ ui.button("Clone", hook="a") }}{{ ui.button("Clone long", hook="b") }}{% endcall %} #}
+{% macro segmented(label="") -%}
+<div class="btn-segmented"{% if label %} role="group" aria-label="{{ label }}"{% endif %}>{{ caller() }}</div>
+{%- endmacro %}
+
 {# The icon button that opens a <details> menu: put it first inside the
    <details>. #}
 {% macro menu_toggle(icon, label) -%}

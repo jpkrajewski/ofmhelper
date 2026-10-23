@@ -29,7 +29,7 @@ from ofmhelpers.web.routers.task_helpers import (
     build_ordered_paths,
     register_generated_asset,
 )
-from ofmhelpers.web.schemas import Job, JobPreview, JobQueued, ResultFile
+from ofmhelpers.web.schemas import Job, JobPreview, JobsQueued, ResultFile
 from ofmhelpers.web.stores.jobs import create_job, run_job, set_job_preview
 from ofmhelpers.web.templates_config import render_polled
 
@@ -45,12 +45,18 @@ _PENDING_MESSAGE = {
 }
 
 
+# The most images one submit may queue (each its own job and gallery card).
+MAX_BATCH = 10
+
+
 class AiRunForm(BaseModel):
     """The fields every /ai/run carries, whatever the model."""
 
     provider: str
     model: str
     api_key: str = ""
+    # Images only: queue this many of the same prompt, each its own job.
+    batch: int = 1
 
 
 async def _form(request: Request) -> FormData:
@@ -106,7 +112,7 @@ def fields(request: Request, model: Annotated[str, Query()]):
 
 
 @router.post("/run")
-def run(request: Request, form: Annotated[FormData, Depends(_form)]) -> JobQueued:
+def run(request: Request, form: Annotated[FormData, Depends(_form)]) -> JobsQueued:
     head = AiRunForm.model_validate(
         {k: form.get(k) for k in AiRunForm.model_fields if form.get(k) is not None}
     )
@@ -123,19 +129,24 @@ def run(request: Request, form: Annotated[FormData, Depends(_form)]) -> JobQueue
     except InvalidInputError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     params = {"provider": spec.provider, "model": spec.key, **values}
-    job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
-    enqueue(
-        run_job,
-        job_id,
-        run_ai,
-        {
-            "job_id": job_id,
-            "api_key": head.api_key.strip(),
-            "assets_root": str(assets_root),
-            **params,
-        },
-    )
-    return JobQueued(job_id=job_id)
+    # Batch is images only: a video model always runs once.
+    count = max(1, min(head.batch, MAX_BATCH)) if spec.kind == "image" else 1
+    job_ids: list[str] = []
+    for _ in range(count):
+        job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
+        enqueue(
+            run_job,
+            job_id,
+            run_ai,
+            {
+                "job_id": job_id,
+                "api_key": head.api_key.strip(),
+                "assets_root": str(assets_root),
+                **params,
+            },
+        )
+        job_ids.append(job_id)
+    return JobsQueued(job_ids=job_ids)
 
 
 def _hosted(urls: list[str]) -> list[str]:

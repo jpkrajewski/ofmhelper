@@ -160,6 +160,31 @@ button:disabled,
 }
 .result-actions > .download-btn + .menu { display: flex; }
 
+/* Two or more buttons joined edge to edge into one control (ui.segmented) --
+   one shared border, square inner corners, filling the row like .result-actions
+   so it lines up with the card's other buttons. Unlike `.segmented` below (a
+   padded set of links), this is a single run of touching buttons. */
+.btn-segmented { display: flex; }
+.btn-segmented > .btn { flex: 1 1 0; border-radius: 0; }
+.btn-segmented > .btn:first-child {
+    border-start-start-radius: var(--radius-control);
+    border-end-start-radius: var(--radius-control);
+}
+.btn-segmented > .btn:last-child {
+    border-start-end-radius: var(--radius-control);
+    border-end-end-radius: var(--radius-control);
+}
+.btn-segmented > .btn + .btn { margin-inline-start: -1px; }
+.btn-segmented > .btn:hover,
+.btn-segmented > .btn:focus-visible { position: relative; z-index: 1; }
+/* Float the clone control AND the actions row together to the card's foot.
+   Only `.send-to` gets margin-top:auto -- two auto margins in a flex column
+   split the free space instead of stacking, which left the clone row
+   floating mid-card. So `.send-to` takes all the space, and the actions row
+   right after it drops its own auto and just sits under it. */
+.send-to { margin-top: auto; }
+.send-to + .result-actions { margin-top: var(--gap-inline); }
+
 /* Segmented control (file-manager roots, and anything else that is a set
    of mutually exclusive links). */
 .segmented {

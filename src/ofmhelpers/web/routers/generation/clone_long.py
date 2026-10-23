@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
 from ofmhelpers.aigenproviders.errors import InvalidInputError
@@ -34,6 +34,7 @@ from ofmhelpers.web.routers.task_helpers import (
     build_ordered_paths,
     classify_kind,
     job_assets,
+    keep_videos,
 )
 from ofmhelpers.web.schemas import Job, ProviderChoice, TaskCard
 from ofmhelpers.web.stores.jobs import create_job, list_jobs_page, run_job
@@ -67,14 +68,17 @@ def card(job: Job) -> TaskCard:
 
 
 @router.get("")
-def page(request: Request):
+def page(request: Request, video: Annotated[list[str] | None, Query()] = None):
     jobs, _total = list_jobs_page(
         {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.actor(request)
     )
+    # One video: a download sends its first (clone-long clones one video).
+    prefill = keep_videos(video or [], assets_root_for(request))[:1]
     return render(
         request,
         "clone_long.html",
         gallery=[card(j) for j in jobs],
+        prefill_video=prefill,
         providers=ProviderChoice.all(list(TARGETS)),
         selected_provider=settings.aigen.default_provider,
         api_keys=get_api_keys(request),

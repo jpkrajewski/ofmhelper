@@ -16,16 +16,18 @@ def _lengths(seconds: float) -> list[float]:
     [
         (3.0, [3.0]),
         (15.0, [15.0]),  # exactly the limit: one piece
-        (15.2, [8.0, 7.2]),
-        (32.0, [11.0, 11.0, 10.0]),
+        (15.2, [8.0, 7.2]),  # a 0.2 s tail would stutter: evened out
+        (20.0, [14.0, 6.0]),  # long first piece, the rest is the tail
+        (32.0, [11.0, 11.0, 10.0]),  # 14 + 14 + 4 would stutter: evened out
+        (35.0, [14.0, 14.0, 7.0]),  # long pieces, a decent tail
         (45.0, [15.0, 15.0, 15.0]),
-        (50.0, [13.0, 13.0, 12.0, 12.0]),  # never 15 + 15 + 15 + 5
-        (44.6, [15.0, 15.0, 14.6]),  # the last takes the fraction left
-        (71.0, [15.0, 14.0, 14.0, 14.0, 14.0]),
+        (50.0, [14.0, 14.0, 14.0, 8.0]),  # as long as the cap allows
+        (44.6, [14.8, 14.8, 15.0]),  # must exceed 14 to fit four... three pieces
+        (71.0, [14.0, 14.0, 14.0, 14.0, 15.0]),
         (600.0, [15.0] * 40),
     ],
 )
-def test_a_video_splits_into_the_fewest_near_equal_pieces(seconds, lengths):
+def test_a_video_splits_into_the_longest_pieces_without_a_sliver(seconds, lengths):
     assert _lengths(seconds) == lengths
 
 
@@ -39,8 +41,8 @@ def test_the_pieces_cover_the_video_once_none_over_the_limit(seconds):
     assert sum(p.length for p in plan.pieces) == pytest.approx(seconds)
     assert all(0 < p.length <= 15 for p in plan.pieces)
     assert plan.count == -(-seconds // 15)
-    lengths = [p.length for p in plan.pieces]
-    assert max(lengths) - min(lengths) <= 1.5
+    # No stuttering sliver: every piece is at least a third of a full one.
+    assert min(p.length for p in plan.pieces) >= 15 / 3 - 1e-6
 
 
 def test_a_price_is_for_the_whole_length_at_the_resolutions_rate():

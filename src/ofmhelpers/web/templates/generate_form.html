@@ -24,6 +24,14 @@
 
     <fieldset class="tool-fields" id="model-fields"></fieldset>
 
+    {# Images only: ai-form.js shows this for an image model, hides it for a
+       video one. Each count queues its own job and gallery card. #}
+    <div class="field" id="batch-field" hidden>
+        <label for="batch-count">Batch</label>
+        <input type="number" id="batch-count" name="batch" value="1" min="1"
+               max="{{ max_batch }}" step="1" inputmode="numeric">
+    </div>
+
     {{ ui.button("Generate", "primary", type="submit") }}
 </form>
 </div>

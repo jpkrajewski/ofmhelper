@@ -8,7 +8,8 @@
 <div class="generate-form-col">
 <form id="clone-long-form" class="clone-form" action="/clone-long/run"
       data-prefix="/clone-long" data-result-kind="video" data-label="Clone long"
-      data-rates='{{ rates|tojson }}' data-max-piece="{{ max_piece_s }}" data-max-video="{{ max_video_s }}" novalidate>
+      data-rates='{{ rates|tojson }}' data-max-piece="{{ max_piece_s }}" data-max-video="{{ max_video_s }}"
+      data-prefill-video='{{ prefill_video|tojson }}' novalidate>
     {% include "_provider_fields.html" %}
     {{ fp.file_picker('image', 'image', 'Subject', max=1) }}
     {{ fp.file_picker('video', 'video', 'Video', max=1) }}

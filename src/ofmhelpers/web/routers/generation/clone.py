@@ -62,8 +62,8 @@ from ofmhelpers.web.routers.task_helpers import (
     build_ordered_paths,
     classify_kind,
     job_assets,
+    keep_videos,
     register_generated_asset,
-    resolve_existing_ref,
 )
 from ofmhelpers.web.schemas import (
     CloneCard,
@@ -339,19 +339,10 @@ def _card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
 
 
 def _prefill_videos(request: Request, paths: list[str]) -> list[str]:
-    """The `?video=` paths /reels hands over, kept only where they are a
-    video in this session's part of the store; a stale link just opens
-    with fewer videos picked."""
-    assets_root = assets_root_for(request)
-    kept: list[str] = []
-    for path in paths:
-        try:
-            resolved = resolve_existing_ref(path, assets_root)
-        except HTTPException:
-            continue
-        if classify_kind(resolved.name) == "video":
-            kept.append(str(resolved))
-    return kept
+    """The `?video=` paths /reels or a download hands over, kept only where
+    they are a video in this session's part of the store; a stale link just
+    opens with fewer videos picked."""
+    return keep_videos(paths, assets_root_for(request))
 
 
 @router.get("")
