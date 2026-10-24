@@ -12,9 +12,10 @@ from fastapi import APIRouter, Query, Request
 from ofmhelpers.config import settings
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.routers.generation.ai import MAX_BATCH
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
 from ofmhelpers.web.schemas import ModelChoice, ProviderChoice, TaskCard
-from ofmhelpers.web.stores.jobs import list_jobs_page
+from ofmhelpers.web.stores.jobs import count_hidden_jobs, list_jobs_page
 from ofmhelpers.web.templates_config import render, render_polled
 
 router = APIRouter(prefix="/generate", tags=["generate"])
@@ -22,16 +23,19 @@ router = APIRouter(prefix="/generate", tags=["generate"])
 GALLERY_LIMIT = settings.web.gallery_limit
 
 
-def _gallery_page(request: Request, offset: int) -> tuple[list[TaskCard], int | None]:
+def _gallery_page(
+    request: Request, offset: int, hidden: bool = False
+) -> tuple[list[TaskCard], int | None]:
     """One page of gallery cards (only the session's own, for a VA) plus the
     offset of the next page, or None when this was the last one. The absence of
     a next offset is what ends the infinite scroll, so there is no separate
-    "has_more" flag to keep in step."""
+    "has_more" flag to keep in step. `hidden`: only the hidden cards."""
     page, total = list_jobs_page(
         set(GENERATE_TOOLS),
         offset,
         GALLERY_LIMIT,
         AuthMiddleware.actor(request),
+        hidden=hidden,
     )
     next_offset = offset + GALLERY_LIMIT
     return (
@@ -53,16 +57,25 @@ def form(request: Request):
         api_keys=get_api_keys(request),
         gallery=gallery,
         next_offset=next_offset,
+        hidden_count=count_hidden_jobs(
+            set(GENERATE_TOOLS), AuthMiddleware.actor(request)
+        ),
         live_poll_s=settings.web.gallery_live_poll_s,
+        max_batch=MAX_BATCH,
     )
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
+def gallery_page(
+    request: Request,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    hidden: Annotated[bool, Query()] = False,
+):
     """The next page of gallery cards as a fragment gallery-scroll.js appends --
     same partial the page's first page renders, so an appended card is
-    indistinguishable from a server-rendered one."""
-    gallery, next_offset = _gallery_page(request, offset)
+    indistinguishable from a server-rendered one. `hidden`: only the hidden
+    cards (hidden-cards.js's "Show hidden")."""
+    gallery, next_offset = _gallery_page(request, offset, hidden)
     return render(
         request,
         "generate_gallery_fragment.html",

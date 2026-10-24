@@ -7,7 +7,7 @@ import datetime
 from pydantic import BaseModel, Field
 
 from ofmhelpers.gdrive import DriveFile, folder_url
-from ofmhelpers.web.schemas.devices import Device
+from ofmhelpers.web.schemas.devices import Device, _compact
 
 
 class DriveTarget(BaseModel):
@@ -21,6 +21,14 @@ class DriveTarget(BaseModel):
     followers: int | None = None
 
     @property
+    def followers_label(self) -> str:
+        """ "1.7k followers"; "" until tracked."""
+        if self.followers is None:
+            return ""
+        n = self.followers
+        return f"{_compact(n)} follower{'' if n == 1 else 's'}"
+
+    @property
     def owner(self) -> str:
         """The phone's owner, or its label when it has none."""
         return self.device.owner or self.device.label
@@ -28,6 +36,18 @@ class DriveTarget(BaseModel):
     @property
     def folder_name(self) -> str:
         return f"{self.handle} - {self.owner}"
+
+
+class UploadPick(BaseModel):
+    """/drive?upload=<job>: a finished /clone video waiting for its folder
+    (the page shows it on top; a click on an account's card uploads it)."""
+
+    job_id: str
+    name: str
+    preview_url: str
+    poster_url: str | None = None
+    # Logins whose folder has it already (or it is on its way there).
+    already: list[int] = Field(default_factory=list)
 
 
 class UploadTarget(BaseModel):
@@ -44,6 +64,24 @@ class UploadTarget(BaseModel):
     creator: str | None = None
     waiting: int | None = None
     followers: int | None = None
+
+    @property
+    def waiting_label(self) -> str:
+        """What waits in its folder: "No reels yet", "2 reels in the folder";
+        "" before the folder's first /drive read."""
+        if self.waiting is None:
+            return ""
+        if self.waiting == 0:
+            return "No reels yet"
+        return f"{self.waiting} reel{'' if self.waiting == 1 else 's'} in the folder"
+
+    @property
+    def followers_label(self) -> str:
+        """ "12.3k followers"; "" when not tracked or not scanned yet."""
+        if self.followers is None:
+            return ""
+        n = self.followers
+        return f"{_compact(n)} follower{'' if n == 1 else 's'}"
 
 
 class DriveUpload(BaseModel):

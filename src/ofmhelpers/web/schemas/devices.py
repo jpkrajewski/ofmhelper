@@ -110,6 +110,16 @@ class LoginSecrets(BaseModel):
     backup_codes: str
 
 
+class ArchivedLogin(BaseModel):
+    """A login removed everywhere, password kept (/phones Archived)."""
+
+    id: int
+    service: str
+    username: str
+    archived_at: float = 0
+    on: list[str] = Field(default_factory=list)
+
+
 class DeviceLogin(BaseModel):
     id: int
     service: str

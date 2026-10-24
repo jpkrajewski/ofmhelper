@@ -20,6 +20,7 @@
             {% if account.creator %} · <span class="accounts-creator-tag">{{ account.creator }}</span>{% endif %}
         </p>
         {% if account.status == "scanning" %}<p class="accounts-sub">Syncing…</p>{% endif %}
+        {{ ui.button("Assign link", href="/links?account=" ~ account.id, icon="link") }}
     </div>
     <form method="get" class="accounts-period" data-autosubmit>
         {% for key, value in query.model_dump(mode="json").items() if value not in (none, "") and key not in ("period", "page") %}

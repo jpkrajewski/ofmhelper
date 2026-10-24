@@ -26,6 +26,10 @@ class Tool(BaseModel):
     # The job's params as the /generate form's fields, for Recreate, when
     # they are stored under other names (an old per-model tool's).
     form_params: Callable[[Any], dict[str, Any]] | None = None
+    # The RQ time limit for a job with these params, when it may run longer
+    # than the queue's default (a long /clone video): what its first run and
+    # recovery's re-run are queued with.
+    job_timeout: Callable[[dict[str, Any]], int] | None = None
 
     @property
     def prefix(self) -> str:

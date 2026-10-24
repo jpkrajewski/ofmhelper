@@ -12,6 +12,7 @@ from itertools import islice
 
 from ofmhelpers.instagram.client import (
     InstagramClient,
+    InstagramRateLimitedError,
     ProfilePrivateError,
 )
 from ofmhelpers.instagram.models import (
@@ -22,6 +23,9 @@ from ofmhelpers.instagram.models import (
     ReelStat,
     ReelSummary,
 )
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 # Old posts in a row that end a read (see _recent, _bulk_media): one more
 # than the 6 reels a profile can pin, since Instagram does not always flag a
@@ -55,12 +59,18 @@ def _bulk_media(
     `_OLD_IN_A_ROW` of them do."""
     found: dict[str, ReelMedia] = {}
     old_in_a_row = 0
-    for code, media, posted_at, pinned in client.timeline(username):
-        if code in codes and media is not None:
-            found[code] = media
-        old_in_a_row = old_in_a_row + 1 if posted_at < since and not pinned else 0
-        if found.keys() == codes or old_in_a_row >= _OLD_IN_A_ROW:
-            break
+    try:
+        for code, media, posted_at, pinned in client.timeline(username):
+            if code in codes and media is not None:
+                found[code] = media
+            old_in_a_row = old_in_a_row + 1 if posted_at < since and not pinned else 0
+            if found.keys() == codes or old_in_a_row >= _OLD_IN_A_ROW:
+                break
+    except InstagramRateLimitedError:
+        # Instagram throttles the logged-out posts query on its own (2026-10-23:
+        # refused while the reels tab and single posts answered): the rest go
+        # reel by reel, and a refusal there is the scan's.
+        logger.warning("@%s: posts refused, reading reels one by one", username)
     return found
 
 

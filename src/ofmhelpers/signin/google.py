@@ -49,6 +49,7 @@ class Google:
     callback_method = "GET"
     local_consent = False
     linkable = True
+    connects_drive = True
 
     def configured(self) -> bool:
         return settings.signin.google_configured

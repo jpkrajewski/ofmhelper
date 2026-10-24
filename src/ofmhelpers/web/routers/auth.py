@@ -48,9 +48,7 @@ router = APIRouter(tags=["auth"])
 _STATE_COOKIE = "ofm_signin"
 
 
-# Where a sign-in lands without a page to return to: the app's home ("/" is
-# the public landing page).
-_HOME = "/home"
+_HOME = AuthMiddleware.HOME
 
 
 class _SignInState(BaseModel):
@@ -261,7 +259,15 @@ def _finish(request: Request, name: str, code: str, state: str, error: str) -> R
         note = "linked" if linked else "taken"
         if linked:
             _sync_new_drive(carried.link_user_id, identity.refresh_token)
-        response = RedirectResponse(url=f"/account?{name}={note}", status_code=303)
+        # Connected from a page (/clone's "Connect Google Drive", the
+        # sign-in's own Drive step): back to that page; else /account says
+        # how it went.
+        back = (
+            carried.next if linked and carried.next not in (_HOME, "/account") else None
+        )
+        response = RedirectResponse(
+            url=back or f"/account?{name}={note}", status_code=303
+        )
     else:
         user = users.sign_in_identity(identity)
         if user is not None:
@@ -277,6 +283,14 @@ def _finish(request: Request, name: str, code: str, state: str, error: str) -> R
             )
         else:
             response = _signed_in(request, user, carried.next, name)
+            drive = users.get_user(user.id)
+            if provider.connects_drive and drive and not drive.drive_connected:
+                # Signed in, but this account has no Drive yet: the Drive
+                # consent follows at once instead of a second "Connect"
+                # someone has to find (prod, 2026-10-22: the VA signed in
+                # with the admin Google account, then had to connect again).
+                query = urlencode({"link": "1", "next": _safe_next(carried.next)})
+                response.headers["location"] = f"/auth/{name}/start?{query}"
     response.delete_cookie(_STATE_COOKIE, path="/auth/")
     return response
 

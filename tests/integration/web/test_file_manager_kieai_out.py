@@ -38,7 +38,7 @@ def _isolated_kieai_root(monkeypatch, tmp_path):
 def test_kieai_out_is_a_browsable_root(client, _isolated_kieai_root):
     (_isolated_kieai_root / "gen.mp4").write_bytes(b"video")
 
-    r = client.get("/file-manager", params={"root": "kieai_out"})
+    r = client.get("/file-manager/disk", params={"root": "kieai_out"})
 
     assert r.status_code == 200
     assert "gen.mp4" in r.text

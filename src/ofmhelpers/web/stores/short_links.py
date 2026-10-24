@@ -108,22 +108,54 @@ def links_by_account(owner: int | None = None) -> dict[int, list[ShortLink]]:
     return found
 
 
+# Links that take a place in the provider's plan: live, or on their way.
+_COUNTED = ("active", "inactive", "creating")
+
+
+def _local_usage(usage: Usage | None, links: list[ShortLink]) -> Usage | None:
+    """The plan's limits from the provider's last answer, the counts from
+    our own rows: a link deleted (or made) here counts at once, not only
+    after the next sync (2026-10-22: 50 / 50 stayed after a delete)."""
+    if usage is None:
+        return None
+    return usage.model_copy(
+        update={
+            "used": sum(1 for x in links if x.status in _COUNTED),
+            "active": (
+                sum(1 for x in links if x.status in ("active", "creating"))
+                if usage.active is not None
+                else None
+            ),
+        }
+    )
+
+
 def provider_states(user_id: int) -> list[ProviderState]:
     syncs = {s["provider"]: s for s in _repository().syncs(user_id)}
+    links = list_links(user_id)
     states = []
     for key, info in provider_infos().items():
         if key not in link_providers():
             continue
         sync = syncs.get(key, {})
         usage = sync.get("usage")
+        has_key = api_key(user_id, key) is not None
         states.append(
             ProviderState(
                 key=key,
                 label=info.label,
-                has_key=api_key(user_id, key) is not None,
+                has_key=has_key,
                 synced_at=sync.get("synced_at"),
+                syncing=has_key
+                and bool(sync)
+                and (
+                    sync.get("synced_at") is None or sync.get("claimed_at") is not None
+                ),
                 error=sync.get("error"),
-                usage=Usage.model_validate(usage) if usage else None,
+                usage=_local_usage(
+                    Usage.model_validate(usage) if usage else None,
+                    [x for x in links if x.provider == key],
+                ),
             )
         )
     return states

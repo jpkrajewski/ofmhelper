@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
+{% import "_card_hide.html" as hide %}
 {% block title %}Styleguide — Ascend Global LLC{% endblock %}
 {% block content %}
 {% call ui.page_header("Styleguide", "Every element of components/ui.html") %}
@@ -79,11 +80,23 @@
     {% endcall %}
 
     {% call ui.card("Gallery card") %}
+    {% with hidden_count = 2 %}{% include "_gallery_hidden.html" %}{% endwith %}
     <div class="results sg-results">
         <div class="result-item">
             <div class="result-file result-failed">No credits</div>
             <p class="source">Nano Banana Pro · kie.ai</p>
-            <div class="result-actions"><button type="button">Recreate</button></div>
+            <div class="result-actions">
+                {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
+                {% call ui.menu("More actions") %}{{ hide.items() }}{% endcall %}
+            </div>
+        </div>
+        <div class="result-item" data-hidden>
+            <div class="result-file result-failed">Timed out</div>
+            <p class="source">Clone · hidden</p>
+            <div class="result-actions">
+                {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
+                {% call ui.menu("More actions") %}{{ hide.items(true) }}{% endcall %}
+            </div>
         </div>
         <div class="result-item">
             <div class="result-file"><span class="spinner"></span> generating…</div>

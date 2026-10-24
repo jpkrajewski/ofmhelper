@@ -47,6 +47,22 @@ def for_jobs(job_ids: list[str]) -> list[DriveUpload]:
     return [DriveUpload.model_validate(r) for r in _repository().for_jobs(job_ids)]
 
 
+def file_id(upload_id: int) -> str | None:
+    """The uploaded file's Drive id (done uploads only)."""
+    found = _repository().get(upload_id)
+    return found["drive_file_id"] if found else None
+
+
+def remove(upload_id: int, reason: str = "Removed from Drive") -> None:
+    _repository().remove(upload_id, reason)
+
+
+def gone_from(login_id: int, present: set[str], before: float) -> int:
+    """This login's uploads whose file left its account folder and POSTED
+    (deleted or moved away in Drive) before `before`: marked removed."""
+    return _repository().gone_from(login_id, present, before)
+
+
 def finish(
     upload_id: int,
     *,

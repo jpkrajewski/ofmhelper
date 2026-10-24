@@ -14,6 +14,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
+from ofmhelpers.aigenproviders.base import upload_lock
 from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.kaiai.models import (
     SUCCESS,
@@ -129,7 +130,13 @@ class KieAIClient:
         return f"kieai:upload:{self.api_key}:{path}"
 
     def upload_local_file(self, path: str, upload_path: str = "refs") -> str:
+        """One upload per file even when several requests start together
+        (`upload_lock`): the rest wait and take the cached URL."""
         cache_key = self._upload_cache_key(path)
+        with upload_lock(cache_key):
+            return self._upload_once(cache_key, path, upload_path)
+
+    def _upload_once(self, cache_key: str, path: str, upload_path: str) -> str:
         cached_url = get_text(cache_key)
         if cached_url is not None:
             if self._remote_file_exists(cached_url):

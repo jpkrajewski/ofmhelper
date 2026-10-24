@@ -3,10 +3,12 @@
    markup, from the same macros, for a reloaded and a live card. Included
    by every page that loads generation.js. #}
 {% import "components/ui.html" as ui %}
+{% import "_card_hide.html" as hide %}
 <template id="card-actions-done"><div class="result-actions">
     {{ ui.button("Download", href="#", icon="download", hook="download-btn") }}
-    {% call ui.menu("More actions") %}{{ ui.menu_item("Recreate", "restore", "recreate-btn") }}{% endcall %}
+    {% call ui.menu("More actions") %}{{ ui.menu_item("Recreate", "restore", "recreate-btn") }}{{ hide.items() }}{% endcall %}
 </div></template>
 <template id="card-actions-failed"><div class="result-actions">
     {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
+    {% call ui.menu("More actions") %}{{ hide.items() }}{% endcall %}
 </div></template>

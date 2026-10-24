@@ -26,6 +26,7 @@ from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import videos as download_videos_router
+from ofmhelpers.web.routers.generation.ai import MAX_BATCH
 from ofmhelpers.web.routers.task_helpers import job_status_payload
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.schemas import JobPreview
@@ -199,6 +200,26 @@ def test_a_fake_image_lands_in_the_shared_out_dir_and_the_asset_store(client, tm
     assert Path(result.path).parent == tmp_path / "out"
     assert result.remote_url is None, "a fake result has no hosted copy"
     assert result.name in [f["name"] for f in client.get("/refs?kind=image").json()]
+
+
+def test_batch_queues_one_job_per_image(client):
+    ids = _fake(client, batch="3").json()["job_ids"]
+    assert len(ids) == 3
+    assert len(set(ids)) == 3  # three distinct jobs
+    assert all(get_job(i).params["prompt"] == "a cat" for i in ids)
+
+
+def test_batch_defaults_to_one(client):
+    assert len(_fake(client).json()["job_ids"]) == 1
+
+
+def test_batch_is_capped_at_the_max(client):
+    assert len(_fake(client, batch=str(MAX_BATCH + 40)).json()["job_ids"]) == MAX_BATCH
+
+
+def test_batch_is_ignored_for_a_video_model(client):
+    ids = _fake(client, model="fake:video", batch="5").json()["job_ids"]
+    assert len(ids) == 1
 
 
 def test_the_error_outcome_fails_with_the_message_typed_in(client):

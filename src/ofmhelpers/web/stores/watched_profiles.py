@@ -103,7 +103,7 @@ def unwatch_unscanned(username: str) -> bool:
     return _repository().delete_unscanned(username)
 
 
-def claim_due(interval_s: float, claim_ttl_s: float) -> list[str]:
+def claim_due(interval_s: float | None, claim_ttl_s: float) -> list[str]:
     return _repository().claim_due(interval_s, claim_ttl_s)
 
 

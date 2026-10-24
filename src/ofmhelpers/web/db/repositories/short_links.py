@@ -353,6 +353,7 @@ class ShortLinkRepository(CachedRepository):
                     "user_id": r.user_id,
                     "provider": r.provider,
                     "synced_at": r.synced_at,
+                    "claimed_at": r.claimed_at,
                     "error": r.error,
                     "usage": r.usage,
                 }

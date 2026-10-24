@@ -143,13 +143,13 @@ button:disabled,
    light, green / violet outline in dark). */
 .result-actions { display: flex; gap: var(--gap-inline); margin-top: auto; }
 .result-actions > * { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); }
-/* Download + ⋯ as one split button: one border, one height, the ⋯ joined
-   to the right of Download. */
+/* Download + ⋯ (a failed card: Recreate + ⋯) as one split button: one
+   border, one height, the ⋯ joined to the right. */
 .result-actions > .menu { flex: none; padding-inline: 0; }
-.result-actions:has(> .download-btn + .menu) { gap: 0; }
-.result-actions > .download-btn:has(+ .menu) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.result-actions > .download-btn + .menu > summary {
-    width: var(--control-h);
+.result-actions:has(> :is(.download-btn, .recreate-btn) + .menu) { gap: 0; }
+.result-actions > :is(.download-btn, .recreate-btn):has(+ .menu) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.result-actions > :is(.download-btn, .recreate-btn) + .menu > summary {
+    width: 52px;
     height: 100%;
     min-height: var(--control-h);
     margin-left: -1px;
@@ -158,7 +158,37 @@ button:disabled,
     background: var(--btn-download-bg);
     color: var(--btn-download-text);
 }
-.result-actions > .download-btn + .menu { display: flex; }
+.result-actions > .recreate-btn + .menu > summary {
+    border-color: var(--btn-recreate-border);
+    background: var(--btn-recreate-bg);
+    color: var(--btn-recreate-text);
+}
+.result-actions > :is(.download-btn, .recreate-btn) + .menu { display: flex; }
+
+/* Two or more buttons joined edge to edge into one control (ui.segmented) --
+   one shared border, square inner corners, filling the row like .result-actions
+   so it lines up with the card's other buttons. Unlike `.segmented` below (a
+   padded set of links), this is a single run of touching buttons. */
+.btn-segmented { display: flex; }
+.btn-segmented > .btn { flex: 1 1 0; border-radius: 0; }
+.btn-segmented > .btn:first-child {
+    border-start-start-radius: var(--radius-control);
+    border-end-start-radius: var(--radius-control);
+}
+.btn-segmented > .btn:last-child {
+    border-start-end-radius: var(--radius-control);
+    border-end-end-radius: var(--radius-control);
+}
+.btn-segmented > .btn + .btn { margin-inline-start: -1px; }
+.btn-segmented > .btn:hover,
+.btn-segmented > .btn:focus-visible { position: relative; z-index: 1; }
+/* Float the clone control AND the actions row together to the card's foot.
+   Only `.send-to` gets margin-top:auto -- two auto margins in a flex column
+   split the free space instead of stacking, which left the clone row
+   floating mid-card. So `.send-to` takes all the space, and the actions row
+   right after it drops its own auto and just sits under it. */
+.send-to { margin-top: auto; }
+.send-to + .result-actions { margin-top: var(--gap-inline); }
 
 /* Segmented control (file-manager roots, and anything else that is a set
    of mutually exclusive links). */
@@ -522,6 +552,8 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .result-failed { color: var(--fail); background: var(--fail-wash); font-weight: 500; }
 .fail-note { min-height: 0; }
 .drive-states:empty { display: none; }
+/* A hidden card (Show hidden's view): faded, its actions not. */
+.result-item[data-hidden] > :not(.result-actions) { opacity: 0.5; }
 /* What static/js/gallery-scroll.js watches for: spans the grid so it is only
    reached once the whole current page has been scrolled past. */
 .gallery-sentinel {
@@ -760,15 +792,17 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
    floating list of items under it, right-aligned. */
 .menu { position: relative; flex: none; margin: 0; padding: 0; border: 0; background: none; }
 .menu > summary { list-style: none; }
+/* The ⋯ itself big enough to hit. */
+.menu > summary .icon { width: 22px; height: 22px; }
 .menu > summary::-webkit-details-marker { display: none; }
 .menu-list {
     position: absolute;
     right: 0;
     z-index: 5;
     display: grid;
-    min-width: 160px;
+    min-width: 220px;
     margin-top: var(--s-1);
-    padding: var(--s-1);
+    padding: var(--s-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-card);
     background: var(--surface-2);
@@ -777,18 +811,19 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .menu-item {
     display: flex;
     align-items: center;
-    gap: var(--s-2);
-    height: var(--control-h-sm);
+    gap: var(--s-3);
+    height: 48px;
     min-height: 0;
-    padding: 0 var(--s-3);
+    padding: 0 var(--s-4);
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text);
-    font-size: var(--step--1);
+    font-size: var(--step-0);
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
 }
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface-3); }
+.menu-item .icon { width: 20px; height: 20px; }
 .menu-item-danger { color: var(--fail); }

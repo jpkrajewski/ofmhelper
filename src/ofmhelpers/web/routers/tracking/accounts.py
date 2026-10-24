@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.socials import platforms
+from ofmhelpers.web.account_removal import remove_accounts
 from ofmhelpers.web.account_tracker import queue_due_scans
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.schemas import (
@@ -45,7 +46,6 @@ from ofmhelpers.web.stores.tracked_accounts import (
     list_creators,
     set_notes,
     track,
-    untrack,
 )
 from ofmhelpers.web.templates_config import render
 
@@ -133,9 +133,10 @@ def creator(request: Request, body: AssignCreator) -> _Count:
 
 @router.post("/delete")
 def delete(request: Request, body: SelectedAccounts) -> _Count:
-    """Stops tracking the accounts; their history stays, and adding them
-    again resumes it."""
-    return _Count(count=untrack(body.ids, AuthMiddleware.scope(request)))
+    """Removes the accounts everywhere (web/account_removal.py): tracking
+    stops (history kept), their logins leave the phones (archived, password
+    kept), their Drive folders go to the trash."""
+    return _Count(count=remove_accounts(body.ids, AuthMiddleware.scope(request)))
 
 
 @router.post("/{account_id}/notes")

@@ -75,6 +75,8 @@ class Job(BaseModel):
     created_at: float
     finished_at: float | None = None
     preview: JobPreview | None = None
+    # When its owner hid it from the galleries; None = shown.
+    hidden_at: float | None = None
 
     @property
     def _entries(self) -> list[dict[str, Any]]:

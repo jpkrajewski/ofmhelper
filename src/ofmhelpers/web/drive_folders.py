@@ -69,6 +69,7 @@ from ofmhelpers.gdrive import (
     FolderGoneError,
     connect,
     connect_as,
+    read_live_mode,
     service_account_email,
 )
 from ofmhelpers.log import get_logger
@@ -83,6 +84,7 @@ from ofmhelpers.web.schemas import (
     SyncReport,
 )
 from ofmhelpers.web.stores import drive_folders as store
+from ofmhelpers.web.stores import drive_uploads as upload_store
 from ofmhelpers.web.stores import users
 
 if TYPE_CHECKING:
@@ -99,8 +101,10 @@ _DEV_PREFIX = "DEV - "
 def root_name() -> str:
     """ "ALL ACCOUNTS" in production; "DEV - ALL ACCOUNTS" anywhere else, so
     dev and tests never adopt or write into the live folders, even in the
-    same Google account."""
-    return _ROOT_NAME if settings.infra.production else f"{_DEV_PREFIX}{_ROOT_NAME}"
+    same Google account. In live-read mode dev reads the live "ALL ACCOUNTS"
+    (every write blocked, `gdrive.ReadOnlyDrive`)."""
+    live = settings.infra.production or read_live_mode()
+    return _ROOT_NAME if live else f"{_DEV_PREFIX}{_ROOT_NAME}"
 
 
 def _bot_root(user_id: int) -> str | None:
@@ -143,8 +147,9 @@ def _owner_label(user_id: int) -> str:
 def _is_root(folder: DriveFolder) -> bool:
     """Whether a stored root may be used. Outside production only a folder
     named `root_name()`: a dev copy of the prod database carries the live
-    "ALL ACCOUNTS" id, which dev must never write into."""
-    if settings.infra.production:
+    "ALL ACCOUNTS" id, which dev must never write into -- except in live-read
+    mode, where it is read (never written, `gdrive.ReadOnlyDrive`)."""
+    if settings.infra.production or read_live_mode():
         return True
     return folder.name.strip().casefold() == root_name().casefold()
 
@@ -218,13 +223,13 @@ def now() -> datetime.datetime:
 
 def _period_starts(at: datetime.datetime) -> list[float]:
     """[start of today, start of the last 7 days] in the Drive timezone, as
-    timestamps: what "posted today / this week" count from. Each midnight
-    is built in the zone itself, so a DST change between them is right."""
-    first = at.date() - datetime.timedelta(days=_WEEK_DAYS - 1)
-    return [
-        datetime.datetime.combine(day, datetime.time(), at.tzinfo).timestamp()
-        for day in (at.date(), first)
-    ]
+    timestamps: what "Posted today / Last 7 days" count from. By the local
+    calendar day, not the posting window -- the team posts in the evening, so
+    a window starting mid-evening would count those posts as yesterday's."""
+    local = at.astimezone(ZoneInfo(settings.gdrive.timezone))
+    today = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    first = today - datetime.timedelta(days=_WEEK_DAYS - 1)
+    return [today.timestamp(), first.timestamp()]
 
 
 def _is_posted(name: str) -> bool:
@@ -247,6 +252,48 @@ def _missing(
     ]
 
 
+def _deleted_by_hand(target: DriveTarget) -> None:
+    """Its folder was deleted in Drive: the account goes everywhere
+    (web/account_removal.py), the folder is not made again. Imported here:
+    the removal reads phones and trashes through this module."""
+    from ofmhelpers.web.account_removal import folder_deleted
+
+    logger.warning(
+        "drive: folder of %s deleted by hand: removing the account", target.handle
+    )
+    store.forget_account_folder(target.login_id)
+    folder_deleted(target.device.user_id, target.login_id)
+
+
+def trash_folders(user_id: int, login_ids: list[int]) -> None:
+    """These logins' account folders into the owner's Drive trash
+    (restorable there), forgotten. A Drive failure is logged, never raised:
+    the folder then stays, listed on /drive under folders no login owns."""
+    stored = store.account_folders()
+    folders = [stored[i] for i in login_ids if i in stored]
+    if not folders:
+        return
+    try:
+        drive = _person_drive(user_id)
+    except (DriveError, SignInError):
+        logger.warning("drive: cannot trash folders of %s", user_id, exc_info=True)
+        return
+    for folder in folders:
+        try:
+            if drive is not None:
+                drive.trash_file(folder.folder_id)
+        except FolderGoneError:
+            pass
+        except DriveError:
+            logger.warning("drive: trashing %s failed", folder.folder_id, exc_info=True)
+            continue
+        store.forget_account_folder(folder.login_id)
+
+
+class _RemovedByHandError(Exception):
+    """The stored account folder was deleted in Drive (`_deleted_by_hand`)."""
+
+
 def _account_folder(
     drive: DriveApi,
     root: str,
@@ -260,12 +307,9 @@ def _account_folder(
     if stored is not None:
         try:
             current = drive.folder(stored.folder_id)
-        except FolderGoneError:
-            logger.warning(
-                "drive: folder of %s is gone, finding or making it again",
-                target.handle,
-            )
-            store.forget_account_folder(target.login_id)
+        except FolderGoneError as exc:
+            _deleted_by_hand(target)
+            raise _RemovedByHandError from exc
         else:
             if current.name != target.folder_name:
                 drive.rename(current.id, target.folder_name)
@@ -343,7 +387,10 @@ def _sync_one(
     stored: StoredFolder | None,
     report: SyncReport,
 ) -> None:
-    account_id, kept = _account_folder(drive, root, target, stored, report)
+    try:
+        account_id, kept = _account_folder(drive, root, target, stored, report)
+    except _RemovedByHandError:
+        return
     posted_id = stored.posted_folder_id if kept and stored else None
     _posted_folder(drive, target, account_id, posted_id, report)
 
@@ -386,7 +433,14 @@ def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountSca
     gone (a trashed folder still lists, so it is asked first)."""
     current = drive.folder(account_id)
     items = drive.children(account_id)
-    posted_items = {d.id: drive.children(d.id) for d in _posted_dirs(items, posted_id)}
+    posted_items: dict[str, list[DriveFile]] = {}
+    for d in _posted_dirs(items, posted_id):
+        try:
+            posted_items[d.id] = drive.children(d.id)
+        except FolderGoneError:
+            # Only that POSTED folder went since the listing, not the
+            # account: never taken as the account deleted by hand.
+            logger.info("drive: POSTED folder %s gone mid-scan", d.id)
     return _build_scan(current.name, items, posted_id, posted_items)
 
 
@@ -400,7 +454,7 @@ def _kept_posted_ok(scan: AccountScan, stored: StoredFolder) -> bool:
 
 
 def _tally_one(
-    user_id: int, root: str, target: DriveTarget, stored: StoredFolder, seen_at: float
+    user_id: int, target: DriveTarget, stored: StoredFolder, seen_at: float
 ) -> SyncReport:
     """Lists one account, heals it, records what is newly posted. Its own
     report (merged by `_tally`): the accounts run in parallel threads, each
@@ -412,9 +466,7 @@ def _tally_one(
     try:
         scan = _scan(drive, stored.folder_id, stored.posted_folder_id)
     except FolderGoneError:
-        logger.warning("drive: folder of %s is gone, making it again", target.handle)
-        store.forget_account_folder(target.login_id)
-        _sync_one(drive, root, target, None, report)
+        _deleted_by_hand(target)
         return report
     if scan.name != target.folder_name:
         drive.rename(stored.folder_id, target.folder_name)
@@ -425,6 +477,9 @@ def _tally_one(
         target.login_id, stored.folder_id, scan.posted, seen_at
     )
     store.save_scans({target.login_id: scan}, seen_at)
+    # A video deleted (or dragged away) in Drive stops showing "In Drive".
+    present = {f.id for f in (*scan.waiting, *scan.posted)}
+    upload_store.gone_from(target.login_id, present, seen_at)
     return report
 
 
@@ -437,9 +492,7 @@ def _merge(into: SyncReport, part: SyncReport) -> None:
     into.failed += part.failed
 
 
-def _tally(
-    user_id: int, root: str, targets: list[DriveTarget], report: SyncReport
-) -> None:
+def _tally(user_id: int, targets: list[DriveTarget], report: SyncReport) -> None:
     """Every linked account of the owner, in parallel; one failing is
     reported."""
     folders = store.account_folders()
@@ -447,7 +500,7 @@ def _tally(
     seen_at = time.time()
     with ThreadPoolExecutor(max_workers=settings.gdrive.list_workers) as pool:
         futures = {
-            pool.submit(_tally_one, user_id, root, t, f, seen_at): t for t, f in linked
+            pool.submit(_tally_one, user_id, t, f, seen_at): t for t, f in linked
         }
         for future, target in futures.items():
             try:
@@ -475,7 +528,7 @@ def _sync_owner(user_id: int, targets: list[DriveTarget], report: SyncReport) ->
         except (DriveError, SignInError) as exc:
             logger.warning("drive: %s not synced: %s", target.handle, exc)
             report.failed.append(f"{target.folder_name}: {exc}")
-    _tally(user_id, root, targets, report)
+    _tally(user_id, targets, report)
 
 
 def sync(owner: int | None = None) -> SyncReport:
@@ -484,6 +537,11 @@ def sync(owner: int | None = None) -> SyncReport:
     tallies and heals every account. One owner or login failing is reported; the
     others still go. The report names only the owners swept."""
     report = SyncReport()
+    if read_live_mode():
+        # Live-read mode only reads the live folders (the page's /drive/live);
+        # the sweep makes and renames folders, so it never runs here.
+        logger.info("drive: live-read mode, sweep skipped (no writes to live)")
+        return report
     with store.sync_lock() as held:
         if not held:
             report.busy = True
@@ -507,7 +565,7 @@ def sync(owner: int | None = None) -> SyncReport:
 
 def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
     """Fills the card from Drive and records what is newly posted; a folder
-    gone since is forgotten, so the next sweep makes it again."""
+    deleted by hand since removes the account everywhere."""
     if card.account_folder_id is None:
         return
     try:
@@ -517,9 +575,9 @@ def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
         folder_id = card.account_folder_id
         card.scan = _scan(drive, folder_id, card.posted_folder_id)
     except FolderGoneError:
-        store.forget_account_folder(card.target.login_id)
+        _deleted_by_hand(card.target)
         card.account_folder_id = card.posted_folder_id = None
-        card.error = "The account's folder was deleted: Sync makes it again"
+        card.error = "The account's folder was deleted: the account was removed"
         return
     except (DriveError, SignInError) as exc:
         logger.warning("drive: listing %s failed: %s", card.target.handle, exc)

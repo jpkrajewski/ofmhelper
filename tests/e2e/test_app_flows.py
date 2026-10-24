@@ -6,7 +6,9 @@ click through every /reels filter and download three reels, track an
 Instagram account on /accounts end to end, generate 18+ gated links for it
 on /links, add a phone with a login on /phones and export it."""
 
+import json
 import re
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -24,12 +26,13 @@ pytestmark = pytest.mark.e2e
 VA_PAGES = [
     "/generate",
     "/clone",
-    "/reels",
+    "/clone-long",
     "/download-assets",
     "/accounts",
     "/links",
     "/phones",
     "/drive",
+    "/reels",
     "/uniqify",
     "/account",
     "/cookies",
@@ -114,19 +117,18 @@ def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(
     page.fill("#fake-email", "newbie@example.com")
     with page.expect_navigation():
         page.click("button[type=submit]")
+    # Signed in; no Drive token yet, so the Drive consent follows at once
+    # (one flow, no "Connect" to find afterwards).
+    expect(page.locator("#fake-email")).to_be_visible()
+    page.fill("#fake-email", "newbie@example.com")
+    with page.expect_navigation():
+        page.click("button[type=submit]")
     assert "/auth/" not in page.url  # a refusal stays on the callback
     page.goto("/account")
     assert page.url.endswith("/account")
     expect(page.locator('[data-provider="google"]')).to_contain_text(
         "newbie@example.com"
     )
-    # Signing in asked no Drive access; connecting it is one more consent.
-    drive_card = page.locator(".card").nth(1)
-    expect(drive_card).to_contain_text("Not connected")
-    drive_card.locator('a[href^="/auth/google/start?link=1"]').click()
-    page.fill("#fake-email", "newbie@example.com")
-    with page.expect_navigation():
-        page.click("button[type=submit]")
     expect(page.locator(".card").nth(1)).to_contain_text("Connected")
     page.click(".logout-form button")
 
@@ -300,16 +302,37 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
     expect(failed.first).to_have_attribute("title", re.compile("kie.ai: wrong API key"))
 
-    # A failed card's one action is Recreate: the images and its video back,
-    # without re-uploading.
+    # A failed card's action is Recreate (its ⋯ menu only hides it): the
+    # images and its video back, without re-uploading.
     first = va.page.locator(f'#clone-gallery > [data-job-id="{body["job_ids"][0]}"]')
-    expect(first.locator(".result-actions .menu")).to_have_count(0)
+    expect(
+        first.locator(".result-actions .menu .menu-item:not([hidden])")
+    ).to_have_text(["Hide"])
     first.locator(".recreate-btn").click()
     expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
+    expect(va.page.locator('.file-picker[data-field="videos"] li')).to_have_count(1)
+    # Every file is still there: none is dropped once checked.
+    va.page.wait_for_load_state("networkidle")
+    expect(va.page.locator(".file-picker-missing")).to_have_count(0)
     expect(va.page.locator('.file-picker[data-field="videos"] li')).to_have_count(1)
 
     assert va.js_errors == []
     assert coworker.js_errors == []
+
+    # 2026-10-23: a file no longer on the server (this test's own sandbox
+    # copy, removed here) left a broken box, found out at Start. Now
+    # Recreate drops it and says so; the rest is restored.
+    params = json.loads(first.get_attribute("data-params") or "{}")
+    Path(params["reference_videos"][0]).unlink()
+    first.locator(".recreate-btn").click()
+    videos = va.page.locator('.file-picker[data-field="videos"]')
+    expect(videos.locator(".file-picker-missing")).to_contain_text(
+        "is not on this server: pick it again"
+    )
+    expect(videos.locator("li")).to_have_count(0)
+    expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
+    # The card itself still shows that run's inputs: their thumbnail 404s.
+    assert all("404" in e for e in va.js_errors), va.js_errors
 
 
 # Profiles of the Instagram fake (src/ofmhelpers/instagram/fake_profiles.json):
@@ -335,6 +358,90 @@ def test_clone_output_selects_and_switches_line_up(va: Session):
     assert va.page.eval_on_selector(
         "#clone-export", "e => getComputedStyle(e).backgroundImage"
     ).startswith("linear-gradient")
+    assert va.js_errors == []
+
+
+def test_clone_long_prices_a_long_16_9_video_before_it_runs(
+    va: Session, tmp_path: Path
+):
+    """/clone-long: a 32 s video is 3 pieces, priced for all 32 s at kie.ai's
+    720P rate (32.78 credits a second, $0.005 a credit)."""
+    video = tmp_path / "long.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=128x72:rate=10",
+            "-t",
+            "32",
+            "-pix_fmt",
+            "yuv420p",
+            str(video),
+        ],
+        check=True,
+        timeout=60,
+    )
+    va.goto("/clone-long")
+    va.page.select_option("#provider-select", "kie")
+    quote = va.page.locator("#clone-long-quote")
+    expect(quote).to_be_hidden()
+
+    va.page.locator('.file-picker[data-field="video"] .file-add-input').set_input_files(
+        str(video)
+    )
+
+    expect(quote).to_have_text("32 s · 3 pieces · $5.24 · 1,049 credits")
+    va.page.select_option("#clone-long-resolution", "1080P")
+    expect(quote).to_contain_text("3 pieces")
+    assert va.js_errors == []
+
+
+def test_clone_long_start_queues_a_card_that_fails_cleanly_on_a_wrong_key(
+    va: Session, subject_images: list[Path], source_videos: list[Path]
+):
+    """2026-10-23: Start did nothing (a JS error, the request never left).
+    Now it queues one run whose card shows up at once and, on a wrong key,
+    fails with the reason -- nothing paid."""
+    va.goto("/clone-long")
+    expect(va.page.locator("#clone-long-empty")).to_be_visible()
+    va.page.select_option("#provider-select", "kie")
+    va.page.fill("#api-key", "e2e-wrong-key")
+    va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
+        str(subject_images[0])
+    )
+    va.page.locator('.file-picker[data-field="video"] .file-add-input').set_input_files(
+        str(source_videos[0])
+    )
+
+    with va.page.expect_response(lambda r: r.url.endswith("/clone-long/run")) as run:
+        va.page.click('#clone-long-form button[type="submit"]')
+
+    job_id = run.value.json()["job_id"]
+    card = va.page.locator(f'#clone-long-gallery > [data-job-id="{job_id}"]')
+    expect(card).to_have_count(1)
+    expect(va.page.locator("#clone-long-empty")).to_be_hidden()
+    expect(card.locator(".result-failed")).to_have_text(
+        re.compile("Wrong API key"), timeout=RESULT_TIMEOUT_MS
+    )
+
+    # Recreate (2026-10-23: it did nothing here): the run's image, video and
+    # prompt back, from the server, without re-uploading.
+    va.page.reload()
+    va.page.fill("#clone-long-prompt", "")
+    va.page.locator(
+        f'#clone-long-gallery > [data-job-id="{job_id}"] .recreate-btn'
+    ).click()
+    for field in ("image", "video"):
+        picked = va.page.locator(f'.file-picker[data-field="{field}"] li')
+        expect(picked).to_have_count(1)
+        expect(picked.locator(".reused-badge")).to_have_count(1)
+    expect(va.page.locator("#clone-long-prompt")).not_to_have_value("")
+    expect(va.page.locator(".file-picker-missing")).to_have_count(0)
     assert va.js_errors == []
 
 
@@ -392,16 +499,16 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
 
     status = va.page.locator("#reels-form .generation-status")
     expect(status).to_contain_text("Added", timeout=SCAN_TIMEOUT_MS)
-    # A first scan runs on the worker; the page reloads itself once it is done.
-    expect(va.page.locator(".reels-watch-item[data-pending]")).to_have_count(
-        0, timeout=SCAN_TIMEOUT_MS
-    )
+    # A first scan runs on the worker; the page reloads itself one poll after
+    # it is done, also when it was done before the rows came back
+    # (2026-10-23: the page stayed without the new reels).
+    cards = va.page.locator(".reel-card[data-video-url]")
+    expect(cards).to_have_count(FEED_REELS, timeout=SCAN_TIMEOUT_MS)
+    expect(va.page.locator(".reels-watch-item[data-pending]")).to_have_count(0)
     for username in ("sheep_love33", "brookslockvip"):
         expect(
             va.page.locator(f'.reels-watch-item[data-username="{username}"]')
         ).to_have_count(1)
-    cards = va.page.locator(".reel-card[data-video-url]")
-    expect(cards).to_have_count(FEED_REELS)
     # One feed, most viewed first, across profiles.
     views = va.page.locator(".reel-card").evaluate_all(
         "cs => cs.map(c => Number(c.dataset.views))"
@@ -462,15 +569,17 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
 
 
 def _add_viral_profiles(session: Session) -> None:
-    """VIRAL_PROFILES on the watch list and scanned (a no-op once they are)."""
+    """VIRAL_PROFILES on the watch list and scanned: their reels in the feed
+    (the page reloads once the first scans are done; "nothing pending" is
+    also true of the list before its new rows come back, 2026-10-23)."""
     session.goto("/reels")
     session.page.fill("#reels-profiles", "\n".join(VIRAL_PROFILES))
     session.page.click('#reels-form button[type="submit"]')
     expect(session.page.locator("#reels-form .generation-status")).to_contain_text(
         "Added", timeout=SCAN_TIMEOUT_MS
     )
-    expect(session.page.locator(".reels-watch-item[data-pending]")).to_have_count(
-        0, timeout=SCAN_TIMEOUT_MS
+    expect(session.page.locator(".reel-card[data-video-url]")).to_have_count(
+        FEED_REELS, timeout=SCAN_TIMEOUT_MS
     )
 
 
@@ -885,14 +994,16 @@ def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     expect(card.locator(".result-actions .download-btn")).to_be_visible()
     card.locator(".menu summary").click()
     card.locator(".drive-upload-btn").click()
-    picker = va.page.locator("#drive-picker")
-    expect(picker).to_be_visible()
-    submit = picker.locator("#drive-picker-submit")
-    expect(submit).to_be_disabled()
-    picker.locator('.drive-pick:has-text("vee.ig") input').check()
-    expect(submit).to_have_text("Upload to 1 account")
-    submit.click()
-    expect(picker).to_be_hidden()
+    # /drive with the video on top; the account card clicked is where it goes.
+    va.page.wait_for_url(f"**/drive?upload={job_id}")
+    expect(va.page.locator("#dr-pick video")).to_have_count(1)
+    va.page.locator('.dr-card[data-folder="vee.ig - Vee"]').click()
+    confirm = va.page.locator("#dr-pick-confirm")
+    expect(confirm).to_contain_text("You are moving VID_")
+    expect(confirm).to_contain_text("to vee.ig - Vee")
+    va.page.locator("#dr-pick-submit").click()
+    va.page.wait_for_url("**/clone*")
+    card = va.page.locator(f'#clone-gallery > [data-job-id="{job_id}"]')
     done = card.locator('.drive-states li[data-status="done"]')
     expect(done).to_contain_text("In Drive: vee.ig - Vee", timeout=RESULT_TIMEOUT_MS)
 
@@ -901,4 +1012,10 @@ def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     )
     uploaded = [n for n in fake_drive.names_in(folder) if n.startswith("VID_")]
     assert len(uploaded) == 1
+
+    # Wrong folder: x takes it back out (Drive trash), the line goes.
+    va.page.once("dialog", lambda d: d.accept())
+    done.locator(".drive-remove").click()
+    expect(card.locator(".drive-states li")).to_have_count(0)
+    assert [n for n in fake_drive.names_in(folder) if n.startswith("VID_")] == []
     assert va.js_errors == []

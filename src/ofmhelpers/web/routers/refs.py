@@ -28,7 +28,7 @@ from ofmhelpers.web.routers.task_helpers import (
     media_response,
     strip_asset_hash_prefix,
 )
-from ofmhelpers.web.schemas import RefEntry
+from ofmhelpers.web.schemas import MissingRefs, RefEntry
 
 logger = get_logger(__name__)
 
@@ -70,7 +70,7 @@ def _entry(path: str, mtime: float, used_at: float | None = None) -> RefEntry:
     )
 
 
-def _stored_files(root: Path, kind: str | None) -> dict[str, float]:
+def stored_files(root: Path, kind: str | None) -> dict[str, float]:
     """Every file under `root` (the session's part of the asset store,
     `in_asset_root`), optionally of one kind, minus the thumbnail cache, as
     path -> mtime. No separate metadata store, this is the real files: one
@@ -124,7 +124,7 @@ def list_refs(
 
     An explicit `?limit=` is the "show older" path: newest-uploaded first, no
     usage grouping."""
-    stored = _stored_files(assets_root_for(request), kind)
+    stored = stored_files(assets_root_for(request), kind)
     if limit is not None:
         newest = heapq.nlargest(limit, stored.items(), key=itemgetter(1))
         return [_entry(path, mtime) for path, mtime in newest]
@@ -143,6 +143,26 @@ def list_refs(
 
     uploaded = heapq.nlargest(RECENT_UPLOAD_LIMIT, stored.items(), key=itemgetter(1))
     return used + [_entry(path, mtime) for path, mtime in uploaded]
+
+
+# Restored files one Recreate checks at once (a run holds a handful).
+MAX_CHECKED = 50
+
+
+@router.get("/missing")
+def missing_refs(
+    request: Request, path: Annotated[list[str], Query(max_length=MAX_CHECKED)]
+) -> MissingRefs:
+    """Of `path`s (a past run's files, restored by Recreate), the ones this
+    session can no longer use: deleted since, never on this server, or not
+    its own. One request, so a restore checks every file without a 404 per
+    gone one."""
+    root = assets_root_for(request)
+    return MissingRefs(
+        missing=[
+            p for p in path if not (in_asset_root(root, Path(p)) and Path(p).is_file())
+        ]
+    )
 
 
 @router.get("/file")

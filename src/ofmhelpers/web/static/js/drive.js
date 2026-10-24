@@ -97,6 +97,62 @@
         });
     }
 
+    // Upload mode (/drive?upload=<job>): every account card is a target;
+    // a click asks to confirm, then the video goes there and /clone shows it.
+    const pick = $("dr-pick");
+    if (pick) {
+        const already = new Set((pick.dataset.already || "").split(",").filter(Boolean));
+        const confirmBox = $("dr-pick-confirm");
+        const submit = $("dr-pick-submit");
+        const error = $("dr-pick-error");
+        let target = null;
+
+        const markCards = () => {
+            for (const card of document.querySelectorAll(".dr-card")) {
+                card.classList.add("dr-pickable");
+                card.classList.toggle("dr-picked", already.has(card.dataset.login));
+            }
+        };
+        markCards();
+        new MutationObserver(markCards).observe(board, { childList: true });
+
+        board.addEventListener("click", (event) => {
+            const card = event.target.closest(".dr-card");
+            if (!card) return;
+            event.preventDefault();
+            if (already.has(card.dataset.login)) return;
+            target = card;
+            $("dr-pick-file").textContent = pick.dataset.name;
+            $("dr-pick-folder").textContent = card.dataset.folder;
+            error.hidden = true;
+            submit.disabled = false;
+            confirmBox.showModal();
+        });
+        $("dr-pick-back").addEventListener("click", () => confirmBox.close());
+        submit.addEventListener("click", async (event) => {
+            event.preventDefault();
+            if (!target) return;
+            submit.disabled = true;
+            try {
+                const response = await fetch("/clone/drive-upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        job_ids: [pick.dataset.job],
+                        login_ids: [Number(target.dataset.login)],
+                    }),
+                });
+                const data = await response.json().catch(() => null);
+                if (!response.ok) throw new Error(data?.detail || `Upload refused (${response.status})`);
+                window.location.href = `/clone#job-${pick.dataset.job}`;
+            } catch (err) {
+                error.textContent = err.message;
+                error.hidden = false;
+                submit.disabled = false;
+            }
+        });
+    }
+
     // Images load after this script runs: listen in the capture phase.
     document.addEventListener("error", (event) => {
         const img = event.target;

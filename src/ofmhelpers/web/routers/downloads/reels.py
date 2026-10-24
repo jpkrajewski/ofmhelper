@@ -256,7 +256,8 @@ def add(
 ):
     """Adds every profile on its own line to `group` and queues the first
     scan of the new ones. A profile already watched is only moved to
-    `group` (when one is given) and left to its 12 h rescan. One bad line
+    `group` (when one is given) and left to its rescan, if rescans are on
+    (`reel_watch`). One bad line
     rejects the lot, before anything is added."""
     form = WatchForm(profiles=profiles, group=group)
     try:

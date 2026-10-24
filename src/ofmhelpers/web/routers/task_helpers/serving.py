@@ -107,10 +107,20 @@ def _result_media(job: Job | None, index: int, kinds: set[str]) -> tuple[Job, Pa
 
 def serve_job_preview(job: Job | None, index: int) -> FileResponse:
     """'/files/{job_id}/{index}/preview': a result image or video small
-    enough for a slow connection (see web/previews.py) -- usually made when
-    the job finished, else now. If it cannot be made, the original is served
-    instead: a slow picture beats none."""
+    enough for a slow connection (see web/previews.py) -- made by the
+    preview worker when the job finished. A video's not made yet, or one that
+    cannot be made: the original instead (a slow picture beats none); an
+    image's is made now (milliseconds)."""
     job, path = _result_media(job, index, {"image", "video"})
+    kind = classify_kind(path.name)
+    if kind == "video" and not previews.preview_path(job.id, index, kind).is_file():
+        # Still being made by the preview worker (a 75 s 4K download takes
+        # about a minute): the original plays now instead of a blank card
+        # for that minute, and of a second encode here (2026-10-23). Not
+        # cached, so the next load gets the small copy.
+        response = media_response(path)
+        response.headers["Cache-Control"] = "no-store"
+        return response
     try:
         dest = previews.make_preview(path, job.id, index)
     except previews.PREVIEW_ERRORS:

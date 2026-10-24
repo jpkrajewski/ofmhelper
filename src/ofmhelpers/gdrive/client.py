@@ -39,6 +39,70 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+
+def read_live_mode() -> bool:
+    """Dev-only live-read: on when OFM_DRIVE_READ_LIVE is set and this is not
+    production. Always off in production -- the live folders are never served
+    through the read-only guard there."""
+    return settings.gdrive.read_live and not settings.infra.production
+
+
+_READ_ONLY = "read-live mode (OFM_DRIVE_READ_LIVE): writing to the live Drive is off"
+
+
+class ReadOnlyDrive:
+    """A Drive whose reads pass through to the real one and whose every write
+    raises `DriveError`: dev reads the live folders to debug prod without any
+    chance of changing them (`read_live_mode`)."""
+
+    def __init__(self, inner: DriveApi) -> None:
+        self._inner = inner
+
+    def folder(self, folder_id: str) -> DriveFolder:
+        return self._inner.folder(folder_id)
+
+    def children(
+        self, parent_id: str, *, folders_only: bool = False
+    ) -> list[DriveFile]:
+        return self._inner.children(parent_id, folders_only=folders_only)
+
+    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+        return self._inner.children_of(parent_ids)
+
+    def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
+        return self._inner.find_folder(parent_id, name)
+
+    def file(self, file_id: str) -> DriveFile:
+        return self._inner.file(file_id)
+
+    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
+        return self._inner.thumbnail(item, px)
+
+    # Every write raises -- the whole point of the guard.
+    def create_folder(self, *args: object, **kwargs: object) -> DriveFolder:
+        raise DriveError(_READ_ONLY)
+
+    def ensure_folder(self, *args: object, **kwargs: object) -> DriveFolder:
+        raise DriveError(_READ_ONLY)
+
+    def rename(self, *args: object, **kwargs: object) -> DriveFolder:
+        raise DriveError(_READ_ONLY)
+
+    def upload(self, *args: object, **kwargs: object) -> DriveFile:
+        raise DriveError(_READ_ONLY)
+
+    def grant(self, *args: object, **kwargs: object) -> None:
+        raise DriveError(_READ_ONLY)
+
+    def trash_file(self, *args: object, **kwargs: object) -> None:
+        raise DriveError(_READ_ONLY)
+
+
+def _guard(drive: DriveApi) -> DriveApi:
+    """The Drive as callers get it: read-only in live-read mode, else as is."""
+    return ReadOnlyDrive(drive) if read_live_mode() else drive
+
+
 # Full Drive: the folder is the owner's, shared to the account. The
 # narrower drive.file scope sees only files the app itself created.
 SCOPES = ("https://www.googleapis.com/auth/drive",)
@@ -321,6 +385,20 @@ class Drive:
             f"Sharing {item_id} with {email}",
         )
 
+    def trash_file(self, item_id: str) -> None:
+        """Into Drive's trash (restorable there for 30 days), never deleted
+        for good. Raises `FolderGoneError` when it is already gone."""
+        self._run(
+            self._files.update(
+                fileId=item_id,
+                body={"trashed": True},
+                supportsAllDrives=True,
+                fields="id",
+            ),
+            f"File {item_id}",
+        )
+        logger.info("drive: trashed %s", item_id)
+
 
 _THREAD = threading.local()
 
@@ -336,7 +414,7 @@ def connect(*, interactive: bool = False) -> DriveApi:
     if settings.infra.fake_externals:
         from ofmhelpers.gdrive.fake import fake_drive
 
-        return fake_drive()
+        return _guard(fake_drive())
     s = settings.gdrive
     key = _key()
     timeout_s, retries = (
@@ -350,7 +428,7 @@ def connect(*, interactive: bool = False) -> DriveApi:
         drives[cache_key] = Drive(
             _credentials(key), timeout_s=timeout_s, retries=retries
         )
-    return drives[cache_key]
+    return _guard(drives[cache_key])
 
 
 def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
@@ -362,7 +440,7 @@ def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
     if settings.infra.fake_externals:
         from ofmhelpers.gdrive.fake import fake_person
 
-        return fake_person(refresh_token)
+        return _guard(fake_person(refresh_token))
     from ofmhelpers.signin.google import drive_credentials
 
     s = settings.gdrive
@@ -377,4 +455,4 @@ def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
         drives[key] = Drive(
             drive_credentials(refresh_token), timeout_s=timeout_s, retries=retries
         )
-    return drives[key]
+    return _guard(drives[key])

@@ -202,6 +202,7 @@ FINISHED_AT = "b6c7d8e9f0a1"
 USERS = "c2d3e4f5a6b7"
 OWNERS = "d3e4f5a6b7c8"
 SPAM = "d4e5f6a7b8c0"
+HIDDEN = "f8a9b0c1d2e3"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -450,3 +451,13 @@ def test_spam_drops_only_the_bots_leads(db):
     with db.connect() as conn:
         left = set(conn.execute(text("SELECT id FROM applications")).scalars())
     assert left == everyone - bots
+
+
+def test_hidden_keeps_every_job_shown(db):
+    """Production's jobs all stay, and none is hidden: every gallery looks
+    as it did."""
+    needs(HIDDEN)(db)
+    jobs = _count(db, "jobs")
+    command.upgrade(_alembic(), "head")
+    assert _count(db, "jobs") == jobs
+    assert _scalar(db, "SELECT count(*) FROM jobs WHERE hidden_at IS NOT NULL") == 0

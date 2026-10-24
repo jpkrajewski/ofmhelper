@@ -1,6 +1,18 @@
 {# One /download-assets gallery card: the shared card, plus the links that
-   failed and a link to every file of a many-file download. #}
+   failed, a link to every file of a many-file download, and -- when it
+   produced a video -- a [Clone | Clone long] control that opens that page
+   with the download's video(s) already picked (static/js/download.js posts
+   the job id; a card that finishes live has the same control cloned in). #}
 {% extends "_gallery_card.html" %}
+{% import "components/ui.html" as ui %}
+{% block below %}{% if job.status == "done" and job.assets|selectattr("kind", "equalto", "video")|list %}
+    <div class="send-to">
+    {% call ui.segmented("Clone this download") %}
+        {{ ui.button("Clone", icon="sparkles", hook="send-to-clone") }}
+        {{ ui.button("Clone long", icon="film", hook="send-to-long") }}
+    {% endcall %}
+    </div>
+{% endif %}{% endblock %}
 {% block no_output %}{% if not job.failed_sources %}<div class="result-file">No output</div>{% endif %}{% endblock %}
 {% block pending_label %}working…{% endblock %}
 {% block notes %}{% if job.failed_sources %}

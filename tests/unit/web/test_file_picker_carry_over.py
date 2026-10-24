@@ -11,7 +11,7 @@ SCRIPT = (SRC / "web/static/js/file-picker.js").read_text(encoding="utf-8")
 HARNESS = """
 const el = () => ({
     dataset: {}, style: {}, classList: { add() {}, remove() {} },
-    appendChild() {}, append() {}, set innerHTML(_) {},
+    appendChild() {}, append() {}, remove() {}, set innerHTML(_) {},
 });
 globalThis.document = { addEventListener() {}, createElement: el };
 globalThis.window = globalThis;

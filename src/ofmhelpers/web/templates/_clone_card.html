@@ -1,12 +1,13 @@
 {# One /clone gallery card: the shared card, plus where its video went in
    Drive and "Upload to Drive" in its ⋯ menu (static/js/clone.js opens the
-   picker). #}
+   picker); × on an uploaded one takes it back out (Drive trash). #}
 {% extends "_gallery_card.html" %}
 {% block below %}
     <ul class="drive-states">
-        {%- for u in job.drive_uploads %}
+        {%- for u in job.drive_uploads if u.status != "removed" %}
         <li data-status="{{ u.status }}" data-login="{{ u.login_id }}">
             {% if u.status == "done" %}In Drive: <a href="{{ u.drive_url }}" target="_blank" rel="noopener">{{ u.folder_name }}</a>
+            {{ ui.icon_button("x", "Remove from " ~ u.folder_name, hook="drive-remove", attrs={"data-upload": u.id}) }}
             {% elif u.status == "failed" %}<span title="{{ u.error }}">Drive upload to {{ u.folder_name }} failed</span>
             {% else %}<span class="spinner"></span> Uploading to {{ u.folder_name }}…{% endif %}
         </li>

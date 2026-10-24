@@ -11,10 +11,12 @@
     {{ ui.stat("Views · " ~ period.label|lower, num.count(summary.views), summary.links ~ " link" ~ ("" if summary.links == 1 else "s")) }}
     {% for p in providers %}
     {% set quota %}{% if p.usage %}{{ p.usage.used }}{% if p.usage.limit is not none %} / {{ p.usage.limit }}{% endif %}{% else %}—{% endif %}{% endset %}
-    {% set note %}{% if not p.has_key %}No API key{% elif p.usage and p.usage.active_limit is not none %}{{ p.usage.active }} / {{ p.usage.active_limit }} active{% elif p.synced_at %}Synced {{ p.synced_at|ago }}{% else %}Not synced yet{% endif %}{% endset %}
+    {% set note %}{% if not p.has_key %}No API key{% elif p.syncing %}Syncing…{% elif p.usage and p.usage.active_limit is not none %}{{ p.usage.active }} / {{ p.usage.active_limit }} active{% elif p.synced_at %}Synced {{ p.synced_at|ago }}{% else %}Not synced yet{% endif %}{% endset %}
     {{ ui.stat(p.label ~ " links", quota, note) }}
     {% endfor %}
 </div>
+{# A sync running: links.js reloads until it is done. #}
+{% if providers|selectattr("syncing")|list %}<span id="links-syncing" hidden></span>{% endif %}
 
 {% for p in providers %}
 {% if not p.has_key %}

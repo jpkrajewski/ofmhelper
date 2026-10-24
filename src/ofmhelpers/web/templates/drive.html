@@ -6,7 +6,6 @@
 {{ ui.page_header("Drive") }}
 
 <div class="generation-status" id="dr-status" role="status" aria-live="polite"></div>
-
 <div class="ph-toolbar">
     <label class="ph-search">
         {{ ic.icon("search") }}
@@ -21,6 +20,29 @@
         {{ ui.button("Sync", "primary", icon="refresh", attrs={"id": "dr-sync", "disabled": board.problem and not board.cards}) }}
     </div>
 </div>
+
+{% if pick %}
+{# Upload mode (?upload=<job>): this video goes into the account card
+   clicked, after a confirm (drive.js). #}
+{% call ui.card(hook="dr-pick", attrs={"id": "dr-pick", "data-job": pick.job_id, "data-name": pick.name, "data-already": pick.already|join(",")}) %}
+    <video src="{{ pick.preview_url }}"{% if pick.poster_url %} poster="{{ pick.poster_url }}"{% endif %} controls playsinline preload="metadata"></video>
+    <div class="dr-pick-text">
+        <h2>Click phone to upload reel there</h2>
+        {{ ui.button("Cancel", href="/clone") }}
+    </div>
+{% endcall %}
+<dialog class="accounts-dialog" id="dr-pick-confirm">
+    <form method="dialog">
+        <h2>Upload to Drive</h2>
+        <p>You are moving <strong id="dr-pick-file"></strong> to <strong id="dr-pick-folder"></strong>.</p>
+        <p class="generation-error" id="dr-pick-error" hidden></p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Back", "ghost", attrs={"id": "dr-pick-back"}) }}
+            {{ ui.button("Confirm", "primary", attrs={"id": "dr-pick-submit"}) }}
+        </div>
+    </form>
+</dialog>
+{% endif %}
 
 <div id="dr-board"{% if not board.live %} data-live="/drive/live"{% endif %}>
 {% include "_drive_board.html" %}

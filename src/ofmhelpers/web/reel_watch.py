@@ -2,7 +2,9 @@
 ofmhelpers/web/reel_watch.py
 
 Rescans every profile on /reels' watch list every `rescan_interval_s` (12 h by
-default), so its viral reels stay current without anyone pressing Scan.
+default), so its viral reels stay current without anyone pressing Scan --
+while `rescan_enabled` (`OFM_IG_RESCAN_ENABLED`, off since 2026-10-23). Off,
+the sweeper only retries the first scan of a just-added profile.
 
 The sweeper only decides *who* is due: it claims them in one atomic UPDATE
 (`stores.watched_profiles.claim_due`, so a second API process cannot claim
@@ -247,8 +249,12 @@ def unlock_gated(user_id: int) -> None:
 
 
 def queue_due_scans() -> list[str]:
+    """Claims and queues the profiles due: never scanned (a first scan lost
+    to a deploy is retried once its claim expires) and, while rescans are
+    on (`rescan_enabled`), not scanned for `rescan_interval_s`."""
     s = settings.instagram
-    due = claim_due(s.rescan_interval_s, s.rescan_claim_ttl_s)
+    interval = s.rescan_interval_s if s.rescan_enabled else None
+    due = claim_due(interval, s.rescan_claim_ttl_s)
     if due:
         logger.info("rescanning %d watched profile(s)", len(due))
         enqueue(scan_all, due)

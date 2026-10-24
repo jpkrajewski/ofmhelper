@@ -17,6 +17,7 @@ Callers: `web/routers/downloads/reels.py`, `web/reel_watch.py`, `socials/platfor
   - `PolarisProfileReelsTabContentQuery_connection` -> `pk`, `code`, `play_count`, thumbnail, pinned flag; no length/mp4/`taken_at`. `pk >> 23` = ms since 1314220021721.
   - `PolarisLoggedOutDesktopWWWPostRootContentQuery` -> mp4, DASH length, `taken_at` (403 on `/graphql/query`).
   - `PolarisProfilePostsTabContentQuery_connection` -> timeline with mp4/length/`taken_at`, 12/page, no views; hidden accounts answer error 1357005.
+  - Rate limits can come as HTTP 200 + `{"errors":[{"message":"Rate limit exceeded","code":1675004}]}` (posts query, 2026-10-23, while the reels query still answered): `_query` raises `InstagramRateLimitedError` (`models.GraphQLErrors`), else it read as an empty timeline. Any other GraphQL error still reads as no data (hidden accounts).
 - Logged-out visitors don't see sensitive/age-restricted reels at all: the reels tab just ends early (danywalking 8 of 15, 2026-10-20). Logged-in GraphQL (`/graphql/query` + `av`/`fb_dtsg` from the logged-in page) lists them; logged-in REST 302s to home.
 - Gated accounts: logged-out post query returns null; `GET /api/v1/media/{pk}/info/` with cookies works. Without a login the reel is still listed as "login only".
 - Doesn't work: anonymous REST (`web_profile_info`, `clips/user`) 429/401; gallery-dl/yt-dlp lack play counts (still the best `doc_id` reference); embed HTML has only rounded followers.

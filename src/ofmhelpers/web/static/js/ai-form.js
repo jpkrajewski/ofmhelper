@@ -87,6 +87,9 @@
         lastModel[model.provider] = model.key;
         form.dataset.resultKind = model.kind;
         form.dataset.toolLabel = model.label;
+        // Batch (many of the same prompt) is images only.
+        const batchField = document.getElementById("batch-field");
+        if (batchField) batchField.hidden = model.kind !== "image";
         applyPrompt(model);
         currentLoad = fieldsHtml(model)
             .then((html) => {

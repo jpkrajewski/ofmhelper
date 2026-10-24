@@ -19,6 +19,10 @@ Python 3.12, FastAPI, PostgreSQL, Redis, RQ. Prod = Linux/Docker.
 - Say what's wrong directly; pick the best default instead of listing options.
 
 ## Validation
+
+FIRST OF ALL, DUMP PROD DATA INTO DEV, CHECK IF YOU CHANGES WORK ON DEV LIKE EXPECTED,
+COMPARE PROD AND DEV
+
 Every check runs in Docker dev, never on the host. `C="docker compose -f docker-compose.yml -f docker-compose.dev.yml"`:
 - Tests: `scripts/test.sh [preset]` (see Testing). `live` = real TikTok/Instagram/kie.ai/Higgsfield/Drive sandbox; local only, not on CI (Instagram rate-limits runner IPs).
 - `$C run --rm tests uv run --frozen mypy` / `ruff check src tests` / `ruff format --check src tests`.

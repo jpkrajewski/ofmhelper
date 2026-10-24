@@ -6,6 +6,7 @@ next sweep. Every provider call is stubbed.
 """
 
 import pytest
+from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.aigenproviders import tasks
 from ofmhelpers.aigenproviders.base import TaskState
@@ -27,9 +28,14 @@ def _job(status="failed", task="ai", provider="kie", model=MODEL):
     return job_id
 
 
-def _remember(job_id, provider="kie", model=MODEL, age_s=0.0):
+def _remember(job_id, provider="kie", model=MODEL, age_s=0.0, part=0):
     task = tasks.ProviderTask(
-        job_id=job_id, provider=provider, model=model, task_id="t1", api_key="key-1"
+        job_id=job_id,
+        provider=provider,
+        model=model,
+        task_id=f"t{part + 1}",
+        api_key="key-1",
+        part=part,
     )
     task.created_at -= age_s
     tasks.remember(task)
@@ -53,10 +59,23 @@ def status(monkeypatch):
     return state
 
 
+class _Reruns(list):
+    """The re-runs recovery queued (their args), and each one's time limit."""
+
+    def __init__(self):
+        super().__init__()
+        self.timeouts = []
+
+
 @pytest.fixture
 def reruns(monkeypatch):
-    calls = []
-    monkeypatch.setattr(recovery, "enqueue", lambda *args: calls.append(args))
+    calls = _Reruns()
+
+    def enqueue(*args, job_timeout=None):
+        calls.append(args)
+        calls.timeouts.append(job_timeout)
+
+    monkeypatch.setattr(recovery, "enqueue", enqueue)
     return calls
 
 
@@ -182,3 +201,192 @@ def test_one_unreachable_provider_never_stops_the_sweep(status, reruns, monkeypa
 
     assert recovery.run_recovery_once() == {}
     assert {t.job_id for t in tasks.remembered()} == {first, second}
+
+
+# --- jobs cut off by a restart ----------------------------------------------
+
+
+@pytest.fixture
+def active(monkeypatch):
+    """The job ids the queue / workers hold, as recovery reads them."""
+    held: set[str] = set()
+    monkeypatch.setattr(recovery, "active_job_ids", lambda: held)
+    monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
+    return held
+
+
+def test_a_job_cut_off_after_its_request_finished_is_resumed(status, reruns, active):
+    """Prod, 2026-10-22: a deploy killed the worker during a clone's CapCut
+    export; the job stayed running with nobody on it."""
+    job_id = _job(status="running", task="clone", provider="higgsfield")
+    _remember(job_id, provider="higgsfield")
+    status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
+
+    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    [(_run_job, rerun_id, _fn, kwargs)] = reruns
+    assert rerun_id == job_id
+    assert kwargs["api_key"] == "key-1"
+
+
+def test_a_cut_off_job_with_nothing_to_resume_fails_instead_of_spinning(
+    status, reruns, active
+):
+    job_id = _job(status="running", task="download_media")
+
+    assert recovery.run_recovery_once() == {job_id: "interrupted"}
+    job = get_job(job_id)
+    assert job.status == "failed"
+    assert job.error == recovery.INTERRUPTED
+    assert reruns == []
+
+
+def test_a_job_a_worker_holds_or_the_queue_has_is_left_running(status, reruns, active):
+    held = _job(status="running", task="clone", provider="higgsfield")
+    _remember(held, provider="higgsfield")
+    queued = _job(status="running", task="download_media")
+    active.update({held, queued})
+
+    assert recovery.run_recovery_once() == {held: "running"}
+    assert get_job(queued).status == "running"
+    assert status["seen"] == []
+
+
+def test_a_just_created_job_is_not_cut_off(status, reruns, active, monkeypatch):
+    monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "120")
+    job_id = _job(status="running", task="download_media")
+    assert recovery.run_recovery_once() == {}
+    assert get_job(job_id).status == "running"
+
+
+def test_without_a_view_of_the_queue_nothing_is_cut_off(status, reruns, monkeypatch):
+    monkeypatch.setattr(recovery, "active_job_ids", lambda: None)
+    job_id = _job(status="running", task="download_media")
+    assert recovery.run_recovery_once() == {}
+    assert get_job(job_id).status == "running"
+
+
+def test_a_saved_job_forgets_its_request():
+    job_id = _job(status="running")
+    _remember(job_id)
+    run_job(job_id, list, {})
+    assert tasks.recall(job_id) is None
+
+
+def _fails_after_the_result(**_kwargs):
+    msg = "CapCut export failed"
+    raise RuntimeError(msg)
+
+
+def _provider_still_generating(**_kwargs):
+    msg = "Kie is still generating"
+    raise ProviderUnavailableError(msg)
+
+
+def test_a_job_failing_after_its_result_forgets_its_request(status, reruns):
+    """Its tail (export, asset store) failed: re-running it every sweep
+    would fail the same way, for 48 h."""
+    job_id = _job(status="running")
+    _remember(job_id)
+    run_job(job_id, _fails_after_the_result, {})
+    assert get_job(job_id).status == "failed"
+    assert tasks.recall(job_id) is None
+    assert recovery.run_recovery_once() == {}
+    assert reruns == []
+
+
+def test_a_job_failing_at_the_provider_keeps_its_request_for_recovery():
+    job_id = _job(status="running")
+    _remember(job_id)
+    run_job(job_id, _provider_still_generating, {})
+    assert get_job(job_id).status == "failed"
+    assert tasks.recall(job_id) is not None
+
+
+# --- a job of several requests (a long /clone video's pieces) ---------------
+
+
+def test_every_piece_is_remembered_on_its_own_and_forgotten_together():
+    job_id = _job(status="running")
+    for part in range(3):
+        _remember(job_id, part=part)
+
+    assert {t.part for t in tasks.remembered() if t.job_id == job_id} == {0, 1, 2}
+    assert tasks.recall(job_id, 1).task_id == "t2"
+    assert tasks.recall(job_id).task_id == "t1"
+
+    tasks.forget(job_id)
+
+    assert [t for t in tasks.remembered() if t.job_id == job_id] == []
+
+
+def test_a_job_whose_pieces_are_all_done_is_rerun_once(status, reruns):
+    job_id = _job(task="clone", model="kie:wan/3-0-video")
+    for part in range(3):
+        _remember(job_id, part=part)
+    status["answer"] = TaskState(state="done", urls=["https://x/v.mp4"])
+
+    outcomes = recovery.run_recovery_once()
+
+    assert outcomes == {job_id: "rerun"}
+    assert len(reruns) == 1
+    assert {seen[2] for seen in status["seen"]} == {"t1", "t2", "t3"}
+
+
+def test_a_job_with_a_piece_still_generating_waits(status, reruns, monkeypatch):
+    job_id = _job(task="clone", model="kie:wan/3-0-video")
+    for part in range(3):
+        _remember(job_id, part=part)
+    done = TaskState(state="done", urls=["https://x/v.mp4"])
+    answers = {"t1": done, "t2": TaskState(state="pending"), "t3": done}
+    monkeypatch.setattr(KieProvider, "status", lambda _self, task_id: answers[task_id])
+
+    assert recovery.run_recovery_once() == {job_id: "pending"}
+    assert reruns == []
+    assert len([t for t in tasks.remembered() if t.job_id == job_id]) == 3
+
+
+def test_a_job_with_a_refused_piece_fails_and_forgets_every_piece(
+    status, reruns, monkeypatch
+):
+    job_id = _job(task="clone", model="kie:wan/3-0-video")
+    for part in range(3):
+        _remember(job_id, part=part)
+    done = TaskState(state="done", urls=["https://x/v.mp4"])
+    answers = {
+        "t1": done,
+        "t2": TaskState(state="failed", error="flagged as sensitive"),
+        "t3": done,
+    }
+    monkeypatch.setattr(KieProvider, "status", lambda _self, task_id: answers[task_id])
+
+    assert recovery.run_recovery_once() == {job_id: "failed"}
+    assert reruns == []
+    assert "flagged as sensitive" in get_job(job_id).error
+    assert [t for t in tasks.remembered() if t.job_id == job_id] == []
+
+
+def test_a_job_rq_ends_at_its_time_limit_keeps_every_piece_for_recovery():
+    """RQ ending a long run (2026-10-23: 5 pieces, then CapCut) must not
+    forget the pieces already paid for: recovery finishes the job instead."""
+    job_id = _job(status="running", task="clone", model="kie:wan/3-0-video")
+    for part in range(3):
+        _remember(job_id, part=part)
+
+    def killed(**_kwargs):
+        msg = "Task exceeded maximum timeout value (2700 seconds)"
+        raise JobTimeoutException(msg)
+
+    run_job(job_id, killed, {})
+
+    assert get_job(job_id).status == "failed"
+    assert len([t for t in tasks.remembered() if t.job_id == job_id]) == 3
+
+
+def test_a_one_piece_job_is_rerun_with_the_queues_limit(status, reruns):
+    job_id = _job()
+    _remember(job_id)
+    status["answer"] = TaskState(state="done", urls=["https://x/v.mp4"])
+
+    recovery.run_recovery_once()
+
+    assert reruns.timeouts == [None]

@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import ColumnElement, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.web.db.models import (
@@ -181,19 +181,20 @@ class WatchedProfileRepository(CachedRepository):
             return bool(removed.all())
 
     @invalidates_cache
-    def claim_due(self, interval_s: float, claim_ttl_s: float) -> list[str]:
-        """Marks every profile not scanned for `interval_s` (and not already
-        claimed within `claim_ttl_s`) as claimed, in one UPDATE, and returns
-        them: of two sweepers racing, each profile goes to exactly one."""
+    def claim_due(self, interval_s: float | None, claim_ttl_s: float) -> list[str]:
+        """Marks every profile never scanned or not scanned for `interval_s`
+        (None: never scanned only), and not already claimed within
+        `claim_ttl_s`, as claimed, in one UPDATE, and returns them: of two
+        sweepers racing, each profile goes to exactly one."""
         now = time.time()
+        due: ColumnElement[bool] = WatchedProfileRow.scanned_at.is_(None)
+        if interval_s is not None:
+            due = or_(due, WatchedProfileRow.scanned_at < now - interval_s)
         with session_scope() as s:
             claimed = s.execute(
                 update(WatchedProfileRow)
                 .where(
-                    or_(
-                        WatchedProfileRow.scanned_at.is_(None),
-                        WatchedProfileRow.scanned_at < now - interval_s,
-                    ),
+                    due,
                     or_(
                         WatchedProfileRow.claimed_at.is_(None),
                         WatchedProfileRow.claimed_at < now - claim_ttl_s,

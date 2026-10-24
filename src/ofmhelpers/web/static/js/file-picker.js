@@ -80,6 +80,7 @@
     }
 
     function renderList(picker) {
+        picker.querySelector(".file-picker-missing")?.remove();
         // data-max caps the list wherever items came from (file input, paste,
         // reuse browser, restore): the newest ones win, so picking a second
         // file into a one-file slot replaces the first instead of erroring
@@ -406,7 +407,41 @@
             path: p,
             name: displayName(p),
         }));
+        return dropMissing(picker);
+    }
+
+    // A restored file that is gone (deleted since, or never on this server)
+    // leaves the list, and the picker says which (2026-10-23: Recreate
+    // filled the boxes with files that 404ed, found out only at Start).
+    // One request for all of them (/refs/missing), before anything is drawn:
+    // no broken preview flashes up. A network blip keeps them all.
+    async function dropMissing(picker) {
+        const restored = picker._items.filter((item) => item.kind === "existing");
+        let missing = [];
+        if (restored.length) {
+            const query = restored
+                .map((item) => `path=${encodeURIComponent(item.path)}`)
+                .join("&");
+            try {
+                const r = await fetch(`/refs/missing?${query}`);
+                if (r.ok) missing = (await r.json()).missing;
+            } catch {
+                missing = [];
+            }
+        }
+        const gone = restored.filter((item) => missing.includes(item.path));
+        picker._items = picker._items.filter((item) => !gone.includes(item));
         renderList(picker);
+        if (!gone.length) return [];
+        const note = document.createElement("p");
+        note.className = "generation-error file-picker-missing";
+        const names = gone.map((item) => item.name).join(", ");
+        note.textContent =
+            gone.length === 1
+                ? `${names} is not on this server: pick it again`
+                : `${gone.length} files are not on this server (${names}): pick them again`;
+        picker.querySelector(".file-order-list").after(note);
+        return gone.map((item) => item.name);
     }
 
     // Hand one tool's queued files to the tool being switched to, by kind:

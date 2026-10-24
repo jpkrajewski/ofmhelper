@@ -23,7 +23,10 @@ dependencies = [
     # Nightly on purpose (yt-dlp's own advice): site extractors break and get
     # fixed between stable releases, months apart. A pre-release in the
     # specifier is what lets uv pick nightlies for this package only.
-    "yt-dlp>=2026.10.21.202512.dev0",
+    # [curl-cffi]: browser impersonation, which extractors behind Cloudflare
+    # demand (PornHub 403s without it: "no impersonate target is available",
+    # prod 2026-10-22).
+    "yt-dlp[curl-cffi]>=2026.10.21.202512.dev0",
     # Ships the JS runtime yt-dlp's "ejs:github" remote component needs
     # (downloaders/generic.py); imported by yt-dlp, never by us.
     "yt-dlp-ejs>=0.8.0",

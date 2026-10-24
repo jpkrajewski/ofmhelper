@@ -13,7 +13,11 @@ from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.web import ref_usage
-from ofmhelpers.web.routers.task_helpers.uploads import in_asset_root, save_asset
+from ofmhelpers.web.routers.task_helpers.uploads import (
+    classify_kind,
+    in_asset_root,
+    save_asset,
+)
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
@@ -32,6 +36,23 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
             status_code=400, detail=f"Reference file not found: {raw_path}"
         )
     return resolved
+
+
+def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
+    """Of the `?video=` refs a page was handed (one tool sending its result
+    to /clone or /clone-long), the ones that are a video still in this
+    session's part of the store. A stale or forged path is dropped, never a
+    400: the page just opens with fewer picked. Each kept path is absolute,
+    ready to hand a file picker as an existing pick."""
+    kept: list[str] = []
+    for raw in raw_paths:
+        try:
+            resolved = resolve_existing_ref(raw, allowed_root)
+        except HTTPException:
+            continue
+        if classify_kind(resolved.name) == "video":
+            kept.append(str(resolved))
+    return kept
 
 
 def build_ordered_paths(

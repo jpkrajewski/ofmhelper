@@ -276,6 +276,23 @@ class _TimelineData(_Base):
     )
 
 
+class _GraphQLError(_Base):
+    message: str = ""
+
+
+class GraphQLErrors(_Base):
+    """The `errors` any GraphQL answer may carry -- with HTTP 200, beside or
+    instead of its data."""
+
+    errors: list[_GraphQLError] = []
+
+    @property
+    def rate_limited(self) -> bool:
+        """'Rate limit exceeded' (2026-10-23, the posts query): without this
+        it read as a page with nothing on it."""
+        return any("rate limit" in e.message.lower() for e in self.errors)
+
+
 class TimelinePage(_Base):
     """One page of a profile's posts grid: photos and videos, newest first
     after the pinned ones, each video with its mp4 and DASH manifest. No view

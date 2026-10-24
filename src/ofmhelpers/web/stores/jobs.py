@@ -19,6 +19,7 @@ list, or a bare id string) -- there is no separate file-reference table.
 
 from __future__ import annotations
 
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,10 @@ from typing import Any
 import logfire
 from pydantic import BaseModel
 from redis.exceptions import RedisError
+from rq.timeouts import JobTimeoutException
 
+from ofmhelpers.aigenproviders import tasks
+from ofmhelpers.aigenproviders.errors import ProviderError
 from ofmhelpers.cache import PREVIEWS_QUEUE, enqueue_to
 from ofmhelpers.log import get_logger
 from ofmhelpers.web.db.repositories import JobRepository
@@ -69,6 +73,16 @@ def log_event(task_name: str, actor: str | None, params: dict | None = None) -> 
     return _repository().create(task_name, params or {}, actor=actor, status="done")
 
 
+def resumable(exc: BaseException) -> bool:
+    """Whether a job failing with `exc` keeps its provider request(s) for
+    recovery to finish: a provider error (timed out, download failed) or RQ
+    ending the job at its time limit -- paid pieces of a long clone
+    included. Anything else failed after the result was in (CapCut export,
+    asset store): recovery re-running it would fail the same way every
+    sweep."""
+    return isinstance(exc, (ProviderError, JobTimeoutException))
+
+
 def run_job(job_id: str, fn, kwargs: dict):
     """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
     endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
@@ -86,6 +100,8 @@ def run_job(job_id: str, fn, kwargs: dict):
         try:
             result = fn(**kwargs)
             _repository().update_status(job_id, "done", result=_stored(result))
+            # Saved: its provider request (if any) needs no resuming.
+            tasks.forget(job_id)
         except Exception as exc:
             # The status pages show this directly to whoever is running the
             # job -- a raw traceback isn't useful to them, just the
@@ -94,6 +110,8 @@ def run_job(job_id: str, fn, kwargs: dict):
             _repository().update_status(
                 job_id, "failed", error=str(exc) or exc.__class__.__name__
             )
+            if not resumable(exc):
+                tasks.forget(job_id)
             span.record_exception(exc)
             span.set_level("error")
             logger.exception("job %s failed", job_id)
@@ -112,6 +130,11 @@ def _queue_previews(job_id: str) -> None:
         enqueue_to(PREVIEWS_QUEUE, warm_previews, job.id, job.local_paths())
     except RedisError:
         logger.warning("could not queue previews of job %s", job_id, exc_info=True)
+
+
+def running_jobs() -> list[Job]:
+    """Every job still marked running (recovery: which were cut off)."""
+    return [Job.model_validate(row) for row in _repository().list_running()]
 
 
 def reopen_job(job_id: str) -> None:
@@ -180,19 +203,50 @@ def list_finished_jobs() -> list[Job]:
 
 
 def list_jobs_page(
-    tasks: set[str], offset: int, limit: int, actor: str | None = None
+    tasks: set[str],
+    offset: int,
+    limit: int,
+    actor: str | None = None,
+    status: str | None = None,
+    hidden: bool | None = None,
 ) -> tuple[list[Job], int]:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that it ran -- same meaning as get_job's), newest first, plus how
     many there are in total (before the slice, so the caller can tell whether
-    another page exists).
+    another page exists). `hidden`: only the jobs hidden from the galleries
+    (`hide_job`; a gallery's "Show hidden"), only the others (a gallery), or
+    both (None: the file manager, character sheet, uniqify).
 
     Filtered and sliced in SQL (`JobRepository.list_page`), and only the page
     is self-healed, so rendering 20 cards costs 20 jobs' worth of rows and
     disk checks instead of the whole history's."""
-    page = _repository().list_page(tuple(sorted(tasks)), actor, offset, limit)
+    page = _repository().list_page(
+        tuple(sorted(tasks)), actor, offset, limit, status, hidden
+    )
     jobs = [Job.model_validate(row) for row in page["jobs"]]
     return _heal(jobs), page["total"]
+
+
+def count_hidden_jobs(tasks: set[str], actor: str) -> int:
+    """How many of `actor`'s jobs of `tasks` are hidden from the galleries."""
+    return _repository().count_hidden(tuple(sorted(tasks)), actor)
+
+
+def hide_job(job_id: str, actor: str, hidden: bool) -> Job | None:
+    """Hides `actor`'s job from its galleries, or shows it again; None when
+    it is not theirs (or gone). A view choice only: the job, its files and
+    the action log stay as they are."""
+    job = get_job(job_id, actor)
+    if job is None or hidden == (job.hidden_at is not None):
+        return job
+    hidden_at = time.time() if hidden else None
+    _repository().set_hidden(job_id, hidden_at)
+    return job.model_copy(update={"hidden_at": hidden_at})
+
+
+def job_counts(tasks: set[str]) -> dict[str, dict[str, int]]:
+    """actor -> task -> how many done jobs, for `tasks`."""
+    return _repository().counts(tuple(sorted(tasks)))
 
 
 def _heal(jobs: list[Job]) -> list[Job]:

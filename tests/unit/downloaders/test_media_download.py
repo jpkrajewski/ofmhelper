@@ -1,12 +1,26 @@
 """One Download tool for any link: each URL tries yt-dlp and gallery-dl in
 the order its kind of post suggests, and keeps the first that gets files."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from ofmhelpers.downloaders import generic, images, media
+from ofmhelpers.downloaders import generic, images, kvs, media
 from ofmhelpers.downloaders.models import DownloadResult
+
+
+@pytest.fixture(autouse=True)
+def _no_kvs_site(monkeypatch):
+    """The KVS reader finds no player (and never reaches the network)
+    unless a test says otherwise."""
+    monkeypatch.setattr(
+        kvs,
+        "download",
+        lambda url, output_dir=None: DownloadResult(
+            url=url, success=False, error="Unsupported URL: no KVS player"
+        ),
+    )
 
 
 @pytest.fixture
@@ -29,6 +43,8 @@ def tried(monkeypatch) -> list[str]:
 
     monkeypatch.setattr(generic, "download", fake("video"))
     monkeypatch.setattr(images, "download", fake("images"))
+    kvs_run = fake("kvs")
+    monkeypatch.setattr(kvs, "download", lambda url, output_dir=None: kvs_run(url))
     return calls
 
 
@@ -66,7 +82,7 @@ def test_a_video_link_that_is_a_photo_post_falls_back_to_gallery_dl(tried):
     result = media.download("https://www.tiktok.com/@a/1234?images")
 
     assert result.success
-    assert tried == ["video", "images"]
+    assert tried == ["video", "kvs", "images"]
     assert [str(p) for p in result.output_paths] == ["/x/images.bin"]
 
 
@@ -79,7 +95,33 @@ def test_when_both_fail_both_reasons_are_kept(tried):
     result = media.download("https://example.com/nothing")
 
     assert not result.success
-    assert result.error == "video: video refused | images: images refused"
+    assert result.error == (
+        "video: video refused | kvs: kvs refused | images: images refused"
+    )
+
+
+def test_a_tool_that_does_not_know_the_site_does_not_hide_the_real_reason(
+    monkeypatch,
+):
+    """Prod, 2026-10-22: PornHub's 403 was shown as "Unsupported URL"."""
+
+    def fails(error):
+        return lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=False, error=error
+        )
+
+    monkeypatch.setattr(media.generic, "download", fails("HTTP Error 403: Forbidden"))
+    monkeypatch.setattr(
+        media.images, "download", fails("[gallery-dl][error] Unsupported URL 'x'")
+    )
+    assert (
+        media.download("https://x.test/v").error == "video: HTTP Error 403: Forbidden"
+    )
+
+    monkeypatch.setattr(media.generic, "download", fails("ERROR: Unsupported URL: y"))
+    both = media.download("https://x.test/v").error
+    assert "video: ERROR: Unsupported URL" in both
+    assert "images:" in both
 
 
 def test_download_all_keeps_the_order(tried):
@@ -113,8 +155,96 @@ def test_download_all_without_cookies_runs_logged_out(monkeypatch):
 
     def run(url: str, config=None, cookiefile=None) -> DownloadResult:
         logins.append(cookiefile)
-        return DownloadResult(url=url, success=True, output_paths=["/x/v.mp4"])
+        return DownloadResult(url=url, success=True, output_paths=["/x/v.bin"])
 
     monkeypatch.setattr(generic, "download", run)
     media.download_all(["https://example.com/a"])
     assert logins == [None]
+
+
+# --- a "video" that is not one (2026-10-23) ----------------------------------
+
+
+def _real_video(path: Path) -> Path:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=64x36:rate=10:duration=1",
+            "-pix_fmt",
+            "yuv420p",
+            str(path),
+        ],
+        check=True,
+    )
+    return path
+
+
+def test_a_web_page_saved_as_mp4_is_no_download_and_the_next_tool_runs(
+    monkeypatch, tmp_path
+):
+    """yt-dlp saved gayhub's HTML as a 268 KB .mp4 and called it done: now
+    it is deleted, and the KVS reader's real video is what comes back."""
+    page = tmp_path / "NA_clip-1NA.mp4"
+    page.write_text("<!DOCTYPE html><html>a web page</html>")
+    video = _real_video(tmp_path / "gayhub_168792.mp4")
+    monkeypatch.setattr(
+        generic,
+        "download",
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=True, output_paths=[page]
+        ),
+    )
+    monkeypatch.setattr(
+        kvs,
+        "download",
+        lambda url, output_dir=None: DownloadResult(
+            url=url, success=True, output_paths=[video]
+        ),
+    )
+
+    result = media.download("https://www.gayhub.com/video/168792/clip/")
+
+    assert result.success
+    assert result.output_paths == [video]
+    assert not page.exists()
+
+
+def test_when_every_tool_gets_a_web_page_it_fails_saying_so(monkeypatch, tmp_path):
+    def page_as_video(url, config=None, cookiefile=None):
+        path = tmp_path / "fake.mp4"
+        path.write_text("<html>not a video</html>")
+        return DownloadResult(url=url, success=True, output_paths=[path])
+
+    monkeypatch.setattr(generic, "download", page_as_video)
+    monkeypatch.setattr(
+        images,
+        "download",
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=False, error="no"
+        ),
+    )
+
+    result = media.download("https://example.com/v")
+
+    assert not result.success
+    assert "video: the site sent a web page, not the video" in result.error
+    assert not (tmp_path / "fake.mp4").exists()
+
+
+def test_a_real_video_passes_the_check(monkeypatch, tmp_path):
+    video = _real_video(tmp_path / "v.mp4")
+    monkeypatch.setattr(
+        generic,
+        "download",
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=True, output_paths=[video]
+        ),
+    )
+    assert media.download("https://example.com/v").output_paths == [video]
+    assert video.exists()

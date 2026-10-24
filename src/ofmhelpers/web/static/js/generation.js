@@ -328,15 +328,28 @@
                 if (!r.ok) {
                     throw new Error(data.detail || "Request failed.");
                 }
-                // live-gallery.js may have drawn this job already, from
-                // the server, while the request was still in flight.
-                if (gallery.querySelector(`[data-job-id="${data.job_id}"]`)) {
-                    card.remove();
-                    return;
+
+                // Start polling `theCard` for `jobId`, unless live-gallery.js
+                // already drew that job from the server while the request was
+                // in flight (then the optimistic card is a duplicate).
+                function track(theCard, jobId) {
+                    if (gallery.querySelector(`[data-job-id="${jobId}"]`)) {
+                        theCard.remove();
+                        return;
+                    }
+                    theCard.dataset.jobId = jobId;
+                    pollJob(theCard, prefix, jobId, label, resultKind);
                 }
-                // Tagged so live-gallery.js knows this job is on the page.
-                card.dataset.jobId = data.job_id;
-                pollJob(card, prefix, data.job_id, label, resultKind);
+
+                // /ai/run answers with one id per image (a batch); other
+                // tools answer with a single job_id.
+                const ids = data.job_ids || [data.job_id];
+                track(card, ids[0]);
+                for (const id of ids.slice(1)) {
+                    const extra = buildPendingCard(label);
+                    gallery.prepend(extra);
+                    track(extra, id);
+                }
             })
             .catch((err) => {
                 // The optimistic card can't become a result now -- turn it

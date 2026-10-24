@@ -849,7 +849,8 @@ def test_unwatch_needs_a_watched_profile(client):
     assert client.post("/reels/unwatch/x").status_code == 404
 
 
-def test_sweeper_rescans_only_stale_profiles_once(scans):
+def test_sweeper_rescans_only_stale_profiles_once(scans, monkeypatch):
+    monkeypatch.setenv("OFM_IG_RESCAN_ENABLED", "true")
     watch("fresh")
     watch("stale")
     reel_watch.scan_watched("fresh")
@@ -863,6 +864,31 @@ def test_sweeper_rescans_only_stale_profiles_once(scans):
     assert stale.result is not None
     # Nothing is due again until the interval has passed.
     assert reel_watch.queue_due_scans() == []
+
+
+def test_with_rescans_off_only_a_first_scan_runs(scans, monkeypatch):
+    """Rescans off (the default since 2026-10-23): a scanned profile is
+    never due again however old its scan; one never scanned still is --
+    by the sweeper and by Add alike."""
+    monkeypatch.setenv("OFM_IG_RESCAN_INTERVAL_S", "0")
+    watch("old")
+    reel_watch.scan_watched("old")
+    watch("new")
+
+    assert reel_watch.queue_due_scans() == ["new"]
+    assert scans == ["old", "new"]
+    assert reel_watch.queue_due_scans() == []
+
+
+def test_adding_a_profile_rescans_no_other_with_rescans_off(client, scans, monkeypatch):
+    monkeypatch.setenv("OFM_IG_RESCAN_INTERVAL_S", "0")
+    watch("old")
+    reel_watch.scan_watched("old")
+
+    r = client.post("/reels/watch", data={"profiles": "brand_new"})
+
+    assert r.status_code == 200
+    assert scans == ["old", "brand_new"]
 
 
 def test_a_claimed_profile_is_not_claimed_twice():

@@ -50,6 +50,7 @@ class Owner:
     # Its consent screen is ours, under fake externals too.
     local_consent = True
     linkable = False
+    connects_drive = False
 
     def configured(self) -> bool:
         return bool(settings.web.app_password_admin)

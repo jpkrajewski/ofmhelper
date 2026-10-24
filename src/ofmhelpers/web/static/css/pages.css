@@ -751,6 +751,18 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-rank { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .accounts-thumb { display: block; width: 48px; height: 64px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); }
 .accounts-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* /file-manager: an image's or video's thumbnail, opens the file. */
+.fm-thumb { display: block; width: 96px; height: 128px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); }
+.fm-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* /file-manager by user: a grid of big tiles, newest first. */
+.fm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--gap-grid); }
+.fm-tile { display: flex; flex-direction: column; gap: var(--gap-inline); padding: var(--pad-tile); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--paper); min-width: 0; }
+.fm-tile-media { display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--grey); }
+.fm-tile-media img { width: 100%; height: 100%; object-fit: cover; }
+.fm-tile-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-tile-meta { color: var(--grey); font-size: var(--step--1); }
+.fm-tile-actions { display: flex; gap: var(--gap-inline); }
+.fm-tile-actions form { display: contents; }
 .accounts-post-main { min-width: 0; font-size: var(--step--1); }
 /* A <progress>: the post's views against the top post's. */
 .accounts-bar {
@@ -982,6 +994,9 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ph-more:hover, .ph-add-login:hover, .ph-more:focus-visible, .ph-add-login:focus-visible { color: var(--text); }
 
 .ph-retired { margin-top: var(--s-6); }
+.ph-archived { margin-top: var(--s-6); }
+.ph-archived-list { display: grid; gap: var(--gap-inline); margin: 0; padding: 0; list-style: none; }
+.ph-archived-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
 .ph-retired .ph-card { opacity: 0.7; }
 
 /* Dialogs */
@@ -1155,31 +1170,70 @@ a.ph-login-user:hover { text-decoration: underline; }
 
 /* "Connect Google Drive" notices (/drive, /clone): the text, then the action. */
 .drive-connect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
-/* /clone "Upload to Drive" picker (clone.html #drive-picker, clone.js):
-   search + model filter, then one row per account folder, fewest files
-   waiting first. */
-.drive-picker-tools { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-bottom: var(--s-3); }
-.drive-picker-tools input[type="search"] { flex: 1 1 180px; min-width: 0; }
-.drive-picker-tools select { width: auto; }
-.drive-picker-list { display: grid; gap: var(--s-1); max-height: 320px; margin-bottom: var(--s-3); overflow-y: auto; }
-.drive-pick {
+/* /drive upload mode: the video on top, account cards are the targets. */
+.card.dr-pick {
     display: grid;
-    grid-template-columns: auto 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-5);
+    margin-bottom: var(--gap-toolbar);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+.dr-pick video {
+    display: block;
+    width: 100%;
+    max-width: 220px;
+    aspect-ratio: 9 / 16;
+    border-radius: var(--radius-card);
+    background: var(--ink);
+    object-fit: contain;
+}
+@media (min-width: 720px) {
+    .card.dr-pick { grid-template-columns: 220px minmax(0, 1fr); align-items: center; }
+}
+.dr-pick-text { display: grid; gap: var(--s-4); justify-items: start; min-width: 0; }
+.dr-pick-text h2 { margin: 0; font-size: var(--step-2); line-height: 1.2; }
+.dr-card.dr-pickable { cursor: pointer; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.dr-card.dr-pickable:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.dr-card.dr-picked { opacity: 0.55; cursor: default; }
+.dr-card.dr-picked:hover { border-color: var(--border); box-shadow: none; }
+.dr-card.dr-picked .dr-account::after { content: " · Already there"; color: var(--text-faint); }
+.dr-followers { color: var(--text-muted); font-weight: 400; }
+/* "Start posting content" (base.html, web/posting.py): a pop-up at the
+   top right while the daily posting window is open. */
+.notice.posting-banner {
+    position: fixed;
+    top: calc(var(--header-h) + var(--s-3));
+    right: var(--s-4);
+    z-index: 30;
     align-items: center;
     gap: var(--s-3);
-    padding: var(--s-2) var(--s-3);
-    border-radius: var(--radius-sm);
-    font-size: var(--step--1);
-    cursor: pointer;
+    max-width: calc(100vw - 2 * var(--s-4));
+    margin: 0;
+    padding: var(--s-3) var(--s-3) var(--s-3) var(--s-5);
+    border-color: var(--accent);
+    border-radius: var(--radius-card);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: var(--step-0);
+    font-weight: 700;
+    box-shadow: var(--shadow-lg);
+    animation: posting-pop var(--dur-slow) var(--ease);
 }
-.drive-pick:hover { background: var(--surface-3); }
-.drive-pick[hidden] { display: none; }
-.drive-pick small { color: var(--text-faint); }
-.drive-pick-waiting { color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.drive-pick-done { grid-column: 2 / -1; color: var(--ok); }
+.notice.posting-banner .icon-btn { border-color: transparent; background: transparent; color: var(--accent-ink); }
+.notice.posting-banner .icon-btn:hover { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
+@keyframes posting-pop {
+    from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .notice.posting-banner { animation: none; }
+}
 .drive-states { margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--step--1); }
 .drive-states li[data-status="failed"] { color: var(--fail); }
 .drive-states li[data-status="done"] { color: var(--ok); }
+.drive-states li { display: flex; align-items: center; gap: var(--gap-inline); }
+.drive-states .icon-btn { width: var(--control-h-sm); height: var(--control-h-sm); min-height: var(--control-h-sm); }
 
 /* /cookies: each social site of services.json, logged in or not, with its
    cookies' names (never a value). */

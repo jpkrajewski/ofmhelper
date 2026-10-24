@@ -1,0 +1,8 @@
+{# Hide / Unhide in a gallery card's ⋯ menu (static/js/hidden-cards.js):
+   both there, the one that does not apply hidden. Used by the server card
+   (_gallery_card.html) and the live one (_card_actions.html) alike. #}
+{% import "components/ui.html" as ui %}
+{% macro items(hidden=false) -%}
+{{ ui.menu_item("Hide", "eye-off", "hide-btn", attrs={"hidden": hidden}) }}
+{{ ui.menu_item("Unhide", "eye", "unhide-btn", attrs={"hidden": not hidden}) }}
+{%- endmacro %}

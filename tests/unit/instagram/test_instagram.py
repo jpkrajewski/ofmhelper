@@ -525,3 +525,77 @@ def test_reels_logged_in_without_a_working_login_is_none():
     dead = _LoggedInSession('"actorID":null', [])
     assert _with_login(dead).reels_logged_in("d", "42", 10) is None
     assert dead.sent == []
+
+
+class _Answer:
+    """A GraphQL answer: HTTP 200, `body` as its JSON."""
+
+    status_code, ok, is_redirect = 200, True, False
+    url = "https://www.instagram.com/api/graphql"
+
+    def __init__(self, body):
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+def test_a_graphql_rate_limit_is_a_rate_limit_not_an_empty_timeline(monkeypatch):
+    """Instagram answers the posts query 200 with only "Rate limit exceeded"
+    (2026-10-23): read as an account with nothing posted, a scan kept no
+    video and never tried another proxy."""
+    client = InstagramClient()
+    limited = {
+        "errors": [
+            {"message": "Rate limit exceeded", "severity": "CRITICAL", "code": 1675004}
+        ],
+        "extensions": {"is_final": True},
+    }
+    monkeypatch.setattr(client._session, "post", lambda *_a, **_k: _Answer(limited))
+
+    with pytest.raises(InstagramRateLimitedError):
+        list(client.timeline("someone"))
+
+
+def test_a_hidden_accounts_error_still_ends_its_timeline_quietly(monkeypatch):
+    client = InstagramClient()
+    hidden = {"errors": [{"message": "Content unavailable", "code": 1357005}]}
+    monkeypatch.setattr(client._session, "post", lambda *_a, **_k: _Answer(hidden))
+
+    assert list(client.timeline("hidden")) == []
+
+
+class _PostsRefused(FakeClient):
+    """Instagram throttling the logged-out posts query on its own."""
+
+    def timeline(self, _username):
+        msg = "Instagram is rate-limiting — wait a few minutes"
+        raise InstagramRateLimitedError(msg)
+
+
+def test_refused_posts_are_read_reel_by_reel():
+    """2026-10-23: the posts query was refused while the reels tab and single
+    posts answered -- the scan still gets every reel's mp4 and length."""
+    client = _PostsRefused(
+        [("a", 900, 5, 1, False), ("b", 800, 6, 2, False)], on_timeline={"a", "b"}
+    )
+
+    found = scan_profile(client, "u", 500, 30, 14 * DAY, 100)
+
+    assert [(r.code, r.duration_s) for r in found.reels] == [("a", 5), ("b", 6)]
+    assert client.media_calls == ["a", "b"]
+
+
+def test_a_refused_single_post_fails_the_scan():
+    """Reel by reel is the last way: a refusal there is the scan's (the
+    caller tries the next proxy), never a reel left without its video."""
+
+    class _AllRefused(_PostsRefused):
+        def media(self, _pk):
+            msg = "Instagram is rate-limiting — wait a few minutes"
+            raise InstagramRateLimitedError(msg)
+
+    with pytest.raises(InstagramRateLimitedError):
+        scan_profile(
+            _AllRefused([("a", 900, 5, 1, False)]), "u", 500, 30, 14 * DAY, 100
+        )

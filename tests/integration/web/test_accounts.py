@@ -783,6 +783,9 @@ def test_analytics_page(client, fetches):
     assert "History" not in html
     assert "data-fchart" in html
     assert "main" in html
+    # Assign link: straight to /links with this account selected.
+    assert f'href="/links?account={_id("yuki")}"' in html
+    assert "Assign link" in html
     # A period with no posts falls back to the latest synced ones.
     track("instagram", "quiet")
     stats = _stats("quiet")

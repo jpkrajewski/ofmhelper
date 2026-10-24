@@ -22,6 +22,10 @@ def drive(backend, monkeypatch) -> DriveApi:
         fake = FakeDrive()
         fake.seed_folder("ALL ACCOUNTS", item_id=FAKE_ROOT, shared=True)
         return fake
+    # The sandbox is written to: dev's read-live switch (the app reading the
+    # live folders, write-guarded) is not for this client. With it set in the
+    # dev .env, every real case failed on its first create_folder.
+    monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "0")
     return connect()
 
 
@@ -129,3 +133,16 @@ def test_a_trashed_folder_still_lists_but_is_gone_as_a_folder(drive, backend, pa
     assert [f.id for f in drive.children(trashed.id)] == [child.id]
     with pytest.raises(FolderGoneError):
         drive.folder(trashed.id)
+
+
+def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
+    """What /clone's remove does with an uploaded video: Drive trash, so it
+    no longer lists and is gone as an item; trashing what is missing is
+    `FolderGoneError`."""
+    child = drive.create_folder(parent, "to-trash")
+    drive.trash_file(child.id)
+    assert child.id not in [c.id for c in drive.children(parent)]
+    with pytest.raises(FolderGoneError):
+        drive.folder(child.id)
+    with pytest.raises(FolderGoneError):
+        drive.trash_file("1" + uuid.uuid4().hex * 2)

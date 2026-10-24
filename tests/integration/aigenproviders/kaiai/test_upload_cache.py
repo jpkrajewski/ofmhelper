@@ -279,3 +279,42 @@ def test_remote_file_exists_swallows_request_exceptions(client):
         mreq.RequestException = requests.RequestException
         mreq.head.side_effect = requests.Timeout("slow host")
         assert client._remote_file_exists("https://tempfile.example/x") is False
+
+
+def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
+    """Pieces of one run start together: the file goes up once, the others
+    wait and take the cached URL."""
+    import threading
+    import time
+
+    def slow_post(*_args, **_kwargs):
+        time.sleep(0.2)
+        return _mock_post_response(url="https://tempfile.example/once")
+
+    def new_client():
+        return KieAIClient(
+            api_key="test-key",
+            out_dir=tmp_path / "out",
+            task_log=tmp_path / "tasks.jsonl",
+            completions_log=tmp_path / "completions.jsonl",
+        )
+
+    urls = []
+    with kie_http() as mreq:
+        mreq.post.side_effect = slow_post
+        mreq.head.return_value = _mock_head_response(200)
+        threads = [
+            threading.Thread(
+                target=lambda: urls.append(
+                    new_client().upload_local_file(str(ref_file))
+                )
+            )
+            for _ in range(3)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert urls == ["https://tempfile.example/once"] * 3
+    assert mreq.post.call_count == 1

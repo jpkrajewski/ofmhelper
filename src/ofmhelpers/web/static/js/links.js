@@ -323,7 +323,8 @@
     }
 
     // --- rows being made or deleted -------------------------------------------
-    if (document.querySelector('tr[data-status="creating"], tr[data-status="deleting"]')) {
+    // ...and while a provider is syncing, so its numbers update by themselves.
+    if (document.querySelector('tr[data-status="creating"], tr[data-status="deleting"], #links-syncing')) {
         window.setInterval(() => {
             const busy = dialog.open || picks().length
                 || document.activeElement.matches("input, textarea, select");

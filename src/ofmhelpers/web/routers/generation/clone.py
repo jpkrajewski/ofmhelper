@@ -44,10 +44,15 @@ from ofmhelpers.aigenproviders.spec import ModelSpec
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.exports import ExportOptions, exports, get_export
+from ofmhelpers.gdrive import DriveError
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.drive_uploads import UploadRefusedError, queue_uploads
+from ofmhelpers.web.drive_uploads import (
+    UploadRefusedError,
+    queue_uploads,
+    remove_upload,
+)
 from ofmhelpers.web.drive_uploads import targets as drive_targets
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.generation.ai import run_ai
@@ -57,8 +62,8 @@ from ofmhelpers.web.routers.task_helpers import (
     build_ordered_paths,
     classify_kind,
     job_assets,
+    keep_videos,
     register_generated_asset,
-    resolve_existing_ref,
 )
 from ofmhelpers.web.schemas import (
     CloneCard,
@@ -71,7 +76,13 @@ from ofmhelpers.web.schemas import (
     UploadsQueued,
 )
 from ofmhelpers.web.stores import drive_uploads as upload_store
-from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
+from ofmhelpers.web.stores.jobs import (
+    count_hidden_jobs,
+    create_job,
+    get_job,
+    list_jobs_page,
+    run_job,
+)
 from ofmhelpers.web.stores.users import refresh_token
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
@@ -282,11 +293,15 @@ def _require_kind(paths: list[str], kind: str, label: str) -> None:
         raise HTTPException(status_code=400, detail=f"{label} must be {kind} files")
 
 
-def _gallery_page(request: Request, offset: int) -> tuple[list[CloneCard], int | None]:
+def _gallery_page(
+    request: Request, offset: int, hidden: bool = False
+) -> tuple[list[CloneCard], int | None]:
     """One page of the session's clone cards, newest first, and the next
-    page's offset (None after the last)."""
+    page's offset (None after the last). `hidden`: only the hidden cards."""
     limit = settings.web.gallery_limit
-    jobs, total = list_jobs_page({TASK}, offset, limit, AuthMiddleware.actor(request))
+    jobs, total = list_jobs_page(
+        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
+    )
     next_offset = offset + limit
     return _cards(jobs), next_offset if next_offset < total else None
 
@@ -310,7 +325,6 @@ def _drive_context(request: Request) -> dict[str, Any]:
             found,
             key=lambda t: (t.waiting is None, t.waiting or 0, -(t.followers or 0)),
         ),
-        "drive_models": sorted({t.creator for t in found if t.creator}),
         "drive_ready": bool(refresh_token(user.id)),
     }
 
@@ -335,19 +349,10 @@ def _card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
 
 
 def _prefill_videos(request: Request, paths: list[str]) -> list[str]:
-    """The `?video=` paths /reels hands over, kept only where they are a
-    video in this session's part of the store; a stale link just opens
-    with fewer videos picked."""
-    assets_root = assets_root_for(request)
-    kept: list[str] = []
-    for path in paths:
-        try:
-            resolved = resolve_existing_ref(path, assets_root)
-        except HTTPException:
-            continue
-        if classify_kind(resolved.name) == "video":
-            kept.append(str(resolved))
-    return kept
+    """The `?video=` paths /reels or a download hands over, kept only where
+    they are a video in this session's part of the store; a stale link just
+    opens with fewer videos picked."""
+    return keep_videos(paths, assets_root_for(request))
 
 
 @router.get("")
@@ -358,6 +363,7 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
         "clone.html",
         gallery=gallery,
         next_offset=next_offset,
+        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
         providers=ProviderChoice.all(list(CLONE_TARGETS)),
         selected_provider=settings.aigen.default_provider,
         api_keys=get_api_keys(request),
@@ -378,9 +384,14 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
-    """The next page of cards, for gallery-scroll.js."""
-    gallery, next_offset = _gallery_page(request, offset)
+def gallery_page(
+    request: Request,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    hidden: Annotated[bool, Query()] = False,
+):
+    """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
+    cards (hidden-cards.js's "Show hidden")."""
+    gallery, next_offset = _gallery_page(request, offset, hidden)
     return render(
         request,
         "clone_gallery_fragment.html",
@@ -417,6 +428,17 @@ def drive_upload(request: Request, body: UploadRequest) -> UploadsQueued:
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
     )
+
+
+@router.post("/drive-uploads/{upload_id}/remove")
+def drive_upload_remove(request: Request, upload_id: int) -> DriveUpload:
+    """Takes an uploaded video back out of its account folder (Drive trash)."""
+    try:
+        return remove_upload(AuthMiddleware.user(request), upload_id)
+    except UploadRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DriveError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/drive-uploads")

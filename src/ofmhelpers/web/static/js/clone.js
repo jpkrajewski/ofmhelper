@@ -22,7 +22,6 @@
 (() => {
     const DRIVE_POLL_MS = 3000;
     // The picker's last choice, per browser.
-    const LAST_PICK_KEY = "clone-drive-last";
 
     function setStatus(statusEl, message, isError) {
         statusEl.innerHTML = "";
@@ -103,8 +102,11 @@
         const submitBtn = form.querySelector('button[type="submit"]');
         const empty = document.getElementById("clone-empty");
         let uploading = false;
+        // Not while cards are only hidden ("Show hidden" says so).
         const showEmpty = () => {
-            empty.hidden = gallery.querySelector(".result-item") !== null;
+            empty.hidden =
+                gallery.querySelector(".result-item") !== null ||
+                document.querySelector(".ph-toolbar:not([hidden]) .hidden-toggle") !== null;
         };
 
         window.addEventListener("beforeunload", (e) => {
@@ -231,6 +233,13 @@
             a.rel = "noopener";
             a.textContent = upload.folder_name;
             li.appendChild(a);
+            const remove = document.getElementById("card-drive-remove")
+                ?.content.firstElementChild.cloneNode(true);
+            if (remove) {
+                remove.dataset.upload = upload.id;
+                remove.setAttribute("aria-label", `Remove from ${upload.folder_name}`);
+                li.append(" ", remove);
+            }
         } else if (upload.status === "failed") {
             const span = document.createElement("span");
             span.title = upload.error || "";
@@ -253,7 +262,8 @@
         for (const [jobId, list] of Object.entries(byJob)) {
             const card = document.querySelector(`.result-item[data-job-id="${jobId}"]`);
             const states = card?.querySelector(".drive-states");
-            if (states) states.replaceChildren(...list.map(driveStateItem));
+            const shown = list.filter((u) => u.status !== "removed");
+            if (states) states.replaceChildren(...shown.map(driveStateItem));
         }
     }
 
@@ -279,109 +289,43 @@
         card.querySelector(".result-actions")?.before(states);
         const item = document.getElementById("card-drive-item");
         const list = card.querySelector(".menu-list");
-        if (item && list) list.append(item.content.firstElementChild.cloneNode(true));
+        if (!item || !list) return;
+        // Before Hide/Unhide, as on a reloaded card.
+        const node = item.content.firstElementChild.cloneNode(true);
+        list.insertBefore(node, list.querySelector(".hide-btn"));
     }
 
     // --- the Drive picker ------------------------------------------------------
 
-    function readLastPick() {
-        try {
-            return JSON.parse(localStorage.getItem(LAST_PICK_KEY) || "{}");
-        } catch {
-            return {};
-        }
-    }
-
-    function saveLastPick(pick) {
-        try {
-            localStorage.setItem(LAST_PICK_KEY, JSON.stringify(pick));
-        } catch {
-            // private window: the next pick just starts empty
-        }
-    }
-
-    function initDrivePicker(gallery) {
-        const dialog = document.getElementById("drive-picker");
-        if (!dialog) return;
-        const form = document.getElementById("drive-picker-form");
-        const search = document.getElementById("drive-picker-search");
-        const model = document.getElementById("drive-picker-model");
-        const error = document.getElementById("drive-picker-error");
-        const submit = document.getElementById("drive-picker-submit");
-        const rows = [...dialog.querySelectorAll(".drive-pick")];
-        let jobId = null;
-
-        const box = (row) => row.querySelector("input");
-        const picked = () => rows.filter((row) => !row.hidden && box(row).checked && !box(row).disabled);
-
-        function refresh() {
-            const n = picked().length;
-            submit.disabled = n === 0;
-            submit.textContent = n ? `Upload to ${n} account${n === 1 ? "" : "s"}` : "Upload";
-        }
-
-        function filter() {
-            const needle = search.value.trim().replace(/^@/, "").toLowerCase();
-            rows.forEach((row) => {
-                row.hidden = (model.value && row.dataset.creator !== model.value)
-                    || (needle && !row.dataset.search.includes(needle));
-            });
-            refresh();
-        }
-
-        function open(card) {
-            jobId = card.dataset.jobId;
-            const already = new Set(
-                [...card.querySelectorAll('.drive-states li:not([data-status="failed"])')]
-                    .map((li) => li.dataset.login)
-            );
-            const last = readLastPick();
-            const lastLogins = new Set((last.logins || []).map(String));
-            model.value = [...model.options].some((o) => o.value === last.model) ? last.model : "";
-            search.value = "";
-            rows.forEach((row) => {
-                const done = already.has(row.dataset.login);
-                box(row).disabled = done;
-                box(row).checked = done || lastLogins.has(row.dataset.login);
-                row.querySelector(".drive-pick-done").hidden = !done;
-            });
-            error.hidden = true;
-            filter();
-            dialog.showModal();
-        }
-
+    // "Upload to Drive" opens /drive with this video on top: the account
+    // card clicked there is where it goes (drive.js).
+    function initDriveUpload(gallery) {
         gallery.addEventListener("click", (e) => {
             const btn = e.target.closest(".drive-upload-btn");
-            if (btn) open(btn.closest(".result-item"));
+            if (!btn) return;
+            const jobId = btn.closest(".result-item")?.dataset.jobId;
+            if (jobId) window.location.href = `/drive?upload=${encodeURIComponent(jobId)}`;
         });
-        search.addEventListener("input", filter);
-        model.addEventListener("change", filter);
-        rows.forEach((row) => box(row).addEventListener("change", refresh));
-        document.getElementById("drive-picker-cancel").addEventListener("click", () => dialog.close());
-
-        form.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const logins = picked().map((row) => Number(row.dataset.login));
-            if (!logins.length || !jobId) return;
-            submit.disabled = true;
-            fetch("/clone/drive-upload", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ job_ids: [jobId], login_ids: logins }),
-            })
-                .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
-                .then(({ ok, body }) => {
-                    if (!ok) throw new Error(body.detail || "Upload refused");
-                    saveLastPick({ logins, model: model.value });
-                    dialog.close();
-                    showDriveStates(body.uploads);
-                    pollDrive([jobId]);
+        // × on an uploaded video: back out of that folder (Drive trash).
+        gallery.addEventListener("click", (e) => {
+            const btn = e.target.closest(".drive-remove");
+            if (!btn) return;
+            const label = btn.getAttribute("aria-label");
+            if (!window.confirm(`${label}?`)) return;
+            const card = btn.closest(".result-item");
+            btn.disabled = true;
+            fetch(`/clone/drive-uploads/${btn.dataset.upload}/remove`, { method: "POST" })
+                .then(async (r) => {
+                    if (!r.ok) {
+                        const body = await r.json().catch(() => ({}));
+                        throw new Error(body.detail || `failed (${r.status})`);
+                    }
+                    pollDrive([card.dataset.jobId]);
                 })
                 .catch((err) => {
-                    error.textContent = err.message;
-                    error.hidden = false;
-                })
-                .finally(refresh);
+                    btn.disabled = false;
+                    window.alert(`Could not remove it: ${err.message}`);
+                });
         });
     }
 
@@ -392,7 +336,7 @@
         initSubmit(form, gallery);
         initRecreate(form, gallery);
         initPrefill(form);
-        initDrivePicker(gallery);
+        initDriveUpload(gallery);
         // Uploads still on their way when the page opened.
         const pending = [...gallery.querySelectorAll('.drive-states li[data-status="queued"]')]
             .map((li) => li.closest(".result-item").dataset.jobId);

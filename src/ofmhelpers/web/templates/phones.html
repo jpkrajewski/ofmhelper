@@ -133,6 +133,20 @@
 {{ ui.empty("No phone matches your search", attrs={"id": "ph-no-match", "hidden": true}) }}
 {% endif %}
 
+{% if archived %}
+<details class="accounts-fold ph-archived">
+    <summary><h2>Archived accounts ({{ archived|length }})</h2></summary>
+    <ul class="ph-archived-list">
+        {% for x in archived %}
+        <li data-login-id="{{ x.id }}">
+            <span><strong>{{ x.username }}</strong> · {{ services[x.service].label if x.service in services else x.service }}{% if x.on %} · {{ x.on|join(", ") }}{% endif %}</span>
+            {% if can_edit %}{{ ui.button("Restore", icon="restore", hook="ph-login-restore") }}{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</details>
+{% endif %}
+
 {% if retired %}
 <details class="accounts-fold ph-retired">
     <summary><h2>Retired ({{ retired|length }})</h2></summary>

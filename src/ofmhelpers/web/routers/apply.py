@@ -4,7 +4,7 @@ ofmhelpers/web/routers/apply.py
 The public landing page (`/`, templates/reachmodel.html) and its application
 form's POST (`/apply`): the one public write in the app. No login -- both are
 on `settings.web.public_paths` -- but `WriteRateLimitMiddleware` caps
-`/apply` per IP.
+`/apply` per IP. Someone signed in never sees it: `/` sends them to /home.
 
 Spam bots filled it (prod, 2026-10-22: every lead but one). A submit is a
 bot's, and is dropped -- answered like a real one, so the bot learns
@@ -30,6 +30,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.middleware.ratelimit import client_id
 from ofmhelpers.web.schemas import ApplicationForm
 from ofmhelpers.web.stores import applications as applications_store
@@ -66,6 +67,9 @@ def _token_problem(token: str) -> str | None:
 
 @router.get("/")
 def landing(request: Request):
+    # Signed in: the app, not the public page.
+    if AuthMiddleware.session_user(request) is not None:
+        return RedirectResponse(url=AuthMiddleware.HOME, status_code=303)
     return render(request, "reachmodel.html", form_token=form_token())
 
 

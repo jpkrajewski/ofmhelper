@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
+{% block content %}
+{{ ui.page_header("Clone long") }}
+{% include "_gallery_hidden.html" %}
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<form id="clone-long-form" class="clone-form" action="/clone-long/run"
+      data-prefix="/clone-long" data-result-kind="video" data-label="Clone long"
+      data-rates='{{ rates|tojson }}' data-max-piece="{{ max_piece_s }}" data-max-video="{{ max_video_s }}"
+      data-prefill-video='{{ prefill_video|tojson }}' novalidate>
+    {% include "_provider_fields.html" %}
+    {{ fp.file_picker('image', 'image', 'Subject', max=1) }}
+    {{ fp.file_picker('video', 'video', 'Video', max=1) }}
+    <div class="field">
+        <label for="clone-long-prompt">Prompt</label>
+        <textarea id="clone-long-prompt" name="prompt" class="prompt-input" rows="3" required>{{ default_prompt }}</textarea>
+    </div>
+    <div class="field">
+        <label for="clone-long-resolution">Resolution</label>
+        <select id="clone-long-resolution" name="resolution">
+            {% for r in resolutions %}
+            <option value="{{ r }}" {% if r == default_resolution %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {{ ui.notice(hook="clone-long-quote", attrs={"id": "clone-long-quote", "hidden": true}) }}
+    {{ ui.button("Start", "primary", type="submit") }}
+</form>
+</div>
+
+<div class="generate-gallery-col">
+<div id="results-panel">
+    <div class="generation-status" role="status" aria-live="polite"></div>
+    <div class="results" id="clone-long-gallery" data-gallery-endpoint="/clone-long/gallery">
+        {% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
+    </div>
+    {{ ui.empty("No long clones yet", attrs={"id": "clone-long-empty", "hidden": gallery|length > 0 or hidden_count > 0}) }}
+</div>
+</div>
+</div>
+
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
+<script src="{{ static_url('js/generation.js') }}"></script>
+<script src="{{ static_url('js/clone-long.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
+{% endblock %}

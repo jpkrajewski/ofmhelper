@@ -24,6 +24,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.phones import catalog, find_model, services
 from ofmhelpers.phones.render import render as draw
 from ofmhelpers.web import phones_workbook
+from ofmhelpers.web.account_removal import logins_leaving
 from ofmhelpers.web.account_tracker import track_login
 from ofmhelpers.web.db.encrypted import VaultError
 from ofmhelpers.web.db.repositories import DuplicateError
@@ -85,6 +86,7 @@ def index(request: Request, query: Annotated[PhoneQuery, Query()]):
         "phones.html",
         devices=shown,
         retired=query.ordered([d for d in devices if d.retired]),
+        archived=store.archived_logins(AuthMiddleware.scope(request)),
         total=len(active),
         logins=sum(len(d.logins) for d in active),
         # The add/edit dialog suggests the people already holding a phone.
@@ -175,9 +177,10 @@ def restore(request: Request, device_id: int) -> _Done:
 
 @router.post("/{device_id}/delete")
 def delete(request: Request, device_id: int) -> _Done:
-    return _found(
-        store.delete_device(device_id, AuthMiddleware.scope(request)), "Phone"
-    )
+    """Its logins no other phone has leave /accounts and Drive too."""
+    scope = AuthMiddleware.scope(request)
+    logins_leaving(scope, device_id)
+    return _found(store.delete_device(device_id, scope), "Phone")
 
 
 def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
@@ -209,5 +212,27 @@ def edit_login(request: Request, login_id: int, body: LoginFields) -> _Done:
 
 @router.post("/{device_id}/logins/{login_id}/delete")
 def remove_login(request: Request, device_id: int, login_id: int) -> _Done:
+    """Off its last phone, the account leaves /accounts and Drive too."""
     scope = AuthMiddleware.scope(request)
+    logins_leaving(scope, device_id, login_id)
     return _found(store.remove_login(device_id, login_id, scope), "Login")
+
+
+@router.post("/logins/{login_id}/restore")
+def restore_login(request: Request, login_id: int) -> _Done:
+    """An archived account back on its phones, tracked again (its Drive
+    folder is made at the next sweep). Not one whose phones were all
+    deleted meanwhile: restored, it would sit on no phone and the next
+    phone change would delete it, password included."""
+    scope = AuthMiddleware.scope(request)
+    archived = {x.id: x for x in store.archived_logins(scope)}
+    if login_id in archived and not archived[login_id].on:
+        msg = "No phone has this account any more: add it to a phone instead"
+        raise HTTPException(status_code=409, detail=msg)
+    found = store.restore_login(login_id, scope)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Archived login not found")
+    owner = store.owner_of_login(login_id)
+    if owner is not None:
+        track_login(found.service, found.username, user_id=owner, revive=True)
+    return _Done()

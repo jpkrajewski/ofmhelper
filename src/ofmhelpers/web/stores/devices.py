@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from ofmhelpers.phones import services
 from ofmhelpers.socials import get_platform
 from ofmhelpers.web.db.repositories import DeviceRepository
-from ofmhelpers.web.schemas import Device, LoginSecrets
+from ofmhelpers.web.schemas import ArchivedLogin, Device, LoginSecrets
 from ofmhelpers.web.stores.tracked_accounts import list_accounts
 from ofmhelpers.web.stores.users import agency_id
 
@@ -165,6 +165,27 @@ def add_login(
 def update_login(login_id: int, fields: LoginFields, owner: int | None = None) -> bool:
     """On every phone it is on."""
     return _repository().update_login(login_id, fields.model_dump(), owner)
+
+
+def archive_logins(login_ids: list[int], owner: int | None = None) -> int:
+    """Off every phone, password kept (web/account_removal.py)."""
+    archived = _repository().archive_logins(login_ids, owner)
+    if archived:
+        _logins_gone()
+    return archived
+
+
+def restore_login(login_id: int, owner: int | None = None) -> ArchivedLogin | None:
+    """Back on its phones; None when not an archived login of `owner`'s."""
+    found = _repository().restore_login(login_id, owner)
+    if found is None:
+        return None
+    _logins_gone()
+    return ArchivedLogin(id=login_id, **found)
+
+
+def archived_logins(owner: int | None = None) -> list[ArchivedLogin]:
+    return [ArchivedLogin.model_validate(r) for r in _repository().archived(owner)]
 
 
 def remove_login(device_id: int, login_id: int, owner: int | None = None) -> bool:
