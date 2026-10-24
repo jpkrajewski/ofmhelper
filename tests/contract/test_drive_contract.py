@@ -4,6 +4,8 @@ in the dev .env, shared with OFM_GDRIVE_SERVICE_ACCOUNT; the app itself
 never uses either),
 inside a fresh "contract-<id>" folder per test; nothing is deleted."""
 
+import contextlib
+import secrets
 import uuid
 from collections.abc import Iterator
 
@@ -14,6 +16,13 @@ from ofmhelpers.gdrive import DriveApi, FolderGoneError, connect
 from ofmhelpers.gdrive.fake import FakeDrive
 
 FAKE_ROOT = "contract-root"
+
+
+def _missing_id() -> str:
+    """An id no item has, in Drive's own shape ("1" + 32 base64url). Made-up
+    hex ids are malformed to Drive now and then, and that one answers 400
+    every time, never 404 (probed 2026-10-24: 1 in 60)."""
+    return "1" + secrets.token_urlsafe(24)[:32]
 
 
 @pytest.fixture
@@ -104,12 +113,17 @@ def test_a_folder_knows_its_parent(drive, parent):
 
 def test_a_missing_folder_is_gone(drive, parent):
     with pytest.raises(FolderGoneError):
-        drive.folder("1" + uuid.uuid4().hex * 2)
+        drive.folder(_missing_id())
 
 
-def test_listing_a_missing_folder_is_gone(drive, parent):
-    with pytest.raises(FolderGoneError):
-        drive.children("1" + uuid.uuid4().hex * 2)
+def test_listing_a_missing_folder_shows_nothing(drive, parent):
+    """Drive 404s most unknown parents, but lists ~1 in 5 ids as empty, the
+    same every time (probed 2026-10-24). Gone is told by `folder()`, which
+    /drive asks before listing; a listing only never shows anything."""
+    listed: list = []
+    with contextlib.suppress(FolderGoneError):
+        listed = drive.children(_missing_id())
+    assert listed == []
 
 
 def _trash(drive, backend, folder_id: str) -> None:
@@ -145,4 +159,4 @@ def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
     with pytest.raises(FolderGoneError):
         drive.folder(child.id)
     with pytest.raises(FolderGoneError):
-        drive.trash_file("1" + uuid.uuid4().hex * 2)
+        drive.trash_file(_missing_id())

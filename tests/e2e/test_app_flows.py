@@ -322,6 +322,12 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     # 2026-10-23: a file no longer on the server (this test's own sandbox
     # copy, removed here) left a broken box, found out at Start. Now
     # Recreate drops it and says so; the rest is restored.
+    # Not while clone-cost.js still reads its length through /refs/file:
+    # removed mid-read, that response was cut short
+    # (ERR_CONTENT_LENGTH_MISMATCH, 2026-10-24).
+    expect(va.page.locator("#clone-cost-summary")).to_have_text(
+        re.compile(r"^1 run · [\d.]+ s of video$")
+    )
     params = json.loads(first.get_attribute("data-params") or "{}")
     Path(params["reference_videos"][0]).unlink()
     first.locator(".recreate-btn").click()

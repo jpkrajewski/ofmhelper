@@ -997,6 +997,15 @@ def test_cards_are_ordered_by_the_accounts_followers(drive):
     assert ">@new.ig</p>" in html
 
 
+def test_the_owner_sits_next_to_the_phone_model(drive):
+    """User request 2026-10-24: one line "iPhone 13 · Blue · Anna", no owner
+    line of its own."""
+    _login(_phone("Phone 01", owner="Anna"), "instagram", "ann.ig")
+    html = _client().get("/drive/live").text
+    assert '<p class="ph-specs">iPhone 13 · Blue · Anna</p>' in html
+    assert 'class="ph-meta"' not in html
+
+
 # --- the page opens from the last read ---------------------------------------------
 
 

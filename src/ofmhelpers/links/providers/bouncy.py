@@ -161,27 +161,41 @@ class BouncyProvider(LinkProvider):
     ) -> dict[str, list[DayStat]]:
         found: dict[str, list[DayStat]] = {}
         for remote_id in remote_ids:
-            per_day: dict[date, list[int]] = {}
-            for first, last in _spans(start, end, self.info().max_span_days):
-                for bucket in self._buckets(remote_id, first, last):
-                    day = date.fromisoformat(bucket["date"][:10])
-                    totals = per_day.setdefault(day, [0, 0])
-                    totals[0] += bucket.get("views", 0)
-                    totals[1] += bucket.get("clicks", 0)
-            found[remote_id] = [
-                DayStat(day=day, views=views, clicks=clicks)
-                for day, (views, clicks) in sorted(per_day.items())
-            ]
+            days = self._days(remote_id, start, end)
+            if days is not None:
+                found[remote_id] = days
         return found
 
-    def _buckets(self, remote_id: str, first: date, last: date) -> list[dict]:
+    def _days(self, remote_id: str, start: date, end: date) -> list[DayStat] | None:
+        """One link's days, summed from its spans; None when it is gone."""
+        per_day: dict[date, list[int]] = {}
+        for first, last in _spans(start, end, self.info().max_span_days):
+            buckets = self._buckets(remote_id, first, last)
+            if buckets is None:
+                return None
+            for bucket in buckets:
+                day = date.fromisoformat(bucket["date"][:10])
+                totals = per_day.setdefault(day, [0, 0])
+                totals[0] += bucket.get("views", 0)
+                totals[1] += bucket.get("clicks", 0)
+        return [
+            DayStat(day=day, views=views, clicks=clicks)
+            for day, (views, clicks) in sorted(per_day.items())
+        ]
+
+    def _buckets(self, remote_id: str, first: date, last: date) -> list[dict] | None:
         """`dailyViews` of one span: days, or hours ("YYYY-MM-DD HH") for a
-        one-day span."""
+        one-day span. None on a 404: the link was deleted since it was
+        listed (by hand on Bouncy, or by a delete job), which failed the
+        whole sync (2026-10-24)."""
         response = self._call(
             "GET",
             f"/analytics/links/{quote(remote_id, safe='')}",
             params={"from": first.isoformat(), "to": last.isoformat()},
         )
+        if response.status_code == _NOT_FOUND:
+            logger.warning("bouncy link %s is gone: its numbers are skipped", remote_id)
+            return None
         if not response.ok:
             raise self._failed(response, f"read analytics of {remote_id}")
         return response.json().get("dailyViews", [])

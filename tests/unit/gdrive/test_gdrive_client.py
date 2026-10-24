@@ -144,6 +144,25 @@ def test_file_reads_parents_and_the_preview_link():
     assert "thumbnailLink" in fields
 
 
+def test_trash_file_asks_first_and_never_updates_a_missing_id():
+    """An update of a missing id answers 500 about one time in five (probed
+    2026-10-24), the get a 404: gone is told by the get."""
+    drive, http = _drive(
+        ({"status": "404"}, {"error": {"code": 404, "message": "File not found"}})
+    )
+    with pytest.raises(FolderGoneError):
+        drive.trash_file("gone")
+    assert [method for _, method, _, _ in http.request_sequence] == ["GET"]
+
+
+def test_trash_file_trashes_what_is_there():
+    drive, http = _drive((_OK, {"id": "f"}), (_OK, {"id": "f"}))
+    drive.trash_file("f")
+    (_, get, _, _), (_, update, body, _) = http.request_sequence
+    assert (get, update) == ("GET", "PATCH")
+    assert json.loads(body) == {"trashed": True}
+
+
 def test_a_trashed_file_is_gone():
     drive, _ = _drive(
         (_OK, {"id": "f", "name": "a", "mimeType": "image/jpeg", "trashed": True})
