@@ -121,6 +121,19 @@ def test_daily_numbers_fall_in_the_range(provider):
         assert len({d.day for d in days}) == len(days)
 
 
+def test_daily_leaves_out_a_link_gone_since_it_was_listed(provider):
+    """Deleted between the list and the numbers (by hand on the provider, or
+    a delete job): left out instead of failing the read. 2026-10-24 Bouncy's
+    404 on one such link (the round trip's, deleted mid-read) failed the
+    whole read, so the whole sync."""
+    end = utc_today()
+    ids = [x.remote_id for x in provider.list_links()][:2]
+    gone = f"ofmh-gone-{uuid.uuid4().hex[:8]}"
+    found = provider.daily([*ids, gone], end - timedelta(days=6), end)
+    assert gone not in found
+    assert set(found) <= set(ids)
+
+
 @pytest.mark.parametrize("name", PROVIDERS)
 def test_fake_reports_the_seeded_traffic(name, fake_externals):
     provider = _client(name, "fake")

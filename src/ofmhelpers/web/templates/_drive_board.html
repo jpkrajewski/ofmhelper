@@ -2,9 +2,9 @@
 {# /drive's cards, counts and folders: the page renders it from each
    folder's last read (no Drive call), GET /drive/live from Drive now, and
    drive.js swaps that in. Expects `board` (schemas.DriveBoard).
-   A card is /phones' card (the phone's drawing, label, model · color,
-   owner) with the Instagram account's Drive folder where /phones lists
-   logins; grid or list (layout.js). #}
+   A card is /phones' card (the phone's drawing, label, model · color ·
+   owner on one line) with the Instagram account's Drive folder where
+   /phones lists logins; grid or list (layout.js). #}
 {% import "_icons.html" as ic %}
 {% set cards = board.cards %}
 {% if not board.live %}
@@ -30,13 +30,12 @@
         <div class="ph-title-row">
             <div class="ph-title">
                 <h2>{{ t.device.label }}</h2>
-                <p class="ph-specs">{{ t.device.specs }}</p>
+                <p class="ph-specs">{{ t.device.specs }}{% if t.device.owner %} · {{ t.device.owner }}{% endif %}</p>
             </div>
             {% if c.account_url %}
             {{ ui.icon_button("folder", "Open the folder of " ~ t.handle, href=c.account_url, attrs={"target": "_blank", "rel": "noopener"}) }}
             {% endif %}
         </div>
-        {% if t.device.owner %}<p class="ph-meta"><span>{{ t.device.owner }}</span></p>{% endif %}
         <p class="dr-account">@{{ t.handle }}{% if t.followers_label %} <span class="dr-followers">· {{ t.followers_label }}</span>{% endif %}</p>
         {% if c.error %}
         <p class="dr-note dr-error">{{ c.error }}</p>

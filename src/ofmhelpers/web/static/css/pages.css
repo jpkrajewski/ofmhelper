@@ -1045,7 +1045,6 @@ a.ph-login-user:hover { text-decoration: underline; }
    and its Drive folder where /phones lists logins. */
 .dr-card .ph-media { display: block; }
 .dr-body { display: flex; flex-direction: column; gap: var(--s-2); }
-.dr-body .ph-meta { margin: 0; }
 .dr-account { margin: 0; font-weight: 600; font-size: var(--step--1); }
 .dr-note { margin: 0; color: var(--text-faint); font-size: var(--step--1); }
 .dr-missing { color: var(--warn); }

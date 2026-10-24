@@ -387,7 +387,14 @@ class Drive:
 
     def trash_file(self, item_id: str) -> None:
         """Into Drive's trash (restorable there for 30 days), never deleted
-        for good. Raises `FolderGoneError` when it is already gone."""
+        for good. Raises `FolderGoneError` when it is already gone: asked
+        with a get first, since an update of a missing id answers 500 about
+        one time in five (a get 404s; probed 2026-10-24), and a 500 is
+        retried, then fails as a `DriveError` (~40 s)."""
+        self._run(
+            self._files.get(fileId=item_id, supportsAllDrives=True, fields="id"),
+            f"File {item_id}",
+        )
         self._run(
             self._files.update(
                 fileId=item_id,
