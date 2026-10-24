@@ -20,7 +20,6 @@ the logged-out view, marked `limited` (the /accounts banner asks them for
 their login).
 """
 
-import asyncio
 import random
 import time
 
@@ -216,13 +215,3 @@ def rescan_limited(user_id: int) -> list[int]:
     mark_due(limited)
     queue_due_scans()
     return limited
-
-
-async def account_tracker_loop() -> None:
-    while True:
-        try:
-            await asyncio.to_thread(queue_due_scans)
-        except Exception:
-            # A broken sweep must never take the loop down -- log and move on.
-            logger.exception("account tracker sweep failed")
-        await asyncio.sleep(settings.accounts.rescan_check_interval_s)

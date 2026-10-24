@@ -243,7 +243,7 @@ def _finish(request: Request, name: str, code: str, state: str, error: str) -> R
     try:
         carried, identity = _identity(request, provider, code, state, error)
     except SignInError as exc:
-        logger.warning("sign-in with %s failed: %s", name, exc)
+        logger.warning("sign-in with %s failed: %s", name, exc, exc_info=True)
         # Someone already signed in was connecting an account (Drive): back to
         # /account to try again, not a login page that invites a plain
         # sign-in, which never asks for Drive (prod, 2026-10-22).

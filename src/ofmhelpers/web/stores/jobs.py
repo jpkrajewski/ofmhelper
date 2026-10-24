@@ -49,13 +49,6 @@ def _repository() -> JobRepository:
     return JobRepository()
 
 
-def load_jobs() -> None:
-    """No-op kept for main.py's lifespan call. Job history now lives in
-    Postgres, so there is nothing to reload into memory at startup -- the
-    database *is* the persistent store that survives a restart."""
-    return
-
-
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
     """`actor`: the id (as a string) of the user who ran it -- whose job it
     is (only they see it), and who the action log names. None (scripts,

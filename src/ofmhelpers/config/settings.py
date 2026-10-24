@@ -491,6 +491,11 @@ class DownloadersSettings(BaseSettings):
     probe_timeout_s: int = Field(
         default=30, ge=1, validation_alias="OFM_DOWNLOAD_PROBE_TIMEOUT_S"
     )
+    # Bounds the H.264 re-encode of a TikTok download; on timeout the original
+    # file is kept, as on any other failed re-encode.
+    reencode_timeout_s: int = Field(
+        default=900, ge=1, validation_alias="OFM_DOWNLOAD_REENCODE_TIMEOUT_S"
+    )
     # Largest cookies.txt /cookies takes. One site's export is a few KB, but
     # an "all cookies" browser export runs to megabytes (2026-10-23: a real
     # one was refused at the old 1 MB).

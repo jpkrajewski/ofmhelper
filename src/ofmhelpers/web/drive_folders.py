@@ -52,7 +52,6 @@ are kept on disk (`thumbnail`).
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import time
 from collections import defaultdict
@@ -872,14 +871,3 @@ def thumbnail(
     if found is not None:
         _keep_thumb(file_id, px, *found)
     return found
-
-
-async def drive_loop() -> None:
-    while True:
-        if settings.signin.google_configured or settings.infra.fake_externals:
-            try:
-                await asyncio.to_thread(sync)
-            except Exception:
-                # A broken sweep must never take the loop down -- log and move on.
-                logger.exception("drive sweep failed")
-        await asyncio.sleep(settings.gdrive.check_interval_s)

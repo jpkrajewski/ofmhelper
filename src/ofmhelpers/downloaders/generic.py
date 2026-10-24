@@ -18,6 +18,7 @@ from ofmhelpers.downloaders.models import (
     YtDlpOptions,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils import ffmpeg
 from ofmhelpers.utils.proxy_pool import ProxyPool
 
 if TYPE_CHECKING:
@@ -195,8 +196,12 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
     cmd = config.ffmpeg_cmd(path, tmp_dst)
 
     try:
-        subprocess.run(cmd, capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        ffmpeg.run(cmd, settings.downloaders.reencode_timeout_s)
+    except (RuntimeError, subprocess.TimeoutExpired, FileNotFoundError):
+        logger.warning(
+            "H.264 re-encode of %s failed, kept the original", path, exc_info=True
+        )
+        tmp_dst.unlink(missing_ok=True)
         return path
 
     if config.delete_original_after_reencode and tmp_dst.exists():
@@ -259,6 +264,7 @@ def download(
 
         return DownloadResult(url=url, success=True, output_paths=paths)
     except Exception as exc:
+        logger.warning("download %s: its files could not be read", url, exc_info=True)
         return DownloadResult(url=url, success=False, error=str(exc))
 
 

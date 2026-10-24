@@ -14,13 +14,12 @@ file's mtime (looked at no more than every `_DOTENV_CHECK_S`). Building one
 reads and parses `.env` and validates every field -- /reels built groups
 310 times per request, ~0.4 s of a 0.5 s page (prod profile, 2026-10-22).
 
-Call-site convention (mirrors how each var was read before this module
-existed):
-  - construct-once-at-import: assign `settings.<group>.<field>` to a
-    module-level constant, same as the old `X = os.getenv(...)` pattern.
-  - fresh-per-call: reference `settings.<group>.<field>` inline inside the
-    function that needs it, every time -- never stash it in a module-level
-    or long-lived variable.
+Call-site convention: reference `settings.<group>.<field>` inline inside the
+function that needs it, every time -- never stash it in a module-level or
+long-lived variable. A few modules still capture a value at import (e.g.
+`routers/generation/clone.py` DEFAULT_PROMPT, `routers/task_helpers/uploads.py`
+ASSETS_ROOT) because tests patch those module attributes; they are not a
+pattern to copy.
 """
 
 import os

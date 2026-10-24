@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict
 HiggsfieldStatus = Literal[
     "queued", "in_progress", "completed", "failed", "nsfw", "canceled"
 ]
-PENDING: frozenset[HiggsfieldStatus] = frozenset({"queued", "in_progress"})
 
 
 class _Lenient(BaseModel):

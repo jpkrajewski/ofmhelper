@@ -1,35 +1,28 @@
 """
 The FastAPI application: logging, middleware, static files, lifespan, and
 the router registration loop. Nothing feature-specific lives here -- a new
-page is added to `routers/__init__.py`'s ROUTERS list, not to this file.
+page is added to `routers/__init__.py`'s ROUTERS list and a new background
+sweep to `web/sweeps.py`, not to this file.
 """
 
-import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, instrument_app
-from ofmhelpers.web.account_tracker import account_tracker_loop
-from ofmhelpers.web.drive_folders import drive_loop
-from ofmhelpers.web.link_sync import link_sync_loop
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
     CanonicalHostMiddleware,
     CompressionMiddleware,
     WriteRateLimitMiddleware,
 )
-from ofmhelpers.web.preview_backfill import preview_backfill_once
-from ofmhelpers.web.recovery import recovery_loop
-from ofmhelpers.web.reel_watch import reel_watch_loop
 from ofmhelpers.web.routers import ROUTERS
-from ofmhelpers.web.stores.jobs import load_jobs
-from ofmhelpers.web.templates_config import render
+from ofmhelpers.web.sweeps import running, sweeps
 
 # Before anything else in the process logs: uvicorn imports this module to
 # find `app`, so this runs ahead of the first request and ahead of uvicorn's
@@ -41,39 +34,12 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Job history (the /generate gallery, Action log, every task's status
-    # page) is persisted -- reload it now so a restart/rebuild doesn't start
-    # with a blank slate. See web/stores/jobs.py.
-    load_jobs()
-
-    # Background recovery sweeper: auto-downloads kie.ai generations whose
-    # in-request poll timed out (or that a restart orphaned) -- see
-    # ofmhelpers/web/recovery.py. Cancelled cleanly on shutdown.
-    sweeper = asyncio.create_task(recovery_loop())
-    # Rescans /reels' watched Instagram profiles when due -- see
-    # ofmhelpers/web/reel_watch.py.
-    reel_watch = asyncio.create_task(reel_watch_loop())
-    # Rescans /accounts' tracked social accounts when due -- see
-    # ofmhelpers/web/account_tracker.py.
-    account_tracker = asyncio.create_task(account_tracker_loop())
-    # Syncs /links' links and their clicks when due -- see
-    # ofmhelpers/web/link_sync.py.
-    link_sync = asyncio.create_task(link_sync_loop())
-    # Makes /drive's folders for the day in the shared Google Drive -- see
-    # ofmhelpers/web/drive_folders.py.
-    drive = asyncio.create_task(drive_loop())
-    # One pass: gallery previews for jobs older than previews -- see
-    # ofmhelpers/web/preview_backfill.py.
-    backfill = asyncio.create_task(preview_backfill_once())
-    logger.info("startup complete: job history loaded, sweepers running")
-    yield
-    sweeper.cancel()
-    reel_watch.cancel()
-    account_tracker.cancel()
-    link_sync.cancel()
-    drive.cancel()
-    backfill.cancel()
-    logger.info("shutdown: sweepers cancelled")
+    # The background sweeps (web/sweeps.py) run while the app does: on
+    # shutdown each is cancelled and awaited.
+    async with running(sweeps()):
+        logger.info("startup complete: sweeps running")
+        yield
+    logger.info("shutdown: sweeps stopped")
 
 
 app = FastAPI(title="Ascend Global LLC — Content Ops", lifespan=lifespan)
@@ -106,13 +72,3 @@ app.mount(
 
 for router in ROUTERS:
     app.include_router(router)
-
-
-@app.get("/home")
-def root(request: Request):
-    return render(request, "home.html")
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}

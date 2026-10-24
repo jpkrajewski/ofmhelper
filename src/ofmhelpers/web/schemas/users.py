@@ -83,10 +83,6 @@ class UserForm(BaseModel):
         return _email(value)
 
 
-class RoleForm(BaseModel):
-    role: Role
-
-
 class LinkedAccount(BaseModel):
     """A Google or Apple account linked to a user."""
 
