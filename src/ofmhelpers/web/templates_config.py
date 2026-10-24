@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.posting import window as posting_window
@@ -14,6 +15,32 @@ from ofmhelpers.web.schemas.accounts import ago
 from ofmhelpers.web.schemas.nav import nav
 
 STATIC_DIR = Path(__file__).parent / "static"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+# Outside production, how often a template's file is looked at for an edit.
+TEMPLATE_RECHECK_S = 1.0
+
+
+class TemplateFiles(FileSystemLoader):
+    """Template edits picked up without a restart, at a fraction of Jinja's
+    cost: it checks a template's file on every include/import -- ~5 per
+    gallery card, ~2 ms each on dev's Windows bind mount, 200 ms of a
+    20-card render that takes 4 ms without (2026-10-24). This looks at each
+    file once every TEMPLATE_RECHECK_S at most. Production compiles every
+    template once and never looks (its templates are in the image)."""
+
+    def get_source(self, environment: Environment, template: str):
+        source, filename, uptodate = super().get_source(environment, template)
+        checked_at = time.monotonic()
+        current = True
+
+        def is_current() -> bool:
+            nonlocal checked_at, current
+            if current and time.monotonic() - checked_at >= TEMPLATE_RECHECK_S:
+                checked_at = time.monotonic()
+                current = uptodate()
+            return current
+
+        return source, filename, is_current
 
 
 @lru_cache(maxsize=256)
@@ -47,7 +74,9 @@ def get_templates() -> Jinja2Templates:
     reads settings, and an import-time instance is a module-level global that
     every test then has to work around.
     """
-    templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
+    templates.env.loader = TemplateFiles(TEMPLATES_DIR)
+    templates.env.auto_reload = not settings.infra.production
 
     # A global rather than a per-route context value: base.html needs it on
     # every page (it feeds static/js/session.js's idle-expiry timer), and

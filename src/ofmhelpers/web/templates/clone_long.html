@@ -3,6 +3,7 @@
 {% import "_file_picker.html" as fp %}
 {% block content %}
 {{ ui.page_header("Clone long") }}
+{% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -33,10 +34,11 @@
 <div class="generate-gallery-col">
 <div id="results-panel">
     <div class="generation-status" role="status" aria-live="polite"></div>
-    <div class="results" id="clone-long-gallery">
+    <div class="results" id="clone-long-gallery" data-gallery-endpoint="/clone-long/gallery">
         {% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
     </div>
-    {{ ui.empty("No long clones yet", attrs={"id": "clone-long-empty", "hidden": gallery|length > 0}) }}
+    {{ ui.empty("No long clones yet", attrs={"id": "clone-long-empty", "hidden": gallery|length > 0 or hidden_count > 0}) }}
 </div>
 </div>
 </div>
@@ -45,4 +47,6 @@
 {% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/clone-long.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
 {% endblock %}

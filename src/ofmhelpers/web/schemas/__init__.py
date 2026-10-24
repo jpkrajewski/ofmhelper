@@ -84,6 +84,7 @@ from ofmhelpers.web.schemas.jobs import (
     JobQueued,
     JobsQueued,
     JobStatusPayload,
+    JobVisibility,
     ReferenceAsset,
 )
 from ofmhelpers.web.schemas.links import (
@@ -163,6 +164,7 @@ __all__ = [
     "JobQueued",
     "JobStatus",
     "JobStatusPayload",
+    "JobVisibility",
     "JobsQueued",
     "Leaderboard",
     "LinkPage",

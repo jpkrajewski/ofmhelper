@@ -1,0 +1,11 @@
+{# A gallery page's toolbar, under its title like /phones' (Export, Add
+   phone): "Show hidden (N)" at the right switches the gallery to only the
+   cards its owner hid, "Hide hidden" back (static/js/hidden-cards.js swaps
+   the label). The row is only there while at least one is hidden. Expects
+   `hidden_count`. #}
+{% import "components/ui.html" as ui %}
+<div class="ph-toolbar"{% if not hidden_count %} hidden{% endif %}>
+    <div class="toolbar-actions">
+        {{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false"}) }}
+    </div>
+</div>

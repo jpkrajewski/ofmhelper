@@ -19,6 +19,7 @@ list, or a bare id string) -- there is no separate file-reference table.
 
 from __future__ import annotations
 
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -207,18 +208,40 @@ def list_jobs_page(
     limit: int,
     actor: str | None = None,
     status: str | None = None,
+    hidden: bool | None = None,
 ) -> tuple[list[Job], int]:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that it ran -- same meaning as get_job's), newest first, plus how
     many there are in total (before the slice, so the caller can tell whether
-    another page exists).
+    another page exists). `hidden`: only the jobs hidden from the galleries
+    (`hide_job`; a gallery's "Show hidden"), only the others (a gallery), or
+    both (None: the file manager, character sheet, uniqify).
 
     Filtered and sliced in SQL (`JobRepository.list_page`), and only the page
     is self-healed, so rendering 20 cards costs 20 jobs' worth of rows and
     disk checks instead of the whole history's."""
-    page = _repository().list_page(tuple(sorted(tasks)), actor, offset, limit, status)
+    page = _repository().list_page(
+        tuple(sorted(tasks)), actor, offset, limit, status, hidden
+    )
     jobs = [Job.model_validate(row) for row in page["jobs"]]
     return _heal(jobs), page["total"]
+
+
+def count_hidden_jobs(tasks: set[str], actor: str) -> int:
+    """How many of `actor`'s jobs of `tasks` are hidden from the galleries."""
+    return _repository().count_hidden(tuple(sorted(tasks)), actor)
+
+
+def hide_job(job_id: str, actor: str, hidden: bool) -> Job | None:
+    """Hides `actor`'s job from its galleries, or shows it again; None when
+    it is not theirs (or gone). A view choice only: the job, its files and
+    the action log stay as they are."""
+    job = get_job(job_id, actor)
+    if job is None or hidden == (job.hidden_at is not None):
+        return job
+    hidden_at = time.time() if hidden else None
+    _repository().set_hidden(job_id, hidden_at)
+    return job.model_copy(update={"hidden_at": hidden_at})
 
 
 def job_counts(tasks: set[str]) -> dict[str, dict[str, int]]:

@@ -13,6 +13,12 @@
  * Appended cards inherit the delegated Recreate and Download handlers, but a
  * still-running card needs its poller armed, hence Generation.resumePendingCards
  * (idempotent by design -- it skips cards already being polled).
+ *
+ * The endpoint is read at each fetch: hidden-cards.js switches it (with or
+ * without hidden cards) and swaps the whole list, then fires
+ * "gallery:replaced" so the new sentinel is watched. Offsets move under a
+ * page that hides or adds cards, so a job already shown is never appended
+ * twice.
  */
 (() => {
     // Fetch a page before the sentinel is actually on screen: at a normal
@@ -20,8 +26,7 @@
     const ROOT_MARGIN = "600px";
 
     function initGalleryScroll(container) {
-        const endpoint = container.dataset.galleryEndpoint;
-        if (!endpoint) return;
+        if (!container.dataset.galleryEndpoint) return;
 
         let loading = false;
 
@@ -47,7 +52,7 @@
             observer.unobserve(sentinel);
 
             // The endpoint may carry its own query (a filter): add to it.
-            const url = new URL(endpoint, window.location.origin);
+            const url = new URL(container.dataset.galleryEndpoint, window.location.origin);
             url.searchParams.set("offset", sentinel.dataset.nextOffset);
             fetch(url)
                 .then((r) => {
@@ -60,6 +65,10 @@
                     // gallery is exhausted.
                     const holder = document.createElement("div");
                     holder.innerHTML = html;
+                    holder.querySelectorAll("[data-job-id]").forEach((card) => {
+                        const id = CSS.escape(card.dataset.jobId);
+                        if (container.querySelector(`[data-job-id="${id}"]`)) card.remove();
+                    });
                     sentinel.replaceWith(...holder.childNodes);
                     loading = false;
                     if (window.Generation) window.Generation.resumePendingCards();
@@ -75,6 +84,10 @@
                 });
         }
 
+        container.addEventListener("gallery:replaced", () => {
+            loading = false;
+            watch();
+        });
         watch();
     }
 

@@ -18,9 +18,10 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `admin/`      -- admin-only surfaces: who may sign in (/users), landing-page
   applications, file manager, action log.
 
-Six modules sit at this level because they belong to no single feature:
+Seven modules sit at this level because they belong to no single feature:
 `auth` (signing in and out: Google, Apple, password), `account` (your own
 sign-ins, Drive connection and API keys), `cookies` (your own cookies.txt),
+`jobs` (hiding your own job's card from its gallery, any tool),
 `apply` (the public landing-page application form's
 POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
 reference-file browser every generation form uses), and `task_helpers` (the
@@ -31,7 +32,7 @@ it, so **adding a page means one import and one entry here**, and main.py is
 never touched.
 """
 
-from ofmhelpers.web.routers import account, apply, auth, cookies, refs
+from ofmhelpers.web.routers import account, apply, auth, cookies, jobs, refs
 from ofmhelpers.web.routers.admin import action_log, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.admin import styleguide as admin_styleguide
@@ -56,6 +57,7 @@ ROUTERS = [
     auth.router,
     account.router,
     cookies.router,
+    jobs.router,
     apply.router,
     refs.router,
     # generation/

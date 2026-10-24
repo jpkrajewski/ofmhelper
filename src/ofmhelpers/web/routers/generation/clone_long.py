@@ -3,7 +3,8 @@
 The page prices the pick live; `/run` measures the video itself, re-prices
 it, checks every piece against the model and only then queues the job --
 the stored price is the server's, never the browser's. Results are the
-shared gallery card; the status page and files come from `add_job_routes`
+shared gallery card, paged like /clone's (`/clone-long/gallery`,
+gallery-scroll.js); the status page and files come from `add_job_routes`
 (only the session's own jobs).
 """
 
@@ -37,7 +38,12 @@ from ofmhelpers.web.routers.task_helpers import (
     keep_videos,
 )
 from ofmhelpers.web.schemas import Job, ProviderChoice, TaskCard
-from ofmhelpers.web.stores.jobs import create_job, list_jobs_page, run_job
+from ofmhelpers.web.stores.jobs import (
+    count_hidden_jobs,
+    create_job,
+    list_jobs_page,
+    run_job,
+)
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/clone-long", tags=["clone-long"])
@@ -67,17 +73,31 @@ def card(job: Job) -> TaskCard:
     )
 
 
+def _gallery_page(
+    request: Request, offset: int, hidden: bool = False
+) -> tuple[list[TaskCard], int | None]:
+    """One page of the session's long-clone cards, newest first, and the
+    next page's offset (None after the last). `hidden`: only the hidden
+    cards."""
+    limit = settings.web.gallery_limit
+    jobs, total = list_jobs_page(
+        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
+    )
+    next_offset = offset + limit
+    return [card(j) for j in jobs], next_offset if next_offset < total else None
+
+
 @router.get("")
 def page(request: Request, video: Annotated[list[str] | None, Query()] = None):
-    jobs, _total = list_jobs_page(
-        {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.actor(request)
-    )
+    gallery, next_offset = _gallery_page(request, 0)
     # One video: a download sends its first (clone-long clones one video).
     prefill = keep_videos(video or [], assets_root_for(request))[:1]
     return render(
         request,
         "clone_long.html",
-        gallery=[card(j) for j in jobs],
+        gallery=gallery,
+        next_offset=next_offset,
+        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
         prefill_video=prefill,
         providers=ProviderChoice.all(list(TARGETS)),
         selected_provider=settings.aigen.default_provider,
@@ -88,6 +108,23 @@ def page(request: Request, video: Annotated[list[str] | None, Query()] = None):
         resolutions=RESOLUTIONS,
         default_resolution=DEFAULT_RESOLUTION,
         default_prompt=settings.web.clone_default_prompt,
+    )
+
+
+@router.get("/gallery")
+def gallery_page(
+    request: Request,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    hidden: Annotated[bool, Query()] = False,
+):
+    """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
+    cards (hidden-cards.js's "Show hidden")."""
+    gallery, next_offset = _gallery_page(request, offset, hidden)
+    return render(
+        request,
+        "clone_long_gallery_fragment.html",
+        gallery=gallery,
+        next_offset=next_offset,
     )
 
 

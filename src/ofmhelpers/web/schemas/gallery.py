@@ -29,6 +29,8 @@ class JobCard(BaseModel):
     params: dict[str, Any]
     assets: list[AssetCard]
     failed_sources: list[FailedSource] = []
+    # Hidden from its gallery by its owner: shown only under "Show hidden".
+    hidden: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -58,6 +60,7 @@ class JobCard(BaseModel):
             params=job.params,
             assets=assets,
             failed_sources=failed_sources,
+            hidden=job.hidden_at is not None,
             **extra,
         )
 

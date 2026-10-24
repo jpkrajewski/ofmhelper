@@ -269,13 +269,14 @@ def test_a_running_card_is_the_shared_card_with_no_timer():
     assert "result-actions" not in html
 
 
-def test_a_failed_card_offers_recreate_and_nothing_else():
+def test_a_failed_card_offers_recreate_and_only_hide_in_its_menu():
     job = _job("f1", status="failed", error="Generation failed")
     html = render_partial("_clone_card.html", job=clone._card(job, []))
     actions = html.split('class="result-actions"')[1]
     assert "recreate-btn" in actions
     assert "download-btn" not in actions
-    assert 'class="menu' not in actions
+    menu = actions.split('class="menu-list"')[1]
+    assert re.findall(r'class="menu-item ([\w-]+)"', menu) == ["hide-btn", "unhide-btn"]
 
 
 def _clip(dest: Path, seconds: int) -> Path:

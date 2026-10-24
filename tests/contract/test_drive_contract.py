@@ -22,6 +22,10 @@ def drive(backend, monkeypatch) -> DriveApi:
         fake = FakeDrive()
         fake.seed_folder("ALL ACCOUNTS", item_id=FAKE_ROOT, shared=True)
         return fake
+    # The sandbox is written to: dev's read-live switch (the app reading the
+    # live folders, write-guarded) is not for this client. With it set in the
+    # dev .env, every real case failed on its first create_folder.
+    monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "0")
     return connect()
 
 

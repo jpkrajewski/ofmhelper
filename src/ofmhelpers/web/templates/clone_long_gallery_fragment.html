@@ -1,0 +1,4 @@
+{# One page of /clone-long cards plus the next sentinel, fetched by
+   gallery-scroll.js (and by hidden-cards.js with ?hidden=1). #}
+{% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
+{% include "_generate_gallery_sentinel.html" %}

@@ -2,6 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% block content %}
 {{ ui.page_header("Gen AI") }}
+{% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -57,5 +58,6 @@
 <script src="{{ static_url('js/ai-form.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
 {% endblock %}

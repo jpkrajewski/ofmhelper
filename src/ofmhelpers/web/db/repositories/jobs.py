@@ -36,6 +36,7 @@ def _job_to_dict(row: JobRow) -> dict:
         "created_at": row.created_at,
         "finished_at": row.finished_at,
         "preview": row.preview,
+        "hidden_at": row.hidden_at,
     }
 
 
@@ -123,6 +124,15 @@ class JobRepository(CachedRepository):
             s.execute(update(JobRow).where(JobRow.id == job_id).values(result=result))
 
     @invalidates_cache
+    def set_hidden(self, job_id: str, hidden_at: float | None) -> None:
+        """Hides the job from its galleries (`hidden_at` = when), or shows it
+        again (None)."""
+        with session_scope() as s:
+            s.execute(
+                update(JobRow).where(JobRow.id == job_id).values(hidden_at=hidden_at)
+            )
+
+    @invalidates_cache
     def delete(self, job_id: str) -> None:
         with session_scope() as s:
             s.execute(delete(JobRow).where(JobRow.id == job_id))
@@ -180,16 +190,23 @@ class JobRepository(CachedRepository):
         offset: int,
         limit: int,
         status: str | None = None,
+        hidden: bool | None = None,
     ) -> dict:
         """One page of the jobs whose task is in `tasks` (and that `actor` ran,
         unless None), newest first, plus how many match in total. Filtered and
         sliced in SQL: a gallery page loads its 20 rows, not the history.
+        `hidden`: only the jobs hidden from the galleries (True), only the
+        others (False), or both (None).
         `tasks` is a tuple so the cache key is stable -- callers sort it."""
         where: list[ColumnElement[bool]] = [JobRow.task.in_(tasks)]
         if actor is not None:
             where.append(JobRow.actor == actor)
         if status is not None:
             where.append(JobRow.status == status)
+        if hidden is not None:
+            where.append(
+                JobRow.hidden_at.is_not(None) if hidden else JobRow.hidden_at.is_(None)
+            )
         with session_scope() as s:
             rows = (
                 s.execute(
@@ -207,3 +224,18 @@ class JobRepository(CachedRepository):
                 "jobs": [_job_to_dict(r) for r in rows],
                 "total": total.scalar_one(),
             }
+
+    @cached
+    def count_hidden(self, tasks: tuple[str, ...], actor: str) -> int:
+        """How many of `actor`'s jobs of `tasks` are hidden (sorted tuple:
+        stable cache key) -- whether a gallery offers "Show hidden"."""
+        with session_scope() as s:
+            return s.execute(
+                select(func.count())
+                .select_from(JobRow)
+                .where(
+                    JobRow.task.in_(tasks),
+                    JobRow.actor == actor,
+                    JobRow.hidden_at.is_not(None),
+                )
+            ).scalar_one()

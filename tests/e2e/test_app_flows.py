@@ -302,10 +302,12 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
     expect(failed.first).to_have_attribute("title", re.compile("kie.ai: wrong API key"))
 
-    # A failed card's one action is Recreate: the images and its video back,
-    # without re-uploading.
+    # A failed card's action is Recreate (its ⋯ menu only hides it): the
+    # images and its video back, without re-uploading.
     first = va.page.locator(f'#clone-gallery > [data-job-id="{body["job_ids"][0]}"]')
-    expect(first.locator(".result-actions .menu")).to_have_count(0)
+    expect(
+        first.locator(".result-actions .menu .menu-item:not([hidden])")
+    ).to_have_text(["Hide"])
     first.locator(".recreate-btn").click()
     expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
     expect(va.page.locator('.file-picker[data-field="videos"] li')).to_have_count(1)

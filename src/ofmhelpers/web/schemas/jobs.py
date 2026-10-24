@@ -74,6 +74,14 @@ class JobsQueued(BaseModel):
         return self.job_ids[0]
 
 
+class JobVisibility(BaseModel):
+    """`POST /jobs/{job_id}/hidden` (static/js/hidden-cards.js): hide the
+    job's card from its gallery, or show it again; answered with the
+    state it is now in."""
+
+    hidden: bool
+
+
 class CloneQueued(BaseModel):
     """`POST /clone/run`: every run's job id, plus the batch already rendered
     as the page's own partial."""

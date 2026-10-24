@@ -76,7 +76,13 @@ from ofmhelpers.web.schemas import (
     UploadsQueued,
 )
 from ofmhelpers.web.stores import drive_uploads as upload_store
-from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
+from ofmhelpers.web.stores.jobs import (
+    count_hidden_jobs,
+    create_job,
+    get_job,
+    list_jobs_page,
+    run_job,
+)
 from ofmhelpers.web.stores.users import refresh_token
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
@@ -287,11 +293,15 @@ def _require_kind(paths: list[str], kind: str, label: str) -> None:
         raise HTTPException(status_code=400, detail=f"{label} must be {kind} files")
 
 
-def _gallery_page(request: Request, offset: int) -> tuple[list[CloneCard], int | None]:
+def _gallery_page(
+    request: Request, offset: int, hidden: bool = False
+) -> tuple[list[CloneCard], int | None]:
     """One page of the session's clone cards, newest first, and the next
-    page's offset (None after the last)."""
+    page's offset (None after the last). `hidden`: only the hidden cards."""
     limit = settings.web.gallery_limit
-    jobs, total = list_jobs_page({TASK}, offset, limit, AuthMiddleware.actor(request))
+    jobs, total = list_jobs_page(
+        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
+    )
     next_offset = offset + limit
     return _cards(jobs), next_offset if next_offset < total else None
 
@@ -353,6 +363,7 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
         "clone.html",
         gallery=gallery,
         next_offset=next_offset,
+        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
         providers=ProviderChoice.all(list(CLONE_TARGETS)),
         selected_provider=settings.aigen.default_provider,
         api_keys=get_api_keys(request),
@@ -373,9 +384,14 @@ def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, offset: Annotated[int, Query(ge=0)] = 0):
-    """The next page of cards, for gallery-scroll.js."""
-    gallery, next_offset = _gallery_page(request, offset)
+def gallery_page(
+    request: Request,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    hidden: Annotated[bool, Query()] = False,
+):
+    """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
+    cards (hidden-cards.js's "Show hidden")."""
+    gallery, next_offset = _gallery_page(request, offset, hidden)
     return render(
         request,
         "clone_gallery_fragment.html",

@@ -4,6 +4,7 @@
 {% import "_icons.html" as ic %}
 {% block content %}
 {{ ui.page_header("Clone") }}
+{% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -77,7 +78,7 @@
         {% for job in gallery %}{% include "_clone_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}
     </div>
-    {{ ui.empty("No clones yet", attrs={"id": "clone-empty", "hidden": gallery|length > 0}) }}
+    {{ ui.empty("No clones yet", attrs={"id": "clone-empty", "hidden": gallery|length > 0 or hidden_count > 0}) }}
 </div>
 </div>
 </div>
@@ -96,4 +97,5 @@
 <script src="{{ static_url('js/clone-cost.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
 {% endblock %}

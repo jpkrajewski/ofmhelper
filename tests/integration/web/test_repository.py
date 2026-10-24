@@ -128,3 +128,38 @@ def test_a_repositorys_cache_follows_the_redis_url_in_force(monkeypatch):
     assert cache.get_or_set("get", ("x",), lambda: "suite") == "suite"
     other = Redis.from_url(other_url)
     other.delete(*other.scan_iter("cache:test-follows-url:*"))
+
+
+def _dead_redis() -> Redis:
+    """A broker that never answers in time (nothing listens on port 1)."""
+    return Redis.from_url("redis://127.0.0.1:1/0", socket_connect_timeout=0.2)
+
+
+def test_an_unreachable_cache_reads_and_writes_through_to_the_database():
+    """Redis is an optimisation: down or timing out, reads come from the
+    database and writes still save (2026-10-24: a Redis stall made every
+    page 500 through the signed-in user's cached read)."""
+    repo = JobRepository(cache=RepositoryCache(_dead_redis(), "job"))
+    job_id = repo.create("seedance", {"prompt": "hi"}, actor="admin")
+    assert repo.get(job_id)["status"] == "running"
+
+    repo.update_status(job_id, "done", result=[])
+    assert repo.get(job_id)["status"] == "done"
+
+
+def test_pages_answer_while_the_cache_is_down(monkeypatch):
+    """The whole request path: signed in, a gallery page and Show hidden's
+    fragment render with Redis unreachable."""
+    from fastapi.testclient import TestClient
+    from signin import sign_in
+
+    from ofmhelpers.web.main import app
+
+    client = TestClient(app)
+    sign_in(client, "ann@example.com")
+    dead = _dead_redis()
+    monkeypatch.setattr(
+        "ofmhelpers.web.db.repositories.cached_repository.get_redis", lambda: dead
+    )
+    assert client.get("/generate").status_code == 200
+    assert client.get("/generate/gallery?hidden=1").status_code == 200

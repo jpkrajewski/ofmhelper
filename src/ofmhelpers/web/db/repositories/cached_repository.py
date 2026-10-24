@@ -9,6 +9,11 @@ Invalidation is a version counter per namespace (one per repository), not a
 Redis KEYS/SCAN delete: every write calls `bump()`, which does an atomic
 INCR, so all previously-cached reads for that repository become unreachable
 in O(1) and simply expire off their own TTL later.
+
+Redis is only an optimisation here (the policy of cache/redis.py): unreachable
+or timing out, a read goes to the database and a write still saves -- slow,
+not broken. Every page read the signed-in user through it, so a Redis stall
+(dev's Docker VM saturated, 2026-10-24) answered 500 everywhere.
 """
 
 from __future__ import annotations
@@ -17,8 +22,11 @@ import json
 from functools import wraps
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
+from redis.exceptions import RedisError
+
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,6 +38,8 @@ if TYPE_CHECKING:
 _DEFAULT_TTL_S = settings.infra.cache_ttl_s
 
 T = TypeVar("T")
+
+logger = get_logger(__name__)
 
 
 class RepositoryCacheLike(Protocol):
@@ -64,17 +74,42 @@ class RepositoryCache:
         return f"cache:{self._namespace}:{self._version()}:{method}:{parts}"
 
     def get_or_set(self, method: str, args: tuple, loader: Callable[[], T]) -> T:
-        key = self._key(method, args)
-        cached = self._redis.get(key)
+        try:
+            key = self._key(method, args)
+            cached = self._redis.get(key)
+        except RedisError:
+            logger.warning(
+                "cache %s unavailable, %s read from the database",
+                self._namespace,
+                method,
+                exc_info=True,
+            )
+            return loader()
         if cached is not None:
             return json.loads(cached)
         value = loader()
-        self._redis.set(key, json.dumps(value), ex=self._ttl_s)
+        try:
+            self._redis.set(key, json.dumps(value), ex=self._ttl_s)
+        except RedisError:
+            logger.warning(
+                "cache %s unavailable, %s not stored",
+                self._namespace,
+                method,
+                exc_info=True,
+            )
         return value
 
     def bump(self) -> None:
-        """Invalidate every cached read for this namespace."""
-        self._redis.incr(f"cache:{self._namespace}:v")
+        """Invalidate every cached read for this namespace. Redis unreachable:
+        the write is saved all the same; reads cached before it may be served
+        until their TTL (`cache_ttl_s`), hence an error, not a warning."""
+        try:
+            self._redis.incr(f"cache:{self._namespace}:v")
+        except RedisError:
+            logger.exception(
+                "cache %s not invalidated: stale reads until their TTL",
+                self._namespace,
+            )
 
 
 def _cache_key_args(args: tuple, kwargs: dict) -> tuple:

@@ -2,6 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% block content %}
 {{ ui.page_header("Download") }}
+{% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
 <div class="generate-form-col">
@@ -101,5 +102,6 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
 <template id="card-send-to">{% import "components/ui.html" as ui %}<div class="send-to">{% call ui.segmented("Clone this download") %}{{ ui.button("Clone", icon="sparkles", hook="send-to-clone") }}{{ ui.button("Clone long", icon="film", hook="send-to-long") }}{% endcall %}</div></template>
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
 <script src="{{ static_url('js/download.js') }}"></script>
 {% endblock %}

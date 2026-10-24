@@ -102,8 +102,11 @@
         const submitBtn = form.querySelector('button[type="submit"]');
         const empty = document.getElementById("clone-empty");
         let uploading = false;
+        // Not while cards are only hidden ("Show hidden" says so).
         const showEmpty = () => {
-            empty.hidden = gallery.querySelector(".result-item") !== null;
+            empty.hidden =
+                gallery.querySelector(".result-item") !== null ||
+                document.querySelector(".ph-toolbar:not([hidden]) .hidden-toggle") !== null;
         };
 
         window.addEventListener("beforeunload", (e) => {
@@ -286,7 +289,10 @@
         card.querySelector(".result-actions")?.before(states);
         const item = document.getElementById("card-drive-item");
         const list = card.querySelector(".menu-list");
-        if (item && list) list.append(item.content.firstElementChild.cloneNode(true));
+        if (!item || !list) return;
+        // Before Hide/Unhide, as on a reloaded card.
+        const node = item.content.firstElementChild.cloneNode(true);
+        list.insertBefore(node, list.querySelector(".hide-btn"));
     }
 
     // --- the Drive picker ------------------------------------------------------

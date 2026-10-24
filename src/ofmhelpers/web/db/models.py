@@ -152,6 +152,9 @@ class JobRow(Base):
     # result/preview are free-form per task type -- see module docstring.
     result: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     preview: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # When its owner hid its card from the galleries; NULL = shown. A view
+    # choice only: the job and its files stay.
+    hidden_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
         # Every read (list_jobs, pruning) sorts/filters by created_at.
