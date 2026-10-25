@@ -1,0 +1,5 @@
+{# One /clone-links gallery card: the shared card, plus its result's
+   review below it (_clone_from_link.html): the link it was made from, the
+   verdict, where it went in Drive and why. #}
+{% extends "_gallery_card.html" %}
+{% block below %}{% if job.status == "done" %}{% include "_clone_from_link.html" %}{% endif %}{% endblock %}

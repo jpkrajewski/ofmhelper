@@ -4,7 +4,6 @@ in the dev .env, shared with OFM_GDRIVE_SERVICE_ACCOUNT; the app itself
 never uses either),
 inside a fresh "contract-<id>" folder per test; nothing is deleted."""
 
-import contextlib
 import secrets
 import uuid
 from collections.abc import Iterator
@@ -12,7 +11,7 @@ from collections.abc import Iterator
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.gdrive import DriveApi, FolderGoneError, connect
+from ofmhelpers.gdrive import DriveApi, DriveError, FolderGoneError, connect
 from ofmhelpers.gdrive.fake import FakeDrive
 
 FAKE_ROOT = "contract-root"
@@ -121,8 +120,19 @@ def test_listing_a_missing_folder_shows_nothing(drive, parent):
     same every time (probed 2026-10-24). Gone is told by `folder()`, which
     /drive asks before listing; a listing only never shows anything."""
     listed: list = []
-    with contextlib.suppress(FolderGoneError):
-        listed = drive.children(_missing_id())
+    for _ in range(5):
+        try:
+            listed = drive.children(_missing_id())
+            break
+        except FolderGoneError:
+            break
+        except DriveError as exc:
+            # Drive calls some made-up ids malformed (400, `_missing_id`):
+            # not a missing folder, so another id is drawn.
+            if "HttpError 400" not in str(exc):
+                raise
+    else:
+        pytest.fail("Drive called 5 made-up ids malformed in a row")
     assert listed == []
 
 

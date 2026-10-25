@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ofmhelpers.gdrive.models import DriveFile, DriveFolder
+    from ofmhelpers.gdrive.models import DriveFile, DriveFolder, DriveStorage
 
 
 class DriveError(Exception):
@@ -18,6 +18,24 @@ class DriveError(Exception):
 
 class FolderGoneError(DriveError):
     """Missing, trashed, not a folder, or not shared with the account."""
+
+
+RECONNECT = "Reconnect Google Drive on your Account page"
+
+
+class DriveAuthError(DriveError):
+    """Google refused the person's sign-in: the grant was revoked or
+    expired, or Drive was not ticked on Google's consent screen. Only
+    connecting Google Drive again on /account fixes it. The message is safe
+    to show; Google's own text stays on the chained cause and in the log."""
+
+    def __init__(self, message: str = RECONNECT) -> None:
+        super().__init__(message)
+
+
+class DriveFullError(DriveError):
+    """The person's Drive has no room left for the upload (Drive's
+    `storageQuotaExceeded`)."""
 
 
 class DriveApi(Protocol):
@@ -48,3 +66,5 @@ class DriveApi(Protocol):
     def grant(self, item_id: str, email: str) -> None: ...
 
     def trash_file(self, item_id: str) -> None: ...
+
+    def storage(self) -> DriveStorage: ...

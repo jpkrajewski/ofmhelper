@@ -614,3 +614,90 @@ class LinkSyncRow(Base):
     claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
+class CloneAiCheckRow(Base):
+    """One AI check (`ofmhelpers.clone_ai_check`, web/clone_ai_checks.py): is a
+    generated video too glitchy to post? The verdict (GOOD/GLITCHY, None when
+    the check itself failed -- `error`), how sure the model was, every glitch
+    it saw, its reasoning, and what a debugger needs: the prompt, the raw
+    answer, who answered, the stills' times (enough to draw the contact
+    sheet again), attempts and timings. `job_id`/`file_index`: the result it
+    checked, when it was one; `user_id`: whose."""
+
+    __tablename__ = "clone_ai_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    file_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    video: Mapped[str] = mapped_column(Text, nullable=False)
+    video_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stills_at: Mapped[list[float]] = mapped_column(JSONB, nullable=False)
+    frame_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    verdict: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    glitch_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    glitches: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_system: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    sheet_s: Mapped[float] = mapped_column(Float, nullable=False)
+    llm_s: Mapped[float] = mapped_column(Float, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # quota / setup / failed (`CloneAiCheck.error_kind`); the provider's own
+    # text, kept for debugging and never shown.
+    error_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    thinking_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class CloneFromLinkRow(Base):
+    """A /clone-links result on its way to Drive (web/clone_links/review.py):
+    checked for glitches (`check_id`: its `clone_ai_checks` row), then uploaded
+    as its owner's Google account into their root's GOOD REELS or TRIAL
+    REELS (`folder_name`). `status`: checking, uploading, done
+    (`drive_file_id`, `drive_url`) or failed (`error`). One per result
+    file. `path`: the result's local file (a cut-off review is queued again
+    from it); `started_at`: when a worker claimed it (None: still queued);
+    `attempts`: how many times it was started. Deleted with its job."""
+
+    __tablename__ = "clone_from_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    file_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    check_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clone_ai_checks.id", ondelete="SET NULL"), nullable=True
+    )
+    folder_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    drive_file_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    drive_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    started_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    finished_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("job_id", "file_index", name="uq_clone_from_links_file"),
+    )

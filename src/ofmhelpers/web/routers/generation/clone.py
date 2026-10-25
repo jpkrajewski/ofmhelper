@@ -21,8 +21,12 @@ up front instead of after some runs were already paid for.
 Each generated video is then exported as the job's `export`
 (`ofmhelpers.exports`: original, CapCut, or a phone's camera recording;
 default `settings.exports.default`); the exported copy becomes the result
-and the provider's hosted original is dropped from it. A failed export
-keeps the generated video.
+and the provider's hosted original is dropped from it. The provider's raw
+file is never the result: an export is tried `settings.exports.attempts`
+times, and when every try fails the run fails ("Export failed", user rule
+2026-10-25) keeping its paid request, so recovery runs it again -- the same
+request resumed, never paid twice -- up to `settings.exports.reruns` runs
+(`EXPORT_FAILURES` on the job counts them).
 
 A finished run's video can be uploaded into one or more Instagram accounts'
 Drive folders, picked in the card's Drive dialog (`/clone/drive-upload`,
@@ -81,6 +85,7 @@ from ofmhelpers.web.stores.jobs import (
     create_job,
     get_job,
     list_jobs_page,
+    merge_params,
     run_job,
 )
 from ofmhelpers.web.stores.users import refresh_token
@@ -99,6 +104,21 @@ DEFAULT_PROMPT = settings.web.clone_default_prompt
 # Offered in the form; each provider gets them in its own spelling.
 RESOLUTIONS = ("480P", "720P", "1080P")
 DEFAULT_RESOLUTION = "720P"
+
+# A job param: how many of its runs' exports failed every try.
+EXPORT_FAILURES = "export_failures"
+
+
+class ExportFailedError(RuntimeError):
+    """Every try of a run's export failed: the run fails with this, never
+    with the provider's raw file as its result. `keep_request`: its paid
+    request stays remembered (`stores.jobs.resumable`), so recovery's re-run
+    exports again without paying -- until `settings.exports.reruns` runs
+    failed so."""
+
+    def __init__(self, export: str) -> None:
+        super().__init__(f"Export failed ({export}): run it again")
+        self.keep_request = True
 
 
 class CloneTarget(BaseModel):
@@ -218,10 +238,12 @@ def _run_clone(
     **page_keys: Any,
 ) -> list[ResultFile]:
     """One clone run. `page_keys` (`model`; older jobs also `clone_batch`,
-    `clone_index`) are stored on the job for the page only. `capcut` is the choice of jobs
-    from before `export` (re-run by recovery)."""
+    `clone_index`) are stored on the job for the page only, but for
+    `EXPORT_FAILURES` (earlier runs whose export failed). `capcut` is the
+    choice of jobs from before `export` (re-run by recovery)."""
+    failures = int(page_keys.get(EXPORT_FAILURES) or 0)
     del page_keys
-    export = export or ("capcut" if capcut else "original")
+    export = export_choice(export, capcut)
     target = CLONE_TARGETS[provider]
     values = _clone_values(
         target,
@@ -235,8 +257,49 @@ def _run_clone(
     results = run_ai(
         job_id, api_key, assets_root, provider=provider, model=target.model, **values
     )
-    options = ExportOptions(mirror=mirror)
-    return [_exported(r, export, options, Path(assets_root)) for r in results]
+    return export_results(
+        job_id,
+        results,
+        export,
+        ExportOptions(mirror=mirror),
+        Path(assets_root),
+        failures=failures,
+    )
+
+
+def export_choice(export: str | None, capcut: bool = False) -> str:
+    """The export a job asked for; jobs from before `export` stored only
+    the `capcut` bool."""
+    return export or ("capcut" if capcut else "original")
+
+
+def export_results(
+    job_id: str,
+    results: list[ResultFile],
+    export: str,
+    options: ExportOptions,
+    assets_root: Path,
+    *,
+    failures: int,
+) -> list[ResultFile]:
+    """Every result exported (`_exported`). An export that failed every try
+    is counted on the job (`failures`: earlier runs'), its paid request kept
+    for recovery's re-run while fewer than `settings.exports.reruns` runs
+    failed so; then raised."""
+    try:
+        return [_exported(r, export, options, assets_root) for r in results]
+    except ExportFailedError as exc:
+        failures += 1
+        merge_params(job_id, {EXPORT_FAILURES: failures})
+        exc.keep_request = failures < settings.exports.reruns
+        logger.exception(
+            "job %s: %s export failed (run %d of %d)",
+            job_id,
+            export,
+            failures,
+            settings.exports.reruns,
+        )
+        raise
 
 
 def _exported(
@@ -244,23 +307,34 @@ def _exported(
 ) -> ResultFile:
     """`result` exported as `export` with `options`, next to the original and registered
     as a reusable asset like it. A remote-only result (the local download
-    failed) has nothing to export and is kept as it is, and so is the
-    original when the export fails: the generation was paid for and is
-    already on disk, so a post-processing error must not lose it."""
+    failed) has nothing to export and is kept as it is. The export is tried
+    `settings.exports.attempts` times; every try failing raises
+    `ExportFailedError` -- the provider's raw file is never the result."""
     if result.path is None:
         return result
     src = Path(result.path)
-    try:
-        dst = get_export(export).render(src, options)
-    except (
-        OSError,
-        RuntimeError,
-        ValueError,
-        ZoneInfoNotFoundError,
-        subprocess.SubprocessError,
-    ):
-        logger.warning("%s export failed, keeping %s", export, src, exc_info=True)
-        return result
+    tries = settings.exports.attempts
+    for attempt in range(1, tries + 1):
+        try:
+            dst = get_export(export).render(src, options)
+            break
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            ZoneInfoNotFoundError,
+            subprocess.SubprocessError,
+        ):
+            logger.warning(
+                "%s export of %s failed (try %d of %d)",
+                export,
+                src.name,
+                attempt,
+                tries,
+                exc_info=True,
+            )
+    else:
+        raise ExportFailedError(export)
     if dst == src:
         return result
     register_generated_asset(dst, assets_root)
@@ -332,7 +406,7 @@ def _drive_context(request: Request) -> dict[str, Any]:
 def _export_label(params: dict[str, Any]) -> str:
     """What the run was exported as (Original, CapCut, a phone), by its
     label; runs from before `export` stored only the `capcut` bool."""
-    name = params.get("export") or ("capcut" if params.get("capcut") else "original")
+    name = export_choice(params.get("export"), bool(params.get("capcut")))
     choice = exports().get(name)
     return choice.label if choice else name
 

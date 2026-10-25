@@ -75,6 +75,11 @@
                 });
         }
 
+        // A page asks for a poll now (clone-links.js after a send whose
+        // answer was lost: the runs may be queued already).
+        container.addEventListener("live-gallery:refresh", () => {
+            if (!document.hidden) tick();
+        });
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 clearTimeout(timer);

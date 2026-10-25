@@ -1,14 +1,26 @@
 """ofmhelpers.gdrive: the real googleapiclient over a scripted transport --
 queries quoted, a hand-made folder reused, a missing or trashed folder a
-`FolderGoneError`, failures a `DriveError`, previews at the asked size."""
+`FolderGoneError`, a full Drive a `DriveFullError`, Google refusing the
+sign-in a `DriveAuthError` with a message a page may show, other failures a
+`DriveError`, previews at the asked size."""
 
 import json
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from google.auth.exceptions import RefreshError
+from google.oauth2.credentials import Credentials as UserCredentials
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.http import HttpMockSequence
 
-from ofmhelpers.gdrive import Drive, DriveError, FolderGoneError
+from ofmhelpers.gdrive import (
+    RECONNECT,
+    Drive,
+    DriveAuthError,
+    DriveError,
+    DriveFullError,
+    FolderGoneError,
+)
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile
 
@@ -105,7 +117,96 @@ def test_refusal_is_a_drive_error_not_http_error(monkeypatch):
     drive, _ = _drive(({"status": "403"}, {"error": {"code": 403, "message": "no"}}))
     with pytest.raises(DriveError) as caught:
         drive.create_folder("root", "x")
-    assert not isinstance(caught.value, FolderGoneError)
+    assert type(caught.value) is DriveError
+
+
+def _refused(reason: str, message: str) -> tuple[dict, dict]:
+    """Drive's 403 body, as files.create answers it."""
+    return (
+        {"status": "403"},
+        {
+            "error": {
+                "code": 403,
+                "message": message,
+                "errors": [{"domain": "global", "reason": reason, "message": message}],
+            }
+        },
+    )
+
+
+def test_a_full_drive_is_a_drive_full_error(monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
+    drive, _ = _drive(
+        _refused(
+            "storageQuotaExceeded", "The user's Drive storage quota has been exceeded."
+        )
+    )
+    with pytest.raises(DriveFullError, match="storage quota"):
+        drive.create_folder("root", "x")
+
+
+def _person(*responses: tuple[dict, object]) -> Drive:
+    """A Drive as a person whose access token is minted from their refresh
+    token at the first call, through the scripted transport (the token
+    endpoint answers first)."""
+    credentials = UserCredentials(
+        token=None,
+        refresh_token="1//refresh",
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id="client",
+        client_secret="secret",
+    )
+    http = HttpMockSequence([(r, json.dumps(b)) for r, b in responses])
+    return Drive(credentials, http=AuthorizedHttp(credentials, http=http))
+
+
+def test_a_revoked_grant_is_a_drive_auth_error_with_a_safe_message(monkeypatch):
+    """Google answers a revoked or expired refresh token with invalid_grant;
+    its tuple repr reached every /clone-links card (review 2026-10-25)."""
+    monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
+    drive = _person(
+        (
+            {"status": "400"},
+            {
+                "error": "invalid_grant",
+                "error_description": "Token has been expired or revoked.",
+            },
+        )
+    )
+    with pytest.raises(DriveAuthError) as caught:
+        drive.folder("1AbCdEf")
+    assert str(caught.value) == RECONNECT
+    assert isinstance(caught.value.__cause__, RefreshError)
+    assert "invalid_grant" in str(caught.value.__cause__)
+
+
+def test_an_access_token_refused_is_a_drive_auth_error(monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
+    drive, _ = _drive(
+        ({"status": "401"}, {"error": {"code": 401, "message": "Invalid Credentials"}})
+    )
+    with pytest.raises(DriveAuthError, match=RECONNECT):
+        drive.folder("1AbCdEf")
+
+
+def test_drive_unticked_on_the_consent_screen_is_a_drive_auth_error(monkeypatch):
+    monkeypatch.setenv("OFM_GDRIVE_RETRIES", "0")
+    drive, _ = _drive(
+        _refused(
+            "insufficientPermissions", "Request had insufficient authentication scopes."
+        )
+    )
+    with pytest.raises(DriveAuthError):
+        drive.create_folder("root", "x")
+
+
+def test_googles_token_endpoint_down_is_no_auth_error():
+    """A retryable refresh failure is Google's outage, not the grant:
+    reconnecting would not help."""
+    failure = drive_client._failure(
+        RefreshError("server_error: try later", retryable=True), "Folder 1"
+    )
+    assert type(failure) is DriveError
 
 
 def test_create_folder_puts_it_in_the_parent():

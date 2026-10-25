@@ -13,7 +13,9 @@ from pathlib import Path
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
 
 
-VIDEO_EXTS = {".mp4", ".mov", ".webm", ".mkv"}
+# Every video downloaders/generic.VIDEO_EXTENSIONS keeps must be one here, or
+# /clone-links calls that download "No video at this link" (review #28: .m4v).
+VIDEO_EXTS = {".mp4", ".mov", ".webm", ".mkv", ".m4v"}
 
 
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg"}

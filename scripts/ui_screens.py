@@ -42,6 +42,7 @@ PAGES = [
     Shot(name="generate", path="/generate"),
     Shot(name="clone", path="/clone"),
     Shot(name="clone-long", path="/clone-long"),
+    Shot(name="clone-links", path="/clone-links"),
     Shot(name="reels", path="/reels"),
     Shot(name="download", path="/download-assets"),
     Shot(name="accounts", path="/accounts"),

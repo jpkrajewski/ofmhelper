@@ -16,6 +16,7 @@ from ofmhelpers.config.settings import (
     DownloadersSettings,
     InfraSettings,
     KieAISettings,
+    LLMSettings,
     SessionSettings,
     WebSettings,
 )
@@ -37,6 +38,9 @@ ALL_ENV_VARS = [
     "OFM_REDIS_URL",
     "OFM_RQ_JOB_TIMEOUT_S",
     "OFM_RQ_ASYNC",
+    "OFM_RQ_WORKERS",
+    "OFM_CLONE_LINKS_WORKERS",
+    "OFM_PREVIEW_WORKERS",
     "OFM_KIEAI_OUT_DIR",
     "OFM_KIEAI_TASK_LOG",
     "OFM_KIEAI_COMPLETIONS_LOG",
@@ -117,9 +121,23 @@ def test_web_settings_defaults_match_pre_refactor_values(clean_env):
     s = WebSettings(_env_file=None)
     assert s.app_password_admin is None
     assert s.kie_ai_api_key_admin is None
-    assert s.max_jobs == 500
+    # Was 500: prod was full in 9 days, and one 120-link /clone-links
+    # Generate deleted 120 of everyone's oldest cards (review #3).
+    assert s.max_jobs == 5000
     assert s.recovery_sweep_interval_s == 300
     assert s.gallery_limit == 20
+
+
+def test_each_worker_pool_has_its_own_size(clean_env, monkeypatch):
+    """The default queue, /clone-links' own queue and the previews queue are
+    separate pools (compose worker / clone-links-worker / preview-worker)."""
+    s = InfraSettings(_env_file=None)
+    assert (s.rq_workers, s.clone_links_workers, s.preview_workers) == (10, 5, 1)
+    monkeypatch.setenv("OFM_CLONE_LINKS_WORKERS", "3")
+    assert InfraSettings(_env_file=None).clone_links_workers == 3
+    monkeypatch.setenv("OFM_CLONE_LINKS_WORKERS", "0")
+    with pytest.raises(ValidationError):
+        InfraSettings(_env_file=None)
 
 
 def test_infra_settings_defaults_point_at_compose_service_names(clean_env):
@@ -304,3 +322,15 @@ def test_fake_externals_are_fine_anywhere_else(monkeypatch, environment, fakes):
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", fakes)
     s = InfraSettings(_env_file=None)
     assert (s.environment, s.fake_externals) == (environment, fakes == "1")
+
+
+def test_gemini_api_key_holds_several_keys_in_order_each_once(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", " a1 ,b2,\na1,, c3 ")
+
+    assert LLMSettings(_env_file=None).gemini_keys == ["a1", "b2", "c3"]
+
+
+def test_no_gemini_key_is_no_keys(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    assert LLMSettings(_env_file=None).gemini_keys == []

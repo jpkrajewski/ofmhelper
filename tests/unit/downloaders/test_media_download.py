@@ -248,3 +248,140 @@ def test_a_real_video_passes_the_check(monkeypatch, tmp_path):
     )
     assert media.download("https://example.com/v").output_paths == [video]
     assert video.exists()
+
+
+# --- one post only (/clone-links, review #12) --------------------------------
+
+
+@pytest.fixture
+def configs(monkeypatch) -> dict[str, object]:
+    """The config each tool got; both fail, so both run."""
+    seen: dict[str, object] = {}
+
+    def keep(name: str):
+        def run(url: str, config=None, cookiefile=None) -> DownloadResult:
+            seen[name] = config
+            return DownloadResult(url=url, success=False, error=f"{name} refused")
+
+        return run
+
+    monkeypatch.setattr(generic, "download", keep("video"))
+    monkeypatch.setattr(images, "download", keep("images"))
+    return seen
+
+
+def test_a_single_download_asks_both_tools_for_the_linked_post_only(
+    configs, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
+
+    with media.downloaded("https://www.instagram.com/p/abc/", single=True):
+        pass
+
+    video, pictures = configs["video"], configs["images"]
+    assert isinstance(video, generic.DownloadConfig)
+    opts = video.ydl_opts().to_ydl()
+    assert opts["noplaylist"] is True
+    assert opts["playlist_items"] == "1:10"
+    assert opts["allowed_extractors"] == ["default", "-generic"]
+    assert isinstance(pictures, images.ImageDownloadConfig)
+    cmd = pictures.gallery_dl_cmd("https://www.instagram.com/p/abc/")
+    assert cmd[cmd.index("--range") + 1] == "1-10"
+
+
+def test_the_download_tool_keeps_playlists_and_every_extractor(configs):
+    media.download("https://www.instagram.com/p/abc/")
+
+    video, pictures = configs["video"], configs["images"]
+    assert isinstance(video, generic.DownloadConfig)
+    opts = video.ydl_opts().to_ydl()
+    assert opts["noplaylist"] is False
+    assert "playlist_items" not in opts
+    assert "allowed_extractors" not in opts
+    assert isinstance(pictures, images.ImageDownloadConfig)
+    assert "--range" not in pictures.gallery_dl_cmd("https://www.instagram.com/p/abc/")
+
+
+# --- downloaded(): the URL's directory is gone after the block (review #45) --
+
+
+def _writes(name: str, *, ok: bool):
+    """A tool that writes into its directory (a partial file when it
+    fails) and reports it."""
+
+    def run(url: str, config=None, cookiefile=None) -> DownloadResult:
+        out = config.output_dir
+        out.mkdir(parents=True, exist_ok=True)
+        path = out / (f"{name}.jpg" if ok else f"{name}.mp4.part")
+        path.write_bytes(b"x")
+        if ok:
+            return DownloadResult(url=url, success=True, output_paths=[path])
+        return DownloadResult(url=url, success=False, error=f"{name} refused")
+
+    return run
+
+
+def test_downloaded_files_exist_in_the_block_and_their_folder_goes_after(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(images, "download", _writes("images", ok=True))
+
+    with media.downloaded("https://www.instagram.com/p/abc/") as result:
+        assert result.success
+        (path,) = result.output_paths
+        assert path.read_bytes() == b"x"
+        assert path.parent.parent == tmp_path
+
+    assert not path.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_failed_download_leaves_no_folder_or_partial_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(generic, "download", _writes("video", ok=False))
+    monkeypatch.setattr(images, "download", _writes("images", ok=False))
+
+    with media.downloaded("https://www.tiktok.com/@a/video/1", single=True) as result:
+        assert not result.success
+        (folder,) = tmp_path.iterdir()
+        assert sorted(p.name for p in folder.iterdir()) == [
+            "images.mp4.part",
+            "video.mp4.part",
+        ]
+
+    assert list(tmp_path.iterdir()) == []
+
+
+class _StoreFullError(RuntimeError):
+    """The caller's own work inside the block failed."""
+
+
+def _keep_then_fail(url: str) -> None:
+    with media.downloaded(url) as result:
+        assert result.output_paths[0].exists()
+        raise _StoreFullError
+
+
+def test_the_folder_goes_when_the_block_raises(monkeypatch, tmp_path):
+    monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(images, "download", _writes("images", ok=True))
+
+    with pytest.raises(_StoreFullError):
+        _keep_then_fail("https://www.instagram.com/p/abc/")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_each_downloaded_url_gets_its_own_folder(monkeypatch, tmp_path):
+    monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(images, "download", _writes("images", ok=True))
+
+    with (
+        media.downloaded("https://www.instagram.com/p/a/") as first,
+        media.downloaded("https://www.instagram.com/p/b/") as second,
+    ):
+        assert first.output_paths[0].parent != second.output_paths[0].parent
+        assert len(list(tmp_path.iterdir())) == 2
+
+    assert list(tmp_path.iterdir()) == []

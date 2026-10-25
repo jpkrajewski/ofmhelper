@@ -5,7 +5,8 @@ SDK runs unchanged over an `httpx.MockTransport` answering its endpoints
 (`POST /<model id>`) and `/requests/<id>/status`.
 
 Only `FAKE_KEY` is accepted; any other key gets 401 (the app shows
-"Higgsfield: wrong API key"). A request is "queued" for `polls_until_done`
+"Higgsfield: wrong API key"). A submit with an `Idempotency-Key` already
+seen answers with that key's request, as Higgsfield does. A request is "queued" for `polls_until_done`
 status reads, then "completed" with one output on the fake result host
 (also served to `requests`: the provider's `_live` check and the download).
 """
@@ -40,6 +41,8 @@ class FakeHiggsfield:
         self.polls_until_done = polls_until_done
         self.requests: dict[str, dict] = {}
         self.submitted: list[str] = []
+        # Idempotency-Key -> its request: a resent submit gets the same one.
+        self.keys: dict[str, str] = {}
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
 
@@ -64,10 +67,15 @@ class FakeHiggsfield:
             return self._status(path.split("/")[2])
         if request.method == "POST":
             model = path.lstrip("/")
+            key = request.headers.get("Idempotency-Key")
             with self._lock:
-                request_id = f"fake-hf-{next(self._ids):06d}"
-                self.requests[request_id] = {"model": model, "polls": 0}
-                self.submitted.append(request_id)
+                request_id = self.keys.get(key) if key else None
+                if request_id is None:
+                    request_id = f"fake-hf-{next(self._ids):06d}"
+                    self.requests[request_id] = {"model": model, "polls": 0}
+                    self.submitted.append(request_id)
+                if key:
+                    self.keys[key] = request_id
             return httpx.Response(
                 200,
                 json={

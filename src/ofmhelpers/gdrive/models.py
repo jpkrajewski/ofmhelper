@@ -24,6 +24,18 @@ class DriveFolder(BaseModel):
         return folder_url(self.id)
 
 
+class DriveStorage(BaseModel):
+    """A person's Drive space (`about.storageQuota`): bytes used of
+    `limit`; None = no limit (a Workspace pool)."""
+
+    usage: int
+    limit: int | None = None
+
+    @property
+    def free(self) -> int | None:
+        return None if self.limit is None else max(self.limit - self.usage, 0)
+
+
 class DriveFile(BaseModel):
     """One item in a folder (`Drive.children`), fields named the way
     Drive's `files` resource names them."""

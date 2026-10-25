@@ -13,9 +13,18 @@ it works on Windows too) and returns once the queue is drained.
 
 import pytest
 import worker_tasks
-from rq import SimpleWorker
+from rq import SimpleWorker, Worker
 
-from ofmhelpers.cache import enqueue, get_queue, get_redis
+from ofmhelpers.cache import (
+    CLONE_LINKS_QUEUE,
+    QUEUE_NAME,
+    active_job_ids,
+    enqueue,
+    enqueue_to,
+    get_queue,
+    get_redis,
+)
+from ofmhelpers.web import recovery
 from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
@@ -70,3 +79,59 @@ def test_worker_log_description_never_carries_the_job_arguments():
     assert rq_job.description == "ofmhelpers.web.stores.jobs.run_job"
     _drain_queue()
     assert get_job(job_id).status == "done"
+
+
+# --- what recovery sees as live (cache.queue.active_job_ids) -----------------
+
+
+def _queue_run(queue: str) -> tuple[str, str]:
+    """A job queued on `queue` the way a router does: (app id, rq id)."""
+    job_id = create_job("clone_links", {})
+    rq_job = enqueue_to(
+        queue, run_job, job_id, worker_tasks.make_result, {"name": "out.mp4"}
+    )
+    return job_id, rq_job.id
+
+
+def test_a_clone_links_run_waits_and_runs_on_its_own_queue():
+    job_id, _ = _queue_run(CLONE_LINKS_QUEUE)
+
+    assert get_queue().get_job_ids() == []
+    assert active_job_ids() == {job_id}
+
+    SimpleWorker([get_queue(CLONE_LINKS_QUEUE)], connection=get_redis()).work(
+        burst=True
+    )
+    assert get_job(job_id).status == "done"
+
+
+def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
+    """Review #57: rq's dequeue BLMOVEs the job into `<queue>:intermediate`
+    and only the work horse sets `current_job` later. In between it is in
+    neither the queue nor a worker, and a sweep failed it as cut off."""
+    monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
+    default_id, _ = _queue_run(QUEUE_NAME)
+    links_id, _ = _queue_run(CLONE_LINKS_QUEUE)
+    for name in (QUEUE_NAME, CLONE_LINKS_QUEUE):
+        queue = get_queue(name)
+        get_redis().lmove(queue.key, queue.intermediate_queue_key)  # the dequeue
+        assert queue.get_job_ids() == []
+
+    assert active_job_ids() == {default_id, links_id}
+    assert recovery.fail_cut_off(active_job_ids(), set()) == {}
+    assert get_job(default_id).status == "running"
+    assert get_job(links_id).status == "running"
+
+
+def test_a_job_a_live_worker_runs_counts():
+    job_id, rq_id = _queue_run(CLONE_LINKS_QUEUE)
+    queue = get_queue(CLONE_LINKS_QUEUE)
+    get_redis().lrem(queue.key, 1, rq_id)  # taken off every list
+    worker = Worker([queue], connection=get_redis())
+    worker.register_birth()
+    worker.set_current_job_id(rq_id)
+
+    assert active_job_ids() == {job_id}
+
+    worker.register_death()
+    assert active_job_ids() == set()

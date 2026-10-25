@@ -16,17 +16,20 @@ written once, in `runner.py`.
 import importlib
 import inspect
 import pkgutil
-import threading
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Literal
 
 import requests
 from pydantic import BaseModel
+from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.spec import ModelSpec, Payload
+from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
@@ -147,11 +150,33 @@ def get_provider(name: str, api_key: str) -> Provider:
     return provider_class(name)(api_key)
 
 
-@lru_cache(maxsize=1024)
-def upload_lock(cache_key: str) -> threading.Lock:  # noqa: ARG001 -- the cache key
-    """One lock per uploaded file (its upload-cache key): requests that start
-    together -- a long /clone-long video's pieces, all with the same subject
-    image -- upload it once, the others wait and take the cached URL
-    (2026-10-23: the image went up three times, ~15 s each). In-process only;
-    a different worker uploads its own copy at worst."""
-    return threading.Lock()
+@contextmanager
+def upload_lock(cache_key: str) -> Iterator[None]:
+    """One upload per file (its upload-cache key) across every worker
+    process: requests that start together -- /clone-long's pieces, a
+    /clone-links batch, all with the same subject image -- upload it once,
+    the others wait here and take the cached URL. A Redis lock: the worker is
+    a pool of processes, and the old in-process lock let two /clone-links
+    runs upload one image twice (dev 2026-10-25). Redis down or the wait
+    over `OFM_UPLOAD_LOCK_S`: no lock, the file is uploaded again at worst.
+    `cache_key` is logged: it must never carry an API key (hash it)."""
+    wait_s = settings.aigen.upload_lock_s
+    lock = None
+    try:
+        lock = get_redis().lock(
+            f"lock:{cache_key}", timeout=wait_s, blocking_timeout=wait_s
+        )
+        held = bool(lock.acquire())
+    except RedisError:
+        logger.warning("upload lock unavailable for %s", cache_key, exc_info=True)
+        held = False
+    try:
+        yield
+    finally:
+        if held and lock is not None:
+            try:
+                lock.release()
+            except (RedisError, LockError):
+                # Expired mid-upload (longer than OFM_UPLOAD_LOCK_S) or
+                # Redis lost it: the upload itself went through.
+                logger.warning("upload lock for %s not released", cache_key)

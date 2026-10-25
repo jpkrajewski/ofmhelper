@@ -1198,35 +1198,57 @@ a.ph-login-user:hover { text-decoration: underline; }
 .dr-card.dr-picked:hover { border-color: var(--border); box-shadow: none; }
 .dr-card.dr-picked .dr-account::after { content: " · Already there"; color: var(--text-faint); }
 .dr-followers { color: var(--text-muted); font-weight: 400; }
-/* "Start posting content" (base.html, web/posting.py): a pop-up at the
-   top right while the daily posting window is open. */
-.notice.posting-banner {
-    position: fixed;
-    top: calc(var(--header-h) + var(--s-3));
+/* Pop-ups just under the header, top right (base.html .page-alerts, inside
+   the sticky header so they sit under it at any height: it wraps to two
+   lines on narrower desktops and a fixed offset hid them, 2026-10-25),
+   stacked: "Start posting content" while the daily posting window is open
+   (web/posting.py), "Google Drive is full" (web/drive_space.py) in the
+   fail colours. */
+.page-alerts {
+    position: absolute;
+    top: calc(100% + var(--s-3));
     right: var(--s-4);
     z-index: 30;
-    align-items: center;
+    display: grid;
+    justify-items: end;
     gap: var(--s-3);
     max-width: calc(100vw - 2 * var(--s-4));
+}
+.page-alerts > .notice {
+    align-items: center;
+    gap: var(--s-3);
     margin: 0;
     padding: var(--s-3) var(--s-3) var(--s-3) var(--s-5);
-    border-color: var(--accent);
     border-radius: var(--radius-card);
-    background: var(--accent);
-    color: var(--accent-ink);
     font-size: var(--step-0);
     font-weight: 700;
     box-shadow: var(--shadow-lg);
     animation: posting-pop var(--dur-slow) var(--ease);
 }
-.notice.posting-banner .icon-btn { border-color: transparent; background: transparent; color: var(--accent-ink); }
-.notice.posting-banner .icon-btn:hover { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
+/* One look for every pop-up: a solid fill, ink text (Start posting's);
+   the Drive one in red. */
+.page-alerts > .notice {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+.page-alerts > .notice-fail {
+    border-color: var(--fail);
+    background: var(--fail);
+}
+/* A phone: the full width, the buttons wrapping under the text. */
+@media (max-width: 600px) {
+    .page-alerts { left: var(--s-4); justify-items: stretch; }
+    .page-alerts > .notice { flex-wrap: wrap; }
+}
+.page-alerts > .notice .icon-btn { border-color: transparent; background: transparent; color: var(--accent-ink); }
+.page-alerts > .notice .icon-btn:hover { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
 @keyframes posting-pop {
     from { opacity: 0; transform: translateY(-12px) scale(0.96); }
     to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .notice.posting-banner { animation: none; }
+    .page-alerts > .notice { animation: none; }
 }
 .drive-states { margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--step--1); }
 .drive-states li[data-status="failed"] { color: var(--fail); }
@@ -1260,3 +1282,105 @@ a.ph-login-user:hover { text-decoration: underline; }
 .sg-ink { background: var(--ink); }
 .sg-red { background: var(--red); }
 .sg-results { grid-template-columns: repeat(auto-fill, minmax(220px, 260px)); }
+
+/* /clone-links: Generate's dialog is a grid of tiles, one per link -- the
+   reel's cover big enough to recognise, its length and price, Remove; one
+   that cannot run greyed with why in red -- and a card's review (the link,
+   verdict + where it went in Drive, "Why" folded). */
+.link-check-actions { margin-top: var(--s-2); }
+/* Generate's status line ("Queued N runs.") with its Stop at the end, a
+   little below the Generate button. */
+.clone-links-status { display: flex; align-items: baseline; gap: var(--gap-inline); }
+.clone-links-status > .generation-status { flex: 1; min-width: 0; }
+.clone-links-status > button { margin-top: var(--s-2); }
+/* As wide as up to six tiles (`--pick-cols`, set by clone-links.js from the
+   link count; min: room for the footer), the tiles' columns stretched to fill
+   the row exactly, room kept for the scrollbar. The list's padding is room
+   for a focused Remove's ring, taken back by its margin. Two a row on a
+   phone. */
+.pick-dialog {
+    --pick-tile: 150px;
+    width: min(
+        calc(var(--pick-cols, 6) * (var(--pick-tile) + var(--gap-grid)) - var(--gap-grid) + 2 * var(--pad-card) + var(--s-5)),
+        calc(100vw - 2 * var(--s-4))
+    );
+    min-width: min(480px, calc(100vw - 2 * var(--s-4)));
+    max-width: none;
+}
+.pick-lines {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(calc(50% - var(--gap-grid)), var(--pick-tile)), 1fr));
+    gap: var(--gap-grid);
+    max-height: min(62vh, 760px);
+    margin: 0 calc(-1 * var(--s-1)) var(--gap-stack);
+    padding: var(--s-1);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    list-style: none;
+}
+.pick-tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    padding: var(--s-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+}
+.pick-tile[data-problem] .pick-cover { opacity: 0.45; }
+.pick-tile[data-problem] .pick-cover img { filter: grayscale(1); }
+/* Remove sits at the tile's foot, tiles of a row the same height. */
+.pick-tile > :last-child { margin-top: auto; }
+.pick-cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 9 / 16;
+    border-radius: var(--radius-control);
+    background: var(--surface-3);
+    overflow: hidden;
+    transition: opacity var(--dur) var(--ease);
+}
+.pick-cover img { width: 100%; height: 100%; object-fit: cover; }
+.pick-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--gap-inline);
+    font-size: var(--step-0);
+    font-variant-numeric: tabular-nums;
+}
+.pick-price { font-weight: 700; }
+.pick-why { color: var(--fail); font-size: var(--step--1); font-weight: 600; }
+.refused-note { margin: 0 0 var(--gap-stack); color: var(--text-muted); }
+/* The total, big, over what it is for; Cancel and Generate on its right. */
+.pick-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-stack) var(--s-5);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--border);
+}
+.pick-total { display: grid; gap: var(--s-1); min-height: var(--control-h); align-content: center; }
+.pick-total strong { color: var(--text); font-size: var(--step-2); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.pick-total span { color: var(--text-muted); font-size: var(--step--1); }
+/* A /clone-links card's AI check: badge, /clone's Drive line, the "Why"
+   button and its panel -- at the card's foot right above Download, spaced
+   only by the card's own gap (it takes the actions' auto margin). */
+.ai-check { display: flex; flex-direction: column; align-items: flex-start; gap: var(--gap-inline); margin-top: auto; }
+.ai-check + .result-actions { margin-top: 0; }
+.ai-check p, .ai-check .drive-states { margin: 0; }
+/* The decision's text: an inset box (the card's own inset role, like its
+   media placeholder), easy to tell from the card around it. */
+.ai-check-why {
+    align-self: stretch;
+    padding: var(--pad-inset);
+    border-radius: var(--radius-control);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.ai-check-why > * { margin: 0; }
+.ai-check-why > * + * { margin-top: var(--gap-inline); }
+.ai-check-why ul { padding-left: var(--s-4); }

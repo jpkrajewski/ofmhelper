@@ -11,9 +11,11 @@ from ofmhelpers.aigenproviders.catalog import get_spec, models_for
 from ofmhelpers.aigenproviders.errors import (
     ProviderAuthError,
     ProviderInputError,
+    ProviderNoCreditsError,
+    ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.aigenproviders.kaiai.client import _session
+from ofmhelpers.aigenproviders.kaiai.client import KieAIClient, _session
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 
 
@@ -53,9 +55,10 @@ def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path):
     ("code", "error"),
     [
         (401, ProviderAuthError),
-        (402, ProviderInputError),
+        (402, ProviderNoCreditsError),
         (422, ProviderInputError),
-        (429, ProviderUnavailableError),
+        (429, ProviderRateLimitError),
+        # Maintenance: retryable, but no rate limit -- a submit is not resent.
         (455, ProviderUnavailableError),
         (500, ProviderUnavailableError),
     ],
@@ -66,7 +69,65 @@ def test_kies_in_body_code_maps_to_an_error_type(provider, code, error):
         with pytest.raises(error) as raised:
             provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
 
+    assert type(raised.value) is error
     assert "nope" in str(raised.value) + getattr(raised.value, "detail", "")
+
+
+def test_no_credits_keeps_the_text_the_card_reads(provider):
+    """The card's 'No credits' reason reads '(code 402)'; callers decide by
+    the type (a batch stops asking)."""
+    with kie_http() as http:
+        http.request.return_value = response({"code": 402, "msg": "Credits low"})
+        with pytest.raises(ProviderNoCreditsError, match=r"\(code 402\)") as raised:
+            provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
+
+    assert isinstance(raised.value, ProviderInputError)
+    assert not raised.value.retryable
+
+
+def test_an_http_429_carries_its_retry_after(provider):
+    answer = response({}, status_code=429)
+    answer.headers = {"Retry-After": "7"}
+    with kie_http() as http:
+        http.request.return_value = answer
+        with pytest.raises(ProviderRateLimitError) as raised:
+            provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
+
+    assert raised.value.retry_after_s == 7.0
+
+
+def test_an_in_body_429_has_no_retry_after(provider):
+    with kie_http() as http:
+        http.request.return_value = response({"code": 429, "msg": "slow down"})
+        with pytest.raises(ProviderRateLimitError) as raised:
+            provider.submit(get_spec("kie:wan/3-0-video"), {}, "job")
+
+    assert raised.value.retry_after_s is None
+
+
+def test_the_upload_cache_key_never_carries_the_api_key(tmp_path):
+    """It names a Redis key and a lock, and is logged when the lock fails."""
+    api_key = "sk-secret-kie-key-123"
+    client = KieAIClient(
+        api_key=api_key,
+        out_dir=tmp_path / "out",
+        task_log=tmp_path / "t.jsonl",
+        completions_log=tmp_path / "c.jsonl",
+    )
+    path = "/app/uploads/assets/users/7/ab__x.mp4"
+
+    key = client._upload_cache_key(path)
+
+    assert api_key not in key
+    assert key.startswith("kieai:upload:")
+    assert key.endswith(f":{path}")
+    other = KieAIClient(
+        api_key="another-key",
+        out_dir=tmp_path / "out",
+        task_log=tmp_path / "t.jsonl",
+        completions_log=tmp_path / "c.jsonl",
+    )
+    assert other._upload_cache_key(path) != key, "uploads are per account"
 
 
 def test_a_rejected_key_says_so_in_one_line(provider):
@@ -116,6 +177,42 @@ def test_status_fail_carries_kies_reason(provider):
         state = provider.status("t1")
 
     assert (state.state, state.error) == ("failed", "content flagged")
+
+
+def _not_json() -> object:
+    answer = response({})
+    answer.json.side_effect = json.JSONDecodeError("Expecting value", "<html>", 0)
+    return answer
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        _not_json(),
+        response({"msg": "no code"}),
+        response({"code": 200, "data": {"state": "success"}}),
+        _record("success", resultJson="{not json"),
+        _record("success", resultJson=json.dumps(["https://cdn/v.mp4"])),
+        _record("success", resultJson=json.dumps({"resultUrls": 5})),
+    ],
+    ids=[
+        "not-json",
+        "no-code",
+        "no-task-id",
+        "result-not-json",
+        "result-not-object",
+        "urls-not-list",
+    ],
+)
+def test_an_unreadable_status_answer_is_transient(provider, answer):
+    """The request exists (maybe paid): an answer that cannot be read is
+    asked again, never a ValueError that fails the job unresumable."""
+    with kie_http() as http:
+        http.request.return_value = answer
+        with pytest.raises(ProviderUnavailableError, match="unreadable") as raised:
+            provider.status("t1")
+
+    assert raised.value.retryable
 
 
 @pytest.mark.parametrize("state", ["waiting", "queuing", "generating"])

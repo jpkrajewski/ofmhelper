@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import urlsplit
@@ -14,11 +15,13 @@ from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import (
     DownloadResult,
     ExtractorArgs,
+    VideoInfo,
     YtDlpInfo,
     YtDlpOptions,
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.proxy_pool import ProxyPool
+from ofmhelpers.utils.video_probe import duration_s
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -69,6 +72,16 @@ def _default_extractor_args() -> ExtractorArgs:
     return {"youtubepot-bgutilhttp": {"base_url": [pot_url]}}
 
 
+# yt-dlp's extractors for one post: its default ones minus Generic, which
+# reads any page of any host. A redirector or shortener extractor (facebook
+# /flx/warn/?u=, t.co) hands its target to whichever extractor matches, so
+# with Generic on, a pasted link could make the server fetch any host it
+# names (review #37). yt-dlp's `-name` removes one (checked 2026-10-25,
+# yt-dlp 2026.10.21: Generic gone, a redirect to an unknown host fails
+# "No suitable extractor" with no request).
+SITE_EXTRACTORS_ONLY = ("default", "-generic")
+
+
 class DownloadConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -81,6 +94,12 @@ class DownloadConfig(BaseModel):
     merge_output_format: str = "mp4"
     write_thumbnail: bool = False
     download_playlist: bool = True
+    # Which of a playlist's entries are read ("1:10"); None = every one.
+    playlist_items: str | None = None
+    # yt-dlp's extractor names it may use; None = all (Generic included).
+    allowed_extractors: list[str] | None = None
+    # Seconds a connection may sit silent; None = yt-dlp's 20.
+    socket_timeout: float | None = None
     filename_template: str = "%(uploader)s_%(id)s%(playlist_index)s.%(ext)s"
 
     # Cookie source for authenticated sites (Instagram etc). Only used as a
@@ -112,6 +131,20 @@ class DownloadConfig(BaseModel):
     # Extra per-extractor arguments, merged over youtube_player_clients'.
     extractor_args: ExtractorArgs = Field(default_factory=_default_extractor_args)
 
+    @classmethod
+    def single_post(cls, **fields: Any) -> DownloadConfig:
+        """The linked post only (/clone-links' look at a link and its
+        download): never the playlist, profile or story tray around it
+        (`watch?v=X&list=PL...` is X, a story link that one story), at most
+        `settings.downloaders.single_post_items` entries (a carousel's
+        slides), read only by the site's own extractor (never Generic)."""
+        return cls(
+            download_playlist=False,
+            playlist_items=f"1:{settings.downloaders.single_post_items}",
+            allowed_extractors=list(SITE_EXTRACTORS_ONLY),
+            **fields,
+        )
+
     def ydl_opts(self, cookiefile: str | None = None) -> YtDlpOptions:
         """The yt-dlp options this config means, logged in as `cookiefile`
         (the downloading user's own cookies.txt, `cookies.cookie_file`)."""
@@ -130,6 +163,9 @@ class DownloadConfig(BaseModel):
             outtmpl=str(self.output_dir / self.filename_template),
             writethumbnail=self.write_thumbnail,
             noplaylist=not self.download_playlist,
+            playlist_items=self.playlist_items,
+            allowed_extractors=self.allowed_extractors,
+            socket_timeout=self.socket_timeout,
             cookiefile=cookiefile,
             cookiesfrombrowser=browser,
             extractor_args=extractor_args,
@@ -186,8 +222,26 @@ def is_tiktok_url(url: str) -> bool:
     return "tiktok.com" in url.lower()
 
 
+@lru_cache(maxsize=1)
+def _site_extractors() -> tuple[Any, ...]:
+    """yt-dlp's site extractors (lazy: only their URL patterns load), not
+    Generic, which takes any URL and reads the page for a video."""
+    from yt_dlp.extractor import gen_extractor_classes
+
+    return tuple(ie for ie in gen_extractor_classes() if ie.ie_key() != "Generic")
+
+
+def site_of(url: str) -> str | None:
+    """The yt-dlp extractor made for `url`'s site ("Instagram", "TikTok"),
+    None when only Generic would try it. Matching only, no request: ~0.3 s
+    the first time (the patterns load), a few ms after (2026-10-25)."""
+    return next((ie.IE_NAME for ie in _site_extractors() if ie.suitable(url)), None)
+
+
 def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
-    """Re-encode a video to H.264/AAC. Returns original path unchanged on failure."""
+    """Re-encode a video to H.264/AAC. Returns original path unchanged on
+    failure, or when ffmpeg runs past `settings.downloaders.reencode_timeout_s`
+    (it is killed then; its partial output removed)."""
     if not is_video_file(path):
         return path
 
@@ -195,8 +249,21 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
     cmd = config.ffmpeg_cmd(path, tmp_dst)
 
     try:
-        subprocess.run(cmd, capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        subprocess.run(
+            cmd,
+            capture_output=True,
+            check=True,
+            timeout=settings.downloaders.reencode_timeout_s,
+        )
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
+        logger.warning(
+            "re-encode of %s failed, original kept", path.name, exc_info=True
+        )
+        tmp_dst.unlink(missing_ok=True)
         return path
 
     if config.delete_original_after_reencode and tmp_dst.exists():
@@ -260,6 +327,94 @@ def download(
         return DownloadResult(url=url, success=True, output_paths=paths)
     except Exception as exc:
         return DownloadResult(url=url, success=False, error=str(exc))
+
+
+def video_info(
+    url: str, cookiefile: str | None = None, *, socket_timeout: float | None = None
+) -> VideoInfo:
+    """The link's video length and cover, read by yt-dlp WITHOUT downloading
+    it (one page/API request, a few seconds), logged in as `cookiefile`;
+    tried like `download` (the site's proxies logged out first, then the
+    login direct). Only the linked post is read (`DownloadConfig.single_post`:
+    no playlist/profile around it, never Generic); `socket_timeout`: seconds
+    a connection may sit silent (None: yt-dlp's 20).
+
+    `error` when nothing could be read or the post holds no video: the last
+    try's reason (the login's, when the site has proxies), and
+    `logged_out_error` the first logged-out try's when there were several."""
+    if settings.infra.fake_externals:
+        return fake.info(url)
+    import yt_dlp
+
+    config = DownloadConfig.single_post(socket_timeout=socket_timeout)
+    opts = config.ydl_opts(cookiefile)
+    errors: list[str] = []
+    info = None
+    for proxy in _proxies_for(url):
+        info = _try_peek(yt_dlp, url, opts, proxy, errors)
+        if info is not None or _hidden_logged_out(errors[-1]):
+            break
+    if info is None:
+        info = _try_peek(yt_dlp, url, opts, None, errors)
+    if info is None:
+        return VideoInfo(
+            url=url,
+            error=errors[-1],
+            logged_out_error=errors[0] if len(errors) > 1 else None,
+        )
+    entry = YtDlpInfo.model_validate(info).first_video()
+    if entry is None:
+        return VideoInfo(url=url, error="No video at this link (a photo post?)")
+    seconds = entry.duration
+    stream = entry.video_url()
+    if seconds is None and stream:
+        # ffprobe reads the stream's header only (~1 s), not the video.
+        try:
+            seconds = duration_s(stream, settings.downloaders.probe_timeout_s)
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+            logger.warning("video info %s: length not probed: %s", url, exc)
+            return VideoInfo(url=url, error=f"The video's length is unreadable: {exc}")
+    return VideoInfo(url=url, seconds=seconds, thumbnail=entry.thumbnail)
+
+
+# A post Instagram hides from every logged-out visitor (login-gated, age
+# restricted, removed): each proxy gets the same answer (dev logs
+# 2026-10-25: 4 proxies x 2-5 s, then the login), so the rest are skipped
+# and the logged-in try goes next. A blocked or rate-limited proxy is not
+# this: the next proxy is tried.
+_LOGGED_OUT_HIDDEN = ("empty media response", "restricted video", "not available")
+
+
+def _hidden_logged_out(error: str) -> bool:
+    lowered = error.lower()
+    return any(sign in lowered for sign in _LOGGED_OUT_HIDDEN)
+
+
+def _try_peek(
+    yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None, errors: list[str]
+) -> Any | None:
+    """`_peek`, its failure logged and added to `errors` (None then)."""
+    try:
+        return _peek(yt_dlp, url, opts, proxy)
+    except Exception as exc:
+        logger.warning(
+            "video info %s failed (%s)",
+            url,
+            "via proxy" if proxy else "direct",
+            exc_info=True,
+        )
+        errors.append(str(exc))
+        return None
+
+
+def _peek(yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None) -> Any:
+    """yt-dlp's info for `url`, nothing written; through `proxy` logged out."""
+    if proxy is not None:
+        opts = opts.model_copy(
+            update={"cookiefile": None, "cookiesfrombrowser": None, "proxy": proxy}
+        )
+    with yt_dlp.YoutubeDL(opts.to_ydl()) as ydl:
+        return ydl.extract_info(url, download=False)
 
 
 def _fetch(yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None) -> Any:

@@ -1,0 +1,4 @@
+{# One page of /clone-links cards plus the next sentinel, fetched by
+   gallery-scroll.js; without a sentinel it is what live-gallery.js polls. #}
+{% for job in gallery %}{% include "_clone_links_card.html" %}{% endfor %}
+{% include "_generate_gallery_sentinel.html" %}

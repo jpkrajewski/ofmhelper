@@ -5,9 +5,10 @@ from pathlib import Path
 from ofmhelpers.utils.ffmpeg import binary, run
 
 
-def duration_s(src: Path, timeout_s: int) -> float:
-    """Container duration in seconds. Raises if ffprobe is missing, fails, or
-    reports no duration -- a caller sizing a generation by it must not guess."""
+def duration_s(src: Path | str, timeout_s: int) -> float:
+    """Container duration in seconds of a file or an http(s) URL (ffprobe
+    reads only the header). Raises if ffprobe is missing, fails, or reports
+    no duration -- a caller sizing a generation by it must not guess."""
     out = run(
         [
             binary("ffprobe"),

@@ -27,6 +27,7 @@ VA_PAGES = [
     "/generate",
     "/clone",
     "/clone-long",
+    "/clone-links",
     "/download-assets",
     "/accounts",
     "/links",

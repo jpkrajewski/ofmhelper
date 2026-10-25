@@ -69,6 +69,7 @@ from ofmhelpers.web.schemas.files import (
 )
 from ofmhelpers.web.schemas.gallery import (
     CloneCard,
+    CloneLinksCard,
     JobCard,
     TaskCard,
 )
@@ -140,6 +141,7 @@ __all__ = [
     "AssignCreator",
     "AssignLinkCreator",
     "CloneCard",
+    "CloneLinksCard",
     "CloneQueued",
     "Device",
     "DeviceFields",

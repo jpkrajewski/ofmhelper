@@ -56,6 +56,7 @@ def test_bar_links_then_the_rest_under_more(client):
         "/generate",
         "/clone",
         "/clone-long",
+        "/clone-links",
         "/download-assets",
         "/accounts",
         "/links",

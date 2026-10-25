@@ -1019,6 +1019,8 @@ def cdn(monkeypatch, tmp_path):
         return response
 
     monkeypatch.setattr(reel_thumbs.outbound, "get", get)
+    # The CDN's host resolves to a public address (no DNS in tests).
+    monkeypatch.setattr(reel_thumbs, "_addresses", lambda _host: ["157.240.1.1"])
     return asked, state
 
 

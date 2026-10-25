@@ -6,11 +6,13 @@ response is parsed into `models.py`, which also maps kie.ai's in-body error
 codes onto the shared error types.
 """
 
+import hashlib
 import json
 import pathlib
 import time
 
 import requests
+from pydantic import BaseModel
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
@@ -49,6 +51,27 @@ def _session() -> requests.Session:
     session = requests.Session()
     session.mount("https://", HTTPAdapter(max_retries=retry))
     return outbound.mount(session)
+
+
+def _retry_after_s(response: requests.Response) -> float | None:
+    """An HTTP answer's Retry-After in seconds, when it gives a number."""
+    value = response.headers.get("Retry-After")
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _parsed[M: BaseModel](response: requests.Response, model: type[M]) -> M:
+    """A 200 answer as `model`. One that is not JSON or not of that shape is
+    kie.ai misbehaving, not the request: `ProviderUnavailableError`, so a
+    poll keeps trying and a paid request stays remembered for recovery
+    (an unparsed answer used to fail the job as non-resumable)."""
+    try:
+        return model.model_validate(response.json())
+    except ValueError as exc:  # JSONDecodeError and ValidationError alike
+        msg = f"kie.ai: unreadable answer ({exc.__class__.__name__})"
+        raise ProviderUnavailableError(msg) from exc
 
 
 class KieAIClient:
@@ -91,7 +114,9 @@ class KieAIClient:
         if response.status_code >= self._HTTP_ERROR:
             # Normally kie.ai answers 200 with its code in the body; a real
             # HTTP error is mapped by its status the same way.
-            raise_for(response.status_code, response.text[:200])
+            raise_for(
+                response.status_code, response.text[:200], _retry_after_s(response)
+            )
         return response
 
     # ------------------------------------------------------------------
@@ -121,13 +146,17 @@ class KieAIClient:
     # ------------------------------------------------------------------
     # File upload. kie.ai's input fields take hosted URLs, so a local
     # reference goes through this first. The same file is reused across many
-    # generations, so its URL is cached in Redis -- keyed by API key as well
-    # as path, since kie.ai namespaces uploads per account -- and every hit is
+    # generations, so its URL is cached in Redis -- keyed by account (a hash
+    # of the key) as well as path, since kie.ai namespaces uploads per
+    # account -- and every hit is
     # confirmed live with a HEAD before it is trusted. Pure optimisation: a
     # broker outage just means the file is uploaded again.
     # ------------------------------------------------------------------
     def _upload_cache_key(self, path: str) -> str:
-        return f"kieai:upload:{self.api_key}:{path}"
+        """Per account (uploads are), without the key itself: the cache key
+        names a Redis key and a lock, and is logged when the lock fails."""
+        account = hashlib.sha256(self.api_key.encode()).hexdigest()[:16]
+        return f"kieai:upload:{account}:{path}"
 
     def upload_local_file(self, path: str, upload_path: str = "refs") -> str:
         """One upload per file even when several requests start together
@@ -155,7 +184,7 @@ class KieAIClient:
                 data={"uploadPath": upload_path, "fileName": upload_file.name},
                 timeout=settings.kieai.upload_timeout_s,
             )
-        url = KieUploadResponse.model_validate(response.json()).url()
+        url = _parsed(response, KieUploadResponse).url()
         logger.info("upload done: %s -> %s", path, url)
         set_text(cache_key, url, settings.kieai.upload_cache_ttl_s)
         return url
@@ -192,7 +221,7 @@ class KieAIClient:
             json={"model": model, "input": payload},
             timeout=settings.kieai.request_timeout_s,
         )
-        created = KieCreateResponse.model_validate(response.json())
+        created = _parsed(response, KieCreateResponse)
         created.raise_for_code()
         if created.data is None:
             msg = "kie.ai: createTask answered without a task id"
@@ -209,7 +238,7 @@ class KieAIClient:
             params={"taskId": task_id},
             timeout=settings.kieai.request_timeout_s,
         )
-        record = KieRecordResponse.model_validate(response.json())
+        record = _parsed(response, KieRecordResponse)
         record.raise_for_code()
         if record.data is None:
             msg = f"kie.ai: no record for task {task_id}"

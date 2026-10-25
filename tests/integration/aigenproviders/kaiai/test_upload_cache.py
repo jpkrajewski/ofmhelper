@@ -2,7 +2,7 @@
 Covers the "don't re-upload the same reference file to kie.ai every single
 time" cache now that it lives in Redis (`ofmhelpers.cache`) instead of a
 per-process LRU: KieAIClient.upload_local_file reads/writes
-`kieai:upload:<api_key>:<path>`.
+`kieai:upload:<sha256(api_key)[:16]>:<path>`.
 
 Real logs showed the same reference images/videos/audio getting re-uploaded
 to kie.ai's tempfile host on every single generation, even when the exact
@@ -15,13 +15,15 @@ Redis is flushed before every test by conftest's autouse `_clean_tables`, so
 no test can leak a cached URL into the next one.
 """
 
+import threading
+import time
 from unittest import mock
 
 import pytest
 import requests
 from kie_http_fake import kie_http, response
 from PIL import Image
-from redis.exceptions import RedisError
+from redis import Redis
 
 from ofmhelpers.aigenproviders.errors import ProviderAuthError, ProviderUnavailableError
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
@@ -46,8 +48,14 @@ def ref_file(tmp_path):
     return p
 
 
-def _cached(api_key: str, path) -> str | None:
-    return get_text(f"kieai:upload:{api_key}:{path}")
+def _key(client: KieAIClient, path) -> str:
+    """The client's own key (never re-derived here: a format change is the
+    client's to make, the tests follow)."""
+    return client._upload_cache_key(str(path))
+
+
+def _cached(client: KieAIClient, path) -> str | None:
+    return get_text(_key(client, path))
 
 
 def _mock_post_response(url="https://tempfile.example/refs/ref.png", success=True):
@@ -67,7 +75,7 @@ def test_first_upload_hits_network_and_populates_cache(client, ref_file):
 
     assert url == "https://tempfile.example/x"
     assert mreq.post.call_count == 1
-    assert _cached("test-key", ref_file) == "https://tempfile.example/x"
+    assert _cached(client, ref_file) == "https://tempfile.example/x"
 
 
 def test_cached_entry_carries_the_configured_ttl(client, ref_file):
@@ -76,8 +84,26 @@ def test_cached_entry_carries_the_configured_ttl(client, ref_file):
         mreq.post.return_value = _mock_post_response()
         client.upload_local_file(str(ref_file))
 
-    ttl = get_redis().ttl(f"kieai:upload:test-key:{ref_file}")
+    ttl = get_redis().ttl(_key(client, ref_file))
     assert 0 < ttl <= settings.kieai.upload_cache_ttl_s
+
+
+def test_the_api_key_is_never_part_of_a_redis_key(client, ref_file):
+    """The cache key names a Redis key and the upload lock."""
+    seen = []
+
+    def post(*_args, **_kwargs):
+        seen.extend(get_redis().scan_iter("*"))  # the lock is held now
+        return _mock_post_response()
+
+    with kie_http() as mreq:
+        mreq.post.side_effect = post
+        client.upload_local_file(str(ref_file))
+    seen.extend(get_redis().scan_iter("*"))
+
+    assert f"lock:{_key(client, ref_file)}".encode() in seen
+    assert _key(client, ref_file).encode() in seen
+    assert not [k for k in seen if b"test-key" in k]
 
 
 def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
@@ -136,7 +162,7 @@ def test_cache_hit_but_remote_gone_triggers_reupload(client, ref_file):
 
     assert second == "https://tempfile.example/new"
     assert mreq.post.call_count == 2, "a dead cached url must trigger a fresh upload"
-    assert _cached("test-key", ref_file) == "https://tempfile.example/new"
+    assert _cached(client, ref_file) == "https://tempfile.example/new"
 
 
 def test_remote_check_network_error_triggers_reupload(client, ref_file):
@@ -161,12 +187,15 @@ def test_remote_check_network_error_triggers_reupload(client, ref_file):
     )
 
 
-def test_an_unreachable_broker_degrades_to_re_uploading(client, ref_file, monkeypatch):
-    """Pure optimisation: a dead Redis must cost an upload, not a failure."""
-    monkeypatch.setattr(
-        "ofmhelpers.cache.redis.get_redis",
-        mock.Mock(side_effect=RedisError("down")),
-    )
+def test_an_unreachable_broker_degrades_to_re_uploading(
+    client, ref_file, monkeypatch, caplog
+):
+    """Pure optimisation: a dead Redis must cost an upload, not a failure --
+    the cache (cache.redis) and the lock (base, which imported get_redis by
+    name) both fail open. The lock's warning names a hash, never the key."""
+    dead = Redis.from_url("unix:///nonexistent/redis.sock")
+    monkeypatch.setattr("ofmhelpers.cache.redis.get_redis", lambda: dead)
+    monkeypatch.setattr("ofmhelpers.aigenproviders.base.get_redis", lambda: dead)
 
     with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
@@ -175,6 +204,41 @@ def test_an_unreachable_broker_degrades_to_re_uploading(client, ref_file, monkey
 
     assert first == second == "https://tempfile.example/x"
     assert mreq.post.call_count == 2
+    assert caplog.text.count("upload lock unavailable") == 2
+    assert "test-key" not in caplog.text
+
+
+def test_a_lock_lost_mid_upload_is_swallowed(client, ref_file, caplog):
+    """The upload outlived the lock (OFM_UPLOAD_LOCK_S) or Redis dropped it:
+    the release fails, the upload still counts (no LockNotOwnedError)."""
+    lock_key = f"lock:{_key(client, ref_file)}"
+
+    def post(*_args, **_kwargs):
+        assert get_redis().delete(lock_key) == 1, "the upload holds the lock"
+        return _mock_post_response(url="https://tempfile.example/x")
+
+    with kie_http() as mreq:
+        mreq.post.side_effect = post
+        url = client.upload_local_file(str(ref_file))
+
+    assert url == "https://tempfile.example/x"
+    assert _cached(client, ref_file) == url
+    assert "not released" in caplog.text
+
+
+def test_a_lock_left_by_a_dead_worker_only_delays_the_upload(client, ref_file):
+    """A holder killed mid-upload leaves its lock until it expires; the next
+    run waits for that, then uploads -- it is not refused."""
+    get_redis().set(f"lock:{_key(client, ref_file)}", "dead-worker", px=300)
+    started = time.monotonic()
+
+    with kie_http() as mreq:
+        mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
+        url = client.upload_local_file(str(ref_file))
+
+    assert url == "https://tempfile.example/x"
+    assert mreq.post.call_count == 1
+    assert time.monotonic() - started >= 0.25
 
 
 def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
@@ -218,7 +282,7 @@ def test_wrong_api_key_response_raises_and_never_populates_cache(client, ref_fil
     assert str(exc.value) == "kie.ai: wrong API key"
     assert "upload rejected" in exc.value.detail
 
-    assert _cached("test-key", ref_file) is None
+    assert _cached(client, ref_file) is None
 
 
 def test_http_error_on_upload_raises_and_never_populates_cache(client, ref_file):
@@ -228,7 +292,7 @@ def test_http_error_on_upload_raises_and_never_populates_cache(client, ref_file)
         with pytest.raises(ProviderUnavailableError):
             client.upload_local_file(str(ref_file))
 
-    assert _cached("test-key", ref_file) is None
+    assert _cached(client, ref_file) is None
 
 
 def test_two_different_local_files_cache_independently(client, tmp_path):
@@ -247,8 +311,8 @@ def test_two_different_local_files_cache_independently(client, tmp_path):
 
     assert url_a != url_b
     assert mreq.post.call_count == 2
-    assert _cached("test-key", ref_a) == "https://tempfile.example/a"
-    assert _cached("test-key", ref_b) == "https://tempfile.example/b"
+    assert _cached(client, ref_a) == "https://tempfile.example/a"
+    assert _cached(client, ref_b) == "https://tempfile.example/b"
 
 
 def test_upload_path_argument_still_forwarded_on_a_fresh_upload(client, ref_file):
@@ -283,13 +347,8 @@ def test_remote_file_exists_swallows_request_exceptions(client):
 
 def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
     """Pieces of one run start together: the file goes up once, the others
-    wait and take the cached URL."""
-    import threading
-    import time
-
-    def slow_post(*_args, **_kwargs):
-        time.sleep(0.2)
-        return _mock_post_response(url="https://tempfile.example/once")
+    wait and take the cached URL. The wait is a lock in Redis -- the worker
+    is a pool of processes, an in-process lock would not stop the others."""
 
     def new_client():
         return KieAIClient(
@@ -298,6 +357,14 @@ def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
             task_log=tmp_path / "tasks.jsonl",
             completions_log=tmp_path / "completions.jsonl",
         )
+
+    lock_key = f"lock:{_key(new_client(), ref_file)}"
+    held_in_redis = []
+
+    def slow_post(*_args, **_kwargs):
+        held_in_redis.append(bool(get_redis().exists(lock_key)))
+        time.sleep(0.2)
+        return _mock_post_response(url="https://tempfile.example/once")
 
     urls = []
     with kie_http() as mreq:
@@ -318,3 +385,5 @@ def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
 
     assert urls == ["https://tempfile.example/once"] * 3
     assert mreq.post.call_count == 1
+    assert held_in_redis == [True]
+    assert not get_redis().exists(lock_key), "released after the upload"

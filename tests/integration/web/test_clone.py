@@ -531,17 +531,43 @@ def test_device_export_serves_the_device_copy(tmp_path, monkeypatch):
     assert result == ResultFile(name=out.name, path=str(out), remote_url=None)
 
 
-def test_failed_export_keeps_the_generated_video(monkeypatch):
+def test_a_failed_export_is_tried_again_and_never_delivers_the_raw_video(monkeypatch):
+    """User rule 2026-10-25: every export gets its tries; the provider's
+    raw file is never the result. The run fails keeping its paid request."""
     result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
     _generated(monkeypatch, result)
+    tries = []
 
     def broken(*_a, **_k):
+        tries.append(1)
         msg = "ffmpeg failed: boom"
         raise RuntimeError(msg)
 
     monkeypatch.setattr(exports_module, "apply_preset", broken)
 
-    assert _run_clone("/x", export="capcut") == result
+    with pytest.raises(clone.ExportFailedError) as failed:
+        _run_clone("/x", export="capcut")
+
+    assert len(tries) == 3
+    assert failed.value.keep_request, "recovery exports it again, unpaid"
+    assert str(failed.value).startswith("Export failed")
+
+
+def test_the_export_tries_follow_the_setting(monkeypatch):
+    monkeypatch.setenv("OFM_EXPORT_ATTEMPTS", "5")
+    _generated(monkeypatch, [ResultFile(name="v.mp4", path="/x/v.mp4")])
+    tries = []
+
+    def broken(*_a, **_k):
+        tries.append(1)
+        raise RuntimeError
+
+    monkeypatch.setattr(exports_module, "apply_preset", broken)
+
+    with pytest.raises(clone.ExportFailedError):
+        _run_clone("/x", export="capcut")
+
+    assert len(tries) == 5
 
 
 def test_jobs_from_before_export_keep_their_capcut_choice(monkeypatch):

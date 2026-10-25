@@ -11,11 +11,12 @@
 # failure mode "dev acts like prod" instead of "prod acts like dev".
 #
 # What this adds on top of the production stack:
-#   - ./src bind-mounted into the API and worker, so edits are visible without
-#     a rebuild (`docker compose ... restart worker` picks them up; the API
-#     reloads itself).
+#   - ./src bind-mounted into the API and workers, so edits are visible without
+#     a rebuild (`docker compose ... restart worker clone-links-worker` picks
+#     them up; the API reloads itself).
 #   - uvicorn --reload for the API.
-#   - a 2-process RQ pool instead of the production 10.
+#   - 2-process RQ pools instead of the production 10 (default queue) and 5
+#     (clone-links).
 #   - postgres/redis published on 127.0.0.1 for host-run `uv run pytest`.
 #   - rq-dashboard, behind the `dev` profile so it stays off unless asked for.
 #   - `migrate` reading ./src and ./alembic, so `up -d` applies the working
@@ -59,6 +60,15 @@ services:
       # processes competing for the same laptop, and startup/restart is the
       # slow part of the dev loop. Bump if you need real concurrency here.
       - OFM_RQ_WORKERS=2
+    dns: *public-dns
+    volumes:
+      - ./src:/app/src
+
+  clone-links-worker:
+    # Same as the worker: no reloader, restart it after changing run code.
+    environment:
+      # 2 instead of the production 5, for the same reason as the worker.
+      - OFM_CLONE_LINKS_WORKERS=2
     dns: *public-dns
     volumes:
       - ./src:/app/src

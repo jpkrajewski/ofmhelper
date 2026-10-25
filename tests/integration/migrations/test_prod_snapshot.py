@@ -203,6 +203,7 @@ USERS = "c2d3e4f5a6b7"
 OWNERS = "d3e4f5a6b7c8"
 SPAM = "d4e5f6a7b8c0"
 HIDDEN = "f8a9b0c1d2e3"
+REEL_CHECKS = "a2b3c4d5e6f7"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -461,3 +462,15 @@ def test_hidden_keeps_every_job_shown(db):
     command.upgrade(_alembic(), "head")
     assert _count(db, "jobs") == jobs
     assert _scalar(db, "SELECT count(*) FROM jobs WHERE hidden_at IS NOT NULL") == 0
+
+
+def test_clone_ai_checks_adds_two_empty_tables_and_changes_no_row(db):
+    """clone_ai_checks + clone_from_links are new and empty; every table production
+    has keeps every row."""
+    needs(REEL_CHECKS)(db)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), "head")
+    after = _row_counts(db)
+    assert after["clone_ai_checks"] == 0
+    assert after["clone_from_links"] == 0
+    assert {t: n for t, n in after.items() if t in before} == before

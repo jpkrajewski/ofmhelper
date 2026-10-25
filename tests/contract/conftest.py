@@ -20,11 +20,15 @@ from ofmhelpers.config.settings import (
     InstagramSettings,
     KieAISettings,
     LinksSettings,
+    LLMSettings,
 )
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.fake import _fake_drive
 from ofmhelpers.instagram.fake import fake_instagram
 from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
+from ofmhelpers.llm.cerebras.fake import fake_cerebras
+from ofmhelpers.llm.gemini.fake import fake_gemini
+from ofmhelpers.llm.groq.fake import fake_groq
 from ofmhelpers.utils import fake_media, outbound
 
 FAKE = "fake"
@@ -35,6 +39,7 @@ _REAL_SETTINGS = (
     InstagramSettings,
     KieAISettings,
     LinksSettings,
+    LLMSettings,
 )
 
 
@@ -47,6 +52,9 @@ def _reset_fakes() -> None:
         fake_kie,
         fake_higgsfield,
         _fake_drive,
+        fake_gemini,
+        fake_groq,
+        fake_cerebras,
         fake_media.mp4,
     ):
         cached.cache_clear()

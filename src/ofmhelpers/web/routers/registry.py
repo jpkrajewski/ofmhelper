@@ -3,10 +3,11 @@ stored under: its label and the router that serves it. The /generate and
 /download-assets galleries and the admin action log all read this, so a new
 tool is one entry here instead of one in each of them."""
 
+from ofmhelpers.cache import CLONE_LINKS_QUEUE
 from ofmhelpers.web.clone_long import run_long_clone
 from ofmhelpers.web.clone_long import time_limit as clone_long_time_limit
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos
-from ofmhelpers.web.routers.generation import ai, clone, clone_long
+from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.clone import _run_clone
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
 from ofmhelpers.web.routers.image_tools import character_sheet
@@ -40,6 +41,11 @@ TOOLS = {
     **GENERATE_TOOLS,
     **DOWNLOAD_TOOLS,
     "clone": Tool(label="Clone", router=clone.router, run=_run_clone),
+    clone_links.TASK: Tool(
+        label=clone_links.LABEL,
+        router=clone_links.router,
+        run=clone_links.run_clone_link,
+    ),
     clone_long.TASK: Tool(
         label=clone_long.LABEL,
         router=clone_long.router,
@@ -57,6 +63,10 @@ RESUMABLE = {task: tool.run for task, tool in TOOLS.items() if tool.run}
 JOB_TIMEOUTS = {
     task: tool.job_timeout for task, tool in TOOLS.items() if tool.job_timeout
 }
+# The RQ queue a task's jobs run on, where not the default one: its first
+# run (the router) and recovery's re-run alike. A /clone-links Generate has
+# its own worker pool so it never holds the default queue.
+QUEUES = {clone_links.TASK: CLONE_LINKS_QUEUE}
 
 
 def task_card(job: Job) -> TaskCard:

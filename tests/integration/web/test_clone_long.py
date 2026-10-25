@@ -29,6 +29,7 @@ from ofmhelpers.aigenproviders.errors import (
 )
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
+from ofmhelpers.config import settings
 from ofmhelpers.web import recovery
 from ofmhelpers.web.clone_long import (
     TARGETS,
@@ -450,17 +451,19 @@ def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
 def test_a_piece_that_fails_to_download_is_finished_by_recovery_unpaid(
     client, tmp_path, monkeypatch
 ):
-    """The provider made all three; one download fails. The run fails
-    with every request kept, and recovery finishes it: nothing sent
+    """The provider made all three; one download fails every try. The run
+    fails with every request kept, and recovery finishes it: nothing sent
     again, only the missing piece downloaded again."""
     sent = []
     generated = _clip(tmp_path / "g.mp4", 2)
     _provider(monkeypatch, KieProvider, generated, sent)
     downloads = []
+    # The runner's own tries (review #11) all fail on the first run.
+    tries = 1 + len(settings.aigen.download_retry_waits_s)
 
     def download(_self, url, dest):
         downloads.append(url)
-        if url.endswith("/t2.mp4") and downloads.count(url) == 1:
+        if url.endswith("/t2.mp4") and downloads.count(url) <= tries:
             msg = "kie.ai: could not download"
             raise ProviderUnavailableError(msg)
         dest.write_bytes(generated.read_bytes())
@@ -479,7 +482,7 @@ def test_a_piece_that_fails_to_download_is_finished_by_recovery_unpaid(
     assert job.status == "done", job.error
     assert len(sent) == 3
     assert sorted(downloads) == sorted(
-        [*(f"https://res/t{i}.mp4" for i in (1, 2, 3)), "https://res/t2.mp4"]
+        [*(f"https://res/t{i}.mp4" for i in (1, 2, 3)), *["https://res/t2.mp4"] * tries]
     )
     assert tasks.recall(job_id) is None
 
@@ -668,8 +671,8 @@ def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeyp
     queued = []
     monkeypatch.setattr(
         recovery,
-        "enqueue",
-        lambda *args, job_timeout=None: queued.append((args, job_timeout)),
+        "enqueue_to",
+        lambda _queue, *args, job_timeout=None: queued.append((args, job_timeout)),
     )
 
     assert recovery.run_recovery_once()[job_id] == "rerun"

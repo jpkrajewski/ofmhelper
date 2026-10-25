@@ -41,6 +41,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 from ofmhelpers.gdrive.fake import FakeDrive
 from ofmhelpers.links.fake import BOUNCY_FAKE_KEY, OOPSIE_FAKE_KEY
+from ofmhelpers.llm.gemini.fake import FAKE_KEY as GEMINI_FAKE_KEY
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -81,6 +82,7 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "OFM_REDIS_URL": backend.redis_url,
         "OFM_RQ_ASYNC": "true",
         "OFM_RQ_WORKERS": "2",
+        "OFM_CLONE_LINKS_WORKERS": "2",
         "OFM_FAKE_EXTERNALS": "1",
         "OFM_FAKES_DIR": str(fakes),
         "OFM_UPLOADS_ROOT": str(workdir / "uploads"),
@@ -100,6 +102,8 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         # The admin's link providers: the fakes' keys (links/fake.py).
         "OOPSIE_API_KEY_ADMIN": OOPSIE_FAKE_KEY,
         "BOUNCY_API_KEY_ADMIN": BOUNCY_FAKE_KEY,
+        # /clone-links' AI check: the Gemini fake's key (llm/gemini/fake.py).
+        "GEMINI_API_KEY": GEMINI_FAKE_KEY,
         # Both sign-in providers set up; under OFM_FAKE_EXTERNALS their
         # consent is /auth/fake-consent and their token endpoints fakes.
         "OFM_GOOGLE_CLIENT_ID": "e2e-google-client",
@@ -183,8 +187,8 @@ def e2e_backend(_test_environment) -> E2EBackend:
 def base_url(
     e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
 ) -> Iterator[str]:
-    """The app and its two workers (jobs, previews), up for the whole
-    session."""
+    """The app and its workers (jobs, /clone-links runs, previews), up for
+    the whole session."""
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
     env = _app_env(app_dir, fakes_dir, e2e_backend)
@@ -200,6 +204,7 @@ def base_url(
             str(port),
         ],
         [sys.executable, "-m", "ofmhelpers.worker"],
+        [sys.executable, "-m", "ofmhelpers.worker", "clone-links"],
         [sys.executable, "-m", "ofmhelpers.worker", "previews"],
     ]
     with app_log.open("w") as log:
@@ -271,21 +276,24 @@ def _seed_users(database_url: str) -> None:
 
 @pytest.fixture
 def jobs_idle(e2e_backend: E2EBackend) -> Callable[[], None]:
-    """Waits until the app's RQ worker has nothing queued or running: work
-    the app starts by itself (e.g. the Drive sync on connecting Google)
-    must be over before a test changes what it would see."""
+    """Waits until the app's RQ workers have nothing queued or running on
+    any job queue: work the app starts by itself (e.g. the Drive sync on
+    connecting Google) must be over before a test changes what it would
+    see."""
     from redis import Redis
     from rq import Queue
     from rq.registry import StartedJobRegistry
 
-    from ofmhelpers.cache import QUEUE_NAME
+    from ofmhelpers.cache import JOB_QUEUES
 
     def wait(timeout_s: float = 30) -> None:
         redis = Redis.from_url(e2e_backend.redis_url)
-        queue = Queue(QUEUE_NAME, connection=redis)
-        started = StartedJobRegistry(QUEUE_NAME, connection=redis)
+        pairs = [
+            (Queue(name, connection=redis), StartedJobRegistry(name, connection=redis))
+            for name in JOB_QUEUES
+        ]
         deadline = time.monotonic() + timeout_s
-        while queue.count or started.count:
+        while any(queue.count or started.count for queue, started in pairs):
             assert time.monotonic() < deadline, "the app's jobs never finished"
             time.sleep(0.1)
 

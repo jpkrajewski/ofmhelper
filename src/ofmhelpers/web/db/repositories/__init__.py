@@ -23,6 +23,8 @@ by domain and a domain may grow a second module.
 """
 
 from ofmhelpers.web.db.repositories.applications import ApplicationRepository
+from ofmhelpers.web.db.repositories.clone_ai_checks import CloneAiCheckRepository
+from ofmhelpers.web.db.repositories.clone_from_links import CloneFromLinkRepository
 from ofmhelpers.web.db.repositories.cookies import CookieRepository
 from ofmhelpers.web.db.repositories.devices import DeviceRepository, DuplicateError
 from ofmhelpers.web.db.repositories.drive_folders import DriveFolderRepository
@@ -35,6 +37,8 @@ from ofmhelpers.web.db.repositories.watched_profiles import WatchedProfileReposi
 
 __all__ = [
     "ApplicationRepository",
+    "CloneAiCheckRepository",
+    "CloneFromLinkRepository",
     "CookieRepository",
     "DeviceRepository",
     "DriveFolderRepository",

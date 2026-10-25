@@ -1,3 +1,4 @@
+import importlib
 import os
 from pathlib import Path
 
@@ -8,26 +9,13 @@ os.environ["LOGFIRE_TOKEN"] = ""
 
 import pytest
 from cryptography.fernet import Fernet
+from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-from ofmhelpers.config.settings import (
-    AccountsSettings,
-    AigenSettings,
-    DownloadersSettings,
-    GDriveSettings,
-    HiggsfieldSettings,
-    InfraSettings,
-    InstagramSettings,
-    KieAISettings,
-    LinksSettings,
-    SessionSettings,
-    SignInSettings,
-    TelemetrySettings,
-    VaultSettings,
-    WebSettings,
-)
+# The module, not `ofmhelpers.config.settings` the accessor.
+settings_module = importlib.import_module("ofmhelpers.config.settings")
 
 # The durable stores (jobs, applications) are Postgres-backed now, so the
 # test suite needs a running Postgres. Bring one up first with:
@@ -122,6 +110,11 @@ def _test_environment(tmp_path_factory):
     # ceiling would eventually trip on unrelated tests. Off by default; the
     # rate-limit tests turn it back on explicitly.
     os.environ["OFM_RATE_LIMIT_ENABLED"] = "false"
+    # The runner's waits before resending a rate-limited submit or a failed
+    # result download (review #11, #54): no real sleeps in tests; a test
+    # timing them patches `runner._sleep`.
+    os.environ["OFM_AIGEN_DOWNLOAD_RETRY_WAITS_S"] = "[0, 0]"
+    os.environ["OFM_AIGEN_RATE_LIMIT_WAITS_S"] = "[0, 0, 0]"
     # A throwaway vault key: /phones logins encrypt with it (a test that
     # needs another key, or none, monkeypatches OFM_VAULT_KEY).
     os.environ["OFM_VAULT_KEY"] = Fernet.generate_key().decode()
@@ -225,6 +218,9 @@ def fake_externals(monkeypatch, tmp_path):
     from ofmhelpers.gdrive.fake import _fake_drive
     from ofmhelpers.instagram.fake import fake_instagram
     from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
+    from ofmhelpers.llm.cerebras.fake import fake_cerebras
+    from ofmhelpers.llm.gemini.fake import fake_gemini
+    from ofmhelpers.llm.groq.fake import fake_groq
     from ofmhelpers.utils import fake_media, outbound
 
     caches = (
@@ -235,6 +231,9 @@ def fake_externals(monkeypatch, tmp_path):
         fake_kie,
         fake_higgsfield,
         _fake_drive,
+        fake_gemini,
+        fake_groq,
+        fake_cerebras,
         fake_media.mp4,
     )
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
@@ -246,26 +245,16 @@ def fake_externals(monkeypatch, tmp_path):
         cached.cache_clear()
 
 
-_SETTINGS_CLASSES = (
-    SessionSettings,
-    WebSettings,
-    InfraSettings,
-    KieAISettings,
-    AigenSettings,
-    HiggsfieldSettings,
-    DownloadersSettings,
-    # Its .env holds the real scan proxies: a test must never go through them.
-    InstagramSettings,
-    AccountsSettings,
-    # Its .env holds the real Oopsie/Bouncy keys.
-    LinksSettings,
-    VaultSettings,
-    # Its .env holds the real Drive key: a test must never reach Drive.
-    GDriveSettings,
-    # Its .env holds the real Google/Apple sign-in clients and admin emails.
-    SignInSettings,
-    # Its .env holds the Logfire write token: a test must never send data.
-    TelemetrySettings,
+# Every settings group defined in config/settings.py, found by type: a
+# hand-kept list missed the /clone-links groups (review 2026-10-25), and a
+# developer's .env then changed test outcomes. Several groups' .env hold
+# real secrets (proxies, provider/Drive/sign-in/Gemini keys, Logfire token).
+_SETTINGS_CLASSES = tuple(
+    cls
+    for cls in vars(settings_module).values()
+    if isinstance(cls, type)
+    and issubclass(cls, BaseSettings)
+    and cls.__module__ == settings_module.__name__
 )
 
 

@@ -14,15 +14,22 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderAuthError,
     ProviderError,
     ProviderInputError,
+    ProviderNoCreditsError,
+    ProviderRateLimitError,
     ProviderUnavailableError,
 )
 
 _OK = 200
 _AUTH_CODES = frozenset({401, 403})
+_NO_CREDITS = 402
+# docs.kie.ai: "Rejected requests will not enter the queue" -- nothing was
+# created, so the runner may send the same createTask again.
+_RATE_LIMITED = 429
 # How errors name the provider (its `Provider.label`).
 _PROVIDER = "kie.ai"
-# 455 is kie.ai's "under maintenance".
-_RETRYABLE_CODES = frozenset({408, 429, 455, 500, 502, 503, 504})
+# 455 is kie.ai's "under maintenance": retryable, but not resent on submit
+# (a short backoff rarely outlasts a maintenance window).
+_RETRYABLE_CODES = frozenset({408, 455, 500, 502, 503, 504})
 
 # kie.ai's documented states: waiting -> queuing -> generating -> success/fail.
 SUCCESS = "success"
@@ -42,11 +49,16 @@ class KieEnvelope(_Lenient):
             raise_for(self.code, self.msg or "")
 
 
-def raise_for(code: int, message: str) -> NoReturn:
-    """kie.ai's code (in the body, or the HTTP status) as the shared error."""
+def raise_for(code: int, message: str, retry_after_s: float | None = None) -> NoReturn:
+    """kie.ai's code (in the body, or the HTTP status) as the shared error.
+    `retry_after_s`: an HTTP answer's Retry-After, for a 429."""
     text = f"{_PROVIDER}: {message or 'error'} (code {code})"
     if code in _AUTH_CODES:
         raise ProviderAuthError(_PROVIDER, text)
+    if code == _NO_CREDITS:
+        raise ProviderNoCreditsError(text)
+    if code == _RATE_LIMITED:
+        raise ProviderRateLimitError(text, retry_after_s)
     error: type[ProviderError] = ProviderInputError
     if code in _RETRYABLE_CODES or code >= 500:  # noqa: PLR2004
         error = ProviderUnavailableError
