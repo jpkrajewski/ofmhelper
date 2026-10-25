@@ -1,4 +1,6 @@
-"""What a caller asks a model: a `Prompt` of text and media parts, in order.
+"""What a caller asks a model -- a `Prompt` of text and media parts, in
+order -- and what one attempt brings back (`Reply`: the text and its
+`Usage`).
 
 Provider-neutral on purpose: a part is text or a local file of a known
 kind, never a provider's upload handle or URL. Each provider turns parts
@@ -7,11 +9,12 @@ kinds it reads (`LLMProvider.media`).
 """
 
 import mimetypes
+from collections.abc import Iterable
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.llm.errors import LLMInputError
 
@@ -64,12 +67,13 @@ class Prompt(BaseModel):
 
     parts: list[Part] = Field(min_length=1)
     system: str = ""
-    # 0: the same input gives (nearly) the same answer -- a checker, not a
-    # writer.
-    temperature: float = Field(default=0.0, ge=0, le=2)
+    # None: the provider's own default (`LLMProvider.temperature`).
+    temperature: float | None = Field(default=None, ge=0, le=2)
 
     @classmethod
-    def of(cls, *items: str | Path, system: str = "", temperature: float = 0.0) -> Self:
+    def of(
+        cls, *items: str | Path, system: str = "", temperature: float | None = None
+    ) -> Self:
         """Text for a `str`, a media file for a `Path`, in this order."""
         parts: list[TextPart | MediaPart] = [
             TextPart(text=i) if isinstance(i, str) else MediaPart.of(i) for i in items
@@ -79,3 +83,34 @@ class Prompt(BaseModel):
     @property
     def media(self) -> list[MediaPart]:
         return [p for p in self.parts if isinstance(p, MediaPart)]
+
+
+class Usage(BaseModel):
+    """The tokens an answer took, as the provider counted them (None: not
+    reported). Thinking is billed as output where a model thinks."""
+
+    model_config = ConfigDict(frozen=True)
+
+    input_tokens: int | None = None
+    thinking_tokens: int | None = None
+    output_tokens: int | None = None
+
+    @classmethod
+    def summed(cls, usages: Iterable[Self]) -> Self:
+        """Every count added up; a count no usage reported stays None."""
+        found = list(usages)
+
+        def total(name: str) -> int | None:
+            counts = [n for u in found if (n := getattr(u, name)) is not None]
+            return sum(counts) if counts else None
+
+        return cls(**{name: total(name) for name in cls.model_fields})
+
+
+class Reply(BaseModel):
+    """One attempt's answer: the model's JSON text and what it took."""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    usage: Usage = Usage()

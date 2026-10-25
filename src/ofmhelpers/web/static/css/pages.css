@@ -1288,6 +1288,11 @@ a.ph-login-user:hover { text-decoration: underline; }
    that cannot run greyed with why in red -- and a card's review (the link,
    verdict + where it went in Drive, "Why" folded). */
 .link-check-actions { margin-top: var(--s-2); }
+/* Generate's status line ("Queued N runs.") with its Stop at the end, a
+   little below the Generate button. */
+.clone-links-status { display: flex; align-items: baseline; gap: var(--gap-inline); }
+.clone-links-status > .generation-status { flex: 1; min-width: 0; }
+.clone-links-status > button { margin-top: var(--s-2); }
 /* As wide as up to six tiles (`--pick-cols`, set by clone-links.js from the
    link count; min: room for the footer), the tiles' columns stretched to fill
    the row exactly, room kept for the scrollbar. The list's padding is room

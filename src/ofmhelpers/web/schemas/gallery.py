@@ -14,7 +14,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel, computed_field
 
-from ofmhelpers.web.schemas.clone_ai_checks import CloneFromLink
+from ofmhelpers.web.schemas.clone_ai_checks import CloneFromLink, ReviewReason
 from ofmhelpers.web.schemas.drive import DriveUpload
 from ofmhelpers.web.schemas.errors import error_reason
 from ofmhelpers.web.schemas.jobs import AssetCard, FailedSource
@@ -88,20 +88,43 @@ class CloneCard(TaskCard):
 class CloneLinksCard(TaskCard):
     """A /clone-links run's card: the link it was made from (`params`) and
     its result's review (web/clone_links/review.py: checked, then uploaded
-    into GOOD REELS or TRIAL REELS). `review_cut_off`: still running long
-    after it started (its worker was killed)."""
+    into GOOD REELS or TRIAL REELS). `saved_here`: its result has a local
+    file (False: only the provider's copy, nothing to check or upload)."""
 
     review: CloneFromLink | None = None
-    review_cut_off: bool = False
+    saved_here: bool = True
+
+    @classmethod
+    def from_job(
+        cls,
+        job: Job,
+        assets: list[AssetCard],
+        failed_sources: list[FailedSource],
+        **extra: Any,
+    ) -> Self:
+        paths = job.local_paths()
+        saved = bool(paths) and paths[0] is not None
+        return super().from_job(
+            job, assets, failed_sources, **{"saved_here": saved, **extra}
+        )
 
     @property
     def link(self) -> str:
         return str(self.params.get("link", ""))
 
     @property
+    def missing_review(self) -> str | None:
+        """Why a done run has no review, after "Not in Drive:" (recovery
+        starts the review it lacks); None when it has one."""
+        if self.status != "done" or self.review is not None:
+            return None
+        return ReviewReason.NOT_STARTED if self.saved_here else ReviewReason.NOT_SAVED
+
+    @property
     def review_settled(self) -> bool:
-        """Nothing more will change without a click: what the page stops
-        polling."""
+        """Nothing more will change on its own: what the page stops
+        polling. A review cut off by a restart still runs: recovery queues
+        it again, or fails it for good."""
         if self.status != "done":
             return self.status == "failed"
-        return self.review is None or not self.review.running or self.review_cut_off
+        return self.review is None or not self.review.running

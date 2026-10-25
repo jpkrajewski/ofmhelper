@@ -13,7 +13,9 @@ from ofmhelpers.aigenproviders.base import TaskState
 from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
+from ofmhelpers.cache import CLONE_LINKS_QUEUE, QUEUE_NAME
 from ofmhelpers.web import recovery
+from ofmhelpers.web.routers.registry import RESUMABLE
 from ofmhelpers.web.stores.jobs import create_job, fail_job, get_job, run_job
 
 MODEL = "kie:wan/3-0-video"
@@ -60,10 +62,12 @@ def status(monkeypatch):
 
 
 class _Reruns(list):
-    """The re-runs recovery queued (their args), and each one's time limit."""
+    """The re-runs recovery queued (their args), and each one's queue and
+    time limit."""
 
     def __init__(self):
         super().__init__()
+        self.queues = []
         self.timeouts = []
 
 
@@ -71,11 +75,12 @@ class _Reruns(list):
 def reruns(monkeypatch):
     calls = _Reruns()
 
-    def enqueue(*args, job_timeout=None):
+    def enqueue_to(queue, *args, job_timeout=None):
         calls.append(args)
+        calls.queues.append(queue)
         calls.timeouts.append(job_timeout)
 
-    monkeypatch.setattr(recovery, "enqueue", enqueue)
+    monkeypatch.setattr(recovery, "enqueue_to", enqueue_to)
     return calls
 
 
@@ -191,6 +196,21 @@ def test_a_clone_job_is_rerun_through_clone(status, reruns):
 
     [(_run_job, _id, fn, _kwargs)] = reruns
     assert fn is _run_clone
+    assert reruns.queues == [QUEUE_NAME]
+
+
+def test_a_clone_links_job_is_rerun_on_its_own_queue(status, reruns):
+    """Its first run went on the clone-links pool; the re-run must too, or
+    it waits behind (and holds) the default queue."""
+    job_id = _job(task="clone_links")
+    _remember(job_id)
+    status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
+
+    assert recovery.run_recovery_once() == {job_id: "rerun"}
+
+    [(_run_job, rerun_id, fn, _kwargs)] = reruns
+    assert (rerun_id, fn) == (job_id, RESUMABLE["clone_links"])
+    assert reruns.queues == [CLONE_LINKS_QUEUE]
 
 
 def test_one_unreachable_provider_never_stops_the_sweep(status, reruns, monkeypatch):
@@ -263,6 +283,40 @@ def test_without_a_view_of_the_queue_nothing_is_cut_off(status, reruns, monkeypa
     job_id = _job(status="running", task="download_media")
     assert recovery.run_recovery_once() == {}
     assert get_job(job_id).status == "running"
+
+
+def test_a_job_queued_while_a_slow_sweep_settles_is_not_cut_off(
+    status, reruns, monkeypatch
+):
+    """Review #24: a provider status call can hold the settle loop past the
+    grace; a Generate queued meanwhile is not in the view taken before it.
+    Cut-off is judged against a view read after the loop."""
+    monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
+    queued = _job(status="running", task="clone_links")
+    views = [set()]  # the view at sweep start, from before `queued` was queued
+    monkeypatch.setattr(
+        recovery, "active_job_ids", lambda: views.pop(0) if views else {queued}
+    )
+
+    assert recovery.run_recovery_once() == {}
+
+    assert get_job(queued).status == "running"
+    assert views == []
+
+
+def test_a_failed_job_a_worker_still_holds_is_never_rerun(status, reruns, active):
+    """A job failed by mistake (or still in its tail) whose request is done:
+    re-running it now would run it twice at once."""
+    job_id = _job(task="clone_links")
+    _remember(job_id)
+    status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
+    active.add(job_id)
+
+    assert recovery.run_recovery_once() == {job_id: "running"}
+
+    assert reruns == []
+    assert status["seen"] == []
+    assert get_job(job_id).status == "failed"
 
 
 def test_a_saved_job_forgets_its_request():

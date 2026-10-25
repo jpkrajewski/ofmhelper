@@ -42,9 +42,10 @@ class PreviewsRequest(BaseModel):
 class LinkPreview(BaseModel):
     """One link in Generate's dialog: the video's cover and length and what
     cloning it costs, read without downloading it. `error`: why it cannot
-    be read, in a few words (`error_detail`: yt-dlp's own answer);
-    `too_long`: longer than the provider takes (`max_s`). Only a `ready`
-    one can be ticked."""
+    be read, in a few fixed words (yt-dlp's own answer goes to the log
+    only: it names hosts and ports); `too_long`: longer than the provider
+    takes (`max_s`; `seconds` rounded up, None when that would read as
+    fitting). Only a `ready` one can be ticked."""
 
     url: str
     seconds: float | None = None
@@ -54,7 +55,6 @@ class LinkPreview(BaseModel):
     credits: float = 0.0
     usd: float = 0.0
     error: str | None = None
-    error_detail: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

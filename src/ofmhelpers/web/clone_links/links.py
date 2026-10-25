@@ -1,17 +1,19 @@
 """What Check makes of the pasted text: one link per line, cleaned and once
 each, in the order pasted. A line that is not exactly one link of a video
 site -- two glued together ("…/reel/A/https://…"), a link and a word, no
-link at all, a page no downloader takes (the caller's `video_site`, yt-dlp's
-`site_of`) -- is named, and Check refuses the paste (user decision
-2026-10-25: never guess, never drop what was pasted, all of it in one
-answer).
+link at all, a share link that only redirects, a page no downloader takes
+or a profile/playlist (`read_pasted`: yt-dlp's `site_of` must be one of
+`settings.clone_links.video_extractors`) -- is named, and Check refuses the
+paste (user decision 2026-10-25: never guess, never drop what was pasted,
+all of it in one answer).
 
 Cleaning: no #fragment, no share tracker in the query
 (`settings.clone_links.tracking_params`), host lower case, and per site
 (`_SITES`) the one canonical spelling of a post -- Instagram writes one reel
-as /reel/, /reels/, /<user>/reel/, with or without www. -- so a reel pasted
-twice in two spellings is one run, not two paid ones. A new site = one
-entry in `_SITES`.
+as /reel/, /reels/, /p/, /tv/, /<user>/reel/, with or without www.; TikTok
+one video on tiktok.com, m. or www. -- so a reel pasted twice in two
+spellings is one run, not two paid ones. A new site = one entry in
+`_SITES` (and `_NAMES` when its name is not its domain's).
 """
 
 import re
@@ -21,6 +23,7 @@ from urllib.parse import SplitResult, parse_qsl, urlencode, urlsplit
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from ofmhelpers.config import settings
+from ofmhelpers.downloaders.generic import site_of
 
 # Text between separators: a link never holds whitespace, a comma or quotes.
 _TOKEN = re.compile(r"[^\s,;<>\"']+")
@@ -34,24 +37,42 @@ _TRAILING = ".!?:)]}"
 _TLD = re.compile(r"\.[a-z]{2,}$")
 # A link of no video site, in the VA's words (user wording 2026-10-25).
 NOT_A_VIDEO_SITE = "Please put Instagram, TikTok, Twitter etc."
-_INSTAGRAM_POST = re.compile(r"^/(?:[\w.]+/)?(reels?|p|tv)/([\w-]+)")
+# A link of a video site that is not one post: a profile, playlist, channel,
+# story tray, tag, sound, or a redirector.
+NOT_ONE_POST = "Paste a reel's link, not a profile or playlist"
+# A share-sheet link (instagram.com/share/...): a token that only redirects
+# to the post, no shortcode in it (yt-dlp refuses it too).
+SHARE_LINK = "Open the link and copy the reel's address"
+# A post of any kind (reel, photo post, IGTV), with or without /<user>/ in
+# front -- never /share/ (its token is no shortcode) nor a reel's audio page.
+_INSTAGRAM_POST = re.compile(
+    r"^/(?!share/)(?:[\w.]+/)?(?:reels?(?!/audio/)|p|tv)/([\w-]+)"
+)
 _TIKTOK_VIDEO = re.compile(r"^/@[\w.-]+/video/\d+")
+# Sites whose /share/... links only redirect to a post.
+_SHARE_HOSTS = ("instagram.com", "facebook.com")
 
 
 def _instagram(parts: SplitResult) -> str:
-    """https://www.instagram.com/reel/<code>/ (or /p/, /tv/): what yt-dlp
-    and the share sheet agree on; the query never matters."""
+    """https://www.instagram.com/reel/<code>/ for every kind of post: one
+    shortcode is one post whatever the path says, yt-dlp reads it as a reel
+    (a photo post ends as "no video"); the query never matters."""
     found = _INSTAGRAM_POST.match(parts.path)
     if found is None:
-        return parts._replace(netloc="www.instagram.com", query="").geturl()
-    kind = "reel" if found[1] in ("reel", "reels") else found[1]
-    return f"https://www.instagram.com/{kind}/{found[2]}/"
+        return parts._replace(
+            scheme="https", netloc="www.instagram.com", query=""
+        ).geturl()
+    return f"https://www.instagram.com/reel/{found[1]}/"
 
 
 def _tiktok(parts: SplitResult) -> str:
-    """A video page keeps only its path: its query is all share trackers."""
-    if _TIKTOK_VIDEO.match(parts.path):
-        return parts._replace(scheme="https", query="").geturl()
+    """A video page is https://www.tiktok.com/@<user>/video/<id> (the only
+    host yt-dlp takes; tiktok.com and m. are the same page), nothing after
+    it: its query is all share trackers. Short links (vm., vt.) as pasted:
+    only a request could tell which video they are."""
+    found = _TIKTOK_VIDEO.match(parts.path)
+    if found:
+        return f"https://www.tiktok.com{found[0]}"
     return parts.geturl()
 
 
@@ -60,12 +81,32 @@ _SITES: dict[str, Callable[[SplitResult], str]] = {
     "instagram.com": _instagram,
     "tiktok.com": _tiktok,
 }
+# A site's name in messages, when it is not its domain's ("x.com" -> "X").
+_NAMES = {"tiktok.com": "TikTok", "youtube.com": "YouTube", "youtu.be": "YouTube"}
+
+
+def _on(host: str, domain: str) -> bool:
+    return host == domain or host.endswith(f".{domain}")
 
 
 def _site(host: str) -> Callable[[SplitResult], str] | None:
-    return next(
-        (fn for d, fn in _SITES.items() if host == d or host.endswith(f".{d}")), None
-    )
+    return next((fn for d, fn in _SITES.items() if _on(host, d)), None)
+
+
+def site_name(url: str) -> str:
+    """The link's site as a VA names it: "Instagram", "TikTok", "YouTube"."""
+    host = (urlsplit(url).hostname or "").lower()
+    named = next((name for d, name in _NAMES.items() if _on(host, d)), None)
+    if named:
+        return named
+    labels = host.removeprefix("www.").split(".")
+    return labels[-2].capitalize() if len(labels) > 1 else "The site"
+
+
+def _share_link(url: str) -> bool:
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    return parts.path.startswith("/share/") and any(_on(host, d) for d in _SHARE_HOSTS)
 
 
 def _tracker(name: str) -> bool:
@@ -139,11 +180,30 @@ def _reason(links: int) -> str:
     return "a link and other text" if links else "not a link"
 
 
+def one_post(url: str) -> bool | str:
+    """Whether yt-dlp reads `url` as ONE post: its extractor (`site_of`)
+    is one of `settings.clone_links.video_extractors` (an allowlist: yt-dlp
+    keeps adding list extractors). False: no site's extractor takes it; else
+    `NOT_ONE_POST` for a profile/playlist/story/tag/redirector link."""
+    found = site_of(url)
+    if found is None:
+        return False
+    return found in settings.clone_links.video_extractors or NOT_ONE_POST
+
+
+def read_pasted(text: str) -> PastedLinks:
+    """What /clone-links Check, previews and Generate take: `read_links`
+    with every link one post of a video site (`one_post`)."""
+    return read_links(text, video_site=one_post)
+
+
 def read_links(
-    text: str, video_site: Callable[[str], bool] | None = None
+    text: str, video_site: Callable[[str], bool | str] | None = None
 ) -> PastedLinks:
-    """`video_site(link)`: whether a downloader can get a video from the
-    link's site (the router passes yt-dlp's `site_of`); False = bad line."""
+    """`video_site(link)`: True when a downloader can get the video, False
+    when no site of the link's has one (`NOT_A_VIDEO_SITE`), or why else
+    the link is refused, in the VA's words. A share link that only
+    redirects is refused before it is asked (`SHARE_LINK`)."""
     links: list[str] = []
     bad: list[BadLine] = []
     for number, line in enumerate(text.splitlines(), start=1):
@@ -153,8 +213,10 @@ def read_links(
         found = [link for t in tokens if (link := _link(t))]
         if len(tokens) != 1 or not found:
             reason = _reason(len(found))
-        elif video_site is not None and not video_site(found[0]):
-            reason = NOT_A_VIDEO_SITE
+        elif _share_link(found[0]):
+            reason = SHARE_LINK
+        elif video_site is not None and (taken := video_site(found[0])) is not True:
+            reason = taken if isinstance(taken, str) else NOT_A_VIDEO_SITE
         else:
             links.append(found[0])
             continue

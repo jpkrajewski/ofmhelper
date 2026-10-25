@@ -5,9 +5,9 @@ Each URL goes to the downloaders in turn and keeps the first that gets
 files that really are what they claim: yt-dlp (`generic.py`, videos), the
 KVS player reader (`kvs.py`, tube sites yt-dlp gets wrong) and gallery-dl
 (`images.py`, photos and mixed posts). Which goes first is decided by the
-link: kinds of posts that are usually photos or carousels (`_IMAGES_FIRST`)
-start with gallery-dl, everything else with yt-dlp. A new site = one entry
-there; a new tool = one entry in `_order`.
+link: kinds of posts that are usually photos or carousels
+(`sites.IMAGES_FIRST`) start with gallery-dl, everything else with yt-dlp.
+A new site = one entry there; a new tool = one entry in `_order`.
 
 A "video" that ffprobe cannot read (a site's web page saved as .mp4,
 2026-10-23) is deleted and counts as that tool failing, so the next one
@@ -16,20 +16,22 @@ gets its turn -- never a broken file reported as downloaded.
 
 from __future__ import annotations
 
-import re
 import secrets
+import shutil
 import subprocess
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
 from ofmhelpers.downloaders import generic, images, kvs
 from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import DownloadResult
+from ofmhelpers.downloaders.sites import images_first
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.video_probe import duration_s
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 logger = get_logger(__name__)
@@ -37,40 +39,36 @@ logger = get_logger(__name__)
 # Where each URL's own download directory is made under (the tools' default).
 _OUTPUT_ROOT = generic.DownloadConfig().output_dir
 
-# Links whose posts are mostly photos or carousels: an Instagram post (a
-# reel is /reel/), an X/Twitter status, a Pinterest pin, a TikTok photo post.
-# gallery-dl gets every item of such a post, yt-dlp only its videos.
-_IMAGES_FIRST = re.compile(
-    r"instagram\.com/(?:[^/]+/)?p/"
-    r"|(?:^|[/.])(?:x|twitter)\.com/"
-    r"|pinterest\.|pin\.it/"
-    r"|tiktok\.com/.*/photo/",
-    re.IGNORECASE,
-)
 
-
-def _video(url: str, cookiefile: str | None, out: Path) -> DownloadResult:
-    return generic.download(
-        url, config=generic.DownloadConfig(output_dir=out), cookiefile=cookiefile
+def _video(url: str, cookiefile: str | None, out: Path, single: bool) -> DownloadResult:
+    config = (
+        generic.DownloadConfig.single_post(output_dir=out)
+        if single
+        else generic.DownloadConfig(output_dir=out)
     )
+    return generic.download(url, config=config, cookiefile=cookiefile)
 
 
-def _images(url: str, cookiefile: str | None, out: Path) -> DownloadResult:
-    return images.download(
-        url, config=images.ImageDownloadConfig(output_dir=out), cookiefile=cookiefile
-    )
+def _images(
+    url: str, cookiefile: str | None, out: Path, single: bool
+) -> DownloadResult:
+    most = settings.downloaders.single_post_items if single else None
+    config = images.ImageDownloadConfig(output_dir=out, max_items=most)
+    return images.download(url, config=config, cookiefile=cookiefile)
 
 
-def _kvs(url: str, cookiefile: str | None, out: Path) -> DownloadResult:
-    del cookiefile  # a KVS video is public
+def _kvs(url: str, cookiefile: str | None, out: Path, single: bool) -> DownloadResult:
+    del cookiefile, single  # a KVS page is one public video
     return kvs.download(url, out)
 
 
 def _order(
     url: str,
-) -> list[tuple[str, Callable[[str, str | None, Path], DownloadResult]]]:
+) -> list[tuple[str, Callable[[str, str | None, Path, bool], DownloadResult]]]:
+    """The tools to try, in turn; each takes (url, cookiefile, its
+    directory, one post only)."""
     video, player, pictures = ("video", _video), ("kvs", _kvs), ("images", _images)
-    if _IMAGES_FIRST.search(url):
+    if images_first(url):
         return [pictures, video]
     return [video, player, pictures]
 
@@ -101,10 +99,33 @@ def download(url: str, cookiefile: str | None = None) -> DownloadResult:
     from the post (and some extractors have no unique id -- every titleless
     X video is `twitter_None_1.mp4`), so a shared folder let one download
     overwrite another's file (prod, 2026-10-23). Isolated, no two collide."""
+    return _download_into(url, cookiefile, _OUTPUT_ROOT / secrets.token_hex(8))
+
+
+@contextmanager
+def downloaded(
+    url: str, cookiefile: str | None = None, *, single: bool = False
+) -> Iterator[DownloadResult]:
+    """`download`, for a caller that only needs the files while the block
+    runs (it copies what it keeps, e.g. into the asset store): the URL's own
+    directory, partial files included, is removed on the way out, whatever
+    happened. `single`: the linked post only, never a playlist, profile or
+    story tray around it (/clone-links clones one video per link): yt-dlp
+    gets `DownloadConfig.single_post`, gallery-dl the same entry limit
+    (`--range`)."""
     out = _OUTPUT_ROOT / secrets.token_hex(8)
+    try:
+        yield _download_into(url, cookiefile, out, single=single)
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
+
+
+def _download_into(
+    url: str, cookiefile: str | None, out: Path, *, single: bool = False
+) -> DownloadResult:
     errors: list[str] = []
     for name, fetch in _order(url):
-        result = fetch(url, cookiefile, out)
+        result = fetch(url, cookiefile, out, single)
         reason = _broken_video(result) if result.success else None
         if result.success and reason is None:
             return result

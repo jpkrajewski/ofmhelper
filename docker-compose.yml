@@ -93,6 +93,13 @@ services:
     # from settings itself, so no shell is needed to expand them -- exec form
     # also keeps signals going straight to the process.
     command: ["python", "-m", "ofmhelpers.worker"]
+    # `compose stop` (every deploy) is a warm shutdown: the pool takes no new
+    # job and each worker finishes the one it runs. Docker's default 10 s
+    # SIGKILLed /clone-links reviews mid-LLM-call or mid-upload; 120 s lets
+    # them finish. A generation still running then is cut off and resumed by
+    # recovery (web/recovery.py). The deploys stop the workers before the
+    # app, so this wait is not downtime.
+    stop_grace_period: 120s
     # The image's HTTP healthcheck (probes :8000/health) is meaningless for the
     # worker, which runs no web server -- disable it so status isn't "unhealthy".
     healthcheck:
@@ -103,6 +110,41 @@ services:
     volumes: *app-volumes
     depends_on:
       # Never against an un-migrated database: `migrate` must have exited 0.
+      migrate:
+        condition: service_completed_successfully
+      pot-provider:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
+  # /clone-links runs (src/ofmhelpers/web/clone_links/run.py) on their own
+  # `clone-links` queue and pool (OFM_CLONE_LINKS_WORKERS, default 5): a
+  # 30-120 link Generate holds a worker per run for minutes each, and on the
+  # shared default queue it held every other job back for hours. Otherwise
+  # the same as `worker` (image, env, mounts, shutdown).
+  clone-links-worker:
+    build: .
+    container_name: ofmhelpers-clone-links-worker
+    restart: unless-stopped
+    command: ["python", "-m", "ofmhelpers.worker", "clone-links"]
+    stop_grace_period: 120s
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    volumes: *app-volumes
+    depends_on:
       migrate:
         condition: service_completed_successfully
       pot-provider:

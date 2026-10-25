@@ -1,15 +1,21 @@
 """Gemini through Google AI Studio (`google-genai`, Google's official SDK).
 
 The free tier reads real video, not just frames (ai.google.dev, checked
-2026-10-24): `gemini-3.8-flash` is free there; free-tier inputs may be used
-by Google to improve its models. Key: https://aistudio.google.com/apikey
-(`GEMINI_API_KEY`); model `OFM_GEMINI_MODEL`.
+2026-10-24): `gemini-3.8-flash` is free there. Free ("Unpaid Services")
+terms, ai.google.dev/gemini-api/terms (2026-04-28): inputs and answers are
+used to improve Google's products and human reviewers may read them; do
+not send sensitive, confidential or personal information. The user accepted
+that for /clone-links checks (2026-10-25, llm/CLAUDE.md). Key:
+https://aistudio.google.com/apikey (`GEMINI_API_KEY`); model
+`OFM_GEMINI_MODEL`.
 
 A media file up to `settings.llm.inline_max_bytes` travels inside the
 request; a bigger one is uploaded through the Files API, waited on until
 Google has processed it, and deleted once answered (Google drops it after
 48 h anyway). The answer is asked as JSON following the caller's schema
-(`response_json_schema`).
+(`response_json_schema`). No temperature is sent: Google deprecated the
+sampling parameters for Gemini 3.x (ignored from 3.6 Flash / 3.5
+Flash-Lite on, a 400 in later generations; llm/CLAUDE.md).
 
 The SDK's own retries are off: `LLMProvider.ask` retries once for every
 provider, honouring Google's `RetryInfo` delay on a 429.
@@ -35,10 +41,11 @@ from ofmhelpers.llm.errors import (
     LLMError,
     LLMInputError,
     LLMOutputError,
+    LLMQuotaError,
     LLMRefusedError,
     LLMUnavailableError,
 )
-from ofmhelpers.llm.models import MediaKind, MediaPart, TextPart
+from ofmhelpers.llm.models import MediaKind, MediaPart, Reply, TextPart, Usage
 from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
@@ -74,42 +81,50 @@ class GeminiLLM(LLMProvider):
 
     @classmethod
     def default_key(cls) -> str | None:
-        key = settings.llm.gemini_api_key
-        return key.get_secret_value() if key else None
+        keys = settings.llm.gemini_keys
+        return keys[0] if keys else None
+
+    @classmethod
+    def default_keys(cls) -> list[str]:
+        return settings.llm.gemini_keys
 
     @classmethod
     def default_model(cls) -> str:
         return settings.llm.gemini_model
 
-    def _client(self) -> genai.Client:
-        s = settings.llm
+    def _client(self, timeout_s: float) -> genai.Client:
         fake = None
         if settings.infra.fake_externals:
             from ofmhelpers.llm.gemini.fake import fake_gemini
 
             fake = httpx.Client(transport=fake_gemini().transport())
         options = types.HttpOptions(
-            timeout=int(s.timeout_s * 1000),
+            timeout=_ms(timeout_s),
             retry_options=types.HttpRetryOptions(attempts=1),
             httpx_client=fake,
         )
         return genai.Client(api_key=self.api_key, http_options=options)
 
-    def _ask(self, prompt: Prompt, answer: type[BaseModel]) -> str:
-        client = self._client()
+    def _ask(self, prompt: Prompt, answer: type[BaseModel], timeout_s: float) -> Reply:
+        ends = time.monotonic() + timeout_s
+        client = self._client(timeout_s)
         uploaded: list[str] = []
         try:
             parts: list[types.PartUnionDict] = [
-                self._part(client, p, uploaded) for p in prompt.parts
+                self._part(client, p, uploaded, ends) for p in prompt.parts
             ]
             response = client.models.generate_content(
                 model=self.model,
                 contents=parts,
                 config=types.GenerateContentConfig(
                     system_instruction=prompt.system or None,
-                    temperature=prompt.temperature,
+                    temperature=self._temperature(prompt),
                     response_mime_type="application/json",
                     response_json_schema=answer.model_json_schema(),
+                    # What an upload left of this attempt's time.
+                    http_options=types.HttpOptions(
+                        timeout=_ms(ends - time.monotonic())
+                    ),
                 ),
             )
         except genai_errors.APIError as exc:
@@ -119,10 +134,14 @@ class GeminiLLM(LLMProvider):
             raise LLMUnavailableError(msg, detail=str(exc)) from exc
         finally:
             self._forget(client, uploaded)
-        return self._text(response)
+        return Reply(text=self._text(response), usage=_usage(response))
 
     def _part(
-        self, client: genai.Client, part: TextPart | MediaPart, uploaded: list[str]
+        self,
+        client: genai.Client,
+        part: TextPart | MediaPart,
+        uploaded: list[str],
+        ends: float,
     ) -> types.Part:
         if isinstance(part, TextPart):
             return types.Part.from_text(text=part.text)
@@ -140,14 +159,17 @@ class GeminiLLM(LLMProvider):
         )
         if file.name:
             uploaded.append(file.name)
-        file = self._ready(client, file, part.path.name)
+        file = self._ready(client, file, part.path.name, ends)
         return types.Part.from_uri(
             file_uri=file.uri or "", mime_type=file.mime_type or part.mime_type
         )
 
-    def _ready(self, client: genai.Client, file: types.File, label: str) -> types.File:
-        """`file` once Google has processed it (a video takes seconds)."""
-        deadline = time.monotonic() + settings.llm.file_ready_timeout_s
+    def _ready(
+        self, client: genai.Client, file: types.File, label: str, ends: float
+    ) -> types.File:
+        """`file` once Google has processed it (a video takes seconds), by
+        `ends` at the latest (the attempt's own end)."""
+        deadline = min(time.monotonic() + settings.llm.file_ready_timeout_s, ends)
         while file.state != types.FileState.ACTIVE:
             if file.state == types.FileState.FAILED:
                 msg = f"{self.label} could not process {label}"
@@ -195,7 +217,7 @@ class GeminiLLM(LLMProvider):
         if code == HTTPStatus.NOT_FOUND:
             return LLMConfigError(f"{self.label}: {message}", detail)
         if code == HTTPStatus.TOO_MANY_REQUESTS:
-            return LLMUnavailableError(
+            return LLMQuotaError(
                 f"{self.label}: rate limited or out of free quota",
                 detail,
                 retry_after_s=_retry_delay(exc.details),
@@ -203,6 +225,24 @@ class GeminiLLM(LLMProvider):
         if code in _TRANSIENT or code >= HTTPStatus.INTERNAL_SERVER_ERROR:
             return LLMUnavailableError(f"{self.label} is unavailable ({code})", detail)
         return LLMInputError(f"{self.label} rejected the request: {message}", detail)
+
+
+def _ms(seconds: float) -> int:
+    """`HttpOptions.timeout` is in milliseconds, and 0 means none at all."""
+    return max(1, int(seconds * 1000))
+
+
+def _usage(response: types.GenerateContentResponse) -> Usage:
+    """The tokens Google counted: the prompt, the thinking (billed as
+    output) and the answer itself."""
+    meta = response.usage_metadata
+    if meta is None:
+        return Usage()
+    return Usage(
+        input_tokens=meta.prompt_token_count,
+        thinking_tokens=meta.thoughts_token_count,
+        output_tokens=meta.candidates_token_count,
+    )
 
 
 def _retry_delay(body: Any) -> float | None:

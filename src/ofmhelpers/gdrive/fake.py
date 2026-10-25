@@ -15,8 +15,8 @@ It behaves the way the real one does where /drive depends on it
 State lives in memory, or, with `OFM_FAKES_DIR` set, in `drive.json` there
 under an exclusive file lock, so the app under test and the test seeding
 it share one Drive across processes. `trash`, `delete`, `add_file`,
-`seed_folder`, `move`, `share`/`unshare`, `fail_on` stand in for what a person
-(or an outage) does in Drive.
+`seed_folder`, `move`, `share`/`unshare`, `fail_on`, `set_storage`,
+`refuse_sign_in` stand in for what a person (or an outage) does in Drive.
 """
 
 from __future__ import annotations
@@ -33,7 +33,12 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.gdrive.base import DriveError, FolderGoneError
+from ofmhelpers.gdrive.base import (
+    DriveAuthError,
+    DriveError,
+    DriveFullError,
+    FolderGoneError,
+)
 from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder, DriveStorage
 
 if TYPE_CHECKING:
@@ -72,6 +77,9 @@ class FakeDriveState(BaseModel):
     # limit. An upload past the limit is refused the way Drive does.
     storage_used: int = 0
     storage_limit: int | None = None
+    # People whose sign-in Google refuses (revoked, expired): every call as
+    # them is a `DriveAuthError`.
+    refused: list[str] = Field(default_factory=list)
 
 
 _WRITES = frozenset({"create", "rename", "upload", "grant"})
@@ -298,7 +306,7 @@ class FakeDrive:
                     f"Uploading {name!r}: Drive refused (The user's Drive storage"
                     " quota has been exceeded.)"
                 )
-                raise DriveError(msg)
+                raise DriveFullError(msg)
             state.storage_used += size
             parent = self._live(state, parent_id, f"Uploading {name!r}")
             if parent.mime_type != FOLDER_MIME:
@@ -403,6 +411,19 @@ class FakeDrive:
         with self._state() as state:
             state.fail_on = list(names)
 
+    def refuse_sign_in(self, email: str) -> None:
+        """Google refuses `email`'s token from now on (revoked in their
+        Google Account, expired): `connect_as` them fails every call."""
+        with self._state() as state:
+            if email not in state.refused:
+                state.refused.append(email)
+
+    def check_sign_in(self, email: str) -> None:
+        """Raises `DriveAuthError` while `email`'s sign-in is refused."""
+        with self._state() as state:
+            if email in state.refused:
+                raise DriveAuthError
+
     # --- what a test reads back ---------------------------------------------
 
     def named(self, name: str, parent: str) -> list[str]:
@@ -460,12 +481,18 @@ class FakePersonDrive:
     """The fake Drive as one person (`connect_as` under OFM_FAKE_EXTERNALS):
     "root" is their own My Drive (a folder of theirs, made on first use),
     and what they make or upload is theirs. Everything else is the shared
-    fake's, so a test reads back through `FakeDrive` as usual."""
+    fake's, so a test reads back through `FakeDrive` as usual. Every call
+    first passes Google's sign-in check (`FakeDrive.refuse_sign_in`)."""
 
     def __init__(self, drive: FakeDrive, email: str) -> None:
         self._drive = drive
         self.email = email
         self.my_drive = f"mydrive-{email}"
+
+    def _me(self) -> FakeDrive:
+        """The shared fake, once Google takes this person's token."""
+        self._drive.check_sign_in(self.email)
+        return self._drive
 
     def _id(self, item_id: str) -> str:
         if item_id != "root":
@@ -477,49 +504,49 @@ class FakePersonDrive:
         return self.my_drive
 
     def folder(self, folder_id: str) -> DriveFolder:
-        return self._drive.folder(self._id(folder_id))
+        return self._me().folder(self._id(folder_id))
 
     def children(
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]:
-        return self._drive.children(self._id(parent_id), folders_only=folders_only)
+        return self._me().children(self._id(parent_id), folders_only=folders_only)
 
     def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
-        return self._drive.children_of([self._id(p) for p in parent_ids])
+        return self._me().children_of([self._id(p) for p in parent_ids])
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
-        return self._drive.find_folder(self._id(parent_id), name)
+        return self._me().find_folder(self._id(parent_id), name)
 
     def create_folder(self, parent_id: str, name: str) -> DriveFolder:
-        return self._drive.create_folder(self._id(parent_id), name, owner=self.email)
+        return self._me().create_folder(self._id(parent_id), name, owner=self.email)
 
     def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:
         return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
 
     def rename(self, folder_id: str, name: str) -> DriveFolder:
-        return self._drive.rename(folder_id, name)
+        return self._me().rename(folder_id, name)
 
     def file(self, file_id: str) -> DriveFile:
-        return self._drive.file(file_id)
+        return self._me().file(file_id)
 
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
-        return self._drive.thumbnail(item, px)
+        return self._me().thumbnail(item, px)
 
     def storage(self) -> DriveStorage:
-        return self._drive.storage()
+        return self._me().storage()
 
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str
     ) -> DriveFile:
-        return self._drive.upload(
+        return self._me().upload(
             self._id(parent_id), path, name, mime_type, owner=self.email
         )
 
     def grant(self, item_id: str, email: str) -> None:
-        self._drive.grant(item_id, email)
+        self._me().grant(item_id, email)
 
     def trash_file(self, item_id: str) -> None:
-        self._drive.trash_file(item_id)
+        self._me().trash_file(item_id)
 
 
 def fake_person(refresh_token: str) -> FakePersonDrive:

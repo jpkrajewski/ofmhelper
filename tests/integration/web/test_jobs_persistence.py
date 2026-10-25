@@ -12,13 +12,17 @@ tables between tests, so these never touch dev/prod data.
 
 from pathlib import Path
 
+from ofmhelpers.aigenproviders import tasks
 from ofmhelpers.web.db.repositories import JobRepository
 from ofmhelpers.web.stores.jobs import (
     create_job,
+    fail_job,
     get_job,
     list_jobs,
     list_jobs_page,
     log_event,
+    merge_params,
+    redone_links,
     reopen_job,
     run_job,
 )
@@ -241,3 +245,95 @@ def test_list_jobs_page_filters_and_pages_in_sql():
     stamps = [j.created_at for j in pages]
     assert stamps == sorted(stamps, reverse=True)
     assert list_jobs_page({"wan3"}, 0, 10, actor=None)[1] == 4
+
+
+# --- the history cap (review #3) ---------------------------------------------
+
+
+def test_the_history_cap_drops_the_oldest_finished_jobs_never_a_running_one(
+    monkeypatch,
+):
+    """A queued /clone-links run behind a big backlog is the oldest row: the
+    cap once deleted it, and the run still paid with nobody to see it."""
+    monkeypatch.setenv("OFM_JOBS_MAX_ENTRIES", "2")
+    queued = create_job("clone_links", {"link": "https://x/1"})
+    finished = [log_event("login", actor="1") for _ in range(4)]
+
+    assert get_job(queued).status == "running"
+    assert [job_id for job_id in finished if get_job(job_id)] == finished[-2:]
+
+
+def test_a_job_whose_row_is_gone_is_never_run():
+    """Nothing is downloaded or paid for a run nobody can see or review;
+    its remembered provider request goes with it."""
+    job_id = create_job("clone_links", {"link": "https://x/1"})
+    tasks.remember(
+        tasks.ProviderTask(
+            job_id=job_id, provider="kie", model="m", task_id="t1", api_key="k"
+        )
+    )
+    JobRepository().delete(job_id)
+    called = []
+
+    run_job(job_id, lambda: called.append("paid"), {})
+
+    assert called == []
+    assert get_job(job_id) is None
+    assert tasks.recall(job_id) is None
+
+
+# --- merge_params / redone_links ----------------------------------------------
+
+
+def test_merge_params_adds_values_and_keeps_the_other_keys():
+    job_id = create_job(
+        "clone_links", {"link": "https://x/1", "batch": "ab12cd34", "seconds": 6}
+    )
+    assert get_job(job_id).params["link"] == "https://x/1"  # a cached read
+
+    merge_params(job_id, {"source": "/a/v.mp4", "seconds": 7.5, "parts": [1, 2]})
+
+    assert get_job(job_id).params == {
+        "link": "https://x/1",
+        "batch": "ab12cd34",
+        "seconds": 7.5,
+        "source": "/a/v.mp4",
+        "parts": [1, 2],
+    }
+
+
+def test_merge_params_on_a_missing_job_does_nothing():
+    merge_params("gone0000", {"source": "/a/v.mp4"})
+    assert get_job("gone0000") is None
+
+
+def test_redone_links_are_the_links_queued_again_later_running_or_done():
+    """What a stale failed card's Recreate leaves out: the same actor's
+    later runs of the same task and link that did not fail."""
+    early = create_job("clone_links", {"link": "https://x/early"}, actor="7")
+    stale = create_job("clone_links", {"link": "https://x/running"}, actor="7")
+    fail_job(stale, "Timed out")
+    after = get_job(stale).created_at
+    create_job("clone_links", {"link": "https://x/running"}, actor="7")
+    done = create_job("clone_links", {"link": "https://x/done"}, actor="7")
+    run_job(done, list, {})
+    failed = create_job("clone_links", {"link": "https://x/failed"}, actor="7")
+    fail_job(failed, "Timed out")
+    create_job("clone_links", {"link": "https://x/other-actor"}, actor="8")
+    create_job("clone", {"link": "https://x/other-task"}, actor="7")
+    create_job("clone_links", {"link": "https://x/not-asked"}, actor="7")
+    asked = [
+        "https://x/early",
+        "https://x/running",
+        "https://x/done",
+        "https://x/failed",
+        "https://x/other-actor",
+        "https://x/other-task",
+    ]
+
+    assert get_job(early).status == "running"
+    assert redone_links("clone_links", "7", asked, after) == {
+        "https://x/running",
+        "https://x/done",
+    }
+    assert redone_links("clone_links", "7", [], after) == set()

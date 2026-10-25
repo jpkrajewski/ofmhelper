@@ -25,7 +25,8 @@ def connect_google(session: Session, email: str) -> None:
     """Links a Google account (the fake consent screen) to the signed-in
     session on /account: their Drive is connected from then on."""
     session.goto("/account")
-    session.page.click('a[href^="/auth/google/start?link=1"]')
+    # The page's own link: base.html also carries a hidden "Reconnect" one.
+    session.page.click('#main a[href^="/auth/google/start?link=1"]')
     session.page.fill("#fake-email", email)
     with session.page.expect_navigation():
         session.page.click("button[type=submit]")

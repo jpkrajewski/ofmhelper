@@ -3,7 +3,12 @@
 message stays available as the card's hover text, so the reason is all the
 card itself needs.
 
-A new kind of failure = one `ErrorReason` in `REASONS`; first match wins."""
+A new kind of failure = one `ErrorReason` in `REASONS`; first match wins.
+Our own fixed messages come first, anchored at the start (a /clone-links
+run that never reached the provider: "Could not download ...", "Too long
+...", "Stopped"), so a downloader's text behind them -- Instagram's
+"rate-limit", a site's "401 Unauthorized" -- never reads as the AI
+provider's "Rate limited" or "Wrong API key"."""
 
 import re
 from functools import lru_cache
@@ -20,6 +25,18 @@ class ErrorReason(BaseModel):
 
 
 REASONS = (
+    # /clone-links runs (web/clone_links/run.py), before anything is paid.
+    ErrorReason(
+        label="Could not download",
+        pattern=r"^(could not download|no video at this link|the video could not"
+        r"|the video cannot)",
+    ),
+    ErrorReason(label="Needs login", pattern=r"^needs login"),
+    ErrorReason(label="Too long", pattern=r"^too long"),
+    ErrorReason(label="Stopped", pattern=r"^stopped\b"),
+    ErrorReason(label="Export failed", pattern=r"^export failed"),
+    # Paid and still being made: recovery finishes it (aigenproviders/runner).
+    ErrorReason(label="Still generating", pattern=r"still generating"),
     ErrorReason(
         label="No credits",
         pattern=r"credits? insufficient|insufficient (credit|balance)|\b402\b",

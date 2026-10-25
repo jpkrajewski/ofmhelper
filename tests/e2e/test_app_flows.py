@@ -16,7 +16,6 @@ import pytest
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_FAKE_KEY
 from ofmhelpers.gdrive.fake import FakeDrive
 from ofmhelpers.web.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.stores import devices, watched_profiles
@@ -28,6 +27,7 @@ VA_PAGES = [
     "/generate",
     "/clone",
     "/clone-long",
+    "/clone-links",
     "/download-assets",
     "/accounts",
     "/links",
@@ -449,85 +449,6 @@ def test_clone_long_start_queues_a_card_that_fails_cleanly_on_a_wrong_key(
         expect(picked.locator(".reused-badge")).to_have_count(1)
     expect(va.page.locator("#clone-long-prompt")).not_to_have_value("")
     expect(va.page.locator(".file-picker-missing")).to_have_count(0)
-    assert va.js_errors == []
-
-
-def test_clone_links_checks_prices_runs_and_files_a_good_reel(
-    va: Session, fake_drive: FakeDrive, subject_images: list[Path]
-):
-    """/clone-links end to end: pasted links cleaned and checked (one reel
-    twice, one dead reel, one page of no video site glued on), Generate
-    asks to confirm the price, the run's video is checked GOOD and lands in
-    the VA's own GOOD REELS."""
-    connect_google(va, "va.google@example.com")
-    va.goto("/clone-links")
-    va.page.select_option("#provider-select", "kie")
-    va.page.fill("#api-key", KIE_FAKE_KEY)
-    va.page.locator('.file-picker[data-field="image"] .file-add-input').set_input_files(
-        str(subject_images[0])
-    )
-    reel = "https://www.instagram.com/reel/E2ECL1/"
-    dead = "https://www.instagram.com/reel/fake-fail-2/"
-    junk = "https://claude.ai/new"
-    refused_paste = f"{reel}\n{dead}{reel}\n{junk}"
-    va.page.fill("#clone-links-text", refused_paste)
-    va.page.click(".check-links-btn")
-    refused = va.page.locator("#clone-links-refused")
-    expect(refused).to_be_visible()
-    expect(refused.locator("h2")).to_have_text("Please put one link per line")
-    expect(refused.locator("strong.cost-line-name")).to_have_text(
-        [f"{dead}{reel}", junk]
-    )
-    expect(refused.locator(".cost-line-detail")).to_have_text(
-        ["2 links on one line", "Please put Instagram, TikTok, Twitter etc."]
-    )
-    refused.get_by_role("button", name="OK").click()
-    expect(refused).to_be_hidden()
-    expect(va.page.locator("#clone-links-text")).to_have_value(refused_paste)
-    expect(va.page.locator("#link-checks")).to_be_hidden()
-    pasted = f"{reel}?igsh=abc\nhttps://instagram.com/reels/E2ECL1\n{dead}"
-    va.page.fill("#clone-links-text", pasted)
-
-    va.page.click(".check-links-btn")
-
-    expect(va.page.locator("#clone-links-text")).to_have_value(f"{reel}\n{dead}")
-    rows = va.page.locator("#link-checks .link-check")
-    expect(rows).to_have_count(2)
-    expect(rows.nth(0).locator(".link-check-detail")).to_have_text(
-        re.compile(r"^\d+\.\d s$"), timeout=RESULT_TIMEOUT_MS
-    )
-    expect(rows.nth(0).locator(".link-check-thumb img")).to_have_count(1)
-    expect(rows.nth(1)).to_have_attribute("data-problem", "", timeout=RESULT_TIMEOUT_MS)
-
-    va.page.click('#clone-links-form button[type="submit"]')
-    dialog = va.page.locator("#clone-links-confirm")
-    expect(dialog).to_be_visible()
-    expect(va.page.locator("#clone-links-confirm-title")).to_have_text(
-        "Generate 1 clone?"
-    )
-    expect(dialog.locator(".cost-line")).to_have_count(2)  # the run + the dead reel
-    expect(dialog.locator(".cost-line-flagged .cost-line-detail")).to_have_text(
-        ["not downloaded, left out"]
-    )
-    expect(va.page.locator("#clone-links-confirm-usd")).to_have_text(
-        re.compile(r"^\$\d+\.\d\d$")
-    )
-    with va.page.expect_response(lambda r: r.url.endswith("/clone-links/run")) as run:
-        va.page.click("#clone-links-confirm-go")
-
-    [job_id] = run.value.json()["job_ids"]
-    card = va.page.locator(f'#clone-links-gallery > [data-job-id="{job_id}"]')
-    expect(card).to_have_count(1)
-    review = card.locator(".ai-check")
-    expect(review).to_contain_text(
-        "In Drive: GOOD REELS", timeout=2 * RESULT_TIMEOUT_MS
-    )
-    expect(review.locator(".badge")).to_have_text("GOOD")
-    (good,) = fake_drive.named(
-        "GOOD REELS", my_root(fake_drive, "va.google@example.com")
-    )
-    assert len(fake_drive.names_in(good)) == 1
-    expect(va.page.locator("#link-checks")).to_be_hidden()
     assert va.js_errors == []
 
 

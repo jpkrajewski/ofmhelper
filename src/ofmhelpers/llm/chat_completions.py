@@ -17,6 +17,7 @@ made to fit strict mode's rules (`strict_schema`).
 from __future__ import annotations
 
 import base64
+import json
 import tempfile
 from http import HTTPStatus
 from pathlib import Path
@@ -33,20 +34,25 @@ from ofmhelpers.llm.errors import (
     LLMError,
     LLMInputError,
     LLMOutputError,
+    LLMQuotaError,
     LLMRefusedError,
     LLMUnavailableError,
 )
-from ofmhelpers.llm.models import MediaKind, MediaPart, TextPart
+from ofmhelpers.llm.models import MediaKind, MediaPart, Reply, TextPart, Usage
 from ofmhelpers.utils.image_fit import ImageLimits, fitted
 
 if TYPE_CHECKING:
     from ofmhelpers.llm.models import Prompt
 
 _AUTH = (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
-# Said on top of the strict schema: a vendor may check the answer against
-# the schema after generating it rather than constrain it (Groq: a plain
-# "Hola" came back as a 400 `json_validate_failed`, 2026-10-25).
-_JSON_ONLY = "Reply with one JSON object that follows the given schema, nothing else."
+# Said on top of the strict schema, with the schema itself: a vendor may
+# check the answer against the schema after generating it rather than
+# constrain it, and a model never shown the field names makes up its own
+# (Groq's qwen: a plain "Hola", then "blocking_problem" / "problems" /
+# "finding" keys on reels it was about to flag, each a 400
+# `json_validate_failed`; asked again, only the short "no glitches" answer
+# got through -- every check GOOD, dev 2026-10-25).
+_JSON_ONLY = "Reply with one JSON object that follows this JSON Schema, nothing else:"
 # The vendor's error code for an answer that failed its own schema check.
 _BAD_JSON = "json_validate_failed"
 _TRANSIENT = (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.CONFLICT)
@@ -109,9 +115,16 @@ class _Choice(BaseModel):
     finish_reason: str | None = None
 
 
+class _Usage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
 class _Completion(BaseModel):
     model_config = ConfigDict(extra="ignore")
     choices: list[_Choice] = []
+    usage: _Usage | None = None
 
 
 class ChatCompletionsLLM(LLMProvider):
@@ -120,6 +133,9 @@ class ChatCompletionsLLM(LLMProvider):
 
     base_url: ClassVar[str]
     media = frozenset({MediaKind.IMAGE})
+    # 0: the same input gives (nearly) the same answer -- a checker, not a
+    # writer.
+    temperature: ClassVar[float | None] = 0.0
     # Vendor-specific request fields.
     extra_body: ClassVar[dict[str, Any]] = {}
 
@@ -128,44 +144,49 @@ class ChatCompletionsLLM(LLMProvider):
         """The vendor's wire fake (OFM_FAKE_EXTERNALS)."""
         raise NotImplementedError
 
-    def _client(self) -> httpx.Client:
+    def _client(self, timeout_s: float) -> httpx.Client:
         transport = self.fake_transport() if settings.infra.fake_externals else None
         return httpx.Client(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=settings.llm.timeout_s,
+            timeout=timeout_s,
             transport=transport,
         )
 
-    def _ask(self, prompt: Prompt, answer: type[BaseModel]) -> str:
+    def _ask(self, prompt: Prompt, answer: type[BaseModel], timeout_s: float) -> Reply:
+        schema = strict_schema(answer.model_json_schema())
+        temperature = self._temperature(prompt)
         with tempfile.TemporaryDirectory(prefix="llm-img-") as work:
             body = {
                 "model": self.model,
-                "messages": self._messages(prompt, Path(work)),
-                "temperature": prompt.temperature,
+                "messages": self._messages(prompt, schema, Path(work)),
+                **({} if temperature is None else {"temperature": temperature}),
                 "response_format": {
                     "type": "json_schema",
                     "json_schema": {
                         "name": answer.__name__,
                         "strict": True,
-                        "schema": strict_schema(answer.model_json_schema()),
+                        "schema": schema,
                     },
                 },
                 **self.extra_body,
             }
         try:
-            with self._client() as client:
+            with self._client(timeout_s) as client:
                 response = client.post("/chat/completions", json=body)
         except httpx.HTTPError as exc:
             msg = f"{self.label}: {type(exc).__name__}"
             raise LLMUnavailableError(msg, detail=str(exc)) from exc
         if response.is_error:
             raise self._mapped(response)
-        return self._text(response)
+        return self._reply(response)
 
-    def _messages(self, prompt: Prompt, work: Path) -> list[dict[str, Any]]:
+    def _messages(
+        self, prompt: Prompt, schema: dict[str, Any], work: Path
+    ) -> list[dict[str, Any]]:
         content = [self._part(p, work) for p in prompt.parts]
-        system = "\n\n".join(filter(None, (prompt.system, _JSON_ONLY)))
+        shape = f"{_JSON_ONLY}\n{json.dumps(schema, separators=(',', ':'))}"
+        system = "\n\n".join(filter(None, (prompt.system, shape)))
         return [
             {"role": "system", "content": system},
             {"role": "user", "content": content},
@@ -185,7 +206,7 @@ class ChatCompletionsLLM(LLMProvider):
         mime = "image/jpeg" if image != part.path else part.mime_type
         return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
 
-    def _text(self, response: httpx.Response) -> str:
+    def _reply(self, response: httpx.Response) -> Reply:
         try:
             found = _Completion.model_validate_json(response.content)
         except ValidationError as exc:
@@ -199,7 +220,12 @@ class ChatCompletionsLLM(LLMProvider):
         if choice is None or not choice.message.content:
             msg = f"{self.label} gave no answer" + (f" ({reason})" if reason else "")
             raise LLMOutputError(msg)
-        return choice.message.content
+        # `completion_tokens` counts any reasoning too (not split out).
+        used = found.usage or _Usage()
+        usage = Usage(
+            input_tokens=used.prompt_tokens, output_tokens=used.completion_tokens
+        )
+        return Reply(text=choice.message.content, usage=usage)
 
     def _mapped(self, response: httpx.Response) -> LLMError:
         code = response.status_code
@@ -214,7 +240,7 @@ class ChatCompletionsLLM(LLMProvider):
         if code == HTTPStatus.NOT_FOUND:
             return LLMConfigError(f"{self.label}: {message}", detail)
         if code == HTTPStatus.TOO_MANY_REQUESTS:
-            return LLMUnavailableError(
+            return LLMQuotaError(
                 f"{self.label}: rate limited or out of free quota",
                 detail,
                 retry_after_s=_seconds(response.headers.get("retry-after")),

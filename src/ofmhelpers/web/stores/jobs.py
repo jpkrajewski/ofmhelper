@@ -77,10 +77,13 @@ def resumable(exc: BaseException) -> bool:
     """Whether a job failing with `exc` keeps its provider request(s) for
     recovery to finish: a provider error (timed out, download failed) or RQ
     ending the job at its time limit -- paid pieces of a long clone
-    included. Anything else failed after the result was in (CapCut export,
-    asset store): recovery re-running it would fail the same way every
-    sweep."""
-    return isinstance(exc, (ProviderError, JobTimeoutException))
+    included -- or an error that says so itself (`keep_request`: a /clone
+    export that failed every try, re-run a bounded number of times).
+    Anything else failed after the result was in (asset store): recovery
+    re-running it would fail the same way every sweep."""
+    return isinstance(exc, (ProviderError, JobTimeoutException)) or bool(
+        getattr(exc, "keep_request", False)
+    )
 
 
 def run_job(job_id: str, fn, kwargs: dict):
@@ -88,13 +91,20 @@ def run_job(job_id: str, fn, kwargs: dict):
     endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
     status transition straight to Postgres so the API process sees it even
     when this runs in a separate worker. One trace per run (telemetry.py):
-    the job, who started it, and every call it makes inside."""
-    row = _repository().get(job_id) or {}
+    the job, who started it, and every call it makes inside.
+
+    A job whose row is gone (the history cap, a heal) is not run: nobody
+    could see or review what it made, yet it would pay the provider."""
+    row = _repository().get(job_id)
+    if row is None:
+        logger.warning("job %s no longer exists: not run", job_id)
+        tasks.forget(job_id)
+        return
     with logfire.span(
         "job {task} {job_id}",
         job_id=job_id,
-        task=row.get("task", fn.__name__),
-        actor=row.get("actor"),
+        task=row["task"],
+        actor=row["actor"],
         function=fn.__qualname__,
     ) as span:
         try:
@@ -233,6 +243,20 @@ def list_batch(task: str, batch: str, actor: str) -> list[Job]:
     return [
         Job.model_validate(row) for row in _repository().list_batch(task, actor, batch)
     ]
+
+
+def merge_params(job_id: str, values: dict[str, Any]) -> None:
+    """`values` added to the job's params (the rest kept): what a run
+    learns that its re-run needs (a /clone-links run's downloaded source).
+    Never a key: params are shown on the job's page."""
+    _repository().merge_params(job_id, values)
+
+
+def redone_links(task: str, actor: str, links: list[str], after: float) -> set[str]:
+    """Which of `links` `actor` queued again as `task` after `after`
+    (created_at), still running or done: a stale failed card's Recreate
+    leaves those out."""
+    return _repository().redone_links(task, actor, links, after)
 
 
 def count_hidden_jobs(tasks: set[str], actor: str) -> int:

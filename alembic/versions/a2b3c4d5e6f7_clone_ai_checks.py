@@ -5,11 +5,17 @@ clone_ai_checks: one row per check (ofmhelpers.clone_ai_check): the verdict
 (GOOD/GLITCHY, NULL when the check itself failed -- `error`), the model's
 glitch percent, glitches and reasoning, and everything needed to debug it:
 prompt, raw answer, provider/model, the stills' times, attempts and
-timings. Optionally the job result it checked. Deleted with its user.
+timings, tokens used, and the kind of failure (`error_kind`: quota, setup,
+failed) with the provider's own text kept apart from the short `error`
+(`error_detail`, never shown). Optionally the job result it checked (SET NULL
+when that job is deleted). Deleted with its user.
 
 clone_from_links: one row per /clone-links result on its way to Drive: its
 check, then the upload into the owner's GOOD REELS or TRIAL REELS folder
-(status checking / uploading / done / failed). One per result file. Deleted
+(status checking / uploading / done / failed), the result's local `path`
+(a cut-off review is queued again from it), `started_at` (when a worker
+claimed it; NULL = still queued) and `attempts`. One per result file.
+Deleted with its job (CASCADE: a reused job id never finds an old row) and
 with its user; its check may go first (SET NULL).
 
 New tables: nothing existing changes.
@@ -57,8 +63,14 @@ def upgrade() -> None:
         sa.Column("sheet_s", sa.Float(), nullable=False),
         sa.Column("llm_s", sa.Float(), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("error_kind", sa.String(length=16), nullable=True),
+        sa.Column("error_detail", sa.Text(), nullable=True),
+        sa.Column("input_tokens", sa.Integer(), nullable=True),
+        sa.Column("thinking_tokens", sa.Integer(), nullable=True),
+        sa.Column("output_tokens", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.Float(), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_clone_ai_checks_job_id", "clone_ai_checks", ["job_id"])
@@ -74,9 +86,13 @@ def upgrade() -> None:
         sa.Column("drive_file_id", sa.String(length=128), nullable=True),
         sa.Column("drive_url", sa.Text(), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("path", sa.Text(), nullable=True),
+        sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.Float(), nullable=False),
+        sa.Column("started_at", sa.Float(), nullable=True),
         sa.Column("finished_at", sa.Float(), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["check_id"], ["clone_ai_checks.id"], ondelete="SET NULL"
         ),

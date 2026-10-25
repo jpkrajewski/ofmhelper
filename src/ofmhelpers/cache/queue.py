@@ -14,6 +14,7 @@ throwaway half.
 from __future__ import annotations
 
 from rq import Queue, Worker
+from rq.job import Job
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
@@ -27,6 +28,12 @@ QUEUE_NAME = "default"
 # Gallery previews (web/previews.py): ffmpeg encodes, consumed by their own
 # low-priority worker so they never hold a generation worker.
 PREVIEWS_QUEUE = "previews"
+# /clone-links runs (web/clone_links/run.py): a 30-120 link Generate on its
+# own worker pool (compose `clone-links-worker`), so it never holds the
+# default queue for hours.
+CLONE_LINKS_QUEUE = "clone-links"
+# Every queue `run_job` is put on: what `active_job_ids` reads.
+JOB_QUEUES = (QUEUE_NAME, CLONE_LINKS_QUEUE)
 
 
 def get_queue(name: str = QUEUE_NAME) -> Queue:
@@ -45,20 +52,33 @@ def get_queue(name: str = QUEUE_NAME) -> Queue:
 
 
 def active_job_ids() -> set[str] | None:
-    """The app job ids (`run_job`'s first argument) queued on the default
-    queue or being run by a live worker; None when it cannot tell (the
-    synchronous test mode, Redis down). A worker killed mid-job (a deploy)
-    stops counting once its heartbeat key expires."""
+    """The app job ids (`run_job`'s first argument) queued on a job queue
+    (`JOB_QUEUES`), being taken off one by a worker, or being run by a live
+    worker; None when it cannot tell (the synchronous test mode, Redis down).
+    A worker killed mid-job (a deploy) stops counting once its heartbeat key
+    expires.
+
+    Read in the order a job moves, so one queued or starting is never
+    missed: each queue's list, then its intermediate list (a worker's
+    dequeue BLMOVEs the job there; its work horse later sets `current_job`
+    and takes the job off that list in one MULTI), then the workers. A job a
+    worker died holding in the intermediate list counts until rq's own
+    cleanup fails it (about a minute)."""
     if not settings.infra.rq_async:
         return None
     try:
-        queue = get_queue()
-        rq_jobs = list(queue.get_jobs())
-        for worker in Worker.all(connection=get_redis()):
-            current = worker.get_current_job()
+        redis = get_redis()
+        rq_ids: list[str] = []
+        for name in JOB_QUEUES:
+            queue = get_queue(name)
+            rq_ids += queue.get_job_ids()
+            rq_ids += queue.intermediate_queue.get_job_ids()
+        for worker in Worker.all(connection=redis):
+            current = worker.get_current_job_id()
             if current is not None:
-                rq_jobs.append(current)
-        return {str(j.args[0]) for j in rq_jobs if j.args}
+                rq_ids.append(current)
+        rq_jobs = Job.fetch_many(rq_ids, connection=redis)
+        return {str(j.args[0]) for j in rq_jobs if j is not None and j.args}
     except Exception:
         logger.warning("could not read the queue's active jobs", exc_info=True)
         return None

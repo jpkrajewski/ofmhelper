@@ -89,8 +89,10 @@ def account_page(request: Request, google: str = "", apple: str = ""):
 @router.get("/drive-space")
 def drive_space_now(request: Request) -> DriveSpace | None:
     """The signed-in person's Google Drive space, for every page's
-    drive-alert.js; null without Google connected or when Drive cannot be
-    asked."""
+    drive-alert.js: `low` (the full pop-up) or `reconnect` (Google refused
+    their token: the Reconnect pop-up); null without Google connected or
+    when Drive did not answer. Cached (web/drive_space.py): Google is asked
+    at most once per TTL per person, whatever it answers."""
     return drive_space(AuthMiddleware.user(request).id)
 
 

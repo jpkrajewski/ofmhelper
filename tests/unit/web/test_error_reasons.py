@@ -4,6 +4,7 @@ The messages below are the real ones jobs have failed with (prod data,
 
 import pytest
 
+from ofmhelpers.web.clone_links import run as clone_link_run
 from ofmhelpers.web.schemas import JobStatusPayload
 from ofmhelpers.web.schemas.errors import FALLBACK, error_reason
 
@@ -69,6 +70,94 @@ from ofmhelpers.web.schemas.errors import FALLBACK, error_reason
 )
 def test_error_maps_to_one_short_reason(error, reason):
     assert error_reason(error) == reason
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        ("Could not download this reel", "Could not download"),
+        # yt-dlp's Instagram login wall and a site's 401 behind our own
+        # words: never the AI provider's "Rate limited" / "Wrong API key".
+        (
+            (
+                "Could not download this reel: The webpage request was redirected"
+                " to the login page. You have exceeded the rate-limit for"
+                " accessing posts anonymously"
+            ),
+            "Could not download",
+        ),
+        (
+            (
+                "Could not download this reel: video: HTTP Error 401: Unauthorized"
+                " | images: '401 Unauthorized' for 'https://www.instagram.com/p/X/'"
+            ),
+            "Could not download",
+        ),
+        (
+            (
+                "Needs login: upload your cookies on the Cookies page"
+                " (Instagram: rate-limit reached or login required)"
+            ),
+            "Needs login",
+        ),
+        ("Too long for Wan 3.0: 15.1 s (the most is 15 s)", "Too long"),
+        ("Stopped: the Generate was stopped", "Stopped"),
+    ],
+)
+def test_a_run_that_never_reached_the_provider_says_so(error, reason):
+    """/clone-links' own fixed messages (web/clone_links/run.py) come first
+    and only at the start of the message."""
+    assert error_reason(error) == reason
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (clone_link_run.COULD_NOT_DOWNLOAD, "Could not download"),
+        (clone_link_run.NO_VIDEO, "Could not download"),
+        (clone_link_run.NOT_KEPT, "Could not download"),
+        (clone_link_run.UNREADABLE, "Could not download"),
+        (clone_link_run.NEEDS_LOGIN, "Needs login"),
+        (clone_link_run.STOPPED, "Stopped"),
+        (clone_link_run.REFETCH, "Still generating"),
+        (clone_link_run.NOT_SAVED, "Still generating"),
+    ],
+)
+def test_every_fixed_message_of_a_clone_links_run_has_its_label(error, reason):
+    assert error_reason(error) == reason
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (
+            "Higgsfield failed this generation: the video could not be made (401)",
+            "Wrong API key",
+        ),
+        (
+            "kie.ai failed this generation: generation stopped by moderation",
+            "Flagged content",
+        ),
+        (
+            "createTask rejected: {'code': 429, 'msg': 'too long a queue'}",
+            "Rate limited",
+        ),
+    ],
+)
+def test_our_words_inside_a_providers_message_are_the_providers(error, reason):
+    assert error_reason(error) == reason
+
+
+def test_a_run_recovery_still_finishes_says_still_generating():
+    """runner.wait's timeout: paid, remembered, finished by recovery -- not
+    "Timed out" or "Failed", and a task id with 401 in it is no key
+    problem."""
+    error = (
+        "kie.ai is still generating (task 8f2c-401-ab, waited 1800s). No action"
+        " needed -- recovery finishes this job once kie.ai does."
+    )
+
+    assert error_reason(error) == "Still generating"
 
 
 def test_status_payload_carries_the_reason_for_the_polling_cards():

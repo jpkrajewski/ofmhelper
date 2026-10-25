@@ -16,6 +16,7 @@ from ofmhelpers.llm.errors import (
     LLMError,
     LLMInputError,
     LLMOutputError,
+    LLMQuotaError,
     LLMRefusedError,
     LLMUnavailableError,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "LLMInputError",
     "LLMOutputError",
     "LLMProvider",
+    "LLMQuotaError",
     "LLMRefusedError",
     "LLMUnavailableError",
     "LLMUse",

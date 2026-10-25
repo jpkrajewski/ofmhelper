@@ -11,7 +11,8 @@
 <h2 class="col-title">New clones from links · Wan 3.0</h2>
 
 <form id="clone-links-form" class="clone-form" action="/clone-links/run"
-      data-max-images="{{ max_images }}" data-max-links="{{ max_links }}" novalidate>
+      data-max-images="{{ max_images }}" data-max-links="{{ max_links }}"
+      data-drive-ready="{{ 'true' if drive_ready else 'false' }}" novalidate>
     {% include "_provider_fields.html" %}
     {{ fp.file_picker('image', 'image', 'Subject', max=max_images, multiple=true) }}
     <div class="field">
@@ -48,7 +49,11 @@
         </div>
     </div>
     {{ ui.button("Generate", "primary", type="submit") }}
-    <div class="generation-status" role="status" aria-live="polite"></div>
+    {# "Queued N runs." and that Generate's Stop (clone-links.js shows it). #}
+    <div class="clone-links-status">
+        <div class="generation-status" role="status" aria-live="polite"></div>
+        {{ ui.button("Stop", hook="clone-links-stop", attrs={"id": "clone-links-stop", "hidden": true}) }}
+    </div>
 </form>
 </div>
 
@@ -75,7 +80,12 @@
 <dialog class="accounts-dialog pick-dialog" id="clone-links-confirm">
     <form method="dialog">
         <h2 id="clone-links-confirm-title"></h2>
-        {% if drive_space and drive_space.low %}{{ ui.notice("Google Drive is full (" ~ drive_space.free_text ~ " left). Check the folder: these videos will not go to Drive.", kind="fail") }}{% endif %}
+        {# drive_space: the cached read only (None when not known); `reconnect`:
+           Google refused the stored token (base.html's banner says so on
+           every page too). #}
+        {% if drive_ready and drive_space and drive_space.reconnect %}{{ ui.notice("Google Drive disconnected: these videos will not go to Drive.", kind="fail") }}{% endif %}
+        {# Shown by clone-links.js while the ready runs x reel_mb do not fit. #}
+        {% if drive_space and drive_space.free_mb is number %}{{ ui.notice("Google Drive will be full (" ~ drive_space.free_text ~ " left): some of these videos will not go to Drive.", kind="fail", attrs={"id": "clone-links-confirm-space", "hidden": true, "data-free-mb": drive_space.free_mb, "data-reel-mb": reel_mb}) }}{% endif %}
         <ol class="pick-lines" id="clone-links-confirm-lines" aria-live="polite"></ol>
         <footer class="pick-footer">
             <div class="pick-total">

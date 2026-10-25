@@ -4,7 +4,9 @@
 thread (its httplib2 transport is not thread-safe). Every request retries
 itself on 5xx / 429 / a dropped connection (`execute(num_retries=...)`).
 Shared drives work too (`supportsAllDrives`). Any Drive failure surfaces as
-a `DriveError` saying what went wrong, never a raw HttpError.
+a `DriveError` saying what went wrong, never a raw HttpError; typed where a
+caller acts on it: `FolderGoneError` (404, trashed), `DriveFullError` (no
+room), `DriveAuthError` (Google refused the person's sign-in: reconnect).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import httplib2
-from google.auth.exceptions import GoogleAuthError
+from google.auth.exceptions import GoogleAuthError, RefreshError
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
 from google_auth_httplib2 import AuthorizedHttp
@@ -27,7 +29,13 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 from ofmhelpers.config import settings
-from ofmhelpers.gdrive.base import DriveApi, DriveError, FolderGoneError
+from ofmhelpers.gdrive.base import (
+    DriveApi,
+    DriveAuthError,
+    DriveError,
+    DriveFullError,
+    FolderGoneError,
+)
 from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder, DriveStorage
 from ofmhelpers.log import get_logger
 
@@ -103,9 +111,10 @@ class ReadOnlyDrive:
 
 class ScopedDrive(ReadOnlyDrive):
     """Live-read mode's one way to write: only inside `root_id` -- dev's
-    own root, never a live folder -- and the folders made in it here; every
-    other write still raises. /clone-links files its reviewed videos on dev
-    through it while /drive keeps reading the live folders."""
+    own root, never a live folder -- and the folders in it (found, read or
+    made through this Drive); every other write still raises. /clone-links
+    files its reviewed videos on dev through it while /drive keeps reading
+    the live folders."""
 
     def __init__(self, inner: DriveApi, root_id: str) -> None:
         super().__init__(inner)
@@ -115,11 +124,25 @@ class ScopedDrive(ReadOnlyDrive):
         if parent_id not in self._writable:
             raise DriveError(_READ_ONLY)
 
-    def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:  # type: ignore[override]
+    def _adopt(self, parents: list[str], folder: DriveFolder) -> DriveFolder:
+        if self._writable.intersection(parents):
+            self._writable.add(folder.id)
+        return folder
+
+    def folder(self, folder_id: str) -> DriveFolder:
+        found = self._inner.folder(folder_id)
+        return self._adopt(found.parents, found)
+
+    def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
+        found = self._inner.find_folder(parent_id, name)
+        return self._adopt([parent_id], found) if found else None
+
+    def create_folder(self, parent_id: str, name: str) -> DriveFolder:  # type: ignore[override]
         self._inside(parent_id)
-        made = self._inner.ensure_folder(parent_id, name)
-        self._writable.add(made.id)
-        return made
+        return self._adopt([parent_id], self._inner.create_folder(parent_id, name))
+
+    def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:  # type: ignore[override]
+        return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
 
     def upload(  # type: ignore[override]
         self, parent_id: str, path: Path, name: str, mime_type: str
@@ -183,11 +206,55 @@ def _quoted(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
+# Drive's 403 reasons meaning the token lacks Drive (unticked on Google's
+# consent screen): reconnecting fixes it, like a refused refresh.
+_SCOPE_REASONS = frozenset(
+    {"insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT", "authError"}
+)
+_FULL_REASON = "storageQuotaExceeded"
+
+
+def _reasons(exc: HttpError) -> set[str]:
+    """The `reason` of each entry in Drive's error body (`errors` or
+    `details`)."""
+    details = exc.error_details if isinstance(exc.error_details, list) else []
+    return {str(d["reason"]) for d in details if isinstance(d, dict) and "reason" in d}
+
+
+def _auth_refused(exc: Exception) -> bool:
+    """Google refused the sign-in itself: a refresh answered for good
+    (invalid_grant: revoked or expired -- a retryable one is Google's token
+    endpoint down, not the grant), the access token refused, or no Drive
+    in what was granted."""
+    if isinstance(exc, RefreshError):
+        return not exc.retryable
+    if not isinstance(exc, HttpError):
+        return False
+    if exc.resp.status == HTTPStatus.UNAUTHORIZED:
+        return True
+    return exc.resp.status == HTTPStatus.FORBIDDEN and bool(
+        _reasons(exc) & _SCOPE_REASONS
+    )
+
+
+def _refused(exc: HttpError, what: str) -> DriveError:
+    """A 403: no room left (`DriveFullError`), or any other refusal."""
+    message = f"{what}: Drive refused ({exc.reason})"
+    if _FULL_REASON in _reasons(exc) or "storage quota" in exc.reason.lower():
+        return DriveFullError(message)
+    return DriveError(message)
+
+
 def _failure(exc: Exception, what: str) -> DriveError:
+    if _auth_refused(exc):
+        # Google's own words (the invalid_grant tuple) only here and on the
+        # chained cause: the message is what a page may show.
+        logger.warning("drive: %s: Google refused the sign-in: %s", what, exc)
+        return DriveAuthError()
     if isinstance(exc, HttpError) and exc.resp.status == HTTPStatus.NOT_FOUND:
         return FolderGoneError(f"{what}: not found, or not shared with the bot")
     if isinstance(exc, HttpError) and exc.resp.status == HTTPStatus.FORBIDDEN:
-        return DriveError(f"{what}: Drive refused ({exc.reason})")
+        return _refused(exc, what)
     return DriveError(f"{what}: {exc}")
 
 

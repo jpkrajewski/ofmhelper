@@ -12,8 +12,9 @@ answering the Gemini API endpoints it calls (ai.google.dev/api):
   request naming a file that is missing or not ACTIVE is a 400, as Google's.
 
 Only `FAKE_KEY` is accepted (`x-goog-api-key`); any other key gets Google's
-400 "API key not valid"; a model not in `MODELS`, Google's 404. State is
-per process (memory): the app under e2e and its tests never share it.
+400 "API key not valid"; a model not in `MODELS`, Google's 404. Every answer
+reports `USAGE` (`usageMetadata`). State is per process (memory): the app
+under e2e and its tests never share it.
 """
 
 from __future__ import annotations
@@ -30,16 +31,26 @@ import httpx
 from ofmhelpers.llm.fakes import example, field
 
 FAKE_KEY = "fake-gemini-key"
+# A second project's key (several keys in GEMINI_API_KEY, tried in turn).
+FAKE_KEY_2 = "fake-gemini-key-2"
 HOST = "generativelanguage.googleapis.com"
 # Free-tier text/vision models (ai.google.dev/gemini-api/docs/models, 2026-10-24).
 MODELS = frozenset(
     {
         "gemini-3.8-flash",
         "gemini-3.6-flash",
+        "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
     }
 )
+# The tokens every answer reports, as Google writes them.
+USAGE = {
+    "promptTokenCount": 1200,
+    "thoughtsTokenCount": 300,
+    "candidatesTokenCount": 80,
+    "totalTokenCount": 1580,
+}
 _BAD_KEY = (
     400,
     "INVALID_ARGUMENT",
@@ -59,8 +70,13 @@ def _error(
 class FakeGemini:
     def __init__(self, polls_until_active: int = 1) -> None:
         self.polls_until_active = polls_until_active
-        # Every generateContent body, oldest first.
+        # Every generateContent body, oldest first, the model each asked and
+        # the read timeout (s) it was sent with.
         self.requests: list[dict[str, Any]] = []
+        self.models: list[str] = []
+        # The key of each generateContent, in order.
+        self.keys: list[str | None] = []
+        self.timeouts: list[float | None] = []
         self.files: dict[str, dict[str, Any]] = {}
         self.deleted: list[str] = []
         # Uploaded files end FAILED instead of ACTIVE (`fail_processing`).
@@ -128,7 +144,8 @@ class FakeGemini:
         path = url.path
         if path.startswith("/upload/") and "upload_id" in parse_qs(url.query.decode()):
             return self._chunk(request)
-        if request.headers.get("x-goog-api-key") != FAKE_KEY:
+        key = request.headers.get("x-goog-api-key")
+        if key not in (FAKE_KEY, FAKE_KEY_2):
             return _error(*_BAD_KEY)
         if path.endswith(":generateContent") and request.method == "POST":
             model = path.rsplit("/", 1)[-1].removesuffix(":generateContent")
@@ -139,7 +156,10 @@ class FakeGemini:
                     f"models/{model} is not found for API version v1beta, or is"
                     " not supported for generateContent.",
                 )
-            return self._generate(json.loads(request.content or b"{}"))
+            with self._lock:
+                self.timeouts.append(request.extensions.get("timeout", {}).get("read"))
+                self.keys.append(key)
+            return self._generate(model, json.loads(request.content or b"{}"))
         if path.startswith("/upload/") and request.method == "POST":
             return self._start_upload(json.loads(request.content or b"{}"))
         if path.startswith("/v1beta/files/"):
@@ -149,9 +169,10 @@ class FakeGemini:
             return self._get(name)
         return _error(404, "NOT_FOUND", f"No such method {request.method} {path}")
 
-    def _generate(self, body: dict[str, Any]) -> httpx.Response:
+    def _generate(self, model: str, body: dict[str, Any]) -> httpx.Response:
         with self._lock:
             self.requests.append(body)
+            self.models.append(model)
             queued = self._replies.pop(0) if self._replies else None
         if isinstance(queued, httpx.Response):
             return queued
@@ -171,7 +192,7 @@ class FakeGemini:
                         "finishReason": "STOP",
                     }
                 ],
-                "usageMetadata": {"promptTokenCount": 1, "totalTokenCount": 2},
+                "usageMetadata": USAGE,
             },
         )
 

@@ -1,14 +1,15 @@
-"""Higgsfield's request-status body, as Pydantic models.
+"""Higgsfield's answers, as Pydantic models.
 
 `GET /requests/{id}/status` (docs: concepts/requests) carries the status and,
 once completed, the outputs: images as `images[].url`, a video as
 `video.url`, audio as `audio.url` / `audios[].url`. Unknown fields are
-ignored, so new output types never break a parse.
+ignored, so new output types never break a parse. A submit answers with its
+request id; an error with FastAPI's `{"detail": ...}`.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 HiggsfieldStatus = Literal[
     "queued", "in_progress", "completed", "failed", "nsfw", "canceled"
@@ -18,6 +19,26 @@ PENDING: frozenset[HiggsfieldStatus] = frozenset({"queued", "in_progress"})
 
 class _Lenient(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+
+class HiggsfieldSubmitted(_Lenient):
+    """A submit's receipt: the request it made, or for an Idempotency-Key
+    sent again the one it made before (docs: concepts/idempotency)."""
+
+    request_id: str
+
+
+class HiggsfieldRefusalDetail(_Lenient):
+    """`detail` as an object: a full queue's 429 (docs: concepts/rate-limits)."""
+
+    retry_after_seconds: float | None = Field(default=None, ge=0)
+
+
+class HiggsfieldRefusal(_Lenient):
+    """An error body: `detail` is a sentence, a validation list, or an object
+    (docs: concepts/errors)."""
+
+    detail: HiggsfieldRefusalDetail | str | list[Any] | None = None
 
 
 class HiggsfieldMedia(_Lenient):

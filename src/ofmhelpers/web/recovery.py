@@ -16,9 +16,12 @@ job already **failed** (gave up waiting), one status check decides:
 - failed -> the job's error becomes the provider's reason;
 - still running -> left for the next sweep.
 
-A running job is left alone while a worker holds it or it waits in the
-queue. One that neither does (a deploy killed its worker mid-job; prod,
-2026-10-22: a clone's CapCut export) is cut off: with a remembered request
+A job is left alone while a worker holds it or it waits in a queue
+(`cache.queue.active_job_ids`), whatever its stored status; a re-run goes
+on its task's own queue (`registry.QUEUES`). A running job neither holds
+(a deploy killed its worker mid-job; prod, 2026-10-22: a clone's CapCut
+export) is cut off, judged against a view of the queues read after the
+slow part of the sweep: with a remembered request
 it is settled like a failed one (resumed, never paid twice); without one it
 fails with "Interrupted by a restart", so no card spins forever. A done or
 deleted job is forgotten, and nothing older than `resume_max_age_s` is
@@ -32,11 +35,12 @@ import time
 from ofmhelpers.aigenproviders import tasks
 from ofmhelpers.aigenproviders.base import get_provider
 from ofmhelpers.aigenproviders.errors import ProviderError
-from ofmhelpers.cache import enqueue
+from ofmhelpers.cache import QUEUE_NAME, enqueue_to
 from ofmhelpers.cache.queue import active_job_ids
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.routers.registry import JOB_TIMEOUTS, RESUMABLE
+from ofmhelpers.web.clone_links.review import resume_reviews
+from ofmhelpers.web.routers.registry import JOB_TIMEOUTS, QUEUES, RESUMABLE
 from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
 from ofmhelpers.web.schemas import Job, JobStatus
 from ofmhelpers.web.stores.jobs import (
@@ -79,6 +83,11 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
     if job is None or job.status == JobStatus.done:
         tasks.forget(job_id)
         return "forgotten"
+    if active is not None and job.id in active:
+        # A worker holds it or the queue has it, whatever its stored status
+        # (one failed by mistake still runs): a re-run now would run it
+        # twice at once, and pay again once the first forgot its request.
+        return "running"
     if job.status != JobStatus.failed and not _cut_off(job, active):
         return "running"
     if max(t.age_s for t in parts) > settings.aigen.resume_max_age_s:
@@ -101,7 +110,8 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
         return "not resumable"
     reopen_job(job.id)
     timeout = JOB_TIMEOUTS.get(job.task)
-    enqueue(
+    enqueue_to(
+        QUEUES.get(job.task, QUEUE_NAME),
         run_job,
         job.id,
         run,
@@ -146,9 +156,18 @@ def run_recovery_once() -> dict[str, str]:
         except Exception:
             logger.exception("recovery could not settle job %s", job_id)
     try:
-        outcomes |= fail_cut_off(active, {t.job_id for t in remembered})
+        # A fresh view, not the one taken before the settle loop: a slow
+        # provider can hold that loop past the grace, and a Generate queued
+        # meanwhile would be failed as cut off while its runs wait in RQ.
+        # Read before fail_cut_off reads the running rows, so a row made in
+        # between is younger than the grace.
+        outcomes |= fail_cut_off(active_job_ids(), {t.job_id for t in remembered})
     except Exception:
         logger.exception("recovery could not check for cut-off jobs")
+    try:
+        outcomes |= resume_reviews()
+    except Exception:
+        logger.exception("recovery could not resume /clone-links reviews")
     return outcomes
 
 

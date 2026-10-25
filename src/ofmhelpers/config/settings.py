@@ -85,7 +85,12 @@ class WebSettings(BaseSettings):
         default=24 * 3600, ge=60, validation_alias="OFM_APPLY_TOKEN_TTL_S"
     )
 
-    max_jobs: int = Field(default=500, validation_alias="OFM_JOBS_MAX_ENTRIES")
+    # Job history kept (repositories/jobs.py `_enforce_cap`): the oldest
+    # finished rows past this go; a running one never does. Was 500 -- prod
+    # was full in 9 days, and one 120-link /clone-links Generate makes 120
+    # rows, so every paste deleted that many of everyone's gallery cards.
+    # Not higher: the admin action log reads (and caches) the whole table.
+    max_jobs: int = Field(default=5000, ge=1, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(
         default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
     )
@@ -280,6 +285,13 @@ class InfraSettings(BaseSettings):
     preview_workers: int = Field(
         default=1, ge=1, validation_alias="OFM_PREVIEW_WORKERS"
     )
+    # The /clone-links pool (`python -m ofmhelpers.worker clone-links`): how
+    # many of a Generate's runs download, pay and wait at once. Its own
+    # queue, so a 120-link paste never holds the default workers for hours;
+    # small, so it also caps concurrent provider submits.
+    clone_links_workers: int = Field(
+        default=5, ge=1, validation_alias="OFM_CLONE_LINKS_WORKERS"
+    )
 
     # Everything the app writes on behalf of a user lives under one root:
     # uploads/assets (the shared reference store), plus a subdir per tool.
@@ -423,6 +435,23 @@ class AigenSettings(BaseSettings):
             "OFM_AIGEN_DOWNLOAD_TIMEOUT_S", "OFM_KIEAI_DOWNLOAD_TIMEOUT_S"
         ),
     )
+    # A result download that fails (reset, stall, CDN 5xx) is tried again
+    # after each of these waits (runner.generate): the paid result's URL
+    # stays valid for hours, a lost download is a lost generation.
+    download_retry_waits_s: list[float] = Field(
+        default=[5, 15], validation_alias="OFM_AIGEN_DOWNLOAD_RETRY_WAITS_S"
+    )
+    # A rate-limited submit (`ProviderRateLimitError`: the provider created
+    # nothing) is sent again after each of these waits, +0-25% jitter, or
+    # after the provider's own Retry-After; never more than
+    # `rate_limit_max_wait_s` in all (well inside OFM_RQ_JOB_TIMEOUT_S, 2700).
+    # Any other submit failure is never resent: it may have been paid.
+    rate_limit_waits_s: list[float] = Field(
+        default=[10, 30, 60], validation_alias="OFM_AIGEN_RATE_LIMIT_WAITS_S"
+    )
+    rate_limit_max_wait_s: float = Field(
+        default=180, ge=0, validation_alias="OFM_AIGEN_RATE_LIMIT_MAX_WAIT_S"
+    )
     # A provider's result URLs outlive this (kie.ai ~24h, Higgsfield 7 days),
     # so a job recovery has not finished by then is written off.
     resume_max_age_s: int = Field(
@@ -507,6 +536,17 @@ class DownloadersSettings(BaseSettings):
     # Bounds one gallery-dl run, which may pull a whole Instagram post set.
     image_download_timeout_s: int = Field(
         default=600, validation_alias="OFM_IMAGE_DOWNLOAD_TIMEOUT_S"
+    )
+    # Bounds one TikTok H.264 re-encode (ffmpeg, CRF 18); past it the
+    # original file is kept, as on any ffmpeg failure. Below RQ's job limit.
+    reencode_timeout_s: int = Field(
+        default=900, ge=1, validation_alias="OFM_DOWNLOAD_REENCODE_TIMEOUT_S"
+    )
+    # A one-post read or download (`DownloadConfig.single_post`, /clone-links)
+    # takes at most this many entries: a carousel's slides, never a whole
+    # profile or playlist pasted by mistake.
+    single_post_items: int = Field(
+        default=10, ge=1, validation_alias="OFM_DOWNLOAD_SINGLE_POST_ITEMS"
     )
 
 
@@ -927,6 +967,12 @@ class ExportSettings(BaseSettings):
     default: str = Field(default="capcut", validation_alias="OFM_EXPORT_DEFAULT")
     # Where the pages' Mirror switch starts.
     mirror: bool = Field(default=False, validation_alias="OFM_EXPORT_MIRROR")
+    # Tries of one video's export before its run fails: the provider's raw
+    # file is never delivered instead (user rule 2026-10-25). A run whose
+    # export failed every try keeps its paid request: recovery runs it again
+    # (resumed, never paid twice) until `reruns` runs failed so.
+    attempts: int = Field(default=3, ge=1, validation_alias="OFM_EXPORT_ATTEMPTS")
+    reruns: int = Field(default=3, ge=1, validation_alias="OFM_EXPORT_RERUNS")
     timeout_s: int = Field(
         default=600,
         validation_alias=AliasChoices(
@@ -981,19 +1027,29 @@ class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Work that reads video (a AI check): Gemini watches the real video.
+    # 3.6-flash first (user decision 2026-10-25): on dev that day 3.8-flash
+    # answered 503 overloaded for 10+ minutes while 3.6-flash answered both
+    # checks in seconds.
     default_video: str = Field(
-        default="gemini", min_length=1, validation_alias="LLM_DEFAULT_VIDEO"
+        default="gemini:gemini-3.6-flash",
+        min_length=1,
+        validation_alias="LLM_DEFAULT_VIDEO",
     )
     # Who a AI check asks next, in order, when the one before is down,
     # rate limited, out of quota or not set up (comma-separated
-    # `<provider>[:<model>]`). Gemini's free quota is per model: on the
-    # first dev paid run (2026-10-25) 3.8-flash and 3.7-flash were used up
-    # (429 RESOURCE_EXHAUSTED) while 3.5-flash answered (35 s); 2.5-flash is
-    # closed to new keys. Groq last:
-    # its one image model (qwen3.8-27b) left fields out or sent no JSON on
-    # about one check in three.
+    # `<provider>[:<model>]`). Gemini's free quota is per model and per
+    # project (dev and prod share one key): 20 requests a day for each of
+    # 3.8/3.7/3.6/3.5-flash, all used up on 2026-10-25; 2.5-flash is closed
+    # to new keys. Measured on dev the same day, 7 reels (one a man in a
+    # strapless tube top, six clean, checked frame by frame at 4K):
+    # 3.5-flash-lite 7/7 in 2-6 s; Groq's qwen3.8-27b GOOD on all 7 (its one
+    # image model, so Groq never checks a reel); 3-flash-preview GLITCHY on
+    # all 7 ("fused fingers" that are not there).
     fallback_video: str = Field(
-        default="gemini:gemini-3.6-flash,gemini:gemini-3.5-flash,groq",
+        default=(
+            "gemini:gemini-3.8-flash,gemini:gemini-3.5-flash,"
+            "gemini:gemini-3.5-flash-lite"
+        ),
         validation_alias="LLM_FALLBACK_VIDEO",
     )
     # Text (and image) work: Groq, fast and not kept by default.
@@ -1002,13 +1058,26 @@ class LLMSettings(BaseSettings):
     )
 
     @property
+    def gemini_keys(self) -> list[str]:
+        """Every Gemini key in `GEMINI_API_KEY`, in order, each once."""
+        raw = self.gemini_api_key.get_secret_value() if self.gemini_api_key else ""
+        keys = (k.strip() for k in raw.replace("\n", ",").split(","))
+        return list(dict.fromkeys(k for k in keys if k))
+
+    @property
     def video_chain(self) -> list[str]:
         """The default video provider, then each fallback once."""
         names = [self.default_video, *self.fallback_video.split(",")]
         return list(dict.fromkeys(n.strip() for n in names if n.strip()))
 
     # Google AI Studio (https://aistudio.google.com/apikey): free tier, no
-    # card; free-tier inputs may be used by Google to improve its models.
+    # card. Unpaid-tier terms (ai.google.dev/gemini-api/terms, 2026-04-28):
+    # inputs improve Google's products and human reviewers may read them;
+    # no sensitive, confidential or personal information. The user accepted
+    # that for /clone-links checks on 2026-10-25 (llm/CLAUDE.md).
+    # One key or several, comma-separated (`gemini_keys`): each project has
+    # its own free daily quota, and the AI check tries the keys in order on
+    # every model before the next model (user ask 2026-10-25).
     gemini_api_key: SecretStr | None = Field(
         default=None, validation_alias="GEMINI_API_KEY"
     )
@@ -1111,6 +1180,21 @@ class CloneAiCheckSettings(BaseSettings):
     ffmpeg_timeout_s: int = Field(
         default=60, ge=1, validation_alias="OFM_CLONE_AI_CHECK_FFMPEG_TIMEOUT_S"
     )
+    # A whole check (sheet, every model of the chain, retries) asks no model
+    # and waits no retry after this long: the reel goes to TRIAL REELS
+    # unchecked. Kept below `OFM_CLONE_LINKS_REVIEW_TIMEOUT_S` (1200, RQ's
+    # limit for check + upload) with room for one request in flight
+    # (`OFM_LLM_TIMEOUT_S`, 300) and the upload: 4 models x 5 tries of 300 s
+    # each came to ~6300 s with no cap (review 2026-10-25).
+    deadline_s: float = Field(
+        default=600, gt=0, validation_alias="OFM_CLONE_AI_CHECK_DEADLINE_S"
+    )
+    # GLITCHY when any glitch is blocking or the model is at least this sure
+    # (its `glitch_percent`) the reel should not be posted: several minor
+    # glitches can add up, and an unsure reel goes where a person looks first.
+    glitchy_percent: int = Field(
+        default=50, ge=1, le=100, validation_alias="OFM_CLONE_AI_CHECK_GLITCHY_PERCENT"
+    )
 
 
 class CloneLinksSettings(BaseSettings):
@@ -1122,8 +1206,8 @@ class CloneLinksSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Links one paste takes: each is previewed (a yt-dlp read through the
-    # Instagram proxies, 6 at once in the page), then a paid run. A VA's
-    # real list was 112 (2026-10-25, user decision: 120).
+    # Instagram proxies, `preview_parallel` at once on the server), then a
+    # paid run. A VA's real list was 112 (2026-10-25, user decision: 120).
     max_links: int = Field(default=120, ge=1, validation_alias="OFM_CLONE_LINKS_MAX")
     # How long a link's yt-dlp read (length, cover URL) stays in Redis: a
     # post's video never changes, so only memory bounds it.
@@ -1140,10 +1224,46 @@ class CloneLinksSettings(BaseSettings):
     drive_space_ttl_s: int = Field(
         default=300, ge=10, validation_alias="OFM_CLONE_LINKS_DRIVE_SPACE_TTL_S"
     )
-    # Links Generate's preview reads at once (yt-dlp, each a page or API
-    # request through the Instagram proxies; cached ones cost nothing).
+    # Links Generate's preview reads at once, across every request of the
+    # process (yt-dlp, each a page or API request through the Instagram
+    # proxies; cached ones cost nothing). No burstier than the 10-process
+    # worker download that follows (review 2026-10-25: 16 fired 16 x 5
+    # Instagram reads per paste).
     preview_parallel: int = Field(
-        default=16, ge=1, le=64, validation_alias="OFM_CLONE_LINKS_PREVIEW_PARALLEL"
+        default=6, ge=1, le=64, validation_alias="OFM_CLONE_LINKS_PREVIEW_PARALLEL"
+    )
+    # A whole preview request ends by then: every link not read yet gets a
+    # "took too long" tile, so one stalled proxy never keeps Generate grey.
+    preview_deadline_s: int = Field(
+        default=90, ge=5, validation_alias="OFM_CLONE_LINKS_PREVIEW_DEADLINE_S"
+    )
+    # yt-dlp's socket timeout for a preview read (its default is 20 s per
+    # stalled request, and a logged-out Instagram try makes up to 4).
+    preview_socket_timeout_s: float = Field(
+        default=10, gt=0, validation_alias="OFM_CLONE_LINKS_PREVIEW_SOCKET_TIMEOUT_S"
+    )
+    # yt-dlp extractors (`IE_NAME`) whose links are one post: Check takes
+    # only these, never a profile, playlist, channel, story tray or a
+    # redirector that chains into the Generic extractor.
+    video_extractors: list[str] = Field(
+        default=[
+            "Instagram",
+            "TikTok",
+            "vm.tiktok",
+            "youtube",
+            "twitter",
+            "facebook",
+            "facebook:reel",
+        ],
+        validation_alias="OFM_CLONE_LINKS_VIDEO_EXTRACTORS",
+    )
+    # What one cloned reel takes in Drive: the confirm dialog warns when the
+    # ticked runs do not fit (CapCut 4K at 28 Mb/s for 15 s is ~53 MB).
+    reel_mb: int = Field(default=55, ge=1, validation_alias="OFM_CLONE_LINKS_REEL_MB")
+    # After a refusal of the account itself (wrong key, no credits), the
+    # rest of that Generate fails at once instead of downloading first.
+    halt_ttl_s: int = Field(
+        default=3600, ge=60, validation_alias="OFM_CLONE_LINKS_HALT_TTL_S"
     )
     # Folders inside the clicker's root (`drive_folders.root_name()`), found
     # by name or made on first use.
@@ -1179,10 +1299,22 @@ class CloneLinksSettings(BaseSettings):
         ],
         validation_alias="OFM_CLONE_LINKS_TRACKING_PARAMS",
     )
-    # A review (check + upload) still running after this long was cut off
-    # (a deploy killed the worker): shown failed, "Check again" re-runs it.
+    # RQ's time limit for one review (check + upload): above the AI check's
+    # whole deadline (`CloneAiCheckSettings.deadline_s`) plus the upload.
+    review_timeout_s: int = Field(
+        default=1200, ge=60, validation_alias="OFM_CLONE_LINKS_REVIEW_TIMEOUT_S"
+    )
+    # A review claimed by a worker (`started_at`) and still running after
+    # this long was cut off (a deploy, OOM or crash killed it): recovery
+    # queues it again. Longer than `review_timeout_s`, so a live one is
+    # never doubled. A review not yet claimed is waiting, never cut off.
     review_stale_s: int = Field(
-        default=3600, ge=60, validation_alias="OFM_CLONE_LINKS_REVIEW_STALE_S"
+        default=1800, ge=60, validation_alias="OFM_CLONE_LINKS_REVIEW_STALE_S"
+    )
+    # How many times one review is started (first run + recovery's
+    # re-queues of a cut-off one or a failed upload) before it stays failed.
+    review_attempts: int = Field(
+        default=3, ge=1, validation_alias="OFM_CLONE_LINKS_REVIEW_ATTEMPTS"
     )
 
 
@@ -1261,4 +1393,22 @@ class GDriveSettings(BaseSettings):
     # again. Longer than a full batch takes, so a live one is never doubled.
     upload_stale_s: int = Field(
         default=3600, ge=60, validation_alias="OFM_GDRIVE_UPLOAD_STALE_S"
+    )
+    # A person's Drive space Google did not answer for (down, slow): not
+    # asked again for this long, so a failing Drive costs one call per
+    # person per minute, not one per page view (web/drive_space.py).
+    space_retry_s: int = Field(
+        default=60, ge=5, validation_alias="OFM_GDRIVE_SPACE_RETRY_S"
+    )
+    # /clone-links reviews of one person find or make their root and
+    # GOOD/TRIAL REELS one at a time (a Redis lock): ten parallel reviews
+    # made ten folders of one name. A review waits at most this long, then
+    # goes ahead without it (web/drive_folders.py `review_folder`).
+    review_lock_s: int = Field(
+        default=60, ge=1, validation_alias="OFM_GDRIVE_REVIEW_LOCK_S"
+    )
+    # How long a found review folder's id is remembered (checked with one
+    # get before each use; Drive's name search can lag a fresh folder).
+    review_folder_ttl_s: int = Field(
+        default=7 * 24 * 3600, ge=60, validation_alias="OFM_GDRIVE_REVIEW_FOLDER_TTL_S"
     )

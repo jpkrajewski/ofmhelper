@@ -57,9 +57,13 @@ import datetime
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from redis.exceptions import LockError, RedisError
+
+from ofmhelpers.cache import get_redis, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive import (
     DriveApi,
@@ -90,6 +94,7 @@ from ofmhelpers.web.stores import drive_uploads as upload_store
 from ofmhelpers.web.stores import users
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 logger = get_logger(__name__)
@@ -233,6 +238,92 @@ def review_target(refresh_token: str, user_id: int) -> tuple[DriveApi, str]:
     # Drive lists newest first: the oldest is the one people have been using.
     root = named[-1].id if named else raw.create_folder("root", name).id
     return ScopedDrive(raw, root), root
+
+
+@contextmanager
+def _review_lock(user_id: int) -> Iterator[None]:
+    """One review of `user_id` at a time finds or makes their root and
+    review folders, across every worker process: ten reviews of a batch
+    finishing together each found nothing and made their own "ALL
+    ACCOUNTS" / "GOOD REELS" (review 2026-10-25). A Redis lock, as
+    `aigenproviders.base.upload_lock`. Redis down, or the wait over
+    `OFM_GDRIVE_REVIEW_LOCK_S`: logged, and the review goes ahead unlocked
+    -- a duplicate folder at worst, never a review left hanging."""
+    wait_s = settings.gdrive.review_lock_s
+    lock = get_redis().lock(
+        f"lock:drive-review:{user_id}", timeout=wait_s, blocking_timeout=wait_s
+    )
+    try:
+        held = bool(lock.acquire())
+    except RedisError:
+        logger.warning("drive: review lock of %s unavailable", user_id, exc_info=True)
+        held = False
+    else:
+        if not held:
+            logger.warning(
+                "drive: review lock of %s not had in %s s: going ahead", user_id, wait_s
+            )
+    try:
+        yield
+    finally:
+        if held:
+            try:
+                lock.release()
+            except (RedisError, LockError):
+                logger.warning("drive: review lock of %s not released", user_id)
+
+
+def _folder_key(user_id: int, root: str, name: str) -> str:
+    return f"drive:review-folder:{user_id}:{root}:{name}"
+
+
+def _remembered(drive: DriveApi, key: str, root: str, name: str) -> str | None:
+    """The folder id found last time, while it is still `name` in `root`
+    (one get); None when not remembered, gone, renamed or moved."""
+    known = get_text(key)
+    if not known:
+        return None
+    try:
+        current = drive.folder(known)
+    except FolderGoneError:
+        logger.info(
+            "drive: review folder %s (%s) is gone: finding it again", name, known
+        )
+        return None
+    if current.name != name or root not in current.parents:
+        return None
+    return known
+
+
+def _review_folder_id(drive: DriveApi, user_id: int, root: str, name: str) -> str:
+    """Folder `name` in `root`: the remembered one, else the oldest of that
+    name, else a new one. A new one is looked for again at once and the
+    oldest kept: Drive's name search can lag a fresh folder, and a review
+    that went ahead unlocked may have made one too. Its id is remembered
+    (`OFM_GDRIVE_REVIEW_FOLDER_TTL_S`) so later reviews never depend on that
+    search. In Redis, not a repository: a Drive lookup memo, no database
+    row behind it (like the Drive space, web/drive_space.py)."""
+    key = _folder_key(user_id, root, name)
+    known = _remembered(drive, key, root, name)
+    if known:
+        return known
+    found = drive.find_folder(root, name)
+    if found is None:
+        made = drive.create_folder(root, name)
+        found = drive.find_folder(root, name) or made
+    set_text(key, found.id, settings.gdrive.review_folder_ttl_s)
+    return found.id
+
+
+def review_folder(refresh_token: str, user_id: int, name: str) -> tuple[DriveApi, str]:
+    """The Drive a reviewed /clone-links video is uploaded through and the
+    id of folder `name` (GOOD REELS / TRIAL REELS) in its root
+    (`review_target`), found or made -- one review of a person at a time
+    (`_review_lock`); the upload itself stays outside, in parallel. Raises
+    `DriveError`."""
+    with _review_lock(user_id):
+        drive, root = review_target(refresh_token, user_id)
+        return drive, _review_folder_id(drive, user_id, root, name)
 
 
 def _by_owner(targets: list[DriveTarget]) -> dict[int, list[DriveTarget]]:

@@ -4,9 +4,10 @@ vendor (its `fake.py`), each with its host, key, models and image cap.
 
 The answer is the next queued one (`answer_next`, `fail_next`,
 `filter_next`), else the plainest value the request's strict JSON Schema
-allows (`fakes.example`). Like the vendors: any key but the fake's is a 401,
-a model not offered a 404, more images than the cap a 400, and a schema not
-in strict form (an open object, an optional property) a 400.
+allows (`fakes.example`); every answer reports `USAGE`. Like the vendors:
+any key but the fake's is a 401, a model not offered a 404, more images
+than the cap a 400, and a schema not in strict form (an open object, an
+optional property) a 400.
 """
 
 from __future__ import annotations
@@ -18,6 +19,9 @@ from typing import Any
 import httpx
 
 from ofmhelpers.llm.fakes import example
+
+# The tokens every answer reports, as the vendors write them.
+USAGE = {"prompt_tokens": 900, "completion_tokens": 60, "total_tokens": 960}
 
 
 def _error(
@@ -60,8 +64,10 @@ class FakeChatCompletions:
         self.key = key
         self.models = models
         self.max_images = max_images
-        # Every chat/completions body, oldest first.
+        # Every chat/completions body, oldest first, and the read timeout
+        # (s) each was sent with.
         self.requests: list[dict[str, Any]] = []
+        self.timeouts: list[float | None] = []
         self._replies: list[httpx.Response | str] = []
         self._lock = threading.Lock()
 
@@ -114,6 +120,7 @@ class FakeChatCompletions:
         body = json.loads(request.content or b"{}")
         with self._lock:
             self.requests.append(body)
+            self.timeouts.append(request.extensions.get("timeout", {}).get("read"))
             queued = self._replies.pop(0) if self._replies else None
         if isinstance(queued, httpx.Response):
             return queued
@@ -165,6 +172,6 @@ class FakeChatCompletions:
                         "finish_reason": finish_reason,
                     }
                 ],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                "usage": USAGE,
             },
         )

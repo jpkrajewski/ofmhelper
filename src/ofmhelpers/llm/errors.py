@@ -58,3 +58,9 @@ class LLMUnavailableError(LLMError):
     ) -> None:
         super().__init__(message, detail)
         self.retry_after_s = retry_after_s
+
+
+class LLMQuotaError(LLMUnavailableError):
+    """Rate limited or out of quota (HTTP 429): the KEY's project hit its
+    limit -- another project's key may still answer the same model, unlike
+    an overloaded model or an outage, which every key waits on alike."""

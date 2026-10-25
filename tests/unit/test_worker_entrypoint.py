@@ -10,9 +10,11 @@ takes effect if main() actually passes --worker-class.
 import logging
 import sys
 
+import pytest
 from rq import Worker
 
 from ofmhelpers import worker as worker_module
+from ofmhelpers.cache import CLONE_LINKS_QUEUE, QUEUE_NAME
 from ofmhelpers.worker import ConfiguredWorker
 
 
@@ -81,6 +83,40 @@ def test_main_passes_our_worker_class_and_settings_to_rq(monkeypatch):
     assert cmd[cmd.index("--worker-class") + 1] == "ofmhelpers.worker.ConfiguredWorker"
     assert cmd[cmd.index("--num-workers") + 1] == "7"
     assert cmd[cmd.index("--url") + 1] == "redis://example:6379/3"
+
+
+def _pool_command(monkeypatch, *argv: str) -> list[str]:
+    """What main() hands rq for `python -m ofmhelpers.worker <argv>`."""
+    monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
+    monkeypatch.setattr(sys, "argv", ["ofmhelpers.worker", *argv])
+    seen = {}
+    monkeypatch.setattr(worker_module, "rq_main", lambda: seen.update(v=list(sys.argv)))
+    worker_module.main()
+    return seen["v"]
+
+
+def test_the_clone_links_queue_has_its_own_pool(monkeypatch):
+    """A 120-link /clone-links Generate runs on its own queue and pool
+    (compose clone-links-worker), never on the default workers."""
+    monkeypatch.setenv("OFM_RQ_WORKERS", "10")
+    monkeypatch.setenv("OFM_CLONE_LINKS_WORKERS", "4")
+
+    cmd = _pool_command(monkeypatch, CLONE_LINKS_QUEUE)
+
+    assert cmd[-1] == "clone-links"
+    assert cmd[cmd.index("--num-workers") + 1] == "4"
+
+
+def test_the_default_pool_serves_only_the_default_queue(monkeypatch):
+    monkeypatch.setenv("OFM_RQ_WORKERS", "10")
+    cmd = _pool_command(monkeypatch)
+    assert cmd[-1] == QUEUE_NAME
+    assert cmd[cmd.index("--num-workers") + 1] == "10"
+
+
+def test_an_unknown_queue_is_refused(monkeypatch):
+    with pytest.raises(SystemExit, match="unknown queue 'clone_links'"):
+        _pool_command(monkeypatch, "clone_links")
 
 
 def test_worker_logger_is_named_for_the_module_not_main():

@@ -23,7 +23,7 @@ from ofmhelpers.llm import (
 )
 from ofmhelpers.llm import base as llm_base
 from ofmhelpers.llm.gemini import provider as gemini_provider
-from ofmhelpers.llm.gemini.fake import FAKE_KEY, fake_gemini, field
+from ofmhelpers.llm.gemini.fake import FAKE_KEY, USAGE, fake_gemini, field
 from ofmhelpers.llm.gemini.provider import GeminiLLM
 from ofmhelpers.utils import fake_media
 
@@ -34,25 +34,33 @@ class Verdict(BaseModel):
 
 
 class _Clock:
-    """`time` as the llm modules see it: real clock, sleeps only noted."""
-
-    monotonic = staticmethod(time.monotonic)
+    """`time` as the llm modules see it: a sleep is noted and moves the
+    clock on, never waited."""
 
     def __init__(self) -> None:
         self.slept: list[float] = []
+
+    def monotonic(self) -> float:
+        return time.monotonic() + sum(self.slept)
 
     def sleep(self, seconds: float) -> None:
         self.slept.append(seconds)
 
 
 @pytest.fixture
-def waits(fake_externals, monkeypatch) -> list[float]:
-    """Gemini on its fake; the seconds every retry and file poll would have
-    slept, without sleeping (only theirs: ffmpeg's own waits are real)."""
+def clock(fake_externals, monkeypatch) -> _Clock:
+    """Gemini on its fake, on a clock that never waits (only the llm
+    modules': ffmpeg's own waits are real)."""
     monkeypatch.setenv("GEMINI_API_KEY", FAKE_KEY)
-    clock = _Clock()
-    monkeypatch.setattr(llm_base, "time", clock)
-    monkeypatch.setattr(gemini_provider, "time", clock)
+    found = _Clock()
+    monkeypatch.setattr(llm_base, "time", found)
+    monkeypatch.setattr(gemini_provider, "time", found)
+    return found
+
+
+@pytest.fixture
+def waits(clock) -> list[float]:
+    """The seconds every retry and file poll would have slept."""
     return clock.slept
 
 
@@ -95,9 +103,69 @@ def test_small_media_goes_inside_the_request_with_the_schema(waits, media):
     config = body["generationConfig"]
     assert config["responseMimeType"] == "application/json"
     assert config["responseJsonSchema"]["required"] == ["ok", "problems"]
-    assert config["temperature"] == 0
+    # Deprecated for Gemini 3.x (ignored, a 400 in later generations).
+    assert "temperature" not in config
     assert body["systemInstruction"]["parts"][0]["text"] == "You check videos."
     assert waits == []
+    # OFM_LLM_TIMEOUT_S, less the moment reading the media took.
+    assert fake_gemini().timeouts == [pytest.approx(300, abs=1)]
+
+
+def test_a_temperature_the_prompt_names_is_sent(waits):
+    get_llm(LLMUse.VIDEO).ask(Prompt.of("Check", temperature=0.5), Verdict)
+    [body] = fake_gemini().requests
+    assert body["generationConfig"]["temperature"] == 0.5
+
+
+def test_the_answer_says_the_tokens_google_counted(waits):
+    found = get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict)
+    assert (found.input_tokens, found.thinking_tokens, found.output_tokens) == (
+        USAGE["promptTokenCount"],
+        USAGE["thoughtsTokenCount"],
+        USAGE["candidatesTokenCount"],
+    )
+
+
+def test_an_answer_asked_again_counts_the_tokens_of_both(waits):
+    fake_gemini().answer_next({"verdict": "fine"})
+
+    found = get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict)
+
+    assert found.attempts == 2
+    assert (found.input_tokens, found.thinking_tokens, found.output_tokens) == (
+        2 * USAGE["promptTokenCount"],
+        2 * USAGE["thoughtsTokenCount"],
+        2 * USAGE["candidatesTokenCount"],
+    )
+
+
+def test_an_outage_stops_at_the_deadline_not_after_every_retry(clock):
+    """A check has one deadline: no retry waits past it, and every request
+    gets only the time left (the configured 300 s otherwise)."""
+    for _ in range(5):  # down for every try `OFM_LLM_RETRIES` 4 allows
+        fake_gemini().fail_next(503, "UNAVAILABLE", "The model is overloaded")
+    deadline = clock.monotonic() + 30
+
+    with pytest.raises(LLMUnavailableError) as err:
+        get_llm(LLMUse.VIDEO).answered(Prompt.of("Check"), Verdict, deadline=deadline)
+
+    assert str(err.value) == "Gemini took too long"
+    # 5 s and 10 s fit; the 3rd try's 20 s wait would end past the deadline.
+    assert clock.slept == [5.0, 10.0]
+    assert fake_gemini().timeouts == [
+        pytest.approx(30, abs=1),
+        pytest.approx(25, abs=1),
+        pytest.approx(15, abs=1),
+    ]
+    assert "Gemini is unavailable (503)" in err.value.detail
+
+
+def test_a_deadline_already_passed_sends_nothing(clock):
+    with pytest.raises(LLMUnavailableError, match="Gemini took too long"):
+        get_llm(LLMUse.VIDEO).answered(
+            Prompt.of("Check"), Verdict, deadline=clock.monotonic() - 1
+        )
+    assert fake_gemini().requests == []
 
 
 def test_a_big_file_is_uploaded_waited_on_and_deleted_after(waits, media, monkeypatch):
@@ -182,10 +250,12 @@ def test_a_safety_block_is_a_refusal(waits):
         get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
 
 
-def test_an_answer_in_another_shape_is_an_output_error(waits):
+def test_an_answer_in_another_shape_twice_is_an_output_error(waits):
+    fake_gemini().answer_next({"verdict": "fine"})
     fake_gemini().answer_next({"verdict": "fine"})
     with pytest.raises(LLMOutputError, match="Gemini answered in the wrong shape"):
         get_llm(LLMUse.VIDEO).ask(Prompt.of("Check"), Verdict)
+    assert len(fake_gemini().requests) == 2  # asked once more first
 
 
 def test_media_a_provider_does_not_read_is_refused_before_sending(waits, media):

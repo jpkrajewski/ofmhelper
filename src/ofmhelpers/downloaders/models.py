@@ -34,7 +34,10 @@ class VideoInfo(BaseModel):
     url: str
     seconds: float | None = None
     thumbnail: str | None = None
+    # Why it could not be read: the last try's reason (the login, when the
+    # site has one), and the first logged-out try's when that differed.
     error: str | None = None
+    logged_out_error: str | None = None
 
 
 class YtDlpOptions(BaseModel):
@@ -45,6 +48,13 @@ class YtDlpOptions(BaseModel):
     outtmpl: str
     writethumbnail: bool
     noplaylist: bool
+    # Which of a playlist's entries are read ("1:10" = the first ten).
+    playlist_items: str | None = None
+    # yt-dlp's names (regexes) of the extractors it may use; None = all its
+    # default ones, Generic (any page of any host) included.
+    allowed_extractors: list[str] | None = None
+    # Seconds a connection may sit silent (yt-dlp's default: 20).
+    socket_timeout: float | None = None
     quiet: bool = True
     no_warnings: bool = False
     remote_components: set[str] = {"ejs:github"}

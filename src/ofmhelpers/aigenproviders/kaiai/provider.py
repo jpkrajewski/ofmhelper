@@ -3,8 +3,9 @@
 from pathlib import Path
 
 from ofmhelpers.aigenproviders.base import Provider, TaskState, register_provider
+from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
-from ofmhelpers.aigenproviders.kaiai.models import FAIL, SUCCESS
+from ofmhelpers.aigenproviders.kaiai.models import FAIL, SUCCESS, KieRecord
 from ofmhelpers.aigenproviders.spec import ModelSpec, Payload
 from ofmhelpers.config import settings
 
@@ -35,7 +36,17 @@ class KieProvider(Provider):
     def status(self, task_id: str) -> TaskState:
         record = self.client.get_task(task_id)
         if record.state == SUCCESS:
-            return TaskState(state="done", urls=record.result_urls)
+            return TaskState(state="done", urls=self._result_urls(record))
         if record.state == FAIL:
             return TaskState(state="failed", error=record.fail_msg)
         return TaskState(state="pending")
+
+    @staticmethod
+    def _result_urls(record: KieRecord) -> list[str]:
+        """A finished (paid) task whose `resultJson` cannot be read is asked
+        again, not failed: the job stays resumable instead of forgetting it."""
+        try:
+            return record.result_urls
+        except (ValueError, AttributeError, TypeError) as exc:
+            msg = f"kie.ai: unreadable result of task {record.task_id}"
+            raise ProviderUnavailableError(msg) from exc

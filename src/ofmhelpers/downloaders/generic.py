@@ -72,6 +72,16 @@ def _default_extractor_args() -> ExtractorArgs:
     return {"youtubepot-bgutilhttp": {"base_url": [pot_url]}}
 
 
+# yt-dlp's extractors for one post: its default ones minus Generic, which
+# reads any page of any host. A redirector or shortener extractor (facebook
+# /flx/warn/?u=, t.co) hands its target to whichever extractor matches, so
+# with Generic on, a pasted link could make the server fetch any host it
+# names (review #37). yt-dlp's `-name` removes one (checked 2026-10-25,
+# yt-dlp 2026.10.21: Generic gone, a redirect to an unknown host fails
+# "No suitable extractor" with no request).
+SITE_EXTRACTORS_ONLY = ("default", "-generic")
+
+
 class DownloadConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -84,6 +94,12 @@ class DownloadConfig(BaseModel):
     merge_output_format: str = "mp4"
     write_thumbnail: bool = False
     download_playlist: bool = True
+    # Which of a playlist's entries are read ("1:10"); None = every one.
+    playlist_items: str | None = None
+    # yt-dlp's extractor names it may use; None = all (Generic included).
+    allowed_extractors: list[str] | None = None
+    # Seconds a connection may sit silent; None = yt-dlp's 20.
+    socket_timeout: float | None = None
     filename_template: str = "%(uploader)s_%(id)s%(playlist_index)s.%(ext)s"
 
     # Cookie source for authenticated sites (Instagram etc). Only used as a
@@ -115,6 +131,20 @@ class DownloadConfig(BaseModel):
     # Extra per-extractor arguments, merged over youtube_player_clients'.
     extractor_args: ExtractorArgs = Field(default_factory=_default_extractor_args)
 
+    @classmethod
+    def single_post(cls, **fields: Any) -> DownloadConfig:
+        """The linked post only (/clone-links' look at a link and its
+        download): never the playlist, profile or story tray around it
+        (`watch?v=X&list=PL...` is X, a story link that one story), at most
+        `settings.downloaders.single_post_items` entries (a carousel's
+        slides), read only by the site's own extractor (never Generic)."""
+        return cls(
+            download_playlist=False,
+            playlist_items=f"1:{settings.downloaders.single_post_items}",
+            allowed_extractors=list(SITE_EXTRACTORS_ONLY),
+            **fields,
+        )
+
     def ydl_opts(self, cookiefile: str | None = None) -> YtDlpOptions:
         """The yt-dlp options this config means, logged in as `cookiefile`
         (the downloading user's own cookies.txt, `cookies.cookie_file`)."""
@@ -133,6 +163,9 @@ class DownloadConfig(BaseModel):
             outtmpl=str(self.output_dir / self.filename_template),
             writethumbnail=self.write_thumbnail,
             noplaylist=not self.download_playlist,
+            playlist_items=self.playlist_items,
+            allowed_extractors=self.allowed_extractors,
+            socket_timeout=self.socket_timeout,
             cookiefile=cookiefile,
             cookiesfrombrowser=browser,
             extractor_args=extractor_args,
@@ -206,7 +239,9 @@ def site_of(url: str) -> str | None:
 
 
 def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
-    """Re-encode a video to H.264/AAC. Returns original path unchanged on failure."""
+    """Re-encode a video to H.264/AAC. Returns original path unchanged on
+    failure, or when ffmpeg runs past `settings.downloaders.reencode_timeout_s`
+    (it is killed then; its partial output removed)."""
     if not is_video_file(path):
         return path
 
@@ -214,8 +249,21 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
     cmd = config.ffmpeg_cmd(path, tmp_dst)
 
     try:
-        subprocess.run(cmd, capture_output=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        subprocess.run(
+            cmd,
+            capture_output=True,
+            check=True,
+            timeout=settings.downloaders.reencode_timeout_s,
+        )
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
+        logger.warning(
+            "re-encode of %s failed, original kept", path.name, exc_info=True
+        )
+        tmp_dst.unlink(missing_ok=True)
         return path
 
     if config.delete_original_after_reencode and tmp_dst.exists():
@@ -281,17 +329,25 @@ def download(
         return DownloadResult(url=url, success=False, error=str(exc))
 
 
-def video_info(url: str, cookiefile: str | None = None) -> VideoInfo:
+def video_info(
+    url: str, cookiefile: str | None = None, *, socket_timeout: float | None = None
+) -> VideoInfo:
     """The link's video length and cover, read by yt-dlp WITHOUT downloading
     it (one page/API request, a few seconds), logged in as `cookiefile`;
     tried like `download` (the site's proxies logged out first, then the
-    login direct). `error` when nothing could be read or the post holds no
-    video."""
+    login direct). Only the linked post is read (`DownloadConfig.single_post`:
+    no playlist/profile around it, never Generic); `socket_timeout`: seconds
+    a connection may sit silent (None: yt-dlp's 20).
+
+    `error` when nothing could be read or the post holds no video: the last
+    try's reason (the login's, when the site has proxies), and
+    `logged_out_error` the first logged-out try's when there were several."""
     if settings.infra.fake_externals:
         return fake.info(url)
     import yt_dlp
 
-    opts = DownloadConfig().ydl_opts(cookiefile)
+    config = DownloadConfig.single_post(socket_timeout=socket_timeout)
+    opts = config.ydl_opts(cookiefile)
     errors: list[str] = []
     info = None
     for proxy in _proxies_for(url):
@@ -301,7 +357,11 @@ def video_info(url: str, cookiefile: str | None = None) -> VideoInfo:
     if info is None:
         info = _try_peek(yt_dlp, url, opts, None, errors)
     if info is None:
-        return VideoInfo(url=url, error=errors[0])
+        return VideoInfo(
+            url=url,
+            error=errors[-1],
+            logged_out_error=errors[0] if len(errors) > 1 else None,
+        )
     entry = YtDlpInfo.model_validate(info).first_video()
     if entry is None:
         return VideoInfo(url=url, error="No video at this link (a photo post?)")

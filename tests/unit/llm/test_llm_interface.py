@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 from pydantic import BaseModel, Field
 
+from ofmhelpers.config.settings import LLMSettings
 from ofmhelpers.llm import (
     LLMConfigError,
     LLMInputError,
@@ -23,6 +24,8 @@ from ofmhelpers.llm import (
 from ofmhelpers.llm.chat_completions import strict_schema
 from ofmhelpers.llm.fakes import example
 from ofmhelpers.llm.frames import contact_sheet
+from ofmhelpers.llm.gemini.fake import MODELS
+from ofmhelpers.llm.models import Usage
 from ofmhelpers.utils import fake_media
 
 
@@ -37,7 +40,7 @@ def test_a_prompt_keeps_text_and_media_in_order():
         (MediaKind.VIDEO, "video/mp4"),
     ]
     assert prompt.system == "role"
-    assert prompt.temperature == 0
+    assert prompt.temperature is None  # the provider's own default
 
 
 def test_a_file_that_is_no_media_is_refused():
@@ -56,6 +59,31 @@ def test_every_provider_is_registered():
     assert llm_names() == ["cerebras", "gemini", "groq"]
 
 
+def test_the_gemini_fake_serves_every_model_the_default_chain_asks():
+    """A model the fake does not serve is a 404, which the AI check skips:
+    tests would quietly run a shorter chain than production (review #48)."""
+    defaults = LLMSettings.model_construct()  # defaults only: no env, no .env
+    asked = {defaults.gemini_model} | {
+        model.strip() or defaults.gemini_model
+        for name, _, model in (n.partition(":") for n in defaults.video_chain)
+        if name.strip().lower() == "gemini"
+    }
+    assert len(asked) > 1  # the chain names models of its own
+    assert asked - MODELS == set()
+
+
+def test_usage_adds_up_what_was_reported():
+    found = Usage.summed(
+        [
+            Usage(input_tokens=10, output_tokens=2),
+            Usage(input_tokens=5, thinking_tokens=7, output_tokens=1),
+            Usage(),
+        ]
+    )
+    assert found == Usage(input_tokens=15, thinking_tokens=7, output_tokens=3)
+    assert Usage.summed([]) == Usage()
+
+
 def test_each_kind_of_work_has_its_own_default(monkeypatch):
     for name in ("GEMINI_API_KEY", "GROQ_API_KEY"):
         monkeypatch.setenv(name, f"key-{name}")
@@ -64,7 +92,7 @@ def test_each_kind_of_work_has_its_own_default(monkeypatch):
 
     assert (video.name, video.model, video.api_key) == (
         "gemini",
-        "gemini-3.8-flash",
+        "gemini-3.6-flash",
         "key-GEMINI_API_KEY",
     )
     assert (chat.name, chat.model) == ("groq", "qwen/qwen3.8-27b")

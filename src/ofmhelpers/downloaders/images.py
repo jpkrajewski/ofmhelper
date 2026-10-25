@@ -41,6 +41,8 @@ class ImageDownloadConfig(BaseModel):
     # unique identifier; num disambiguates multiple images in one post.
     filename_template: str = "{category}_{post_shortcode}_{num}.{extension}"
     extra_args: list[str] = []
+    # At most this many files (gallery-dl `--range 1-N`); None = all of them.
+    max_items: int | None = None
 
     def gallery_dl_cmd(self, url: str, cookiefile: str | None = None) -> list[str]:
         cmd = [
@@ -53,6 +55,8 @@ class ImageDownloadConfig(BaseModel):
             "--no-skip",  # overwrite existing files instead of silently skipping them
         ]
 
+        if self.max_items is not None:
+            cmd += ["--range", f"1-{self.max_items}"]
         if cookiefile:
             cmd += ["--cookies", cookiefile]
 

@@ -1,8 +1,10 @@
 """
 ofmhelpers/web/stores/clone_ai_checks.py
 
-AI checks kept for good (web/clone_ai_checks.py runs and saves them): the
-verdict, the model's reasoning and everything to debug one.
+AI checks kept for good (web/clone_links/review.py runs and saves them): the
+verdict, the model's reasoning, the tokens it used, why a check has none
+(`error`, `error_kind`, the raw `error_detail`) and everything to debug one.
+Every `CloneAiCheck` field is a column: `save` writes the whole model.
 """
 
 from __future__ import annotations

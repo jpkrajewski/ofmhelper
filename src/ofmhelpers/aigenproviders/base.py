@@ -158,12 +158,14 @@ def upload_lock(cache_key: str) -> Iterator[None]:
     the others wait here and take the cached URL. A Redis lock: the worker is
     a pool of processes, and the old in-process lock let two /clone-links
     runs upload one image twice (dev 2026-10-25). Redis down or the wait
-    over `OFM_UPLOAD_LOCK_S`: no lock, the file is uploaded again at worst."""
+    over `OFM_UPLOAD_LOCK_S`: no lock, the file is uploaded again at worst.
+    `cache_key` is logged: it must never carry an API key (hash it)."""
     wait_s = settings.aigen.upload_lock_s
-    lock = get_redis().lock(
-        f"lock:{cache_key}", timeout=wait_s, blocking_timeout=wait_s
-    )
+    lock = None
     try:
+        lock = get_redis().lock(
+            f"lock:{cache_key}", timeout=wait_s, blocking_timeout=wait_s
+        )
         held = bool(lock.acquire())
     except RedisError:
         logger.warning("upload lock unavailable for %s", cache_key, exc_info=True)
@@ -171,8 +173,10 @@ def upload_lock(cache_key: str) -> Iterator[None]:
     try:
         yield
     finally:
-        if held:
+        if held and lock is not None:
             try:
                 lock.release()
             except (RedisError, LockError):
+                # Expired mid-upload (longer than OFM_UPLOAD_LOCK_S) or
+                # Redis lost it: the upload itself went through.
                 logger.warning("upload lock for %s not released", cache_key)

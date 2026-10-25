@@ -1,8 +1,9 @@
 """
 Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker
 [queue]` -- the default queue (generations, downloads, ...) with
-`rq_workers` processes, or `previews` (gallery previews, web/previews.py)
-with `preview_workers`.
+`rq_workers` processes, `clone-links` (/clone-links runs) with
+`clone_links_workers`, or `previews` (gallery previews, web/previews.py)
+with `preview_workers`. One compose service per queue.
 
 Exists purely so the worker gets the same logging setup the API does. The
 compose file used to invoke `rq worker-pool` directly, which meant job code
@@ -22,7 +23,7 @@ import sys
 from rq import Worker
 from rq.cli import main as rq_main
 
-from ofmhelpers.cache import PREVIEWS_QUEUE, QUEUE_NAME
+from ofmhelpers.cache import CLONE_LINKS_QUEUE, PREVIEWS_QUEUE, QUEUE_NAME
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
@@ -64,7 +65,11 @@ def main() -> None:
 
     infra = settings.infra
     queue = sys.argv[1] if len(sys.argv) > 1 else QUEUE_NAME
-    pools = {QUEUE_NAME: infra.rq_workers, PREVIEWS_QUEUE: infra.preview_workers}
+    pools = {
+        QUEUE_NAME: infra.rq_workers,
+        CLONE_LINKS_QUEUE: infra.clone_links_workers,
+        PREVIEWS_QUEUE: infra.preview_workers,
+    }
     if queue not in pools:
         msg = f"unknown queue {queue!r}; one of {sorted(pools)}"
         raise SystemExit(msg)

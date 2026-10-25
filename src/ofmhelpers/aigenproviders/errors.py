@@ -36,6 +36,11 @@ class ProviderInputError(ProviderError):
     will not take, no credits left)."""
 
 
+class ProviderNoCreditsError(ProviderInputError):
+    """The account has no credits left: nothing more can run on this key
+    until it is topped up (a batch stops asking, /clone-links)."""
+
+
 class ProviderGenerationError(ProviderError):
     """The request was accepted, then the generation failed or was refused by
     moderation on the provider's side."""
@@ -46,6 +51,16 @@ class ProviderUnavailableError(ProviderError):
     retries."""
 
     retryable = True
+
+
+class ProviderRateLimitError(ProviderUnavailableError):
+    """Too many requests: the provider created nothing, so the same submit
+    may be sent again after `retry_after_s` (its own hint, when it gave
+    one) -- unlike a timeout or a 5xx, which may have created a paid task."""
+
+    def __init__(self, message: str, retry_after_s: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_s = retry_after_s
 
 
 class ProviderTimeoutError(ProviderError):

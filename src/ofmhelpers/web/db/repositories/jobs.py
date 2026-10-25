@@ -6,7 +6,8 @@ import time
 import uuid
 from typing import Any
 
-from sqlalchemy import ColumnElement, delete, func, select, update
+from sqlalchemy import ColumnElement, delete, func, select, type_coerce, update
+from sqlalchemy.dialects.postgresql import JSONB
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.db.models import (
@@ -71,12 +72,16 @@ class JobRepository(CachedRepository):
         return job_id
 
     def _enforce_cap(self, session) -> None:
-        """Keep the history from growing forever -- drop the oldest rows beyond
-        settings.web.max_jobs, same cap the JSON store enforced on every save."""
+        """Keep the history from growing forever -- drop the oldest finished
+        rows beyond settings.web.max_jobs. Never a running one: a queued run
+        whose row went would still pay, with nobody to see or review it."""
         cap = settings.web.max_jobs
         stale_ids = (
             session.execute(
-                select(JobRow.id).order_by(JobRow.created_at.desc()).offset(cap)
+                select(JobRow.id)
+                .where(JobRow.status != "running")
+                .order_by(JobRow.created_at.desc())
+                .offset(cap)
             )
             .scalars()
             .all()
@@ -244,6 +249,37 @@ class JobRepository(CachedRepository):
                 .all()
             )
             return [_job_to_dict(r) for r in rows]
+
+    @invalidates_cache
+    def merge_params(self, job_id: str, values: dict[str, Any]) -> None:
+        """`values` written into the job's params, the rest kept (JSONB
+        `||`). A missing job: nothing happens."""
+        with session_scope() as s:
+            s.execute(
+                update(JobRow)
+                .where(JobRow.id == job_id)
+                .values(params=JobRow.params.op("||")(type_coerce(values, JSONB)))
+            )
+
+    def redone_links(
+        self, task: str, actor: str, links: list[str], after: float
+    ) -> set[str]:
+        """Which of `links` (params `link`) `actor` queued again as `task`
+        after `after` and that is still running or done."""
+        if not links:
+            return set()
+        link = JobRow.params["link"].astext
+        with session_scope() as s:
+            found = s.execute(
+                select(link).where(
+                    JobRow.task == task,
+                    JobRow.actor == actor,
+                    JobRow.created_at > after,
+                    JobRow.status.in_(("running", "done")),
+                    link.in_(links),
+                )
+            ).scalars()
+            return set(found)
 
     @cached
     def count_hidden(self, tasks: tuple[str, ...], actor: str) -> int:

@@ -83,11 +83,14 @@ class JobVisibility(BaseModel):
 
 
 class CloneQueued(BaseModel):
-    """`POST /clone/run`: every run's job id, plus the batch already rendered
-    as the page's own partial."""
+    """`POST /clone/run`, `POST /clone-links/run`: every run's job id, plus
+    the batch already rendered as the page's own partial."""
 
     job_ids: list[str]
     html: str
+    # /clone-links: the Generate's id (its Stop; a resend with it answers
+    # with these runs instead of paying again). None on /clone.
+    batch: str | None = None
 
 
 class ReferenceAsset(BaseModel):
