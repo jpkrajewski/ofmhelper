@@ -28,7 +28,7 @@ from googleapiclient.http import MediaFileUpload
 
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive.base import DriveApi, DriveError, FolderGoneError
-from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder
+from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder, DriveStorage
 from ofmhelpers.log import get_logger
 
 if TYPE_CHECKING:
@@ -78,6 +78,9 @@ class ReadOnlyDrive:
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
         return self._inner.thumbnail(item, px)
 
+    def storage(self) -> DriveStorage:
+        return self._inner.storage()
+
     # Every write raises -- the whole point of the guard.
     def create_folder(self, *args: object, **kwargs: object) -> DriveFolder:
         raise DriveError(_READ_ONLY)
@@ -96,6 +99,33 @@ class ReadOnlyDrive:
 
     def trash_file(self, *args: object, **kwargs: object) -> None:
         raise DriveError(_READ_ONLY)
+
+
+class ScopedDrive(ReadOnlyDrive):
+    """Live-read mode's one way to write: only inside `root_id` -- dev's
+    own root, never a live folder -- and the folders made in it here; every
+    other write still raises. /clone-links files its reviewed videos on dev
+    through it while /drive keeps reading the live folders."""
+
+    def __init__(self, inner: DriveApi, root_id: str) -> None:
+        super().__init__(inner)
+        self._writable = {root_id}
+
+    def _inside(self, parent_id: str) -> None:
+        if parent_id not in self._writable:
+            raise DriveError(_READ_ONLY)
+
+    def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:  # type: ignore[override]
+        self._inside(parent_id)
+        made = self._inner.ensure_folder(parent_id, name)
+        self._writable.add(made.id)
+        return made
+
+    def upload(  # type: ignore[override]
+        self, parent_id: str, path: Path, name: str, mime_type: str
+    ) -> DriveFile:
+        self._inside(parent_id)
+        return self._inner.upload(parent_id, path, name, mime_type)
 
 
 def _guard(drive: DriveApi) -> DriveApi:
@@ -192,6 +222,7 @@ class Drive:
         service = build("drive", "v3", cache_discovery=False, http=http)
         self._files = service.files()
         self._permissions = service.permissions()
+        self._about = service.about()
         self._retries = settings.gdrive.retries if retries is None else retries
 
     def _run(self, request: HttpRequest, what: str) -> dict[str, Any]:
@@ -206,6 +237,15 @@ class Drive:
             httplib2.HttpLib2Error,
         ) as exc:
             raise _failure(exc, what) from exc
+
+    def storage(self) -> DriveStorage:
+        """The person's space: used, and the limit (none: unlimited)."""
+        found = self._run(self._about.get(fields="storageQuota"), "Storage")
+        quota = found.get("storageQuota", {})
+        limit = quota.get("limit")
+        return DriveStorage(
+            usage=int(quota.get("usage", 0)), limit=int(limit) if limit else None
+        )
 
     def folder(self, folder_id: str) -> DriveFolder:
         """Raises `FolderGoneError` when it is missing, trashed or not
@@ -438,7 +478,9 @@ def connect(*, interactive: bool = False) -> DriveApi:
     return _guard(drives[cache_key])
 
 
-def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
+def connect_as(
+    refresh_token: str, *, interactive: bool = False, guard: bool = True
+) -> DriveApi:
     """This thread's `Drive` acting as a person (their refresh token, from
     signing in with Google; `signin.google`): everything /drive does goes
     through the folder owner's own account. `interactive`: a page waits
@@ -447,7 +489,8 @@ def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
     if settings.infra.fake_externals:
         from ofmhelpers.gdrive.fake import fake_person
 
-        return _guard(fake_person(refresh_token))
+        person = fake_person(refresh_token)
+        return _guard(person) if guard else person
     from ofmhelpers.signin.google import drive_credentials
 
     s = settings.gdrive
@@ -462,4 +505,5 @@ def connect_as(refresh_token: str, *, interactive: bool = False) -> DriveApi:
         drives[key] = Drive(
             drive_credentials(refresh_token), timeout_s=timeout_s, retries=retries
         )
-    return _guard(drives[key])
+    # guard=False: only for a caller that wraps it in `ScopedDrive` at once.
+    return _guard(drives[key]) if guard else drives[key]

@@ -6,7 +6,7 @@ tool is one entry here instead of one in each of them."""
 from ofmhelpers.web.clone_long import run_long_clone
 from ofmhelpers.web.clone_long import time_limit as clone_long_time_limit
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos
-from ofmhelpers.web.routers.generation import ai, clone, clone_long
+from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.clone import _run_clone
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
 from ofmhelpers.web.routers.image_tools import character_sheet
@@ -40,6 +40,11 @@ TOOLS = {
     **GENERATE_TOOLS,
     **DOWNLOAD_TOOLS,
     "clone": Tool(label="Clone", router=clone.router, run=_run_clone),
+    clone_links.TASK: Tool(
+        label=clone_links.LABEL,
+        router=clone_links.router,
+        run=clone_links.run_clone_link,
+    ),
     clone_long.TASK: Tool(
         label=clone_long.LABEL,
         router=clone_long.router,

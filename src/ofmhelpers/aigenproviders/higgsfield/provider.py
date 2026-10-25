@@ -58,6 +58,9 @@ UPLOAD_TYPES = frozenset(
         "video/mp4",
     }
 )
+# The image's Python (3.12, no /etc/mime.types) does not know .webp: a WebP
+# subject was refused as "not WebP" (dev 2026-10-25).
+mimetypes.add_type("image/webp", ".webp")
 _AUTH_STATUSES = frozenset({401, 403})
 _RETRYABLE_STATUSES = frozenset({408, 429})
 _SERVER_ERROR = 500

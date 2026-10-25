@@ -17,7 +17,7 @@ from PIL import Image
 from ofmhelpers.config import settings
 from ofmhelpers.utils.ffmpeg import binary, run
 
-_VIDEO_S = 2
+MP4_SECONDS = 2
 # The first callers may be several threads (a reel download pool) at once.
 _MAKING = threading.Lock()
 
@@ -48,11 +48,11 @@ def _make_mp4(folder: Path, path: Path) -> None:
             "-f",
             "lavfi",
             "-i",
-            f"testsrc=size=320x568:rate=25:duration={_VIDEO_S}",
+            f"testsrc=size=320x568:rate=25:duration={MP4_SECONDS}",
             "-f",
             "lavfi",
             "-i",
-            f"sine=frequency=440:duration={_VIDEO_S}",
+            f"sine=frequency=440:duration={MP4_SECONDS}",
             "-c:v",
             "libx264",
             "-pix_fmt",

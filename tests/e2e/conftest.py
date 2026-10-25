@@ -41,6 +41,7 @@ from sqlalchemy.engine import make_url
 from alembic import command
 from ofmhelpers.gdrive.fake import FakeDrive
 from ofmhelpers.links.fake import BOUNCY_FAKE_KEY, OOPSIE_FAKE_KEY
+from ofmhelpers.llm.gemini.fake import FAKE_KEY as GEMINI_FAKE_KEY
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -100,6 +101,8 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         # The admin's link providers: the fakes' keys (links/fake.py).
         "OOPSIE_API_KEY_ADMIN": OOPSIE_FAKE_KEY,
         "BOUNCY_API_KEY_ADMIN": BOUNCY_FAKE_KEY,
+        # /clone-links' AI check: the Gemini fake's key (llm/gemini/fake.py).
+        "GEMINI_API_KEY": GEMINI_FAKE_KEY,
         # Both sign-in providers set up; under OFM_FAKE_EXTERNALS their
         # consent is /auth/fake-consent and their token endpoints fakes.
         "OFM_GOOGLE_CLIENT_ID": "e2e-google-client",

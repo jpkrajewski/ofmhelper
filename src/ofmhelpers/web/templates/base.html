@@ -16,7 +16,9 @@
     <script src="{{ static_url('js/confirm.js') }}" defer></script>
     <script src="{{ static_url('js/menu.js') }}" defer></script>
     <script src="{{ static_url('js/theme.js') }}" defer></script>
+    <script src="{{ static_url('js/notify.js') }}" defer></script>
     <script src="{{ static_url('js/posting.js') }}" defer></script>
+    <script src="{{ static_url('js/drive-alert.js') }}" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -70,16 +72,30 @@
                 <span class="nav-toggle-bars" aria-hidden="true"></span>
             </button>
         </div>
+        {# Pop-ups just under the header (inside it: they follow it at any
+           height), top right, stacked. The daily posting window
+           (web/posting.py): while it is open (static/js/posting.js shows it,
+           also at the window's start on a page left open; dismissed, it stays
+           away for that day's window). A full Google Drive (web/drive_space.py,
+           signed in only): static/js/drive-alert.js asks for the space and
+           shows it; dismissed, it stays away for the day. Both chime and notify
+           the desktop once (static/js/notify.js). #}
+        <div class="page-alerts">
+        {% set pw = posting_window() %}
+        {% call ui.notice(hook="posting-banner", attrs={"data-start": pw.start|int, "data-end": pw.end|int, "hidden": true}) %}
+            <span>Start posting content</span>
+            {{ ui.icon_button("x", "Dismiss", hook="posting-dismiss") }}
+        {% endcall %}
+        {% if signed_in_as %}
+        {% call ui.notice(kind="fail", hook="drive-full-banner", attrs={"hidden": true}) %}
+            <span class="drive-full-text">Google Drive is full. Check the folder.</span>
+            {{ ui.button("Open folder", href="https://drive.google.com/drive/my-drive", hook="drive-full-folder", attrs={"target": "_blank", "rel": "noopener"}) }}
+            {{ ui.button("Buy more space", href="https://one.google.com/storage", hook="drive-full-buy", attrs={"target": "_blank", "rel": "noopener"}) }}
+            {{ ui.icon_button("x", "Dismiss", hook="drive-full-dismiss") }}
+        {% endcall %}
+        {% endif %}
+        </div>
     </header>
-
-    {# The daily posting window (web/posting.py): a pop-up while it is open
-       (static/js/posting.js shows it, also at the window's start on a page
-       left open; dismissed, it stays away for that day's window). #}
-    {% set pw = posting_window() %}
-    {% call ui.notice(hook="posting-banner", attrs={"data-start": pw.start|int, "data-end": pw.end|int, "hidden": true}) %}
-        <span>Start posting content</span>
-        {{ ui.icon_button("x", "Dismiss", hook="posting-dismiss") }}
-    {% endcall %}
 
     <main class="page-content" id="main">
         {% block content %}{% endblock %}

@@ -6,6 +6,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+import requests
+
+from ofmhelpers.aigenproviders.kaiai.fake import RESULT_HOST, FakeKie
 from ofmhelpers.instagram.fake import cdn_reply
 from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
 
@@ -54,6 +57,19 @@ def log_in(
 
 
 _CDN = re.compile(rf"^https://{re.escape(GLOBAL_CDN_HOST)}/")
+# Where kie.ai hosts a result: a card plays it from there while the job
+# still downloads it.
+_KIE_RESULTS = re.compile(rf"^https://{re.escape(RESULT_HOST)}/")
+
+
+def _serve_kie_result(route: Route) -> None:
+    request = requests.Request("GET", route.request.url).prepare()
+    reply = FakeKie.handle_files(request, {})
+    route.fulfill(
+        status=reply.status,
+        headers={**reply.headers, "Access-Control-Allow-Origin": "*"},
+        body=reply.body,
+    )
 
 
 def _serve_cdn(route: Route) -> None:
@@ -77,6 +93,7 @@ class Session:
         # Pages load reel videos and thumbnails straight from Instagram's
         # CDN: the browser gets them from the same fake as the app.
         self.context.route(_CDN, _serve_cdn)
+        self.context.route(_KIE_RESULTS, _serve_kie_result)
         self.page = self.context.new_page()
         self.js_errors: list[str] = []
         self.failed_requests: list[str] = []

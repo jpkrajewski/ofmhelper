@@ -8,6 +8,7 @@ takes effect if main() actually passes --worker-class.
 """
 
 import logging
+import sys
 
 from rq import Worker
 
@@ -62,13 +63,14 @@ def test_main_passes_our_worker_class_and_settings_to_rq(monkeypatch):
     monkeypatch.setenv("OFM_RQ_WORKERS", "7")
     monkeypatch.setenv("OFM_REDIS_URL", "redis://example:6379/3")
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
+    # main() reads the queue from argv: pytest's own args (--alluredir=...)
+    # were taken for one.
+    monkeypatch.setattr(sys, "argv", ["ofmhelpers.worker"])
 
     argv = {}
     monkeypatch.setattr(worker_module, "rq_main", lambda: argv.update(v=sys_argv()))
 
     def sys_argv():
-        import sys
-
         return list(sys.argv)
 
     worker_module.main()

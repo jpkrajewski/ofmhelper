@@ -33,6 +33,8 @@ from pydantic_settings import BaseSettings
 from ofmhelpers.config.settings import (
     AccountsSettings,
     AigenSettings,
+    CloneAiCheckSettings,
+    CloneLinksSettings,
     CloneLongSettings,
     DownloadersSettings,
     ExportSettings,
@@ -42,6 +44,7 @@ from ofmhelpers.config.settings import (
     InstagramSettings,
     KieAISettings,
     LinksSettings,
+    LLMSettings,
     LoggingSettings,
     SessionSettings,
     SignInSettings,
@@ -142,6 +145,10 @@ class Settings:
         return self._group(CloneLongSettings)
 
     @property
+    def clone_links(self) -> CloneLinksSettings:
+        return self._group(CloneLinksSettings)
+
+    @property
     def signin(self) -> SignInSettings:
         return self._group(SignInSettings)
 
@@ -160,6 +167,14 @@ class Settings:
     @property
     def gdrive(self) -> GDriveSettings:
         return self._group(GDriveSettings)
+
+    @property
+    def llm(self) -> LLMSettings:
+        return self._group(LLMSettings)
+
+    @property
+    def clone_ai_check(self) -> CloneAiCheckSettings:
+        return self._group(CloneAiCheckSettings)
 
     @property
     def logging(self) -> LoggingSettings:

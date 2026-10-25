@@ -37,7 +37,13 @@ def _shrink(content: bytes, dest: Path) -> None:
 def reel_thumb(code: str, source_url: str) -> Path | None:
     """The kept thumbnail, fetched and shrunk first when missing; None when
     Instagram no longer serves it (expired URL, 403) or it is not an image."""
-    dest = thumb_path(code)
+    return kept_thumb(thumb_path(code), source_url)
+
+
+def kept_thumb(dest: Path, source_url: str) -> Path | None:
+    """`source_url`'s image shrunk into `dest`, fetched only when `dest` is
+    missing (any site's cover: /clone-links' previews too); None when it
+    cannot be fetched or is not an image."""
     if dest.is_file():
         return dest
     try:
@@ -45,6 +51,6 @@ def reel_thumb(code: str, source_url: str) -> Path | None:
         response.raise_for_status()
         write_atomic(dest, lambda tmp: _shrink(response.content, tmp))
     except (requests.RequestException, UnidentifiedImageError, OSError) as exc:
-        logger.warning("reels: thumbnail of %s not fetched: %s", code, exc)
+        logger.warning("thumbnail %s not fetched: %s", dest.name, exc)
         return None
     return dest

@@ -4,6 +4,7 @@ from ofmhelpers.gdrive.base import DriveApi, DriveError, FolderGoneError
 from ofmhelpers.gdrive.client import (
     Drive,
     ReadOnlyDrive,
+    ScopedDrive,
     connect,
     connect_as,
     read_live_mode,
@@ -19,6 +20,7 @@ __all__ = [
     "DriveFolder",
     "FolderGoneError",
     "ReadOnlyDrive",
+    "ScopedDrive",
     "connect",
     "connect_as",
     "folder_url",

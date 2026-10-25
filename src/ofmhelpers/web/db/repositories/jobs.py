@@ -226,6 +226,26 @@ class JobRepository(CachedRepository):
             }
 
     @cached
+    def list_batch(self, task: str, actor: str, batch: str) -> list[dict]:
+        """`actor`'s jobs of `task` queued by one submit (params `batch`),
+        oldest first: the order they were pasted in."""
+        with session_scope() as s:
+            rows = (
+                s.execute(
+                    select(JobRow)
+                    .where(
+                        JobRow.task == task,
+                        JobRow.actor == actor,
+                        JobRow.params["batch"].astext == batch,
+                    )
+                    .order_by(JobRow.created_at)
+                )
+                .scalars()
+                .all()
+            )
+            return [_job_to_dict(r) for r in rows]
+
+    @cached
     def count_hidden(self, tasks: tuple[str, ...], actor: str) -> int:
         """How many of `actor`'s jobs of `tasks` are hidden (sorted tuple:
         stable cache key) -- whether a gallery offers "Show hidden"."""

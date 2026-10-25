@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from ofmhelpers.gdrive.models import DriveFile, DriveFolder
+    from ofmhelpers.gdrive.models import DriveFile, DriveFolder, DriveStorage
 
 
 class DriveError(Exception):
@@ -48,3 +48,5 @@ class DriveApi(Protocol):
     def grant(self, item_id: str, email: str) -> None: ...
 
     def trash_file(self, item_id: str) -> None: ...
+
+    def storage(self) -> DriveStorage: ...

@@ -48,6 +48,9 @@ dependencies = [
     # service account. google-auth also gives the authorised thumbnail fetch.
     "google-api-python-client>=2.201.0",
     "google-auth>=2.40.0",
+    # ofmhelpers/llm/gemini: Google's official Gemini SDK (the free tier
+    # takes real video). 2.29.0: the newest release at least two weeks old.
+    "google-genai>=2.29.0",
     # Traces, logs and metrics (OpenTelemetry) to Pydantic Logfire
     # (ofmhelpers/telemetry.py): web requests, Postgres, Redis, outbound
     # HTTP (kie.ai, Higgsfield, Instagram, Google) and every RQ job.

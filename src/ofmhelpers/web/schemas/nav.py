@@ -28,6 +28,7 @@ NAV = (
     NavItem(href="/generate", label="Gen AI", icon="sparkles", place=NavPlace.BAR),
     NavItem(href="/clone", label="Clone", icon="film", place=NavPlace.BAR),
     NavItem(href="/clone-long", label="Clone long", icon="film", place=NavPlace.BAR),
+    NavItem(href="/clone-links", label="Clone links", icon="film", place=NavPlace.BAR),
     NavItem(
         href="/download-assets", label="Download", icon="download", place=NavPlace.BAR
     ),

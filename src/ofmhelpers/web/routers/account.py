@@ -17,6 +17,7 @@ from ofmhelpers.aigenproviders.base import provider_classes
 from ofmhelpers.config import settings
 from ofmhelpers.links.providers import link_providers
 from ofmhelpers.signin import linkable, providers
+from ofmhelpers.web.drive_space import DriveSpace, drive_space
 from ofmhelpers.web.link_sync import sync_now
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.schemas import ApiKeysForm
@@ -83,6 +84,14 @@ def account_page(request: Request, google: str = "", apple: str = ""):
         if outcome == "linked":
             return _page(request, message=notes["linked"].format(label))
     return _page(request)
+
+
+@router.get("/drive-space")
+def drive_space_now(request: Request) -> DriveSpace | None:
+    """The signed-in person's Google Drive space, for every page's
+    drive-alert.js; null without Google connected or when Drive cannot be
+    asked."""
+    return drive_space(AuthMiddleware.user(request).id)
 
 
 @router.post("/password")

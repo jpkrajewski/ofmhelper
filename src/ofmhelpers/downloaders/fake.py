@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-from ofmhelpers.downloaders.models import DownloadResult
+from ofmhelpers.downloaders.models import DownloadResult, VideoInfo
 from ofmhelpers.utils import fake_media
 
 if TYPE_CHECKING:
@@ -19,6 +19,13 @@ _FAIL = "fake-fail"
 
 def _stem(url: str) -> str:
     return "fake-" + hashlib.sha256(url.encode()).hexdigest()[:10]
+
+
+def info(url: str) -> VideoInfo:
+    """What a look at the link says: the 2 s fake reel, no cover."""
+    if _FAIL in url:
+        return VideoInfo(url=url, error="ERROR: Video unavailable")
+    return VideoInfo(url=url, seconds=fake_media.MP4_SECONDS)
 
 
 def video(url: str, output_dir: Path) -> DownloadResult:

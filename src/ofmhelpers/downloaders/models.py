@@ -25,6 +25,18 @@ class DownloadResult(BaseModel):
     error: str | None = None
 
 
+class VideoInfo(BaseModel):
+    """A link's video as yt-dlp sees it without downloading it: its length
+    and cover image URL, or why it could not be read (`error`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    seconds: float | None = None
+    thumbnail: str | None = None
+    error: str | None = None
+
+
 class YtDlpOptions(BaseModel):
     """The yt-dlp options a `DownloadConfig` resolves to."""
 
@@ -60,6 +72,15 @@ class RequestedDownload(BaseModel):
     filename: str | None = Field(default=None, alias="_filename")
 
 
+class YtDlpFormat(BaseModel):
+    """One format yt-dlp picked for an entry (a DASH video, its audio)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    url: str | None = None
+    vcodec: str | None = None
+
+
 class YtDlpInfo(BaseModel):
     """The parts of yt-dlp's info dict this app reads: a playlist's entries,
     or a single entry's written files."""
@@ -70,6 +91,34 @@ class YtDlpInfo(BaseModel):
     entries: list["YtDlpInfo | None"] | None = None
     requested_downloads: list[RequestedDownload] = []
     filepath: str | None = None
+    # What a look without downloading reads (`generic.video_info`). Some
+    # extractors give no `duration` (Instagram logged out, 2026-10-25): the
+    # length is then probed from the video stream's URL.
+    duration: float | None = None
+    thumbnail: str | None = None
+    url: str | None = None
+    vcodec: str | None = None
+    requested_formats: list[YtDlpFormat] = []
+
+    def video_url(self) -> str | None:
+        """Where its video stream is: the picked video format's URL."""
+        streams = self.requested_formats or [
+            YtDlpFormat(url=self.url, vcodec=self.vcodec)
+        ]
+        return next((f.url for f in streams if f.url and f.vcodec != "none"), None)
+
+    def first_video(self) -> "YtDlpInfo | None":
+        """The entry that is a video: itself, or a playlist's first (a
+        carousel post's first video)."""
+        entries = self.entries if self.type == "playlist" else [self]
+        return next(
+            (
+                e
+                for e in entries or []
+                if e is not None and (e.duration is not None or e.video_url())
+            ),
+            None,
+        )
 
     def output_paths(self) -> list[Path]:
         """The real output file(s): what yt-dlp itself considers final after

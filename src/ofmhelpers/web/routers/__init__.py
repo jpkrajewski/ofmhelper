@@ -42,7 +42,7 @@ from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import media as download_media
 from ofmhelpers.web.routers.downloads import videos as download_videos
-from ofmhelpers.web.routers.generation import ai, clone, clone_long
+from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
@@ -65,6 +65,7 @@ ROUTERS = [
     ai.router,
     clone.router,
     clone_long.router,
+    clone_links.router,
     *(router for _label, router in LEGACY_TOOLS.values()),
     # downloads/
     downloads_index.router,

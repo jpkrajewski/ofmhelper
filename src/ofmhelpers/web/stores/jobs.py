@@ -227,6 +227,14 @@ def list_jobs_page(
     return _heal(jobs), page["total"]
 
 
+def list_batch(task: str, batch: str, actor: str) -> list[Job]:
+    """`actor`'s jobs of `task` from one submit (params `batch`), oldest
+    first. Not healed: callers read params only."""
+    return [
+        Job.model_validate(row) for row in _repository().list_batch(task, actor, batch)
+    ]
+
+
 def count_hidden_jobs(tasks: set[str], actor: str) -> int:
     """How many of `actor`'s jobs of `tasks` are hidden from the galleries."""
     return _repository().count_hidden(tuple(sorted(tasks)), actor)
@@ -276,14 +284,18 @@ def _heal(jobs: list[Job]) -> list[Job]:
 
 
 def _live_entries(job: Job) -> list[dict]:
-    """The job's stored result minus whatever no longer exists on disk."""
+    """The job's stored result minus whatever no longer exists on disk. A
+    kept entry stays exactly as stored: a task's own fields on top of
+    `ResultFile`'s (a /clone-links Check's `url`/`seconds`) were lost when
+    entries went back through `ResultFile` (2026-10-25)."""
     if not job.is_grouped:
         # A path of None means the local download never finished and this
         # entry only ever lived as a remote_url -- there's no local file to go
         # stale, so it's never pruned.
+        entries = job.result if isinstance(job.result, list) else []
         return [
-            f.to_result()
-            for f in job.result_files()
+            entry
+            for entry, f in zip(entries, job.result_files(), strict=True)
             if f.path is None or Path(f.path).is_file()
         ]
 

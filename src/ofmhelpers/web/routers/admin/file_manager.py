@@ -65,7 +65,7 @@ DEFAULT_ROOT = "uploads"
 # The sections a user's runs are filed under, in tab order: task names.
 _NAMED = {
     "aigen": ("AI GEN", set(GENERATE_TOOLS)),
-    "clone": ("CLONE", {"clone", "clone_long"}),
+    "clone": ("CLONE", {"clone", "clone_long", "clone_links"}),
     "downloads": ("DOWNLOADS", set(DOWNLOAD_TOOLS)),
 }
 SECTIONS: dict[str, tuple[str, set[str]]] = {

@@ -392,6 +392,9 @@ class AigenSettings(BaseSettings):
     default_provider: str = Field(
         default="higgsfield", validation_alias="OFM_DEFAULT_PROVIDER"
     )
+    # How long a run waits for another worker's upload of the same file
+    # (base.upload_lock), and how long a held lock lives if its holder dies.
+    upload_lock_s: int = Field(default=300, ge=10, validation_alias="OFM_UPLOAD_LOCK_S")
     out_dir: str = Field(
         default="/app/kieai_out",
         validation_alias=AliasChoices("OFM_AIGEN_OUT_DIR", "OFM_KIEAI_OUT_DIR"),
@@ -965,6 +968,221 @@ class CloneLongSettings(BaseSettings):
     # several times the original's bitrate, once per piece.
     piece_max_side: int = Field(
         default=1080, ge=2, validation_alias="OFM_CLONE_LONG_PIECE_MAX_SIDE"
+    )
+
+
+class LLMSettings(BaseSettings):
+    """`ofmhelpers.llm`: language models that read text, images and video
+    and answer in a typed shape, behind one interface. One default per kind
+    of work (`llm.LLMUse`), each `<provider>` or `<provider>:<model>` (the
+    provider's own model field when no model is named). Each provider's key
+    and model are its own fields here (a new provider adds its pair)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Work that reads video (a AI check): Gemini watches the real video.
+    default_video: str = Field(
+        default="gemini", min_length=1, validation_alias="LLM_DEFAULT_VIDEO"
+    )
+    # Who a AI check asks next, in order, when the one before is down,
+    # rate limited, out of quota or not set up (comma-separated
+    # `<provider>[:<model>]`). Gemini's free quota is per model: on the
+    # first dev paid run (2026-10-25) 3.8-flash and 3.7-flash were used up
+    # (429 RESOURCE_EXHAUSTED) while 3.5-flash answered (35 s); 2.5-flash is
+    # closed to new keys. Groq last:
+    # its one image model (qwen3.8-27b) left fields out or sent no JSON on
+    # about one check in three.
+    fallback_video: str = Field(
+        default="gemini:gemini-3.6-flash,gemini:gemini-3.5-flash,groq",
+        validation_alias="LLM_FALLBACK_VIDEO",
+    )
+    # Text (and image) work: Groq, fast and not kept by default.
+    default_chat: str = Field(
+        default="groq", min_length=1, validation_alias="LLM_DEFAULT_CHAT"
+    )
+
+    @property
+    def video_chain(self) -> list[str]:
+        """The default video provider, then each fallback once."""
+        names = [self.default_video, *self.fallback_video.split(",")]
+        return list(dict.fromkeys(n.strip() for n in names if n.strip()))
+
+    # Google AI Studio (https://aistudio.google.com/apikey): free tier, no
+    # card; free-tier inputs may be used by Google to improve its models.
+    gemini_api_key: SecretStr | None = Field(
+        default=None, validation_alias="GEMINI_API_KEY"
+    )
+    # A stable id, free on the free tier (ai.google.dev pricing, 2026-10-24).
+    gemini_model: str = Field(
+        default="gemini-3.8-flash", min_length=1, validation_alias="OFM_GEMINI_MODEL"
+    )
+    # GroqCloud (https://console.groq.com/keys): free plan, no card. Inference
+    # data is not kept by default (logs up to 30 days; Zero Data Retention is
+    # a switch in Data Controls).
+    groq_api_key: SecretStr | None = Field(
+        default=None, validation_alias="GROQ_API_KEY"
+    )
+    # Groq's vision model (console.groq.com/docs/vision, 2026-10-24): images
+    # only, at most 3 per request; free plan 30/min, 1,000/day, 8K tokens/min.
+    groq_model: str = Field(
+        default="qwen/qwen3.8-27b", min_length=1, validation_alias="OFM_GROQ_MODEL"
+    )
+    # Cerebras (https://cloud.cerebras.ai): Free Trial tier. Its vision model
+    # (inference-docs.cerebras.ai, 2026-10-24): at most 2 images and 10 MiB
+    # per request; free 5 requests/min, 1M tokens/day.
+    cerebras_api_key: SecretStr | None = Field(
+        default=None, validation_alias="CEREBRAS_API_KEY"
+    )
+    cerebras_model: str = Field(
+        default="qwen-3.8-27b", min_length=1, validation_alias="OFM_CEREBRAS_MODEL"
+    )
+    # Images go to a chat-completions provider (Groq, Cerebras) shrunk to
+    # this: tokens per image grow with its size, and free plans count tokens
+    # per minute (Groq: 8K).
+    image_max_side: int = Field(
+        default=1024, ge=64, validation_alias="OFM_LLM_IMAGE_MAX_SIDE"
+    )
+    image_max_bytes: int = Field(
+        default=3 * 1024 * 1024, ge=1024, validation_alias="OFM_LLM_IMAGE_MAX_BYTES"
+    )
+    # A provider that reads images but not video gets a video as one contact
+    # sheet: this many stills, evenly spaced, tiled in time order, each this
+    # wide.
+    video_sheet_frames: int = Field(
+        default=9, ge=1, le=36, validation_alias="OFM_LLM_VIDEO_SHEET_FRAMES"
+    )
+    video_sheet_frame_px: int = Field(
+        default=360, ge=64, validation_alias="OFM_LLM_VIDEO_SHEET_FRAME_PX"
+    )
+    video_sheet_timeout_s: int = Field(
+        default=60, ge=1, validation_alias="OFM_LLM_VIDEO_SHEET_TIMEOUT_S"
+    )
+    # One request, media upload included. gemini-3.8-flash took 60 and 87 s
+    # to answer one AI check (a 9-still sheet) on the free tier (dev,
+    # 2026-10-25): 120 s left too little room before a retry.
+    timeout_s: float = Field(default=300, gt=0, validation_alias="OFM_LLM_TIMEOUT_S")
+    # Rate limited / overloaded / 5xx: tries after the first, waiting the
+    # provider's own retry hint, else `retry_wait_s` doubling, at most
+    # `retry_max_wait_s` each. A hint longer than that (a daily quota used
+    # up) is not waited for: the call fails at once.
+    retries: int = Field(default=4, ge=0, validation_alias="OFM_LLM_RETRIES")
+    # An answer in the wrong shape (JSON mode missed): asked again this many
+    # times before it counts as the answer (llm/base.py `_reasked`).
+    shape_retries: int = Field(
+        default=1, ge=0, validation_alias="OFM_LLM_SHAPE_RETRIES"
+    )
+    retry_wait_s: float = Field(
+        default=5, ge=0, validation_alias="OFM_LLM_RETRY_WAIT_S"
+    )
+    retry_max_wait_s: float = Field(
+        default=60, ge=0, validation_alias="OFM_LLM_RETRY_MAX_WAIT_S"
+    )
+    # A media file up to this size goes inside the request; a bigger one is
+    # uploaded first (Gemini: 20 MB per request, base64 adds a third).
+    inline_max_bytes: int = Field(
+        default=14 * 1024 * 1024, ge=0, validation_alias="OFM_LLM_INLINE_MAX_BYTES"
+    )
+    # An uploaded file must be processed before a request may use it.
+    file_ready_timeout_s: float = Field(
+        default=120, gt=0, validation_alias="OFM_LLM_FILE_READY_TIMEOUT_S"
+    )
+
+
+class CloneAiCheckSettings(BaseSettings):
+    """`ofmhelpers.clone_ai_check`: is a generated reel too glitchy to post? A
+    contact sheet of the whole video goes to the video model
+    (`LLM_DEFAULT_VIDEO`), which answers GOOD or GLITCHY."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # One still per this many seconds of video, first and last frame
+    # included, at most `max_frames` (a 15 s reel: 16 stills, 4 x 4).
+    every_s: float = Field(
+        default=1.0, gt=0, validation_alias="OFM_CLONE_AI_CHECK_EVERY_S"
+    )
+    max_frames: int = Field(
+        default=16, ge=2, le=36, validation_alias="OFM_CLONE_AI_CHECK_MAX_FRAMES"
+    )
+    # Each still's width: a face must stay readable on the sheet.
+    frame_px: int = Field(
+        default=360, ge=64, validation_alias="OFM_CLONE_AI_CHECK_FRAME_PX"
+    )
+    # Reading the video and cutting each still.
+    ffmpeg_timeout_s: int = Field(
+        default=60, ge=1, validation_alias="OFM_CLONE_AI_CHECK_FFMPEG_TIMEOUT_S"
+    )
+
+
+class CloneLinksSettings(BaseSettings):
+    """/clone-links (`web/clone_links`): reel links + a subject image -> one
+    Wan 3.0 run per link, each result checked for glitches
+    (`ofmhelpers.clone_ai_check`) and uploaded into the clicker's Drive root: a
+    GOOD one into `good_folder`, anything else into `trial_folder`."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Links one paste takes: each is previewed (a yt-dlp read through the
+    # Instagram proxies, 6 at once in the page), then a paid run. A VA's
+    # real list was 112 (2026-10-25, user decision: 120).
+    max_links: int = Field(default=120, ge=1, validation_alias="OFM_CLONE_LINKS_MAX")
+    # How long a link's yt-dlp read (length, cover URL) stays in Redis: a
+    # post's video never changes, so only memory bounds it.
+    info_ttl_s: int = Field(
+        default=30 * 24 * 3600, ge=60, validation_alias="OFM_CLONE_LINKS_INFO_TTL_S"
+    )
+    # The page warns (and every failed upload says so) when the clicker's
+    # Google Drive has less than this free: a clone is ~20-50 MB, and a full
+    # Drive refused every upload on the first dev paid run (2026-10-25).
+    drive_min_free_mb: int = Field(
+        default=500, ge=0, validation_alias="OFM_CLONE_LINKS_DRIVE_MIN_FREE_MB"
+    )
+    # How long a Drive's free space is trusted before it is asked again.
+    drive_space_ttl_s: int = Field(
+        default=300, ge=10, validation_alias="OFM_CLONE_LINKS_DRIVE_SPACE_TTL_S"
+    )
+    # Links Generate's preview reads at once (yt-dlp, each a page or API
+    # request through the Instagram proxies; cached ones cost nothing).
+    preview_parallel: int = Field(
+        default=16, ge=1, le=64, validation_alias="OFM_CLONE_LINKS_PREVIEW_PARALLEL"
+    )
+    # Folders inside the clicker's root (`drive_folders.root_name()`), found
+    # by name or made on first use.
+    good_folder: str = Field(
+        default="GOOD REELS",
+        min_length=1,
+        validation_alias="OFM_CLONE_LINKS_GOOD_FOLDER",
+    )
+    trial_folder: str = Field(
+        default="TRIAL REELS",
+        min_length=1,
+        validation_alias="OFM_CLONE_LINKS_TRIAL_FOLDER",
+    )
+    # Query parameters a shared link carries that never change what it
+    # points at (share trackers): dropped by Check. "utm_*" = every name
+    # starting "utm_".
+    tracking_params: list[str] = Field(
+        default=[
+            "igsh",
+            "igshid",
+            "utm_*",
+            "si",
+            "fbclid",
+            "gclid",
+            "_t",
+            "_r",
+            "is_from_webapp",
+            "sender_device",
+            "share_app_id",
+            "share_link_id",
+            "share_item_id",
+            "social_sharing",
+        ],
+        validation_alias="OFM_CLONE_LINKS_TRACKING_PARAMS",
+    )
+    # A review (check + upload) still running after this long was cut off
+    # (a deploy killed the worker): shown failed, "Check again" re-runs it.
+    review_stale_s: int = Field(
+        default=3600, ge=60, validation_alias="OFM_CLONE_LINKS_REVIEW_STALE_S"
     )
 
 

@@ -67,6 +67,7 @@ from ofmhelpers.gdrive import (
     DriveFile,
     DriveFolder,
     FolderGoneError,
+    ScopedDrive,
     connect,
     connect_as,
     read_live_mode,
@@ -74,6 +75,7 @@ from ofmhelpers.gdrive import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.signin import SignInError
+from ofmhelpers.web.clone_links.folders import review_folders
 from ofmhelpers.web.previews import previews_dir, write_atomic
 from ofmhelpers.web.schemas import (
     AccountScan,
@@ -208,6 +210,29 @@ def ensure_root(drive: DriveApi, user_id: int) -> str:
         "drive: root of %s is %s (%s)", _owner_label(user_id), found, root_name()
     )
     return found
+
+
+def review_target(refresh_token: str, user_id: int) -> tuple[DriveApi, str]:
+    """The Drive a reviewed /clone-links video is written through, and the
+    root it is filed in: the owner's root (`ensure_root`). In live-read mode
+    -- dev reading the live folders, every write blocked -- dev's own
+    "DEV - ALL ACCOUNTS" in the owner's My Drive instead (found by name or
+    made, never stored as their root), through a Drive that can write only
+    inside it (`gdrive.ScopedDrive`): the live folders stay untouched.
+    Raises `DriveError`."""
+    if not read_live_mode():
+        drive = connect_as(refresh_token)
+        return drive, ensure_root(drive, user_id)
+    raw = connect_as(refresh_token, guard=False)
+    name = f"{_DEV_PREFIX}{_ROOT_NAME}"
+    named = [
+        f
+        for f in raw.children("root", folders_only=True)
+        if f.name.strip().casefold() == name.casefold()
+    ]
+    # Drive lists newest first: the oldest is the one people have been using.
+    root = named[-1].id if named else raw.create_folder("root", name).id
+    return ScopedDrive(raw, root), root
 
 
 def _by_owner(targets: list[DriveTarget]) -> dict[int, list[DriveTarget]]:
@@ -673,8 +698,15 @@ def _list_root(
         return {}
     in_root = {f.id: f.name for f in listed}
     if known is not None:
+        # /clone-links' GOOD/TRIAL REELS are the app's own, not leftovers.
+        ours = {name.casefold() for name in review_folders()}
         result.other_folders = sorted(
-            (f for f in listed if f.id not in known), key=lambda f: f.name.lower()
+            (
+                f
+                for f in listed
+                if f.id not in known and f.name.strip().casefold() not in ours
+            ),
+            key=lambda f: f.name.lower(),
         )
     try:
         _list_batched(

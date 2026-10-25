@@ -34,7 +34,7 @@ from pydantic import BaseModel, Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.gdrive.base import DriveError, FolderGoneError
-from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder
+from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile, DriveFolder, DriveStorage
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -68,6 +68,10 @@ class FakeDriveState(BaseModel):
     calls: list[str] = Field(default_factory=list)
     # Folder names whose creation Drive refuses (an outage, a quota).
     fail_on: list[str] = Field(default_factory=list)
+    # Every person's space (`storage`): uploads add their size; None = no
+    # limit. An upload past the limit is refused the way Drive does.
+    storage_used: int = 0
+    storage_limit: int | None = None
 
 
 _WRITES = frozenset({"create", "rename", "upload", "grant"})
@@ -258,6 +262,16 @@ class FakeDrive:
         with self._state("file") as state:
             return self._as_file(self._live(state, file_id, f"File {file_id}"))
 
+    def storage(self) -> DriveStorage:
+        with self._state("storage") as state:
+            return DriveStorage(usage=state.storage_used, limit=state.storage_limit)
+
+    def set_storage(self, limit: int | None, used: int = 0) -> None:
+        """A test's Drive space: `limit` bytes (None: unlimited), `used` taken."""
+        with self._state() as state:
+            state.storage_limit = limit
+            state.storage_used = used
+
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:  # noqa: ARG002 -- one size fits every px
         with self._state("thumbnail"):
             if not item.thumbnail_link:
@@ -278,6 +292,14 @@ class FakeDrive:
             if name in state.fail_on:
                 msg = f"Uploading {name!r}: Drive refused (fake outage)"
                 raise DriveError(msg)
+            limit = state.storage_limit
+            if limit is not None and state.storage_used + size > limit:
+                msg = (
+                    f"Uploading {name!r}: Drive refused (The user's Drive storage"
+                    " quota has been exceeded.)"
+                )
+                raise DriveError(msg)
+            state.storage_used += size
             parent = self._live(state, parent_id, f"Uploading {name!r}")
             if parent.mime_type != FOLDER_MIME:
                 msg = f"Uploading {name!r}: {parent_id} is not a folder"
@@ -482,6 +504,9 @@ class FakePersonDrive:
 
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
         return self._drive.thumbnail(item, px)
+
+    def storage(self) -> DriveStorage:
+        return self._drive.storage()
 
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str

@@ -173,6 +173,27 @@ def test_list_jobs_page_filters_slices_and_reports_the_total():
     assert list_jobs_page({"fake_ai"}, 99, 2) == ([], 5)
 
 
+def test_the_heal_keeps_a_tasks_own_result_fields(tmp_path):
+    """A result entry with fields beyond `ResultFile`'s (a /clone-links
+    Check's `url`/`seconds`) keeps them through a heal -- dropping a missing
+    sibling included. Re-dumping entries through `ResultFile` stripped them
+    and wrote that back: Generate on such a Check then failed (2026-10-25)."""
+    kept = tmp_path / "kept.mp4"
+    kept.write_bytes(b"mp4")
+    entry = {"name": kept.name, "path": str(kept), "url": "https://x/1", "seconds": 6.3}
+    whole = create_job("fake_fetch", {})
+    run_job(whole, lambda: [entry], {})
+    pruned = create_job("fake_fetch", {})
+    gone = {"name": "gone.mp4", "path": str(tmp_path / "gone.mp4"), "seconds": 1.0}
+    run_job(pruned, lambda: [entry, gone], {})
+
+    list_jobs()
+    list_jobs_page({"fake_fetch"}, 0, 10)
+
+    assert get_job(whole).result == [entry]
+    assert get_job(pruned).result == [entry]
+
+
 def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch):
     """The self-heal stats every result file it is handed. Doing that for the
     whole history to render one page is what made every scroll tick cost more

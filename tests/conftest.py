@@ -22,6 +22,7 @@ from ofmhelpers.config.settings import (
     InstagramSettings,
     KieAISettings,
     LinksSettings,
+    LLMSettings,
     SessionSettings,
     SignInSettings,
     TelemetrySettings,
@@ -225,6 +226,9 @@ def fake_externals(monkeypatch, tmp_path):
     from ofmhelpers.gdrive.fake import _fake_drive
     from ofmhelpers.instagram.fake import fake_instagram
     from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
+    from ofmhelpers.llm.cerebras.fake import fake_cerebras
+    from ofmhelpers.llm.gemini.fake import fake_gemini
+    from ofmhelpers.llm.groq.fake import fake_groq
     from ofmhelpers.utils import fake_media, outbound
 
     caches = (
@@ -235,6 +239,9 @@ def fake_externals(monkeypatch, tmp_path):
         fake_kie,
         fake_higgsfield,
         _fake_drive,
+        fake_gemini,
+        fake_groq,
+        fake_cerebras,
         fake_media.mp4,
     )
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
@@ -266,6 +273,8 @@ _SETTINGS_CLASSES = (
     SignInSettings,
     # Its .env holds the Logfire write token: a test must never send data.
     TelemetrySettings,
+    # Its .env holds the real Gemini key.
+    LLMSettings,
 )
 
 

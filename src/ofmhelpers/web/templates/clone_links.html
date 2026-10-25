@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
+{% import "_icons.html" as ic %}
+{% block content %}
+{{ ui.page_header("Clone links") }}
+{% include "_gallery_hidden.html" %}
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<h2 class="col-title">New clones from links · Wan 3.0</h2>
+
+<form id="clone-links-form" class="clone-form" action="/clone-links/run"
+      data-max-images="{{ max_images }}" data-max-links="{{ max_links }}" novalidate>
+    {% include "_provider_fields.html" %}
+    {{ fp.file_picker('image', 'image', 'Subject', max=max_images, multiple=true) }}
+    <div class="field">
+        <label for="clone-links-text">Links</label>
+        <textarea id="clone-links-text" name="links" rows="5" spellcheck="false"
+                  autocomplete="off"></textarea>
+        <div class="link-check-actions">{{ ui.button("Check links", hook="check-links-btn") }}</div>
+    </div>
+    <div class="field">
+        <label for="clone-prompt">Prompt</label>
+        <textarea id="clone-prompt" name="prompt" class="prompt-input" rows="3" required>{{ default_prompt }}</textarea>
+    </div>
+    <div class="field clone-output">
+        <span class="field-label">Output</span>
+        <div class="clone-output-row">
+            <select id="clone-resolution" name="resolution" aria-label="Resolution">
+                {% for r in resolutions %}
+                <option value="{{ r }}" {% if r == default_resolution %}selected{% endif %}>{{ r }}</option>
+                {% endfor %}
+            </select>
+            <label class="check-field">
+                <input type="checkbox" name="audio" value="true" checked>
+                Audio
+            </label>
+            <select id="clone-export" name="export" aria-label="Export as">
+                {% for e in exports %}
+                <option value="{{ e.name }}" {% if e.name == default_export %}selected{% endif %}>{{ e.label }}</option>
+                {% endfor %}
+            </select>
+            <label class="check-field">
+                <input type="checkbox" name="mirror" value="true" {% if default_mirror %}checked{% endif %}>
+                Mirror
+            </label>
+        </div>
+    </div>
+    {{ ui.button("Generate", "primary", type="submit") }}
+    <div class="generation-status" role="status" aria-live="polite"></div>
+</form>
+</div>
+
+<div class="generate-gallery-col">
+{% if not drive_ready %}
+{% call ui.notice(kind="warn", hook="drive-connect") %}
+    <span>Google Drive not connected</span>
+    {{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/clone-links") }}
+{% endcall %}
+{% endif %}
+
+<div id="results-panel">
+    <div class="results" id="clone-links-gallery" data-gallery-endpoint="/clone-links/gallery"
+         data-live-endpoint="/clone-links/gallery/latest" data-live-key="jobId"
+         data-live-interval="{{ live_poll_s }}" data-live-empty="clone-links-empty">
+        {% for job in gallery %}{% include "_clone_links_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
+    </div>
+    {{ ui.empty("No clones yet", attrs={"id": "clone-links-empty", "hidden": gallery|length > 0 or hidden_count > 0}) }}
+</div>
+</div>
+</div>
+
+<dialog class="accounts-dialog pick-dialog" id="clone-links-confirm">
+    <form method="dialog">
+        <h2 id="clone-links-confirm-title"></h2>
+        {% if drive_space and drive_space.low %}{{ ui.notice("Google Drive is full (" ~ drive_space.free_text ~ " left). Check the folder: these videos will not go to Drive.", kind="fail") }}{% endif %}
+        <ol class="pick-lines" id="clone-links-confirm-lines" aria-live="polite"></ol>
+        <footer class="pick-footer">
+            <div class="pick-total">
+                <strong id="clone-links-confirm-usd"></strong>
+                <span id="clone-links-confirm-summary"></span>
+            </div>
+            <div class="accounts-dialog-actions">
+                {{ ui.button("Cancel", "ghost", type="submit", attrs={"value": "cancel"}) }}
+                {{ ui.button("Generate", "primary", type="submit", attrs={"value": "confirm", "id": "clone-links-confirm-go"}) }}
+            </div>
+        </footer>
+    </form>
+</dialog>
+
+{# A Generate tile's Remove (clone-links.js clones it into every tile). #}
+<template id="pick-remove">{{ ui.button("Remove", block=true, hook="pick-remove") }}</template>
+
+{# Check refused the paste (one link per line): the lines and why. #}
+<dialog class="accounts-dialog" id="clone-links-refused">
+    <form method="dialog">
+        <h2 id="clone-links-refused-title"></h2>
+        <p class="refused-note" id="clone-links-refused-note" hidden>Check top of the list for bad links</p>
+        <ol class="cost-lines" id="clone-links-refused-lines"></ol>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("OK", "primary", type="submit") }}
+        </div>
+    </form>
+</dialog>
+
+{# The review block clone-links.js adds to a card that finishes while the
+   page is open; its first poll fills it. #}
+<template id="card-review">{% include "_clone_from_link_pending.html" %}</template>
+{# The decision button's icon while its text shows / is hidden (clone-links.js). #}
+<template id="icon-eye-off">{{ ic.icon("eye-off") }}</template>
+<template id="icon-eye">{{ ic.icon("eye") }}</template>
+
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
+<script src="{{ static_url('js/generation.js') }}"></script>
+<script src="{{ static_url('js/prompt-highlight.js') }}"></script>
+<script src="{{ static_url('js/clone-links.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/live-gallery.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
+{% endblock %}

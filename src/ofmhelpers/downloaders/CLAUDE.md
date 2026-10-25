@@ -3,6 +3,7 @@
 Media from external URLs.
 
 - `generic.py` — videos via yt-dlp (`DownloadConfig`, `download`, `download_all`; TikTok H.264 re-encode, YouTube PO-token workarounds). The only place that downloads video.
+  - `site_of(url)`: the yt-dlp extractor made for the URL's site (`IE_NAME`), None when only Generic would try; pattern match only, no request (~0.3 s first call, ~3 ms after, 2026-10-25). /clone-links Check uses it to fail junk links before any download.
   - `_PROXIED_SITES` (Instagram: `OFM_IG_PROXIES`, 1 + `OFM_IG_PROXY_RETRIES` tries): metadata logged out via a proxy, file direct from the CDN, then the cookies + direct try last. Verified on prod 2026-10-21: server IP logged out -> "redirected to the login page"; cookies.txt -> `HTTP Error 400`; proxy logged out -> OK.
 - `images.py` — images via the `gallery-dl` CLI; filenames use `post_shortcode`. `_LOGIN_WALLS` turns a login-redirect error into "upload your fresh cookies.txt at /cookies".
   - Instagram photo/carousel posts need a working login. Verified 2026-10-22 on `/p/DGUaB0Rtazx`: gallery-dl 1.32.17 logged out (direct, via `OFM_IG_PROXIES`, `api=graphql`) -> "HTTP redirect to login page"; the logged-out post page carries only the cover image (1 `image_versions2`, no `video_versions`); yt-dlp -> "There is no video in this post" (prod via proxy: "No video formats found!"). Not a yt-dlp bug: it downloads video only.

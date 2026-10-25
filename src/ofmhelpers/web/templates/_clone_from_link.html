@@ -1,0 +1,43 @@
+{# A /clone-links card's AI check (`job`: schemas.CloneLinksCard), at the
+   card's foot right above Download: running -> where the video went, as
+   /clone's own Drive line (`.drive-states`) -> "AI decision: good /
+   glitch / not done", a full-width button whose eye shows the problems the
+   model saw and its one line (eye-off hides them again, clone-links.js); no
+   badge besides (user decision 2026-10-25). No Check again (user
+   decision 2026-10-25: the VA sorts in Drive). `data-settled`: nothing
+   changes any more, clone-links.js stops polling. #}
+{% import "components/ui.html" as ui %}
+{% set review = job.review %}
+{% set check = review.check if review else none %}
+<div class="ai-check" data-job="{{ job.job_id }}"{% if job.review_settled %} data-settled{% endif %}>
+    {%- if review is none %}
+    <p class="source">AI check: no video file</p>
+    {%- elif review.status == "checking" and not job.review_cut_off %}
+    <p class="source"><span class="spinner"></span> AI check…</p>
+    {%- else %}
+    <ul class="drive-states">
+        {%- if review.status == "uploading" and not job.review_cut_off %}
+        <li data-status="uploading"><span class="spinner"></span> Uploading to {{ review.folder_name }}…</li>
+        {%- elif review.status == "done" %}
+        <li data-status="done">In Drive: <a href="{{ review.drive_url }}" target="_blank" rel="noopener">{{ review.folder_name }}</a></li>
+        {%- else %}
+        <li data-status="failed"><span title="{{ review.error or 'Cut off by a restart' }}">Not in Drive: {{ review.error or "cut off by a restart" }}</span></li>
+        {%- endif %}
+    </ul>
+    {%- endif %}
+    {% if check %}
+    {% set decision = "not done" if not check.verdict else ("good" if check.verdict == "GOOD" else "glitch") %}
+    {{ ui.button("AI decision: " ~ decision, icon="eye", block=true, hook="why-toggle", attrs={"aria-expanded": "false"}) }}
+    <div class="ai-check-why" hidden>
+        {% if check.error %}<p>{{ check.error }}</p>{% endif %}
+        {% if check.glitches %}
+        <ul>
+            {% for g in check.glitches %}
+            <li>{{ "%d:%04.1f"|format(g.at_s // 60, g.at_s % 60) }} · {{ g.what }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if check.reasoning %}<p>{{ check.reasoning }}</p>{% endif %}
+    </div>
+    {% endif %}
+</div>
