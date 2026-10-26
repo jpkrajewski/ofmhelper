@@ -837,6 +837,10 @@ class TelemetrySettings(BaseSettings):
     token: SecretStr | None = Field(default=None, validation_alias="LOGFIRE_TOKEN")
     # What is running (a git sha on deploy); tells releases apart.
     release: str = Field(default="dev", validation_alias="OFM_RELEASE")
+    # The most a work horse waits for its spans to go out before it exits.
+    flush_timeout_s: float = Field(
+        default=5.0, gt=0, validation_alias="OFM_TELEMETRY_FLUSH_S"
+    )
 
     @field_validator("token", mode="before")
     @classmethod
