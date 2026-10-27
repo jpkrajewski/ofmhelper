@@ -13,6 +13,6 @@ Standalone media utilities.
 - `proxy_pool.py` — `ProxyPool`: one job's proxies in turn (`start` offset), dead ones dropped, direct when none; used by `web/reel_watch.py` and `web/account_tracker.py`.
 - `outbound.py` — every outside `requests` call: `mount(session)`, `get`, `head`. Under OFM_FAKE_EXTERNALS a `FakeAdapter` answers by host from the fakes (instagram, kie.ai, Higgsfield files); any other host is refused (`ConnectionError`), never reached.
 - `fake_media.py` — real tiny media for the fakes: a playable 2 s mp4 (ffmpeg, cached in `OFM_FAKES_DIR`), images.
-- `ffmpeg.py` — `binary`/`run`: the one ffmpeg/ffprobe runner (`RuntimeError` with the last 3 stderr lines).
+- `ffmpeg.py` — `binary`/`run`/`run_bytes` (raw stdout, e.g. pixels): the one ffmpeg/ffprobe runner (`RuntimeError` with the last 3 stderr lines, or "timed out after N s"; never the argv).
 
 Callers: `clean_image.py`, `task_helpers/uploads.py` (heic), `character_sheet.py`, `uniqify.py`, `clone.py` (video_probe, capcut), `iphones/` (mov_atoms, ffmpeg), `web/reel_watch.py` + `web/account_tracker.py` (proxy_pool).

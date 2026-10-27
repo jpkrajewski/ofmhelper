@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ofmhelpers.utils.ffmpeg import binary, run
+from ofmhelpers.utils.ffmpeg import binary, run, run_bytes
 from ofmhelpers.utils.video_probe import duration_s
 from ofmhelpers.web.clone_long.models import Shape
 
@@ -30,6 +30,11 @@ if TYPE_CHECKING:
 _SIDEWAYS = 90
 
 _VIDEO = ("-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p")
+
+# How far colour match may pull one channel of a piece (x0.75 .. x1.33): a
+# piece that is mostly dark (a fade, a night shot) would otherwise be pushed
+# to white by a 10x gain.
+_GAIN = (0.75, 1.33)
 
 
 class VideoTools:
@@ -90,18 +95,107 @@ class VideoTools:
             dest,
         )
 
-    def join(self, parts: list[Path], dest: Path, shape: Shape) -> Path:
+    def last_frame(self, src: Path, dst: Path) -> Path:
+        """The source's last frame as an image (the next piece's start, when
+        chaining; `params.chain`). Every frame of the last 0.2 s is written
+        over the one before (`-update 1`), so the very last one stays."""
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        run(
+            [
+                binary("ffmpeg"),
+                "-y",
+                "-loglevel",
+                "error",
+                "-sseof",
+                "-0.2",
+                "-i",
+                str(src),
+                "-update",
+                "1",
+                str(dst),
+            ],
+            self.timeout_s,
+        )
+        return dst
+
+    def _mean_rgb(self, src: Path) -> tuple[float, float, float]:
+        raw = run_bytes(
+            [
+                binary("ffmpeg"),
+                "-v",
+                "error",
+                "-i",
+                str(src),
+                "-vf",
+                "scale=1:1,format=rgb24",
+                "-f",
+                "rawvideo",
+                "-",
+            ],
+            self.timeout_s,
+        )
+        n = max(1, len(raw) // 3)
+        return sum(raw[0::3]) / n, sum(raw[1::3]) / n, sum(raw[2::3]) / n
+
+    def _colour_matched(
+        self, parts: list[Path], dests: list[Path], *, audio: bool
+    ) -> list[Path]:
+        """Each part after the first, its average colour pulled to the first
+        part's (each channel by at most `_GAIN`), written to `dests`."""
+        ref = self._mean_rgb(parts[0])
+        keep = ["-c:a", "copy"] if audio else ["-an"]
+        for part, dst in zip(parts[1:], dests, strict=True):
+            m = self._mean_rgb(part)
+            gains = ":".join(
+                f"{c}={_gain(ref[j], m[j]):.4f}"
+                for j, c in enumerate(("rr", "gg", "bb"))
+            )
+            self._write(
+                [
+                    "-i",
+                    str(part),
+                    "-vf",
+                    f"colorchannelmixer={gains},format=yuv420p",
+                    *keep,
+                    *_VIDEO,
+                ],
+                dst,
+            )
+        return dests
+
+    def join(
+        self,
+        parts: list[Path],
+        dest: Path,
+        shape: Shape,
+        *,
+        work: Path,
+        colour_match: bool = False,
+        audio: bool = False,
+    ) -> Path:
         """`parts` one after another, as one video of `shape`'s aspect ratio
-        at the first part's height. No sound (a long clone has none)."""
+        at the first part's height. `audio`: keep the pieces' sound (else
+        silent). `colour_match`: pull each piece's colour to the first's.
+        `work`: the run's own folder for the listing and the colour-matched
+        copies, removed again whatever happens -- `dest`'s folder (shared by
+        every job) only ever gets `dest`."""
         width, height = shape.size_at(self.shape(parts[0]).height)
         fit = (
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1"
         )
-        listing = dest.with_suffix(".txt")
-        listing.parent.mkdir(parents=True, exist_ok=True)
-        listing.write_text("".join(f"file '{_quoted(p)}'\n" for p in parts))
+        sound = ["-c:a", "aac", "-b:a", "192k"] if audio else ["-an"]
+        listing = work / "join.txt"
+        matched = (
+            [work / f"cm_{i:03d}.mp4" for i in range(1, len(parts))]
+            if colour_match
+            else []
+        )
         try:
+            if matched:
+                parts = [parts[0], *self._colour_matched(parts, matched, audio=audio)]
+            work.mkdir(parents=True, exist_ok=True)
+            listing.write_text("".join(f"file '{_quoted(p)}'\n" for p in parts))
             return self._write(
                 [
                     "-xerror",
@@ -113,13 +207,14 @@ class VideoTools:
                     str(listing),
                     "-vf",
                     fit,
-                    "-an",
+                    *sound,
                     *_VIDEO,
                 ],
                 dest,
             )
         finally:
-            listing.unlink(missing_ok=True)
+            for made in (listing, *matched):
+                made.unlink(missing_ok=True)
 
     def _write(self, args: list[str], dest: Path) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -142,6 +237,11 @@ class VideoTools:
         finally:
             tmp.unlink(missing_ok=True)
         return dest
+
+
+def _gain(ref: float, mean: float) -> float:
+    """`ref / mean` within `_GAIN`; 1 for a channel with nothing in it."""
+    return min(max(ref / mean, _GAIN[0]), _GAIN[1]) if mean else 1.0
 
 
 def _quoted(path: Path) -> str:

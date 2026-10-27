@@ -1019,6 +1019,19 @@ class CloneLongSettings(BaseSettings):
     piece_max_side: int = Field(
         default=1080, ge=2, validation_alias="OFM_CLONE_LONG_PIECE_MAX_SIDE"
     )
+    # Colour-match every piece to the first before the join (each piece is a
+    # separate generation, so they drift in exposure/tint; the seams show it).
+    colour_match: bool = Field(
+        default=False, validation_alias="OFM_CLONE_LONG_COLOUR_MATCH"
+    )
+    # Generate pieces in order, each from the previous piece's last frame
+    # (passed as a second reference image, prompt "Start video from @Image2"),
+    # so the subject carries across the seam. Off = independent pieces,
+    # generated `parallel_pieces` at a time (faster, but seams jump).
+    chain: bool = Field(default=False, validation_alias="OFM_CLONE_LONG_CHAIN")
+    # Ask the provider to generate audio per piece and keep it through the
+    # join. Off = silent (the long clone had no sound).
+    audio: bool = Field(default=False, validation_alias="OFM_CLONE_LONG_AUDIO")
 
 
 class LLMSettings(BaseSettings):

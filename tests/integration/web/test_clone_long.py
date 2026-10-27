@@ -342,12 +342,12 @@ def test_a_rerun_resumes_every_piece_and_pays_for_none_again(tmp_path, monkeypat
     real_join = service.VideoTools.join
     calls = {"n": 0}
 
-    def join_dies_once(self, parts, dest, shape):
+    def join_dies_once(self, parts, dest, shape, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             msg = "killed"
             raise RuntimeError(msg)
-        return real_join(self, parts, dest, shape)
+        return real_join(self, parts, dest, shape, **kwargs)
 
     monkeypatch.setattr(service.VideoTools, "join", join_dies_once)
     clone = LongClone(params)
@@ -422,6 +422,148 @@ def test_a_refused_piece_starts_no_further_piece(tmp_path, monkeypatch):
     assert len(sent) == 1
     assert [t for t in tasks.remembered() if t.job_id == "stop01"] == []
     assert not (service.work_dir() / "stop01").exists()
+
+
+# --- chained pieces (OFM_CLONE_LONG_CHAIN) -------------------------------------
+
+
+@pytest.mark.parametrize("provider", list(TARGETS))
+@pytest.mark.parametrize("audio", [False, True])
+def test_a_pieces_request_follows_the_audio_switch(
+    tmp_path, monkeypatch, provider, audio
+):
+    monkeypatch.setenv("OFM_CLONE_LONG_AUDIO", "1" if audio else "0")
+    target = TARGETS[provider]
+
+    values = target.values(_params(tmp_path, 10), 10, "piece.mp4")
+
+    assert values[target.audio_field] is audio
+
+
+@pytest.mark.parametrize("provider", list(TARGETS))
+def test_a_chained_pieces_request_starts_from_the_frame_given(tmp_path, provider):
+    target = TARGETS[provider]
+    params = _params(tmp_path, 10)
+
+    values = target.values(params, 10, "piece.mp4", "chain_0.png")
+
+    assert values[target.image_field] == [params.image, "chain_0.png"]
+    assert values["prompt"] == "p Start video from @Image2"
+
+
+@pytest.mark.slow
+def test_chained_pieces_go_in_order_each_from_the_last_frame_before_it(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
+    sent = []
+    _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
+    images = TARGETS["kie"].image_field
+
+    [result] = LongClone(_params(tmp_path)).run("chain01", "k", str(tmp_path / "a"))
+
+    assert [p["key"] for p in sent] == ["chain01", "chain01:1", "chain01:2"]
+    assert [p[images] for p in sent] == [
+        ["https://up/face.png"],
+        ["https://up/face.png", "https://up/chain_0.png"],
+        ["https://up/face.png", "https://up/chain_1.png"],
+    ]
+    assert [p["prompt"] for p in sent] == ["p"] + ["p Start video from @Image2"] * 2
+    assert service.VideoTools(20).length(Path(result.path)) == pytest.approx(6, abs=0.3)
+    assert not (service.work_dir() / "chain01").exists()
+    tasks.forget("chain01")
+
+
+@pytest.mark.slow
+def test_a_refused_chained_piece_starts_no_further_piece(tmp_path, monkeypatch):
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
+
+    def status(_self, tid):
+        if tid == "t2":
+            return TaskState(state="failed", error="flagged as sensitive")
+        return TaskState(state="done", urls=[f"https://res/{tid}.mp4"])
+
+    sent = []
+    _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 1), sent, status)
+
+    with pytest.raises(ProviderGenerationError, match="flagged as sensitive"):
+        LongClone(_params(tmp_path, 46)).run("chain02", "k", str(tmp_path / "a"))
+
+    assert len(sent) == 2
+    assert [t for t in tasks.remembered() if t.job_id == "chain02"] == []
+    assert not (service.work_dir() / "chain02").exists()
+
+
+@pytest.mark.slow
+def test_a_chained_rerun_takes_the_saved_pieces_and_pays_for_none_again(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
+    sent = []
+    _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
+    real_join = service.VideoTools.join
+    calls = {"n": 0}
+
+    def join_dies_once(self, parts, dest, shape, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            msg = "killed"
+            raise RuntimeError(msg)
+        return real_join(self, parts, dest, shape, **kwargs)
+
+    monkeypatch.setattr(service.VideoTools, "join", join_dies_once)
+    clone = LongClone(_params(tmp_path))
+
+    with pytest.raises(RuntimeError, match="killed"):
+        clone.run("chain03", "k", str(tmp_path / "a"))
+    [result] = clone.run("chain03", "k", str(tmp_path / "a"))
+
+    assert len(sent) == 3
+    assert Path(result.path).is_file()
+    tasks.forget("chain03")
+
+
+def test_a_run_keeps_the_switches_it_was_queued_with(tmp_path, monkeypatch):
+    """Switched after the run was queued: the run (and a recovery re-run of
+    it) still makes every piece the way it started."""
+    for name in ("CHAIN", "COLOUR_MATCH", "AUDIO"):
+        monkeypatch.setenv(f"OFM_CLONE_LONG_{name}", "1")
+    params = _params(tmp_path, 10)
+    for name in ("CHAIN", "COLOUR_MATCH", "AUDIO"):
+        monkeypatch.setenv(f"OFM_CLONE_LONG_{name}", "0")
+
+    stored = LongCloneParams.model_validate(params.model_dump())
+
+    assert (stored.chain, stored.colour_match, stored.audio) == (True, True, True)
+    target = TARGETS["kie"]
+    assert target.values(stored, 10, "piece.mp4")[target.audio_field] is True
+
+
+@pytest.mark.slow
+def test_a_run_queued_chained_stays_chained_when_the_switch_goes_off(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
+    params = _params(tmp_path)
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "0")
+    sent = []
+    _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
+
+    LongClone(params).run("chain04", "k", str(tmp_path / "a"))
+
+    images = TARGETS["kie"].image_field
+    assert [len(p[images]) for p in sent] == [1, 2, 2]
+    tasks.forget("chain04")
+
+
+def test_a_job_stored_before_the_switches_runs_with_all_three_off(tmp_path):
+    stored = _params(tmp_path, 10).model_dump()
+    for name in ("chain", "colour_match", "audio"):
+        del stored[name]
+
+    params = LongCloneParams.model_validate(stored)
+
+    assert (params.chain, params.colour_match, params.audio) == (False, False, False)
 
 
 @pytest.mark.slow
@@ -640,6 +782,34 @@ def test_the_time_limit_grows_with_the_rounds_of_pieces(
         credits=0,
         usd=0,
     )
+    assert LongClone(params).time_limit() == expected
+    assert JOB_TIMEOUTS["clone_long"](params.model_dump()) == expected
+
+
+def test_a_chained_runs_time_limit_has_a_provider_wait_per_piece(monkeypatch):
+    """Chained, the pieces go one at a time: 12 pieces are 12 rounds, not
+    the 3 rounds of 5 at once."""
+    monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
+    monkeypatch.setenv("OFM_AIGEN_VIDEO_POLL_TIMEOUT_S", "1800")
+    monkeypatch.setenv("OFM_CLONE_LONG_PARALLEL", "5")
+    monkeypatch.setenv("OFM_CLONE_LONG_FFMPEG_TIMEOUT_S", "900")
+    params = LongCloneParams(
+        provider="kie",
+        model=TARGETS["kie"].model,
+        prompt="p",
+        resolution="720P",
+        image="/x/f.png",
+        video="/x/v.mp4",
+        width=1920,
+        height=1080,
+        seconds=180,
+        pieces=0,
+        credits=0,
+        usd=0,
+        chain=True,
+    )
+
+    expected = 2700 + 11 * 1800 + 13 * 900
     assert LongClone(params).time_limit() == expected
     assert JOB_TIMEOUTS["clone_long"](params.model_dump()) == expected
 
