@@ -83,21 +83,32 @@ class Target(BaseModel):
         return shape.nearest([str(r) for r in allowed if ":" in str(r)])
 
     def values(
-        self, params: LongCloneParams, seconds: float, video: str
+        self,
+        params: LongCloneParams,
+        seconds: float,
+        video: str,
+        chain_image: str | None = None,
     ) -> dict[str, Any]:
-        """One piece's request, in this model's own field names."""
+        """One piece's request, in this model's own field names. `chain_image`
+        (the previous piece's last frame) is added as a second reference image
+        with a 'start from it' prompt (`settings.clone_long.chain`)."""
         allowed = self.spec.properties["resolution"].enum or []
         resolution = next(
             (str(v) for v in allowed if str(v).lower() == params.resolution.lower()),
             params.resolution,
         )
+        images = [params.image]
+        prompt = params.prompt
+        if chain_image is not None:
+            images.append(chain_image)
+            prompt = f"{prompt} Start video from @Image2"
         return {
-            "prompt": params.prompt,
+            "prompt": prompt,
             "resolution": resolution,
             "aspect_ratio": self.aspect_ratio(params.shape),
             "duration": self.duration(seconds),
-            self.audio_field: False,
-            self.image_field: [params.image],
+            self.audio_field: settings.clone_long.audio,
+            self.image_field: images,
             self.video_field: [video],
         }
 
@@ -240,7 +251,11 @@ class LongClone:
         out = Path(settings.aigen.out_dir) / f"clone_long_{job_id}.mp4"
         try:
             self.tools.join(
-                self._generate(job_id, api_key, work), out, self.params.shape
+                self._generate(job_id, api_key, work),
+                out,
+                self.params.shape,
+                colour_match=settings.clone_long.colour_match,
+                audio=settings.clone_long.audio,
             )
         except Exception as exc:
             refused = isinstance(exc, ProviderGenerationError)
@@ -271,6 +286,8 @@ class LongClone:
         refusal is raised before any other error. RQ ending the job meanwhile
         (its time limit) leaves those to the work horse's exit, and their
         requests to recovery."""
+        if settings.clone_long.chain:
+            return self._generate_chained(job_id, api_key, work)
         # Set by the first failure; checked before a piece does anything (a
         # pool thread takes the next piece the moment its own one fails).
         stop = threading.Event()
@@ -307,10 +324,31 @@ class LongClone:
             raise (refused or errors)[0]
         return [f.result() for f in futures]
 
-    def _piece(self, job_id: str, api_key: str, work: Path, part: int) -> Path:
+    def _generate_chained(self, job_id: str, api_key: str, work: Path) -> list[Path]:
+        """Pieces in order, each started from the previous piece's last frame
+        (`settings.clone_long.chain`): the subject carries across the seam.
+        No parallelism -- piece N needs piece N-1's output. A failure raises
+        at once, so no later piece is paid for; saved pieces (a re-run) are
+        taken as they are and still give the next piece its start frame."""
+        results: list[Path] = []
+        chain_image: Path | None = None
+        for part in range(self.plan.count):
+            results.append(self._piece(job_id, api_key, work, part, chain_image))
+            chain_image = self.tools.last_frame(results[-1], work / f"chain_{part}.png")
+        return results
+
+    def _piece(
+        self,
+        job_id: str,
+        api_key: str,
+        work: Path,
+        part: int,
+        chain_image: Path | None = None,
+    ) -> Path:
         """Piece `part` generated and saved in `work`; one saved by an
         earlier run of this job is taken as it is, nothing asked again. The
-        first piece is the card's preview while the rest generate."""
+        first piece is the card's preview while the rest generate.
+        `chain_image`: the previous piece's last frame, when chaining."""
         saved = work / f"result_{part}.mp4"
         if saved.is_file():
             return saved
@@ -322,8 +360,9 @@ class LongClone:
             self.tools.cut(Path(p.video), piece, cut, p.shape.within(limit))
         spec = self.target.spec
         client = get_provider(p.provider, api_key)
+        chain = str(chain_image) if chain_image is not None else None
         payload = spec.request(
-            self.target.values(p, piece.length, str(cut)), client.upload
+            self.target.values(p, piece.length, str(cut), chain), client.upload
         )
 
         def preview(urls: list[str]) -> None:

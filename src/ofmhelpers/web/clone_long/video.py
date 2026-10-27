@@ -15,6 +15,7 @@ as done.
 
 from __future__ import annotations
 
+import subprocess
 from typing import TYPE_CHECKING
 
 from ofmhelpers.utils.ffmpeg import binary, run
@@ -90,14 +91,102 @@ class VideoTools:
             dest,
         )
 
-    def join(self, parts: list[Path], dest: Path, shape: Shape) -> Path:
+    def last_frame(self, src: Path, dst: Path) -> Path:
+        """The source's last frame as an image (the next piece's start, when
+        chaining; `settings.clone_long.chain`)."""
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        run(
+            [
+                binary("ffmpeg"),
+                "-y",
+                "-loglevel",
+                "error",
+                "-sseof",
+                "-0.2",
+                "-i",
+                str(src),
+                "-update",
+                "1",
+                "-frames:v",
+                "1",
+                str(dst),
+            ],
+            self.timeout_s,
+        )
+        return dst
+
+    def _mean_rgb(self, src: Path) -> tuple[float, float, float]:
+        raw = subprocess.run(
+            [
+                binary("ffmpeg"),
+                "-v",
+                "error",
+                "-i",
+                str(src),
+                "-vf",
+                "scale=1:1,format=rgb24",
+                "-f",
+                "rawvideo",
+                "-",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=self.timeout_s,
+        ).stdout
+        n = max(1, len(raw) // 3)
+        return sum(raw[0::3]) / n, sum(raw[1::3]) / n, sum(raw[2::3]) / n
+
+    def _colour_matched(
+        self, parts: list[Path], work: Path, *, audio: bool
+    ) -> list[Path]:
+        """Each part after the first, its average colour pulled to the first
+        part's, as new files in `work`. The first part is returned as is."""
+        ref = self._mean_rgb(parts[0])
+        out = [parts[0]]
+        keep = ["-c:a", "copy"] if audio else ["-an"]
+        for i, part in enumerate(parts[1:], 1):
+            m = self._mean_rgb(part)
+            dst = work / f"cm_{i:03d}.mp4"
+            gains = ":".join(
+                f"{c}={ref[j] / m[j]:.4f}" if m[j] else f"{c}=1"
+                for j, c in enumerate(("rr", "gg", "bb"))
+            )
+            self._write(
+                [
+                    "-i",
+                    str(part),
+                    "-vf",
+                    f"colorchannelmixer={gains},format=yuv420p",
+                    *keep,
+                    *_VIDEO,
+                ],
+                dst,
+            )
+            out.append(dst)
+        return out
+
+    def join(
+        self,
+        parts: list[Path],
+        dest: Path,
+        shape: Shape,
+        *,
+        colour_match: bool = False,
+        audio: bool = False,
+    ) -> Path:
         """`parts` one after another, as one video of `shape`'s aspect ratio
-        at the first part's height. No sound (a long clone has none)."""
+        at the first part's height. `audio`: keep the pieces' sound (else
+        silent). `colour_match`: pull each piece's colour to the first's."""
         width, height = shape.size_at(self.shape(parts[0]).height)
         fit = (
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1"
         )
+        made: list[Path] = []
+        if colour_match and len(parts) > 1:
+            parts = self._colour_matched(parts, dest.parent, audio=audio)
+            made = parts[1:]
+        sound = ["-c:a", "aac", "-b:a", "192k"] if audio else ["-an"]
         listing = dest.with_suffix(".txt")
         listing.parent.mkdir(parents=True, exist_ok=True)
         listing.write_text("".join(f"file '{_quoted(p)}'\n" for p in parts))
@@ -113,13 +202,15 @@ class VideoTools:
                     str(listing),
                     "-vf",
                     fit,
-                    "-an",
+                    *sound,
                     *_VIDEO,
                 ],
                 dest,
             )
         finally:
             listing.unlink(missing_ok=True)
+            for m in made:
+                m.unlink(missing_ok=True)
 
     def _write(self, args: list[str], dest: Path) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)

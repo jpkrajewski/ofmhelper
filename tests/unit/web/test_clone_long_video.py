@@ -60,6 +60,31 @@ def _probe(path: Path) -> dict:
     }
 
 
+def _rgb(path: Path, at: float = 0) -> tuple[int, int, int]:
+    """The average colour of the frame at `at` seconds."""
+    raw = subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-ss",
+            str(at),
+            "-i",
+            str(path),
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=1:1,format=rgb24",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return raw[0], raw[1], raw[2]
+
+
 def test_cut_gives_exactly_that_piece(tmp_path):
     src = _clip(tmp_path / "src.mp4", 20, audio=True)
 
@@ -109,6 +134,73 @@ def test_join_plays_the_parts_one_after_another_silent(tmp_path, audio):
     assert TOOLS.length(out) == pytest.approx(6, abs=0.2)
     assert _probe(out)["audio"] is False  # a long clone has no sound
     assert [p.name for p in out.parent.iterdir()] == ["joined.mp4"]
+
+
+@pytest.mark.parametrize("colour_match", [False, True])
+def test_join_keeps_the_pieces_sound_when_asked(tmp_path, colour_match):
+    parts = [_clip(tmp_path / f"g{i}.mp4", 2, audio=True) for i in range(2)]
+
+    out = TOOLS.join(
+        parts,
+        tmp_path / "out" / "joined.mp4",
+        Shape(width=16, height=9),
+        colour_match=colour_match,
+        audio=True,
+    )
+
+    assert _probe(out)["audio"] is True
+    assert TOOLS.length(out) == pytest.approx(4, abs=0.2)
+
+
+def test_colour_match_pulls_every_piece_to_the_first_pieces_colour(tmp_path):
+    """The second piece came out darker and tinted: joined, it plays in the
+    first piece's colour; the matched copies are not left behind."""
+    parts = [
+        _clip(tmp_path / "first.mp4", 2, colour="0x808080"),
+        _clip(tmp_path / "second.mp4", 2, colour="0x806040"),
+    ]
+
+    out = TOOLS.join(
+        parts,
+        tmp_path / "out" / "joined.mp4",
+        Shape(width=16, height=9),
+        colour_match=True,
+    )
+
+    first, second = _rgb(out, 0.5), _rgb(out, 3)
+    assert all(abs(a - b) <= 6 for a, b in zip(first, second, strict=True))
+    assert [p.name for p in out.parent.iterdir()] == ["joined.mp4"]
+
+
+def test_without_colour_match_each_piece_keeps_its_own_colour(tmp_path):
+    parts = [
+        _clip(tmp_path / "first.mp4", 2, colour="0x808080"),
+        _clip(tmp_path / "second.mp4", 2, colour="0x806040"),
+    ]
+
+    out = TOOLS.join(parts, tmp_path / "joined.mp4", Shape(width=16, height=9))
+
+    assert _rgb(out, 3)[2] < _rgb(out, 0.5)[2] - 40
+
+
+def test_last_frame_is_the_videos_last_picture(tmp_path):
+    """The next chained piece starts from it: the end of the video, not
+    its start."""
+    video = TOOLS.join(
+        [
+            _clip(tmp_path / "red.mp4", 1, colour="red"),
+            _clip(tmp_path / "blue.mp4", 1, colour="blue"),
+        ],
+        tmp_path / "video.mp4",
+        Shape(width=16, height=9),
+    )
+
+    frame = TOOLS.last_frame(video, tmp_path / "chain" / "last.png")
+
+    assert frame == tmp_path / "chain" / "last.png"
+    red, _, blue = _rgb(frame)
+    assert blue > 200
+    assert red < 50
 
 
 def test_join_takes_names_with_quotes_and_spaces(tmp_path):
