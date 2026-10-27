@@ -91,7 +91,7 @@ class Target(BaseModel):
     ) -> dict[str, Any]:
         """One piece's request, in this model's own field names. `chain_image`
         (the previous piece's last frame) is added as a second reference image
-        with a 'start from it' prompt (`settings.clone_long.chain`)."""
+        with a 'start from it' prompt (`params.chain`)."""
         allowed = self.spec.properties["resolution"].enum or []
         resolution = next(
             (str(v) for v in allowed if str(v).lower() == params.resolution.lower()),
@@ -107,7 +107,7 @@ class Target(BaseModel):
             "resolution": resolution,
             "aspect_ratio": self.aspect_ratio(params.shape),
             "duration": self.duration(seconds),
-            self.audio_field: settings.clone_long.audio,
+            self.audio_field: params.audio,
             self.image_field: images,
             self.video_field: [video],
         }
@@ -199,6 +199,7 @@ class LongClone:
         target = TARGETS[provider]
         plan = Plan.split(seconds, target.max_piece_s)
         quote = rate(provider).quote(seconds, resolution, plan.count)
+        switches = settings.clone_long
         clone = cls(
             LongCloneParams(
                 provider=provider,
@@ -213,6 +214,9 @@ class LongClone:
                 pieces=plan.count,
                 credits=quote.credits,
                 usd=quote.usd,
+                chain=switches.chain,
+                colour_match=switches.colour_match,
+                audio=switches.audio,
             )
         )
         for piece in plan.pieces:
@@ -227,9 +231,14 @@ class LongClone:
     def time_limit(self) -> int:
         """RQ's limit: the queue's default (one generation and its download)
         plus a provider wait per extra round of parallel pieces, and an
-        ffmpeg limit per round's cuts and for the join."""
+        ffmpeg limit per round's cuts and for the join. Chained, every piece
+        is a round of its own."""
         cfg = settings.clone_long
-        rounds = math.ceil(self.plan.count / cfg.parallel_pieces)
+        rounds = (
+            self.plan.count
+            if self.params.chain
+            else math.ceil(self.plan.count / cfg.parallel_pieces)
+        )
         return (
             settings.infra.rq_job_timeout_s
             + (rounds - 1) * settings.aigen.video_poll_timeout_s
@@ -254,8 +263,9 @@ class LongClone:
                 self._generate(job_id, api_key, work),
                 out,
                 self.params.shape,
-                colour_match=settings.clone_long.colour_match,
-                audio=settings.clone_long.audio,
+                work=work,
+                colour_match=self.params.colour_match,
+                audio=self.params.audio,
             )
         except Exception as exc:
             refused = isinstance(exc, ProviderGenerationError)
@@ -286,7 +296,7 @@ class LongClone:
         refusal is raised before any other error. RQ ending the job meanwhile
         (its time limit) leaves those to the work horse's exit, and their
         requests to recovery."""
-        if settings.clone_long.chain:
+        if self.params.chain:
             return self._generate_chained(job_id, api_key, work)
         # Set by the first failure; checked before a piece does anything (a
         # pool thread takes the next piece the moment its own one fails).
@@ -326,7 +336,7 @@ class LongClone:
 
     def _generate_chained(self, job_id: str, api_key: str, work: Path) -> list[Path]:
         """Pieces in order, each started from the previous piece's last frame
-        (`settings.clone_long.chain`): the subject carries across the seam.
+        (`params.chain`): the subject carries across the seam.
         No parallelism -- piece N needs piece N-1's output. A failure raises
         at once, so no later piece is paid for; saved pieces (a re-run) are
         taken as they are and still give the next piece its start frame."""

@@ -116,7 +116,12 @@ def test_cut_and_join_keep_the_pictures_shape(tmp_path, size):
     ]
 
     width, height = (int(x) for x in size.split("x"))
-    out = TOOLS.join(parts, tmp_path / "out.mp4", Shape(width=width, height=height))
+    out = TOOLS.join(
+        parts,
+        tmp_path / "out.mp4",
+        Shape(width=width, height=height),
+        work=tmp_path / "work",
+    )
 
     assert _probe(out)["size"] == (width, height)
     assert TOOLS.shape(out) == Shape(width=width, height=height)
@@ -129,7 +134,12 @@ def test_join_plays_the_parts_one_after_another_silent(tmp_path, audio):
         for i, c in enumerate(["red", "green", "blue"])
     ]
 
-    out = TOOLS.join(parts, tmp_path / "out" / "joined.mp4", Shape(width=16, height=9))
+    out = TOOLS.join(
+        parts,
+        tmp_path / "out" / "joined.mp4",
+        Shape(width=16, height=9),
+        work=tmp_path / "work",
+    )
 
     assert TOOLS.length(out) == pytest.approx(6, abs=0.2)
     assert _probe(out)["audio"] is False  # a long clone has no sound
@@ -144,6 +154,7 @@ def test_join_keeps_the_pieces_sound_when_asked(tmp_path, colour_match):
         parts,
         tmp_path / "out" / "joined.mp4",
         Shape(width=16, height=9),
+        work=tmp_path / "work",
         colour_match=colour_match,
         audio=True,
     )
@@ -153,46 +164,133 @@ def test_join_keeps_the_pieces_sound_when_asked(tmp_path, colour_match):
 
 
 def test_colour_match_pulls_every_piece_to_the_first_pieces_colour(tmp_path):
-    """The second piece came out darker and tinted: joined, it plays in the
-    first piece's colour; the matched copies are not left behind."""
+    """The second piece came out tinted: joined, it plays in the first
+    piece's colour; the matched copies are not left behind."""
     parts = [
         _clip(tmp_path / "first.mp4", 2, colour="0x808080"),
-        _clip(tmp_path / "second.mp4", 2, colour="0x806040"),
+        _clip(tmp_path / "second.mp4", 2, colour="0x8c7464"),
     ]
 
     out = TOOLS.join(
         parts,
         tmp_path / "out" / "joined.mp4",
         Shape(width=16, height=9),
+        work=tmp_path / "work",
         colour_match=True,
     )
 
     first, second = _rgb(out, 0.5), _rgb(out, 3)
     assert all(abs(a - b) <= 6 for a, b in zip(first, second, strict=True))
     assert [p.name for p in out.parent.iterdir()] == ["joined.mp4"]
+    assert list((tmp_path / "work").iterdir()) == []
+
+
+def test_colour_match_never_pushes_a_dark_piece_to_white(tmp_path):
+    """A piece that is mostly dark (a fade, a night shot) is pulled at most
+    x1.33 per channel, not by the 12x its average asks for."""
+    parts = [
+        _clip(tmp_path / "first.mp4", 2, colour="0x787878"),
+        _clip(tmp_path / "dark.mp4", 2, colour="0x0a0a0a"),
+    ]
+
+    out = TOOLS.join(
+        parts,
+        tmp_path / "joined.mp4",
+        Shape(width=16, height=9),
+        work=tmp_path / "work",
+        colour_match=True,
+    )
+
+    assert max(_rgb(out, 3)) < 30
+
+
+def test_colour_match_writes_its_copies_only_in_the_runs_work_folder(
+    tmp_path, monkeypatch
+):
+    """The output folder is every job's: two joins at once must never
+    share a copy's name there."""
+    written = []
+    real_write = VideoTools._write
+
+    def write(self, args, dest):
+        written.append(dest)
+        return real_write(self, args, dest)
+
+    monkeypatch.setattr(VideoTools, "_write", write)
+    parts = [
+        _clip(tmp_path / f"p{i}.mp4", 1, colour=c)
+        for i, c in enumerate(["red", "green", "blue"])
+    ]
+    out_dir = tmp_path / "shared-out"
+
+    out = TOOLS.join(
+        parts,
+        out_dir / "joined.mp4",
+        Shape(width=16, height=9),
+        work=tmp_path / "job1",
+        colour_match=True,
+    )
+
+    assert [d for d in written if d.parent != tmp_path / "job1"] == [out]
+    assert len(written) == 3
+
+
+def test_a_colour_match_failing_part_way_leaves_nothing_behind(tmp_path):
+    """The third piece cannot be read: the copy already made of the second
+    is removed, and the failure names ffmpeg, not its command line."""
+    good = _clip(tmp_path / "good.mp4", 1)
+    broken = tmp_path / "broken.mp4"
+    broken.write_bytes(b"not a video")
+
+    with pytest.raises(RuntimeError, match="ffmpeg failed") as caught:
+        TOOLS.join(
+            [good, good, broken],
+            tmp_path / "o" / "out.mp4",
+            Shape(width=16, height=9),
+            work=tmp_path / "work",
+            colour_match=True,
+        )
+
+    assert "rawvideo" not in str(caught.value)
+    assert list((tmp_path / "work").iterdir()) == []
+    assert not (tmp_path / "o").exists()
 
 
 def test_without_colour_match_each_piece_keeps_its_own_colour(tmp_path):
     parts = [
         _clip(tmp_path / "first.mp4", 2, colour="0x808080"),
-        _clip(tmp_path / "second.mp4", 2, colour="0x806040"),
+        _clip(tmp_path / "second.mp4", 2, colour="0x8c7464"),
     ]
 
-    out = TOOLS.join(parts, tmp_path / "joined.mp4", Shape(width=16, height=9))
+    out = TOOLS.join(
+        parts, tmp_path / "joined.mp4", Shape(width=16, height=9), work=tmp_path / "w"
+    )
 
-    assert _rgb(out, 3)[2] < _rgb(out, 0.5)[2] - 40
+    assert _rgb(out, 3)[2] < _rgb(out, 0.5)[2] - 20
 
 
-def test_last_frame_is_the_videos_last_picture(tmp_path):
-    """The next chained piece starts from it: the end of the video, not
-    its start."""
-    video = TOOLS.join(
+def test_last_frame_is_the_videos_very_last_frame(tmp_path):
+    """The next chained piece starts from it: only the last 0.1 s (one
+    frame at 10 fps) is blue, and that is the frame taken."""
+    video = tmp_path / "video.mp4"
+    subprocess.run(
         [
-            _clip(tmp_path / "red.mp4", 1, colour="red"),
-            _clip(tmp_path / "blue.mp4", 1, colour="blue"),
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            (
+                "color=c=red:size=64x36:rate=10:d=2,"
+                "drawbox=color=blue:t=fill:enable='gte(t,1.9)'"
+            ),
+            "-pix_fmt",
+            "yuv420p",
+            str(video),
         ],
-        tmp_path / "video.mp4",
-        Shape(width=16, height=9),
+        check=True,
     )
 
     frame = TOOLS.last_frame(video, tmp_path / "chain" / "last.png")
@@ -205,7 +303,9 @@ def test_last_frame_is_the_videos_last_picture(tmp_path):
 
 def test_join_takes_names_with_quotes_and_spaces(tmp_path):
     parts = [_clip(tmp_path / f"it's part {i}.mp4", 1) for i in range(2)]
-    out = TOOLS.join(parts, tmp_path / "o.mp4", Shape(width=16, height=9))
+    out = TOOLS.join(
+        parts, tmp_path / "o.mp4", Shape(width=16, height=9), work=tmp_path / "w"
+    )
     assert TOOLS.length(out) == pytest.approx(2, abs=0.2)
 
 
@@ -219,8 +319,10 @@ def test_a_failed_join_leaves_nothing_behind(tmp_path):
             [first, tmp_path / "missing.mp4"],
             tmp_path / "o" / "out.mp4",
             Shape(width=64, height=36),
+            work=tmp_path / "work",
         )
     assert list((tmp_path / "o").iterdir()) == []
+    assert list((tmp_path / "work").iterdir()) == []
 
 
 def test_join_fits_pieces_of_a_near_ratio_into_the_sources_exact_shape(tmp_path):
@@ -228,7 +330,12 @@ def test_join_fits_pieces_of_a_near_ratio_into_the_sources_exact_shape(tmp_path)
     again -- scaled to fit, never cropped."""
     parts = [_clip(tmp_path / f"p{i}.mp4", 1, size="768x1024") for i in range(2)]
 
-    out = TOOLS.join(parts, tmp_path / "out.mp4", Shape(width=1080, height=1350))
+    out = TOOLS.join(
+        parts,
+        tmp_path / "out.mp4",
+        Shape(width=1080, height=1350),
+        work=tmp_path / "work",
+    )
 
     assert _probe(out)["size"] == (818, 1024)
 
@@ -277,11 +384,17 @@ def test_join_reads_many_pieces_of_any_size_into_one_shape(tmp_path):
         )
     ]
 
-    out = TOOLS.join(parts, tmp_path / "o" / "out.mp4", Shape(width=16, height=9))
+    out = TOOLS.join(
+        parts,
+        tmp_path / "o" / "out.mp4",
+        Shape(width=16, height=9),
+        work=tmp_path / "work",
+    )
 
     assert _probe(out)["size"] == (64, 36)
     assert TOOLS.length(out) == pytest.approx(12, abs=0.3)
     assert [p.name for p in out.parent.iterdir()] == ["out.mp4"]
+    assert list((tmp_path / "work").iterdir()) == []
 
 
 def test_a_broken_piece_fails_the_join_instead_of_ending_it_early(tmp_path):
@@ -296,5 +409,6 @@ def test_a_broken_piece_fails_the_join_instead_of_ending_it_early(tmp_path):
             [first, broken, first],
             tmp_path / "o" / "out.mp4",
             Shape(width=16, height=9),
+            work=tmp_path / "work",
         )
     assert list((tmp_path / "o").iterdir()) == []

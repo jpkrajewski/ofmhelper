@@ -166,6 +166,12 @@ class LongCloneParams(BaseModel):
     pieces: int
     credits: float
     usd: float
+    # The `settings.clone_long` switches as they were when the run was
+    # queued: a re-run (recovery) never mixes pieces made under two settings.
+    # Off for a job stored before they existed (it ran with all three off).
+    chain: bool = False
+    colour_match: bool = False
+    audio: bool = False
 
     @property
     def shape(self) -> Shape:

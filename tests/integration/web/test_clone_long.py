@@ -523,6 +523,49 @@ def test_a_chained_rerun_takes_the_saved_pieces_and_pays_for_none_again(
     tasks.forget("chain03")
 
 
+def test_a_run_keeps_the_switches_it_was_queued_with(tmp_path, monkeypatch):
+    """Switched after the run was queued: the run (and a recovery re-run of
+    it) still makes every piece the way it started."""
+    for name in ("CHAIN", "COLOUR_MATCH", "AUDIO"):
+        monkeypatch.setenv(f"OFM_CLONE_LONG_{name}", "1")
+    params = _params(tmp_path, 10)
+    for name in ("CHAIN", "COLOUR_MATCH", "AUDIO"):
+        monkeypatch.setenv(f"OFM_CLONE_LONG_{name}", "0")
+
+    stored = LongCloneParams.model_validate(params.model_dump())
+
+    assert (stored.chain, stored.colour_match, stored.audio) == (True, True, True)
+    target = TARGETS["kie"]
+    assert target.values(stored, 10, "piece.mp4")[target.audio_field] is True
+
+
+@pytest.mark.slow
+def test_a_run_queued_chained_stays_chained_when_the_switch_goes_off(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "1")
+    params = _params(tmp_path)
+    monkeypatch.setenv("OFM_CLONE_LONG_CHAIN", "0")
+    sent = []
+    _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
+
+    LongClone(params).run("chain04", "k", str(tmp_path / "a"))
+
+    images = TARGETS["kie"].image_field
+    assert [len(p[images]) for p in sent] == [1, 2, 2]
+    tasks.forget("chain04")
+
+
+def test_a_job_stored_before_the_switches_runs_with_all_three_off(tmp_path):
+    stored = _params(tmp_path, 10).model_dump()
+    for name in ("chain", "colour_match", "audio"):
+        del stored[name]
+
+    params = LongCloneParams.model_validate(stored)
+
+    assert (params.chain, params.colour_match, params.audio) == (False, False, False)
+
+
 @pytest.mark.slow
 def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
     client, tmp_path, monkeypatch
@@ -739,6 +782,34 @@ def test_the_time_limit_grows_with_the_rounds_of_pieces(
         credits=0,
         usd=0,
     )
+    assert LongClone(params).time_limit() == expected
+    assert JOB_TIMEOUTS["clone_long"](params.model_dump()) == expected
+
+
+def test_a_chained_runs_time_limit_has_a_provider_wait_per_piece(monkeypatch):
+    """Chained, the pieces go one at a time: 12 pieces are 12 rounds, not
+    the 3 rounds of 5 at once."""
+    monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
+    monkeypatch.setenv("OFM_AIGEN_VIDEO_POLL_TIMEOUT_S", "1800")
+    monkeypatch.setenv("OFM_CLONE_LONG_PARALLEL", "5")
+    monkeypatch.setenv("OFM_CLONE_LONG_FFMPEG_TIMEOUT_S", "900")
+    params = LongCloneParams(
+        provider="kie",
+        model=TARGETS["kie"].model,
+        prompt="p",
+        resolution="720P",
+        image="/x/f.png",
+        video="/x/v.mp4",
+        width=1920,
+        height=1080,
+        seconds=180,
+        pieces=0,
+        credits=0,
+        usd=0,
+        chain=True,
+    )
+
+    expected = 2700 + 11 * 1800 + 13 * 900
     assert LongClone(params).time_limit() == expected
     assert JOB_TIMEOUTS["clone_long"](params.model_dump()) == expected
 
