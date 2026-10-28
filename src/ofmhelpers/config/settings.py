@@ -26,6 +26,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from ofmhelpers.iphones.models import GeoPoint, Place
 from ofmhelpers.utils.image_fit import ImageLimits
 
+_DAILY_AT_MSG = "rescan_daily_at must be HH:MM"
+
 
 class SessionSettings(BaseSettings):
     """Only ever constructed by web/main.py, at app-construction time.
@@ -699,6 +701,30 @@ class AccountsSettings(BaseSettings):
     claim_ttl_s: int = Field(
         default=2 * 60 * 60, ge=60, validation_alias="OFM_ACCOUNTS_CLAIM_TTL_S"
     )
+    # web/account_tracker.py: pin the periodic sweep to once a day, not
+    # before this local time plus a per-day random delay -- a fixed schedule
+    # is what gets an Instagram login flagged as automation. None: the
+    # interval alone decides, whenever an account falls due.
+    rescan_daily_at: str | None = Field(
+        default=None, validation_alias="OFM_ACCOUNTS_RESCAN_DAILY_AT"
+    )
+    # How far past `rescan_daily_at` the day's run may land.
+    rescan_daily_jitter_s: int = Field(
+        default=600, ge=0, validation_alias="OFM_ACCOUNTS_RESCAN_DAILY_JITTER_S"
+    )
+
+    @field_validator("rescan_daily_at")
+    @classmethod
+    def _daily_at(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            hour, minute = (int(part) for part in value.split(":"))
+            datetime.time(hour, minute)  # ValueError outside 0..23 / 0..59
+        except ValueError:
+            raise ValueError(_DAILY_AT_MSG) from None
+        return f"{hour:02d}:{minute:02d}"
+
     # Accounts per worker job: jobs run in parallel on the worker pool, each
     # rotating through the platform's proxies from its own starting point.
     batch_size: int = Field(

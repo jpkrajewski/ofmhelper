@@ -3,7 +3,10 @@ ofmhelpers/web/account_tracker.py
 
 Rescans every tracked social account every `rescan_interval_s` (6 h by
 default), so /accounts' followers, views and growth stay current without
-anyone pressing a button. Platform-agnostic: everything platform-specific is
+anyone pressing a button. The periodic sweep can be pinned to once a day at
+`rescan_daily_at` local time plus a per-day random delay (`daily_sweep_due`)
+-- a fixed schedule is what gets an Instagram login flagged as automation.
+Platform-agnostic: everything platform-specific is
 behind `socials.Platform.fetch`.
 
 The sweeper claims due accounts in one atomic UPDATE (a second API process
@@ -23,6 +26,7 @@ their login).
 import asyncio
 import random
 import time
+from datetime import datetime, timedelta
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -218,10 +222,32 @@ def rescan_limited(user_id: int) -> list[int]:
     return limited
 
 
+def daily_sweep_due(now: datetime | None = None) -> bool:
+    """The periodic sweep's daily window. `rescan_daily_at` unset: always
+    due (the interval alone decides). Set: not before that local time plus
+    today's jitter, seeded by the date so every sweep pass agrees on the
+    day's run time. There is no upper edge on the window: an overnight
+    outage runs late on the next pass rather than skipping the day. First
+    scans (a login just added) and a fresh cookies upload bypass this --
+    they queue directly, not through this loop."""
+    daily_at = settings.accounts.rescan_daily_at
+    if not daily_at:
+        return True
+    hour, minute = (int(part) for part in daily_at.split(":"))
+    now = now or datetime.now()  # noqa: DTZ005 -- naive local time is the point: the window is local
+    jitter = random.Random(now.strftime("%Y-%m-%d")).uniform(  # noqa: S311 -- per-day jitter, not crypto
+        0, settings.accounts.rescan_daily_jitter_s
+    )
+    run_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    run_at += timedelta(seconds=jitter)
+    return now >= run_at
+
+
 async def account_tracker_loop() -> None:
     while True:
         try:
-            await asyncio.to_thread(queue_due_scans)
+            if daily_sweep_due():
+                await asyncio.to_thread(queue_due_scans)
         except Exception:
             # A broken sweep must never take the loop down -- log and move on.
             logger.exception("account tracker sweep failed")
