@@ -1,0 +1,22 @@
+{
+  "label": "Shuffled encoder per copy (Duplyfi)",
+  "video": {
+    "profile": "high",
+    "preset": ["veryfast", "faster", "fast", "medium"],
+    "crf": [20, 25],
+    "gop": [48, 250],
+    "bframes": [0, 3],
+    "strip_sei": true,
+    "fps": "near_source",
+    "max_width": 720
+  },
+  "audio": {
+    "bitrate_kbps": [160, 280],
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitexact": true
+  },
+  "container": {
+    "movflags": ["+faststart"]
+  }
+}

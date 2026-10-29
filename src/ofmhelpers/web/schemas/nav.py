@@ -38,6 +38,7 @@ NAV = (
     NavItem(href="/drive", label="Drive", icon="folder", place=NavPlace.BAR),
     NavItem(href="/reels", label="Viral", icon="flame", place=NavPlace.MORE),
     NavItem(href="/uniqify", label="Uniqify", icon="shuffle", place=NavPlace.MORE),
+    NavItem(href="/repurpose", label="Repurpose", icon="sparkles", place=NavPlace.MORE),
     NavItem(href="/account", label="Account", icon="user", place=NavPlace.MORE),
     NavItem(href="/cookies", label="Cookies", icon="cookie", place=NavPlace.MORE),
     NavItem(

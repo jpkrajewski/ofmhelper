@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
+{% block content %}
+{{ ui.page_header("Repurpose") }}
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<form id="repurpose-form" action="/repurpose/run" data-prefix="/repurpose" data-result-kind="video"
+      data-tool-label="Repurpose" data-default-device="{{ default_device }}" data-manual-submit novalidate>
+    {{ fp.file_picker('video', 'video', 'Source video', max=1) }}
+    <div class="rp-row">
+        {% call ui.field("Preset", "rp-preset") %}
+        <select id="rp-preset" name="preset_name">
+            <option value="">Custom</option>
+            {% for name in presets %}<option value="{{ name }}"{% if name == default_preset %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+        {% endcall %}
+        {% call ui.field("Device", "rp-device") %}
+        <select id="rp-device" name="device">
+            {% for name, label in devices %}<option value="{{ name }}"{% if name == default_device %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        {% endcall %}
+        {% call ui.field("Copies", "rp-copies") %}
+        <input type="number" id="rp-copies" name="copies" min="1" max="{{ max_copies }}" value="{{ default_copies }}">
+        {% endcall %}
+    </div>
+    <label class="check-field"><input type="checkbox" id="rp-special" name="special" value="true"> Special</label>
+
+    {% for group in knob_groups %}
+    <details class="rp-group">
+        <summary>{{ group.title }}</summary>
+        <div class="rp-knobs">
+            {% for k in group.knobs %}{% include "_repurpose_knob.html" %}{% endfor %}
+        </div>
+    </details>
+    {% endfor %}
+
+    <div class="rp-actions">
+        {{ ui.button("Download preset", icon="download", hook="rp-download") }}
+        {{ ui.button("Generate", "primary", type="submit") }}
+    </div>
+</form>
+<script type="application/json" id="rp-presets">{{ presets|tojson }}</script>
+</div>
+
+<div class="generate-gallery-col">
+<div id="results-panel">
+    <div class="generation-status" role="status" aria-live="polite"></div>
+    <div class="results" id="rp-gallery">
+        {% for job in cards %}{% include "_repurpose_card.html" %}{% endfor %}
+    </div>
+    {{ ui.empty("No copies yet", attrs={"id": "rp-empty", "hidden": cards|length > 0}) }}
+</div>
+</div>
+</div>
+
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
+<script src="{{ static_url('js/generation.js') }}"></script>
+<script src="{{ static_url('js/repurpose.js') }}"></script>
+{% endblock %}

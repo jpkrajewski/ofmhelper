@@ -1,0 +1,19 @@
+{# One /repurpose copy: its video, its score against the source, and
+   Recreate as the only action (`job`: schemas.RepurposeCard). #}
+{% extends "_gallery_card.html" %}
+{% import "components/ui.html" as ui %}
+{% block notes %}
+{% if job.score %}
+<div class="rp-score">
+    {% if job.score.unique %}{{ ui.badge("Unique", "ok") }}{% endif %}
+    {% if job.score.looks_like_source %}{{ ui.badge("Picture matches source", "warn") }}{% endif %}
+    {% if job.score.sounds_like_source %}{{ ui.badge("Sound matches source", "warn") }}{% endif %}
+    {% for m in job.score.methods %}
+    <p class="rp-method"><span>{{ m.method }} · {{ m.medium }}</span><span>{{ m.percent }}%</span></p>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+{% block meta %}Repurpose{% if job.copies %} · copy {{ job.copy_number }}/{{ job.copies }}{% endif %} · {{ job.params.preset_name or "custom" }}{% if job.params.special %} special{% endif %} · {{ job.params.device }}{% endblock %}
+{% block pending_label %}making copies…{% endblock %}
+{% block actions %}{{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}{% endblock %}

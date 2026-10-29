@@ -56,6 +56,10 @@ dependencies = [
     # HTTP (kie.ai, Higgsfield, Instagram, Google) and every RQ job.
     # Sends nothing without LOGFIRE_TOKEN.
     "logfire[fastapi,sqlalchemy,requests,httpx]>=4.41.0",
+    "imagehash>=4.3.2",
+    # Meta's PDQ (256-bit, dihedral) for repurpose.checker; sdist only on
+    # Linux, built with the g++ of the Dockerfile's build/test stages.
+    "pdqhash>=0.2.8",
 ]
 
 [dependency-groups]
@@ -75,6 +79,9 @@ dev = [
     "ruff>=0.16.0",
     "time-machine>=3.5.1",
 ]
+# repurpose/lab: the knob search (Optuna's NSGA-II). Only where the lab
+# runs (a RunPod CPU pod): `uv sync --group lab`.
+lab = ["optuna>=4.0.0"]
 
 [build-system]
 requires = ["hatchling"]

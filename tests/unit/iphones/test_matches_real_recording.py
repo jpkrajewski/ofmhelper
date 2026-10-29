@@ -28,6 +28,7 @@ from repo_paths import FIXTURES
 from ofmhelpers.iphones import load_profile
 from ofmhelpers.iphones.models import Recording
 from ofmhelpers.iphones.recorder import record
+from ofmhelpers.repurpose import Repurpose
 
 FIXTURE = FIXTURES / "iphones" / "iphone17_img0063.exif.json"
 EXIFTOOL_ARGS = ["-j", "-a", "-G1:4", "-n", "-u"]
@@ -136,6 +137,19 @@ def test_recording_matches_a_real_iphone17_file_tag_for_tag(tmp_path: Path):
     }
     assert diff == {}, json.dumps(diff, indent=1)
 
+    # The same through repurpose: the iphone17 preset.
+    dst = tmp_path / "repurposed.mov"
+    Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
+        "iphone17"
+    ).run()
+    made = _exif(dst).tags
+    diff = {
+        tag: {"real": real.get(tag), "made": made.get(tag)}
+        for tag in sorted(set(real) | set(made))
+        if _compared(tag) and real.get(tag) != made.get(tag)
+    }
+    assert diff == {}, json.dumps(diff, indent=1)
+
 
 # From the real IMG_0063 hvc1 entry: colr box, and hvcC's
 # configurationVersion, profile space/tier/idc, compatibility flags,
@@ -166,6 +180,17 @@ def test_video_sample_entry_boxes_match_the_real_ones(tmp_path: Path):
     assert hvcc[12] == REAL_HVCC_LEVEL
     assert REAL_COLR in data
 
+    # The same through repurpose: the iphone17 preset.
+    dst = tmp_path / "repurposed.mov"
+    Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
+        "iphone17"
+    ).run()
+    data = dst.read_bytes()
+    hvcc = data[data.index(b"hvcC") + 4 :]
+    assert hvcc[:6] == REAL_HVCC_PROFILE
+    assert hvcc[12] == REAL_HVCC_LEVEL
+    assert REAL_COLR in data
+
 
 @pytest.mark.slow
 @pytest.mark.heavy
@@ -185,6 +210,14 @@ def test_every_track_ends_with_the_movie_like_an_iphone(tmp_path: Path):
     end = datetime.datetime.now(datetime.UTC)
     record(src, dst, load_profile("iphone17"), Recording(end=end, duration_s=0), 120)
 
+    tags = _exif(dst).tags
+    movie = tags["QuickTime:Duration"]
+    assert tags["Track1:TrackDuration"] == movie
+    assert tags["Track2:TrackDuration"] == movie
+
+    # The same through repurpose: the iphone17 preset.
+    dst = tmp_path / "repurposed.mov"
+    Repurpose(src, dst, recorded_at=end).apply_json_preset("iphone17").run()
     tags = _exif(dst).tags
     movie = tags["QuickTime:Duration"]
     assert tags["Track1:TrackDuration"] == movie

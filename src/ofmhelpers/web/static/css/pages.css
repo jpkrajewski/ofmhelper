@@ -1384,3 +1384,26 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ai-check-why > * { margin: 0; }
 .ai-check-why > * + * { margin-top: var(--gap-inline); }
 .ai-check-why ul { padding-left: var(--s-4); }
+
+/* ---------------------------------------------------------------------
+   /repurpose: preset / device / copies in one row, every knob group a
+   fold, its knobs on a grid; a range knob's min and max side by side.
+   A card's score sits above Recreate (it takes the actions' auto margin).
+   --------------------------------------------------------------------- */
+.rp-row { display: grid; grid-template-columns: 1fr 1fr 5rem; gap: var(--gap-inline); }
+.rp-row .field { margin: 0 0 var(--gap-stack); min-width: 0; }
+.rp-group > summary { margin: 0; }
+.rp-group[open] > summary { margin-bottom: var(--gap-stack); }
+.rp-knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0 var(--gap-stack); }
+.rp-knobs .field { margin-bottom: var(--gap-stack); min-width: 0; }
+.rp-knobs > .check-field { align-self: end; margin-bottom: var(--gap-stack); min-height: var(--control-h); }
+.rp-range { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-1); }
+.rp-range input { padding: 0 var(--s-2); }
+.rp-words { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--gap-stack); }
+.rp-words .check-field { margin: 0; font-weight: 400; }
+.rp-knobs .field:has(.rp-words) { grid-column: 1 / -1; }
+.rp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-inline); margin-top: var(--gap-stack); }
+.rp-score { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--gap-inline); margin-top: auto; font-size: var(--step--1); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.rp-score p { flex-basis: 100%; margin: 0; }
+.rp-method { display: flex; justify-content: space-between; gap: var(--gap-inline); }
+.rp-score + .source { margin-top: var(--gap-inline); }

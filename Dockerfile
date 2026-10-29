@@ -9,6 +9,11 @@ WORKDIR /app
 # on PYTHONPATH instead, so this .venv (~1GB) depends on uv.lock alone and a
 # code-only deploy reuses its layer instead of stranding a fresh copy in the
 # build cache.
+# g++: pdqhash (repurpose.checker) ships no Linux wheel, only a C++ sdist.
+# This stage only: runtime copies the compiled .venv (libstdc++ is in slim).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends g++ && \
+    rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
@@ -23,9 +28,10 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
 # ffmpeg as in runtime; exiftool (Debian's libimage-exiftool-perl) to inspect
 # media the app writes; git for pre-commit; node for the static-JS unit tests;
-# psql to load the production snapshot the migration tests run on.
+# psql to load the production snapshot the migration tests run on; g++ to
+# build pdqhash (no Linux wheel), as in the build stage.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl git nodejs postgresql-client ca-certificates && \
+    apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl git nodejs postgresql-client ca-certificates g++ && \
     rm -rf /var/lib/apt/lists/*
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \

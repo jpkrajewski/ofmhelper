@@ -1,0 +1,58 @@
+{
+  "label": "CapCut 4K desktop export (copied from utils.capcut)",
+  "video": {
+    "profile": "main",
+    "level": "5.1",
+    "preset": "veryfast",
+    "crf": null,
+    "bitrate_kbps": 28000,
+    "maxrate_factor": 1.10714,
+    "bufsize_factor": 1.0,
+    "x264_params": "bframes=0:colorprim=bt709:transfer=bt709:colormatrix=bt709",
+    "tag": "avc1",
+    "strip_sei": true,
+    "colorspace": "bt709",
+    "color_primaries": "bt709",
+    "color_trc": "bt709",
+    "color_range": "tv",
+    "timescale": 60000,
+    "fps": "60000/1001",
+    "max_width": null,
+    "short_side": 2160,
+    "scaler": "lanczos"
+  },
+  "audio": {
+    "bitrate_kbps": 192,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bitexact": true
+  },
+  "container": {
+    "brand": "isom",
+    "movflags": ["+faststart", "+use_metadata_tags"],
+    "bitexact": true
+  },
+  "tags": {
+    "format": {
+      "creation_time": "{creation_time}",
+      "Hw": "1",
+      "bitrate": "55000000",
+      "maxrate": "0",
+      "te_is_reencode": "1",
+      "zzcodec": "Lavf61.1.100"
+    },
+    "video": {
+      "handler_name": "VideoHandler",
+      "creation_time": "{creation_time}"
+    },
+    "audio": {
+      "handler_name": "SoundHandler",
+      "creation_time": "{creation_time}"
+    },
+    "creation_time": "now"
+  },
+  "patches": {
+    "rename_keys": {"zzcodec": "encoder"},
+    "blank_compressor_name": true
+  }
+}

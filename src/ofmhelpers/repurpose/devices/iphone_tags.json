@@ -1,0 +1,34 @@
+{
+  "label": "iPhone-like tags only: legacy uniqify device mode",
+  "video": {
+    "profile": "high",
+    "preset": "fast",
+    "crf": 23,
+    "fps": 30,
+    "max_width": 720
+  },
+  "audio": {
+    "bitrate_kbps": 192,
+    "sample_rate": 44100,
+    "channels": 2
+  },
+  "container": {
+    "movflags": ["+faststart", "+use_metadata_tags"]
+  },
+  "tags": {
+    "format": {
+      "major_brand": "qt  ",
+      "minor_version": "512",
+      "compatible_brands": "qt  ",
+      "creation_time": "{creation_time}"
+    },
+    "video": {
+      "creation_time": "{creation_time}",
+      "handler_name": "Core Media Video",
+      "vendor_id": "FFMP",
+      "encoder": "H.264"
+    },
+    "creation_time": "recent",
+    "recent_days": 7
+  }
+}

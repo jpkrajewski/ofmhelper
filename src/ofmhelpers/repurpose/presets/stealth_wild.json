@@ -1,0 +1,90 @@
+{
+  "label": "stealth wild: lab pick 2026-10-26 (framing mix + vignette; pitch 0.5 + flanger/phaser/vibrato)",
+  "video": {
+    "cut_head": [
+      0.01751,
+      0.03502
+    ],
+    "speed": [
+      0.98343,
+      1.01657
+    ],
+    "shift_y": [
+      -0.04224,
+      0.04224
+    ],
+    "corner_zoom": [
+      1.04024,
+      1.08048
+    ],
+    "tilt": [
+      -0.65564,
+      0.65564
+    ],
+    "drift": [
+      0.0222,
+      0.0444
+    ],
+    "saturation": [
+      0.9332,
+      1.0668
+    ],
+    "brightness": [
+      -0.03076,
+      0.03076
+    ],
+    "gamma": [
+      0.99138,
+      1.00862
+    ],
+    "sharpen": [
+      0.28873,
+      0.57745
+    ],
+    "vignette": [
+      0.12677,
+      0.25354
+    ],
+    "sharpen_late": [
+      0.18821,
+      0.37642
+    ]
+  },
+  "audio": {
+    "volume": [
+      0.98536,
+      1.01464
+    ],
+    "pitch": [
+      -0.50043,
+      0.50043
+    ],
+    "mid_db": [
+      -1.48631,
+      1.48631
+    ],
+    "echo": [
+      "room"
+    ],
+    "room_ms": [
+      5.085,
+      10.17001
+    ],
+    "loud": [
+      "flanger",
+      "phaser",
+      "vibrato"
+    ],
+    "loudness": 1.011,
+    "deess_db": [
+      2.12635,
+      4.2527
+    ],
+    "limit": [
+      0.95271,
+      0.97635
+    ],
+    "match_level": true
+  },
+  "device": "strip"
+}
