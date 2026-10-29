@@ -64,3 +64,42 @@ def test_a_download_run_shows_on_the_page_and_reopens_in_the_one_tool(client):
     assert 'data-task="download_media"' in html
     # Old runs of the two tools it replaced map onto it for Recreate.
     assert 'data-tasks="download_media download_videos download_images"' in html
+
+
+def test_a_login_walled_reel_is_rescued_by_the_saver_fallback(client, monkeypatch):
+    """Prod 2026-10-28: every downloader refused a reel Instagram hides
+    from the logged-out API; the saver fallback fetches it."""
+    from ofmhelpers.downloaders import generic, images, kvs
+    from ofmhelpers.downloaders.models import DownloadResult
+
+    walled = "content isn't available to everyone"
+    monkeypatch.setattr(
+        generic,
+        "download",
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=False, error=walled
+        ),
+    )
+    monkeypatch.setattr(
+        images,
+        "download",
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=False, error="This post needs a login"
+        ),
+    )
+    monkeypatch.setattr(
+        kvs,
+        "download",
+        lambda url, output_dir=None: DownloadResult(
+            url=url, success=False, error="Unsupported URL: no KVS player"
+        ),
+    )
+
+    url = "https://www.instagram.com/reel/rescued/"
+    r = client.post("/download-media/run", data={"urls": url})
+    status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
+
+    assert status["status"] == "done"
+    assert status["failed_sources"] == []
+    kinds = [(a["source"], a["kind"]) for a in status["result"]]
+    assert kinds == [(url, "video")]

@@ -67,6 +67,7 @@ def _routes() -> dict[str, FakeHandler]:
     clients' models, which import this module."""
     from ofmhelpers.aigenproviders.higgsfield.fake import routes as hf_routes
     from ofmhelpers.aigenproviders.kaiai.fake import routes as kie_routes
+    from ofmhelpers.downloaders.savers_fake import routes as savers_routes
     from ofmhelpers.instagram.fake import routes as instagram_routes
     from ofmhelpers.links.fake import routes as links_routes
     from ofmhelpers.signin.fake import routes as signin_routes
@@ -77,6 +78,7 @@ def _routes() -> dict[str, FakeHandler]:
         **hf_routes(),
         **signin_routes(),
         **links_routes(),
+        **savers_routes(),
     }
 
 
