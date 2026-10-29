@@ -16,7 +16,20 @@ IMAGES_FIRST = re.compile(
     re.IGNORECASE,
 )
 
+# What the saver sites (downloaders/savers.py) take: one Instagram post.
+# A profile, story tray or highlight is not a post -- savers answer those
+# with avatars or nothing, so the fallback never tries them.
+SAVER_POST = re.compile(
+    r"instagram\.com/(?:[^/]+/)?(?:p|reels?|tv)/",
+    re.IGNORECASE,
+)
+
 
 def images_first(url: str) -> bool:
     """True for a link of a kind of post that is usually photos."""
     return IMAGES_FIRST.search(url) is not None
+
+
+def saver_supported(url: str) -> bool:
+    """True for a link a saver site can fetch: an Instagram post."""
+    return SAVER_POST.search(url) is not None

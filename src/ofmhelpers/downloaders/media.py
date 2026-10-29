@@ -3,11 +3,13 @@
 The person pasting links should not have to know which tool a post needs.
 Each URL goes to the downloaders in turn and keeps the first that gets
 files that really are what they claim: yt-dlp (`generic.py`, videos), the
-KVS player reader (`kvs.py`, tube sites yt-dlp gets wrong) and gallery-dl
-(`images.py`, photos and mixed posts). Which goes first is decided by the
-link: kinds of posts that are usually photos or carousels
-(`sites.IMAGES_FIRST`) start with gallery-dl, everything else with yt-dlp.
-A new site = one entry there; a new tool = one entry in `_order`.
+KVS player reader (`kvs.py`, tube sites yt-dlp gets wrong), gallery-dl
+(`images.py`, photos and mixed posts) and, for Instagram posts only,
+the saver sites (`savers.py`) -- the fallback for posts Instagram hides
+from the logged-out API. Which goes first is decided by the link: kinds
+of posts that are usually photos or carousels (`sites.IMAGES_FIRST`)
+start with gallery-dl, everything else with yt-dlp. A new site = one
+entry there; a new tool = one entry in `_order`.
 
 A "video" that ffprobe cannot read (a site's web page saved as .mp4,
 2026-10-23) is deleted and counts as that tool failing, so the next one
@@ -23,7 +25,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
-from ofmhelpers.downloaders import generic, images, kvs
+from ofmhelpers.downloaders import generic, images, kvs, savers
 from ofmhelpers.downloaders.cookies import cookie_file
 from ofmhelpers.downloaders.models import DownloadResult
 from ofmhelpers.downloaders.sites import images_first
@@ -66,11 +68,20 @@ def _order(
     url: str,
 ) -> list[tuple[str, Callable[[str, str | None, Path, bool], DownloadResult]]]:
     """The tools to try, in turn; each takes (url, cookiefile, its
-    directory, one post only)."""
+    directory, one post only). The saver sites go last: a fallback for
+    posts Instagram keeps from yt-dlp and gallery-dl, never the first
+    try (their sessions and rate limits are not ours to spend)."""
     video, player, pictures = ("video", _video), ("kvs", _kvs), ("images", _images)
     if images_first(url):
-        return [pictures, video]
-    return [video, player, pictures]
+        return [pictures, video, ("savers", _savers)]
+    return [video, player, pictures, ("savers", _savers)]
+
+
+def _savers(
+    url: str, cookiefile: str | None, out: Path, single: bool
+) -> DownloadResult:
+    del cookiefile  # saver sites log in with their own sessions
+    return savers.download(url, out, single=single)
 
 
 def _broken_video(result: DownloadResult) -> str | None:

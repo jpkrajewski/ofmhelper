@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.downloaders import generic, images, kvs, media
+from ofmhelpers.downloaders import generic, images, kvs, media, savers
 from ofmhelpers.downloaders.models import DownloadResult
 
 
@@ -21,6 +21,22 @@ def _no_kvs_site(monkeypatch):
             url=url, success=False, error="Unsupported URL: no KVS player"
         ),
     )
+
+
+@pytest.fixture(autouse=True)
+def _no_saver_sites(monkeypatch):
+    """The saver fallback refuses (as it does for a non-Instagram link,
+    `savers.download`) and never reaches the network unless a test says
+    otherwise. Yields the real download()."""
+    original = savers.download
+    monkeypatch.setattr(
+        savers,
+        "download",
+        lambda url, output_dir, *, single=False: DownloadResult(
+            url=url, success=False, error="Unsupported URL: not an Instagram post"
+        ),
+    )
+    return original
 
 
 @pytest.fixture
@@ -385,3 +401,79 @@ def test_each_downloaded_url_gets_its_own_folder(monkeypatch, tmp_path):
         assert len(list(tmp_path.iterdir())) == 2
 
     assert list(tmp_path.iterdir()) == []
+
+
+# --- the saver-site fallback (Instagram posts, tried last) -------------------
+
+
+def test_savers_run_last_after_every_other_tool(monkeypatch):
+    calls: list[str] = []
+
+    def fail(name):
+        def run(url, output_dir, *, single=False):
+            calls.append(name)
+            return DownloadResult(url=url, success=False, error=f"{name} refused")
+
+        return run
+
+    monkeypatch.setattr(media.savers, "download", fail("savers"))
+    for tool in (generic, images, kvs):
+        monkeypatch.setattr(
+            tool,
+            "download",
+            lambda url, config=None, cookiefile=None, _n=tool.__name__: DownloadResult(
+                url=url, success=False, error=f"{_n} refused"
+            ),
+        )
+
+    media.download("https://www.instagram.com/reel/abc/")
+
+    assert calls == ["savers"]
+
+
+def test_a_login_walled_instagram_post_is_rescued_by_savers(
+    monkeypatch, tmp_path, fake_externals, _no_saver_sites
+):
+    """Prod 2026-10-28: every tool failed 'content isn't available to
+    everyone' -- the saver fallback fetches the reel."""
+    walled = "content isn't available to everyone"
+    monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
+    monkeypatch.setattr(savers, "download", _no_saver_sites)
+    for tool in (generic, images):
+        monkeypatch.setattr(
+            tool,
+            "download",
+            lambda url, **kw: DownloadResult(url=url, success=False, error=walled),
+        )
+    monkeypatch.setattr(
+        kvs,
+        "download",
+        lambda url, output_dir=None: DownloadResult(
+            url=url, success=False, error="Unsupported URL: no KVS player"
+        ),
+    )
+
+    result = media.download("https://www.instagram.com/reel/abc/")
+
+    assert result.success
+    assert len(result.output_paths) == 1
+
+
+def test_the_savers_failure_is_part_of_the_error(monkeypatch):
+    def fails(url, output_dir, *, single=False):
+        return DownloadResult(url=url, success=False, error="saver sites: down")
+
+    monkeypatch.setattr(media.savers, "download", fails)
+    monkeypatch.setattr(
+        generic,
+        "download",
+        lambda url, config=None, cookiefile=None: DownloadResult(
+            url=url, success=False, error="login required"
+        ),
+    )
+
+    result = media.download("https://www.instagram.com/reel/abc/")
+
+    assert not result.success
+    assert "video: login required" in result.error
+    assert "savers: saver sites: down" in result.error
