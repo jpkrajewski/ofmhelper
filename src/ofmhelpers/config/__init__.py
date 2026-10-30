@@ -50,6 +50,7 @@ from ofmhelpers.config.settings import (
     SessionSettings,
     SignInSettings,
     TelemetrySettings,
+    TrialsSettings,
     VaultSettings,
     WebSettings,
 )
@@ -180,6 +181,10 @@ class Settings:
     @property
     def repurpose(self) -> RepurposeSettings:
         return self._group(RepurposeSettings)
+
+    @property
+    def trials(self) -> TrialsSettings:
+        return self._group(TrialsSettings)
 
     @property
     def logging(self) -> LoggingSettings:

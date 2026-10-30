@@ -86,6 +86,9 @@ class ReadOnlyDrive:
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
         return self._inner.thumbnail(item, px)
 
+    def download(self, file_id: str) -> tuple[bytes, str]:
+        return self._inner.download(file_id)
+
     def storage(self) -> DriveStorage:
         return self._inner.storage()
 
@@ -162,6 +165,8 @@ SCOPES = ("https://www.googleapis.com/auth/drive",)
 _FILE_FIELDS = "id, name, mimeType, webViewLink, hasThumbnail, createdTime, size"
 _THUMB_SIZE = re.compile(r"=s\d+$")
 _THUMB_TIMEOUT_S = 20
+# Reels are MBs, on hotel Wi-Fi minutes: generous.
+_DOWNLOAD_TIMEOUT_S = 300
 # Resumable upload chunks: a dropped connection resends one chunk, not the
 # whole video.
 _UPLOAD_CHUNK = 8 * 1024 * 1024
@@ -457,6 +462,25 @@ class Drive:
             )
             return None
         return response.content, response.headers.get("Content-Type", "image/jpeg")
+
+    def download(self, file_id: str) -> tuple[bytes, str]:
+        """A file's whole content (bytes, its Drive name); reels are MBs, so
+        a long timeout. `file()` first: a missing/unshared id 404s there,
+        and the name comes back with it."""
+        item = self.file(file_id)
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
+        try:
+            response = AuthorizedSession(self._credentials).get(
+                url,
+                params={"alt": "media", "supportsAllDrives": "true"},
+                timeout=_DOWNLOAD_TIMEOUT_S,
+            )
+        except (GoogleAuthError, OSError) as exc:
+            raise _failure(exc, f"Download of {file_id}") from exc
+        if response.status_code != HTTPStatus.OK:
+            msg = f"Download of {file_id} answered {response.status_code}"
+            raise DriveError(msg)
+        return response.content, item.name
 
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str

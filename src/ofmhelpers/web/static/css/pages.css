@@ -1407,3 +1407,44 @@ a.ph-login-user:hover { text-decoration: underline; }
 .rp-score p { flex-basis: 100%; margin: 0; }
 .rp-method { display: flex; justify-content: space-between; gap: var(--gap-inline); }
 .rp-score + .source { margin-top: var(--gap-inline); }
+
+
+/* /trials: /drive's phone cards with Generate trials pinned to the card's
+   bottom; a folder's copies as 9:16 video cards, caption under each. */
+.tr-generate { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-top: auto; padding-top: var(--s-2); }
+.tr-status { flex: 1; min-width: 0; margin: 0; color: var(--text-muted); font-size: var(--step--1); }
+.tr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: var(--gap-grid); }
+.tr-reel { display: flex; flex-direction: column; gap: var(--gap-stack); }
+.tr-video { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-control); background: var(--ink); }
+/* Being made: the gallery cards' generating box, at the video's 9:16. */
+.tr-pending { aspect-ratio: 9 / 16; min-height: 0; }
+.tr-caption textarea { display: block; width: 100%; min-height: 4.5em; resize: vertical; font: inherit; font-size: var(--step-0); line-height: 1.4; }
+/* Wraps rather than overflows: buttons never shrink below their label. */
+.tr-reel-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
+.tr-reel-actions button { flex: 1 1 auto; }
+.tr-reel-actions form { display: contents; }
+/* Select: a whole-width toggle; the card takes the accent while selected. */
+.tr-pick {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-2);
+    min-height: var(--control-h);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.tr-pick:hover { border-color: var(--accent); }
+.tr-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.tr-pick:focus-within { box-shadow: 0 0 0 3px var(--accent-ring); }
+.tr-pick-on { display: none; align-items: center; gap: var(--s-1); }
+.tr-pick:has(input:checked) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.tr-pick:has(input:checked) .tr-pick-on { display: inline-flex; }
+.tr-pick:has(input:checked) .tr-pick-off { display: none; }
+.tr-pick:has(input:disabled) { opacity: 0.45; cursor: default; }
+.tr-reel > .badge { align-self: flex-start; }
+.tr-reel:has(.tr-pick input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }

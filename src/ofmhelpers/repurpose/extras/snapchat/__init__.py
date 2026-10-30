@@ -15,10 +15,11 @@ below are of the frame's height, so any output size gets the same look:
 the last filter-graph segment (over vignette, grain, everything).
 """
 
-import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+from ofmhelpers.config import settings
 
 # Fractions of the frame height, measured from the reference.
 BAR_H = 0.0500
@@ -39,9 +40,9 @@ _FONT_CANDIDATES = (
 
 def find_font() -> str:
     """The caption font: $OFM_SNAPCHAT_FONT, else the first installed candidate."""
-    env = os.environ.get(_FONT_ENV)
-    if env and Path(env).is_file():
-        return env
+    chosen = settings.repurpose.snapchat_font
+    if chosen and Path(chosen).is_file():
+        return chosen
     for candidate in _FONT_CANDIDATES:
         if Path(candidate).is_file():
             return candidate

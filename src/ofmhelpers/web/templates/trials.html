@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_icons.html" as ic %}
+{# /drive's phone cards: the phone opens the folder's trials, Generate
+   trials makes them from its POSTED reels. `made`: copies per login. #}
+{% block title %}Trials — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("Trials") }}
+
+<div class="ph-toolbar">
+    <label class="ph-search">
+        {{ ic.icon("search") }}
+        <input type="search" id="tr-search" placeholder="Search accounts, people, phones…" aria-label="Search accounts" autocomplete="off">
+    </label>
+    <div class="ph-layout" role="group" aria-label="Layout" data-layout-key="trials-layout">
+        {{ ui.icon_button("grid", "Grid", attrs={"data-layout": "grid", "aria-pressed": "true"}) }}
+        {{ ui.icon_button("list", "List", attrs={"data-layout": "list", "aria-pressed": "false"}) }}
+    </div>
+</div>
+
+{% if board.problem %}
+{% call ui.notice(kind="warn") %}
+    <span>{{ board.problem }}</span>
+    {% if board.connect_drive %}{{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/trials") }}{% endif %}
+{% endcall %}
+{% endif %}
+
+{% if board.cards %}
+<div class="ph-grid" data-layout="grid">
+    {% for c in board.cards %}
+    {% set t = c.target %}
+    {% set posted = c.scan.posted|selectattr("kind", "equalto", "video")|list %}
+    <article class="ph-card dr-card tr-card" data-search="{{ c.search_text }}">
+        <a class="ph-media" href="/trials/{{ t.login_id }}" aria-label="Trials of @{{ t.handle }}">
+            <img src="{{ t.device.drawing_url }}" alt="{{ t.device.specs }}" loading="lazy">
+        </a>
+        <div class="ph-body dr-body">
+            <div class="ph-title-row">
+                <div class="ph-title">
+                    <h2>{{ t.device.label }}</h2>
+                    <p class="ph-specs">{{ t.device.specs }}{% if t.device.owner %} · {{ t.device.owner }}{% endif %}</p>
+                </div>
+            </div>
+            <p class="dr-account">@{{ t.handle }}{% if t.followers_label %} <span class="dr-followers">· {{ t.followers_label }}</span>{% endif %}</p>
+            {% if c.error %}
+            <p class="dr-note dr-error">{{ c.error }}</p>
+            {% elif not c.account_folder_id %}
+            <p class="dr-note">No Drive folder yet</p>
+            {% else %}
+            <p class="dr-count">
+                <span>Posted: <strong>{{ posted|length }}</strong></span>
+                <span>Trials: <strong>{{ made.get(t.login_id, 0) }}</strong></span>
+            </p>
+            {% endif %}
+            <form method="post" action="/trials/{{ t.login_id }}/generate" class="tr-generate">
+                {% if made.get(t.login_id) %}{{ ui.button("See generated", href="/trials/" ~ t.login_id, icon="play") }}{% endif %}
+                {{ ui.button("Generate trials", "primary", icon="sparkles", type="submit", attrs={"disabled": not posted}) }}
+            </form>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% elif not board.problem %}
+{% call ui.empty() %}No Instagram logins yet. <a href="/phones">Add one on Phones</a>{% endcall %}
+{% endif %}
+
+<script src="{{ static_url('js/layout.js') }}"></script>
+<script src="{{ static_url('js/trials.js') }}"></script>
+{% endblock %}

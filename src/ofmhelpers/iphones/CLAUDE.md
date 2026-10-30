@@ -1,6 +1,6 @@
 # iphones
 
-Re-encode a video into a camera recording of a real iPhone model. One folder per model, `<model>/profile.json` (decoded from real recordings, shipped in the package), validated into `models.DeviceProfile`; `load_profile(name)` is cached. New model = new folder. Exception: `iphone16` is adapted from the `iphone17` profile (model / lens / software strings only, `samples: 0`) — no iPhone 16 recording decoded yet; swap in real bytes when available.
+Re-encode a video into a camera recording of a real iPhone model. One folder per model, `<model>/profile.json` (decoded from real recordings, shipped in the package), validated into `models.DeviceProfile`; `load_profile(name)` is cached. New model = new folder. Exception: `iphone16` is adapted from the `iphone17` profile (model / lens / software strings only, `samples: 0`) — no iPhone 16 recording decoded yet; swap in real bytes when available. `iphone16_4k` = `iphone16` at 4K30 (2160x3840, level 5.1, 24 Mb/s: Apple's 170 MB/min for 4K30 HEVC, as its 60 MB/min matches the 1080p profile's 8.4 Mb/s) -- also a guess until a real 4K recording is decoded; `x265_preset` `fast` (profile field, default medium: same refs/SPS flags, ~2x quicker at 4K).
 
 ## Files
 - `models.py` — `DeviceProfile`, `FrameTiming`/`TimingPlan`, `GeoPoint`/`Place` (location + jitter), `Recording` (end time in the phone's zone, length, location, seed).

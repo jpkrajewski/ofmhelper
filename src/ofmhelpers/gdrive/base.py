@@ -59,6 +59,10 @@ class DriveApi(Protocol):
 
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None: ...
 
+    def download(self, file_id: str) -> tuple[bytes, str]:
+        """A file's content and name; `FolderGoneError` when missing."""
+        ...
+
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str
     ) -> DriveFile: ...

@@ -74,8 +74,11 @@ def write_image_thumb(source: Path, dest: Path, size: int) -> None:
         img.convert("RGB").save(dest, "WEBP")
 
 
-def write_video_thumb(source: Path, dest: Path, size: int) -> None:
-    """First frame, scaled to fit a `size` box, as webp.
+def write_video_thumb(
+    source: Path, dest: Path, size: int, *, pre_filter: str = ""
+) -> None:
+    """First frame, scaled to fit a `size` box, as webp; `pre_filter`
+    (ending in a comma) runs first.
 
     Extracted with ffmpeg rather than served as a <video preload="metadata">
     tile: that made the browser range-request every clip in a grid just to
@@ -96,7 +99,7 @@ def write_video_thumb(source: Path, dest: Path, size: int) -> None:
                 "-frames:v",
                 "1",
                 "-vf",
-                f"scale={size}:{size}:force_original_aspect_ratio=decrease",
+                f"{pre_filter}scale={size}:{size}:force_original_aspect_ratio=decrease",
                 "-f",
                 "webp",
                 str(tmp),
@@ -109,12 +112,23 @@ def write_video_thumb(source: Path, dest: Path, size: int) -> None:
     write_atomic(dest, write)
 
 
-def write_video_preview(source: Path, dest: Path) -> None:
+def write_video_preview(
+    source: Path,
+    dest: Path,
+    *,
+    pre_filter: str = "",
+    height: int | None = None,
+    maxrate: str | None = None,
+) -> None:
     """At most `preview_height` lines (never upscaled), bitrate-capped H.264
     with the index up front (`+faststart`), so playback starts after the
     first few hundred KB instead of after the whole file. Two threads: the
-    preview worker shares the machine with the app and the generations."""
+    preview worker shares the machine with the app and the generations.
+    `pre_filter` (ending in a comma) runs before the scale; `height` /
+    `maxrate` override the gallery's settings (a page judging quality)."""
     cfg = settings.web
+    height = height or cfg.preview_height
+    maxrate = maxrate or cfg.preview_maxrate
 
     def write(tmp: Path) -> None:
         subprocess.run(
@@ -126,7 +140,7 @@ def write_video_preview(source: Path, dest: Path) -> None:
                 "-i",
                 str(source),
                 "-vf",
-                f"scale=-2:'min({cfg.preview_height},ih)'",
+                f"{pre_filter}scale=-2:'min({height},ih)'",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -134,9 +148,9 @@ def write_video_preview(source: Path, dest: Path) -> None:
                 "-crf",
                 "26",
                 "-maxrate",
-                cfg.preview_maxrate,
+                maxrate,
                 "-bufsize",
-                cfg.preview_maxrate,
+                maxrate,
                 "-pix_fmt",
                 "yuv420p",
                 "-threads",

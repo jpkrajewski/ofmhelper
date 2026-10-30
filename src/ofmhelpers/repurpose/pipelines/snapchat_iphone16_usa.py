@@ -1,7 +1,7 @@
-"""The snapchat-US pipeline: stealth_wild-like picture (gentler: no vignette,
-brighter bias, 0.1 s head trim) + a lowered Duplyfi special audio, mirrored
-and turned 2 degrees, a Snapchat caption bar, recorded as an iPhone 16 Pro
-Max in the USA. The knobs live in `snapchat_iphone16_usa.json` next to this
+"""The snapchat-US pipeline: a light touch (colours and sound vary ~5%,
+CapCut sharpen 5, framing barely moves; user 2026-10-30: the stealth_wild
+mix "fucks up colors"), mirrored and turned 2 degrees, a Snapchat caption
+bar, recorded as an iPhone 16 Pro Max in 4K30 HDR in the USA. The knobs live in `snapchat_iphone16_usa.json` next to this
 file; edit the JSON, not the code.
 
     from ofmhelpers.repurpose.pipelines.snapchat_iphone16_usa import run
@@ -45,72 +45,66 @@ def run(
         }
     )
     result = job.run()
-    _verify_audio(result.output)
+    _verify_audio(Path(src), result.output)
     return result
 
 
-_MEAN_MIN_DB = -35.0  # quieter = effectively silent
-_MEAN_MAX_DB = -6.0  # hotter = a crushed wall
-# A real recording has dynamics: mean sits this far under the peak.
+# How far the copy may sit under its source before it counts as silenced
+# (the preset's volume and EQ move it ~1 dB; a blown chain 20+ dB), and the
+# loudest a copy may be: hotter = a crushed wall.
+_MAX_DROP_DB = 10.0
+_MEAN_MAX_DB = -6.0
+# A real recording has dynamics: its mean sits this far under the peak;
+# a copy may lose some of the source's, never all of them.
 _MIN_DYNAMICS_DB = 4.0
+_DYNAMICS_LOSS_DB = 3.0
 
 
-def _verify_audio(dst: Path) -> None:
-    """The copy must sound like something: ffmpeg 8.0.1's vibrato filter
-    intermittently blows a chain up to a full-scale wall (measured 2026-10-30,
-    ~30% of runs, any params) -- and a wall of constant amplitude IS silence
-    to a speaker. Raise before a bad copy ships."""
+def _levels(path: Path) -> tuple[float, float] | None:
+    """(mean, max) volume of the first audio stream; None: no audio."""
+    import re
+
     from ofmhelpers.repurpose.runner import run_log
     from ofmhelpers.utils.ffmpeg import run
 
-    out = run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "a:0",
-            "-show_entries",
-            "stream=codec_type",
-            "-of",
-            "csv=p=0",
-            str(dst),
-        ],
-        60,
-    )
-    if not out.strip():
-        msg = f"{dst.name}: no audio stream"
-        raise RuntimeError(msg)
-    import re
-
-    log = run_log(
-        [
-            "ffmpeg",
-            "-nostats",
-            "-loglevel",
-            "info",
-            "-i",
-            str(dst),
-            "-map",
-            "0:a:0",
-            "-af",
-            "volumedetect",
-            "-f",
-            "null",
-            "-",
-        ],
-        300,
-    )
+    probe = ["ffprobe", "-v", "error", "-select_streams", "a:0"]
+    probe += ["-show_entries", "stream=codec_type", "-of", "csv=p=0", str(path)]
+    if not run(probe, 60).strip():
+        return None
+    detect = ["ffmpeg", "-nostats", "-loglevel", "info", "-i", str(path)]
+    detect += ["-map", "0:a:0", "-af", "volumedetect", "-f", "null", "-"]
+    log = run_log(detect, 300)
     mean_m = re.search(r"mean_volume: (-?[\d.]+)", log)
     max_m = re.search(r"max_volume: (-?[\d.]+)", log)
     if mean_m is None or max_m is None:
-        msg = f"{dst.name}: volumedetect printed no levels"
+        msg = f"{path.name}: volumedetect printed no levels"
         raise RuntimeError(msg)
-    mean, max_v = float(mean_m.group(1)), float(max_m.group(1))
-    if not (_MEAN_MIN_DB <= mean <= _MEAN_MAX_DB):
-        msg = f"{dst.name}: audio mean {mean:.1f} dB outside {_MEAN_MIN_DB}..{_MEAN_MAX_DB}"
+    return float(mean_m.group(1)), float(max_m.group(1))
+
+
+def _verify_audio(src: Path, dst: Path) -> None:
+    """The copy must sound like its source: ffmpeg 8.0.1's vibrato filter
+    intermittently blows a chain up to a full-scale wall (measured 2026-10-30,
+    ~30% of runs, any params) -- and a wall of constant amplitude IS silence
+    to a speaker. Judged against the source, not absolute levels: a nearly
+    silent reel (mean -50 dB, prod 2026-10-30) makes a nearly silent copy.
+    Raise before a bad copy ships."""
+    copy = _levels(dst)
+    if copy is None:
+        msg = f"{dst.name}: no audio stream"
         raise RuntimeError(msg)
-    if max_v - mean < _MIN_DYNAMICS_DB:
+    source = _levels(src)
+    mean, max_v = copy
+    if source is not None and mean < source[0] - _MAX_DROP_DB:
+        msg = f"{dst.name}: audio mean {mean:.1f} dB, source {source[0]:.1f} dB"
+        raise RuntimeError(msg)
+    if mean > _MEAN_MAX_DB:
+        msg = f"{dst.name}: audio mean {mean:.1f} dB over {_MEAN_MAX_DB}"
+        raise RuntimeError(msg)
+    floor = _MIN_DYNAMICS_DB
+    if source is not None:
+        floor = min(floor, source[1] - source[0] - _DYNAMICS_LOSS_DB)
+    if max_v - mean < floor:
         msg = f"{dst.name}: audio has no dynamics (max {max_v:.1f}, mean {mean:.1f})"
         raise RuntimeError(msg)
 

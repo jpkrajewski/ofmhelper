@@ -1475,3 +1475,21 @@ class RepurposeSettings(BaseSettings):
     lab_vmaf_ffmpeg: str | None = Field(
         default=None, validation_alias="OFM_LAB_VMAF_FFMPEG"
     )
+    # The snapchat caption's font file (extras/snapchat); unset = the first
+    # installed of Arial / Liberation Sans / DejaVu Sans.
+    snapchat_font: str | None = Field(
+        default=None, validation_alias="OFM_SNAPCHAT_FONT"
+    )
+
+
+class TrialsSettings(BaseSettings):
+    """/trials (`ofmhelpers.trials`): how many reels one Generate makes at
+    once. Each is an LLM wait + an ffmpeg chain that is mostly one thread
+    (filters, zscale): side by side they overlap; above the cores they only
+    queue."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    parallel: int = Field(
+        default=3, ge=1, le=16, validation_alias="OFM_TRIALS_PARALLEL"
+    )

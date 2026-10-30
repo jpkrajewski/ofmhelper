@@ -48,7 +48,7 @@ from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
 from ofmhelpers.web.routers.inventory import drive, phones
 from ofmhelpers.web.routers.tracking import accounts, links
-from ofmhelpers.web.routers.video_tools import repurpose, uniqify
+from ofmhelpers.web.routers.video_tools import repurpose, trials, uniqify
 
 # Order is presentational only -- FastAPI matches on path and no two routers
 # share a prefix -- so it follows the package grouping above and this list
@@ -85,6 +85,7 @@ ROUTERS = [
     # video_tools/
     uniqify.router,
     repurpose.router,
+    trials.router,
     # admin/
     admin_users.router,
     admin_applications.router,

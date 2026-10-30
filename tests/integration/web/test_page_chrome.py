@@ -67,6 +67,7 @@ def test_bar_links_then_the_rest_under_more(client):
     assert more == [
         "/reels",
         "/uniqify",
+        "/trials",
         "/repurpose",
         "/account",
         "/cookies",
@@ -85,7 +86,14 @@ def test_a_users_more_has_no_admin_pages():
     va = TestClient(app)
     sign_in(va)
     _bar, more = _nav(va.get("/generate").text)
-    assert more == ["/reels", "/uniqify", "/repurpose", "/account", "/cookies"]
+    assert more == [
+        "/reels",
+        "/uniqify",
+        "/trials",
+        "/repurpose",
+        "/account",
+        "/cookies",
+    ]
 
 
 def test_login_page_is_standalone_but_still_responsive():
