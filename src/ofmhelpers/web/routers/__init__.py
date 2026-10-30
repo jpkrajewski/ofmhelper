@@ -14,7 +14,7 @@ Every HTTP route in the app, grouped by what it is *for*:
   folders in the shared Google Drive).
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
-- `video_tools/` -- local video edits with no external service (uniqify).
+- `video_tools/` -- local video edits with no external service (uniqify, repurpose).
 - `admin/`      -- admin-only surfaces: who may sign in (/users), landing-page
   applications, file manager, action log.
 
@@ -48,7 +48,7 @@ from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet
 from ofmhelpers.web.routers.inventory import drive, phones
 from ofmhelpers.web.routers.tracking import accounts, links
-from ofmhelpers.web.routers.video_tools import uniqify
+from ofmhelpers.web.routers.video_tools import repurpose, uniqify
 
 # Order is presentational only -- FastAPI matches on path and no two routers
 # share a prefix -- so it follows the package grouping above and this list
@@ -84,6 +84,7 @@ ROUTERS = [
     character_sheet.router,
     # video_tools/
     uniqify.router,
+    repurpose.router,
     # admin/
     admin_users.router,
     admin_applications.router,

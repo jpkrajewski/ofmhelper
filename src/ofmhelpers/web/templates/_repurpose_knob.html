@@ -1,0 +1,33 @@
+{# One /repurpose knob (`k`: schemas.Knob). Inputs carry `data-knob` (its
+   place in the preset), never a `name`: repurpose.js collects them into the
+   preset JSON. #}
+{% import "components/ui.html" as ui %}
+{% if k.kind == "range" %}
+{% call ui.field(k.label, k.dom_id ~ "-lo") %}
+<div class="rp-range">
+    <input type="number" step="any" id="{{ k.dom_id }}-lo" data-knob="{{ k.path }}" data-end="lo" placeholder="min" aria-label="{{ k.label }} min">
+    <input type="number" step="any" id="{{ k.dom_id }}-hi" data-knob="{{ k.path }}" data-end="hi" placeholder="max" aria-label="{{ k.label }} max">
+</div>
+{% endcall %}
+{% elif k.kind == "number" %}
+{% call ui.field(k.label, k.dom_id) %}
+<input type="number" step="any" id="{{ k.dom_id }}" data-knob="{{ k.path }}">
+{% endcall %}
+{% elif k.kind == "words" %}
+{% call ui.field(k.label) %}
+<div class="rp-words">
+    {% for option in k.options %}
+    <label class="check-field"><input type="checkbox" data-knob="{{ k.path }}" value="{{ option }}"> {{ option }}</label>
+    {% endfor %}
+</div>
+{% endcall %}
+{% elif k.kind == "choice" %}
+{% call ui.field(k.label, k.dom_id) %}
+<select id="{{ k.dom_id }}" data-knob="{{ k.path }}">
+    <option value=""></option>
+    {% for option in k.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+</select>
+{% endcall %}
+{% else %}
+<label class="check-field"><input type="checkbox" data-knob="{{ k.path }}" data-switch> {{ k.label }}</label>
+{% endif %}

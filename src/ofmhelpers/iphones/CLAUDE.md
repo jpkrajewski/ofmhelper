@@ -1,6 +1,6 @@
 # iphones
 
-Re-encode a video into a camera recording of a real iPhone model. One folder per model, `<model>/profile.json` (decoded from real recordings, shipped in the package), validated into `models.DeviceProfile`; `load_profile(name)` is cached. New model = new folder.
+Re-encode a video into a camera recording of a real iPhone model. One folder per model, `<model>/profile.json` (decoded from real recordings, shipped in the package), validated into `models.DeviceProfile`; `load_profile(name)` is cached. New model = new folder. Exception: `iphone16` is adapted from the `iphone17` profile (model / lens / software strings only, `samples: 0`) — no iPhone 16 recording decoded yet; swap in real bytes when available.
 
 ## Files
 - `models.py` — `DeviceProfile`, `FrameTiming`/`TimingPlan`, `GeoPoint`/`Place` (location + jitter), `Recording` (end time in the phone's zone, length, location, seed).

@@ -1,0 +1,18 @@
+{
+  "label": "Near-lossless master at the source's size and rate (recorder input)",
+  "video": {
+    "profile": "high",
+    "preset": "veryfast",
+    "crf": 10,
+    "fps": "source",
+    "max_width": null
+  },
+  "audio": {
+    "bitrate_kbps": 320,
+    "sample_rate": 48000,
+    "channels": 2
+  },
+  "container": {
+    "movflags": ["+faststart"]
+  }
+}

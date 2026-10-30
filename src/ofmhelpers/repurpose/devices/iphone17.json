@@ -1,0 +1,12 @@
+{
+  "label": "iPhone 17 Pro Max camera recording (ofmhelpers.iphones recorder)",
+  "recorder": {
+    "profile": "iphone17",
+    "time_zone": "America/New_York",
+    "place": {
+      "center": {"latitude": 40.7549, "longitude": -73.984, "altitude_m": 10.0},
+      "jitter_m": 1500,
+      "accuracy_m": [2.0, 2.7]
+    }
+  }
+}

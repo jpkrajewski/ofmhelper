@@ -1451,3 +1451,27 @@ class GDriveSettings(BaseSettings):
     review_folder_ttl_s: int = Field(
         default=7 * 24 * 3600, ge=60, validation_alias="OFM_GDRIVE_REVIEW_FOLDER_TTL_S"
     )
+
+
+class RepurposeSettings(BaseSettings):
+    """`ofmhelpers.repurpose`: the checker's optional detectors and the knob
+    lab. All off unless set: the app image has neither torch nor the TMK
+    tools; the lab pod sets them (repurpose/CLAUDE.md, Lab)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # SSCD (checker/sscd.py): the TorchScript model file; unset = not used.
+    sscd_model: str | None = Field(default=None, validation_alias="OFM_SSCD_MODEL")
+    # Cosine at or above which two frames are the same picture.
+    sscd_threshold: float = Field(
+        default=0.75, gt=0, le=1, validation_alias="OFM_SSCD_THRESHOLD"
+    )
+    # torch threads per process (the lab runs ~20 processes on 32 vCPUs).
+    sscd_threads: int = Field(default=2, ge=1, validation_alias="OFM_SSCD_THREADS")
+    # TMK+PDQF (checker/tmk.py): folder of the built ThreatExchange tools.
+    tmk_dir: str | None = Field(default=None, validation_alias="OFM_TMK_DIR")
+    # The lab's VMAF (lab/measure.py): an ffmpeg with libvmaf (Debian's has
+    # none); unset = SSIM x 100 instead.
+    lab_vmaf_ffmpeg: str | None = Field(
+        default=None, validation_alias="OFM_LAB_VMAF_FFMPEG"
+    )

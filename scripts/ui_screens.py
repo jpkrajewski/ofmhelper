@@ -50,6 +50,7 @@ PAGES = [
     Shot(name="phones", path="/phones"),
     Shot(name="drive", path="/drive"),
     Shot(name="uniqify", path="/uniqify"),
+    Shot(name="repurpose", path="/repurpose"),
     Shot(name="account", path="/account"),
     Shot(name="cookies", path="/cookies"),
     Shot(name="users", path="/users"),

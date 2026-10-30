@@ -1,0 +1,196 @@
+{
+  "label": "hard: legacy uniqify hard + handheld; special = Duplyfi",
+  "video": {
+    "trim_head_s": [
+      0.0,
+      0.1
+    ],
+    "speed": [
+      0.9388,
+      1.0612
+    ],
+    "saturation": [
+      0.9184,
+      1.1224
+    ],
+    "contrast": [
+      0.9388,
+      1.0816
+    ],
+    "brightness": [
+      -0.0306,
+      0.0306
+    ],
+    "zoom": [
+      1.0,
+      1.00286
+    ],
+    "sharpen": [
+      0.0,
+      1.02
+    ],
+    "colortemp": [
+      6296.0,
+      6704.0
+    ],
+    "stretch": [
+      1.0,
+      1.01224
+    ],
+    "noise": [
+      0.0,
+      9.18
+    ],
+    "tilt": [
+      -1.02,
+      1.02
+    ],
+    "perspective": [
+      0.01428,
+      0.0306
+    ],
+    "shake": [
+      0.00194,
+      0.00571
+    ],
+    "drift": [
+      0.01428,
+      0.04284
+    ]
+  },
+  "audio": {
+    "volume": [
+      0.9388,
+      1.0612
+    ],
+    "pitch": [
+      -0.306,
+      0.306
+    ]
+  },
+  "video_special": {
+    "gamma": [
+      0.98,
+      1.02
+    ],
+    "tone_mid": [
+      -8.0,
+      8.0
+    ],
+    "tone_shoulder": [
+      -5.0,
+      5.0
+    ],
+    "tint": [
+      -0.045,
+      0.045
+    ],
+    "corner_zoom": [
+      1.03,
+      1.06
+    ],
+    "vignette": [
+      0.2,
+      0.35
+    ],
+    "chroma_px": [
+      1.0,
+      2.0
+    ],
+    "size": [
+      0.965,
+      0.995
+    ],
+    "cut_head": [
+      0.03,
+      0.07
+    ],
+    "cut_tail": [
+      0.03,
+      0.07
+    ],
+    "noise_flags": "t+u+p",
+    "look": [
+      "border",
+      "pattern",
+      "none"
+    ],
+    "border": [
+      0.018,
+      0.025
+    ],
+    "pattern": [
+      "stripes",
+      "grid",
+      "check",
+      "spiral",
+      "particles",
+      "psyche"
+    ],
+    "pattern_opacity": [
+      0.02,
+      0.05
+    ]
+  },
+  "audio_special": {
+    "pitch": [
+      -0.75,
+      0.75
+    ],
+    "phaser_shift": [
+      5.0,
+      10.0
+    ],
+    "treble_db": [
+      1.5,
+      3.5
+    ],
+    "bass_cut_db": [
+      0.5,
+      2.5
+    ],
+    "mid_db": [
+      -2.0,
+      2.0
+    ],
+    "echo": [
+      "reverb",
+      "room"
+    ],
+    "reverb_ms": [
+      40.0,
+      90.0
+    ],
+    "reverb_decay": [
+      0.3,
+      0.45
+    ],
+    "room_ms": [
+      20.0,
+      50.0
+    ],
+    "loud": [
+      "chorus",
+      "flanger",
+      "phaser",
+      "tremolo",
+      "vibrato"
+    ],
+    "loudness": 0.8,
+    "compress_db": [
+      -24.0,
+      -10.0
+    ],
+    "deess_db": [
+      2.0,
+      3.0
+    ],
+    "limit": [
+      0.88,
+      0.98
+    ],
+    "room_tone": true,
+    "match_level": true
+  },
+  "device_special": "shuffled"
+}

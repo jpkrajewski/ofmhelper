@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ofmhelpers.iphones import load_profile
 from ofmhelpers.iphones.models import Recording
 from ofmhelpers.iphones.recorder import record
+from ofmhelpers.repurpose import Repurpose
 
 
 class ExifRead(BaseModel):
@@ -63,6 +64,37 @@ def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
         _clip(tmp_path / "in.mp4"), dst, profile, Recording(end=end, duration_s=0), 120
     )
 
+    out = subprocess.run(
+        ["exiftool", "-j", "-G1", "-n", "-u", str(dst)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    read = ExifRead.model_validate(json.loads(out)[0])
+    assert read.major_brand == "qt  "
+    assert read.minor_version == "0.0.0"
+    assert (read.make, read.model, read.software) == (
+        "Apple",
+        "iPhone 17 Pro Max",
+        "26.5.1",
+    )
+    assert read.creation_date == "2026:10:19 15:00:00-03:00"
+    assert read.full_frame_rate == 1
+    assert read.lens == "iPhone 17 Pro Max front camera 2.715mm f/1.9"
+    assert read.maker_note_74 == 6
+    assert read.video_handler == "Core Media Video"
+    assert read.video_vendor == "appl"
+    assert read.video_language == "und"
+    assert read.compressor == "HEVC"
+    assert read.aperture == "1080 1920"
+    assert read.audio_rate == 48000
+    assert b"FFMP" not in dst.read_bytes()
+
+    # The same through repurpose: the iphone17 preset, same recording time.
+    dst = tmp_path / "repurposed.mov"
+    Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
+        "iphone17"
+    ).run()
     out = subprocess.run(
         ["exiftool", "-j", "-G1", "-n", "-u", str(dst)],
         check=True,
