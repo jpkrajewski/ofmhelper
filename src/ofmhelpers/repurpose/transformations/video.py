@@ -6,7 +6,8 @@ the knobs once for one copy and builds the ffmpeg filter chain, always in
 this order:
 
 1. mirror, then the framing crops: centred zoom (moved down by `shift_y`),
-   zoom into a random corner, the directional stretch;
+   zoom into a random corner, the directional stretch, a fixed `rotate`
+   (scaled up so the turned frame still covers, cropped back);
 2. the handheld look: tilt, perspective, shake, drift (`handheld.py`);
 3. colour: eq (saturation / contrast / brightness / gamma),
    colortemperature, a luma tone curve, a shadow tint, CapCut's Adjust
@@ -16,7 +17,8 @@ this order:
    outputs float RGB, which the noise filter would turn into colour static);
 6. speed, then the scale to the exact output size;
 7. after it: late sharpen, Adjust's sharpen / clarity / particles,
-   particles, the pattern overlay, yuv420p.
+   particles, the pattern overlay, the snapchat caption (`extras/snapchat`),
+   yuv420p.
 
 Knobs come from: legacy `utils.uniqify` (speed, eq, colortemperature,
 sharpen, zoom, stretch, mirror, B&W, grain), InstaLabs Spoofer (handheld),
@@ -26,15 +28,17 @@ sharpen, particles, trims in seconds) and CapCut's Adjust panel (`adjust`,
 in CapCut's slider units: `adjust.py`).
 """
 
+import math
 import random
 from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel
 
+from ofmhelpers.repurpose.extras.snapchat import render as render_snapchat
 from ofmhelpers.repurpose.probe import Source
 from ofmhelpers.repurpose.transformations.adjust import AdjustDraws, AdjustSettings
-from ofmhelpers.repurpose.transformations.handheld import Handheld
+from ofmhelpers.repurpose.transformations.handheld import _WARP_EPS, Handheld
 from ofmhelpers.repurpose.transformations.patterns import Pattern
 from ofmhelpers.repurpose.transformations.patterns import write as write_pattern
 from ofmhelpers.repurpose.values import Value, chance, draw, draw_int, even, pick
@@ -57,6 +61,7 @@ class VideoSettings(BaseModel, frozen=True):
     speed: Value | None = None
     # Framing.
     mirror: float | None = None
+    rotate: Value | None = None
     zoom: Value | None = None
     shift_y: Value | None = None
     corner_zoom: Value | None = None
@@ -91,6 +96,9 @@ class VideoSettings(BaseModel, frozen=True):
     size: Value | None = None
     sharpen_late: Value | None = None
     particles: Value | None = None
+    # A Snapchat caption bar (extras/snapchat) with this text, overlaid last;
+    # None = no caption.
+    snapchat_caption: str | None = None
     # CapCut's Adjust panel, in its slider units.
     adjust: AdjustSettings | None = None
 
@@ -113,6 +121,8 @@ class VideoDraws(BaseModel, frozen=True):
     timeline: Timeline
     output_size: tuple[int, int]
     mirror: bool
+    rotate: float | None
+    rotate_cover: float | None
     zoom: float | None
     shift_y: float | None
     corner: tuple[int, int] | None
@@ -215,15 +225,31 @@ def _chroma(s: VideoSettings, rng: random.Random) -> tuple[int, int] | None:
     return (_sign(rng) * x, _sign(rng) * (y or 0))
 
 
+def _rotate(s: VideoSettings, rng: random.Random) -> float | None:
+    """The drawn rotation in degrees; None = knob off (0 turns nothing)."""
+    return draw(s.rotate, rng)
+
+
+def _rotate_cover(rotate: float | None, aspect: float) -> float | None:
+    """The overscan a rotated frame needs to still cover the output."""
+    if rotate is None or abs(rotate) < _WARP_EPS:
+        return None
+    a = math.radians(abs(rotate))
+    return math.cos(a) + aspect * math.sin(a) + 0.01
+
+
 def _draw(
     s: VideoSettings, src: Source, size: tuple[int, int], rng: random.Random
 ) -> VideoDraws:
     timeline = _timeline(s, src, rng)
     tone_mid, tone_shoulder = draw_int(s.tone_mid, rng), draw_int(s.tone_shoulder, rng)
+    rotate = _rotate(s, rng)
     return VideoDraws(
         timeline=timeline,
         output_size=_sized(size, draw(s.size, rng)),
         mirror=chance(s.mirror, rng),
+        rotate=rotate,
+        rotate_cover=_rotate_cover(rotate, src.aspect),
         zoom=draw(s.zoom, rng),
         shift_y=draw(s.shift_y, rng),
         corner=(rng.randrange(2), rng.randrange(2))
@@ -286,8 +312,23 @@ class VideoTransformer:
     def output_size(self) -> tuple[int, int]:
         return self.draws.output_size
 
-    def filters(self, work_dir: Path, scaler: str = "bicubic") -> str:
-        """The whole -vf graph; the pattern image (if any) goes to `work_dir`."""
+    def write_caption(self, work_dir: Path) -> Path | None:
+        """The snapchat caption PNG (`extras/snapchat`), if the settings name
+        one; `command.build` adds it as a second input and overlays it last."""
+        if not self.settings.snapchat_caption:
+            return None
+        return render_snapchat(
+            self.settings.snapchat_caption,
+            self.draws.output_size,
+            work_dir / "snapchat.png",
+        )
+
+    def filters(
+        self, work_dir: Path, scaler: str = "bicubic", caption_input: int | None = None
+    ) -> str:
+        """The whole -vf graph; the pattern image (if any) goes to `work_dir`.
+        `caption_input`: the ffmpeg input index of the caption PNG when
+        `command.build` added one; None drops the caption overlay."""
         d = self.draws
         w, h = d.output_size
         chain = [
@@ -296,6 +337,7 @@ class VideoTransformer:
             # the whole audio (movie twice as long; 2026-10-26).
             "setpts=PTS-STARTPTS",
             *self._framing(),
+            *self._rotation(),
             *d.handheld.filters(),
             *self._colour(),
             *self._late(),
@@ -306,6 +348,10 @@ class VideoTransformer:
         ]
         graph = ",".join(chain)
         overlay = self._overlay(work_dir)
+        if caption_input is not None and self.settings.snapchat_caption:
+            overlay = (overlay or "") + (
+                f"[cap0];[{caption_input}:v]format=rgba[cap1];[cap0][cap1]overlay=0:0"
+            )
         return (
             f"{graph}{overlay},format=yuv420p" if overlay else f"{graph},format=yuv420p"
         )
@@ -328,6 +374,22 @@ class VideoTransformer:
             sx, sy = (max(1.0, v) for v in d.stretch)
             chain.append(f"crop=trunc(iw/{sx:.4f}/2)*2:trunc(ih/{sy:.4f}/2)*2")
         return chain
+
+    def _rotation(self) -> list[str]:
+        """A fixed rotation: scaled up so the turned frame still covers the
+        output, turned, cropped back (same overscan idea as the handheld)."""
+        d = self.draws
+        if d.rotate is None or d.rotate_cover is None:
+            return []
+        o = d.rotate_cover
+        return [
+            f"scale=w=trunc(iw*{o:.5f}/2)*2:h=trunc(ih*{o:.5f}/2)*2",
+            (
+                f"rotate={d.rotate:.4f}*PI/180:"
+                "ow=trunc(iw/2)*2:oh=trunc(ih/2)*2:fillcolor=black"
+            ),
+            f"crop=w=trunc(iw/{o:.5f}/2)*2:h=trunc(ih/{o:.5f}/2)*2",
+        ]
 
     def _colour(self) -> list[str]:
         d = self.draws
@@ -438,10 +500,11 @@ def _border(share: float) -> str:
 
 
 def _graph_path(path: Path) -> str:
-    """A file path as a filtergraph value: only plain characters pass, so
-    nothing needs escaping (the image lives in a temp dir we name)."""
+    """A file path as a filtergraph value: plain characters only, so nothing
+    needs escaping but a Windows drive colon, which the filter parser reads
+    as an option separator (`C:` -> `C\\:`)."""
     text = path.as_posix()
-    if not all(c.isalnum() or c in "/._-" for c in text):
+    if not all(c.isalnum() or c in "/._-:" for c in text):
         msg = f"unsafe path for a filtergraph: {text!r}"
         raise ValueError(msg)
-    return text
+    return text.replace(":", "\\:")

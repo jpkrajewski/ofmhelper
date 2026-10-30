@@ -82,13 +82,23 @@ def build(
     work_dir: Path,
 ) -> list[str]:
     room_tone = audio.settings.room_tone and not source.has_audio
+    caption_png = video.write_caption(work_dir)
     args = [binary("ffmpeg"), "-y", "-loglevel", "error", *input_args(src, video)]
     if room_tone:
         seconds = video.timeline.duration_s / video.timeline.speed + _ROOM_TONE_SLACK_S
         args += room_tone_input(seconds, device.audio.sample_rate)
+    caption_input = None
+    if caption_png:
+        # After the source (and the room-tone input, if any): a single-frame
+        # PNG; the overlay filter repeats it for the whole video.
+        caption_input = 2 if room_tone else 1
+        args += ["-i", str(caption_png)]
     if encode.fps:
         args += ["-r", encode.fps]
-    args += ["-vf", video.filters(work_dir, device.video.scaler)]
+    graph = video.filters(work_dir, device.video.scaler, caption_input)
+    # The caption overlay pulls a second input into the graph: simple -vf
+    # then no longer applies, it has to be -filter_complex.
+    args += ["-filter_complex" if caption_input is not None else "-vf", graph]
     if source.has_audio:
         args += ["-filter:a", audio.filters(makeup_db), *_audio_encode(device, encode)]
     elif room_tone:

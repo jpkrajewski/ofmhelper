@@ -160,7 +160,12 @@ class AudioTransformer:
         if makeup_db > 0:
             chain.append(f"volume={makeup_db:.2f}dB")
         if d.limit is not None:
-            chain.append(f"alimiter=limit={d.limit:.3f}:attack=5:release=50")
+            # level=false: the default (true) auto-normalizes the output to
+            # 0 dBFS, crushing every copy to full scale (a near-DC wall on a
+            # quiet chain) -- this is a ceiling, not a loudness knob.
+            chain.append(
+                f"alimiter=limit={d.limit:.3f}:attack=5:release=50:level=false"
+            )
         return ",".join(chain)
 
     def _pitch_and_tempo(self) -> list[str]:
