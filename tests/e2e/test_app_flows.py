@@ -35,6 +35,8 @@ VA_PAGES = [
     "/drive",
     "/reels",
     "/uniqify",
+    "/trials",
+    "/repurpose",
     "/account",
     "/cookies",
 ]

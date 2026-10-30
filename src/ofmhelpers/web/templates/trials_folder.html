@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{# One login's trials: the copies made (video, caption, select to upload),
+   then the ones Generate trials is still making. trials.js runs the page:
+   every button is a fetch answered at once, and while anything runs it
+   polls `data-live` and swaps in only the cards that changed. #}
+{% block title %}Trials — @{{ card.target.handle }} — Ascend Global LLC{% endblock %}
+{% block content %}
+{% set t = card.target %}
+{{ ui.back_link("/trials", "Trials") }}
+{{ ui.page_header("@" ~ t.handle, t.device.label ~ (" · " ~ t.device.owner if t.device.owner else "")) }}
+
+<div class="ph-toolbar">
+    <p class="tr-status" id="tr-status" role="status" aria-live="polite">
+        {%- if jobs.making %}Making trials… {{ state.ready|length }} of {{ state.reels|length }} ready
+        {%- elif jobs.uploading %}Uploading {{ jobs.uploading|length }} to Drive…
+        {%- elif jobs.busy %}Making {{ jobs.busy|length }}…{% endif -%}
+    </p>
+    <div class="toolbar-actions">
+        {{ ui.button("TRIALS in Drive", href=state.trials_url or "#", icon="folder", attrs={"id": "tr-drive", "target": "_blank", "rel": "noopener", "hidden": not state.trials_url}) }}
+        <form method="post" action="/trials/{{ t.login_id }}/upload" id="tr-upload">
+            {{ ui.button("Upload to Drive", icon="upload", type="submit", hook="tr-upload-btn", attrs={"disabled": true}) }}
+        </form>
+        <form method="post" action="/trials/{{ t.login_id }}/generate" id="tr-generate">
+            {{ ui.button("Generate trials", "primary", icon="sparkles", type="submit", attrs={"disabled": jobs.making or not state.todo}) }}
+        </form>
+    </div>
+</div>
+
+{% if state.problem %}
+{% call ui.notice(kind="warn") %}
+    <span>{{ state.problem }}</span>
+    {{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/trials/" ~ t.login_id) }}
+{% endcall %}
+{% endif %}
+
+<div class="tr-grid" id="tr-grid" data-live="/trials/{{ t.login_id }}/live" data-cards="/trials/{{ t.login_id }}/cards"{% if jobs.active %} data-running{% endif %}>
+{% with reels=state.ready %}{% include "_trials_cards.html" %}{% endwith %}
+</div>
+{{ ui.empty("No trials yet", attrs={"id": "tr-empty", "hidden": (state.ready|length + pending|length) > 0}) }}
+
+<script src="{{ static_url('js/trials.js') }}"></script>
+{% endblock %}

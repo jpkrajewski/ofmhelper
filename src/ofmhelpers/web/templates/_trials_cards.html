@@ -1,0 +1,42 @@
+{% import "components/ui.html" as ui %}
+{% import "_icons.html" as ic %}
+{# /trials/{login} cards: the folder page renders them all, GET .../cards
+   the ones trials.js asks for (it swaps each by data-key when its
+   data-stamp moved). Expects `t` (the login's target), `reels` (made
+   copies), `pending` (reels Generate trials is still making), `jobs`
+   (router `_Jobs`), `stamps` (key -> stamp). #}
+{% for reel in reels %}
+{% set busy = reel.key in jobs.busy %}
+{% call ui.card(hook="tr-reel", attrs={"id": "reel-" ~ reel.key, "data-key": reel.key, "data-stamp": stamps[reel.key], "data-busy": busy}) %}
+    {% set file = "/trials/files/" ~ t.login_id ~ "/" ~ reel.key %}
+    {% if busy %}
+    <div class="result-file tr-pending"><span class="spinner"></span> {{ "uploading…" if reel.key in jobs.uploading else "generating…" }}</div>
+    {% else %}
+    <video class="tr-video" src="{{ file }}?v={{ reel.made }}" poster="{{ file }}/poster?v={{ reel.made }}" controls playsinline preload="none"></video>
+    {% endif %}
+    <form method="post" action="/trials/{{ t.login_id }}/reel/{{ reel.key }}/caption" class="tr-caption" id="cap-{{ reel.key }}">
+        <textarea name="caption" rows="2" maxlength="80" aria-label="Caption" required>{{ reel.caption or '' }}</textarea>
+    </form>
+    <div class="tr-reel-actions">
+        {{ ui.button("Apply caption", type="submit", attrs={"form": "cap-" ~ reel.key, "disabled": busy}) }}
+        <form method="post" action="/trials/{{ t.login_id }}/reel/{{ reel.key }}/regenerate">
+            {{ ui.button("Regenerate", icon="refresh", type="submit", attrs={"disabled": busy}) }}
+        </form>
+    </div>
+    {% if reel.status == "uploaded" %}
+    {{ ui.badge("In Drive · " ~ reel.uploaded_as if reel.uploaded_as else "In Drive", "ok") }}
+    {% elif reel.key not in jobs.uploading %}
+    <label class="tr-pick">
+        <input type="checkbox" name="approved" value="{{ reel.key }}" form="tr-upload"{% if reel.approved %} checked{% endif %}{% if busy %} disabled{% endif %}>
+        <span class="tr-pick-off">Select</span>
+        <span class="tr-pick-on">{{ ic.icon("check") }} Selected</span>
+    </label>
+    {% endif %}
+    {% if reel.error %}<p class="dr-note dr-error">{{ reel.error }}</p>{% endif %}
+{% endcall %}
+{% endfor %}
+{% for reel in pending %}
+{% call ui.card(hook="tr-reel", attrs={"data-key": "pending-" ~ reel.key, "data-stamp": "", "data-busy": true}) %}
+    <div class="result-file tr-pending"><span class="spinner"></span> generating…</div>
+{% endcall %}
+{% endfor %}

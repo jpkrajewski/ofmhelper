@@ -1,0 +1,26 @@
+{
+  "label": "snapchat_iphone16_usa pipeline preset: light touch (user 2026-10-30: colours and audio vary ~5%, CapCut sharpen 5, the rest barely), iphone16_usa device; mirror + 2 degree turn are pinned in code",
+  "video": {
+    "trim_head_s": 0.1,
+    "cut_head": [0.005, 0.01],
+    "speed": [0.995, 1.005],
+    "shift_y": [-0.01, 0.01],
+    "corner_zoom": [1.01, 1.02],
+    "tilt": [-0.15, 0.15],
+    "drift": [0.005, 0.01],
+    "saturation": [0.95, 1.05],
+    "brightness": [-0.02, 0.02],
+    "gamma": [0.97, 1.03],
+    "adjust": {"sharpen": 5}
+  },
+  "audio": {
+    "volume": [0.95, 1.05],
+    "pitch": [-0.4, 0.4],
+    "treble_db": [-0.5, 0.5],
+    "bass_cut_db": [0.0, 0.5],
+    "limit": 0.97,
+    "room_tone": true,
+    "match_level": true
+  },
+  "device": "iphone16_usa"
+}

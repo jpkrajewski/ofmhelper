@@ -49,7 +49,9 @@ PAGES = [
     Shot(name="links", path="/links"),
     Shot(name="phones", path="/phones"),
     Shot(name="drive", path="/drive"),
+    Shot(name="trials", path="/trials"),
     Shot(name="uniqify", path="/uniqify"),
+    Shot(name="repurpose", path="/repurpose"),
     Shot(name="account", path="/account"),
     Shot(name="cookies", path="/cookies"),
     Shot(name="users", path="/users"),
@@ -72,10 +74,10 @@ def sign_in(page: Page, password: str) -> None:
         raise SystemExit(msg)
 
 
-def first_account(page: Page) -> str | None:
-    """/accounts/{id} of the first tracked account, if there is one."""
-    page.goto("/accounts", wait_until="load")
-    link = page.locator('a[href^="/accounts/"]').first
+def first_link(page: Page, path: str) -> str | None:
+    """The first `path/...` link on `path` (a detail page), if there is one."""
+    page.goto(path, wait_until="load")
+    link = page.locator(f'a[href^="{path}/"]').first
     return link.get_attribute("href") if link.count() else None
 
 
@@ -145,8 +147,10 @@ def main() -> None:
         page = browser.new_page(base_url=base_url)
         sign_in(page, password)
         shots = [s for s in PAGES if s.signed_in]
-        if detail := first_account(page):
+        if detail := first_link(page, "/accounts"):
             shots.append(Shot(name="account-analytics", path=detail))
+        if folder := first_link(page, "/trials"):
+            shots.append(Shot(name="trials-folder", path=folder))
         for shot in shots:
             shoot(page, shot, revision)
         browser.close()

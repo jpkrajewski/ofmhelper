@@ -1,0 +1,27 @@
+{
+  "label": "CapCut: utils.capcut DEFAULT_PRESET (Adjust sliders) + its jitter, CapCut 4K export",
+  "video": {
+    "trim_head_s": 0.3,
+    "trim_tail_s": 0.3,
+    "speed": 1.03,
+    "zoom": [1.1, 1.10242],
+    "shift_y": 0.02,
+    "stretch": [1.0, 1.004],
+    "saturation": [0.949, 1.0816],
+    "contrast": [0.9694, 1.051],
+    "brightness": [-0.0204, 0.0204],
+    "colortemp": [6450, 6550],
+    "noise": [0.0, 5.1],
+    "sharpen_late": [0.0, 0.3],
+    "adjust": {
+      "exposure": -3,
+      "contrast": 5,
+      "sharpen": 15,
+      "particles": 10
+    }
+  },
+  "audio": {
+    "volume": [0.9694, 1.0306]
+  },
+  "device": "capcut"
+}

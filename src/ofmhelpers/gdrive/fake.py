@@ -286,6 +286,11 @@ class FakeDrive:
                 return None
             return _thumb_jpeg(), "image/jpeg"
 
+    def download(self, file_id: str) -> tuple[bytes, str]:
+        """Fake files carry no content: the bytes are empty, the name real."""
+        item = self.file(file_id)
+        return b"", item.name
+
     def upload(
         self,
         parent_id: str,
@@ -531,6 +536,9 @@ class FakePersonDrive:
 
     def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
         return self._me().thumbnail(item, px)
+
+    def download(self, file_id: str) -> tuple[bytes, str]:
+        return self._me().download(self._id(file_id))
 
     def storage(self) -> DriveStorage:
         return self._me().storage()

@@ -1,0 +1,18 @@
+{
+  "label": "Strip: legacy uniqify encode, no tags",
+  "video": {
+    "profile": "high",
+    "preset": "fast",
+    "crf": 23,
+    "fps": 30,
+    "max_width": 720
+  },
+  "audio": {
+    "bitrate_kbps": 192,
+    "sample_rate": 44100,
+    "channels": 2
+  },
+  "container": {
+    "movflags": ["+faststart"]
+  }
+}

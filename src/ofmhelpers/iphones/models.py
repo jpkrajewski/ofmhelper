@@ -148,6 +148,10 @@ class Video(_Frozen):
     timescale: int
     bitrate_kbps: int
     b_frames: int
+    # libx265's speed preset; None = its default (medium). Not in the
+    # recording: `fast` keeps medium's 3 refs and the same SPS/PPS flags,
+    # ~2x quicker (a 4K profile, 2026-10-30).
+    x265_preset: str | None = None
     # Frames between keyframes, and the NAL unit type every keyframe is
     # (21 = CRA: open GOP), as the `sync` sample group declares it.
     gop_size: int

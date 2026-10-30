@@ -1,0 +1,12 @@
+{
+  "label": "iPhone 16 Pro Max 4K30 HDR camera recording, US location (recorder profile iphone16_4k)",
+  "recorder": {
+    "profile": "iphone16_4k",
+    "time_zone": "America/New_York",
+    "place": {
+      "center": {"latitude": 40.7549, "longitude": -73.984, "altitude_m": 10.0},
+      "jitter_m": 1500,
+      "accuracy_m": [2.0, 2.7]
+    }
+  }
+}

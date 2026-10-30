@@ -46,9 +46,11 @@ from ofmhelpers.config.settings import (
     LinksSettings,
     LLMSettings,
     LoggingSettings,
+    RepurposeSettings,
     SessionSettings,
     SignInSettings,
     TelemetrySettings,
+    TrialsSettings,
     VaultSettings,
     WebSettings,
 )
@@ -175,6 +177,14 @@ class Settings:
     @property
     def clone_ai_check(self) -> CloneAiCheckSettings:
         return self._group(CloneAiCheckSettings)
+
+    @property
+    def repurpose(self) -> RepurposeSettings:
+        return self._group(RepurposeSettings)
+
+    @property
+    def trials(self) -> TrialsSettings:
+        return self._group(TrialsSettings)
 
     @property
     def logging(self) -> LoggingSettings:

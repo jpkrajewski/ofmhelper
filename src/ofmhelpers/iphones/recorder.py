@@ -112,6 +112,7 @@ def encode_args(
         "passthrough",
         "-c:v",
         "libx265",
+        *(["-preset", v.x265_preset] if v.x265_preset else []),
         "-profile:v",
         v.profile,
         "-b:v",
