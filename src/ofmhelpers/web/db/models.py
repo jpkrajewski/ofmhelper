@@ -701,3 +701,29 @@ class CloneFromLinkRow(Base):
     __table_args__ = (
         UniqueConstraint("job_id", "file_index", name="uq_clone_from_links_file"),
     )
+
+
+class PicturePresetRow(Base):
+    """A /pictures preset (alembic 9c1d2e3f4a5b): a name, the prompt and up
+    to 10 reference images (paths in the owner's part of the asset store, in
+    order) every run of it sends. Its owner's; the agency's are everyone's
+    to use. Names are unique per owner."""
+
+    __tablename__ = "picture_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    images: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    # Every run's output shape ("3:4"); NULL = the picture's own (alembic
+    # 4e5f6a7b8c9d).
+    aspect_ratio: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_picture_presets_owner_name"),
+    )

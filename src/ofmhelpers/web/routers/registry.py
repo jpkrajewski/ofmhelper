@@ -6,11 +6,11 @@ tool is one entry here instead of one in each of them."""
 from ofmhelpers.cache import CLONE_LINKS_QUEUE
 from ofmhelpers.web.clone_long import run_long_clone
 from ofmhelpers.web.clone_long import time_limit as clone_long_time_limit
-from ofmhelpers.web.routers.downloads import clean_image, images, media, videos
+from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.clone import _run_clone
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
-from ofmhelpers.web.routers.image_tools import character_sheet
+from ofmhelpers.web.routers.image_tools import character_sheet, pictures
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
 from ofmhelpers.web.schemas import Job, TaskCard, Tool
@@ -54,6 +54,13 @@ TOOLS = {
     ),
     "character_sheet": Tool(label="Character sheet", router=character_sheet.router),
     "uniqify": Tool(label="Uniqify", router=uniqify.router),
+    viral.TASK: Tool(label=viral.LABEL, router=viral.router),
+    pictures.TASK: Tool(
+        label=pictures.LABEL,
+        router=pictures.router,
+        run=pictures.run_picture,
+        describe=pictures.describe,
+    ),
 }
 
 

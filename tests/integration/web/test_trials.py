@@ -23,6 +23,7 @@ from ofmhelpers.trials import state as trial_state
 from ofmhelpers.trials.captions import ReelNotes
 from ofmhelpers.web import drive_folders
 from ofmhelpers.web.main import app
+from ofmhelpers.web.routers.video_tools import trials as trials_router
 from ofmhelpers.web.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.stores import devices, users
 from ofmhelpers.web.stores.jobs import create_job
@@ -237,6 +238,33 @@ def test_regenerate_runs_only_the_pipeline_with_a_new_seed(drive, made, monkeypa
     assert again.made == 3
     assert len(set(seeds)) == 2  # a new variant each time
     assert '?v=3"' in client.get(f"/trials/{login}").text
+
+
+# The slowest copy seen on prod (2026-10-30: 4K HEVC, 2 at once, 4 vCPU).
+_PROD_COPY_S = 630
+
+
+def test_a_job_has_time_for_prod_copies_made_one_after_another(
+    drive, made, monkeypatch
+):
+    """Generate on prod was killed at 21 of 26 (its time limit was dev's
+    pace): a job may take the slowest prod copy per reel, even in a row."""
+    limits: list[int] = []
+    monkeypatch.setattr(
+        trials_router,
+        "enqueue",
+        lambda *_a, job_timeout, **_k: limits.append(job_timeout),
+    )
+    login = _login(drive, *(f"{i}.mp4" for i in range(26)))
+    client = _client()
+    client.get(f"/trials/{login}")
+
+    client.post(f"/trials/{login}/generate")
+    (reel, *_) = _state(login).reels
+    client.post(f"/trials/{login}/reel/{reel.key}/regenerate")
+
+    assert limits[0] >= 26 * _PROD_COPY_S
+    assert limits[1] >= _PROD_COPY_S
 
 
 def _running_job() -> str:

@@ -7,6 +7,7 @@ import time
 import uuid
 
 import pytest
+import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.instagram import (
@@ -80,14 +81,22 @@ def test_a_missing_profile_is_not_found(backend):
 @pytest.mark.live
 def test_canary_a_public_account_through_a_real_proxy(real_env):
     """The scans' route: Instagram through one of the configured proxies
-    (OFM_IG_PROXIES), never direct."""
+    (OFM_IG_PROXIES), never direct. A proxy the scan would drop (refused,
+    or dead: 2026-11-01 one exit node failed every TLS handshake with
+    Instagram) is skipped here too."""
     proxies = settings.instagram.proxy_urls
     assert proxies, "no OFM_IG_PROXIES in .env"
+    refused = []
     for proxy in proxies:
         try:
             profile = InstagramClient(proxy).open_profile(PROFILE["real"])
-        except (InstagramRateLimitedError, ProfileNotFoundError):
+        except (
+            InstagramRateLimitedError,
+            ProfileNotFoundError,
+            requests.RequestException,
+        ) as exc:
+            refused.append(type(exc).__name__)
             continue
         assert profile.followers > 0
         return
-    pytest.fail(f"Instagram refused all {len(proxies)} proxies")
+    pytest.fail(f"Instagram refused all {len(proxies)} proxies: {refused}")

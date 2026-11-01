@@ -30,6 +30,7 @@ from ofmhelpers.aigenproviders.base import Provider, TaskState
 from ofmhelpers.aigenproviders.errors import (
     ProviderError,
     ProviderGenerationError,
+    ProviderNoCreditsError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
@@ -180,6 +181,8 @@ def generate(
     if state.state == "failed" or not state.urls:
         tasks.forget(job_id)
         msg = f"{provider.label} failed this generation: {state.error or 'no result'}"
+        if state.no_credits:
+            raise ProviderNoCreditsError(msg)
         raise ProviderGenerationError(msg)
     if on_result_urls is not None:
         on_result_urls(state.urls)

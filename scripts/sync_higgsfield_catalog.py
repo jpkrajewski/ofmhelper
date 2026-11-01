@@ -84,6 +84,10 @@ def main() -> int:
     with ThreadPoolExecutor(8) as pool:
         groups = pool.map(lambda f: _workflows(*f), families)
     entries = {e["model_id"]: e for group in groups for e in group}
+    # A model's measured upload limit is ours, not the docs': kept.
+    for old in json.loads(OUT.read_text(encoding="utf-8")):
+        if old.get("max_upload_bytes") and old["model_id"] in entries:
+            entries[old["model_id"]]["max_upload_bytes"] = old["max_upload_bytes"]
     catalog = sorted(
         entries.values(), key=lambda e: (e["kind"], e["family"], e["label"])
     )

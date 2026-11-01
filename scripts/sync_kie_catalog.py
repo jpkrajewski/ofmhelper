@@ -13,7 +13,8 @@ Merge rules (the catalog is shared with jobs and /clone, so ids never move):
 - `CURATED` entries are kept verbatim: their schemas were hand-tuned to the
   bodies the old per-model wrappers sent.
 - Every other entry already in the file keeps its `label`, `family`,
-  `fixed` and `default_prompt`; its `input_schema` is regenerated.
+  `fixed`, `default_prompt` and `max_upload_bytes`; its `input_schema` is
+  regenerated.
 - An entry the docs no longer list is kept (old jobs name it) and reported.
 
 What the form cannot take is decided here, not per model:
@@ -401,6 +402,8 @@ def _entry(page: Page, current: dict[str, dict]) -> dict[str, Any]:
         entry["fixed"] = fixed
     if keep.get("default_prompt"):
         entry["default_prompt"] = keep["default_prompt"]
+    if keep.get("max_upload_bytes"):
+        entry["max_upload_bytes"] = keep["max_upload_bytes"]
     _check_form_fills(entry)
     return entry
 

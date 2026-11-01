@@ -16,6 +16,8 @@ The allowlist is deployment config (`settings.web.public_paths` /
 `public_prefixes`), not literals in here.
 """
 
+from urllib.parse import quote, urlsplit
+
 from fastapi import HTTPException
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
@@ -93,12 +95,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
     def _to_login(self, request: Request) -> Response:
         """Not signed in and hitting a protected route: to /login,
         remembering where they were headed so login can send them back."""
-        next_url = request.url.path
-        if request.url.query:
-            next_url += f"?{request.url.query}"
         if self.is_fetch(request):
+            # Back to the page that made the call, never the call's own URL
+            # (prod 2026-10-27..31: a gallery poll's 401 sent people from
+            # login to /clone/gallery/latest, a bare fragment).
             return JSONResponse(
-                {"detail": "Session expired", "login_url": f"/login?next={next_url}"},
+                {
+                    "detail": "Session expired",
+                    "login_url": self._login_url(self._calling_page(request)),
+                },
                 status_code=401,
             )
         if "dl" in request.query_params:
@@ -108,7 +113,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return PlainTextResponse(
                 "Signed out: sign in again, then download", status_code=401
             )
-        return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
+        next_url = request.url.path
+        if request.url.query:
+            next_url += f"?{request.url.query}"
+        return RedirectResponse(url=self._login_url(next_url), status_code=303)
+
+    @staticmethod
+    def _login_url(next_url: str | None) -> str:
+        """/login, sending back to `next_url` (its query kept whole)."""
+        return f"/login?next={quote(next_url, safe='/')}" if next_url else "/login"
+
+    @staticmethod
+    def _calling_page(request: Request) -> str | None:
+        """The page of this site a fetch was made from (its Referer), or
+        None when unknown: login then lands on the app's home."""
+        referer = urlsplit(request.headers.get("referer", ""))
+        if not referer.netloc or referer.netloc != request.url.netloc:
+            return None
+        return referer.path + (f"?{referer.query}" if referer.query else "")
 
     @staticmethod
     def is_public(path: str) -> bool:

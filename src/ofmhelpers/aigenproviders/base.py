@@ -17,9 +17,9 @@ import importlib
 import inspect
 import pkgutil
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -39,11 +39,13 @@ logger = get_logger(__name__)
 
 class TaskState(BaseModel):
     """Where a submitted request stands. `urls` is set once it is `done`,
-    `error` once it `failed` (moderation included)."""
+    `error` once it `failed` (moderation included); `no_credits`: it failed
+    for want of credits (nothing made, nothing paid)."""
 
     state: Literal["pending", "done", "failed"]
     urls: list[str] = []
     error: str | None = None
+    no_credits: bool = False
 
 
 class Provider(ABC):
@@ -72,8 +74,10 @@ class Provider(ABC):
         own (.env), if configured. Users only ever get their own."""
 
     @abstractmethod
-    def upload(self, path: Path) -> str:
-        """Host a local reference file; the URL a request can point at."""
+    def upload(self, path: Path, max_bytes: int | None = None) -> str:
+        """Host a local reference file; the URL a request can point at.
+        `max_bytes`: the model's own per-file limit when it is above the
+        provider's default cap (`ModelSpec.max_upload_bytes`)."""
 
     @abstractmethod
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
@@ -148,6 +152,14 @@ def provider_class(name: str) -> type[Provider]:
 
 def get_provider(name: str, api_key: str) -> Provider:
     return provider_class(name)(api_key)
+
+
+def uploader(provider: Provider, spec: ModelSpec) -> Callable[[Path], str]:
+    """`provider.upload`, with `spec`'s own file limit when it has one: what
+    `spec.request` hands each reference to."""
+    if spec.max_upload_bytes is None:
+        return provider.upload
+    return partial(provider.upload, max_bytes=spec.max_upload_bytes)
 
 
 @contextmanager

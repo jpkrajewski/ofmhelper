@@ -472,7 +472,8 @@
     },
     "fixed": {
       "nsfw_checker": false
-    }
+    },
+    "max_upload_bytes": 20000000
   },
   {
     "model_id": "minimax-h3/text-to-video",
@@ -696,7 +697,8 @@
     "fixed": {
       "image_input": []
     },
-    "default_prompt": "Refer to first image and second image, replicate third image."
+    "default_prompt": "Refer to first image and second image, replicate third image.",
+    "max_upload_bytes": 30000000
   },
   {
     "model_id": "seedream/4.5-text-to-image",
@@ -10369,7 +10371,8 @@
     },
     "fixed": {
       "nsfw_checker": false
-    }
+    },
+    "max_upload_bytes": 20000000
   },
   {
     "model_id": "wan/2-6-flash-video-to-video",

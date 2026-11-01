@@ -36,7 +36,7 @@ KIE_MODELS = {
 
 
 def test_providers_in_select_order():
-    assert provider_names() == ["kie", "higgsfield", "fake"]
+    assert provider_names() == ["kie", "higgsfield", "runninghub", "fake"]
 
 
 def test_every_kie_model_is_still_offered():
@@ -90,6 +90,19 @@ def test_no_field_collides_with_the_run_forms_own(spec):
     assert not {"provider", "model", "api_key"} & set(spec.properties)
 
 
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
+def test_no_default_is_a_url(spec):
+    """A URL default is a docs sample asset: sent for a field left empty, and
+    once a signed link with the docs' own access key in it."""
+    urls = {
+        name: prop["default"]
+        for name, prop in spec.input_schema.get("properties", {}).items()
+        if isinstance(prop.get("default"), str)
+        and prop["default"].startswith(("http://", "https://"))
+    }
+    assert not urls
+
+
 def test_get_spec_by_key_and_unknown_key():
     assert get_spec("kie:wan/3-0-video").kind == "video"
     with pytest.raises(KeyError):
@@ -133,7 +146,7 @@ def plugin_provider(tmp_path, monkeypatch):
         def default_key(cls):
             return "plugin-key"
 
-        def upload(self, path):
+        def upload(self, path, max_bytes=None):  # noqa: ARG002
             return f"https://plugin/{path.name}"
 
         def submit(self, spec, payload, idempotency_key):

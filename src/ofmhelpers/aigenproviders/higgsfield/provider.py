@@ -227,7 +227,7 @@ class HiggsfieldProvider(Provider):
         account = hashlib.sha256(self.api_key.encode()).hexdigest()[:16]
         return f"higgsfield:upload:{account}:{path}"
 
-    def upload(self, path: Path) -> str:
+    def upload(self, path: Path, max_bytes: int | None = None) -> str:
         """Memoized like kie.ai's: a reference reused across generations is
         uploaded once, and a cached URL is confirmed live before reuse. The
         cache and its lock are keyed by `path` itself and looked up first: a
@@ -242,6 +242,8 @@ class HiggsfieldProvider(Provider):
             )
             raise ProviderInputError(msg)
         cache_key = self._upload_cache_key(path)
+        if max_bytes:
+            cache_key = f"{cache_key}:{max_bytes}"
         with upload_lock(cache_key):
             cached = get_text(cache_key)
             if cached is not None and _live(cached):
@@ -250,7 +252,7 @@ class HiggsfieldProvider(Provider):
             sent = fitted(
                 path,
                 Path(settings.aigen.out_dir) / "higgsfield" / "fitted",
-                settings.higgsfield.ref_image_limits,
+                settings.higgsfield.ref_image_limits.with_max_bytes(max_bytes),
                 jpeg=as_jpeg,
             )
             with _mapped_errors("upload"):
@@ -284,7 +286,9 @@ class HiggsfieldProvider(Provider):
             request = HiggsfieldRequest.model_validate(controller.get())
         if request.status == "completed":
             return TaskState(state="done", urls=request.urls)
-        return TaskState(state="failed", error=request.failure)
+        return TaskState(
+            state="failed", error=request.failure, no_credits=request.out_of_credits
+        )
 
 
 def _live(url: str) -> bool:

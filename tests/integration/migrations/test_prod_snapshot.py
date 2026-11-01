@@ -204,6 +204,8 @@ OWNERS = "d3e4f5a6b7c8"
 SPAM = "d4e5f6a7b8c0"
 HIDDEN = "f8a9b0c1d2e3"
 REEL_CHECKS = "a2b3c4d5e6f7"
+PICTURE_PRESETS = "9c1d2e3f4a5b"
+PRESET_ASPECT = "4e5f6a7b8c9d"
 
 
 def test_tracked_posts_moves_every_post_out_of_the_jsonb(db):
@@ -474,3 +476,34 @@ def test_clone_ai_checks_adds_two_empty_tables_and_changes_no_row(db):
     assert after["clone_ai_checks"] == 0
     assert after["clone_from_links"] == 0
     assert {t: n for t, n in after.items() if t in before} == before
+
+
+def test_picture_presets_adds_an_empty_table_and_changes_no_row(db):
+    """picture_presets is new and empty; every table production has keeps
+    every row, and a downgrade drops only it."""
+    needs(PICTURE_PRESETS)(db)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), "head")
+    after = _row_counts(db)
+    assert after["picture_presets"] == 0
+    assert {t: n for t, n in after.items() if t in before} == before
+    command.downgrade(_alembic(), REEL_CHECKS)
+    assert _row_counts(db) == before
+
+
+def test_preset_aspect_adds_an_empty_column_and_changes_no_row(db):
+    """picture_presets.aspect_ratio is new and NULL: every preset keeps
+    following its pictures; a downgrade drops only the column."""
+    needs(PRESET_ASPECT)(db)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), "head")
+    assert "aspect_ratio" in _columns(db, "picture_presets")
+    assert (
+        _scalar(
+            db, "SELECT count(*) FROM picture_presets WHERE aspect_ratio IS NOT NULL"
+        )
+        == 0
+    )
+    assert {t: n for t, n in _row_counts(db).items() if t in before} == before
+    command.downgrade(_alembic(), "-1")
+    assert "aspect_ratio" not in _columns(db, "picture_presets")

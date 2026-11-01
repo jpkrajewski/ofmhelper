@@ -46,12 +46,15 @@ from ofmhelpers.config.settings import (
     LinksSettings,
     LLMSettings,
     LoggingSettings,
+    PicturesSettings,
     RepurposeSettings,
+    RunningHubSettings,
     SessionSettings,
     SignInSettings,
     TelemetrySettings,
     TrialsSettings,
     VaultSettings,
+    ViralSettings,
     WebSettings,
 )
 
@@ -127,6 +130,14 @@ class Settings:
         return self._group(HiggsfieldSettings)
 
     @property
+    def runninghub(self) -> RunningHubSettings:
+        return self._group(RunningHubSettings)
+
+    @property
+    def pictures(self) -> PicturesSettings:
+        return self._group(PicturesSettings)
+
+    @property
     def downloaders(self) -> DownloadersSettings:
         return self._group(DownloadersSettings)
 
@@ -185,6 +196,10 @@ class Settings:
     @property
     def trials(self) -> TrialsSettings:
         return self._group(TrialsSettings)
+
+    @property
+    def viral(self) -> ViralSettings:
+        return self._group(ViralSettings)
 
     @property
     def logging(self) -> LoggingSettings:

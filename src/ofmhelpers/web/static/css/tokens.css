@@ -151,6 +151,9 @@
     --control-h: 40px;
     --control-h-sm: 32px;
     --control-font: 1rem;
+    /* A small square preview in a row of them (a /pictures preset's
+       reference images). */
+    --thumb-sm: 64px;
     /* Width of a filter / sort dropdown in a toolbar: one width for all,
        not each sized to its longest option. */
     --control-w-filter: 10rem;

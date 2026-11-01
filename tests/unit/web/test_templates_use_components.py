@@ -21,6 +21,9 @@ OWNED = {
     "table-wrap", "menu", "menu-list", "menu-item", "menu-item-danger",
 }  # fmt: skip
 CLASS_ATTR = re.compile(r'class="([^"]*)"')
+# A Download link written by hand next to the macro's (2026-11-01: the job
+# page's "⬇ Download" looked like no other button).
+HAND_BUTTON = re.compile(r'class="download-btn"')
 STYLE_ATTR = re.compile(r'style="(?!--)')
 
 
@@ -38,6 +41,8 @@ def _problems(text: str) -> list[str]:
                 found.append(f"{n}: {sorted(owned)}")
         if STYLE_ATTR.search(line) or "<style" in line:
             found.append(f"{n}: inline style")
+        if HAND_BUTTON.search(line):
+            found.append(f"{n}: hand-written button")
     return found
 
 

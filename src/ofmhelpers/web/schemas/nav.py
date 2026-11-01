@@ -36,7 +36,10 @@ NAV = (
     NavItem(href="/links", label="Links", icon="link", place=NavPlace.BAR),
     NavItem(href="/phones", label="Phones", icon="smartphone", place=NavPlace.BAR),
     NavItem(href="/drive", label="Drive", icon="folder", place=NavPlace.BAR),
-    NavItem(href="/reels", label="Viral", icon="flame", place=NavPlace.MORE),
+    # Under More: the bar holds 9 links at 1440 px before "More" wraps.
+    NavItem(href="/viral", label="Viral", icon="flame", place=NavPlace.MORE),
+    NavItem(href="/pictures", label="Pictures", icon="image", place=NavPlace.MORE),
+    NavItem(href="/reels", label="Viral watch", icon="flame", place=NavPlace.MORE),
     NavItem(href="/uniqify", label="Uniqify", icon="shuffle", place=NavPlace.MORE),
     NavItem(href="/trials", label="Trials", icon="flame", place=NavPlace.MORE),
     NavItem(href="/repurpose", label="Repurpose", icon="sparkles", place=NavPlace.MORE),

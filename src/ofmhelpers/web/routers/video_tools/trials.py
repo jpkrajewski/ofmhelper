@@ -39,8 +39,11 @@ router = APIRouter(prefix="/trials", tags=["trials"])
 
 TASK = "trials"
 
-# Seconds per reel a job may take (pipeline encode + the LLM, an upload).
-_PER_REEL_S = 240
+# Seconds per reel a job may take (pipeline encode + the LLM, an upload),
+# even made one after another. Prod 2026-10-30 (4 vCPU, 2 at once): 21 4K
+# copies in 110 min, ~10.5 min each; 240 s (dev's pace) killed Generate at
+# 21 of 26.
+_PER_REEL_S = 900
 _JOB_GRACE_S = 300
 
 

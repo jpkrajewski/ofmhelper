@@ -38,6 +38,10 @@ from ofmhelpers.web.schemas.errors import FALLBACK, error_reason
         ),
         ("abc123 failed: Internal Error, Please try again later.", "Provider error"),
         (
+            "Higgsfield failed this generation: Your credit balance is too low to complete this request. Please top up your balance and try again.",
+            "No credits",
+        ),
+        (
             "500 Server Error: Internal Server Error for url: https://kieai.redpandaai.co/api/file-stream-upload",
             "Provider error",
         ),

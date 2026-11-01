@@ -33,6 +33,8 @@ VA_PAGES = [
     "/links",
     "/phones",
     "/drive",
+    "/viral",
+    "/pictures",
     "/reels",
     "/uniqify",
     "/trials",

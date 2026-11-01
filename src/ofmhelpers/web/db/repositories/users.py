@@ -173,7 +173,7 @@ class UserRepository(CachedRepository):
                 s.flush()
                 return True
         except IntegrityError as exc:
-            msg = "still owns phones, accounts or watched profiles"
+            msg = "still owns phones, accounts, watched profiles or picture presets"
             raise OwnsDataError(msg) from exc
 
     def refresh_token(self, user_id: int) -> str:

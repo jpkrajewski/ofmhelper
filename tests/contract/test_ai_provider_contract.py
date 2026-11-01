@@ -1,4 +1,4 @@
-"""kie.ai and Higgsfield behind the shared interface, on their fakes and on
+"""kie.ai, Higgsfield and RunningHub behind the shared interface, on their fakes and on
 the real APIs: a wrong key is refused the same way everywhere (free), and
 the cheapest job runs end to end (its real side is marked `paid`: a few
 cents per provider, run only by `scripts/test.sh paid`; keys from .env)."""
@@ -13,16 +13,28 @@ from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_FAKE_KEY
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.aigenproviders.runner import generate
+from ofmhelpers.aigenproviders.runninghub.fake import FAKE_KEY as RH_FAKE_KEY
+from ofmhelpers.aigenproviders.runninghub.provider import RunningHubProvider
 
 BAD_KEY = "contract-test-invalid-key"
 PROVIDERS = {
     "kie": (KieProvider, BAD_KEY, KIE_FAKE_KEY),
     "higgsfield": (HiggsfieldProvider, f"{BAD_KEY}:{BAD_KEY}", HF_FAKE_KEY),
+    "runninghub": (RunningHubProvider, BAD_KEY, RH_FAKE_KEY),
+}
+# A task id nobody has, in each provider's own format: RunningHub's are
+# numeric, and it refuses a UUID with 1007 "failed to parse request body"
+# before it looks at the key.
+UNKNOWN_TASK = {
+    "kie": "00000000-0000-0000-0000-000000000000",
+    "higgsfield": "00000000-0000-0000-0000-000000000000",
+    "runninghub": "1904152012345678901",
 }
 # Presumed cheapest image model per provider (Lite / Turbo tier).
 CHEAPEST = {
     "kie": "kie:seedream/5-lite-text-to-image",
     "higgsfield": "higgsfield:z-image/turbo",
+    "runninghub": "runninghub:seedream-v5-lite/text-to-image",
 }
 
 
@@ -34,7 +46,7 @@ def provider_name(request) -> str:
 def test_a_wrong_key_is_refused_on_status(backend, provider_name):
     cls, bad, _ = PROVIDERS[provider_name]
     with pytest.raises(ProviderAuthError, match=f"{cls.label}: wrong API key"):
-        cls(bad).status("00000000-0000-0000-0000-000000000000")
+        cls(bad).status(UNKNOWN_TASK[provider_name])
 
 
 def test_a_wrong_key_is_refused_at_the_first_upload(backend, provider_name, tmp_path):

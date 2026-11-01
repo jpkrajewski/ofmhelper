@@ -72,7 +72,7 @@ class FakeProvider(Provider):
     def default_key(cls) -> str | None:
         return None
 
-    def upload(self, path: Path) -> str:
+    def upload(self, path: Path, max_bytes: int | None = None) -> str:  # noqa: ARG002 -- nothing is uploaded
         return f"{_SCHEME}{path}"
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:

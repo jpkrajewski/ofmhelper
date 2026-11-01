@@ -313,7 +313,9 @@ def _stub(provider_cls, monkeypatch, sent):
         msg = "no download in tests"
         raise ProviderUnavailableError(msg)
 
-    monkeypatch.setattr(provider_cls, "upload", lambda _self, p: f"https://up/{p.name}")
+    monkeypatch.setattr(
+        provider_cls, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+    )
     monkeypatch.setattr(provider_cls, "submit", submit)
     monkeypatch.setattr(
         provider_cls,
@@ -605,6 +607,9 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     assert pricing["kie"]["max_reference_s"] == 15
     assert pricing["higgsfield"]["credits_per_video_s"] == {"720P": 2.0}
     assert pricing["higgsfield"]["max_reference_s"] == 15
+    # RunningHub's Wan 3.0 price is not public: Alibaba's, in CNY.
+    assert pricing["runninghub"]["unit"] == "CNY"
+    assert pricing["runninghub"]["credits_per_video_s"]["720P"] == 1.2
     assert 'id="clone-cost"' in client.get("/clone").text
 
 

@@ -63,8 +63,11 @@ def test_bar_links_then_the_rest_under_more(client):
         "/phones",
         "/drive",
     ]
-    # Viral retired from the bar (2026-10-23).
+    # The /reels watch list left the bar (2026-10-23); /viral (one profile's
+    # top reels, 2026-10-31) leads More: a 10th bar link wraps "More".
     assert more == [
+        "/viral",
+        "/pictures",
         "/reels",
         "/uniqify",
         "/trials",
@@ -87,6 +90,8 @@ def test_a_users_more_has_no_admin_pages():
     sign_in(va)
     _bar, more = _nav(va.get("/generate").text)
     assert more == [
+        "/viral",
+        "/pictures",
         "/reels",
         "/uniqify",
         "/trials",

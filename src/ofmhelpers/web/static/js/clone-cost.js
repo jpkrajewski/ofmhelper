@@ -24,8 +24,8 @@
     // whole numbers would round a cheap run to 0.
     const fewDigits = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
-    function creditsText(credits) {
-        return `${(credits < 100 ? fewDigits : whole).format(credits)} credits`;
+    function creditsText(credits, unit) {
+        return `${(credits < 100 ? fewDigits : whole).format(credits)} ${unit || "credits"}`;
     }
 
     const fileLengths = new WeakMap();
@@ -124,7 +124,7 @@
                 credits += lineCredits;
                 seconds += length;
                 runs += 1;
-                const detail = `${length.toFixed(1)} s · ${creditsText(lineCredits)}`;
+                const detail = `${length.toFixed(1)} s · ${creditsText(lineCredits, price.unit)}`;
                 lines.append(line(i + 1, item.name, detail, usd.format(lineCredits * usdPerCredit), false));
             });
 
@@ -133,7 +133,7 @@
                 ? `${runs} ${runNoun} · reading ${pending} more…`
                 : `${runs} ${runNoun} · ${seconds.toFixed(1)} s of video`;
             document.getElementById("clone-cost-usd").textContent = usd.format(credits * usdPerCredit);
-            document.getElementById("clone-cost-credits").textContent = creditsText(credits);
+            document.getElementById("clone-cost-credits").textContent = creditsText(credits, price.unit);
         }
 
         function update() {

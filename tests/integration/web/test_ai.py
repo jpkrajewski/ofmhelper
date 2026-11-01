@@ -325,7 +325,7 @@ def kie(monkeypatch):
         calls["submit"].append((spec.model_id, payload))
         return "kie-task"
 
-    def upload(_self, path):
+    def upload(_self, path, max_bytes=None):
         calls["upload"].append(path.name)
         return f"https://up.kie/{path.name}"
 
@@ -429,7 +429,9 @@ def test_a_higgsfield_run_uses_its_own_field_names(client, monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        HiggsfieldProvider, "upload", lambda _self, p: f"https://hf/{p.name}"
+        HiggsfieldProvider,
+        "upload",
+        lambda _self, p, max_bytes=None: f"https://hf/{p.name}",
     )
     monkeypatch.setattr(
         HiggsfieldProvider,
@@ -577,7 +579,7 @@ def plugin(tmp_path, monkeypatch):
         def default_key(cls):
             return None
 
-        def upload(self, p):
+        def upload(self, p, max_bytes=None):  # noqa: ARG002
             return str(p)
 
         def submit(self, spec, payload, idempotency_key):

@@ -24,8 +24,8 @@ class KieProvider(Provider):
     def default_key(cls) -> str | None:
         return settings.web.kie_ai_api_key_admin
 
-    def upload(self, path: Path) -> str:
-        return self.client.upload_local_file(str(path))
+    def upload(self, path: Path, max_bytes: int | None = None) -> str:
+        return self.client.upload_local_file(str(path), max_bytes=max_bytes)
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
         """kie.ai has no idempotency key; a re-run never resubmits anyway

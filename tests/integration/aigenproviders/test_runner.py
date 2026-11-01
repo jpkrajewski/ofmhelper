@@ -9,6 +9,7 @@ from ofmhelpers.aigenproviders.catalog import get_spec
 from ofmhelpers.aigenproviders.errors import (
     ProviderAuthError,
     ProviderGenerationError,
+    ProviderNoCreditsError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
@@ -120,6 +121,19 @@ def test_a_failed_generation_fails_with_the_providers_reason_and_is_forgotten():
     with pytest.raises(ProviderGenerationError, match="nsfw input"):
         runner.generate(provider, SPEC, {}, "job5")
     assert tasks.recall("job5") is None
+
+
+def test_a_generation_ended_for_want_of_credits_is_no_credits():
+    """Prod 2026-10-31: Higgsfield accepted three /clone runs, then failed
+    each "credit balance is too low"; as a generation failure the cards said
+    "Failed" and a /clone-links batch would have gone on asking."""
+    provider = ScriptedProvider(
+        [TaskState(state="failed", error="balance too low", no_credits=True)]
+    )
+
+    with pytest.raises(ProviderNoCreditsError, match="balance too low"):
+        runner.generate(provider, SPEC, {}, "job5b")
+    assert tasks.recall("job5b") is None
 
 
 def test_a_timeout_keeps_the_request_for_recovery(monkeypatch):
