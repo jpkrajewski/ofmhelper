@@ -158,14 +158,22 @@ class KieAIClient:
         account = hashlib.sha256(self.api_key.encode()).hexdigest()[:16]
         return f"kieai:upload:{account}:{path}"
 
-    def upload_local_file(self, path: str, upload_path: str = "refs") -> str:
+    def upload_local_file(
+        self, path: str, upload_path: str = "refs", max_bytes: int | None = None
+    ) -> str:
         """One upload per file even when several requests start together
         (`upload_lock`): the rest wait and take the cached URL."""
         cache_key = self._upload_cache_key(path)
+        if max_bytes:
+            # Under a model's own larger limit the file may go up untouched:
+            # never the copy cached under the default cap.
+            cache_key = f"{cache_key}:{max_bytes}"
         with upload_lock(cache_key):
-            return self._upload_once(cache_key, path, upload_path)
+            return self._upload_once(cache_key, path, upload_path, max_bytes)
 
-    def _upload_once(self, cache_key: str, path: str, upload_path: str) -> str:
+    def _upload_once(
+        self, cache_key: str, path: str, upload_path: str, max_bytes: int | None
+    ) -> str:
         cached_url = get_text(cache_key)
         if cached_url is not None:
             if self._remote_file_exists(cached_url):
@@ -174,7 +182,7 @@ class KieAIClient:
             logger.info("cached url for %s no longer resolves, re-uploading", path)
             delete_text(cache_key)
 
-        upload_file = self._fit_for_upload(pathlib.Path(path))
+        upload_file = self._fit_for_upload(pathlib.Path(path), max_bytes)
         logger.info("upload starting: %s", upload_file)
         with upload_file.open("rb") as fh:
             response = self._call(
@@ -189,13 +197,16 @@ class KieAIClient:
         set_text(cache_key, url, settings.kieai.upload_cache_ttl_s)
         return url
 
-    def _fit_for_upload(self, path: pathlib.Path) -> pathlib.Path:
+    def _fit_for_upload(
+        self, path: pathlib.Path, max_bytes: int | None = None
+    ) -> pathlib.Path:
         """`path`, or a shrunk JPEG copy of it when it is an image over
         kie.ai's reference limits -- an oversized reference is otherwise a 422
         from createTask ("file size exceeds limit") after the upload already
         succeeded. The original stays untouched (a character sheet is kept
         lossless), and the copy is reused on the next upload of the same file."""
-        return fitted(path, self.OUT_DIR / "fitted", settings.kieai.ref_image_limits)
+        limits = settings.kieai.ref_image_limits.with_max_bytes(max_bytes)
+        return fitted(path, self.OUT_DIR / "fitted", limits)
 
     def _remote_file_exists(self, url: str) -> bool:
         """Best-effort existence check for a previously-uploaded file's

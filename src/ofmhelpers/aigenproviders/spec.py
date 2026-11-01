@@ -147,6 +147,10 @@ class ModelSpec(BaseModel):
     input_schema: dict[str, JsonValue]
     fixed: Payload = {}
     default_prompt: str | None = None
+    # The model's own documented per-file limit, where it takes bigger files
+    # than its provider's default cap (kie.ai's Nano Banana Pro: 30 MB): an
+    # image under it goes up untouched instead of as a JPEG copy.
+    max_upload_bytes: int | None = None
 
     @property
     def key(self) -> str:

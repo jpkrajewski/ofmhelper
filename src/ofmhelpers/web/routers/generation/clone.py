@@ -131,6 +131,7 @@ class CloneTarget(BaseModel):
     images: str
     video: str
     audio: str
+    aspect: str = "aspect_ratio"
     max_reference_s: int = 15
 
     @property
@@ -141,12 +142,14 @@ class CloneTarget(BaseModel):
 class ClonePrice(BaseModel):
     """One provider's clone price, as the form's live estimate
     (clone-cost.js) reads it: credits per second of source video by
-    resolution, what a credit costs, and the longest reference it takes."""
+    resolution, what a credit costs, and the longest reference it takes.
+    `unit`: what the provider bills in (its credits, or a currency)."""
 
     credits_per_video_s: dict[str, float]
     usd_per_credit: float
     max_reference_s: int
     note: str
+    unit: str = "credits"
 
 
 def clone_pricing() -> dict[str, ClonePrice]:
@@ -166,6 +169,13 @@ def clone_pricing() -> dict[str, ClonePrice]:
             max_reference_s=CLONE_TARGETS["higgsfield"].max_reference_s,
             note="Higgsfield list price at 60% off, measured on a real run · $1 = 16 credits",
         ),
+        "runninghub": ClonePrice(
+            credits_per_video_s=web.clone_rh_cny_per_video_s,
+            usd_per_credit=web.rh_usd_per_cny,
+            max_reference_s=CLONE_TARGETS["runninghub"].max_reference_s,
+            note="Alibaba's Wan 3.0 list price, not yet measured on RunningHub",
+            unit="CNY",
+        ),
     }
 
 
@@ -181,6 +191,13 @@ CLONE_TARGETS = {
         images="image_urls",
         video="video_urls",
         audio="generate_audio",
+    ),
+    "runninghub": CloneTarget(
+        model="runninghub:alibaba/wan-3.0/reference-to-video",
+        images="imageUrls",
+        video="videoUrls",
+        audio="audio",
+        aspect="aspectRatio",
     ),
 }
 
@@ -213,7 +230,7 @@ def _clone_values(
     return {
         "prompt": prompt,
         "resolution": _enum_value(target.spec, "resolution", resolution),
-        "aspect_ratio": "adaptive",
+        target.aspect: "adaptive",
         "duration": duration,
         target.audio: audio,
         target.images: images,

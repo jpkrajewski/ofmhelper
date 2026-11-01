@@ -102,6 +102,7 @@ from ofmhelpers.web.schemas.links import (
     ShortLink,
 )
 from ofmhelpers.web.schemas.persistence import Job, JobPreview, JobStatus, ResultFile
+from ofmhelpers.web.schemas.pictures import PicturePreset
 from ofmhelpers.web.schemas.tools import Tool
 from ofmhelpers.web.schemas.users import (
     ApiKeysForm,
@@ -113,6 +114,7 @@ from ofmhelpers.web.schemas.users import (
     User,
     UserForm,
 )
+from ofmhelpers.web.schemas.viral import ViralFile, ViralReel, ViralSearch
 from ofmhelpers.web.schemas.watched import (
     FeedItem,
     GroupForm,
@@ -185,6 +187,7 @@ __all__ = [
     "Period",
     "PhoneQuery",
     "PhoneSort",
+    "PicturePreset",
     "ProviderChoice",
     "ProviderState",
     "RefEntry",
@@ -209,6 +212,9 @@ __all__ = [
     "User",
     "UserFiles",
     "UserForm",
+    "ViralFile",
+    "ViralReel",
+    "ViralSearch",
     "WatchForm",
     "WatchedProfile",
 ]

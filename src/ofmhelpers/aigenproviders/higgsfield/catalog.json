@@ -5877,7 +5877,8 @@
           "default": false
         }
       }
-    }
+    },
+    "max_upload_bytes": 21000000
   },
   {
     "model_id": "alibaba/wan-3.0/text-to-video",

@@ -13,6 +13,8 @@ import pytest
 
 from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
 from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
+from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
+from ofmhelpers.apify.fake import fake_apify
 from ofmhelpers.config import settings as app_settings
 from ofmhelpers.config.settings import (
     GDriveSettings,
@@ -21,6 +23,8 @@ from ofmhelpers.config.settings import (
     KieAISettings,
     LinksSettings,
     LLMSettings,
+    RunningHubSettings,
+    ViralSettings,
 )
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.fake import _fake_drive
@@ -40,6 +44,8 @@ _REAL_SETTINGS = (
     KieAISettings,
     LinksSettings,
     LLMSettings,
+    RunningHubSettings,
+    ViralSettings,
 )
 
 
@@ -55,6 +61,8 @@ def _reset_fakes() -> None:
         fake_gemini,
         fake_groq,
         fake_cerebras,
+        fake_apify,
+        fake_runninghub,
         fake_media.mp4,
     ):
         cached.cache_clear()

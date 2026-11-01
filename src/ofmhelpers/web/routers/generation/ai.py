@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from starlette.datastructures import FormData, UploadFile
 
 from ofmhelpers.aigenproviders import runner
-from ofmhelpers.aigenproviders.base import get_provider, provider_class
+from ofmhelpers.aigenproviders.base import get_provider, provider_class, uploader
 from ofmhelpers.aigenproviders.catalog import catalog, get_spec
 from ofmhelpers.aigenproviders.errors import InvalidInputError
 from ofmhelpers.aigenproviders.spec import ModelSpec
@@ -172,7 +172,7 @@ def run_ai(
     instead of losing a finished (paid) generation."""
     spec = get_spec(model)
     client = get_provider(provider, api_key)
-    payload = spec.request(values, client.upload)
+    payload = spec.request(values, uploader(client, spec))
     remote: list[str] = []
 
     def on_result_urls(urls: list[str]) -> None:

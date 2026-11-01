@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_asset_media.html" as am %}
+{% import "_reel_counts.html" as rc %}
+{# /viral (routers/downloads/viral.py): a profile in, its most played reels
+   out. `current`: the search shown (schemas.ViralSearch) or None;
+   `searches`: the newest ones, each a link. static/js/viral.js posts the
+   form and reloads once a running search is done. #}
+{% block content %}
+{{ ui.page_header("Viral", scan ~ " newest reels a search · up to $" ~ "%.2f"|format(max_usd)) }}
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<form id="viral-form" method="post" action="/viral/run">
+    {% call ui.field("Instagram profile", "viral-profile") %}
+    <input type="text" id="viral-profile" name="profile" required autocomplete="off" spellcheck="false"
+           placeholder="@username or instagram.com/username" value="{{ current.profile if current else '' }}">
+    {% endcall %}
+    {{ ui.button("Find top " ~ top ~ " reels", "primary", type="submit") }}
+    {{ ui.notice(kind="fail", attrs={"id": "viral-error", "hidden": true}) }}
+</form>
+
+{% if searches %}
+<h2 class="col-title">Searches</h2>
+<div class="viral-searches">
+    {% for s in searches %}
+    {{ ui.button("@" ~ s.profile, "primary" if current and s.job_id == current.job_id else "secondary", href="/viral?job=" ~ s.job_id) }}
+    {% endfor %}
+</div>
+{% endif %}
+</div>
+
+<div class="generate-gallery-col">
+{% if not current %}
+    {{ ui.empty("No searches yet") }}
+{% elif current.status == "running" %}
+    <div class="results">
+        <div class="result-item" id="viral-pending" data-poll="/viral/jobs/{{ current.job_id }}/status">
+            <div class="result-file"><span class="spinner"></span> finding @{{ current.profile }}'s top reels…</div>
+        </div>
+    </div>
+{% elif current.status == "failed" %}
+    {{ ui.notice("@" ~ current.profile ~ ": " ~ current.error_reason, "fail", attrs={"title": current.error}) }}
+{% else %}
+    <div class="ph-toolbar">
+        <p class="source">@{{ current.profile }} · top {{ current.reels|length }}{% if current.scanned %} of {{ current.scanned }} reels{% endif %}{% if current.cost_usd is not none %} · ${{ "%.2f"|format(current.cost_usd) }}{% endif %}</p>
+        {% if current.reels %}
+        <div class="toolbar-actions">
+            {{ ui.button("Download all", "primary", href="/viral/zip/" ~ current.job_id, icon="download", attrs={"download": true}) }}
+        </div>
+        {% endif %}
+    </div>
+    <div class="results">
+        {% for reel in current.reels %}
+        <div class="result-item">
+            {{ am.asset_media(reel.file) }}
+            <p class="source">{{ rc.short_count(reel.plays) }} plays{% if reel.likes is not none %} · {{ rc.short_count(reel.likes) }} likes{% endif %}{% if reel.seconds %} · {{ reel.seconds|round|int }} s{% endif %}{% if reel.posted_at %} · {{ reel.posted_at.strftime("%b %-d, %Y") }}{% endif %}</p>
+            <div class="result-actions">
+                {{ ui.button("Download", href=reel.file.download_url, icon="download", hook="download-btn", attrs={"download": reel.file.download_name}) }}
+                {{ ui.icon_button("external", "Open on Instagram", href=reel.url, attrs={"target": "_blank", "rel": "noopener"}) }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% endif %}
+</div>
+</div>
+<script src="{{ static_url('js/viral.js') }}"></script>
+{% endblock %}

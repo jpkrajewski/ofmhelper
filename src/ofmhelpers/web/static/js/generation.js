@@ -21,10 +21,9 @@
  * `Generation.submit(form, formData)` once they've built their own FormData.
  */
 (() => {
-    // A single dropped request (a network blip, a momentary server hiccup)
-    // shouldn't abandon a job that's still running fine on the server --
-    // only give up after several consecutive failures.
-    const MAX_CONSECUTIVE_FAILURES = 5;
+    // A running job's polls back off from the first interval to the last.
+    const POLL_FIRST_MS = 2000;
+    const POLL_MAX_MS = 8000;
 
     // Users unsure whether their click registered tend to click Generate
     // again right away -- this is a flat cooldown on the button itself, not
@@ -171,7 +170,7 @@
         else card.prepend(media);
     }
 
-    // job is optional: the "lost track of this job" fallback has no params
+    // job is optional: the "Not found" card (a job gone) has no params
     // to restore, so that card gets no Recreate button.
     // `reason` is the short one (schemas/errors.py, the status payload's
     // error_reason); the full message stays as the hover text.
@@ -190,29 +189,53 @@
         return div;
     }
 
+    // Runs `fn` once the hidden tab is shown again.
+    function onceShown(fn) {
+        document.addEventListener("visibilitychange", function shown() {
+            if (document.hidden) return;
+            document.removeEventListener("visibilitychange", shown);
+            fn();
+        });
+    }
+
     // Polls one job and swaps `card` for the outcome when it lands.
     // Standalone (no submit-scope state) so it works both for cards created
     // by a fresh submit AND for server-rendered still-running cards being
     // resumed after a page load.
-    function pollJob(card, prefix, jobId, label, resultKind, interval = 2000, failures = 0) {
+    // Only the job's own answer ends the polling: a failed poll (offline,
+    // a deploy's 502) is tried again for as long as it takes (prod
+    // 2026-10-31: five failed polls on a phone put away turned a running
+    // clone into "Lost track"; it finished fine 3 minutes later).
+    function pollJob(card, prefix, jobId, label, resultKind, interval = POLL_FIRST_MS) {
+        // A hidden tab (a phone put away, a laptop asleep) often has no
+        // network, and nobody sees it: polled again the moment it is shown.
+        if (document.hidden) {
+            onceShown(() => pollJob(card, prefix, jobId, label, resultKind, interval));
+            return;
+        }
+        function again(nextInterval) {
+            setTimeout(
+                () => pollJob(card, prefix, jobId, label, resultKind, nextInterval),
+                interval
+            );
+        }
         fetch(`${prefix}/jobs/${jobId}/status`)
-            .then(async (r) => {
-                const job = await r.json();
-                if (!r.ok) {
-                    throw new Error(job.detail || `status check failed (${r.status})`);
-                }
-                return job;
+            .then((r) => {
+                if (r.status === 404) return { status: "gone" };
+                if (!r.ok || !isJson(r)) throw new Error(`status check failed (${r.status})`);
+                return r.json();
             })
             .then((job) => {
                 if (job.status === "running" || job.status === "queued") {
                     if (job.preview?.remote_url) {
                         showPreview(card, job.preview, resultKind);
                     }
-                    setTimeout(
-                        () =>
-                            pollJob(card, prefix, jobId, label, resultKind,
-                                Math.min(interval * 1.4, 8000), 0),
-                        interval
+                    again(Math.min(interval * 1.4, POLL_MAX_MS));
+                    return;
+                }
+                if (job.status === "gone") {
+                    card.replaceWith(
+                        buildFailedCard(label, `Job ${jobId} no longer exists.`, null, "Not found")
                     );
                     return;
                 }
@@ -247,24 +270,7 @@
                 cards.forEach((c) => c.dispatchEvent(
                     new CustomEvent("gallery:card-ready", { bubbles: true })
                 ));
-            })
-            .catch(() => {
-                if (failures + 1 < MAX_CONSECUTIVE_FAILURES) {
-                    setTimeout(
-                        () => pollJob(card, prefix, jobId, label, resultKind, interval, failures + 1),
-                        interval
-                    );
-                    return;
-                }
-                card.replaceWith(
-                    buildFailedCard(
-                        label,
-                        `Lost track of this job's status -- check /action-log for job ${jobId}.`,
-                        null,
-                        "Lost track"
-                    )
-                );
-            });
+            }, () => again(interval));
     }
 
     function isJson(response) {

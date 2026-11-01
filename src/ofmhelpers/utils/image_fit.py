@@ -27,6 +27,12 @@ class ImageLimits(BaseModel):
     max_bytes: int = Field(gt=0)
     max_side: int = Field(gt=0)
 
+    def with_max_bytes(self, max_bytes: int | None) -> "ImageLimits":
+        """These limits with a model's own byte limit, when it has one."""
+        if not max_bytes:
+            return self
+        return self.model_copy(update={"max_bytes": max_bytes})
+
 
 def fits(src: Path, max_bytes: int, max_side: int) -> bool:
     """Whether `src` is already within both limits (header read only)."""

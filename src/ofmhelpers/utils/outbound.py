@@ -7,7 +7,8 @@ such request is answered in-process by the fake of its host -- Instagram and
 its CDN (`instagram/fake.py`), kie.ai (`aigenproviders/kaiai/fake.py`),
 Higgsfield's file host (`aigenproviders/higgsfield/fake.py`), Google's and
 Apple's sign-in token endpoints (`signin/fake.py`), Oopsie and Bouncy
-(`links/fake.py`) -- and a
+(`links/fake.py`), Apify (`apify/fake.py`), RunningHub
+(`aigenproviders/runninghub/fake.py`) -- and a
 host without a fake is refused with a connection error: nothing reaches the
 internet. Higgsfield's API (httpx, its SDK) and Drive (googleapiclient)
 are switched in their own clients.
@@ -67,6 +68,8 @@ def _routes() -> dict[str, FakeHandler]:
     clients' models, which import this module."""
     from ofmhelpers.aigenproviders.higgsfield.fake import routes as hf_routes
     from ofmhelpers.aigenproviders.kaiai.fake import routes as kie_routes
+    from ofmhelpers.aigenproviders.runninghub.fake import routes as rh_routes
+    from ofmhelpers.apify.fake import routes as apify_routes
     from ofmhelpers.downloaders.savers_fake import routes as savers_routes
     from ofmhelpers.instagram.fake import routes as instagram_routes
     from ofmhelpers.links.fake import routes as links_routes
@@ -79,6 +82,8 @@ def _routes() -> dict[str, FakeHandler]:
         **signin_routes(),
         **links_routes(),
         **savers_routes(),
+        **apify_routes(),
+        **rh_routes(),
     }
 
 

@@ -70,7 +70,7 @@
                         expire(body.login_url);
                         // Never settle: the tab is navigating away, and
                         // resolving would let the caller paint an error card
-                        // ("Lost track of this job") over the overlay first.
+                        // over the overlay first.
                         return new Promise(() => {});
                     }
                     return response;

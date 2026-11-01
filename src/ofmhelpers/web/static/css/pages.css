@@ -1448,3 +1448,16 @@ a.ph-login-user:hover { text-decoration: underline; }
 .tr-pick:has(input:disabled) { opacity: 0.45; cursor: default; }
 .tr-reel > .badge { align-self: flex-start; }
 .tr-reel:has(.tr-pick input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+
+/* ---- Viral (/viral, static/js/viral.js) ------------------------------ */
+#viral-form + .col-title { margin-top: var(--s-6); }
+.viral-searches { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
+
+/* ---- Pictures (/pictures, static/js/pictures.js) ---------------------- */
+.pictures-preset-row { display: flex; gap: var(--gap-inline); }
+.pictures-preset-row select { flex: 1; min-width: 0; }
+.pictures-preset { display: flex; flex-direction: column; gap: var(--gap-inline); margin-bottom: var(--gap-stack); }
+.pictures-thumbs, .pictures-keep { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin: 0; padding: 0; list-style: none; }
+.pictures-thumbs img, .pictures-keep img { width: var(--thumb-sm); height: var(--thumb-sm); object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--border); }
+.pictures-preset .source { white-space: pre-wrap; }
+.pictures-preset-actions { display: flex; gap: var(--gap-inline); }

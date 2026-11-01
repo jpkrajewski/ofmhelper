@@ -37,7 +37,7 @@ from ofmhelpers.web.routers.admin import action_log, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.admin import styleguide as admin_styleguide
 from ofmhelpers.web.routers.admin import users as admin_users
-from ofmhelpers.web.routers.downloads import clean_image, reels
+from ofmhelpers.web.routers.downloads import clean_image, reels, viral
 from ofmhelpers.web.routers.downloads import images as download_images
 from ofmhelpers.web.routers.downloads import index as downloads_index
 from ofmhelpers.web.routers.downloads import media as download_media
@@ -45,7 +45,7 @@ from ofmhelpers.web.routers.downloads import videos as download_videos
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
-from ofmhelpers.web.routers.image_tools import character_sheet
+from ofmhelpers.web.routers.image_tools import character_sheet, pictures
 from ofmhelpers.web.routers.inventory import drive, phones
 from ofmhelpers.web.routers.tracking import accounts, links
 from ofmhelpers.web.routers.video_tools import repurpose, trials, uniqify
@@ -74,6 +74,7 @@ ROUTERS = [
     download_images.router,
     clean_image.router,
     reels.router,
+    viral.router,
     # tracking/
     accounts.router,
     links.router,
@@ -82,6 +83,7 @@ ROUTERS = [
     drive.router,
     # image_tools/
     character_sheet.router,
+    pictures.router,
     # video_tools/
     uniqify.router,
     repurpose.router,

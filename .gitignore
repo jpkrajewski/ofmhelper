@@ -40,3 +40,6 @@ backlog.txt
 
 # Logfire project credential (write token), made by `logfire projects use`.
 .logfire/
+
+# Contains live API keys (ElevenLabs etc.) — local only, never commit.
+/VOICEchanger.md

@@ -29,7 +29,9 @@
             {% if job.status == "done" and job.assets %}
                 {{ am.asset_media(job.assets[0]) }}
                 <p class="filename">{{ job.assets[0].name }}</p>
-                <a href="{{ job.assets[0].download_url }}" download="{{ job.assets[0].download_name }}" class="download-btn">⬇ Download</a>
+                <div class="result-actions">
+                    {{ ui.button("Download", href=job.assets[0].download_url, icon="download", hook="download-btn", attrs={"download": job.assets[0].download_name}) }}
+                </div>
             {% elif job.status == "failed" %}
                 <div class="result-file" title="{{ job.error }}">⚠ {{ job.error|default("failed", true)|truncate(80) }}</div>
             {% elif job.status == "done" %}

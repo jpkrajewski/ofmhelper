@@ -215,6 +215,8 @@ def fake_externals(monkeypatch, tmp_path):
     app's outside services answered in-process, as under e2e."""
     from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
     from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
+    from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
+    from ofmhelpers.apify.fake import fake_apify
     from ofmhelpers.gdrive.fake import _fake_drive
     from ofmhelpers.instagram.fake import fake_instagram
     from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
@@ -234,6 +236,8 @@ def fake_externals(monkeypatch, tmp_path):
         fake_gemini,
         fake_groq,
         fake_cerebras,
+        fake_apify,
+        fake_runninghub,
         fake_media.mp4,
     )
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")

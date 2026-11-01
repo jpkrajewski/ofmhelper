@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
+{# /pictures (routers/image_tools/pictures.py): pick a preset, add the
+   pictures to recreate, Generate -- one Nano Banana Pro run per picture
+   (generation.js posts the form and polls the cards). Each preset's images
+   and prompt are drawn once, the selected one shown (static/js/pictures.js
+   switches them, runs the preset dialog and Recreate). #}
+{% block content %}
+{{ ui.page_header("Pictures") }}
+{% include "_gallery_hidden.html" %}
+
+<div class="generate-layout">
+<div class="generate-form-col">
+<form id="pictures-form" action="/pictures/run" data-prefix="/pictures" data-result-kind="image"
+      data-tool-label="Pictures" data-max-images='{{ max_images|tojson }}' novalidate>
+    {% call ui.field("Preset", "pictures-preset") %}
+    <div class="pictures-preset-row">
+        <select id="pictures-preset" name="preset" required>
+            {% for p in presets %}
+            <option value="{{ p.id }}" {% if p.id == selected %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+        {{ ui.button("New preset", icon="plus", attrs={"id": "preset-new"}) }}
+    </div>
+    {% endcall %}
+    {% for p in presets %}
+    <div class="pictures-preset" data-preset="{{ p.id }}" data-mine="{{ 'true' if p.mine else 'false' }}"
+         data-name="{{ p.name }}" data-prompt="{{ p.prompt }}" data-aspect="{{ p.aspect_ratio or '' }}"
+         data-count="{{ p.images|length }}"{% if p.id != selected %} hidden{% endif %}>
+        <div class="pictures-thumbs">
+            {% for path in p.images %}
+            <img src="/pictures/presets/{{ p.id }}/images/{{ loop.index0 }}" alt="{{ p.name }} {{ loop.index }}" loading="lazy" decoding="async">
+            {% endfor %}
+        </div>
+        {% if p.aspect_ratio %}<span>{{ ui.badge(p.aspect_ratio) }}</span>{% endif %}
+        <p class="source">{{ p.prompt }}</p>
+        {% if p.mine %}
+        <div class="pictures-preset-actions">
+            {{ ui.button("Edit preset", icon="pencil", hook="preset-edit") }}
+            {{ ui.button("Delete", "danger", icon="trash", hook="preset-delete") }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if not presets %}{{ ui.empty("No presets yet") }}{% endif %}
+    {{ fp.file_picker('pictures', 'image', 'Pictures to recreate', max=max_pictures, multiple=true) }}
+    {% include "_provider_fields.html" %}
+    {{ ui.button("Generate", "primary", type="submit") }}
+</form>
+</div>
+
+<div class="generate-gallery-col">
+<div id="results-panel">
+    <div class="generation-status"></div>
+    <div class="results" data-gallery-endpoint="/pictures/gallery"
+         data-live-endpoint="/pictures/gallery/latest" data-live-key="jobId"
+         data-live-interval="{{ live_poll_s }}" data-live-empty="pictures-empty">
+        {% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
+    </div>
+    {{ ui.empty("No pictures yet", attrs={"id": "pictures-empty", "hidden": gallery|length > 0 or hidden_count > 0}) }}
+</div>
+</div>
+</div>
+
+<dialog class="accounts-dialog" id="preset-dialog">
+    <form id="preset-form" method="dialog">
+        <h2 id="preset-dialog-title">New preset</h2>
+        {% call ui.field("Name", "preset-name") %}
+        <input type="text" id="preset-name" name="name" maxlength="80" required autocomplete="off">
+        {% endcall %}
+        {% call ui.field("Prompt", "preset-prompt") %}
+        <textarea id="preset-prompt" name="prompt" class="prompt-input" rows="4" required></textarea>
+        {% endcall %}
+        {% call ui.field("Shape", "preset-aspect") %}
+        <select id="preset-aspect" name="aspect_ratio">
+            <option value="">{{ "Default · " ~ default_aspect if default_aspect else "Same as the picture" }}</option>
+            {% for a in aspects %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+        </select>
+        {% endcall %}
+        {% call ui.field("Pictures (up to " ~ preset_max_images ~ ")", "preset-images") %}
+        <ul class="pictures-keep" id="preset-keep"></ul>
+        <input type="file" id="preset-images" name="images" accept="image/*" multiple>
+        {% endcall %}
+        {{ ui.notice(kind="fail", attrs={"id": "preset-error", "hidden": true}) }}
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", attrs={"data-close": true}) }}
+            {{ ui.button("Save", "primary", type="submit") }}
+        </div>
+    </form>
+</dialog>
+<template id="preset-keep-item"><li><label class="check-field"><input type="checkbox" name="keep" checked><img alt="" loading="lazy"></label></li></template>
+
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+{% include "_card_actions.html" %}
+<script src="{{ static_url('js/generation.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/live-gallery.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
+<script src="{{ static_url('js/pictures.js') }}"></script>
+{% endblock %}

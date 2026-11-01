@@ -250,6 +250,18 @@ class WebSettings(BaseSettings):
     hf_usd_per_credit: float = Field(
         default=0.0625, gt=0, validation_alias="OFM_HF_USD_PER_CREDIT"
     )
+    # The same estimate on RunningHub. Its Wan 3.0 price is not public (the
+    # price-preview endpoint needs a key): Alibaba's own Wan 3.0 list price
+    # until a run is measured -- 0.3 / 0.6 / 1.2 CNY per billed second
+    # (480P/720P/1080P, help.aliyun.com wan3-0-video), billed = output +
+    # reference video, about twice the source. In CNY per source second.
+    clone_rh_cny_per_video_s: dict[str, float] = Field(
+        default={"480P": 0.6, "720P": 1.2, "1080P": 2.4},
+        validation_alias="OFM_CLONE_RH_CNY_PER_VIDEO_S",
+    )
+    rh_usd_per_cny: float = Field(
+        default=0.14, gt=0, validation_alias="OFM_RH_USD_PER_CNY"
+    )
 
 
 class InfraSettings(BaseSettings):
@@ -497,6 +509,42 @@ class HiggsfieldSettings(BaseSettings):
     )
     ref_image_max_side: int = Field(
         default=8000, validation_alias="OFM_HF_REF_IMAGE_MAX_SIDE"
+    )
+
+    @property
+    def ref_image_limits(self) -> ImageLimits:
+        return ImageLimits(
+            max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
+        )
+
+
+class RunningHubSettings(BaseSettings):
+    """aigenproviders/runninghub/. The admin's key pre-fills their form
+    like the kie.ai and Higgsfield keys; unset = the key field starts
+    empty."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    api_key_admin: str | None = Field(
+        default=None, validation_alias="RUNNINGHUB_API_KEY_ADMIN"
+    )
+    # International site; runninghub.cn is the mainland one (other accounts).
+    base_url: str = Field(
+        default="https://www.runninghub.ai", validation_alias="OFM_RH_BASE_URL"
+    )
+    # One API call; an upload streams a whole reference video.
+    request_timeout_s: float = Field(
+        default=300, validation_alias="OFM_RH_REQUEST_TIMEOUT_S"
+    )
+    # Its upload URLs are signed for 24 h: kept for less.
+    upload_cache_ttl_s: int = Field(
+        default=20 * 3600, validation_alias="OFM_RH_UPLOAD_CACHE_TTL_S"
+    )
+    ref_image_max_bytes: int = Field(
+        default=10 * 1024 * 1024, validation_alias="OFM_RH_REF_IMAGE_MAX_BYTES"
+    )
+    ref_image_max_side: int = Field(
+        default=8000, validation_alias="OFM_RH_REF_IMAGE_MAX_SIDE"
     )
 
     @property
@@ -1496,4 +1544,78 @@ class TrialsSettings(BaseSettings):
 
     parallel: int = Field(
         default=3, ge=1, le=16, validation_alias="OFM_TRIALS_PARALLEL"
+    )
+
+
+class ViralSettings(BaseSettings):
+    """/viral (`ofmhelpers.viral`): one Instagram profile's most played
+    reels, read through an Apify actor (`ofmhelpers.apify`), the top ones
+    downloaded."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Comma-separated Apify API tokens; a search runs on the one with the most
+    # credit left. The name the server's .env has held since the lead hunt.
+    # A plain string, split by `api_keys`: a list field is parsed as JSON.
+    apify_api_keys: str = Field(default="", validation_alias="APIFY_API_KEYS")
+    actor: str = Field(
+        default="apify~instagram-reel-scraper", validation_alias="OFM_VIRAL_ACTOR"
+    )
+    # How many of the profile's newest reels a search reads (paid per reel):
+    # the top ones are picked from these.
+    scan: int = Field(default=200, ge=1, le=5000, validation_alias="OFM_VIRAL_SCAN")
+    top: int = Field(default=30, ge=1, le=200, validation_alias="OFM_VIRAL_TOP")
+    # The actor's Free-plan prices (apify.com/apify/instagram-reel-scraper/
+    # pricing): only for the page's "up to $X a search"; what a search cost
+    # is read from its run.
+    usd_per_reel: float = Field(
+        default=0.0026, ge=0, validation_alias="OFM_VIRAL_USD_PER_REEL"
+    )
+    usd_per_run: float = Field(
+        default=0.001, ge=0, validation_alias="OFM_VIRAL_USD_PER_RUN"
+    )
+    # One run's limit on Apify (it stops the run then).
+    run_timeout_s: int = Field(
+        default=900, ge=60, validation_alias="OFM_VIRAL_RUN_TIMEOUT_S"
+    )
+    download_workers: int = Field(
+        default=6, ge=1, le=32, validation_alias="OFM_VIRAL_DOWNLOAD_WORKERS"
+    )
+    download_timeout_s: float = Field(
+        default=60, gt=0, validation_alias="OFM_VIRAL_DOWNLOAD_TIMEOUT_S"
+    )
+
+    @property
+    def api_keys(self) -> list[str]:
+        return [k.strip() for k in self.apify_api_keys.split(",") if k.strip()]
+
+    @property
+    def max_usd(self) -> float:
+        """The most one search costs: every scanned reel charged."""
+        return self.scan * self.usd_per_reel + self.usd_per_run
+
+
+class PicturesSettings(BaseSettings):
+    """/pictures: presets (a prompt + reference images) run through Nano
+    Banana Pro with each picture to recreate."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # A preset's reference images; a run also sends the picture to recreate,
+    # and the model caps the total (kie.ai 8, RunningHub 10).
+    preset_max_images: int = Field(
+        default=10, ge=1, le=20, validation_alias="OFM_PICTURES_PRESET_MAX_IMAGES"
+    )
+    # Pictures one submit may recreate (one run each).
+    max_pictures: int = Field(
+        default=20, ge=1, le=100, validation_alias="OFM_PICTURES_MAX_PICTURES"
+    )
+    # Output size, in the model's own spelling ("2K" / "2k"); user rule
+    # 2026-11-01: 2K output, best-quality input (references go up untouched
+    # under the model's own limit, `ModelSpec.max_upload_bytes`).
+    resolution: str = Field(default="2K", validation_alias="OFM_PICTURES_RESOLUTION")
+    # Every run's shape unless its preset fixes another; "" = the picture's
+    # own (user rule 2026-11-01: all pictures 3:4).
+    aspect_ratio: str = Field(
+        default="3:4", validation_alias="OFM_PICTURES_ASPECT_RATIO"
     )

@@ -1,9 +1,12 @@
 {% import "_asset_media.html" as am %}
+{% import "components/ui.html" as ui %}
 {% for a in assets %}
 <div class="result-item">
     {{ am.asset_media(a) }}
     {% if a.source %}<p class="source">{{ a.source }}</p>{% endif %}
     <p class="filename">{{ a.name }}</p>
-    <a href="{{ a.download_url }}" download="{{ a.download_name }}" data-local-fallback-url="{{ a.local_fallback_url or '' }}" class="download-btn">⬇ Download</a>
+    <div class="result-actions">
+        {{ ui.button("Download", href=a.download_url, icon="download", hook="download-btn", attrs={"download": a.download_name, "data-local-fallback-url": a.local_fallback_url or ""}) }}
+    </div>
 </div>
 {% endfor %}

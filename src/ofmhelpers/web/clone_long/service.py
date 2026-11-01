@@ -31,7 +31,7 @@ from pydantic import BaseModel, ConfigDict
 from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.aigenproviders import runner, tasks
-from ofmhelpers.aigenproviders.base import get_provider
+from ofmhelpers.aigenproviders.base import get_provider, uploader
 from ofmhelpers.aigenproviders.catalog import get_spec
 from ofmhelpers.aigenproviders.errors import ProviderGenerationError
 from ofmhelpers.config import settings
@@ -372,7 +372,8 @@ class LongClone:
         client = get_provider(p.provider, api_key)
         chain = str(chain_image) if chain_image is not None else None
         payload = spec.request(
-            self.target.values(p, piece.length, str(cut), chain), client.upload
+            self.target.values(p, piece.length, str(cut), chain),
+            uploader(client, spec),
         )
 
         def preview(urls: list[str]) -> None:

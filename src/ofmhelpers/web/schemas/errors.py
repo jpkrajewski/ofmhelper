@@ -35,20 +35,31 @@ REASONS = (
     ErrorReason(label="Too long", pattern=r"^too long"),
     ErrorReason(label="Stopped", pattern=r"^stopped\b"),
     ErrorReason(label="Export failed", pattern=r"^export failed"),
+    # /viral searches (ofmhelpers.viral).
+    ErrorReason(label="Profile not found", pattern=r"^profile not found"),
+    ErrorReason(label="No reels", pattern=r"^no reels"),
+    ErrorReason(label="No Apify credit", pattern=r"^no apify credit"),
     # Paid and still being made: recovery finishes it (aigenproviders/runner).
     ErrorReason(label="Still generating", pattern=r"still generating"),
     ErrorReason(
         label="No credits",
-        pattern=r"credits? insufficient|insufficient (credit|balance)|\b402\b",
+        pattern=r"credits? insufficient|insufficient (credit|balance)"
+        r"|credit balance is too low|not.enough.wallet|insufficient.funds|\b402\b",
     ),
     ErrorReason(
         label="Wrong API key",
         pattern=r"\b401\b|unauthori[sz]ed|invalid (api )?key|api key",
     ),
     ErrorReason(
-        label="Flagged content", pattern=r"nsfw|sensitive|flagged|content polic|moderat"
+        label="Flagged content",
+        pattern=r"nsfw|sensitive|flagged|content polic|moderat|prohibited"
+        r"|content verification",
     ),
-    ErrorReason(label="Rate limited", pattern=r"\b429\b|rate.?limit|too many requests"),
+    ErrorReason(
+        label="Rate limited",
+        pattern=r"\b429\b|rate.?limit|too many requests|queue.maxed|instance.maxed"
+        r"|concurrency limit",
+    ),
     ErrorReason(label="Timed out", pattern=r"time ?out|timed out"),
     ErrorReason(
         label="Input out of range", pattern=r"out of range|must be between|\b422\b"

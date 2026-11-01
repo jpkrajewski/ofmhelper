@@ -196,6 +196,27 @@ def test_ended_without_output_is_failed_with_a_reason(wire, provider, body, erro
     assert error in state.error
 
 
+def test_a_generation_refused_for_credit_is_out_of_credits(wire, provider):
+    """The words Higgsfield ended three prod /clone runs with (2026-10-31)."""
+    wire(_status_routes({"status": "failed", "error": _LOW_BALANCE}))
+
+    state = provider.status("r1")
+
+    assert (state.state, state.no_credits) == ("failed", True)
+    assert state.error == _LOW_BALANCE
+
+
+def test_any_other_failure_is_not_out_of_credits(wire, provider):
+    wire(_status_routes({"status": "failed", "error": "bad input video"}))
+    assert provider.status("r1").no_credits is False
+
+
+_LOW_BALANCE = (
+    "Your credit balance is too low to complete this request. "
+    "Please top up your balance and try again."
+)
+
+
 @pytest.mark.parametrize(
     "body",
     [

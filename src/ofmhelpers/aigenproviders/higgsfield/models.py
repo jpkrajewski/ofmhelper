@@ -65,3 +65,12 @@ class HiggsfieldRequest(_Lenient):
         if self.status == "canceled":
             return "canceled"
         return self.error or "generation failed"
+
+    @property
+    def out_of_credits(self) -> bool:
+        """Failed for want of credits: accepted, then refused (prod
+        2026-10-31: "Your credit balance is too low to complete this
+        request. Please top up your balance and try again.")."""
+        return (
+            self.status == "failed" and "credit balance" in (self.error or "").lower()
+        )

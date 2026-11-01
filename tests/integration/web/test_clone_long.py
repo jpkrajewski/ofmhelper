@@ -118,7 +118,9 @@ def _provider(monkeypatch, provider_cls, generated: Path, sent: list, status=Non
         dest.write_bytes(generated.read_bytes())
         return dest
 
-    monkeypatch.setattr(provider_cls, "upload", lambda _self, p: f"https://up/{p.name}")
+    monkeypatch.setattr(
+        provider_cls, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+    )
     monkeypatch.setattr(provider_cls, "submit", submit)
     monkeypatch.setattr(
         provider_cls,
@@ -575,7 +577,7 @@ def test_a_wrong_key_fails_the_run_and_leaves_no_cut_pieces(
     sent = []
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), sent)
 
-    def upload(_self, _path):
+    def upload(_self, _path, max_bytes=None):
         provider = "kie.ai"
         raise ProviderAuthError(provider)
 
@@ -704,7 +706,7 @@ def test_a_big_videos_pieces_go_up_at_most_the_piece_size(
     _provider(monkeypatch, KieProvider, _clip(tmp_path / "g.mp4", 2), [])
     pieces = []
 
-    def upload(_self, path):
+    def upload(_self, path, max_bytes=None):
         if path.name.startswith("piece_"):
             pieces.append(_size(path))
         return f"https://up/{path.name}"

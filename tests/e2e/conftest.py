@@ -104,6 +104,8 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "BOUNCY_API_KEY_ADMIN": BOUNCY_FAKE_KEY,
         # /clone-links' AI check: the Gemini fake's key (llm/gemini/fake.py).
         "GEMINI_API_KEY": GEMINI_FAKE_KEY,
+        # /viral's Apify account: any key but the fake's broke/wrong ones.
+        "APIFY_API_KEYS": "fake-apify-key",
         # Both sign-in providers set up; under OFM_FAKE_EXTERNALS their
         # consent is /auth/fake-consent and their token endpoints fakes.
         "OFM_GOOGLE_CLIENT_ID": "e2e-google-client",

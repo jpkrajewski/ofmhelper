@@ -13,6 +13,7 @@ looks signed in. The fix has two halves, both covered here:
 """
 
 import os
+from urllib.parse import parse_qs, urlsplit
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
@@ -43,15 +44,50 @@ def test_fetch_gets_401_json_not_a_redirect():
 
     assert r.status_code == 401
     body = r.json()
-    assert body["login_url"].startswith("/login?next=")
+    assert body["login_url"].startswith("/login")
 
 
-def test_fetch_401_login_url_preserves_the_target_path():
-    """login_url has to send the user back where they were, not just "/"."""
-    r = _request("/generate", {"sec-fetch-mode": "cors"})
+def test_fetch_401_sends_login_back_to_the_calling_page():
+    """Prod 2026-10-27..31: the gallery poll's 401 named its own URL, so
+    signing in again landed on /clone/gallery/latest, a bare fragment."""
+    r = _request(
+        "/clone/gallery/latest",
+        {"sec-fetch-mode": "cors", "referer": "http://testserver/clone"},
+    )
 
     assert r.status_code == 401
-    assert r.json()["login_url"] == "/login?next=/generate"
+    assert r.json()["login_url"] == "/login?next=/clone"
+
+
+def test_fetch_401_without_a_calling_page_lands_on_home():
+    """No Referer, or another site's: never the fetch URL, login's default."""
+    bare = _request("/clone/gallery/latest", {"sec-fetch-mode": "cors"})
+    foreign = _request(
+        "/clone/gallery/latest",
+        {"sec-fetch-mode": "cors", "referer": "https://elsewhere.example/clone"},
+    )
+
+    assert bare.json()["login_url"] == "/login"
+    assert foreign.json()["login_url"] == "/login"
+
+
+def test_signing_in_from_a_fetch_401_returns_to_the_page_with_its_query():
+    """The whole round trip: 401 -> /login -> sign in -> the calling page,
+    its query (several values, an `&`) intact."""
+    page = "/clone?video=a.mp4&video=b.mp4"
+    r = _request(
+        "/clone/gallery/latest",
+        {"sec-fetch-mode": "cors", "referer": f"http://testserver{page}"},
+    )
+    next_url = parse_qs(urlsplit(r.json()["login_url"]).query)["next"][0]
+
+    signed_in = TestClient(app).post(
+        "/login",
+        data={"password": "test-admin", "next": next_url},
+        follow_redirects=False,
+    )
+
+    assert (signed_in.status_code, signed_in.headers["location"]) == (303, page)
 
 
 def test_page_navigation_still_redirects_to_login():
