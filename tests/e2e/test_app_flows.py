@@ -376,7 +376,7 @@ def test_clone_long_prices_a_long_16_9_video_before_it_runs(
     va: Session, tmp_path: Path
 ):
     """/clone-long: a 32 s video is 3 pieces, priced for all 32 s at kie.ai's
-    720P rate (32.78 credits a second, $0.005 a credit)."""
+    720P rate (32 credits a second, $0.005 a credit)."""
     video = tmp_path / "long.mp4"
     subprocess.run(
         [
@@ -406,7 +406,7 @@ def test_clone_long_prices_a_long_16_9_video_before_it_runs(
         str(video)
     )
 
-    expect(quote).to_have_text("32 s · 3 pieces · $5.24 · 1,049 credits")
+    expect(quote).to_have_text("32 s · 3 pieces · $5.12 · 1,024 credits")
     va.page.select_option("#clone-long-resolution", "1080P")
     expect(quote).to_contain_text("3 pieces")
     assert va.js_errors == []
@@ -457,7 +457,7 @@ def test_clone_long_start_queues_a_card_that_fails_cleanly_on_a_wrong_key(
 
 
 def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Path]):
-    # 3 s + 5 s of video at kie.ai's rates (32.78 / 64 credits a second).
+    # 3 s + 5 s of video at kie.ai's rates (32 / 64 credits a second).
     va.goto("/clone")
     va.page.select_option("#provider-select", "kie")
     panel = va.page.locator("#clone-cost")
@@ -471,25 +471,25 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
     expect(va.page.locator("#clone-cost-summary")).to_have_text(
         "2 runs · 8.0 s of video"
     )
-    expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.31")
-    expect(va.page.locator("#clone-cost-credits")).to_have_text("262 credits")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.28")
+    expect(va.page.locator("#clone-cost-credits")).to_have_text("256 credits")
     expect(va.page.locator("#clone-cost-rate")).to_have_text(
-        "720P · $0.164 per video second"
+        "720P · $0.16 per video second"
     )
 
     va.page.select_option("#clone-resolution", "1080P")
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$2.56")
 
-    # Higgsfield: Wan 3.0 at 60% off, measured from a real run.
+    # Higgsfield: measured on prod runs, $0.433 per source second at 720P.
     va.page.select_option("#provider-select", "higgsfield")
-    expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.28")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$6.93")
     va.page.select_option("#clone-resolution", "720P")
-    expect(va.page.locator("#clone-cost-usd")).to_have_text("$0.64")
-    expect(va.page.locator("#clone-cost-credits")).to_have_text("10.2 credits")
+    expect(va.page.locator("#clone-cost-usd")).to_have_text("$3.47")
+    expect(va.page.locator("#clone-cost-credits")).to_have_text("55.4 credits")
     expect(va.page.locator("#clone-cost-rate")).to_have_text(
-        "720P · $0.08 per video second"
+        "720P · $0.433 per video second"
     )
-    expect(va.page.locator("#clone-cost-note")).to_contain_text("Higgsfield")
+    expect(va.page.locator("#clone-cost-note")).to_contain_text("Measured on your runs")
     va.page.select_option("#provider-select", "kie")
     va.page.select_option("#clone-resolution", "1080P")
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$2.56")

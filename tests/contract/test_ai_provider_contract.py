@@ -1,12 +1,15 @@
-"""kie.ai, Higgsfield and RunningHub behind the shared interface, on their fakes and on
-the real APIs: a wrong key is refused the same way everywhere (free), and
-the cheapest job runs end to end (its real side is marked `paid`: a few
-cents per provider, run only by `scripts/test.sh paid`; keys from .env)."""
+"""kie.ai, Higgsfield, RunningHub and Elyum behind the shared interface, on
+their fakes and on the real APIs: a wrong key is refused the same way
+everywhere (free), and the cheapest job runs end to end (its real side is
+marked `paid`: a few cents per provider, run only by `scripts/test.sh paid`;
+keys from .env)."""
 
 import pytest
 from PIL import Image
 
 from ofmhelpers.aigenproviders.catalog import get_spec
+from ofmhelpers.aigenproviders.elyum.fake import FAKE_KEY as ELYUM_FAKE_KEY
+from ofmhelpers.aigenproviders.elyum.provider import ElyumProvider
 from ofmhelpers.aigenproviders.errors import ProviderAuthError
 from ofmhelpers.aigenproviders.higgsfield.fake import FAKE_KEY as HF_FAKE_KEY
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
@@ -21,6 +24,7 @@ PROVIDERS = {
     "kie": (KieProvider, BAD_KEY, KIE_FAKE_KEY),
     "higgsfield": (HiggsfieldProvider, f"{BAD_KEY}:{BAD_KEY}", HF_FAKE_KEY),
     "runninghub": (RunningHubProvider, BAD_KEY, RH_FAKE_KEY),
+    "elyum": (ElyumProvider, f"ek_live_{BAD_KEY}", ELYUM_FAKE_KEY),
 }
 # A task id nobody has, in each provider's own format: RunningHub's are
 # numeric, and it refuses a UUID with 1007 "failed to parse request body"
@@ -29,13 +33,17 @@ UNKNOWN_TASK = {
     "kie": "00000000-0000-0000-0000-000000000000",
     "higgsfield": "00000000-0000-0000-0000-000000000000",
     "runninghub": "1904152012345678901",
+    "elyum": "g_000000000000",
 }
-# Presumed cheapest image model per provider (Lite / Turbo tier).
+# Presumed cheapest model per provider (Lite / Turbo tier); Elyum's
+# catalog has video only: Wan 3.0 at its shortest and lowest, $0.08.
 CHEAPEST = {
     "kie": "kie:seedream/5-lite-text-to-image",
     "higgsfield": "higgsfield:z-image/turbo",
     "runninghub": "runninghub:seedream-v5-lite/text-to-image",
+    "elyum": "elyum:alibaba/wan-3.0/text-to-video",
 }
+CHEAPEST_SETTINGS = {"elyum": {"resolution": "480p", "duration": 2, "audio": False}}
 
 
 @pytest.fixture(params=list(PROVIDERS))
@@ -60,9 +68,11 @@ def test_a_wrong_key_is_refused_at_the_first_upload(backend, provider_name, tmp_
 def _cheapest_job(cls, key: str) -> None:
     assert key, f"no {cls.label} key in .env"
     spec = get_spec(CHEAPEST[cls.name])
-    paths = generate(
-        cls(key), spec, {"prompt": "a single red apple on white"}, "contract-job"
-    )
+    payload = {
+        "prompt": "a single red apple on white",
+        **CHEAPEST_SETTINGS.get(cls.name, {}),
+    }
+    paths = generate(cls(key), spec, payload, "contract-job")
     assert paths
     assert all(p.exists() and p.stat().st_size > 0 for p in paths)
 

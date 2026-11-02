@@ -19,6 +19,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.log import get_logger
@@ -29,7 +30,7 @@ from ofmhelpers.web import drive_folders
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.previews import PREVIEW_ERRORS
 from ofmhelpers.web.schemas.drive import DriveCard
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.web.stores.jobs import create_job, get_job, run_job, running_jobs
 from ofmhelpers.web.stores.users import refresh_token
 from ofmhelpers.web.templates_config import render
 
@@ -139,15 +140,35 @@ def _new_job(uid: int, login_id: int, label: str) -> str:
     return create_job(TASK, {"label": label, "login": login_id}, actor=str(uid))
 
 
+class FolderProgress(BaseModel):
+    """A phone card's trials: copies made, reels in all, Generate running."""
+
+    ready: int
+    total: int
+    making: bool
+
+
+def _progress(state: trial_state.FolderState, running: set[str]) -> FolderProgress:
+    return FolderProgress(
+        ready=len(state.ready),
+        total=len(state.reels),
+        making=state.job_id in running,
+    )
+
+
 @router.get("")
 def trials_page(request: Request):
+    """The phone cards. A card whose Generate runs keeps a way into its
+    folder ("Making… 0 of 21"): with nothing made yet it showed no button,
+    as if the click had been lost (prod 2026-11-02)."""
     uid, scope = _actor(request)
     board = drive_folders.board(owner=scope, viewer=uid, live=False)
-    made = {
-        c.target.login_id: len(trial_state.load(uid, c.target.login_id).ready)
+    running = {j.id for j in running_jobs() if j.actor == str(uid)}
+    progress = {
+        c.target.login_id: _progress(trial_state.load(uid, c.target.login_id), running)
         for c in board.cards
     }
-    return render(request, "trials.html", board=board, made=made)
+    return render(request, "trials.html", board=board, progress=progress)
 
 
 @router.get("/{login_id}")

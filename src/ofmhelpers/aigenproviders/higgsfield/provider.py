@@ -55,6 +55,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
 from ofmhelpers.utils.image_fit import FITTABLE_SUFFIXES, fitted
+from ofmhelpers.utils.video_mp4 import CONVERTIBLE_SUFFIXES, as_mp4
 
 logger = get_logger(__name__)
 
@@ -190,6 +191,27 @@ def _needs_jpeg(path: Path) -> bool:
     )
 
 
+def _needs_mp4(path: Path) -> bool:
+    """A video Higgsfield does not take that an MP4 copy stands in for (an
+    iPhone .mov failed a /clone run on prod, 2026-11-02)."""
+    return path.suffix.lower() in CONVERTIBLE_SUFFIXES
+
+
+def _mp4_copy(path: Path) -> Path:
+    """`path` as an MP4 (`utils.video_mp4`). A video ffmpeg cannot read is
+    the input's fault: the job fails with a plain reason, nothing is paid."""
+    try:
+        return as_mp4(
+            path,
+            Path(settings.aigen.out_dir) / "higgsfield" / "mp4",
+            settings.higgsfield.video_convert_timeout_s,
+        )
+    except (RuntimeError, OSError, ValueError) as exc:
+        logger.warning("higgsfield: %s not converted to MP4", path, exc_info=True)
+        msg = f"Could not turn {path.name} into an MP4 video"
+        raise ProviderInputError(msg) from exc
+
+
 def _submit_key(job_key: str, model_id: str, payload: Payload) -> str:
     """One generation intent (docs: concepts/idempotency): the job's key plus
     a digest of exactly what is sent. A resend of the same request gets the
@@ -233,9 +255,11 @@ class HiggsfieldProvider(Provider):
         cache and its lock are keyed by `path` itself and looked up first: a
         batch makes one shrunk copy and one upload, and a resumed run whose
         subject is gone still gets its URL. An image over `ref_image_limits`
-        or in a format Higgsfield does not take goes up as a JPEG copy."""
+        or in a format Higgsfield does not take goes up as a JPEG copy; a
+        .mov/.webm/.mkv/.m4v video as an MP4 copy."""
         as_jpeg = _needs_jpeg(path)
-        if not as_jpeg and _content_type(path) not in UPLOAD_TYPES:
+        to_mp4 = _needs_mp4(path)
+        if not (as_jpeg or to_mp4) and _content_type(path) not in UPLOAD_TYPES:
             msg = (
                 f"Higgsfield takes JPEG/PNG/WebP/GIF images, WAV audio and MP4 "
                 f"video -- not {path.name}"
@@ -249,11 +273,15 @@ class HiggsfieldProvider(Provider):
             if cached is not None and _live(cached):
                 return cached
             delete_text(cache_key)
-            sent = fitted(
-                path,
-                Path(settings.aigen.out_dir) / "higgsfield" / "fitted",
-                settings.higgsfield.ref_image_limits.with_max_bytes(max_bytes),
-                jpeg=as_jpeg,
+            sent = (
+                _mp4_copy(path)
+                if to_mp4
+                else fitted(
+                    path,
+                    Path(settings.aigen.out_dir) / "higgsfield" / "fitted",
+                    settings.higgsfield.ref_image_limits.with_max_bytes(max_bytes),
+                    jpeg=as_jpeg,
+                )
             )
             with _mapped_errors("upload"):
                 url = self.client.upload_file(sent)
