@@ -170,10 +170,6 @@ class TrackedAccount(BaseModel):
         return AccountStatus.ACTIVE
 
     @property
-    def platform_label(self) -> str:
-        return get_platform(self.platform).label
-
-    @property
     def profile_url(self) -> str:
         return get_platform(self.platform).profile_url(self.handle)
 

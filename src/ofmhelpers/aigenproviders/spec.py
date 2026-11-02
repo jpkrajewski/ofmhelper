@@ -41,8 +41,6 @@ _SCALAR_TYPES: dict[str, type] = {
     "number": float,
     "boolean": bool,
 }
-# Shown as a textarea rather than a one-line input.
-_LONG_TEXT_FIELDS = frozenset({"prompt", "negative_prompt"})
 
 
 class FieldSchema(BaseModel):
@@ -113,10 +111,6 @@ class FormField(BaseModel):
     minimum: float | None = None
     maximum: float | None = None
     description: str | None = None
-
-    @property
-    def multiline(self) -> bool:
-        return self.name in _LONG_TEXT_FIELDS
 
 
 def _label(name: str, field: FieldSchema) -> str:

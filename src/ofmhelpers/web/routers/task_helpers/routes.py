@@ -1,8 +1,8 @@
-"""The three GET endpoints every background-job tool exposes, registered once.
+"""The five GET endpoints every background-job tool exposes, registered once.
 
 A tool router is then its own page and `/run`, plus one `add_job_routes` call:
-the status page, its polling payload and the result download all live here,
-under the router's own prefix.
+the status page, its polling payload, the result download and the result's
+preview and poster all live here, under the router's own prefix.
 """
 
 from collections.abc import Callable

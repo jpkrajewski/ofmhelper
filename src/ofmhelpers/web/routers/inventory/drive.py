@@ -99,7 +99,7 @@ def thumb(request: Request, login_id: int, file_id: FileId) -> Response:
             login_id, file_id, AuthMiddleware.scope(request)
         )
     except (DriveError, SignInError) as exc:
-        logger.warning("drive: preview of %s failed: %s", file_id, exc)
+        logger.warning("drive: preview of %s failed: %s", file_id, exc, exc_info=True)
         raise HTTPException(status_code=404, detail="No preview") from exc
     if found is None:
         raise HTTPException(status_code=404, detail="No preview yet")

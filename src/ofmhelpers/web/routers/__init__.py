@@ -9,9 +9,9 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `tracking/`   -- social accounts' numbers over time (/accounts, every
   platform of `ofmhelpers.socials`) and their short links' clicks (/links,
   every provider of `ofmhelpers.links`).
-- `inventory/`  -- what the agency owns and signs in with (/phones: the
-  physical phones and their logins; /drive: their Instagram accounts'
-  folders in the shared Google Drive).
+- `inventory/`  -- what each person owns and signs in with (/phones: their
+  physical phones and logins; /drive: those Instagram accounts' folders in
+  the owner's own Google Drive).
 - `image_tools/` -- local image edits with no external service (character
   sheet, admin only).
 - `video_tools/` -- local video edits with no external service (uniqify, repurpose).
@@ -27,12 +27,13 @@ POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
 reference-file browser every generation form uses), and `task_helpers` (the
 upload/job/serve plumbing those routers are built out of).
 
-`ROUTERS` below is the single registration list -- `web/main.py` loops over
-it, so **adding a page means one import and one entry here**, and main.py is
-never touched.
+`ROUTERS` below is the registration list -- `web/main.py` loops over it, so
+**adding a page means one import and one entry here** (plus its `NavItem` in
+`web/schemas/nav.py`; a background-job tool also gets its `Tool` in
+`registry.py`), and main.py is never touched.
 """
 
-from ofmhelpers.web.routers import account, apply, auth, cookies, jobs, refs
+from ofmhelpers.web.routers import account, apply, auth, cookies, home, jobs, refs
 from ofmhelpers.web.routers.admin import action_log, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.admin import styleguide as admin_styleguide
@@ -54,6 +55,7 @@ from ofmhelpers.web.routers.video_tools import repurpose, trials, uniqify
 # share a prefix -- so it follows the package grouping above and this list
 # reads like the directory listing.
 ROUTERS = [
+    home.router,
     auth.router,
     account.router,
     cookies.router,

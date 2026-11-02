@@ -19,7 +19,6 @@ earliest-added watcher who has uploaded any (`stores.cookies.for_watched`),
 else none -- the one place a user's login works for others' lists too.
 """
 
-import asyncio
 import random
 import time
 
@@ -259,13 +258,3 @@ def queue_due_scans() -> list[str]:
         logger.info("rescanning %d watched profile(s)", len(due))
         enqueue(scan_all, due)
     return due
-
-
-async def reel_watch_loop() -> None:
-    while True:
-        try:
-            await asyncio.to_thread(queue_due_scans)
-        except Exception:
-            # A broken sweep must never take the loop down -- log and move on.
-            logger.exception("reel watch sweep failed")
-        await asyncio.sleep(settings.instagram.rescan_check_interval_s)

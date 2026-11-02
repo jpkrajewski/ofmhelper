@@ -16,7 +16,6 @@ dependencies = [
     "pillow>=12.3.0",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
-    "pytest>=9.1.1",
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
     "uvicorn>=0.54.0",
@@ -71,6 +70,8 @@ dev = [
     # Browser for tests/e2e (uv run playwright install chromium).
     "playwright>=1.64.0",
     "pre-commit>=4.6.1",
+    # Test-only: the runtime image installs `--no-dev` and nothing in src/ imports it.
+    "pytest>=9.1.1",
     "pytest-json-report>=1.5.0",
     "pytest-repeat>=0.9.4",
     "pytest-socket>=0.8.1",

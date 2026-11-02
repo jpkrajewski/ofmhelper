@@ -1,5 +1,6 @@
 """Gallery previews for jobs that finished before previews existed (or while
-the previews worker was down): one pass at startup queues every finished job
+the previews worker was down): one pass at startup (web/sweeps.py) queues
+every finished job
 whose previews are missing, newest first, so the cards people look at first
 are ready first. See web/previews.py.
 
@@ -10,10 +11,6 @@ jobs. Read-only on the history: it lists jobs unhealed
 (`list_finished_jobs`), so a job whose files are missing is skipped, never
 deleted.
 """
-
-import asyncio
-
-from redis.exceptions import RedisError
 
 from ofmhelpers.cache import PREVIEWS_QUEUE, enqueue_to, get_redis
 from ofmhelpers.config import settings
@@ -42,10 +39,3 @@ def backfill() -> int:
         queued += 1
     logger.info("preview backfill: %d jobs queued", queued)
     return queued
-
-
-async def preview_backfill_once() -> None:
-    try:
-        await asyncio.to_thread(backfill)
-    except RedisError:
-        logger.warning("preview backfill skipped: Redis unavailable", exc_info=True)

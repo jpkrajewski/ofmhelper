@@ -1,7 +1,7 @@
 """
 Shared plumbing for every "upload files -> run in background -> download
-result" router (clean-images, download-videos, kling3, nanobanana,
-seedance, ...).
+result" router (/ai, /clone, /clone-long, /download-media, /clean-images,
+/uniqify, /character-sheet and the old per-model tools' job pages).
 
 Each router should only need to define its own processing function and
 wire it through these helpers -- everything else lives here once, split by
@@ -12,7 +12,7 @@ what it does:
 - `responses.py`  the status/polling payloads every tool renders
 - `serving.py`    handing a stored file back to the browser
 - `routes.py`     the status page / polling / download endpoints of a job
-- `download_names.py`  what a downloaded result is saved as
+- `web/download_names.py` (re-exported)  what a downloaded result is saved as
 
 Import from this package, not the submodules: every tool router imports from
 here, and which submodule a helper lives in is not their business.

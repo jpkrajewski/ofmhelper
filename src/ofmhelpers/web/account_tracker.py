@@ -23,7 +23,6 @@ the logged-out view, marked `limited` (the /accounts banner asks them for
 their login).
 """
 
-import asyncio
 import random
 import time
 from datetime import datetime, timedelta
@@ -241,14 +240,3 @@ def daily_sweep_due(now: datetime | None = None) -> bool:
     run_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     run_at += timedelta(seconds=jitter)
     return now >= run_at
-
-
-async def account_tracker_loop() -> None:
-    while True:
-        try:
-            if daily_sweep_due():
-                await asyncio.to_thread(queue_due_scans)
-        except Exception:
-            # A broken sweep must never take the loop down -- log and move on.
-            logger.exception("account tracker sweep failed")
-        await asyncio.sleep(settings.accounts.rescan_check_interval_s)

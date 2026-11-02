@@ -66,16 +66,6 @@ class UploadTarget(BaseModel):
     followers: int | None = None
 
     @property
-    def waiting_label(self) -> str:
-        """What waits in its folder: "No reels yet", "2 reels in the folder";
-        "" before the folder's first /drive read."""
-        if self.waiting is None:
-            return ""
-        if self.waiting == 0:
-            return "No reels yet"
-        return f"{self.waiting} reel{'' if self.waiting == 1 else 's'} in the folder"
-
-    @property
     def followers_label(self) -> str:
         """ "12.3k followers"; "" when not tracked or not scanned yet."""
         if self.followers is None:
@@ -171,10 +161,6 @@ class DriveCard(BaseModel):
     @property
     def account_url(self) -> str | None:
         return folder_url(self.account_folder_id) if self.account_folder_id else None
-
-    @property
-    def posted_url(self) -> str | None:
-        return folder_url(self.posted_folder_id) if self.posted_folder_id else None
 
     @property
     def waiting(self) -> list[DriveFile]:

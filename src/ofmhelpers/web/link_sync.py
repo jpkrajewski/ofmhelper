@@ -20,7 +20,6 @@ Provider-agnostic: everything provider-specific is behind
 
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -243,13 +242,3 @@ def sync_now(user_id: int, provider: str | None = None) -> list[tuple[int, str]]
             if (provider is None or key == provider) and store.api_key(user_id, key)
         ]
     )
-
-
-async def link_sync_loop() -> None:
-    while True:
-        try:
-            await asyncio.to_thread(queue_due_syncs)
-        except Exception:
-            # A broken sweep must never take the loop down -- log and move on.
-            logger.exception("link sync sweep failed")
-        await asyncio.sleep(settings.links.sync_check_interval_s)

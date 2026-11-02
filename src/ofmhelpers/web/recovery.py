@@ -29,7 +29,6 @@ checked again. Provider-agnostic: a new provider is recovered without a
 line here.
 """
 
-import asyncio
 import time
 
 from ofmhelpers.aigenproviders import tasks
@@ -53,8 +52,6 @@ from ofmhelpers.web.stores.jobs import (
 
 logger = get_logger(__name__)
 
-SWEEP_INTERVAL_S = settings.web.recovery_sweep_interval_s
-
 INTERRUPTED = "Interrupted by a restart: run it again."
 
 
@@ -66,12 +63,6 @@ def _cut_off(job: Job, active: set[str] | None) -> bool:
         and job.id not in active
         and time.time() - job.created_at >= settings.web.recovery_orphan_grace_s
     )
-
-
-def settle(task: tasks.ProviderTask, active: set[str] | None = None) -> str:
-    """Settle one remembered request; what happened, for the log and tests.
-    `active`: the job ids workers hold or the queue has (None: unknown)."""
-    return settle_job([task], active)
 
 
 def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
@@ -139,8 +130,9 @@ def fail_cut_off(active: set[str] | None, remembered: set[str]) -> dict[str, str
 
 
 def run_recovery_once() -> dict[str, str]:
-    """One sweep: job id -> outcome. Blocking -- call via asyncio.to_thread
-    from the event loop. One bad task never stops the sweep."""
+    """One sweep: job id -> outcome. Blocking -- web/sweeps.py runs it in a
+    thread every `recovery_sweep_interval_s`. One bad task never stops the
+    sweep."""
     outcomes = {}
     active = active_job_ids()
     remembered = tasks.remembered()
@@ -169,13 +161,3 @@ def run_recovery_once() -> dict[str, str]:
     except Exception:
         logger.exception("recovery could not resume /clone-links reviews")
     return outcomes
-
-
-async def recovery_loop() -> None:
-    while True:
-        try:
-            await asyncio.to_thread(run_recovery_once)
-        except Exception:
-            # A broken sweep (Redis down) must never take the loop down.
-            logger.exception("recovery sweep failed")
-        await asyncio.sleep(SWEEP_INTERVAL_S)
