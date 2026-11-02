@@ -296,6 +296,22 @@ def test_a_second_generate_while_one_runs_starts_nothing(drive, made):
     assert "generating…" in page
 
 
+def test_a_phone_card_whose_generate_runs_still_opens_its_folder(drive, made):
+    """Prod 2026-11-02: Generate clicked, back to /trials, nothing made yet:
+    the card had no button left, as if the click was lost."""
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.get(f"/trials/{login}")
+    job_id = _running_job()
+    trial_state.change(users.agency_id(), login, lambda s: setattr(s, "job_id", job_id))
+
+    page = client.get("/trials").text
+
+    assert page.count(f'href="/trials/{login}"') == 2  # the phone + the button
+    assert "Making… 0 of 2" in page
+    assert "See generated" not in page
+
+
 def test_a_caption_applies_while_generate_trials_runs_on_the_others(drive, made):
     """The user fixes a made copy while 27 more are being made: only a reel
     being made itself is blocked."""

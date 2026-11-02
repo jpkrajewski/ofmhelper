@@ -1,0 +1,96 @@
+[
+  {
+    "model_id": "alibaba/wan-3.0/reference-to-video",
+    "label": "Wan 3.0 · Reference to video",
+    "family": "Wan 3.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "required": ["prompt"],
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "title": "Prompt",
+          "description": "Cite inputs as @image1, @video1 in the order sent."
+        },
+        "image_urls": {
+          "type": "array",
+          "items": {"type": "string"},
+          "maxItems": 10,
+          "title": "Reference images",
+          "x-media": "image",
+          "x-role": "reference"
+        },
+        "video_urls": {
+          "type": "array",
+          "items": {"type": "string"},
+          "maxItems": 5,
+          "title": "Reference videos",
+          "x-media": "video",
+          "x-role": "reference"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": ["480p", "720p", "1080p"],
+          "default": "1080p",
+          "title": "Resolution"
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 30,
+          "default": 5,
+          "title": "Duration (sec)"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+          "title": "Aspect ratio"
+        },
+        "audio": {
+          "type": "boolean",
+          "default": true,
+          "title": "Sound"
+        }
+      }
+    }
+  },
+  {
+    "model_id": "alibaba/wan-3.0/text-to-video",
+    "label": "Wan 3.0 · Text to video",
+    "family": "Wan 3.0",
+    "kind": "video",
+    "input_schema": {
+      "type": "object",
+      "required": ["prompt"],
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {"type": "string", "title": "Prompt"},
+        "resolution": {
+          "type": "string",
+          "enum": ["480p", "720p", "1080p"],
+          "default": "1080p",
+          "title": "Resolution"
+        },
+        "duration": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 30,
+          "default": 5,
+          "title": "Duration (sec)"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+          "title": "Aspect ratio"
+        },
+        "audio": {
+          "type": "boolean",
+          "default": true,
+          "title": "Sound"
+        }
+      }
+    }
+  }
+]

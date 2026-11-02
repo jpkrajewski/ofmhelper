@@ -224,43 +224,46 @@ class WebSettings(BaseSettings):
         default=8, ge=1, validation_alias="OFM_CLONE_PROBE_WORKERS"
     )
     # The /clone form's live cost estimate: credits one clone run costs per
-    # second of its source video, by resolution. Measured from this
-    # account's Wan 3.0 history (2026-10-17: 81 runs at 720P, 14 at 1080P;
-    # kie.ai bills the output plus the reference video, so about twice its
-    # 16 / 32 credits a second). 480P has no runs yet: half of 720P, as on
-    # kie.ai's price list. JSON in the env var.
+    # second of its source video, by resolution. kie.ai's Wan 3.0 is 8 / 16
+    # / 32 credits per billed second (480P/720P/1080P; 720P = $0.08/s), billed
+    # = output + reference video, so twice that per source second (2026-10-17
+    # history: 81 runs at 720P averaged 32.78). JSON in the env var.
     clone_credits_per_video_s: dict[str, float] = Field(
-        default={"480P": 16.39, "720P": 32.78, "1080P": 64.0},
+        default={"480P": 16.0, "720P": 32.0, "1080P": 64.0},
         validation_alias="OFM_CLONE_CREDITS_PER_VIDEO_S",
     )
     # What one kie.ai credit costs in dollars: $50 buys 10,000.
     kie_usd_per_credit: float = Field(
         default=0.005, gt=0, validation_alias="OFM_KIE_USD_PER_CREDIT"
     )
-    # The same estimate on Higgsfield. Its Wan 3.0 list price is $0.05 /
-    # $0.10 / $0.20 per billed second (480p/720p/1080p), billed = output +
-    # reference video seconds, so about twice the source length; this
-    # account gets 60% off. Measured 2026-10-18: a 13.09 s source at 720p
-    # billed 26.09 s and cost $1.05, i.e. $0.04 a billed second.
+    # The same estimate on Higgsfield, measured on prod: the key saved
+    # 2026-11-02 19:49 UTC paid $29 for 7 Wan 3.0 runs at 720P with sound,
+    # 67 s of source in all = $0.433 per source second (6.93 credits at
+    # 16 credits = $1). The 60% discount measured 2026-10-18 ($0.04 a billed
+    # second) is gone. 480P/1080P: half/double, as on its price list.
     clone_hf_credits_per_video_s: dict[str, float] = Field(
-        default={"480P": 0.64, "720P": 1.28, "1080P": 2.56},
+        default={"480P": 3.46, "720P": 6.93, "1080P": 13.86},
         validation_alias="OFM_CLONE_HF_CREDITS_PER_VIDEO_S",
     )
     # What one Higgsfield credit costs in dollars: 16 credits = $1.
     hf_usd_per_credit: float = Field(
         default=0.0625, gt=0, validation_alias="OFM_HF_USD_PER_CREDIT"
     )
-    # The same estimate on RunningHub. Its Wan 3.0 price is not public (the
-    # price-preview endpoint needs a key): Alibaba's own Wan 3.0 list price
-    # until a run is measured -- 0.3 / 0.6 / 1.2 CNY per billed second
-    # (480P/720P/1080P, help.aliyun.com wan3-0-video), billed = output +
-    # reference video, about twice the source. In CNY per source second.
-    clone_rh_cny_per_video_s: dict[str, float] = Field(
-        default={"480P": 0.6, "720P": 1.2, "1080P": 2.4},
-        validation_alias="OFM_CLONE_RH_CNY_PER_VIDEO_S",
+    # The same estimate on RunningHub, in dollars per source second: its
+    # Wan 3.0 is $0.07 per billed second at 720P (user's account,
+    # 2026-11-02), billed = output + min(reference, 15) s, so twice that per
+    # source second. 480P/1080P: half/double, as Alibaba prices them.
+    clone_rh_usd_per_video_s: dict[str, float] = Field(
+        default={"480P": 0.07, "720P": 0.14, "1080P": 0.28},
+        validation_alias="OFM_CLONE_RH_USD_PER_VIDEO_S",
     )
-    rh_usd_per_cny: float = Field(
-        default=0.14, gt=0, validation_alias="OFM_RH_USD_PER_CNY"
+    # The same estimate on Elyum, in dollars per source second: Wan 3.0 is
+    # $0.0396 / $0.0792 / $0.1584 per second of clip + output (480p/720p/
+    # 1080p, elyum.ai/open/models/alibaba/wan-3.0, 2026-11-02: "the clip's
+    # seconds are always charged"), so twice that per source second.
+    clone_elyum_usd_per_video_s: dict[str, float] = Field(
+        default={"480P": 0.0792, "720P": 0.1584, "1080P": 0.3168},
+        validation_alias="OFM_CLONE_ELYUM_USD_PER_VIDEO_S",
     )
 
 
@@ -510,6 +513,12 @@ class HiggsfieldSettings(BaseSettings):
     ref_image_max_side: int = Field(
         default=8000, validation_alias="OFM_HF_REF_IMAGE_MAX_SIDE"
     )
+    # A reference video that is not MP4 (.mov, .webm) is converted before
+    # upload (utils/video_mp4.py). Remuxing H.264 takes seconds. Encoding a
+    # 60 s 4K HEVC iPhone clip on the 4 vCPU prod box takes minutes.
+    video_convert_timeout_s: int = Field(
+        default=900, validation_alias="OFM_HF_VIDEO_CONVERT_TIMEOUT_S"
+    )
 
     @property
     def ref_image_limits(self) -> ImageLimits:
@@ -551,6 +560,47 @@ class RunningHubSettings(BaseSettings):
     def ref_image_limits(self) -> ImageLimits:
         return ImageLimits(
             max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
+        )
+
+
+class ElyumSettings(BaseSettings):
+    """aigenproviders/elyum/ (elyum.ai public API, `ek_live_...` keys with
+    the generate + spend scopes). The admin's key pre-fills their form like
+    the other providers' keys; unset = the key field starts empty."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    api_key_admin: str | None = Field(
+        default=None, validation_alias="ELYUM_API_KEY_ADMIN"
+    )
+    base_url: str = Field(
+        default="https://api.elyum.ai", validation_alias="OFM_ELYUM_BASE_URL"
+    )
+    # One API call; an upload streams a whole reference video (<= 60 MB).
+    request_timeout_s: float = Field(
+        default=300, validation_alias="OFM_ELYUM_REQUEST_TIMEOUT_S"
+    )
+    # "Upload once and reuse the returned id"; its lifetime is not
+    # documented, so it is kept a day at most.
+    upload_cache_ttl_s: int = Field(
+        default=20 * 3600, validation_alias="OFM_ELYUM_UPLOAD_CACHE_TTL_S"
+    )
+    # Its file limit (POST /v1/files: 60 MB a file).
+    max_file_bytes: int = Field(
+        default=60 * 1000 * 1000, validation_alias="OFM_ELYUM_MAX_FILE_BYTES"
+    )
+    ref_image_max_side: int = Field(
+        default=8000, validation_alias="OFM_ELYUM_REF_IMAGE_MAX_SIDE"
+    )
+    # An .mkv/.m4v reference goes up as an MP4 copy (utils/video_mp4.py).
+    video_convert_timeout_s: int = Field(
+        default=900, validation_alias="OFM_ELYUM_VIDEO_CONVERT_TIMEOUT_S"
+    )
+
+    @property
+    def ref_image_limits(self) -> ImageLimits:
+        return ImageLimits(
+            max_bytes=self.max_file_bytes, max_side=self.ref_image_max_side
         )
 
 

@@ -131,7 +131,10 @@ class CloneTarget(BaseModel):
     images: str
     video: str
     audio: str
-    aspect: str = "aspect_ratio"
+    # Sent "adaptive" (the shape follows the video); None = left out, for a
+    # provider that has no "adaptive" and picks the shape from the inputs
+    # itself (Elyum).
+    aspect: str | None = "aspect_ratio"
     max_reference_s: int = 15
 
     @property
@@ -161,20 +164,27 @@ def clone_pricing() -> dict[str, ClonePrice]:
             credits_per_video_s=web.clone_credits_per_video_s,
             usd_per_credit=web.kie_usd_per_credit,
             max_reference_s=CLONE_TARGETS["kie"].max_reference_s,
-            note="From your Wan 3.0 history · $50 = 10,000 credits",
+            note="$0.08 a second at 720P, video and result both billed · $50 = 10,000 credits",
         ),
         "higgsfield": ClonePrice(
             credits_per_video_s=web.clone_hf_credits_per_video_s,
             usd_per_credit=web.hf_usd_per_credit,
             max_reference_s=CLONE_TARGETS["higgsfield"].max_reference_s,
-            note="Higgsfield list price at 60% off, measured on a real run · $1 = 16 credits",
+            note="Measured on your runs: $0.43 per second of video at 720P · $1 = 16 credits",
         ),
         "runninghub": ClonePrice(
-            credits_per_video_s=web.clone_rh_cny_per_video_s,
-            usd_per_credit=web.rh_usd_per_cny,
+            credits_per_video_s=web.clone_rh_usd_per_video_s,
+            usd_per_credit=1.0,
             max_reference_s=CLONE_TARGETS["runninghub"].max_reference_s,
-            note="Alibaba's Wan 3.0 list price, not yet measured on RunningHub",
-            unit="CNY",
+            note="$0.07 a second at 720P, video and result both billed",
+            unit="USD",
+        ),
+        "elyum": ClonePrice(
+            credits_per_video_s=web.clone_elyum_usd_per_video_s,
+            usd_per_credit=1.0,
+            max_reference_s=CLONE_TARGETS["elyum"].max_reference_s,
+            note="$0.0792 a second at 720P, video and result both billed",
+            unit="USD",
         ),
     }
 
@@ -198,6 +208,13 @@ CLONE_TARGETS = {
         video="videoUrls",
         audio="audio",
         aspect="aspectRatio",
+    ),
+    "elyum": CloneTarget(
+        model="elyum:alibaba/wan-3.0/reference-to-video",
+        images="image_urls",
+        video="video_urls",
+        audio="audio",
+        aspect=None,
     ),
 }
 
@@ -227,15 +244,17 @@ def _clone_values(
     video: str,
 ) -> dict[str, Any]:
     """One run's inputs, in the target model's own field names."""
-    return {
+    values: dict[str, Any] = {
         "prompt": prompt,
         "resolution": _enum_value(target.spec, "resolution", resolution),
-        target.aspect: "adaptive",
         "duration": duration,
         target.audio: audio,
         target.images: images,
         target.video: [video],
     }
+    if target.aspect:
+        values[target.aspect] = "adaptive"
+    return values
 
 
 def _run_clone(

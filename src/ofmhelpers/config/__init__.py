@@ -37,6 +37,7 @@ from ofmhelpers.config.settings import (
     CloneLinksSettings,
     CloneLongSettings,
     DownloadersSettings,
+    ElyumSettings,
     ExportSettings,
     GDriveSettings,
     HiggsfieldSettings,
@@ -132,6 +133,10 @@ class Settings:
     @property
     def runninghub(self) -> RunningHubSettings:
         return self._group(RunningHubSettings)
+
+    @property
+    def elyum(self) -> ElyumSettings:
+        return self._group(ElyumSettings)
 
     @property
     def pictures(self) -> PicturesSettings:

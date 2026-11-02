@@ -213,6 +213,7 @@ def pytest_collection_modifyitems(config, items):
 def fake_externals(monkeypatch, tmp_path):
     """OFM_FAKE_EXTERNALS on, every fake fresh (state in `tmp_path`): the
     app's outside services answered in-process, as under e2e."""
+    from ofmhelpers.aigenproviders.elyum.fake import fake_elyum
     from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
     from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
     from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
@@ -238,6 +239,7 @@ def fake_externals(monkeypatch, tmp_path):
         fake_cerebras,
         fake_apify,
         fake_runninghub,
+        fake_elyum,
         fake_media.mp4,
     )
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")

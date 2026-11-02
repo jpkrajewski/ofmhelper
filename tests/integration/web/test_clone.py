@@ -607,23 +607,36 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     assert pricing["kie"]["max_reference_s"] == 15
     assert pricing["higgsfield"]["credits_per_video_s"] == {"720P": 2.0}
     assert pricing["higgsfield"]["max_reference_s"] == 15
-    # RunningHub's Wan 3.0 price is not public: Alibaba's, in CNY.
-    assert pricing["runninghub"]["unit"] == "CNY"
-    assert pricing["runninghub"]["credits_per_video_s"]["720P"] == 1.2
+    # RunningHub and Elyum price in dollars.
+    assert pricing["runninghub"]["unit"] == "USD"
+    assert pricing["elyum"]["unit"] == "USD"
     assert 'id="clone-cost"' in client.get("/clone").text
 
 
-def test_higgsfield_default_rate_matches_the_measured_run(client):
-    """2026-10-18: a 13.09 s source at 720p cost $1.05 on Higgsfield (26.09
-    billed seconds at 60% off). The per-source-second rate must reproduce it
-    within a cent or two."""
+def _usd_per_video_s(price: dict, resolution: str) -> float:
+    return price["credits_per_video_s"][resolution] * price["usd_per_credit"]
+
+
+def test_higgsfield_default_rate_matches_the_measured_runs(client):
+    """Prod 2026-11-02: the new key paid $29 for 7 runs at 720P, 67 s of
+    source in all. The per-source-second rate must reproduce it."""
     price = _pricing(client)["higgsfield"]
 
-    estimate = 13.09 * price["credits_per_video_s"]["720P"] * price["usd_per_credit"]
+    assert 67 * _usd_per_video_s(price, "720P") == pytest.approx(29, abs=0.1)
 
-    assert estimate == pytest.approx(1.05, abs=0.02)
-    for res, per_s in price["credits_per_video_s"].items():
-        list_usd_per_billed_s = {"480P": 0.05, "720P": 0.10, "1080P": 0.20}[res]
-        assert per_s * price["usd_per_credit"] == pytest.approx(
-            2 * list_usd_per_billed_s * 0.4
-        )
+
+@pytest.mark.parametrize(
+    ("provider", "usd_per_billed_s"),
+    [("kie", 0.08), ("runninghub", 0.07), ("elyum", 0.0792)],
+)
+def test_billed_by_video_plus_result_costs_twice_the_rate_per_source_second(
+    client, provider, usd_per_billed_s
+):
+    """kie.ai, RunningHub and Elyum bill the reference video's seconds and
+    the result's: a source second costs two billed seconds at 720P, and
+    480P/1080P are half/double."""
+    price = _pricing(client)[provider]
+
+    assert _usd_per_video_s(price, "720P") == pytest.approx(2 * usd_per_billed_s)
+    assert _usd_per_video_s(price, "480P") == pytest.approx(usd_per_billed_s)
+    assert _usd_per_video_s(price, "1080P") == pytest.approx(4 * usd_per_billed_s)

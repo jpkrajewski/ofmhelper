@@ -25,6 +25,7 @@ from ofmhelpers.aigenproviders.higgsfield.fake import FAKE_KEY, fake_higgsfield
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.runner import generate
 from ofmhelpers.cache import get_redis
+from ofmhelpers.utils import fake_media
 from ofmhelpers.web.schemas.errors import error_reason
 
 BASE = "https://api.higgsfield.ai"
@@ -486,11 +487,44 @@ def test_a_file_type_higgsfield_refuses_is_rejected_before_any_call(
     wire, provider, tmp_path
 ):
     fake = wire({})
-    clip = tmp_path / "clip.mov"
-    clip.write_bytes(b"x")
+    notes = tmp_path / "notes.txt"
+    notes.write_bytes(b"x")
 
     with pytest.raises(ProviderInputError, match="MP4"):
+        provider.upload(notes)
+    assert fake.calls == []
+
+
+def test_a_mov_reference_goes_up_as_its_mp4_copy(wire, provider, tmp_path, monkeypatch):
+    """Prod 2026-11-02: an iPhone .mov reference failed a /clone run with
+    "Higgsfield takes ... MP4 video -- not ...__Video-21956.mov"."""
+    monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
+    clip = tmp_path / "abc__Video-21956.mov"
+    clip.write_bytes(fake_media.mp4())  # H.264 + AAC: remuxed, nothing encoded
+    original = clip.read_bytes()
+    fake = wire(_upload_routes())
+
+    provider.upload(clip)
+
+    presign, put = fake.calls
+    assert presign["json"] == {"content_type": "video/mp4"}
+    (sent,) = (tmp_path / "out" / "higgsfield" / "mp4").glob("abc__Video-21956-*.mp4")
+    assert put["content"] == sent.read_bytes()
+    assert clip.read_bytes() == original
+
+
+def test_a_video_that_cannot_be_converted_fails_before_any_call(
+    wire, provider, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
+    fake = wire({})
+    clip = tmp_path / "clip.mov"
+    clip.write_bytes(b"not a video")
+
+    with pytest.raises(ProviderInputError) as raised:
         provider.upload(clip)
+
+    assert str(raised.value) == "Could not turn clip.mov into an MP4 video"
     assert fake.calls == []
 
 

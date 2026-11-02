@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.ffmpeg import binary, run
+from ofmhelpers.utils.hdr import sdr_filters
 
 logger: logging.Logger = get_logger(__name__)
 
@@ -27,12 +28,6 @@ logger: logging.Logger = get_logger(__name__)
 # can decode no frame at all.
 _END_MARGIN_S = 0.1
 _LABEL_PAD = 4
-# HDR transfers (ffprobe `color_transfer`): HLG and PQ (HDR10).
-_HDR = frozenset({"arib-std-b67", "smpte2084"})
-# SDR white inside an HDR picture, nits (ITU-R BT.2408): what the iPhone
-# export maps SDR white to (iphones recorder `_video_filter`), so going back
-# with it is that export's exact inverse; brighter highlights clip.
-_SDR_WHITE_NITS = 203
 
 
 class _Stream(BaseModel):
@@ -108,15 +103,9 @@ def video_seconds(video: Path, timeout_s: int) -> float:
 
 def _to_sdr(stream: _Stream) -> str:
     """The filters (ending in ",") turning `stream`'s HDR picture into
-    BT.709 SDR, "" for SDR: zscale from its transfer, primaries and matrix
-    (BT.2020 when untagged) to BT.709, SDR white at `_SDR_WHITE_NITS`."""
-    if stream.color_transfer not in _HDR:
-        return ""
-    return (
-        f"zscale=tin={stream.color_transfer}"
-        f":pin={stream.color_primaries or 'bt2020'}"
-        f":min={stream.color_space or 'bt2020nc'}"
-        f":t=bt709:p=bt709:m=bt709:npl={_SDR_WHITE_NITS},format=yuv420p,"
+    BT.709 SDR, "" for SDR (`utils.hdr`)."""
+    return sdr_filters(
+        stream.color_transfer, stream.color_primaries, stream.color_space
     )
 
 

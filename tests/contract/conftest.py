@@ -11,12 +11,14 @@ from collections.abc import Iterator
 
 import pytest
 
+from ofmhelpers.aigenproviders.elyum.fake import fake_elyum
 from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
 from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
 from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
 from ofmhelpers.apify.fake import fake_apify
 from ofmhelpers.config import settings as app_settings
 from ofmhelpers.config.settings import (
+    ElyumSettings,
     GDriveSettings,
     HiggsfieldSettings,
     InstagramSettings,
@@ -38,6 +40,7 @@ from ofmhelpers.utils import fake_media, outbound
 FAKE = "fake"
 REAL = "real"
 _REAL_SETTINGS = (
+    ElyumSettings,
     GDriveSettings,
     HiggsfieldSettings,
     InstagramSettings,
@@ -63,6 +66,7 @@ def _reset_fakes() -> None:
         fake_cerebras,
         fake_apify,
         fake_runninghub,
+        fake_elyum,
         fake_media.mp4,
     ):
         cached.cache_clear()
