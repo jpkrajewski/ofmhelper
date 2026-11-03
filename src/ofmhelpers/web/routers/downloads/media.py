@@ -8,18 +8,19 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException
+from pydantic import Field
 
 from ofmhelpers.db.stores import cookies as login_cookies
 from ofmhelpers.db.stores.jobs import get_job
 from ofmhelpers.integrations.downloaders.media import download_all
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.downloads.shared import queue_downloads
+from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
+from ofmhelpers.web.forms import FormModel
+from ofmhelpers.web.routers.downloads.shared import Redirect, queue_downloads
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
-    assets_root_for,
     classify_kind,
     register_generated_asset,
     register_grouped_results,
@@ -34,6 +35,13 @@ router = APIRouter(prefix="/download-media", tags=["download-media"])
 _SEND_TARGETS = {"clone": ("/clone", False), "clone-long": ("/clone-long", True)}
 
 
+class SendForm(FormModel):
+    job_id: str
+    target: str
+    # The card's own file (`/files/{job}/{index}`).
+    index: int | None = Field(default=None, ge=0)
+
+
 def _run_downloads(
     urls: list[str], assets_root: str, user_id: int | None = None
 ) -> list[DownloadResult]:
@@ -46,33 +54,39 @@ def _run_downloads(
 
 
 @router.post("/run")
-def run(request: Request, urls: Annotated[str, Form()]) -> JobQueued:
-    return queue_downloads(request, TASK, urls, _run_downloads)
+def run(
+    urls: Annotated[str, Form()],
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
+) -> JobQueued:
+    return queue_downloads(TASK, urls, _run_downloads, actor, owner_id, assets_root)
 
 
 @router.post("/send")
 def send(
-    request: Request,
-    job_id: Annotated[str, Form()],
-    target: Annotated[str, Form()],
-):
-    """Hand a finished download's video(s) to /clone or /clone-long: answers
-    the URL to open with them already picked. The job must be this session's
-    own (its actor); its video files are re-checked against this session's
-    store before being handed over."""
-    chosen = _SEND_TARGETS.get(target)
+    form: Annotated[SendForm, Form()], actor: Actor, assets_root: AssetsRoot
+) -> Redirect:
+    """Hand a finished download's video to /clone or /clone-long: answers the
+    URL to open with it already picked. `index`: that file, what a card sends;
+    none: all its videos (/clone) or its first (/clone-long). The job must be
+    this session's own (its actor); its video files are re-checked against this
+    session's store before being handed over."""
+    chosen = _SEND_TARGETS.get(form.target)
     if chosen is None:
         raise HTTPException(status_code=400, detail="Unknown target")
     base, one_only = chosen
-    job = get_job(job_id, actor=AuthMiddleware.actor(request))
+    job = get_job(form.job_id, actor=actor)
     if job is None:
         raise HTTPException(status_code=404, detail="No such download")
     # A download's files live in the download area, not the asset store that
     # /clone's picker reuses from; register each video into this session's
     # store (as /reels does) so clone opens with it picked.
-    assets_root = assets_root_for(request)
+    paths = job.local_paths()
+    if form.index is not None:
+        paths = paths[form.index : form.index + 1]
     videos: list[str] = []
-    for path in job.local_paths():
+    for path in paths:
         if path is None:
             continue
         src = Path(path)
@@ -81,11 +95,11 @@ def send(
         kept = register_generated_asset(src, assets_root)
         if kept is not None:
             videos.append(str(kept.resolve()))
+            if one_only:
+                break
     if not videos:
         raise HTTPException(status_code=400, detail="This download has no video")
-    if one_only:
-        videos = videos[:1]
-    return {"redirect": base + "?" + urlencode([("video", v) for v in videos])}
+    return Redirect(redirect=base + "?" + urlencode([("video", v) for v in videos]))
 
 
 add_job_routes(

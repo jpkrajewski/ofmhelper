@@ -27,7 +27,7 @@ from urllib.parse import urlencode
 import requests
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi import Path as PathParam
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, TypeAdapter, ValidationError
 from starlette.background import BackgroundTask
 
@@ -51,10 +51,10 @@ from ofmhelpers.integrations.instagram import (
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import FeedItem, GroupForm, Leaderboard, WatchForm
 from ofmhelpers.telemetry import in_this_trace
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import AssetsRoot, OwnerId, Scope
+from ofmhelpers.web.routers.downloads.shared import Redirect
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
-    assets_root_for,
     make_job_dir,
     register_generated_asset,
 )
@@ -80,6 +80,29 @@ _THUMB_CACHE = {"Cache-Control": "private, max-age=2592000, immutable"}
 
 # The follower multiples offered as chips.
 _RATIO_STEPS = (2, 3, 5, 10)
+
+# A group as a form sends it; "" = no group.
+GroupField = Annotated[str, Form()]
+# The page's picks, as JSON (`_DOWNLOADS`).
+PickedReels = Annotated[str, Form()]
+
+
+class GroupCreated(BaseModel):
+    group: str
+
+
+class WatchAdded(BaseModel):
+    added: list[str]
+    already_watched: int
+
+
+class ProfileMoved(BaseModel):
+    username: str
+    group: str
+
+
+class ProfileRemoved(BaseModel):
+    removed: str
 
 
 class _Filters(BaseModel):
@@ -171,12 +194,12 @@ def _short(views: int) -> str:
 @router.get("")
 def form(
     request: Request,
+    scope: Scope,
     group: GroupQuery = None,
     rank: RankQuery = None,
     ratio: RatioQuery = None,
-):
+) -> Response:
     filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
-    scope = AuthMiddleware.scope(request)
     feed, next_offset = _feed_page(filters, 0, scope)
     return render(
         request,
@@ -199,14 +222,15 @@ def form(
 @router.get("/feed")
 def feed_page(
     request: Request,
+    scope: Scope,
     group: GroupQuery = None,
     rank: RankQuery = None,
     ratio: RatioQuery = None,
     offset: Annotated[int, Query(ge=0)] = 0,
-):
+) -> Response:
     """The next page of cards, as the fragment gallery-scroll.js appends."""
     filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
-    feed, next_offset = _feed_page(filters, offset, AuthMiddleware.scope(request))
+    feed, next_offset = _feed_page(filters, offset, scope)
     return render(request, "_reels_feed_page.html", feed=feed, next_offset=next_offset)
 
 
@@ -227,9 +251,8 @@ def thumb(code: ReelCode) -> FileResponse:
 
 
 @router.get("/watchlist")
-def watchlist(request: Request, group: GroupQuery = None):
+def watchlist(request: Request, scope: Scope, group: GroupQuery = None) -> Response:
     """The watch list rows, as the page polls them while scans run."""
-    scope = AuthMiddleware.scope(request)
     return render(
         request,
         "_reels_watch_rows.html",
@@ -239,22 +262,22 @@ def watchlist(request: Request, group: GroupQuery = None):
 
 
 @router.post("/groups")
-def new_group(request: Request, name: Annotated[str, Form()] = ""):
+def new_group(owner_id: OwnerId, name: Annotated[str, Form()] = "") -> GroupCreated:
     """ "+ New group": a group every dropdown offers before any profile is in
     it. Answers the stored name (trimmed, lower case)."""
     group = GroupForm(group=name).group
     if not group:
         raise HTTPException(status_code=400, detail="Name the group")
-    create_group(group, AuthMiddleware.owner_id(request))
-    return {"group": group}
+    create_group(group, owner_id)
+    return GroupCreated(group=group)
 
 
 @router.post("/watch")
 def add(
-    request: Request,
+    owner_id: OwnerId,
     profiles: Annotated[str, Form()] = "",
-    group: Annotated[str, Form()] = "",
-):
+    group: GroupField = "",
+) -> WatchAdded:
     """Adds every profile on its own line to `group` and queues the first
     scan of the new ones. A profile already watched is only moved to
     `group` (when one is given) and left to its rescan, if rescans are on
@@ -267,10 +290,9 @@ def add(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not usernames:
         raise HTTPException(status_code=400, detail="Add at least one profile")
-    user_id = AuthMiddleware.owner_id(request)
-    added = [u for u in usernames if watch(u, form.group or None, user_id=user_id)]
+    added = [u for u in usernames if watch(u, form.group or None, user_id=owner_id)]
     queue_due_scans()
-    return {"added": added, "already_watched": len(usernames) - len(added)}
+    return WatchAdded(added=added, already_watched=len(usernames) - len(added))
 
 
 def _handle(username: str) -> str:
@@ -281,21 +303,21 @@ def _handle(username: str) -> str:
 
 
 @router.post("/group/{username}")
-def move(request: Request, username: str, group: Annotated[str, Form()] = ""):
+def move(username: str, owner_id: OwnerId, group: GroupField = "") -> ProfileMoved:
     """A watch-list row's group dropdown: moves the profile ("" = no group)."""
     handle = _handle(username)
     target = GroupForm(group=group).group
-    if not set_group(handle, target or None, AuthMiddleware.owner_id(request)):
+    if not set_group(handle, target or None, owner_id):
         raise HTTPException(status_code=404, detail=f"@{handle} is not watched")
-    return {"username": handle, "group": target}
+    return ProfileMoved(username=handle, group=target)
 
 
 @router.post("/unwatch/{username}")
-def remove(request: Request, username: str):
+def remove(username: str, owner_id: OwnerId) -> ProfileRemoved:
     handle = _handle(username)
-    if not unwatch(handle, AuthMiddleware.owner_id(request)):
+    if not unwatch(handle, owner_id):
         raise HTTPException(status_code=404, detail=f"@{handle} is not watched")
-    return {"removed": handle}
+    return ProfileRemoved(removed=handle)
 
 
 def _download(client: InstagramClient, reel: ReelDownload, job_dir: Path) -> Path:
@@ -321,15 +343,20 @@ def _download_picked(reels: str) -> list[Path]:
             download = in_this_trace(lambda r: _download(client, r, job_dir))
             return list(pool.map(download, picked))
     except (OSError, requests.RequestException) as exc:
+        shutil.rmtree(job_dir, ignore_errors=True)
         logger.warning("reel download failed", exc_info=True)
         raise HTTPException(
             status_code=502,
             detail="Could not download a reel — rescan the profile and retry",
         ) from exc
+    except Exception:
+        # Any other failure is still a crash, but leaves no folder behind.
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
 
 
 @router.post("/download")
-def download(reels: Annotated[str, Form()]):
+def download(reels: PickedReels) -> Response:
     """The picked reels as a file: the mp4 itself for one, a zip for more
     (stored, not deflated: H.264 does not compress further). Nothing is
     kept: the job dir goes once the response is sent."""
@@ -350,14 +377,17 @@ def download(reels: Annotated[str, Form()]):
 
 
 @router.post("/clone")
-def clone(request: Request, reels: Annotated[str, Form()]):
+def clone(reels: PickedReels, assets_root: AssetsRoot) -> Redirect:
     """Downloads the picked reels into the asset store and answers with the
-    /clone URL that opens with them picked."""
+    /clone URL that opens with them picked. The store keeps its own link to
+    each file, so the job dir goes."""
     files = _download_picked(reels)
-    assets_root = assets_root_for(request)
-    paths = [
-        str(path)
-        for file in files
-        if (path := register_generated_asset(file, assets_root)) is not None
-    ]
-    return {"redirect": "/clone?" + urlencode([("video", p) for p in paths])}
+    try:
+        paths = [
+            str(path)
+            for file in files
+            if (path := register_generated_asset(file, assets_root)) is not None
+        ]
+    finally:
+        shutil.rmtree(files[0].parent, ignore_errors=True)
+    return Redirect(redirect="/clone?" + urlencode([("video", p) for p in paths]))

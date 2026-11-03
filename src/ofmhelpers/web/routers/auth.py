@@ -12,7 +12,7 @@ stores/users.py says who may.
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import users
@@ -28,6 +28,7 @@ from ofmhelpers.features.signin.state import (
 )
 from ofmhelpers.integrations.signin import Provider, SignInError, configured, providers
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(tags=["auth"])
@@ -61,13 +62,15 @@ def _respond(request: Request, outcome: Outcome) -> Response:
         )
     if outcome.user is not None:
         AuthMiddleware.sign_in(request, outcome.user)
-    return RedirectResponse(url=outcome.redirect, status_code=303)
+    return see_other(outcome.redirect)
 
 
 @router.get("/login")
-def login_form(request: Request, next_url: Annotated[str, Query(alias="next")] = HOME):
+def login_form(
+    request: Request, next_url: Annotated[str, Query(alias="next")] = HOME
+) -> Response:
     if AuthMiddleware.session_user(request):
-        return RedirectResponse(url=safe_next(next_url), status_code=303)
+        return see_other(safe_next(next_url))
     return _login_page(request, safe_next(next_url))
 
 
@@ -77,17 +80,17 @@ def login_submit(
     password: Annotated[str, Form()],
     email: Annotated[str, Form()] = users.PASSWORD_ADMIN,
     next_url: Annotated[str, Form(alias="next")] = HOME,
-):
+) -> Response:
     return _respond(request, passwords.login(request, email, password, next_url))
 
 
 @router.post("/logout")
-def logout(request: Request):
+def logout(request: Request) -> Response:
     user = AuthMiddleware.session_user(request)
     if user is not None:
         log_event("logout", actor=user.actor)  # capture before clearing
     request.session.clear()
-    return RedirectResponse(url="/login", status_code=303)
+    return see_other("/login")
 
 
 @router.get("/auth/{name}/start")
@@ -96,16 +99,16 @@ def start(
     name: str,
     next_url: Annotated[str, Query(alias="next")] = HOME,
     link: bool = False,
-):
+) -> Response:
     """To the provider's consent. `link`: connect it to the signed-in user
     (/account) -- for Google, asking consent again so a Drive token comes."""
     provider = _provider(name)
     current = AuthMiddleware.session_user(request)
     if link and current is None:
-        return RedirectResponse(url="/login", status_code=303)
+        return see_other("/login")
     link_user_id = current.id if link and current else None
     begun = consent.begin(provider, str(request.base_url), next_url, link_user_id)
-    response = RedirectResponse(url=begun.url, status_code=303)
+    response = see_other(begun.url)
     carry_state(response, begun.cookie)
     return response
 
@@ -128,7 +131,7 @@ def _finish(request: Request, name: str, code: str, state: str, error: str) -> R
 @router.get("/auth/{name}/callback")
 def callback_get(
     request: Request, name: str, code: str = "", state: str = "", error: str = ""
-):
+) -> Response:
     return _finish(request, name, code, state, error)
 
 
@@ -139,13 +142,13 @@ def callback_post(
     code: Annotated[str, Form()] = "",
     state: Annotated[str, Form()] = "",
     error: Annotated[str, Form()] = "",
-):
+) -> Response:
     """Apple's form_post return."""
     return _finish(request, name, code, state, error)
 
 
 @router.get("/auth/owner/consent")
-def owner_consent(request: Request, state: str = ""):
+def owner_consent(request: Request, state: str = "") -> Response:
     """The app owner's consent screen: the admin password."""
     return render(request, "owner_consent.html", state=state, error=None)
 
@@ -155,7 +158,7 @@ def owner_consent_submit(
     request: Request,
     state: Annotated[str, Form()],
     password: Annotated[str, Form()],
-):
+) -> Response:
     outcome = passwords.owner_consent(request, state, password)
     if outcome.redirect is None:
         return render(
@@ -165,11 +168,11 @@ def owner_consent_submit(
             error=outcome.error,
             status_code=outcome.status_code,
         )
-    return RedirectResponse(url=outcome.redirect, status_code=303)
+    return see_other(outcome.redirect)
 
 
 @router.get("/auth/fake-consent")
-def fake_consent(request: Request, provider: str, state: str):
+def fake_consent(request: Request, provider: str, state: str) -> Response:
     """The providers' consent screens under OFM_FAKE_EXTERNALS (e2e)."""
     if not settings.infra.fake_externals:
         raise HTTPException(status_code=404)
@@ -182,7 +185,7 @@ def fake_consent_submit(
     provider: Annotated[str, Form()],
     state: Annotated[str, Form()],
     email: Annotated[str, Form()],
-):
+) -> Response:
     if not settings.infra.fake_externals:
         raise HTTPException(status_code=404)
     cookie = request.cookies.get(STATE_COOKIE, "")
@@ -190,7 +193,7 @@ def fake_consent_submit(
         url = consent.fake_callback(cookie, provider, state, email)
     except SignInError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return RedirectResponse(url=url, status_code=303)
+    return see_other(url)
 
 
 def _password_page(request: Request, page: password_link.LinkPage) -> Response:
@@ -205,7 +208,7 @@ def _password_page(request: Request, page: password_link.LinkPage) -> Response:
 
 
 @router.get("/password/{token}")
-def password_form(request: Request, token: str):
+def password_form(request: Request, token: str) -> Response:
     return _password_page(request, password_link.page(token))
 
 
@@ -215,7 +218,7 @@ def password_submit(
     token: str,
     password: Annotated[str, Form()],
     confirm: Annotated[str, Form()],
-):
+) -> Response:
     done = password_link.set_password(token, password, confirm)
     if isinstance(done, password_link.LinkPage):
         return _password_page(request, done)

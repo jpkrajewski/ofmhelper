@@ -9,14 +9,17 @@ import zipfile
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
+from fastapi.responses import Response
+from pydantic import Field
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import create_job, list_jobs_page, run_job
 from ofmhelpers.media.uniqify import MetadataMode, Strength, generate_variants
 from ofmhelpers.schemas import Job, JobCard, JobQueued, ResultFile
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.web.forms import FormModel, Stripped
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
     VIDEO_KINDS,
@@ -39,6 +42,16 @@ FILES_PREFIX = f"{router.prefix}/files"
 MAX_COPIES = settings.web.uniqify_max_copies
 
 MAX_TRIM_S = settings.web.uniqify_max_trim_s
+
+
+class UniqifyForm(FormModel):
+    file: UploadFile
+    copies: int = Field(5, ge=1, le=MAX_COPIES)
+    strength: Strength = Strength.HARD
+    mirror_pct: float = Field(0.0, ge=0, le=100)
+    trim_secs: float = Field(0.1, ge=0, le=MAX_TRIM_S)
+    metadata: MetadataMode = MetadataMode.STRIP
+    output_name: Stripped = ""
 
 
 def _run_uniqify(
@@ -84,10 +97,8 @@ def _gallery_card(job: Job) -> JobCard:
 
 
 @router.get("")
-def form(request: Request):
-    recent, _total = list_jobs_page(
-        {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.actor(request)
-    )
+def form(request: Request, actor: Actor) -> Response:
+    recent, _total = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor)
     return render(
         request,
         "uniqify.html",
@@ -100,18 +111,9 @@ def form(request: Request):
 
 
 @router.post("/run")
-def run(
-    request: Request,
-    file: Annotated[UploadFile, File()],
-    copies: Annotated[int, Form(ge=1, le=MAX_COPIES)] = 5,
-    strength: Annotated[Strength, Form()] = Strength.HARD,
-    mirror_pct: Annotated[float, Form(ge=0, le=100)] = 0.0,
-    trim_secs: Annotated[float, Form(ge=0, le=MAX_TRIM_S)] = 0.1,
-    metadata: Annotated[MetadataMode, Form()] = MetadataMode.STRIP,
-    output_name: Annotated[str, Form()] = "",
-):
-    source = require_upload_kind(file.filename, VIDEO_KINDS)
-    stem = Path(safe_filename(output_name.strip() or source)).stem
+def run(form: Annotated[UniqifyForm, Form()], actor: Actor) -> JobQueued:
+    source = require_upload_kind(form.file.filename, VIDEO_KINDS)
+    stem = Path(safe_filename(form.output_name or source)).stem
     if not stem:
         raise HTTPException(status_code=400, detail="Invalid output name")
 
@@ -119,20 +121,18 @@ def run(
     # Prefixed so an output named like the upload can never overwrite it.
     saved = f"source_{source}"
     with (job_dir / saved).open("wb") as out:
-        shutil.copyfileobj(file.file, out)
+        shutil.copyfileobj(form.file.file, out)
 
     params = {
         "source": saved,
         "stem": stem,
-        "copies": copies,
-        "strength": strength.value,
-        "mirror_pct": mirror_pct,
-        "trim_secs": trim_secs,
-        "metadata": metadata.value,
+        "copies": form.copies,
+        "strength": form.strength.value,
+        "mirror_pct": form.mirror_pct,
+        "trim_secs": form.trim_secs,
+        "metadata": form.metadata.value,
     }
-    job_id = create_job(
-        TASK, {"dir": str(job_dir), **params}, actor=AuthMiddleware.actor(request)
-    )
+    job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
     enqueue(run_job, job_id, _run_uniqify, {"job_dir": str(job_dir), **params})
     return JobQueued(job_id=job_id)
 

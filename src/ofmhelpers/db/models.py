@@ -33,9 +33,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     false,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, column_property, mapped_column
 
 from ofmhelpers.db.encrypted import EncryptedText
 
@@ -62,8 +63,14 @@ class UserRow(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
     last_login_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Deferred: this row is read on every request, and decrypting it there would
+    # turn a changed OFM_VAULT_KEY into every page answering 500.
     google_refresh_token: Mapped[str] = mapped_column(
-        EncryptedText, nullable=False, default=""
+        EncryptedText, nullable=False, default="", deferred=True
+    )
+    # "" is stored as "" (db/encrypted.py), so this needs no key.
+    drive_connected: Mapped[bool] = column_property(
+        func.length(google_refresh_token) > 0
     )
     password_hash: Mapped[str] = mapped_column(Text, nullable=False, default="")
     # Their "ALL ACCOUNTS" folder in their own Drive (features/drive/folders.py
@@ -423,8 +430,21 @@ class LoginRow(Base):
     service: Mapped[str] = mapped_column(String(32), nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     username: Mapped[str] = mapped_column(String(255), nullable=False)
-    password: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="")
-    backup_codes: Mapped[str] = mapped_column(EncryptedText, nullable=False, default="")
+    # Deferred: a row loaded for its name never needs the key.
+    password: Mapped[str] = mapped_column(
+        EncryptedText,
+        nullable=False,
+        default="",
+        deferred=True,
+        deferred_group="secret",
+    )
+    backup_codes: Mapped[str] = mapped_column(
+        EncryptedText,
+        nullable=False,
+        default="",
+        deferred=True,
+        deferred_group="secret",
+    )
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     added_at: Mapped[float] = mapped_column(Float, nullable=False)
     updated_at: Mapped[float] = mapped_column(Float, nullable=False)

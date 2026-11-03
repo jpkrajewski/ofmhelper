@@ -5,10 +5,11 @@
  * Generate trials starts the job (fetch) and opens its folder.
  *
  * /trials/{login} runs without page reloads:
- *   a button (Apply caption, Regenerate, Upload, Generate trials) -> its
- *       card or button changes at once, the form is sent with fetch (the
- *       server answers JSON at once; the work is a job), then polling
+ *   a button (a caption, Apply caption, Regenerate, Upload, Generate trials)
+ *       -> its card or button changes at once, the form is sent with fetch
+ *       (the server answers JSON at once; the work is a job), then polling
  *       starts
+ *   Upload -> first asks (#tr-replace): it replaces what is in TRIALS
  *   Select -> kept at once (POST .../select); "Upload N to Drive" counts it
  *   polling (#tr-grid[data-live], every 3 s while anything runs) -> the
  *       status line, and the cards whose data-stamp moved are fetched
@@ -46,6 +47,7 @@
     const upload = document.querySelector(".tr-upload-btn");
     const generate = document.querySelector("#tr-generate button");
     const drive = document.getElementById("tr-drive");
+    const replace = document.getElementById("tr-replace");
     const POLL_MS = 3000;
     let timer = null;
 
@@ -76,6 +78,14 @@
         video.replaceWith(box);
     }
 
+    document.getElementById("tr-replace-back").addEventListener("click", () => replace.close());
+    document.getElementById("tr-replace-go").addEventListener("click", () => {
+        replace.close();
+        const form = document.getElementById("tr-upload");
+        form.dataset.confirmed = "true";
+        form.requestSubmit();
+    });
+
     async function send(form, body) {
         const r = await fetch(form.action, { method: "POST", body });
         if (!r.ok) throw new Error(String(r.status));
@@ -98,6 +108,13 @@
         } else if (form.id === "tr-upload") {
             const chosen = picks();
             if (!chosen.length) return;
+            if (form.dataset.confirmed !== "true") {
+                document.getElementById("tr-replace-count").textContent =
+                    chosen.length === 1 ? "1 reel" : `${chosen.length} reels`;
+                replace.showModal();
+                return;
+            }
+            delete form.dataset.confirmed;
             for (const p of chosen) {
                 const c = p.closest(".tr-reel");
                 c.dataset.busy = "true";
@@ -152,7 +169,7 @@
 
     async function apply(live) {
         status.textContent = live.status;
-        generate.disabled = live.making || live.todo === 0;
+        generate.disabled = live.making;
         if (live.trials_url) {
             drive.href = live.trials_url;
             drive.hidden = false;

@@ -9,10 +9,11 @@ from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from ofmhelpers.db.stores.jobs import get_job
-from ofmhelpers.schemas import Job
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.schemas import Job, JobStatusPayload
+from ofmhelpers.web.dependencies import Actor
 from ofmhelpers.web.routers.task_helpers.responses import (
     job_assets,
     job_inputs,
@@ -49,8 +50,8 @@ def add_job_routes(
     files_prefix = f"{router.prefix}/files"
 
     @router.get("/jobs/{job_id}")
-    def job_status(request: Request, job_id: str):
-        job = get_job(job_id, AuthMiddleware.actor(request))
+    def job_status(request: Request, job_id: str, actor: Actor) -> Response:
+        job = get_job(job_id, actor)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found")
         assets, failed_sources = job_assets(job, files_prefix)
@@ -68,23 +69,19 @@ def add_job_routes(
         )
 
     @router.get("/jobs/{job_id}/status")
-    def job_status_json(request: Request, job_id: str):
-        job = get_job(job_id, AuthMiddleware.actor(request))
-        return job_status_payload(job, files_prefix)
+    def job_status_json(job_id: str, actor: Actor) -> JobStatusPayload:
+        return job_status_payload(get_job(job_id, actor), files_prefix)
 
     @router.get("/files/{job_id}/{index}")
     def download_file(
-        request: Request, job_id: str, index: int, dl: Annotated[int, Query()] = 0
-    ):
-        job = get_job(job_id, AuthMiddleware.actor(request))
-        return serve_job_file(job, index, as_attachment=bool(dl))
+        job_id: str, index: int, actor: Actor, dl: Annotated[int, Query()] = 0
+    ) -> Response:
+        return serve_job_file(get_job(job_id, actor), index, as_attachment=bool(dl))
 
     @router.get("/files/{job_id}/{index}/preview")
-    def preview_file(request: Request, job_id: str, index: int):
-        job = get_job(job_id, AuthMiddleware.actor(request))
-        return serve_job_preview(job, index)
+    def preview_file(job_id: str, index: int, actor: Actor) -> Response:
+        return serve_job_preview(get_job(job_id, actor), index)
 
     @router.get("/files/{job_id}/{index}/poster")
-    def poster_file(request: Request, job_id: str, index: int):
-        job = get_job(job_id, AuthMiddleware.actor(request))
-        return serve_job_poster(job, index)
+    def poster_file(job_id: str, index: int, actor: Actor) -> Response:
+        return serve_job_poster(get_job(job_id, actor), index)

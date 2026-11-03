@@ -95,6 +95,7 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 ## Libraries & Tools
 - Preference: stdlib -> vetted Python package (check advisories) -> distro binary (ffmpeg, exiftool) -> custom code last, with the reason stated.
 - Tools live in Docker images, never on the Windows host.
+- `.claude/skills/fastapi/` is FastAPI's own skill, a copy of what the pinned version ships. After upgrading FastAPI: `$C run --rm --no-deps tests uvx library-skills --claude --yes --copy --no-tool-skill --skill fastapi`, then delete the `.agents/` it also writes. Where our code goes against it on purpose, the reason is in `web/CLAUDE.md` (routers).
 
 ## UI (templates + CSS)
 - Every page extends `base.html`; navigation comes from `schemas/nav.py` `NAV` (new page = one `NavItem`).

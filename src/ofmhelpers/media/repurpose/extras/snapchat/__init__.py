@@ -1,11 +1,12 @@
 """The Snapchat caption bar: a translucent black strip across the frame's
-middle with white centred text (the classic snap-caption look).
+lower part with white centred text (the classic snap-caption look).
 
 Measured off a reference snap video (2026-10-29, 2160x3840) -- the fractions
 below are of the frame's height, so any output size gets the same look:
 
-- bar: full width, 5.0% of the frame's height, centred at 49.4% of it,
-  black at 61% opacity;
+- bar: full width, 5.0% of the frame's height, black at 61% opacity; centred
+  at 70% of it (the reference had it at 49.4%, user 2026-11-03: "lower, not in
+  middle"; still above the 22% Instagram's Reels UI covers at the bottom);
 - text: white, centred in the bar, bounding box 2.29% of the frame's height;
 - font: regular-weight Arial/Helvetica class (Liberation Sans is metrically
   identical to Arial and ships with Linux images; DejaVu is the last resort
@@ -21,9 +22,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 from ofmhelpers.config import settings
 
-# Fractions of the frame height, measured from the reference.
+# Fractions of the frame height, measured from the reference (BAR_CENTER: chosen).
 BAR_H = 0.0500
-BAR_CENTER = 0.4938
+BAR_CENTER = 0.70
 BAR_ALPHA = 0.61
 TEXT_BBOX_H = 0.0229
 # Arial / Liberation Sans: rendered bbox height = 0.94 * point size.

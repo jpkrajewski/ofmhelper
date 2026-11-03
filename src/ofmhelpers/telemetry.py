@@ -25,7 +25,10 @@ like password, secret, api_key, cookie, ...; not `confirm`, `current`, `token`,
 `backup_codes`, and never `http.url`, `url.full`, `url.query` or
 `exception.message`, which it treats as safe):
 - a request's arguments go through an allow-list (`_request_attributes`): a value
-  shows only for a name in `_LOGGED_ARGUMENTS`;
+  shows only for a name in `_LOGGED_ARGUMENTS`, and only when it is plain (a
+  dependency's result, a whole Job or preset, is no argument whatever it is
+  called); arguments taken as one object (`LoggedFields`: a form, a gallery's
+  query) go field by field;
 - `_Redactor` masks credentials (`redact.py`) in every text attribute of every
   span, including the safe ones and the log messages.
 """
@@ -47,6 +50,7 @@ from opentelemetry.sdk.trace import Event, SpanProcessor
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.redact import redact
+from ofmhelpers.web.forms import LoggedFields
 
 if TYPE_CHECKING:
     import logging
@@ -255,15 +259,30 @@ def _request_attributes(
     errors = attributes.get("errors") or []
     return {
         **attributes,
-        "values": {
-            name: value if name in _LOGGED_ARGUMENTS else _HIDDEN
-            for name, value in values.items()
-        },
+        "values": _logged_arguments(values),
         "errors": [
             {key: value for key, value in error.items() if key != "input"}
             for error in errors
         ],
     }
+
+
+def _logged_arguments(values: Mapping[str, Any]) -> dict[str, Any]:
+    logged: dict[str, Any] = {}
+    for name, value in values.items():
+        if isinstance(value, LoggedFields):
+            logged.update(_logged_arguments(dict(value)))
+        elif name in _LOGGED_ARGUMENTS and _is_plain(value):
+            logged[name] = value
+        else:
+            logged[name] = _HIDDEN
+    return logged
+
+
+def _is_plain(value: Any) -> bool:
+    if isinstance(value, list | tuple):
+        return all(_is_plain(item) for item in value)
+    return value is None or isinstance(value, str | int | float)
 
 
 def _masked(value: Any) -> Any:

@@ -77,6 +77,22 @@ class TaskCard(JobCard):
     # the server does not say).
     result_kind: str = "image"
 
+    def per_file(self) -> list[Self]:
+        """One card per result file, as generation.js draws a run that finishes
+        on the page. What failed shows once, on the first; a card with no file
+        (still running, failed) stays one card."""
+        if not self.assets:
+            return [self]
+        return [
+            self.model_copy(
+                update={
+                    "assets": [asset],
+                    "failed_sources": self.failed_sources if i == 0 else [],
+                }
+            )
+            for i, asset in enumerate(self.assets)
+        ]
+
 
 class CloneCard(TaskCard):
     """A /clone run's card: the shared card, plus where its video was

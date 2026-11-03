@@ -6,8 +6,8 @@ from operator import itemgetter
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets import ref_usage
@@ -19,10 +19,9 @@ from ofmhelpers.features.previews.render import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import MissingRefs, RefEntry
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
-    assets_root_for,
     classify_kind,
     in_asset_root,
     media_response,
@@ -48,6 +47,8 @@ THUMBS_DIR = ASSETS_ROOT / ".thumbs"
 RECENT_USED_LIMIT = settings.web.recent_used_limit
 RECENT_UPLOAD_LIMIT = settings.web.recent_upload_limit
 MAX_REF_LIMIT = settings.web.max_ref_limit
+
+RefPath = Annotated[str, Query()]
 
 
 @lru_cache(maxsize=1024)
@@ -94,12 +95,12 @@ def stored_files(root: Path, kind: str | None) -> dict[str, float]:
     return found
 
 
-def _require_visible(request: Request, path: str) -> Path:
+def _require_visible(assets_root: Path, path: str) -> Path:
     """A client-supplied path, refused unless it is a file inside the
     session's part of the asset store -- nobody, admins included, fetches
     another person's file by guessing its path."""
     file_path = Path(path)
-    if not in_asset_root(assets_root_for(request), file_path):
+    if not in_asset_root(assets_root, file_path):
         raise HTTPException(status_code=403, detail="Invalid path")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
@@ -108,10 +109,11 @@ def _require_visible(request: Request, path: str) -> Path:
 
 @router.get("")
 def list_refs(
-    request: Request,
+    assets_root: AssetsRoot,
+    owner_id: OwnerId,
     kind: Annotated[str | None, Query()] = None,
     limit: Annotated[int | None, Query(ge=1, le=MAX_REF_LIMIT)] = None,
-):
+) -> list[RefEntry]:
     """The reuse picker's list.
 
     Default: the `RECENT_USED_LIMIT` files you (this user) last *picked* (features/assets/ref_usage.py,
@@ -123,15 +125,13 @@ def list_refs(
 
     An explicit `?limit=` is the "show older" path: newest-uploaded first, no
     usage grouping."""
-    stored = stored_files(assets_root_for(request), kind)
+    stored = stored_files(assets_root, kind)
     if limit is not None:
         newest = heapq.nlargest(limit, stored.items(), key=itemgetter(1))
         return [_entry(path, mtime) for path, mtime in newest]
 
     used: list[RefEntry] = []
-    for raw, used_at in ref_usage.recent(
-        AuthMiddleware.owner_id(request), MAX_REF_LIMIT
-    ):
+    for raw, used_at in ref_usage.recent(owner_id, MAX_REF_LIMIT):
         # A used file can have been deleted through the file manager since,
         # or be of another kind than this picker wants.
         mtime = stored.pop(raw, None)
@@ -150,23 +150,24 @@ MAX_CHECKED = 50
 
 @router.get("/missing")
 def missing_refs(
-    request: Request, path: Annotated[list[str], Query(max_length=MAX_CHECKED)]
+    assets_root: AssetsRoot, path: Annotated[list[str], Query(max_length=MAX_CHECKED)]
 ) -> MissingRefs:
     """Of `path`s (a past run's files, restored by Recreate), the ones this
     session can no longer use: deleted since, never on this server, or not
     its own. One request, so a restore checks every file without a 404 per
     gone one."""
-    root = assets_root_for(request)
     return MissingRefs(
         missing=[
-            p for p in path if not (in_asset_root(root, Path(p)) and Path(p).is_file())
+            p
+            for p in path
+            if not (in_asset_root(assets_root, Path(p)) and Path(p).is_file())
         ]
     )
 
 
 @router.get("/file")
-def get_ref_file(request: Request, path: Annotated[str, Query()]):
-    file_path = _require_visible(request, path)
+def get_ref_file(assets_root: AssetsRoot, path: RefPath) -> Response:
+    file_path = _require_visible(assets_root, path)
     # Display name (hash prefix stripped) decides the type, and non-media is
     # forced to a download -- see media_response.
     return media_response(file_path, strip_asset_hash_prefix(file_path.name))
@@ -193,15 +194,15 @@ def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
 
 @router.get("/thumb")
 def get_ref_thumb(
-    request: Request,
-    path: Annotated[str, Query()],
+    assets_root: AssetsRoot,
+    path: RefPath,
     size: Annotated[int, Query(ge=16, le=1024)] = 200,
-):
+) -> Response:
     """Small cached preview for the reuse-picker/inputs grids -- never the
     original (see THUMBS_DIR comment). Images thumbnail through Pillow, videos
     through an ffmpeg first-frame grab; audio has no visual frame to show and
     still gets an icon client-side."""
-    file_path = _require_visible(request, path)
+    file_path = _require_visible(assets_root, path)
 
     kind = classify_kind(file_path.name)
     if kind not in ("image", "video"):

@@ -9,63 +9,46 @@ non-blocking gallery of past runs across all three tools on the right --
 tool's existing /run endpoint.
 """
 
-from typing import Annotated
-
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Request
+from fastapi.responses import Response
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import count_hidden_jobs, list_jobs_page
-from ofmhelpers.schemas import TaskCard
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.schemas import Job, TaskCard
+from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, task_card
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/download-assets", tags=["download-assets"])
 
+gallery = Gallery(set(DOWNLOAD_TOOLS), limit=lambda: settings.web.download_gallery_page)
 
-def _gallery_page(
-    request: Request, offset: int, hidden: bool = False
-) -> tuple[list[TaskCard], int | None]:
-    """One page of cards plus the next page's offset, None after the last
-    (what ends the scroll). `hidden`: only the hidden cards."""
-    size = settings.web.download_gallery_page
-    page, total = list_jobs_page(
-        set(DOWNLOAD_TOOLS),
-        offset,
-        size,
-        AuthMiddleware.actor(request),
-        hidden=hidden,
-    )
-    next_offset = offset + size
-    return [task_card(j) for j in page], next_offset if next_offset < total else None
+
+def _cards(jobs: list[Job]) -> list[TaskCard]:
+    """Every file of every job its own card: a download of six is six cards."""
+    return [card for job in jobs for card in task_card(job).per_file()]
 
 
 @router.get("")
-def form(request: Request):
-    gallery, next_offset = _gallery_page(request, 0)
+def form(request: Request, actor: Actor) -> Response:
+    first = gallery.page(actor)
     return render(
         request,
         "download_assets_form.html",
-        gallery=gallery,
-        next_offset=next_offset,
-        hidden_count=count_hidden_jobs(
-            set(DOWNLOAD_TOOLS), AuthMiddleware.actor(request)
-        ),
+        gallery=_cards(first.jobs),
+        next_offset=first.next_offset,
+        hidden_count=gallery.hidden_count(actor),
     )
 
 
 @router.get("/gallery")
-def gallery_page(
-    request: Request,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    hidden: Annotated[bool, Query()] = False,
-):
+def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
     """The next page of cards as a fragment gallery-scroll.js appends: the
     same partial the page renders. `hidden`: only the hidden cards."""
-    gallery, next_offset = _gallery_page(request, offset, hidden)
+    found = gallery.page(actor, query)
     return render(
         request,
         "download_gallery_fragment.html",
-        gallery=gallery,
-        next_offset=next_offset,
+        gallery=_cards(found.jobs),
+        next_offset=found.next_offset,
     )

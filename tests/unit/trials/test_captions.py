@@ -6,10 +6,12 @@ it fails."""
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from ofmhelpers.llm import LLMUnavailableError, LLMUse, MediaKind
 from ofmhelpers.trials import captions, media
-from ofmhelpers.trials.captions import Caption, ReelNotes
+from ofmhelpers.trials.captions import CHOICES, Captions, ReelNotes
+from ofmhelpers.trials.state import CAPTION_MAX
 
 
 class _Model:
@@ -46,21 +48,70 @@ def models(monkeypatch):
 
 def test_the_caption_is_written_by_the_chat_model(models):
     asked, answers = models
-    answers["groq"] = Caption(caption="  just here for my checkup ")
+    answers["groq"] = Captions(captions=["  just here for my checkup ", "second"])
 
-    assert captions.caption_for(ReelNotes(description="d"), used=[]) == (
-        "just here for my checkup"
-    )
+    assert captions.captions_for(ReelNotes(description="d")) == [
+        "just here for my checkup",
+        "second",
+    ]
     assert asked == [("groq", [])]
 
 
 def test_the_video_chain_writes_it_when_the_chat_model_is_down(models):
     asked, answers = models
     answers["groq"] = LLMUnavailableError("429")
-    answers["g1"] = Caption(caption="from gemini")
+    answers["g1"] = Captions(captions=["from gemini"])
 
-    assert captions.caption_for(ReelNotes(), used=["old"]) == "from gemini"
+    assert captions.captions_for(ReelNotes()) == ["from gemini"]
     assert [entry for entry, _media in asked] == ["groq", "g1"]
+
+
+def test_one_ask_asks_for_all_the_choices(models, monkeypatch):
+    """Five asks would cost five of the day's requests."""
+    _asked, answers = models
+    answers["groq"] = Captions(captions=["one"])
+    prompts = []
+    ask = _Model.ask
+
+    def recording(self, prompt, answer):
+        prompts.append(prompt)
+        return ask(self, prompt, answer)
+
+    monkeypatch.setattr(_Model, "ask", recording)
+
+    captions.captions_for(ReelNotes(description="a walk"))
+
+    assert len(prompts) == 1
+    assert f"Write {CHOICES} different" in prompts[0].parts[0].text
+    assert "a walk" in prompts[0].parts[0].text
+
+
+def test_the_choices_come_back_clean_fitting_and_none_twice():
+    found = Captions(
+        captions=[
+            '"quoted  one"',
+            "QUOTED ONE",
+            "",
+            "   ",
+            "x" * 200,
+            "two\nlines",
+            "three",
+            "four",
+            "five",
+        ]
+    ).captions
+
+    assert len(found) == CHOICES
+    assert found[0] == "QUOTED ONE"  # same words: kept once, in its first place
+    assert found[1] == "x" * CAPTION_MAX
+    assert found[2] == "two lines"
+
+
+@pytest.mark.parametrize("empty", [[], ["", "   ", '""']])
+def test_no_caption_at_all_is_the_wrong_answer(empty):
+    """The chain then asks the next model."""
+    with pytest.raises(ValidationError):
+        Captions(captions=empty)
 
 
 def test_watching_sends_the_proxy_to_the_video_chain_only(models):

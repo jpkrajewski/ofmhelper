@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, exists, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, StatementError
+from sqlalchemy.orm import undefer_group
 
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.models import DeviceLoginRow, DeviceRow, LoginRow
@@ -179,7 +180,9 @@ class DeviceRepository(CachedRepository):
                     "has_codes": bool(r.backup_codes),
                 }
                 for r in s.execute(
-                    select(LoginRow).where(
+                    select(LoginRow)
+                    .options(undefer_group("secret"))
+                    .where(
                         *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_(None)
                     )
                 ).scalars()

@@ -8,6 +8,7 @@ and replaced under the folder's Redis lock -- so none undoes another's."""
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -25,6 +26,8 @@ logger = get_logger(__name__)
 _LOCK_S = 30
 
 CAPTION_MAX = 80
+# A reel with no POSTED date sorts after every one that has it.
+_NEVER = datetime.min.replace(tzinfo=UTC)
 
 
 class ReelStatus(StrEnum):
@@ -46,8 +49,13 @@ class ReelState(BaseModel):
 
     key: str  # the Drive file id (stable, unique in the folder)
     name: str
+    # Its createdTime in POSTED: the page shows the newest first.
+    posted_at: datetime | None = None
     status: ReelStatus = ReelStatus.PENDING
     caption: str | None = None
+    # What the AI wrote to choose from (empty: a reel made before there were
+    # choices); `caption` is the one on the copy, maybe the person's own.
+    captions: list[str] = Field(default_factory=list)
     local: str | None = None  # downloaded source, relative to the work dir
     out: str | None = None  # the generated copy, relative to the work dir
     made: int = 0  # times the copy was made: the page's cache buster
@@ -57,6 +65,9 @@ class ReelState(BaseModel):
     job_id: str | None = None
     # Its file name in TRIALS once uploaded.
     uploaded_as: str | None = None
+
+    def posted_or_never(self) -> datetime:
+        return self.posted_at or _NEVER
 
     def claim_remake(self, job_id: str, caption: str | None = None) -> None:
         """Taken by a job making it again (with `caption`, when given)."""
@@ -68,27 +79,47 @@ class ReelState(BaseModel):
         self.job_id, self.status, self.error = job_id, ReelStatus.UPLOADING, None
         self.approved = False
 
+    def claim_captions(self, job_id: str) -> None:
+        self.job_id, self.error = job_id, None
+
     def select(self, selected: bool) -> None:
         self.approved = selected
 
     def mark_downloaded(self, local: str) -> None:
         self.local, self.status, self.error = local, ReelStatus.DOWNLOADED, None
 
-    def mark_made(self, caption: str, out: str) -> None:
+    def mark_made(self, caption: str, out: str, captions: list[str]) -> None:
+        """Its new copy is not the one in Drive, if one is."""
         self.caption, self.out, self.made = caption, out, self.made + 1
+        self.captions = captions
         self.status, self.error = ReelStatus.GENERATED, None
-        self.approved, self.job_id = False, None
+        self.approved, self.job_id, self.uploaded_as = False, None, None
 
     def mark_failed(self, error: str) -> None:
         self.status, self.error, self.job_id = ReelStatus.FAILED, error, None
+
+    def mark_captions(self, captions: list[str]) -> None:
+        self.captions, self.job_id, self.error = captions, None, None
+
+    def captions_failed(self, error: str) -> None:
+        self.job_id, self.error = None, error
 
     def mark_uploaded(self, name: str) -> None:
         self.status, self.uploaded_as = ReelStatus.UPLOADED, name
         self.job_id, self.error = None, None
 
+    def left_drive(self) -> None:
+        """Replaced by a newer batch: selectable again."""
+        self.uploaded_as = None
+        if self.status == ReelStatus.UPLOADED:
+            self.status = ReelStatus.GENERATED
+
     def upload_failed(self, error: str) -> None:
-        """Back to selectable, saying why."""
-        self.status, self.job_id, self.error = ReelStatus.GENERATED, None, error
+        """Its batch did not go up: as it was before the click, still selected,
+        saying why."""
+        was_in_drive = self.uploaded_as is not None
+        self.status = ReelStatus.UPLOADED if was_in_drive else ReelStatus.GENERATED
+        self.job_id, self.error, self.approved = None, error, True
 
 
 class FolderState(BaseModel):
@@ -100,6 +131,10 @@ class FolderState(BaseModel):
     job_id: str | None = None
     # Why the last job could not reach Google Drive (page notice), if so.
     problem: str | None = None
+    # What the last Generate trials left (status line): nothing new in POSTED,
+    # or how many it could not make.
+    note: str | None = None
+    # Newest in POSTED first (`tasks.merge_posted`): the page's order.
     reels: list[ReelState] = Field(default_factory=list)
 
     def reel(self, key: str) -> ReelState | None:
@@ -107,6 +142,9 @@ class FolderState(BaseModel):
 
     def report(self, problem: str | None) -> None:
         self.problem = problem
+
+    def tell(self, note: str | None) -> None:
+        self.note = note
 
     def remember_trials_folder(self, folder_id: str) -> None:
         self.trials_folder_id = folder_id

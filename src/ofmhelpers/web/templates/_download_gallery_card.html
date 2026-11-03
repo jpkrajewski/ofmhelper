@@ -1,8 +1,9 @@
-{# One /download-assets gallery card: the shared card, plus the links that
-   failed, a link to every file of a many-file download, and -- when it
-   produced a video -- a [Clone | Clone long] control that opens that page
-   with the download's video(s) already picked (static/js/download.js posts
-   the job id; a card that finishes live has the same control cloned in). #}
+{# One /download-assets gallery card, one per file of a download
+   (`TaskCard.per_file`): the shared card, plus the links that failed, and --
+   when its file is a video -- a [Clone | Clone long] control that opens that
+   page with this video already picked (static/js/download.js posts the job id
+   and the card's file index; a card that finishes live has the same control
+   cloned in). #}
 {% extends "_gallery_card.html" %}
 {% import "components/ui.html" as ui %}
 {% block below %}{% if job.status == "done" and job.assets|selectattr("kind", "equalto", "video")|list %}
@@ -20,4 +21,3 @@
         {{ job.failed_sources|length }} link{{ "s" if job.failed_sources|length != 1 }} failed
     </div>
 {% endif %}{% endblock %}
-{% block meta %}{{ job.task_label }}{% if job.assets|length > 1 %} · <a href="/{{ job.task | replace('_', '-') }}/jobs/{{ job.job_id }}">all {{ job.assets|length }} files</a>{% endif %}{% endblock %}

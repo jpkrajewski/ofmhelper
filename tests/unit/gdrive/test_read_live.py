@@ -165,6 +165,24 @@ def test_scoped_drive_writes_into_folders_it_makes_finds_or_reads_in_its_root(
     assert fake.names_in(by_hand) == ["b.mp4"]
 
 
+def test_scoped_drive_trashes_only_inside_its_root(tmp_path):
+    fake, person, root, video = _scoped(tmp_path)
+    scoped = ScopedDrive(person, root)
+    own = scoped.create_folder(root, "TRIALS")
+    made = scoped.upload(own.id, video, "a.mp4", "video/mp4")
+    live = fake.seed_folder("ALL ACCOUNTS", shared=True)
+    inside_live = fake.seed_folder("TRIALS", parent=live)
+    other = fake.add_file(inside_live, "VID_1.mp4", "video/mp4")
+    scoped.folder(inside_live)  # read: still not its to write
+
+    scoped.trash_file(made.id)
+
+    with pytest.raises(DriveError):
+        scoped.trash_file(other)
+    assert fake.names_in(own.id) == []
+    assert fake.names_in(inside_live) == ["VID_1.mp4"]
+
+
 def test_scoped_drive_writes_nowhere_outside_its_root(tmp_path):
     fake, person, root, video = _scoped(tmp_path)
     scoped = ScopedDrive(person, root)

@@ -12,17 +12,12 @@ import subprocess
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import (
-    count_hidden_jobs,
-    create_job,
-    list_jobs_page,
-    run_job,
-)
+from ofmhelpers.db.stores.jobs import start_job
 from ofmhelpers.features.clone_long import (
     RESOLUTIONS,
     TARGETS,
@@ -32,13 +27,12 @@ from ofmhelpers.features.clone_long import (
     rate,
     run_long_clone,
 )
-from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.schemas import Job, ProviderChoice, TaskCard
-from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor, ApiKeys, AssetsRoot, OwnerId
+from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
+from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
-    assets_root_for,
     build_ordered_paths,
     classify_kind,
     job_assets,
@@ -52,6 +46,17 @@ TASK = "clone_long"
 LABEL = "Clone long"
 FILES_PREFIX = f"{router.prefix}/files"
 DEFAULT_RESOLUTION = "720P"
+
+gallery = Gallery({TASK})
+
+
+class LongCloneForm(PaidForm):
+    prompt: Stripped = Field("", max_length=2000)
+    resolution: Upper = DEFAULT_RESOLUTION
+    image: Files
+    image_manifest: str = "[]"
+    video: Files
+    video_manifest: str = "[]"
 
 
 class LongCloneQueued(BaseModel):
@@ -73,35 +78,27 @@ def card(job: Job) -> TaskCard:
     )
 
 
-def _gallery_page(
-    request: Request, offset: int, hidden: bool = False
-) -> tuple[list[TaskCard], int | None]:
-    """One page of the session's long-clone cards, newest first, and the
-    next page's offset (None after the last). `hidden`: only the hidden
-    cards."""
-    limit = settings.web.gallery_limit
-    jobs, total = list_jobs_page(
-        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
-    )
-    next_offset = offset + limit
-    return [card(j) for j in jobs], next_offset if next_offset < total else None
-
-
 @router.get("")
-def page(request: Request, video: Annotated[list[str] | None, Query()] = None):
-    gallery, next_offset = _gallery_page(request, 0)
+def page(
+    request: Request,
+    actor: Actor,
+    api_keys: ApiKeys,
+    assets_root: AssetsRoot,
+    video: Annotated[list[str] | None, Query()] = None,
+) -> Response:
+    first = gallery.page(actor)
     # One video: a download sends its first (clone-long clones one video).
-    prefill = keep_videos(video or [], assets_root_for(request))[:1]
+    prefill = keep_videos(video or [], assets_root)[:1]
     return render(
         request,
         "clone_long.html",
-        gallery=gallery,
-        next_offset=next_offset,
-        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
+        gallery=[card(j) for j in first.jobs],
+        next_offset=first.next_offset,
+        hidden_count=gallery.hidden_count(actor),
         prefill_video=prefill,
         providers=ProviderChoice.all(list(TARGETS)),
         selected_provider=settings.aigen.default_provider,
-        api_keys=get_api_keys(request),
+        api_keys=api_keys,
         rates={name: rate(name).model_dump() for name in TARGETS},
         max_piece_s=min(t.max_reference_s for t in TARGETS.values()),
         max_video_s=settings.clone_long.max_video_s,
@@ -112,19 +109,15 @@ def page(request: Request, video: Annotated[list[str] | None, Query()] = None):
 
 
 @router.get("/gallery")
-def gallery_page(
-    request: Request,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    hidden: Annotated[bool, Query()] = False,
-):
+def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
     """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    gallery, next_offset = _gallery_page(request, offset, hidden)
+    found = gallery.page(actor, query)
     return render(
         request,
         "clone_long_gallery_fragment.html",
-        gallery=gallery,
-        next_offset=next_offset,
+        gallery=[card(j) for j in found.jobs],
+        next_offset=found.next_offset,
     )
 
 
@@ -153,33 +146,28 @@ def _measure(path: str) -> tuple[float, Shape]:
 
 @router.post("/run")
 def run(
-    request: Request,
-    api_key: Annotated[str, Form()] = "",
-    provider: Annotated[str, Form()] = "",
-    prompt: Annotated[str, Form(max_length=2000)] = "",
-    resolution: Annotated[str, Form()] = DEFAULT_RESOLUTION,
-    image: Annotated[list[UploadFile] | None, File()] = None,
-    image_manifest: Annotated[str, Form()] = "[]",
-    video: Annotated[list[UploadFile] | None, File()] = None,
-    video_manifest: Annotated[str, Form()] = "[]",
+    form: Annotated[LongCloneForm, Form()],
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
 ) -> LongCloneQueued:
-    provider = provider or settings.aigen.default_provider
-    if provider not in TARGETS:
+    if form.provider not in TARGETS:
         raise HTTPException(status_code=400, detail="That provider cannot clone")
-    if not api_key.strip():
+    if not form.api_key:
         raise HTTPException(status_code=400, detail="API key is required")
-    resolution = resolution.upper()
-    if resolution not in RESOLUTIONS:
+    if form.resolution not in RESOLUTIONS:
         raise HTTPException(status_code=400, detail="Unknown resolution")
-    root = assets_root_for(request)
-    user_id = AuthMiddleware.owner_id(request)
     image_path = _one(
-        build_ordered_paths(image_manifest, image or [], root, user_id=user_id),
+        build_ordered_paths(
+            form.image_manifest, form.image, assets_root, user_id=owner_id
+        ),
         "image",
         "subject image",
     )
     video_path = _one(
-        build_ordered_paths(video_manifest, video or [], root, user_id=user_id),
+        build_ordered_paths(
+            form.video_manifest, form.video, assets_root, user_id=owner_id
+        ),
         "video",
         "video",
     )
@@ -190,31 +178,22 @@ def run(
             status_code=400,
             detail=f"The video is {seconds:.0f} s; the longest is {longest} s",
         )
-    try:
-        clone = LongClone.prepare(
-            provider=provider,
-            prompt=prompt.strip() or settings.web.clone_default_prompt,
-            resolution=resolution,
-            image=image_path,
-            video=video_path,
-            seconds=seconds,
-            shape=shape,
-        )
-    except InvalidInputError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
-
+    clone = LongClone.prepare(
+        provider=form.provider,
+        prompt=form.prompt or settings.web.clone_default_prompt,
+        resolution=form.resolution,
+        image=image_path,
+        video=video_path,
+        seconds=seconds,
+        shape=shape,
+    )
     params = clone.params.model_dump()
-    job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
-    enqueue(
-        run_job,
-        job_id,
+    job_id = start_job(
+        TASK,
+        params,
         run_long_clone,
-        {
-            "job_id": job_id,
-            "api_key": api_key.strip(),
-            "assets_root": str(root),
-            **params,
-        },
+        {"api_key": form.api_key, "assets_root": str(assets_root), **params},
+        actor=actor,
         job_timeout=clone.time_limit(),
     )
     return LongCloneQueued(job_id=job_id)

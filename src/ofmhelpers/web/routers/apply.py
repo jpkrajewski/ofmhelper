@@ -25,7 +25,7 @@ import time
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import Response
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from ofmhelpers.config import settings
@@ -34,6 +34,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import ApplicationForm
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.middleware.ratelimit import client_id
+from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)
@@ -66,10 +67,10 @@ def _token_problem(token: str) -> str | None:
 
 
 @router.get("/")
-def landing(request: Request):
+def landing(request: Request) -> Response:
     # Signed in: the app, not the public page.
     if AuthMiddleware.session_user(request) is not None:
-        return RedirectResponse(url=AuthMiddleware.HOME, status_code=303)
+        return see_other(AuthMiddleware.HOME)
     return render(request, "reachmodel.html", form_token=form_token())
 
 
@@ -81,7 +82,9 @@ class _Submitted(ApplicationForm):
 
 
 @router.post("/apply")
-def submit_application(request: Request, posted: Annotated[_Submitted, Form()]):
+def submit_application(
+    request: Request, posted: Annotated[_Submitted, Form()]
+) -> Response:
     form = ApplicationForm.model_validate(
         posted.model_dump(exclude={"form_token", "website"})
     )
@@ -94,7 +97,7 @@ def submit_application(request: Request, posted: Annotated[_Submitted, Form()]):
         logger.warning(
             "application dropped as spam (%s) from %s", reason, client_id(request)
         )
-        return RedirectResponse(url=_THANKS, status_code=303)
+        return see_other(_THANKS)
     application = applications_store.add_application(form)
     logger.info("application received: %s", application.id)
-    return RedirectResponse(url=_THANKS, status_code=303)
+    return see_other(_THANKS)

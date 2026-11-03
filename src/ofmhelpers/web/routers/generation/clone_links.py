@@ -33,33 +33,28 @@ fails "Stopped" when it reaches the worker; a paid one finishes.
 """
 
 import uuid
+from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
 from ofmhelpers.cache import CLONE_LINKS_QUEUE, enqueue_to, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import clone_from_links
 from ofmhelpers.db.stores.jobs import (
-    count_hidden_jobs,
     create_job,
     fail_job,
     get_job,
     list_batch,
-    list_jobs_page,
     redone_links,
     run_job,
 )
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.clone.pricing import UnpricedError, clone_price
-from ofmhelpers.features.clone.service import (
-    CloneRefusedError,
-    export_label,
-    require_kind,
-)
+from ofmhelpers.features.clone.service import export_label, require_kind
 from ofmhelpers.features.clone.targets import (
     DEFAULT_RESOLUTION,
     CloneTarget,
@@ -94,12 +89,20 @@ from ofmhelpers.schemas import (
     ResultFile,
 )
 from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
-from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import (
+    Actor,
+    ApiKeys,
+    AssetsRoot,
+    CurrentUser,
+    OwnerId,
+    Scope,
+)
+from ofmhelpers.web.forms import Files, PaidForm
+from ofmhelpers.web.gallery import Gallery, GalleryParams
+from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import DEFAULT_PROMPT
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
-    assets_root_for,
     build_ordered_paths,
     job_assets,
 )
@@ -111,8 +114,6 @@ router = APIRouter(prefix="/clone-links", tags=["clone-links"])
 
 FILES_PREFIX = f"{router.prefix}/files"
 THUMBS_PREFIX = f"{router.prefix}/thumb"
-# Covers are kept on disk under their link's hash: fine to cache a day.
-_THUMB_CACHE = {"Cache-Control": "private, max-age=86400"}
 # The preview stream line by line through the host's nginx, never buffered.
 _UNBUFFERED = {"X-Accel-Buffering": "no"}
 
@@ -125,6 +126,20 @@ BATCH = r"^[0-9a-f]{8,32}$"
 _SENT_TTL_S = 24 * 3600
 # A run's row made but never queued (Redis/RQ refused): its card says so.
 NOT_QUEUED = "Not queued: run it again"
+
+gallery = Gallery({TASK})
+
+
+class CloneLinksForm(PaidForm):
+    prompt: str = Field(DEFAULT_PROMPT, min_length=1)
+    resolution: str = DEFAULT_RESOLUTION
+    audio: bool = False
+    export: str = Field(default_factory=lambda: settings.exports.default)
+    mirror: bool = False
+    image: Files
+    image_manifest: str = "[]"
+    links: list[str] = Field(default_factory=list)
+    batch: str | None = Field(None, pattern=BATCH)
 
 
 class ReviewState(BaseModel):
@@ -219,18 +234,20 @@ def _price(provider: str, resolution: str) -> Price:
 
 
 @router.post("/previews")
-def previews(request: Request, body: PreviewsRequest) -> StreamingResponse:
+def previews(
+    body: PreviewsRequest, user: CurrentUser, owner_id: OwnerId
+) -> StreamingResponse:
     """Generate's dialog: every link's cover, length and price, read without
     downloading (as the clicker, with their cookies.txt), all in parallel;
     one JSON line (`LinkPreview`) per link as each is done, cached ones
     first. The page fills each tile as its line arrives. Nothing is read
     without Google Drive connected: `/run` would refuse it anyway."""
-    if not refresh_token(AuthMiddleware.user(request).id):
+    if not refresh_token(user.id):
         raise HTTPException(status_code=400, detail=NOT_CONNECTED)
     urls = _read("\n".join(body.urls))
     provider = body.provider or settings.aigen.default_provider
     price = _price(provider, _resolution(body.resolution or DEFAULT_RESOLUTION))
-    found = preview_all(urls, AuthMiddleware.owner_id(request), price, THUMBS_PREFIX)
+    found = preview_all(urls, owner_id, price, THUMBS_PREFIX)
     return StreamingResponse(
         (p.model_dump_json() + "\n" for p in found),
         media_type="application/x-ndjson",
@@ -245,18 +262,19 @@ def thumb(key: str) -> FileResponse:
     path = thumb_file(key) if THUMB_KEY.match(key) else None
     if path is None or not path.is_file():
         raise HTTPException(status_code=404, detail="No cover")
-    return FileResponse(path, media_type="image/webp", headers=_THUMB_CACHE)
+    # Covers are kept on disk under their link's hash: fine to cache a day.
+    return FileResponse(path, media_type="image/webp", headers=PRIVATE_FOR_A_DAY)
 
 
 # --- Generate ------------------------------------------------------------------
 
 
-def _queue(request: Request, api_key: str, params: dict[str, Any]) -> str:
+def _queue(actor: str, assets_root: Path, api_key: str, params: dict[str, Any]) -> str:
     """One run's job, on the clone-links queue. The key goes to the worker
     only, never into the params its page shows. Not queued (Redis/RQ
     refused): the job is failed at once -- never left `running` for
     recovery to call a restart -- and the error raised."""
-    job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
+    job_id = create_job(TASK, params, actor=actor)
     try:
         enqueue_to(
             CLONE_LINKS_QUEUE,
@@ -266,7 +284,7 @@ def _queue(request: Request, api_key: str, params: dict[str, Any]) -> str:
             {
                 "job_id": job_id,
                 "api_key": api_key,
-                "assets_root": str(assets_root_for(request)),
+                "assets_root": str(assets_root),
                 **params,
             },
         )
@@ -312,54 +330,38 @@ def _queued(jobs: list[Job], batch: str, user_id: int) -> CloneQueued:
 
 @router.post("/run")
 def run(
-    request: Request,
-    api_key: Annotated[str, Form()] = "",
-    provider: Annotated[str, Form()] = "",
-    prompt: Annotated[str, Form(min_length=1)] = DEFAULT_PROMPT,
-    resolution: Annotated[str, Form()] = DEFAULT_RESOLUTION,
-    audio: Annotated[bool, Form()] = False,
-    export: Annotated[str, Form()] = "",
-    mirror: Annotated[bool, Form()] = False,
-    image: Annotated[list[UploadFile] | None, File()] = None,
-    image_manifest: Annotated[str, Form()] = "[]",
-    links: Annotated[list[str] | None, Form()] = None,
-    batch: Annotated[str | None, Form(pattern=BATCH)] = None,
+    form: Annotated[CloneLinksForm, Form()],
+    user: CurrentUser,
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
 ) -> CloneQueued:
     """One run per ticked link; their job ids and cards, newest first like
     the gallery. Each link's video is downloaded by its own run. `batch`:
     the page's id of this Generate -- one already sent answers with its
     runs and queues nothing (none: a new id)."""
-    provider = provider or settings.aigen.default_provider
-    target = _target(provider)
-    if not api_key.strip():
+    target = _target(form.provider)
+    if not form.api_key:
         raise HTTPException(status_code=400, detail="API key is required")
-    export = export or settings.exports.default
-    if export not in exports():
+    if form.export not in exports():
         raise HTTPException(status_code=400, detail="Unknown export")
-    resolution = _resolution(resolution)
-    user = AuthMiddleware.user(request)
+    resolution = _resolution(form.resolution)
     if not refresh_token(user.id):
         raise HTTPException(status_code=400, detail=NOT_CONNECTED)
-    urls = _read("\n".join(links or []))
+    urls = _read("\n".join(form.links))
     image_paths = build_ordered_paths(
-        image_manifest,
-        image or [],
-        assets_root_for(request),
-        user_id=AuthMiddleware.owner_id(request),
+        form.image_manifest, form.image, assets_root, user_id=owner_id
     )
     max_images = settings.web.clone_max_images
     if not 1 <= len(image_paths) <= max_images:
         raise HTTPException(
             status_code=400, detail=f"Pick between 1 and {max_images} subject images"
         )
-    try:
-        require_kind(image_paths, "image", "The subject")
-    except CloneRefusedError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+    require_kind(image_paths, "image", "The subject")
 
-    actor = AuthMiddleware.actor(request)
     # Only now, every refusal behind it: a refused send leaves its batch
     # free for the corrected resend.
+    batch = form.batch
     sent: list[Job] = []
     if batch is not None:
         first = _first_send(actor, batch)
@@ -368,13 +370,13 @@ def run(
             return _queued(sent, batch, user.id)
     batch = batch or uuid.uuid4().hex
     shared = {
-        "provider": provider,
+        "provider": form.provider,
         "model": target.model,
-        "prompt": prompt,
+        "prompt": form.prompt,
         "resolution": resolution,
-        "audio": audio,
-        "export": export,
-        "mirror": mirror,
+        "audio": form.audio,
+        "export": form.export,
+        "mirror": form.mirror,
         "reference_images": image_paths,
         # One per Generate: a failed run's Recreate brings back its
         # batch's failed links (`recreate_links`), Stop stops them all.
@@ -383,7 +385,7 @@ def run(
     queued = {job.params.get("link") for job in sent if job.error != NOT_QUEUED}
     try:
         job_ids = [
-            _queue(request, api_key.strip(), {**shared, "link": url})
+            _queue(actor, assets_root, form.api_key, {**shared, "link": url})
             for url in urls
             if url not in queued
         ]
@@ -422,33 +424,20 @@ def _cards(jobs: list[Job], user_id: int) -> list[CloneLinksCard]:
     return [_card(j, reviews.get(j.id)) for j in jobs]
 
 
-def _gallery_page(
-    request: Request, offset: int, hidden: bool = False
-) -> tuple[list[CloneLinksCard], int | None]:
-    """One page of the session's cards, newest first, and the next page's
-    offset (None after the last). `hidden`: only the hidden cards."""
-    limit = settings.web.gallery_limit
-    jobs, total = list_jobs_page(
-        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
-    )
-    next_offset = offset + limit
-    cards = _cards(jobs, AuthMiddleware.scope(request))
-    return cards, next_offset if next_offset < total else None
-
-
 @router.get("")
-def form(request: Request):
-    gallery, next_offset = _gallery_page(request, 0)
-    user = AuthMiddleware.user(request)
+def form(
+    request: Request, user: CurrentUser, actor: Actor, scope: Scope, api_keys: ApiKeys
+) -> Response:
+    first = gallery.page(actor)
     return render(
         request,
         "clone_links.html",
-        gallery=gallery,
-        next_offset=next_offset,
-        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
+        gallery=_cards(first.jobs, scope),
+        next_offset=first.next_offset,
+        hidden_count=gallery.hidden_count(actor),
         providers=ProviderChoice.all(list(clone_targets())),
         selected_provider=settings.aigen.default_provider,
-        api_keys=get_api_keys(request),
+        api_keys=api_keys,
         default_prompt=DEFAULT_PROMPT,
         default_resolution=DEFAULT_RESOLUTION,
         resolutions=offered_resolutions(),
@@ -467,27 +456,27 @@ def form(request: Request):
 
 @router.get("/gallery")
 def gallery_page(
-    request: Request,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    hidden: Annotated[bool, Query()] = False,
-):
+    request: Request, scope: Scope, actor: Actor, query: GalleryParams
+) -> Response:
     """The next page of cards (gallery-scroll.js); `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    gallery, next_offset = _gallery_page(request, offset, hidden)
+    found = gallery.page(actor, query)
     return render(
         request,
         "clone_links_gallery_fragment.html",
-        gallery=gallery,
-        next_offset=next_offset,
+        gallery=_cards(found.jobs, scope),
+        next_offset=found.next_offset,
     )
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request):
+def gallery_latest(request: Request, actor: Actor, scope: Scope) -> Response:
     """The newest page of cards, no sentinel: what live-gallery.js polls."""
-    gallery, _ = _gallery_page(request, 0)
     return render_polled(
-        request, "clone_links_gallery_fragment.html", gallery=gallery, next_offset=None
+        request,
+        "clone_links_gallery_fragment.html",
+        gallery=_cards(gallery.page(actor).jobs, scope),
+        next_offset=None,
     )
 
 
@@ -502,8 +491,7 @@ def _states(jobs: list[Job], user_id: int) -> list[ReviewState]:
     ]
 
 
-def _own_runs(request: Request, job_ids: list[str]) -> list[Job]:
-    actor = AuthMiddleware.actor(request)
+def _own_runs(actor: str, job_ids: list[str]) -> list[Job]:
     return [
         job
         for job_id in dict.fromkeys(job_ids)
@@ -545,10 +533,9 @@ def _links_to_recreate(job: Job, actor: str) -> list[str]:
 
 
 @router.get("/recreate/{job_id}")
-def recreate_links(request: Request, job_id: str) -> RecreateLinks:
+def recreate_links(job_id: str, actor: Actor) -> RecreateLinks:
     """The links a card's Recreate puts back in the box (none: nothing to
     redo)."""
-    actor = AuthMiddleware.actor(request)
     job = get_job(job_id, actor)
     if job is None or job.task != TASK:
         raise HTTPException(status_code=404, detail="Not found")
@@ -556,11 +543,10 @@ def recreate_links(request: Request, job_id: str) -> RecreateLinks:
 
 
 @router.post("/stop/{job_id}")
-def stop(request: Request, job_id: str) -> BatchStopped:
+def stop(job_id: str, actor: Actor) -> BatchStopped:
     """Stop: the Generate of this card stopped (`clone_links.stop`). Rows
     are never failed or their requests forgotten here: a worker may hold a
     run, and a paid one is finished by its worker or by recovery."""
-    actor = AuthMiddleware.actor(request)
     job = get_job(job_id, actor)
     batch = job.params.get("batch") if job is not None and job.task == TASK else None
     if not isinstance(batch, str) or not batch:
@@ -581,10 +567,10 @@ def stop(request: Request, job_id: str) -> BatchStopped:
 
 @router.get("/reviews")
 def reviews(
-    request: Request, job: Annotated[list[str], Query(max_length=200)]
+    job: Annotated[list[str], Query(max_length=200)], actor: Actor, scope: Scope
 ) -> list[ReviewState]:
     """These runs' review blocks: what the page polls while reviews run."""
-    return _states(_own_runs(request, job), AuthMiddleware.scope(request))
+    return _states(_own_runs(actor, job), scope)
 
 
 add_job_routes(

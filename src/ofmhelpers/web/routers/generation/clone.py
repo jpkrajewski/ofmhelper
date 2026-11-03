@@ -13,11 +13,12 @@ looked up here when called and handed on, so this module stays their one seam.
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.responses import Response
+from pydantic import Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import count_hidden_jobs, get_job, start_job
-from ofmhelpers.db.stores.jobs import gallery_page as job_gallery_page
+from ofmhelpers.db.stores.jobs import get_job, start_job
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
     ExportFailedError,
@@ -30,7 +31,6 @@ from ofmhelpers.features.clone.service import (
     FILES_PREFIX,
     PREFIX,
     TASK,
-    CloneRefusedError,
     CloneRun,
     cards,
     check_choices,
@@ -47,16 +47,11 @@ from ofmhelpers.features.clone.targets import (
     offered_resolutions,
 )
 from ofmhelpers.features.clone.targets import clone_values as _clone_values
-from ofmhelpers.features.drive.uploads import (
-    UploadRefusedError,
-    queue_uploads,
-    remove_upload,
-)
+from ofmhelpers.features.drive.uploads import queue_uploads, remove_upload
 from ofmhelpers.integrations.gdrive import DriveError
 from ofmhelpers.media.exports import ExportOptions, exports
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.schemas import (
-    CloneCard,
     CloneQueued,
     DriveUpload,
     ProviderChoice,
@@ -71,6 +66,8 @@ from ofmhelpers.web.dependencies import (
     CurrentUser,
     OwnerId,
 )
+from ofmhelpers.web.forms import Files, PaidForm
+from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.generation.ai import run_ai
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
@@ -101,6 +98,20 @@ router = APIRouter(prefix=PREFIX, tags=["clone"])
 DEFAULT_PROMPT = settings.web.clone_default_prompt
 
 CLONE_TARGETS = clone_targets()
+
+gallery = Gallery({TASK})
+
+
+class CloneForm(PaidForm):
+    prompt: str = Field(DEFAULT_PROMPT, min_length=1)
+    resolution: str = DEFAULT_RESOLUTION
+    audio: bool = False
+    export: str = ""
+    mirror: bool = False
+    image: Files
+    image_manifest: str = "[]"
+    videos: Files
+    videos_manifest: str = "[]"
 
 
 def _run_clone(
@@ -151,17 +162,6 @@ def _video_seconds(path: str) -> float:
     return video_seconds(path, duration_s)
 
 
-def _gallery_page(
-    actor: str, offset: int, hidden: bool = False
-) -> tuple[list[CloneCard], int | None]:
-    """One page of the session's clone cards, newest first, and the next
-    page's offset (None after the last). `hidden`: only the hidden cards."""
-    jobs, next_offset = job_gallery_page(
-        {TASK}, offset, settings.web.gallery_limit, actor, hidden
-    )
-    return cards(jobs), next_offset
-
-
 def _queue(run: CloneRun, api_key: str, assets_root: Path, actor: str) -> str:
     """One run's job. The key goes to the worker only, never into the
     params its page shows."""
@@ -192,14 +192,14 @@ def form(
     api_keys: ApiKeys,
     assets_root: AssetsRoot,
     video: Annotated[list[str] | None, Query()] = None,
-):
-    gallery, next_offset = _gallery_page(actor, 0)
+) -> Response:
+    first = gallery.page(actor)
     return render(
         request,
         "clone.html",
-        gallery=gallery,
-        next_offset=next_offset,
-        hidden_count=count_hidden_jobs({TASK}, actor),
+        gallery=cards(first.jobs),
+        next_offset=first.next_offset,
+        hidden_count=gallery.hidden_count(actor),
         providers=ProviderChoice.all(list(CLONE_TARGETS)),
         selected_provider=settings.aigen.default_provider,
         api_keys=api_keys,
@@ -224,32 +224,30 @@ def form(
 @router.get("/gallery")
 def gallery_page(
     request: Request,
-    actor: Actor,
     user: CurrentUser,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    hidden: Annotated[bool, Query()] = False,
-):
+    actor: Actor,
+    query: GalleryParams,
+) -> Response:
     """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    gallery, next_offset = _gallery_page(actor, offset, hidden)
+    found = gallery.page(actor, query)
     return render(
         request,
         "clone_gallery_fragment.html",
-        gallery=gallery,
-        next_offset=next_offset,
+        gallery=cards(found.jobs),
+        next_offset=found.next_offset,
         **dict(drive_picker(user.id)),
     )
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request, actor: Actor, user: CurrentUser):
+def gallery_latest(request: Request, actor: Actor, user: CurrentUser) -> Response:
     """The newest page of cards, no sentinel: what live-gallery.js polls to
     show runs started in other sessions."""
-    gallery, _ = _gallery_page(actor, 0)
     return render_polled(
         request,
         "clone_gallery_fragment.html",
-        gallery=gallery,
+        gallery=cards(gallery.page(actor).jobs),
         next_offset=None,
         **dict(drive_picker(user.id)),
     )
@@ -259,10 +257,7 @@ def gallery_latest(request: Request, actor: Actor, user: CurrentUser):
 def drive_upload(user: CurrentUser, body: UploadRequest) -> UploadsQueued:
     """These runs' videos into each picked account's Drive folder, on the
     worker, as the clicker's Google account."""
-    try:
-        uploads = queue_uploads(user, body.job_ids, body.login_ids)
-    except UploadRefusedError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    uploads = queue_uploads(user, body.job_ids, body.login_ids)
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
     )
@@ -273,8 +268,6 @@ def drive_upload_remove(user: CurrentUser, upload_id: int) -> DriveUpload:
     """Takes an uploaded video back out of its account folder (Drive trash)."""
     try:
         return remove_upload(user, upload_id)
-    except UploadRefusedError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DriveError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -290,42 +283,29 @@ def drive_upload_states(
 
 @router.post("/run")
 def run(
+    form: Annotated[CloneForm, Form()],
     actor: Actor,
     owner: OwnerId,
     user: CurrentUser,
     assets_root: AssetsRoot,
-    api_key: Annotated[str, Form()] = "",
-    provider: Annotated[str, Form()] = "",
-    prompt: Annotated[str, Form(min_length=1)] = DEFAULT_PROMPT,
-    resolution: Annotated[str, Form()] = DEFAULT_RESOLUTION,
-    audio: Annotated[bool, Form()] = False,
-    export: Annotated[str, Form()] = "",
-    mirror: Annotated[bool, Form()] = False,
-    image: Annotated[list[UploadFile] | None, File()] = None,
-    image_manifest: Annotated[str, Form()] = "[]",
-    videos: Annotated[list[UploadFile] | None, File()] = None,
-    videos_manifest: Annotated[str, Form()] = "[]",
-):
+) -> CloneQueued:
     """Queues one run per video and returns their job ids plus their cards
     rendered, newest first like the gallery, so the page shows them without
     a reload."""
-    try:
-        choices = check_choices(provider, api_key, export, resolution)
-        runs = plan_runs(
-            choices,
-            prompt,
-            audio,
-            mirror,
-            build_ordered_paths(
-                image_manifest, image or [], assets_root, user_id=owner
-            ),
-            build_ordered_paths(
-                videos_manifest, videos or [], assets_root, user_id=owner
-            ),
-            _video_seconds,
-        )
-    except CloneRefusedError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+    choices = check_choices(form.provider, form.api_key, form.export, form.resolution)
+    runs = plan_runs(
+        choices,
+        form.prompt,
+        form.audio,
+        form.mirror,
+        build_ordered_paths(
+            form.image_manifest, form.image, assets_root, user_id=owner
+        ),
+        build_ordered_paths(
+            form.videos_manifest, form.videos, assets_root, user_id=owner
+        ),
+        _video_seconds,
+    )
     job_ids = [_queue(r, choices.api_key, assets_root, actor) for r in runs]
     return CloneQueued(job_ids=job_ids, html=_rendered_cards(job_ids, actor, user.id))
 

@@ -13,23 +13,16 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import ValidationError
 from starlette.background import BackgroundTask
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import (
-    create_job,
-    get_job,
-    list_jobs_page,
-    merge_params,
-    run_job,
-)
+from ofmhelpers.db.stores.jobs import get_job, list_jobs_page, merge_params, start_job
 from ofmhelpers.features.viral import find_viral
 from ofmhelpers.integrations.instagram import ProfileHandle
 from ofmhelpers.schemas import Job, JobQueued, ViralFile, ViralSearch
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
     add_job_routes,
@@ -77,8 +70,7 @@ def _search(job: Job) -> ViralSearch:
 
 
 @router.get("")
-def page(request: Request, job: JobQuery = None):
-    actor = AuthMiddleware.actor(request)
+def page(request: Request, actor: Actor, job: JobQuery = None) -> Response:
     searches, _ = list_jobs_page({TASK}, 0, _HISTORY, actor)
     picked = get_job(job, actor) if job else None
     current = picked if picked and picked.task == TASK else None
@@ -96,23 +88,24 @@ def page(request: Request, job: JobQuery = None):
 
 
 @router.post("/run")
-def run(request: Request, profile: Annotated[str, Form()] = "") -> JobQueued:
+def run(actor: Actor, profile: Annotated[str, Form()] = "") -> JobQueued:
     try:
         handle = ProfileHandle(username=profile).username
     except ValidationError as exc:
         raise HTTPException(
             status_code=400, detail="Paste an Instagram profile: @name or its link"
         ) from exc
-    job_id = create_job(TASK, {"profile": handle}, actor=AuthMiddleware.actor(request))
-    enqueue(run_job, job_id, run_viral, {"job_id": job_id, "profile": handle})
+    job_id = start_job(
+        TASK, {"profile": handle}, run_viral, {"profile": handle}, actor=actor
+    )
     return JobQueued(job_id=job_id)
 
 
 @router.get("/zip/{job_id}")
-def download_all(request: Request, job_id: str) -> FileResponse:
+def download_all(job_id: str, actor: Actor) -> FileResponse:
     """Every reel of a finished search as one zip (stored: H.264 does not
     compress further), named after the profile."""
-    job = get_job(job_id, AuthMiddleware.actor(request))
+    job = get_job(job_id, actor)
     if job is None or job.task != TASK:
         raise HTTPException(status_code=404, detail="No such search")
     files = [Path(p) for p in job.local_paths() if p and Path(p).is_file()]

@@ -10,9 +10,9 @@ import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import Response
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -29,11 +29,11 @@ from ofmhelpers.schemas.repurpose import (
     RepurposeResult,
     knob_groups,
 )
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
+from ofmhelpers.web.forms import Files, FormModel
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
     add_job_routes,
-    assets_root_for,
     build_ordered_paths,
     job_assets,
     make_job_dir,
@@ -75,6 +75,18 @@ _HASH_NAMES = {
     "whash": "wHash",
     "sscd": "SSCD",
 }
+
+
+class RepurposeForm(FormModel):
+    video: Files
+    video_manifest: str = "[]"
+    # A string the route parses: a knob it cannot take is a worded 400, which a
+    # validator here would turn into a 422 the page does not show.
+    preset: str = "{}"
+    preset_name: str = ""
+    special: bool = False
+    device: str = DEFAULT_DEVICE
+    copies: int = Field(DEFAULT_COPIES, ge=1, le=MAX_COPIES)
 
 
 def _devices() -> list[tuple[str, str]]:
@@ -194,10 +206,8 @@ def _cards(job: Job) -> list[RepurposeCard]:
 
 
 @router.get("")
-def form(request: Request):
-    recent, _total = list_jobs_page(
-        {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.actor(request)
-    )
+def form(request: Request, actor: Actor) -> Response:
+    recent, _total = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor)
     return render(
         request,
         "repurpose.html",
@@ -213,10 +223,10 @@ def form(request: Request):
 
 
 @router.get("/cards/{job_id}")
-def cards(request: Request, job_id: str):
+def cards(request: Request, job_id: str, actor: Actor) -> Response:
     """A finished job's cards as the gallery draws them (repurpose.js swaps
     them in for the ones generation.js built)."""
-    job = get_job(job_id, AuthMiddleware.actor(request))
+    job = get_job(job_id, actor)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return render(request, "_repurpose_cards.html", cards=_cards(job))
@@ -234,28 +244,21 @@ def preset_json(preset: Preset) -> Response:
 
 @router.post("/run")
 def run(
-    request: Request,
-    video: Annotated[list[UploadFile] | None, File()] = None,
-    video_manifest: Annotated[str, Form()] = "[]",
-    preset: Annotated[str, Form()] = "{}",
-    preset_name: Annotated[str, Form()] = "",
-    special: Annotated[bool, Form()] = False,
-    device: Annotated[str, Form()] = DEFAULT_DEVICE,
-    copies: Annotated[int, Form(ge=1, le=MAX_COPIES)] = DEFAULT_COPIES,
+    form: Annotated[RepurposeForm, Form()],
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
 ) -> JobQueued:
-    if device not in dict(_devices()):
+    if form.device not in dict(_devices()):
         raise HTTPException(status_code=400, detail="Unknown device")
     try:
-        knobs = Preset.model_validate_json(preset)
+        knobs = Preset.model_validate_json(form.preset)
     except ValidationError:
         raise HTTPException(
             status_code=400, detail="A knob has a value it cannot take"
         ) from None
     paths = build_ordered_paths(
-        video_manifest,
-        video or [],
-        assets_root_for(request),
-        user_id=AuthMiddleware.owner_id(request),
+        form.video_manifest, form.video, assets_root, user_id=owner_id
     )
     if len(paths) != 1:
         raise HTTPException(status_code=400, detail="Pick one video")
@@ -263,20 +266,18 @@ def run(
     params = {
         "source": paths[0],
         "preset": knobs.model_dump(mode="json", exclude_none=True, exclude=_PAGE_ONLY),
-        "preset_name": preset_name,
-        "special": special,
-        "device": device,
-        "copies": copies,
+        "preset_name": form.preset_name,
+        "special": form.special,
+        "device": form.device,
+        "copies": form.copies,
     }
-    job_id = create_job(
-        TASK, {"dir": str(job_dir), **params}, actor=AuthMiddleware.actor(request)
-    )
+    job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
     enqueue(
         run_job,
         job_id,
         _run_repurpose,
         {"job_dir": str(job_dir), **params},
-        job_timeout=copies * settings.web.uniqify_encode_timeout_s,
+        job_timeout=form.copies * settings.web.uniqify_encode_timeout_s,
     )
     return JobQueued(job_id=job_id)
 

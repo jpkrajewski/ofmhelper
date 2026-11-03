@@ -1,8 +1,8 @@
 /*
  * /download-assets: hand a finished download's video to /clone or
- * /clone-long. The card's [Clone | Clone long] posts the job id; the server
- * resolves that download's video file(s) and answers the URL to open with
- * them already picked (clone: every video, clone-long: the first).
+ * /clone-long. Each file is its own card; its [Clone | Clone long] posts the
+ * job id and the card's file index, and the server answers the URL to open
+ * with that video already picked.
  *
  * A reloaded card carries the control from the server
  * (_download_gallery_card.html); a card that finishes while the page is open
@@ -25,6 +25,7 @@
             const body = new URLSearchParams({
                 job_id: card.dataset.jobId,
                 target: targetOf(btn),
+                index: card.dataset.fileIndex,
             });
             const r = await fetch("/download-media/send", { method: "POST", body });
             if (!r.ok) throw new Error((await r.text()) || r.status);

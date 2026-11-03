@@ -13,7 +13,7 @@
 {% import "components/ui.html" as ui %}
 {% import "_asset_media.html" as am %}
 {% import "_card_hide.html" as hide %}
-<div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"
+<div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"{% if job.assets %} data-file-index="{{ job.assets[0].index }}"{% endif %}
      data-params='{{ job.params_json }}'{% if job.hidden %} data-hidden{% endif %}
      {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}" data-poll-kind="{{ job.result_kind }}"{% endif %}>
     {% if job.status == "done" and job.assets %}

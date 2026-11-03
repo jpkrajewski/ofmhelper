@@ -8,19 +8,19 @@ import shutil
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import create_job, list_jobs_page, run_job
 from ofmhelpers.media.character_sheet import combine_side_by_side
 from ofmhelpers.schemas import Job, JobCard, JobQueued, ResultFile
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor, AdminOnly, AssetsRoot
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     UPLOADS_ROOT,
     add_job_routes,
-    assets_root_for,
     convert_heic_upload,
     job_assets,
     make_job_dir,
@@ -32,7 +32,7 @@ from ofmhelpers.web.templates_config import render
 router = APIRouter(
     prefix="/character-sheet",
     tags=["character-sheet"],
-    dependencies=[Depends(AuthMiddleware.require_admin)],
+    dependencies=[AdminOnly],
 )
 
 UPLOAD_ROOT = UPLOADS_ROOT / "character-sheet"
@@ -65,10 +65,8 @@ def _gallery_card(job: Job) -> JobCard:
 
 
 @router.get("")
-def form(request: Request):
-    recent, _total = list_jobs_page(
-        {TASK}, 0, settings.web.gallery_limit, AuthMiddleware.actor(request)
-    )
+def form(request: Request, actor: Actor) -> Response:
+    recent, _total = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor)
     return render(
         request,
         "character_sheet.html",
@@ -79,9 +77,10 @@ def form(request: Request):
 
 @router.post("/run")
 def run(
-    request: Request,
+    actor: Actor,
+    assets_root: AssetsRoot,
     files: Annotated[list[UploadFile] | None, File()] = None,
-):
+) -> JobQueued:
     uploads = [convert_heic_upload(f) for f in files or [] if f.filename]
     max_images = settings.web.character_sheet_max_images
     if not MIN_IMAGES <= len(uploads) <= max_images:
@@ -101,9 +100,7 @@ def run(
             shutil.copyfileobj(upload.file, out)
         saved.append(dest.name)
 
-    job_id = create_job(
-        TASK, {"dir": str(job_dir), "files": saved}, actor=AuthMiddleware.actor(request)
-    )
+    job_id = create_job(TASK, {"dir": str(job_dir), "files": saved}, actor=actor)
     enqueue(
         run_job,
         job_id,
@@ -111,7 +108,7 @@ def run(
         {
             "job_dir": str(job_dir),
             "files": saved,
-            "assets_root": str(assets_root_for(request)),
+            "assets_root": str(assets_root),
         },
     )
     return JobQueued(job_id=job_id)

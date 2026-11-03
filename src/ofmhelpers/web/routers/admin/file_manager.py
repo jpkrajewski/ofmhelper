@@ -10,8 +10,8 @@ with upload). The last resort when a page lost track of a result (prod,
 2026-10-22: a finished run with no card buttons).
 Admin-only
 -- a VA browsing to raw uploads/downloads and deleting things isn't part of
-their job, so the whole router is gated via AuthMiddleware.require_admin instead of
-individual routes.
+their job, so the whole router is gated via AdminOnly instead of individual
+routes.
 """
 
 import shutil
@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import get_job, job_counts, list_jobs_page
@@ -29,7 +29,9 @@ from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DirEntry, FileEntry, FileTile, Job, UserFiles
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import AdminOnly
+from ofmhelpers.web.forms import FormModel
+from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY, see_other
 from ofmhelpers.web.routers.refs import stored_files
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, GENERATE_TOOLS, TOOLS
 from ofmhelpers.web.routers.task_helpers import (
@@ -47,7 +49,7 @@ logger = get_logger(__name__)
 router = APIRouter(
     prefix="/file-manager",
     tags=["file-manager"],
-    dependencies=[Depends(AuthMiddleware.require_admin)],
+    dependencies=[AdminOnly],
 )
 
 # Named roots the manager is allowed to browse -- everything else stays
@@ -75,6 +77,14 @@ SECTIONS: dict[str, tuple[str, set[str]]] = {
     "other": ("OTHER", set(TOOLS) - set().union(*(t for _, t in _NAMED.values()))),
 }
 TILES_PER_PAGE = 60
+
+FormText = Annotated[str, Form()]
+
+
+class DiskUploadForm(FormModel):
+    files: list[UploadFile]
+    path: str = ""
+    root: str = DEFAULT_ROOT
 
 
 def _get_root(root_name: str) -> Path:
@@ -234,7 +244,7 @@ def _section_tiles(
 @router.get("")
 def files_page(
     request: Request, user: int | None = None, section: str = "aigen", page: int = 0
-):
+) -> Response:
     """Users, then one user's files of one section."""
     if section not in SECTIONS:
         raise HTTPException(status_code=400, detail="Unknown section")
@@ -257,7 +267,7 @@ def files_page(
 
 def _back(user_id: int, section: str) -> RedirectResponse:
     query = urlencode({"user": user_id, "section": section})
-    return RedirectResponse(url=f"/file-manager?{query}", status_code=303)
+    return see_other(f"/file-manager?{query}")
 
 
 def _asset(user_id: int, path: str) -> Path:
@@ -269,7 +279,7 @@ def _asset(user_id: int, path: str) -> Path:
 
 
 @router.get("/assets/{user_id}")
-def asset_file(user_id: int, path: str, download: bool = False):
+def asset_file(user_id: int, path: str, download: bool = False) -> Response:
     found = _asset(user_id, path)
     name = strip_asset_hash_prefix(found.name)
     if download:
@@ -278,12 +288,12 @@ def asset_file(user_id: int, path: str, download: bool = False):
 
 
 @router.get("/assets/{user_id}/thumb")
-def asset_thumb(user_id: int, path: str):
+def asset_thumb(user_id: int, path: str) -> Response:
     return _thumb(_asset(user_id, path))
 
 
 @router.post("/assets/{user_id}/delete")
-def asset_delete(user_id: int, path: str):
+def asset_delete(user_id: int, path: str) -> Response:
     found = _asset(user_id, path)
     found.unlink()
     logger.info("file manager: deleted upload %s of user %s", found.name, user_id)
@@ -291,7 +301,7 @@ def asset_delete(user_id: int, path: str):
 
 
 @router.post("/assets/{user_id}/upload")
-def asset_upload(user_id: int, files: Annotated[list[UploadFile], File()]):
+def asset_upload(user_id: int, files: Annotated[list[UploadFile], File()]) -> Response:
     """Into the user's reference store (their reuse picker), deduped by
     content like any upload; media only (`save_asset` 400s anything else)."""
     root = assets_root_for_user(user_id)
@@ -311,7 +321,7 @@ def _run_file(job_id: str, index: int) -> Path:
 
 
 @router.get("/runs/{job_id}/{index}")
-def run_file(job_id: str, index: int, download: bool = False):
+def run_file(job_id: str, index: int, download: bool = False) -> Response:
     """A run's file: in the browser, or `download=1` as an attachment."""
     found = _run_file(job_id, index)
     if download:
@@ -322,12 +332,12 @@ def run_file(job_id: str, index: int, download: bool = False):
 
 
 @router.get("/runs/{job_id}/{index}/thumb")
-def run_thumb(job_id: str, index: int):
+def run_thumb(job_id: str, index: int) -> Response:
     return _thumb(_run_file(job_id, index))
 
 
 @router.post("/runs/{job_id}/{index}/delete")
-def run_delete(job_id: str, index: int):
+def run_delete(job_id: str, index: int) -> Response:
     """The file off the disk; its card (and the run, when nothing is left)
     goes at the next listing (`stores.jobs._heal`). Back to its section."""
     found = _run_file(job_id, index)
@@ -335,34 +345,32 @@ def run_delete(job_id: str, index: int):
     logger.info("file manager: deleted %s of job %s", found.name, job_id)
     job = get_job(job_id)
     if job is None or job.actor is None or not job.actor.isdigit():
-        return RedirectResponse(url="/file-manager", status_code=303)
+        return see_other("/file-manager")
     return _back(int(job.actor), _section_of(job.task))
 
 
 @router.post("/upload")
-def disk_upload(
-    files: Annotated[list[UploadFile], File()],
-    path: Annotated[str, Form()] = "",
-    root: Annotated[str, Form()] = DEFAULT_ROOT,
-):
+def disk_upload(form: Annotated[DiskUploadForm, Form()]) -> Response:
     """Into the disk folder on screen, under the file's own (safe) name; a
     name already there is refused, never overwritten."""
-    directory = _safe_path(root, path)
+    directory = _safe_path(form.root, form.path)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
-    for upload in files:
+    for upload in form.files:
         dest = directory / safe_filename(upload.filename)
         if dest.exists():
             raise HTTPException(status_code=409, detail=f"{dest.name} already exists")
         with dest.open("wb") as out:
             shutil.copyfileobj(upload.file, out)
-    logger.info("file manager: %d upload(s) into %s/%s", len(files), root, path)
-    query = urlencode({"root": root, "path": path})
-    return RedirectResponse(url=f"/file-manager/disk?{query}", status_code=303)
+    logger.info(
+        "file manager: %d upload(s) into %s/%s", len(form.files), form.root, form.path
+    )
+    query = urlencode({"root": form.root, "path": form.path})
+    return see_other(f"/file-manager/disk?{query}")
 
 
 @router.get("/disk")
-def browse(request: Request, root: str = DEFAULT_ROOT, path: str = ""):
+def browse(request: Request, root: str = DEFAULT_ROOT, path: str = "") -> Response:
     _get_root(root).mkdir(parents=True, exist_ok=True)
     dirs, files = _list_entries(root, path)
 
@@ -393,14 +401,14 @@ def _file(root: str, path: str) -> Path:
 
 
 @router.get("/view")
-def view(path: str, root: str = DEFAULT_ROOT):
+def view(path: str, root: str = DEFAULT_ROOT) -> Response:
     """In the browser: media inline, anything else as a download (never
     same-origin HTML, `media_response`)."""
     return media_response(_file(root, path))
 
 
 @router.get("/thumb")
-def thumb(path: str, root: str = DEFAULT_ROOT):
+def thumb(path: str, root: str = DEFAULT_ROOT) -> Response:
     return _thumb(_file(root, path))
 
 
@@ -413,15 +421,11 @@ def _thumb(file_path: Path) -> FileResponse:
     except PREVIEW_ERRORS:
         logger.warning("file manager: no thumbnail of %s", file_path, exc_info=True)
         raise HTTPException(status_code=404, detail="No thumbnail") from None
-    return FileResponse(
-        found,
-        media_type="image/webp",
-        headers={"Cache-Control": "private, max-age=86400"},
-    )
+    return FileResponse(found, media_type="image/webp", headers=PRIVATE_FOR_A_DAY)
 
 
 @router.get("/download")
-def download(path: str, root: str = DEFAULT_ROOT):
+def download(path: str, root: str = DEFAULT_ROOT) -> Response:
     file_path = _file(root, path)
     return FileResponse(
         file_path, filename=file_path.name, media_type="application/octet-stream"
@@ -429,9 +433,7 @@ def download(path: str, root: str = DEFAULT_ROOT):
 
 
 @router.post("/delete")
-def delete_one(
-    path: Annotated[str, Form()], root: Annotated[str, Form()] = DEFAULT_ROOT
-):
+def delete_one(path: FormText, root: FormText = DEFAULT_ROOT) -> Response:
     target = _safe_path(root, path, allow_root=False)
     if target.is_file():
         target.unlink()
@@ -445,15 +447,11 @@ def delete_one(
         if str(Path(path).parent) != "."
         else ""
     )
-    return RedirectResponse(
-        url=f"/file-manager/disk?root={root}&path={parent}", status_code=303
-    )
+    return see_other(f"/file-manager/disk?root={root}&path={parent}")
 
 
 @router.post("/delete-all")
-def delete_all(
-    path: Annotated[str, Form()] = "", root: Annotated[str, Form()] = DEFAULT_ROOT
-):
+def delete_all(path: FormText = "", root: FormText = DEFAULT_ROOT) -> Response:
     directory = _safe_path(root, path, allow_root=False)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
@@ -464,6 +462,4 @@ def delete_all(
         else:
             entry.unlink()
 
-    return RedirectResponse(
-        url=f"/file-manager/disk?root={root}&path={path}", status_code=303
-    )
+    return see_other(f"/file-manager/disk?root={root}&path={path}")

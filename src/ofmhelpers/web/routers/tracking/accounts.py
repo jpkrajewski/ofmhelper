@@ -16,6 +16,7 @@ a platform; static/js/accounts.js reloads while a row is still scanning.
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
@@ -46,10 +47,12 @@ from ofmhelpers.schemas import (
     Period,
     SelectedAccounts,
 )
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
+
+ListQuery = Annotated[AccountQuery, Query()]
 
 
 def _period(query: AccountQuery) -> Period:
@@ -70,9 +73,8 @@ class _Count(BaseModel):
 
 
 @router.get("")
-def index(request: Request, query: Annotated[AccountQuery, Query()]):
+def index(request: Request, query: ListQuery, scope: Scope) -> Response:
     s = settings.accounts
-    scope = AuthMiddleware.scope(request)
     period = _period(query)
     matching = [a for a in list_accounts(scope) if query.matches(a)]
     accounts = query.ordered(matching, period.days)
@@ -98,7 +100,7 @@ def index(request: Request, query: Annotated[AccountQuery, Query()]):
 
 
 @router.post("/add")
-def add(request: Request, body: AddAccounts) -> AddResult:
+def add(body: AddAccounts, owner_id: OwnerId) -> AddResult:
     """Tracks every handle on its own line and queues the first scan of the
     new ones. One already tracked is only assigned to `creator` (when
     given). One bad line rejects the lot, before anything is added."""
@@ -113,46 +115,44 @@ def add(request: Request, body: AddAccounts) -> AddResult:
             status_code=400,
             detail=f"At most {settings.accounts.max_add} accounts at once",
         )
-    user_id = AuthMiddleware.owner_id(request)
     added = [
         h
         for h in handles
-        if track(body.platform, h, body.creator or None, user_id=user_id)
+        if track(body.platform, h, body.creator or None, user_id=owner_id)
     ]
     queue_due_scans()
     return AddResult(added=added, existing=len(handles) - len(added))
 
 
 @router.post("/creator")
-def creator(request: Request, body: AssignCreator) -> _Count:
+def creator(body: AssignCreator, scope: Scope) -> _Count:
     """Assigns the accounts to a creator ("" = none), creating it on first
     use."""
-    scope = AuthMiddleware.scope(request)
     return _Count(count=assign_creator(body.ids, body.creator or None, scope))
 
 
 @router.post("/delete")
-def delete(request: Request, body: SelectedAccounts) -> _Count:
+def delete(body: SelectedAccounts, scope: Scope) -> _Count:
     """Removes the accounts everywhere (features/accounts/removal.py): tracking
     stops (history kept), their logins leave the phones (archived, password
     kept), their Drive folders go to the trash."""
-    return _Count(count=remove_accounts(body.ids, AuthMiddleware.scope(request)))
+    return _Count(count=remove_accounts(body.ids, scope))
 
 
 @router.post("/{account_id}/notes")
-def notes(request: Request, account_id: int, body: Notes) -> Notes:
-    if not set_notes(account_id, body.notes, AuthMiddleware.scope(request)):
+def notes(account_id: int, body: Notes, scope: Scope) -> Notes:
+    if not set_notes(account_id, body.notes, scope):
         raise HTTPException(status_code=404, detail="Account not tracked")
     return body
 
 
 @router.get("/{account_id}")
 def analytics(
-    request: Request, account_id: int, query: Annotated[AccountQuery, Query()]
-):
+    request: Request, account_id: int, query: ListQuery, scope: Scope
+) -> Response:
     """One account over the period: KPIs, follower chart, top posts.
     `query` is the list's, kept for the way back."""
-    account = get_account(account_id, AuthMiddleware.scope(request))
+    account = get_account(account_id, scope)
     if account is None:
         raise HTTPException(status_code=404, detail="Account not tracked")
     s = settings.accounts
