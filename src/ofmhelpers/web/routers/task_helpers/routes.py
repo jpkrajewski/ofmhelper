@@ -1,8 +1,8 @@
-"""The three GET endpoints every background-job tool exposes, registered once.
+"""The five GET endpoints every background-job tool exposes, registered once.
 
 A tool router is then its own page and `/run`, plus one `add_job_routes` call:
-the status page, its polling payload and the result download all live here,
-under the router's own prefix.
+the status page, its polling payload, the result download and the result's
+preview and poster all live here, under the router's own prefix.
 """
 
 from collections.abc import Callable
@@ -10,6 +10,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.schemas import Job
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers.responses import (
     job_assets,
@@ -21,9 +23,16 @@ from ofmhelpers.web.routers.task_helpers.serving import (
     serve_job_poster,
     serve_job_preview,
 )
-from ofmhelpers.web.schemas import Job
-from ofmhelpers.web.stores.jobs import get_job
 from ofmhelpers.web.templates_config import render
+
+
+def _pending_text(pending_message: Callable[[Job], str], job: Job) -> str:
+    """The running job's wording; a plain one when its stored params are not
+    what the wording reads (a job of an older release)."""
+    try:
+        return pending_message(job)
+    except KeyError:
+        return "Working…"
 
 
 def add_job_routes(
@@ -53,7 +62,7 @@ def add_job_routes(
             failed_sources=failed_sources,
             job_inputs=job_inputs(job) if show_inputs else None,
             title=title,
-            pending_message=pending_message(job),
+            pending_message=_pending_text(pending_message, job),
             back_url=back_url,
             back_label=back_label,
         )

@@ -10,11 +10,11 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
+from ofmhelpers.db.stores.jobs import history
+from ofmhelpers.db.stores.users import list_users
+from ofmhelpers.schemas import ActionLogEntry, Job
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.registry import TOOLS
-from ofmhelpers.web.schemas import ActionLogEntry, Job
-from ofmhelpers.web.stores.jobs import list_jobs
-from ofmhelpers.web.stores.users import list_users
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
@@ -52,8 +52,10 @@ def _entry(job: Job, who: dict[str, tuple[str, str]], me: str) -> ActionLogEntry
 
 @router.get("", response_class=HTMLResponse)
 def dashboard(request: Request):
+    """The history as stored: an audit trail is read, never healed -- a job
+    whose files are gone stays listed (its link may 404)."""
     who = {str(u.id): (u.email, str(u.role)) for u in list_users()}
     me = AuthMiddleware.actor(request)
-    jobs = [_entry(job, who, me) for job in list_jobs()]
+    jobs = [_entry(job, who, me) for job in history()]
     any_running = any(j.status in ("running", "queued") for j in jobs)
     return render(request, "action_log.html", jobs=jobs, any_running=any_running)

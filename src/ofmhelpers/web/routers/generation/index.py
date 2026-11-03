@@ -10,12 +10,12 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.jobs import count_hidden_jobs, list_jobs_page
+from ofmhelpers.schemas import ModelChoice, ProviderChoice, TaskCard
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.generation.ai import MAX_BATCH
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
-from ofmhelpers.web.schemas import ModelChoice, ProviderChoice, TaskCard
-from ofmhelpers.web.stores.jobs import count_hidden_jobs, list_jobs_page
 from ofmhelpers.web.templates_config import render, render_polled
 
 router = APIRouter(prefix="/generate", tags=["generate"])

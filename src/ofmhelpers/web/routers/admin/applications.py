@@ -9,8 +9,8 @@ delete only -- the rows are written by routers/apply.py and never edited.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from ofmhelpers.db.stores import applications as applications_store
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.stores import applications as applications_store
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(

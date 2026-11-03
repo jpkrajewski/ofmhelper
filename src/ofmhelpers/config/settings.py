@@ -23,8 +23,8 @@ from typing import Literal
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from ofmhelpers.iphones.models import GeoPoint, Place
-from ofmhelpers.utils.image_fit import ImageLimits
+from ofmhelpers.media.image_fit import ImageLimits
+from ofmhelpers.media.recorder.models import GeoPoint, Place
 
 _DAILY_AT_MSG = "rescan_daily_at must be HH:MM"
 
@@ -87,11 +87,11 @@ class WebSettings(BaseSettings):
         default=24 * 3600, ge=60, validation_alias="OFM_APPLY_TOKEN_TTL_S"
     )
 
-    # Job history kept (repositories/jobs.py `_enforce_cap`): the oldest
-    # finished rows past this go; a running one never does. Was 500 -- prod
-    # was full in 9 days, and one 120-link /clone-links Generate makes 120
-    # rows, so every paste deleted that many of everyone's gallery cards.
-    # Not higher: the admin action log reads (and caches) the whole table.
+    # Finished jobs kept per person per task (repositories/jobs.py
+    # `_enforce_cap`); queued and running ones are never evicted. Was 500 --
+    # prod was full in 9 days, and one 120-link /clone-links Generate makes
+    # 120 rows. Not higher: the admin action log reads (and caches) the whole
+    # table.
     max_jobs: int = Field(default=5000, ge=1, validation_alias="OFM_JOBS_MAX_ENTRIES")
     recovery_sweep_interval_s: int = Field(
         default=300, validation_alias="OFM_RECOVERY_SWEEP_INTERVAL_S"
@@ -164,7 +164,7 @@ class WebSettings(BaseSettings):
         default=5, validation_alias="OFM_REFS_RECENT_UPLOAD_LIMIT"
     )
     max_ref_limit: int = Field(default=60, validation_alias="OFM_REFS_MAX_LIMIT")
-    # How many "recently picked" files web/ref_usage.py keeps in its Redis
+    # How many "recently picked" files features/assets/ref_usage.py keeps in its Redis
     # sorted set. Only the first recent_used_limit are ever shown; the rest is
     # headroom so a file doesn't drop out the moment it stops being top-5.
     ref_usage_max_tracked: int = Field(
@@ -172,7 +172,7 @@ class WebSettings(BaseSettings):
     )
     # Bounds the ffprobe/ffmpeg call behind a video reference thumbnail.
     ffmpeg_timeout_s: int = Field(default=20, validation_alias="OFM_FFMPEG_TIMEOUT_S")
-    # What galleries show instead of a result (web/previews.py): a video's
+    # What galleries show instead of a result (features/previews/render.py): a video's
     # height cap, bitrate cap and encode bound, its poster frame's box, and
     # an image's box (2x a card, so the hover zoom stays sharp).
     preview_height: int = Field(
@@ -188,7 +188,7 @@ class WebSettings(BaseSettings):
     image_preview_px: int = Field(
         default=1024, ge=64, validation_alias="OFM_IMAGE_PREVIEW_PX"
     )
-    # How long one startup's preview backfill (web/preview_backfill.py) keeps
+    # How long one startup's preview backfill (features/previews/backfill.py) keeps
     # other processes starting at the same time from running it too.
     preview_backfill_guard_s: int = Field(
         default=3600, ge=1, validation_alias="OFM_PREVIEW_BACKFILL_GUARD_S"
@@ -315,7 +315,7 @@ class InfraSettings(BaseSettings):
     # Bind-mounted in both compose files, so a container swap keeps it.
     uploads_root: str = Field(default="uploads", validation_alias="OFM_UPLOADS_ROOT")
     # TTL on the repository cache-aside reads, see
-    # web/db/repositories/cached_repository.py. Short: it
+    # db/repositories/cached_repository.py. Short: it
     # absorbs the read burst a page render makes, it is not a write-through
     # cache, and every write bumps its namespace anyway.
     cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")
@@ -347,35 +347,23 @@ class InfraSettings(BaseSettings):
         return self
 
 
-class KieAISettings(BaseSettings):
-    """aigenproviders/kaiai/: kie.ai's endpoints, upload limits and audit
-    logs. What every provider shares (output dir, polling) is AigenSettings."""
+class ProviderSettings(BaseSettings):
+    """integrations/ai_providers/: what every provider's group has. A group's env
+    vars are its `env_prefix` + the field's name (`OFM_RH_REQUEST_TIMEOUT_S`)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    task_log: str = Field(
-        default="/app/kieai_out/tasks.jsonl", validation_alias="OFM_KIEAI_TASK_LOG"
-    )
-    completions_log: str = Field(
-        default="/app/kieai_out/completions.jsonl",
-        validation_alias="OFM_KIEAI_COMPLETIONS_LOG",
-    )
-    # How long a "this local file is already hosted at that URL" entry is kept
-    # in Redis (see client.upload_local_file). Well under kie.ai's own tempfile
-    # retention, and every hit is confirmed live before it is trusted anyway,
-    # so this only bounds how long a dead entry can keep costing one HEAD.
-    upload_cache_ttl_s: int = Field(
-        default=12 * 3600, validation_alias="OFM_KIEAI_UPLOAD_CACHE_TTL_S"
-    )
-    # Reference images over either limit are shrunk to a JPEG before upload
-    # (client._fit_for_upload). Wan 3.0 documents 20MB / 8000px per side;
-    # bytes are halved for the models whose limit is undocumented.
-    ref_image_max_bytes: int = Field(
-        default=10 * 1024 * 1024, validation_alias="OFM_KIEAI_REF_IMAGE_MAX_BYTES"
-    )
-    ref_image_max_side: int = Field(
-        default=8000, validation_alias="OFM_KIEAI_REF_IMAGE_MAX_SIDE"
-    )
+    # One API call; an upload streams a whole reference video, so this is generous.
+    request_timeout_s: float = 300
+    # How long an uploaded file's URL or id is remembered; the provider's own
+    # retention decides, so each group sets it.
+    upload_cache_ttl_s: int
+    # Reference images over either limit go up as a shrunk JPEG copy; a bigger one
+    # fails after submit (an 8262 px sheet on Higgsfield's Wan 3.0, 2026-10-19; a
+    # 422 "file size exceeds limit" on kie.ai). Wan 3.0 documents 20MB / 8000 px per
+    # side; bytes are halved for the models whose limit is undocumented.
+    ref_image_max_bytes: int = 10 * 1024 * 1024
+    ref_image_max_side: int = 8000
 
     @property
     def ref_image_limits(self) -> ImageLimits:
@@ -383,32 +371,36 @@ class KieAISettings(BaseSettings):
             max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
         )
 
-    jobs_base: str = Field(
-        default="https://api.kie.ai/api/v1/jobs", validation_alias="OFM_KIEAI_JOBS_BASE"
-    )
+
+class KieAISettings(ProviderSettings):
+    """integrations/ai_providers/kie/: kie.ai's endpoints, upload limits and audit
+    logs. What every provider shares (output dir, polling) is AigenSettings."""
+
+    model_config = SettingsConfigDict(env_prefix="OFM_KIEAI_")
+
+    task_log: str = "/app/kieai_out/tasks.jsonl"
+    completions_log: str = "/app/kieai_out/completions.jsonl"
+    # Well under kie.ai's own tempfile retention, and every hit is confirmed live
+    # before it is trusted anyway, so this only bounds how long a dead entry can
+    # keep costing one HEAD.
+    upload_cache_ttl_s: int = 12 * 3600
+
+    jobs_base: str = "https://api.kie.ai/api/v1/jobs"
     # A different host from the API: kie.ai serves uploads off its own CDN.
-    upload_base: str = Field(
-        default="https://kieai.redpandaai.co", validation_alias="OFM_KIEAI_UPLOAD_BASE"
-    )
+    upload_base: str = "https://kieai.redpandaai.co"
 
     # HTTP timeouts, split by what the call actually waits on: an upload
     # streams a whole reference file, a download streams a result, and the
     # task-queue calls are small JSON round trips.
-    upload_timeout_s: int = Field(
-        default=900, validation_alias="OFM_KIEAI_UPLOAD_TIMEOUT_S"
-    )
-    request_timeout_s: int = Field(
-        default=30, validation_alias="OFM_KIEAI_REQUEST_TIMEOUT_S"
-    )
+    upload_timeout_s: int = 900
+    request_timeout_s: float = 30
     # The best-effort HEAD behind the upload cache: it fails closed into a
     # re-upload, so waiting on it is never worth much.
-    remote_check_timeout_s: int = Field(
-        default=10, validation_alias="OFM_KIEAI_REMOTE_CHECK_TIMEOUT_S"
-    )
+    remote_check_timeout_s: int = 10
 
 
 class AigenSettings(BaseSettings):
-    """aigenproviders/runner.py, aigenproviders/tasks.py, web/recovery.py:
+    """integrations/ai_providers/runner.py, integrations/ai_providers/tasks.py, features/jobs/recovery.py:
     what every provider shares -- where results land, how long a poll waits
     before handing the job to recovery, and how long recovery keeps trying.
 
@@ -421,6 +413,8 @@ class AigenSettings(BaseSettings):
     default_provider: str = Field(
         default="higgsfield", validation_alias="OFM_DEFAULT_PROVIDER"
     )
+    # The most images one /generate submit may queue (each its own job and card).
+    max_batch: int = Field(default=10, ge=1, validation_alias="OFM_AIGEN_MAX_BATCH")
     # How long a run waits for another worker's upload of the same file
     # (base.upload_lock), and how long a held lock lives if its holder dies.
     upload_lock_s: int = Field(default=300, ge=10, validation_alias="OFM_UPLOAD_LOCK_S")
@@ -483,125 +477,70 @@ class AigenSettings(BaseSettings):
     )
 
 
-class HiggsfieldSettings(BaseSettings):
-    """aigenproviders/higgsfield/. Keys are Higgsfield's `KEY_ID:KEY_SECRET`
+class HiggsfieldSettings(ProviderSettings):
+    """integrations/ai_providers/higgsfield/. Keys are Higgsfield's `KEY_ID:KEY_SECRET`
     pair as one string, pre-filled per role like the kie.ai keys; unset just
     means the form's key field starts empty."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="OFM_HF_")
 
     api_key_admin: str | None = Field(default=None, validation_alias="HF_API_KEY_ADMIN")
-    base_url: str = Field(
-        default="https://api.higgsfield.ai", validation_alias="OFM_HF_BASE_URL"
-    )
-    # One SDK call (submit, status, presign, upload PUT); an upload streams
-    # a whole reference video, so this is generous.
-    request_timeout_s: float = Field(
-        default=300, validation_alias="OFM_HF_REQUEST_TIMEOUT_S"
-    )
-    upload_cache_ttl_s: int = Field(
-        default=24 * 3600, validation_alias="OFM_HF_UPLOAD_CACHE_TTL_S"
-    )
-    # Reference images over either limit are shrunk to a JPEG copy before
-    # upload (provider.upload); a bigger one fails the generation after it is
-    # submitted ("The image dimensions or aspect ratio are not supported", an
-    # 8262 px character sheet on Wan 3.0, 2026-10-19). Wan 3.0 documents
-    # 20MB / 8000 px per side; bytes halved for models that document none.
-    ref_image_max_bytes: int = Field(
-        default=10 * 1024 * 1024, validation_alias="OFM_HF_REF_IMAGE_MAX_BYTES"
-    )
-    ref_image_max_side: int = Field(
-        default=8000, validation_alias="OFM_HF_REF_IMAGE_MAX_SIDE"
+    base_url: str = "https://api.higgsfield.ai"
+    upload_cache_ttl_s: int = 24 * 3600
+    # The HEAD behind the upload cache. kie.ai's variable still counts: this
+    # check used to read it, and a server's .env may set it.
+    remote_check_timeout_s: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "OFM_HF_REMOTE_CHECK_TIMEOUT_S", "OFM_KIEAI_REMOTE_CHECK_TIMEOUT_S"
+        ),
     )
     # A reference video that is not MP4 (.mov, .webm) is converted before
     # upload (utils/video_mp4.py). Remuxing H.264 takes seconds. Encoding a
     # 60 s 4K HEVC iPhone clip on the 4 vCPU prod box takes minutes.
-    video_convert_timeout_s: int = Field(
-        default=900, validation_alias="OFM_HF_VIDEO_CONVERT_TIMEOUT_S"
-    )
-
-    @property
-    def ref_image_limits(self) -> ImageLimits:
-        return ImageLimits(
-            max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
-        )
+    video_convert_timeout_s: int = 900
 
 
-class RunningHubSettings(BaseSettings):
-    """aigenproviders/runninghub/. The admin's key pre-fills their form
+class RunningHubSettings(ProviderSettings):
+    """integrations/ai_providers/runninghub/. The admin's key pre-fills their form
     like the kie.ai and Higgsfield keys; unset = the key field starts
     empty."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="OFM_RH_")
 
     api_key_admin: str | None = Field(
         default=None, validation_alias="RUNNINGHUB_API_KEY_ADMIN"
     )
     # International site; runninghub.cn is the mainland one (other accounts).
-    base_url: str = Field(
-        default="https://www.runninghub.ai", validation_alias="OFM_RH_BASE_URL"
-    )
-    # One API call; an upload streams a whole reference video.
-    request_timeout_s: float = Field(
-        default=300, validation_alias="OFM_RH_REQUEST_TIMEOUT_S"
-    )
+    base_url: str = "https://www.runninghub.ai"
     # Its upload URLs are signed for 24 h: kept for less.
-    upload_cache_ttl_s: int = Field(
-        default=20 * 3600, validation_alias="OFM_RH_UPLOAD_CACHE_TTL_S"
-    )
-    ref_image_max_bytes: int = Field(
-        default=10 * 1024 * 1024, validation_alias="OFM_RH_REF_IMAGE_MAX_BYTES"
-    )
-    ref_image_max_side: int = Field(
-        default=8000, validation_alias="OFM_RH_REF_IMAGE_MAX_SIDE"
-    )
-
-    @property
-    def ref_image_limits(self) -> ImageLimits:
-        return ImageLimits(
-            max_bytes=self.ref_image_max_bytes, max_side=self.ref_image_max_side
-        )
+    upload_cache_ttl_s: int = 20 * 3600
 
 
-class ElyumSettings(BaseSettings):
-    """aigenproviders/elyum/ (elyum.ai public API, `ek_live_...` keys with
+class ElyumSettings(ProviderSettings):
+    """integrations/ai_providers/elyum/ (elyum.ai public API, `ek_live_...` keys with
     the generate + spend scopes). The admin's key pre-fills their form like
     the other providers' keys; unset = the key field starts empty."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="OFM_ELYUM_")
 
     api_key_admin: str | None = Field(
         default=None, validation_alias="ELYUM_API_KEY_ADMIN"
     )
-    base_url: str = Field(
-        default="https://api.elyum.ai", validation_alias="OFM_ELYUM_BASE_URL"
-    )
-    # One API call; an upload streams a whole reference video (<= 60 MB).
-    request_timeout_s: float = Field(
-        default=300, validation_alias="OFM_ELYUM_REQUEST_TIMEOUT_S"
-    )
+    base_url: str = "https://api.elyum.ai"
     # "Upload once and reuse the returned id"; its lifetime is not
     # documented, so it is kept a day at most.
-    upload_cache_ttl_s: int = Field(
-        default=20 * 3600, validation_alias="OFM_ELYUM_UPLOAD_CACHE_TTL_S"
-    )
-    # Its file limit (POST /v1/files: 60 MB a file).
-    max_file_bytes: int = Field(
+    upload_cache_ttl_s: int = 20 * 3600
+    # Its one file limit (POST /v1/files: 60 MB a file), images included.
+    ref_image_max_bytes: int = Field(
         default=60 * 1000 * 1000, validation_alias="OFM_ELYUM_MAX_FILE_BYTES"
     )
-    ref_image_max_side: int = Field(
-        default=8000, validation_alias="OFM_ELYUM_REF_IMAGE_MAX_SIDE"
-    )
     # An .mkv/.m4v reference goes up as an MP4 copy (utils/video_mp4.py).
-    video_convert_timeout_s: int = Field(
-        default=900, validation_alias="OFM_ELYUM_VIDEO_CONVERT_TIMEOUT_S"
-    )
+    video_convert_timeout_s: int = 900
 
     @property
-    def ref_image_limits(self) -> ImageLimits:
-        return ImageLimits(
-            max_bytes=self.max_file_bytes, max_side=self.ref_image_max_side
-        )
+    def max_file_bytes(self) -> int:
+        return self.ref_image_max_bytes
 
 
 class DownloadersSettings(BaseSettings):
@@ -651,7 +590,7 @@ class DownloadersSettings(BaseSettings):
 
 
 class InstagramSettings(BaseSettings):
-    """instagram/client.py, routers/downloads/reels.py, web/reel_watch.py."""
+    """instagram/client.py, routers/downloads/reels.py, features/reels/watch.py."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -685,7 +624,7 @@ class InstagramSettings(BaseSettings):
     feed_page_size: int = Field(
         default=24, ge=1, validation_alias="OFM_IG_FEED_PAGE_SIZE"
     )
-    # Width of the kept feed thumbnails (web/reel_thumbs.py), px.
+    # Width of the kept feed thumbnails (features/reels/thumbs.py), px.
     feed_thumb_px: int = Field(
         default=270, ge=64, validation_alias="OFM_IG_FEED_THUMB_PX"
     )
@@ -738,7 +677,7 @@ class InstagramSettings(BaseSettings):
     max_duration_s: float = Field(
         default=15.0, gt=0, validation_alias="OFM_IG_MAX_DURATION_S"
     )
-    # web/reel_watch.py: whether watched profiles are rescanned at all (off
+    # features/reels/watch.py: whether watched profiles are rescanned at all (off
     # since 2026-10-23, /reels retired to More: only a just-added profile's
     # first scan runs), how stale a scan may get, how often the sweeper
     # looks, and how long a claimed scan may run before another sweep takes
@@ -773,8 +712,8 @@ class InstagramSettings(BaseSettings):
 
 
 class AccountsSettings(BaseSettings):
-    """web/account_tracker.py, routers/accounts.py: tracked social accounts
-    (every platform of `ofmhelpers.socials`). Each platform's own knobs
+    """features/accounts/tracker.py, routers/accounts.py: tracked social accounts
+    (every platform of `ofmhelpers.integrations.socials`). Each platform's own knobs
     (proxies, how many posts a scan reads) live in its own group."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -799,7 +738,7 @@ class AccountsSettings(BaseSettings):
     claim_ttl_s: int = Field(
         default=2 * 60 * 60, ge=60, validation_alias="OFM_ACCOUNTS_CLAIM_TTL_S"
     )
-    # web/account_tracker.py: pin the periodic sweep to once a day, not
+    # features/accounts/tracker.py: pin the periodic sweep to once a day, not
     # before this local time plus a per-day random delay -- a fixed schedule
     # is what gets an Instagram login flagged as automation. None: the
     # interval alone decides, whenever an account falls due.
@@ -974,7 +913,7 @@ class TelemetrySettings(BaseSettings):
 
 
 class LinksSettings(BaseSettings):
-    """ofmhelpers/links, web/link_sync.py, routers/tracking/links.py: short
+    """ofmhelpers/links, features/links/sync.py, routers/tracking/links.py: short
     links on link providers (Oopsie, Bouncy). A user's own key (/account)
     wins; an admin with none runs on the `*_API_KEY_ADMIN` one."""
 
@@ -1048,7 +987,7 @@ class LinksSettings(BaseSettings):
 
 
 class VaultSettings(BaseSettings):
-    """web/db/encrypted.py: the Fernet keys the /phones logins and backup
+    """db/encrypted.py: the Fernet keys the /phones logins and backup
     codes are encrypted with at rest. Comma-separated, newest first: the
     first key encrypts, every key decrypts (rotate by prepending a new one,
     drop the old one once nothing uses it). Losing every key loses the
@@ -1082,7 +1021,7 @@ class LoggingSettings(BaseSettings):
 
 
 class ExportSettings(BaseSettings):
-    """How a finished video is exported (`ofmhelpers.exports`): the default
+    """How a finished video is exported (`ofmhelpers.media.exports`): the default
     choice, the bound on one export's encode, and the device exports' phone
     time zone (IANA, so DST follows the date) and place -- each video lands
     at a random point within `jitter_m` of `center`, reporting a GPS
@@ -1121,7 +1060,7 @@ class ExportSettings(BaseSettings):
 
 
 class CloneLongSettings(BaseSettings):
-    """/clone-long (`web/clone_long`): one image + one long video through
+    """/clone-long (`features/clone_long`): one image + one long video through
     Wan 3.0 in pieces of at most 15 s."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -1159,7 +1098,7 @@ class CloneLongSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    """`ofmhelpers.llm`: language models that read text, images and video
+    """`ofmhelpers.integrations.llm`: language models that read text, images and video
     and answer in a typed shape, behind one interface. One default per kind
     of work (`llm.LLMUse`), each `<provider>` or `<provider>:<model>` (the
     provider's own model field when no model is named). Each provider's key
@@ -1299,7 +1238,7 @@ class LLMSettings(BaseSettings):
 
 
 class CloneAiCheckSettings(BaseSettings):
-    """`ofmhelpers.clone_ai_check`: is a generated reel too glitchy to post? A
+    """`ofmhelpers.features.clone_links.ai_check`: is a generated reel too glitchy to post? A
     contact sheet of the whole video goes to the video model
     (`LLM_DEFAULT_VIDEO`), which answers GOOD or GLITCHY."""
 
@@ -1339,9 +1278,9 @@ class CloneAiCheckSettings(BaseSettings):
 
 
 class CloneLinksSettings(BaseSettings):
-    """/clone-links (`web/clone_links`): reel links + a subject image -> one
+    """/clone-links (`features/clone_links`): reel links + a subject image -> one
     Wan 3.0 run per link, each result checked for glitches
-    (`ofmhelpers.clone_ai_check`) and uploaded into the clicker's Drive root: a
+    (`ofmhelpers.features.clone_links.ai_check`) and uploaded into the clicker's Drive root: a
     GOOD one into `good_folder`, anything else into `trial_folder`."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -1452,6 +1391,11 @@ class CloneLinksSettings(BaseSettings):
     review_stale_s: int = Field(
         default=1800, ge=60, validation_alias="OFM_CLONE_LINKS_REVIEW_STALE_S"
     )
+    # A review no worker claimed for this long has probably lost its queued
+    # job: recovery queues it again. Longer than the worst queue seen.
+    review_lost_s: int = Field(
+        default=6 * 3600, ge=60, validation_alias="OFM_CLONE_LINKS_REVIEW_LOST_S"
+    )
     # How many times one review is started (first run + recovery's
     # re-queues of a cut-off one or a failed upload) before it stays failed.
     review_attempts: int = Field(
@@ -1460,7 +1404,7 @@ class CloneLinksSettings(BaseSettings):
 
 
 class GDriveSettings(BaseSettings):
-    """/drive (`ofmhelpers.gdrive`, web/drive_folders.py): each phone
+    """/drive (`ofmhelpers.integrations.gdrive`, features/drive/folders.py): each phone
     owner's own Google Drive, through their Google sign-in (`SignInSettings`
     google_*): an "ALL ACCOUNTS" folder ("DEV - ALL ACCOUNTS" outside
     production) with a "<handle> - <owner>" folder per Instagram login and a
@@ -1471,7 +1415,7 @@ class GDriveSettings(BaseSettings):
     sandbox, and on prod the agency admin's fallback: until the password
     account has a Google token, /drive reads and makes its folders through
     that account in that root (prod's "ALL ACCOUNTS", shared with it;
-    web/drive_folders.py `_bot_root`)."""
+    features/drive/folders.py `_bot_root`)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -1537,14 +1481,14 @@ class GDriveSettings(BaseSettings):
     )
     # A person's Drive space Google did not answer for (down, slow): not
     # asked again for this long, so a failing Drive costs one call per
-    # person per minute, not one per page view (web/drive_space.py).
+    # person per minute, not one per page view (features/drive/space.py).
     space_retry_s: int = Field(
         default=60, ge=5, validation_alias="OFM_GDRIVE_SPACE_RETRY_S"
     )
     # /clone-links reviews of one person find or make their root and
     # GOOD/TRIAL REELS one at a time (a Redis lock): ten parallel reviews
     # made ten folders of one name. A review waits at most this long, then
-    # goes ahead without it (web/drive_folders.py `review_folder`).
+    # goes ahead without it (features/drive/folders.py `review_folder`).
     review_lock_s: int = Field(
         default=60, ge=1, validation_alias="OFM_GDRIVE_REVIEW_LOCK_S"
     )
@@ -1556,7 +1500,7 @@ class GDriveSettings(BaseSettings):
 
 
 class RepurposeSettings(BaseSettings):
-    """`ofmhelpers.repurpose`: the checker's optional detectors and the knob
+    """`ofmhelpers.media.repurpose`: the checker's optional detectors and the knob
     lab. All off unless set: the app image has neither torch nor the TMK
     tools; the lab pod sets them (repurpose/CLAUDE.md, Lab)."""
 
@@ -1585,7 +1529,7 @@ class RepurposeSettings(BaseSettings):
 
 
 class TrialsSettings(BaseSettings):
-    """/trials (`ofmhelpers.trials`): how many reels one Generate makes at
+    """/trials (`ofmhelpers.features.trials`): how many reels one Generate makes at
     once. Each is an LLM wait + an ffmpeg chain that is mostly one thread
     (filters, zscale): side by side they overlap; above the cores they only
     queue."""
@@ -1595,11 +1539,19 @@ class TrialsSettings(BaseSettings):
     parallel: int = Field(
         default=3, ge=1, le=16, validation_alias="OFM_TRIALS_PARALLEL"
     )
+    # Seconds per reel a job may take (pipeline encode + the LLM, an upload),
+    # even made one after another. Prod 2026-10-30 (4 vCPU, 2 at once): 21 4K
+    # copies in 110 min, ~10.5 min each; 240 s (dev's pace) killed Generate at
+    # 21 of 26.
+    per_reel_s: int = Field(default=900, ge=1, validation_alias="OFM_TRIALS_PER_REEL_S")
+    job_grace_s: int = Field(
+        default=300, ge=0, validation_alias="OFM_TRIALS_JOB_GRACE_S"
+    )
 
 
 class ViralSettings(BaseSettings):
-    """/viral (`ofmhelpers.viral`): one Instagram profile's most played
-    reels, read through an Apify actor (`ofmhelpers.apify`), the top ones
+    """/viral (`ofmhelpers.features.viral`): one Instagram profile's most played
+    reels, read through an Apify actor (`ofmhelpers.integrations.apify`), the top ones
     downloaded."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

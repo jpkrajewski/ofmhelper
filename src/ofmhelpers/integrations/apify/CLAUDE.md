@@ -1,0 +1,11 @@
+# apify
+
+Apify's REST API v2 (https://docs.apify.com/api/v2), only the calls the app makes, through `utils.outbound` (no `apify-client` dependency; the fake answers at the wire).
+
+- `client.py` — `ApifyClient(token)`: `remaining_usd()` (`GET /users/me/limits`: `limits.maxMonthlyUsageUsd - current.monthlyUsageUsd`), `run(actor, input, timeout_s)` (`POST /acts/{owner~name}/runs?timeout=` once, never retried: a lost answer would pay for a second run; then `GET /actor-runs/{id}?waitForFinish=60` until a final status), `items(run)` (`GET /datasets/{id}/items?clean=true`). Errors: 401 `ApifyAuthError` ("Wrong Apify API key"), 402/403 or an error type with "usage" `ApifyCreditError` ("No Apify credit left"), else `ApifyError`; messages are what a card shows. `richest(tokens)`: the account with the most credit left (unreadable ones logged and skipped; none = `ApifyAuthError`).
+- `models.py` — `ActorRun` (`RunStatus`, dataset id, `cost_usd`), `Limits`, the `{"data": ...}` / `{"error": {type, message}}` envelopes. **Cost:** a pay-per-event actor's charges reach `usageTotalUsd` only after the run ends (a real 20-reel run, 2026-10-31: $0.001 when it turned SUCCEEDED, $0.053 later), so `cost_usd` = `chargedEventCounts` x `pricingInfo.pricingPerEvent.actorChargeEvents[*].eventPriceUsd`, or `usageTotalUsd` when that is more.
+- `fake.py` — `api.apify.com` under OFM_FAKE_EXTERNALS: limits ($5), runs of `apify~instagram-reel-scraper` only (RUNNING, SUCCEEDED at the first poll, billed like the real one incl. the lag above), datasets. Reels = the Instagram fake's profiles (`instagram/fake.py`, newest first, videos on its CDN); private profile = the actor's `no_items` item, unknown = `not_found`. Keys `BROKE_KEY` (no credit, 402), `WRONG_KEY` (401). `inputs`/`calls` for assertions.
+
+Keys: `APIFY_API_KEYS` (comma-separated, `settings.viral.api_keys`; both prod accounts are Free plans, $5 a month each, hard stop when used up). Contract tests: `tests/contract/test_apify_contract.py` (real half under `live`, 3 reels, under a cent).
+
+Used by `ofmhelpers.features.viral` (/viral).

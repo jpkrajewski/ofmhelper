@@ -1,20 +1,14 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, Request
 
-from ofmhelpers.cache import enqueue
-from ofmhelpers.downloaders.images import download_all
-from ofmhelpers.downloaders.models import DownloadResult
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.task_helpers import (
-    add_job_routes,
-    assets_root_for,
-    register_grouped_results,
-)
-from ofmhelpers.web.schemas import JobQueued
-from ofmhelpers.web.stores import cookies as login_cookies
-from ofmhelpers.web.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores import cookies as login_cookies
+from ofmhelpers.integrations.downloaders.images import download_all
+from ofmhelpers.integrations.downloaders.models import DownloadResult
+from ofmhelpers.schemas import JobQueued
+from ofmhelpers.web.routers.downloads.shared import queue_downloads
+from ofmhelpers.web.routers.task_helpers import add_job_routes, register_grouped_results
 
 router = APIRouter(prefix="/download-images", tags=["download-images"])
 
@@ -31,26 +25,8 @@ def _run_downloads(
 
 
 @router.post("/run")
-def run(request: Request, urls: Annotated[str, Form()]):
-    url_list = [u.strip() for u in urls.splitlines() if u.strip()]
-    if not url_list:
-        raise HTTPException(status_code=400, detail="At least one URL is required")
-
-    job_id = create_job(
-        "download_images", {"urls": url_list}, actor=AuthMiddleware.actor(request)
-    )
-    enqueue(
-        run_job,
-        job_id,
-        _run_downloads,
-        {
-            "urls": url_list,
-            "assets_root": str(assets_root_for(request)),
-            "user_id": AuthMiddleware.owner_id(request),
-        },
-    )
-
-    return JobQueued(job_id=job_id)
+def run(request: Request, urls: Annotated[str, Form()]) -> JobQueued:
+    return queue_downloads(request, "download_images", urls, _run_downloads)
 
 
 add_job_routes(

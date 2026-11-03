@@ -67,12 +67,14 @@
         </tbody>
     {% endcall %}
 
+{% if not at_root %}
 <form method="post" action="/file-manager/delete-all" class="section"
       data-confirm="Delete EVERYTHING in this folder? This cannot be undone.">
     <input type="hidden" name="root" value="{{ current_root }}">
     <input type="hidden" name="path" value="{{ current_path }}">
     {{ ui.button("Delete all in this folder", "danger", type="submit") }}
 </form>
+{% endif %}
 {% else %}
 {{ ui.empty("This folder is empty") }}
 {% endif %}

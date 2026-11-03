@@ -1,6 +1,6 @@
 """
 /phones: physical phones -- each a card with its drawing (the model's back
-in its color, `ofmhelpers.phones.render`), model, owner and number, and the
+in its color, `ofmhelpers.features.phones.catalog.render`), model, owner and number, and the
 logins signed in on it as compact rows (iCloud, Gmail, socials, any other
 site). The page carries no password or backup code: Show / Copy / Edit
 fetch one login's from `/phones/logins/{id}/secret`. Each phone belongs to a
@@ -20,22 +20,17 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
+from ofmhelpers.db.encrypted import VaultError
+from ofmhelpers.db.repositories import DuplicateError
+from ofmhelpers.db.stores import devices as store
+from ofmhelpers.features.accounts.removal import logins_leaving
+from ofmhelpers.features.accounts.tracker import track_login
+from ofmhelpers.features.phones import workbook as phones_workbook
+from ofmhelpers.features.phones.catalog import catalog, find_model, services
+from ofmhelpers.features.phones.catalog.render import render as draw
 from ofmhelpers.log import get_logger
-from ofmhelpers.phones import catalog, find_model, services
-from ofmhelpers.phones.render import render as draw
-from ofmhelpers.web import phones_workbook
-from ofmhelpers.web.account_removal import logins_leaving
-from ofmhelpers.web.account_tracker import track_login
-from ofmhelpers.web.db.encrypted import VaultError
-from ofmhelpers.web.db.repositories import DuplicateError
+from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery, PhoneSort
 from ofmhelpers.web.middleware.auth import AuthMiddleware
-from ofmhelpers.web.schemas import (
-    DeviceFields,
-    LoginFields,
-    PhoneQuery,
-    PhoneSort,
-)
-from ofmhelpers.web.stores import devices as store
 from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)
@@ -116,7 +111,7 @@ def drawing(model: str = "", color: str = "") -> Response:
 @router.get("/export.xlsx")
 def export(request: Request) -> Response:
     """Every active phone and its logins, in plaintext (see
-    web/phones_workbook.py). Logged: who, and how many -- never a value."""
+    features/phones/workbook.py). Logged: who, and how many -- never a value."""
     scope = AuthMiddleware.scope(request)
     active = [d for d in _vault(store.export_devices, scope) if not d.retired]
     logins = sum(len(d.logins) for d in active)

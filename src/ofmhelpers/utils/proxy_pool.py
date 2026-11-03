@@ -1,7 +1,7 @@
 """One background job's proxies, taken in turn, minus the ones found dead.
 
 Shared by every scanner that rotates proxies against a rate-limiting site
-(web/reel_watch.py, web/account_tracker.py): a call that fails on one proxy is
+(features/reels/watch.py, features/accounts/tracker.py): a call that fails on one proxy is
 retried on the next, and a proxy whose connection itself is broken leaves the
 pool for the rest of the job. With none configured, or none left, calls go
 direct (`next()` answers None).

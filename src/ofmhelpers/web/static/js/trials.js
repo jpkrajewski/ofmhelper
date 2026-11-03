@@ -85,6 +85,8 @@
     // Every form on the page goes by fetch; what it changes shows at once.
     document.addEventListener("submit", async (e) => {
         const form = e.target;
+        // Not the header's Sign out.
+        if (!form.getAttribute("action")?.startsWith("/trials/")) return;
         e.preventDefault();
         // Read first: a control disabled below would not be sent.
         const body = new FormData(form);

@@ -31,9 +31,9 @@ from starlette.responses import (
 )
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.users import get_user
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.schemas import SessionUser, User
-from ofmhelpers.web.stores.users import get_user
+from ofmhelpers.schemas import SessionUser, User
 
 logger = get_logger(__name__)
 

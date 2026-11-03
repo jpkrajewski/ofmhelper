@@ -97,7 +97,7 @@ services:
     # job and each worker finishes the one it runs. Docker's default 10 s
     # SIGKILLed /clone-links reviews mid-LLM-call or mid-upload; 120 s lets
     # them finish. A generation still running then is cut off and resumed by
-    # recovery (web/recovery.py). The deploys stop the workers before the
+    # recovery (features/jobs/recovery.py). The deploys stop the workers before the
     # app, so this wait is not downtime.
     stop_grace_period: 120s
     # The image's HTTP healthcheck (probes :8000/health) is meaningless for the
@@ -127,7 +127,7 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
-  # /clone-links runs (src/ofmhelpers/web/clone_links/run.py) on their own
+  # /clone-links runs (features/clone_links/run.py) on their own
   # `clone-links` queue and pool (OFM_CLONE_LINKS_WORKERS, default 5): a
   # 30-120 link Generate holds a worker per run for minutes each, and on the
   # shared default queue it held every other job back for hours. Otherwise
@@ -162,7 +162,7 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
-  # Gallery previews (src/ofmhelpers/web/previews.py): one ffmpeg encode at a
+  # Gallery previews (features/previews/render.py): one ffmpeg encode at a
   # time, at low CPU priority and capped at two cores, so a backlog (every old
   # result after a deploy) never slows the app or the generation workers.
   preview-worker:

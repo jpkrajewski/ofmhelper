@@ -14,10 +14,10 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.jobs import count_hidden_jobs, list_jobs_page
+from ofmhelpers.schemas import TaskCard
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, task_card
-from ofmhelpers.web.schemas import TaskCard
-from ofmhelpers.web.stores.jobs import count_hidden_jobs, list_jobs_page
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/download-assets", tags=["download-assets"])

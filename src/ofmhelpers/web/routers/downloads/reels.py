@@ -8,12 +8,12 @@ and sends the user to /clone with them already in the videos picker;
 "Download selected" hands them straight back (one mp4, or a zip of several).
 
 Adding profiles queues their first scan on the worker (with any other
-profile due for its 12 h rescan, web/reel_watch.py), so no request waits on
+profile due for its 12 h rescan, features/reels/watch.py), so no request waits on
 Instagram; the page polls `GET /reels/watchlist` until none is pending.
 
 Reels play on the page straight from Instagram's CDN (it allows cross-origin
 embedding); their covers come shrunk and kept from `GET /reels/thumb/{code}`
-(web/reel_thumbs.py). Nothing is downloaded until Clone or Download
+(features/reels/thumbs.py). Nothing is downloaded until Clone or Download
 selected.
 """
 
@@ -32,30 +32,31 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from starlette.background import BackgroundTask
 
 from ofmhelpers.config import settings
-from ofmhelpers.instagram import (
-    VIEW_TIERS,
-    InstagramClient,
-    ProfileHandle,
-    ReelDownload,
-)
-from ofmhelpers.log import get_logger
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.reel_thumbs import reel_thumb, thumb_path
-from ofmhelpers.web.reel_watch import queue_due_scans
-from ofmhelpers.web.routers.task_helpers import (
-    UPLOADS_ROOT,
-    assets_root_for,
-    make_job_dir,
-    register_generated_asset,
-)
-from ofmhelpers.web.schemas import FeedItem, GroupForm, Leaderboard, WatchForm
-from ofmhelpers.web.stores.watched_profiles import (
+from ofmhelpers.db.stores.watched_profiles import (
     create_group,
     list_groups,
     list_watched,
     set_group,
     unwatch,
     watch,
+)
+from ofmhelpers.features.reels.thumbs import reel_thumb, thumb_path
+from ofmhelpers.features.reels.watch import queue_due_scans
+from ofmhelpers.integrations.instagram import (
+    VIEW_TIERS,
+    InstagramClient,
+    ProfileHandle,
+    ReelDownload,
+)
+from ofmhelpers.log import get_logger
+from ofmhelpers.schemas import FeedItem, GroupForm, Leaderboard, WatchForm
+from ofmhelpers.telemetry import in_this_trace
+from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.routers.task_helpers import (
+    UPLOADS_ROOT,
+    assets_root_for,
+    make_job_dir,
+    register_generated_asset,
 )
 from ofmhelpers.web.templates_config import render
 
@@ -211,7 +212,7 @@ def feed_page(
 
 @router.get("/thumb/{code}")
 def thumb(code: ReelCode) -> FileResponse:
-    """A feed card's cover, small and kept (web/reel_thumbs.py). Only reels
+    """A feed card's cover, small and kept (features/reels/thumbs.py). Only reels
     of the watch list: the source URL comes from the stored scan, never
     from the request."""
     path: Path | None = thumb_path(code)
@@ -317,7 +318,8 @@ def _download_picked(reels: str) -> list[Path]:
     job_dir = make_job_dir(UPLOADS_ROOT / "reels")
     try:
         with ThreadPoolExecutor(settings.instagram.download_workers) as pool:
-            return list(pool.map(lambda r: _download(client, r, job_dir), picked))
+            download = in_this_trace(lambda r: _download(client, r, job_dir))
+            return list(pool.map(download, picked))
     except (OSError, requests.RequestException) as exc:
         logger.warning("reel download failed", exc_info=True)
         raise HTTPException(

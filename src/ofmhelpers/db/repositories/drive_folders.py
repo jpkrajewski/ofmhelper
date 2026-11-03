@@ -1,0 +1,197 @@
+"""Which Drive folders belong to which Instagram login -- its account folder
+and the POSTED folder inside it -- and the files seen posted (/drive). Drive
+ids only; Drive itself is `ofmhelpers.integrations.gdrive`."""
+
+from __future__ import annotations
+
+import time
+from contextlib import contextmanager
+from typing import TYPE_CHECKING
+
+from sqlalchemy import case, delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
+
+from ofmhelpers.db.models import DriveAccountFolderRow, DrivePostedFileRow
+from ofmhelpers.db.repositories.cached_repository import (
+    CachedRepository,
+    cached,
+    invalidates_cache,
+)
+from ofmhelpers.db.session import session_scope
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+# pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
+_SYNC_LOCK_KEY = 0x0D21_5E00
+
+
+class DriveFolderRepository(CachedRepository):
+    cache_namespace = "drive_folder"
+
+    @cached
+    def account_folders(self, roots: list[str]) -> list[dict]:
+        """The logins' folders in any of `roots` (each owner's current
+        "ALL ACCOUNTS"); rows of any other root are left out (an old root,
+        or prod's in a dev copy of its database)."""
+        with session_scope() as s:
+            rows = (
+                s.execute(
+                    select(DriveAccountFolderRow).where(
+                        DriveAccountFolderRow.root_folder_id.in_(roots)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return [
+                {
+                    "login_id": r.login_id,
+                    "folder_id": r.folder_id,
+                    "name": r.name,
+                    "root_folder_id": r.root_folder_id,
+                    "posted_folder_id": r.posted_folder_id,
+                    "scan": r.scan,
+                    "scanned_at": r.scanned_at,
+                }
+                for r in rows
+            ]
+
+    @cached
+    def posted_counts(
+        self, roots: list[str], since: list[float]
+    ) -> dict[str, list[int]]:
+        """{login id (str: the cache is JSON): [files first seen posted at
+        or after each of `since`]}, for the logins with a folder in `roots`;
+        only files seen in that folder."""
+        with session_scope() as s:
+            columns = [
+                func.count().filter(DrivePostedFileRow.first_seen_at >= t)
+                for t in since
+            ]
+            rows = s.execute(
+                select(DrivePostedFileRow.login_id, *columns)
+                .join(
+                    DriveAccountFolderRow,
+                    (DriveAccountFolderRow.login_id == DrivePostedFileRow.login_id)
+                    & (DriveAccountFolderRow.folder_id == DrivePostedFileRow.folder_id),
+                )
+                .where(DriveAccountFolderRow.root_folder_id.in_(roots))
+                .group_by(DrivePostedFileRow.login_id)
+            ).all()
+            return {str(login_id): list(counts) for login_id, *counts in rows}
+
+    @contextmanager
+    def sync_lock(self) -> Iterator[bool]:
+        """Whether this caller holds the one sweep lock (Postgres advisory,
+        session level): never waits; a crashed holder's connection closing
+        frees it, no expiry to outlive."""
+        with session_scope() as s:
+            held = bool(
+                s.execute(select(func.pg_try_advisory_lock(_SYNC_LOCK_KEY))).scalar()
+            )
+            try:
+                yield held
+            finally:
+                if held:
+                    s.execute(select(func.pg_advisory_unlock(_SYNC_LOCK_KEY)))
+
+    @invalidates_cache
+    def save_account_folder(
+        self, login_id: int, folder_id: str, name: str, root: str
+    ) -> None:
+        """A changed folder id drops the POSTED id with it: that one was
+        inside the old folder."""
+        values = {
+            "folder_id": folder_id,
+            "name": name,
+            "root_folder_id": root,
+            "updated_at": time.time(),
+        }
+        same = DriveAccountFolderRow.folder_id == folder_id
+        kept_posted = case((same, DriveAccountFolderRow.posted_folder_id), else_=None)
+        with session_scope() as s:
+            s.execute(
+                insert(DriveAccountFolderRow)
+                .values(login_id=login_id, **values)
+                .on_conflict_do_update(
+                    index_elements=["login_id"],
+                    set_={
+                        **values,
+                        "posted_folder_id": kept_posted,
+                    },
+                )
+            )
+
+    @invalidates_cache
+    def save_scans(self, scans: dict[int, dict], at: float) -> None:
+        """Each login's account folder as just read (login id -> scan)."""
+        if not scans:
+            return
+        with session_scope() as s:
+            for login_id, scan in scans.items():
+                s.execute(
+                    update(DriveAccountFolderRow)
+                    .where(DriveAccountFolderRow.login_id == login_id)
+                    .values(scan=scan, scanned_at=at)
+                )
+
+    @invalidates_cache
+    def logins_changed(self) -> None:
+        """A login or phone was deleted: the database dropped its folder rows
+        (ON DELETE CASCADE) behind this cache's back."""
+
+    @invalidates_cache
+    def forget_account_folder(self, login_id: int) -> None:
+        """Its folder is gone from Drive: the next sweep makes or finds one
+        again, and its POSTED folder with it."""
+        with session_scope() as s:
+            s.execute(
+                delete(DriveAccountFolderRow).where(
+                    DriveAccountFolderRow.login_id == login_id
+                )
+            )
+
+    @invalidates_cache
+    def save_posted_folder(self, login_id: int, folder_id: str | None) -> None:
+        """`None` forgets it: the next sweep finds or makes one again."""
+        with session_scope() as s:
+            s.execute(
+                update(DriveAccountFolderRow)
+                .where(DriveAccountFolderRow.login_id == login_id)
+                .values(posted_folder_id=folder_id, updated_at=time.time())
+            )
+
+    @invalidates_cache
+    def record_posted(
+        self,
+        login_id: int,
+        folder_id: str,
+        files: list[tuple[str, str, str]],
+        seen_at: float,
+    ) -> int:
+        """Adds the (id, name, kind) files not seen before, as seen in the
+        account folder `folder_id`; how many were new. A file already recorded keeps its first time (a re-run, or it
+        went out and back in, never counts twice)."""
+        if not files:
+            return 0
+        with session_scope() as s:
+            added = s.execute(
+                insert(DrivePostedFileRow)
+                .values(
+                    [
+                        {
+                            "file_id": file_id,
+                            "login_id": login_id,
+                            "folder_id": folder_id,
+                            "name": name[:512],
+                            "kind": kind,
+                            "first_seen_at": seen_at,
+                        }
+                        for file_id, name, kind in files
+                    ]
+                )
+                .on_conflict_do_nothing(index_elements=["file_id"])
+                .returning(DrivePostedFileRow.file_id)
+            ).all()
+        return len(added)

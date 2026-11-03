@@ -16,7 +16,6 @@ dependencies = [
     "pillow>=12.3.0",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
-    "pytest>=9.1.1",
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
     "uvicorn>=0.54.0",
@@ -39,7 +38,7 @@ dependencies = [
     "pillow-heif>=1.8.1",
     "higgsfield-client>=0.2.0",
     "jsonschema>=4.23",
-    # Fernet for the /phones vault (web/db/encrypted.py): logins and backup
+    # Fernet for the /phones vault (db/encrypted.py): logins and backup
     # codes are encrypted at rest. >=50.0.0: CVE-2026-69247 and older fixes.
     "cryptography>=50.0.0",
     # /phones Excel export (web/exports/devices_xlsx.py), write-only.
@@ -71,6 +70,8 @@ dev = [
     # Browser for tests/e2e (uv run playwright install chromium).
     "playwright>=1.64.0",
     "pre-commit>=4.6.1",
+    # Test-only: the runtime image installs `--no-dev` and nothing in src/ imports it.
+    "pytest>=9.1.1",
     "pytest-json-report>=1.5.0",
     "pytest-repeat>=0.9.4",
     "pytest-socket>=0.8.1",
@@ -172,13 +173,13 @@ ignore-variadic-names = true
 # Lazy singletons that rebuild when the configured URL changes -- `global`
 # is inherent to the pattern.
 "src/ofmhelpers/cache/redis.py" = ["PLW0603"]
-"src/ofmhelpers/web/db/session.py" = ["PLW0603"]
+"src/ofmhelpers/db/session.py" = ["PLW0603"]
 # Same: a once-per-process "already configured" flag.
 "src/ofmhelpers/log.py" = ["PLW0603"]
 # `lifespan(app)` is Starlette's required signature.
 "src/ofmhelpers/web/main.py" = ["ARG001"]
 # DSP helpers share one (audio, sr, ...) positional shape by design.
-"src/ofmhelpers/utils/radio_comms_fx.py" = ["ARG001"]
+"src/ofmhelpers/media/radio_comms_fx.py" = ["ARG001"]
 # Standalone scripts and migrations aren't importable packages.
 "scripts/**" = ["INP001"]
 "alembic/**" = ["INP001"]
@@ -229,3 +230,7 @@ ignore = "J018,H052,H023,H030,H031"
 # Inline style only where the value is data (a batch's hue) or the page is
 # deliberately self-contained (the public landing page).
 per-file-ignores = { "reachmodel.html" = "H021", "_clone_batch.html" = "H021" }
+
+[tool.ruff.lint.isort]
+# Also the old paths of moved modules (ofmhelpers/_moved.py), which tests still name.
+known-first-party = ["ofmhelpers"]

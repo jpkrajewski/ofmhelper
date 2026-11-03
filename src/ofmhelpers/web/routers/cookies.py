@@ -7,14 +7,13 @@ background scan and download uses).
 """
 
 from fastapi import APIRouter, Request, UploadFile
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse, Response
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.web.account_tracker import rescan_limited
+from ofmhelpers.db.stores import cookies
+from ofmhelpers.features.accounts.tracker import rescan_limited
+from ofmhelpers.features.reels.watch import unlock_gated
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.reel_watch import unlock_gated
-from ofmhelpers.web.stores import cookies
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/cookies", tags=["cookies"])
@@ -58,16 +57,19 @@ def _after_upload(user_id: int) -> None:
 
 
 @router.post("")
-async def upload_cookies(request: Request, file: UploadFile) -> Response:
+def upload_cookies(request: Request, file: UploadFile) -> Response:
+    """A plain `def`, so FastAPI runs it in its threadpool: the file is read,
+    parsed and stored -- and the page re-rendered on a refusal -- off the
+    event loop. A file over the limit is refused by its size before it is
+    read into memory."""
     user_id = AuthMiddleware.owner_id(request)
-    payload = await file.read()
     try:
-        await run_in_threadpool(
-            cookies.save, user_id, payload, (file.filename or "cookies.txt")[:255]
-        )
+        if file.size is not None:
+            cookies.check_size(file.size)
+        cookies.save(user_id, file.file.read(), (file.filename or "cookies.txt")[:255])
     except cookies.CookieFileError as exc:
         return _page(request, error=str(exc), status_code=400)
-    await run_in_threadpool(_after_upload, user_id)
+    _after_upload(user_id)
     return RedirectResponse(url="/cookies?note=uploaded", status_code=303)
 
 

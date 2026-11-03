@@ -2,13 +2,10 @@
 __pycache__
 **/__pycache__
 *.pyc
-.git
-.gitignore
 .env
 .pytest_cache
 .ruff_cache
 *.egg-info
-.pre-commit-config.yaml
 CLAUDE.local.md
 deploy.local.env
 
@@ -20,6 +17,7 @@ deploy.local.env
 /downloads/
 /kieai_out/
 /out/
+/output/
 /secrets/
 /cookies/
 backlog.txt
@@ -43,3 +41,6 @@ backlog.txt
 
 # Contains live API keys (ElevenLabs etc.) — local only, never commit.
 /VOICEchanger.md
+
+# Serena (code-navigation MCP) local project state.
+/.serena/

@@ -1,4 +1,4 @@
-"""Rebuild `aigenproviders/higgsfield/catalog.json` from Higgsfield's docs.
+"""Rebuild `integrations/ai_providers/higgsfield/catalog.json` from Higgsfield's docs.
 
 Higgsfield documents every model as one Markdown page per workflow
 (`docs/models/<family>/<workflow>.md`) carrying its endpoint id and the
@@ -23,7 +23,7 @@ DOCS = "https://docs.higgsfield.ai"
 CATEGORIES = {"video": "video-generation", "image": "image-generation"}
 OUT = (
     Path(__file__).resolve().parents[1]
-    / "src/ofmhelpers/aigenproviders/higgsfield/catalog.json"
+    / "src/ofmhelpers/integrations/ai_providers/higgsfield/catalog.json"
 )
 TIMEOUT_S = 30
 

@@ -16,11 +16,11 @@ from fastapi.responses import RedirectResponse, Response
 from pydantic import ValidationError
 
 from ofmhelpers.config import settings
-from ofmhelpers.signin import configured
-from ofmhelpers.web.db.repositories import OwnsDataError
+from ofmhelpers.db.repositories import OwnsDataError
+from ofmhelpers.db.stores import users
+from ofmhelpers.integrations.signin import configured
+from ofmhelpers.schemas import Role, User, UserForm
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.schemas import Role, User, UserForm
-from ofmhelpers.web.stores import users
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(

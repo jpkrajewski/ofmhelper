@@ -2,7 +2,7 @@
 /clone-links: reel links + subject image(s) -> one Wan 3.0 run per link,
 made exactly like a /clone run (`clone._run_clone`: provider, export,
 mirror), each result then checked for glitches and uploaded into the
-clicker's Drive (web/clone_links/).
+clicker's Drive (features/clone_links/).
 
 Check (`POST /check`, instant, nothing downloaded): the pasted text read as
 links (`clone_links.links.read_pasted`: one post per line, cleaned, each
@@ -40,56 +40,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 
-from ofmhelpers.aigenproviders import tasks
 from ofmhelpers.cache import CLONE_LINKS_QUEUE, enqueue_to, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.exports import exports
-from ofmhelpers.log import get_logger
-from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.clone_links import run as clone_link_run
-from ofmhelpers.web.clone_links.links import read_pasted
-from ofmhelpers.web.clone_links.models import (
-    CheckedLinks,
-    CheckRefused,
-    PreviewsRequest,
-    RecreateLinks,
-)
-from ofmhelpers.web.clone_links.preview import (
-    THUMB_KEY,
-    Price,
-    preview_all,
-    thumb_file,
-)
-from ofmhelpers.web.clone_links.review import NOT_CONNECTED
-from ofmhelpers.web.clone_links.stop import stop_batch
-from ofmhelpers.web.drive_space import drive_space
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.generation.clone import (
-    CLONE_TARGETS,
-    DEFAULT_PROMPT,
-    DEFAULT_RESOLUTION,
-    RESOLUTIONS,
-    CloneTarget,
-    _export_label,
-    _require_kind,
-    clone_pricing,
-)
-from ofmhelpers.web.routers.task_helpers import (
-    add_job_routes,
-    assets_root_for,
-    build_ordered_paths,
-    job_assets,
-)
-from ofmhelpers.web.schemas import (
-    CloneLinksCard,
-    CloneQueued,
-    Job,
-    ProviderChoice,
-    ResultFile,
-)
-from ofmhelpers.web.schemas.clone_ai_checks import CloneFromLink
-from ofmhelpers.web.stores import clone_from_links
-from ofmhelpers.web.stores.jobs import (
+from ofmhelpers.db.stores import clone_from_links
+from ofmhelpers.db.stores.jobs import (
     count_hidden_jobs,
     create_job,
     fail_job,
@@ -99,7 +53,56 @@ from ofmhelpers.web.stores.jobs import (
     redone_links,
     run_job,
 )
-from ofmhelpers.web.stores.users import refresh_token
+from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.features.clone.pricing import UnpricedError, clone_price
+from ofmhelpers.features.clone.service import (
+    CloneRefusedError,
+    export_label,
+    require_kind,
+)
+from ofmhelpers.features.clone.targets import (
+    DEFAULT_RESOLUTION,
+    CloneTarget,
+    clone_targets,
+    offered_resolutions,
+)
+from ofmhelpers.features.clone_links import run as clone_link_run
+from ofmhelpers.features.clone_links.links import read_pasted
+from ofmhelpers.features.clone_links.models import (
+    CheckedLinks,
+    CheckRefused,
+    PreviewsRequest,
+    RecreateLinks,
+)
+from ofmhelpers.features.clone_links.preview import (
+    THUMB_KEY,
+    Price,
+    preview_all,
+    thumb_file,
+)
+from ofmhelpers.features.clone_links.review import NOT_CONNECTED
+from ofmhelpers.features.clone_links.stop import stop_batch
+from ofmhelpers.features.drive.space import drive_space
+from ofmhelpers.integrations.ai_providers import tasks
+from ofmhelpers.log import get_logger
+from ofmhelpers.media.exports import exports
+from ofmhelpers.schemas import (
+    CloneLinksCard,
+    CloneQueued,
+    Job,
+    ProviderChoice,
+    ResultFile,
+)
+from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
+from ofmhelpers.web.api_keys import get_api_keys
+from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.routers.generation.clone import DEFAULT_PROMPT
+from ofmhelpers.web.routers.task_helpers import (
+    add_job_routes,
+    assets_root_for,
+    build_ordered_paths,
+    job_assets,
+)
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
 logger = get_logger(__name__)
@@ -142,7 +145,7 @@ class BatchStopped(BaseModel):
     running: int
 
 
-# --- The run (worker): web/clone_links/run.py --------------------------------
+# --- The run (worker): features/clone_links/run.py --------------------------------
 
 
 def run_clone_link(**params: Any) -> list[ResultFile]:
@@ -187,14 +190,14 @@ def check(links: Annotated[str, Form()] = "") -> CheckedLinks:
 
 
 def _target(provider: str) -> CloneTarget:
-    target = CLONE_TARGETS.get(provider or settings.aigen.default_provider)
+    target = clone_targets().get(provider or settings.aigen.default_provider)
     if target is None:
         raise HTTPException(status_code=400, detail="That provider cannot clone")
     return target
 
 
 def _resolution(resolution: str) -> str:
-    if resolution.upper() not in RESOLUTIONS:
+    if resolution.upper() not in offered_resolutions():
         raise HTTPException(status_code=400, detail="Unknown resolution")
     return resolution.upper()
 
@@ -203,10 +206,14 @@ def _price(provider: str, resolution: str) -> Price:
     """A source second's price at `provider` and `resolution` (what /clone's
     panel charges), and the longest video it takes."""
     target = _target(provider)
-    price = clone_pricing().get(provider)
+    try:
+        price = clone_price(provider)
+        credits_per_s = price.per_second(resolution)
+    except UnpricedError as exc:
+        raise HTTPException(status_code=400, detail="Unknown resolution") from exc
     return Price(
-        credits_per_s=price.credits_per_video_s.get(resolution, 0.0) if price else 0.0,
-        usd_per_credit=price.usd_per_credit if price else 0.0,
+        credits_per_s=credits_per_s,
+        usd_per_credit=price.usd_per_credit,
         max_s=target.max_reference_s,
     )
 
@@ -285,6 +292,14 @@ def _first_send(actor: str, batch: str) -> bool:
         return True
 
 
+def _forget_send(actor: str, batch: str) -> None:
+    """`batch`'s send failed halfway: its resend counts as a first send."""
+    try:
+        get_redis().delete(f"clone-links:run:{actor}:{batch}")
+    except RedisError:
+        logger.warning("could not clear batch %s", batch, exc_info=True)
+
+
 def _queued(jobs: list[Job], batch: str, user_id: int) -> CloneQueued:
     """`/run`'s answer: the runs' ids in paste order, their cards newest
     first like the gallery."""
@@ -337,15 +352,19 @@ def run(
         raise HTTPException(
             status_code=400, detail=f"Pick between 1 and {max_images} subject images"
         )
-    _require_kind(image_paths, "image", "The subject")
+    try:
+        require_kind(image_paths, "image", "The subject")
+    except CloneRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     actor = AuthMiddleware.actor(request)
     # Only now, every refusal behind it: a refused send leaves its batch
     # free for the corrected resend.
+    sent: list[Job] = []
     if batch is not None:
         first = _first_send(actor, batch)
         sent = list_batch(TASK, batch, actor)
-        if sent or not first:
+        if not first:
             return _queued(sent, batch, user.id)
     batch = batch or uuid.uuid4().hex
     shared = {
@@ -361,11 +380,20 @@ def run(
         # batch's failed links (`recreate_links`), Stop stops them all.
         "batch": batch,
     }
-    job_ids = [
-        _queue(request, api_key.strip(), {**shared, "link": url}) for url in urls
-    ]
+    queued = {job.params.get("link") for job in sent if job.error != NOT_QUEUED}
+    try:
+        job_ids = [
+            _queue(request, api_key.strip(), {**shared, "link": url})
+            for url in urls
+            if url not in queued
+        ]
+    except Exception:
+        # Some may be queued already: the page's resend gets those back and
+        # queues only the rest, never one twice.
+        _forget_send(actor, batch)
+        raise
     jobs = [job for j in job_ids if (job := get_job(j, actor)) is not None]
-    return _queued(jobs, batch, user.id)
+    return _queued([*sent, *jobs], batch, user.id)
 
 
 # --- Gallery and reviews -------------------------------------------------------
@@ -375,7 +403,7 @@ def _card(job: Job, review: CloneFromLink | None) -> CloneLinksCard:
     return CloneLinksCard.from_job(
         job,
         *job_assets(job, FILES_PREFIX),
-        task_label=_export_label(job.params),
+        task_label=export_label(job.params),
         poll_prefix=router.prefix,
         result_kind="video",
         review=review,
@@ -418,12 +446,12 @@ def form(request: Request):
         gallery=gallery,
         next_offset=next_offset,
         hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
-        providers=ProviderChoice.all(list(CLONE_TARGETS)),
+        providers=ProviderChoice.all(list(clone_targets())),
         selected_provider=settings.aigen.default_provider,
         api_keys=get_api_keys(request),
         default_prompt=DEFAULT_PROMPT,
         default_resolution=DEFAULT_RESOLUTION,
-        resolutions=RESOLUTIONS,
+        resolutions=offered_resolutions(),
         max_images=settings.web.clone_max_images,
         max_links=settings.clone_links.max_links,
         live_poll_s=settings.web.gallery_live_poll_s,

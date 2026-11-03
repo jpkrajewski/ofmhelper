@@ -1,6 +1,5 @@
 import heapq
 import os
-import subprocess
 import threading
 from functools import lru_cache
 from operator import itemgetter
@@ -9,17 +8,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from PIL import Image
 
 from ofmhelpers.config import settings
-from ofmhelpers.log import get_logger
-from ofmhelpers.web import ref_usage
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.previews import (
+from ofmhelpers.features.assets import ref_usage
+from ofmhelpers.features.previews.render import (
+    PREVIEW_ERRORS,
     write_atomic,
     write_image_thumb,
     write_video_thumb,
 )
+from ofmhelpers.log import get_logger
+from ofmhelpers.schemas import MissingRefs, RefEntry
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     ASSETS_ROOT,
     assets_root_for,
@@ -28,7 +28,6 @@ from ofmhelpers.web.routers.task_helpers import (
     media_response,
     strip_asset_hash_prefix,
 )
-from ofmhelpers.web.schemas import MissingRefs, RefEntry
 
 logger = get_logger(__name__)
 
@@ -115,7 +114,7 @@ def list_refs(
 ):
     """The reuse picker's list.
 
-    Default: the `RECENT_USED_LIMIT` files you (this user) last *picked* (web/ref_usage.py,
+    Default: the `RECENT_USED_LIMIT` files you (this user) last *picked* (features/assets/ref_usage.py,
     written by task_helpers.build_ordered_paths), then the
     `RECENT_UPLOAD_LIMIT` most recently *uploaded* ones that aren't already in
     that list. Those are two different orderings on purpose -- mtime means
@@ -183,12 +182,7 @@ def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
             write_atomic(thumb, lambda tmp: write_image_thumb(source, tmp, size))
         else:
             write_video_thumb(source, thumb, size)
-    except (
-        OSError,
-        ValueError,
-        subprocess.SubprocessError,
-        Image.UnidentifiedImageError,
-    ):
+    except PREVIEW_ERRORS:
         # A corrupt/unreadable source shouldn't 500 the whole picker grid
         # -- the client falls back to its icon tile on a 404.
         logger.warning("could not thumbnail %s", source, exc_info=True)

@@ -4,7 +4,9 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.utils.metadata_cleaner import clean_metadata
+from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.media.metadata_cleaner import clean_metadata
+from ofmhelpers.schemas import JobQueued, ResultFile
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
@@ -17,8 +19,6 @@ from ofmhelpers.web.routers.task_helpers import (
     require_upload_kind,
     save_upload,
 )
-from ofmhelpers.web.schemas import JobQueued, ResultFile
-from ofmhelpers.web.stores.jobs import create_job, run_job
 
 router = APIRouter(prefix="/clean-images", tags=["clean-images"])
 

@@ -7,9 +7,9 @@ job, only the session's own; a view choice only, the job and its files stay.
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ofmhelpers.db.stores.jobs import hide_job
+from ofmhelpers.schemas import JobVisibility
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.schemas import JobVisibility
-from ofmhelpers.web.stores.jobs import hide_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 

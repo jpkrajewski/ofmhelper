@@ -10,9 +10,9 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.posting import window as posting_window
-from ofmhelpers.web.schemas.accounts import ago
-from ofmhelpers.web.schemas.nav import nav
+from ofmhelpers.features.drive.posting import window as posting_window
+from ofmhelpers.schemas.accounts import ago
+from ofmhelpers.schemas.nav import nav
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"

@@ -17,12 +17,7 @@ from ofmhelpers.cache.queue import (
     enqueue_to,
     get_queue,
 )
-from ofmhelpers.cache.redis import (
-    delete_text,
-    get_redis,
-    get_text,
-    set_text,
-)
+from ofmhelpers.cache.redis import delete_text, get_redis, get_text, set_text
 
 __all__ = [
     "CLONE_LINKS_QUEUE",

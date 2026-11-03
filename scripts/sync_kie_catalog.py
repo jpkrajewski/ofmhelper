@@ -1,4 +1,4 @@
-"""Rebuild `aigenproviders/kaiai/catalog.json` from kie.ai's docs.
+"""Rebuild `integrations/ai_providers/kie/catalog.json` from kie.ai's docs.
 
 kie.ai lists every documented endpoint in `https://docs.kie.ai/llms.txt`;
 each model page (`<page>.md`) embeds the OpenAPI spec of its request, and
@@ -56,10 +56,10 @@ from urllib3.util import Retry
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ofmhelpers.aigenproviders.spec import ModelSpec  # noqa: E402
+from ofmhelpers.integrations.ai_providers.spec import ModelSpec  # noqa: E402
 
 DOCS = "https://docs.kie.ai"
-OUT = ROOT / "src/ofmhelpers/aigenproviders/kaiai/catalog.json"
+OUT = ROOT / "src/ofmhelpers/integrations/ai_providers/kie/catalog.json"
 TIMEOUT_S = 30
 CREATE_TASK = "/api/v1/jobs/createTask"
 KINDS = {"Image": "image", "Video": "video"}

@@ -12,76 +12,20 @@ no references -- a different picture. `as_ai_params` reads an old job as the
 Recreate restores the model, settings and reference files too.
 """
 
-from collections.abc import Callable
-from typing import Any
-
 from fastapi import APIRouter
 
+from ofmhelpers.features.generate.legacy import Params, legacy_tools
+from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers import add_job_routes
-from ofmhelpers.web.schemas import Job
-
-# task name -> (old prefix, label)
-_LEGACY = {
-    "seedance": ("/seedance", "Seedance 2.0"),
-    "seedance25": ("/seedance25", "Seedance 2.5"),
-    "kling3": ("/kling3", "Kling 3.0"),
-    "wan3": ("/wan3", "Wan 3.0"),
-    "minimax_h3": ("/minimax-h3", "MiniMax H3"),
-    "nanobanana": ("/nanobanana", "Nano Banana Pro"),
-    "seedream45": ("/seedream45", "Seedream 4.5"),
-    "seedream5": ("/seedream5", "Seedream 5.0"),
-    "gpt_image": ("/gpt-image", "GPT Image 2.5 Flare"),
-    "fake_ai": ("/fake-ai", "Fake AI Model"),
-}
-
-
-Params = dict[str, Any]
-
-
-def _as(key: str, renames: dict[str, str] | None = None) -> Callable[[Params], Params]:
-    """An old tool whose params are one catalog model's fields, some under
-    an older name."""
-    names = renames or {}
-
-    def translate(params: Params) -> Params:
-        return {"model": key, **{names.get(k, k): v for k, v in params.items()}}
-
-    return translate
-
-
-def _seedream5(params: Params) -> Params:
-    """One tool for Lite and Pro (`variant`), text- or image-to-image by
-    whether references were picked; the catalog has a model per pair."""
-    rest = {k: v for k, v in params.items() if k != "variant"}
-    mode = "image-to-image" if params.get("image_urls") else "text-to-image"
-    return {"model": f"kie:seedream/5-{params.get('variant', 'lite')}-{mode}", **rest}
-
-
-# task name -> its params as an /ai job's; every old tool ran on kie.ai. Only
-# tools with jobs on record: an old task missing here keeps prompt-only
-# Recreate.
-_AS_AI: dict[str, Callable[[Params], Params]] = {
-    "seedream5": _seedream5,
-    "nanobanana": _as("kie:nano-banana-pro"),
-    "gpt_image": _as("kie:gpt-image-2-5-flare-image-to-image"),
-    "wan3": _as(
-        "kie:wan/3-0-video",
-        {
-            "reference_images": "reference_image_urls",
-            "reference_videos": "reference_video_urls",
-            "reference_audio": "reference_audio_urls",
-        },
-    ),
-}
 
 
 def as_ai_params(job: Job) -> Params:
-    """An old job's params as /ai stores them, or unchanged when its tool
-    has no translation."""
-    translate = _AS_AI.get(job.task)
-    if translate is None:
+    """An old job's params as /ai stores them (every old tool ran on kie.ai),
+    or unchanged when its tool has no translation."""
+    tool = legacy_tools().get(job.task)
+    if tool is None or tool.as_ai is None:
         return job.params
-    return {"provider": "kie", **translate(job.params)}
+    return {"provider": "kie", **tool.as_ai.translate(job.params)}
 
 
 def _router(prefix: str, label: str) -> APIRouter:
@@ -99,5 +43,6 @@ def _router(prefix: str, label: str) -> APIRouter:
 
 # task name -> (label, router)
 LEGACY_TOOLS = {
-    task: (label, _router(prefix, label)) for task, (prefix, label) in _LEGACY.items()
+    task: (tool.label, _router(tool.prefix, tool.label))
+    for task, tool in legacy_tools().items()
 }

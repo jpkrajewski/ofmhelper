@@ -2,8 +2,8 @@
 
 Everything here runs on *every* request, before routing. `auth.py` owns the
 whole auth story (the allowlist check, the password check, `require_admin`) on
-`AuthMiddleware` itself; `ratelimit.py` is only the per-request wiring over
-`web/ratelimit.py`'s counters.
+`AuthMiddleware` itself; `ratelimit.py` holds the Redis counters (failed
+logins, writes per IP) and the middleware that applies them.
 
 Order matters and is decided in `web/main.py`, not here: Starlette applies
 middleware outside-in in *added* order, so the last `add_middleware` call ends

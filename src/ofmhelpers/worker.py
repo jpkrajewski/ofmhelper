@@ -2,7 +2,7 @@
 Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker
 [queue]` -- the default queue (generations, downloads, ...) with
 `rq_workers` processes, `clone-links` (/clone-links runs) with
-`clone_links_workers`, or `previews` (gallery previews, web/previews.py)
+`clone_links_workers`, or `previews` (gallery previews, features/previews/render.py)
 with `preview_workers`. One compose service per queue.
 
 Exists purely so the worker gets the same logging setup the API does. The
@@ -19,7 +19,9 @@ place worker behavior is defined.
 from __future__ import annotations
 
 import sys
+from typing import Any
 
+import logfire
 from rq import Worker
 from rq.cli import main as rq_main
 
@@ -31,6 +33,15 @@ from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
 # Not __name__: under `python -m ofmhelpers.worker` that's "__main__", which
 # tells you nothing in a log line.
 logger = get_logger("ofmhelpers.worker")
+
+
+def _function_of(job: Any) -> str:
+    """What a queued job runs. Reading it unpickles the job, which may fail: rq
+    then fails the job itself, the span is no reason to."""
+    try:
+        return str(job.func_name)
+    except Exception:  # a span name, never worth a failed job
+        return "unknown"
 
 
 class ConfiguredWorker(Worker):
@@ -54,7 +65,11 @@ class ConfiguredWorker(Worker):
         no atexit, so the job's buffered spans and logs are sent here or
         never."""
         try:
-            return super().perform_job(job, queue)
+            with logfire.span("rq {func}", func=_function_of(job)) as span:
+                performed = super().perform_job(job, queue)
+                if not performed:
+                    span.set_level("error")
+                return performed
         finally:
             flush_telemetry()
 

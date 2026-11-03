@@ -23,10 +23,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.jobs import get_job, job_counts, list_jobs_page
+from ofmhelpers.db.stores.users import list_users
+from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.media_kinds import classify_kind
+from ofmhelpers.schemas import DirEntry, FileEntry, FileTile, Job, UserFiles
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.previews import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.web.routers.refs import stored_files
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, GENERATE_TOOLS, TOOLS
 from ofmhelpers.web.routers.task_helpers import (
@@ -37,9 +40,6 @@ from ofmhelpers.web.routers.task_helpers import (
     save_asset,
     strip_asset_hash_prefix,
 )
-from ofmhelpers.web.schemas import DirEntry, FileEntry, FileTile, Job, UserFiles
-from ofmhelpers.web.stores.jobs import get_job, job_counts, list_jobs_page
-from ofmhelpers.web.stores.users import list_users
 from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)
@@ -83,13 +83,18 @@ def _get_root(root_name: str) -> Path:
     return ROOTS[root_name]
 
 
-def _safe_path(root_name: str, rel_path: str) -> Path:
+def _safe_path(root_name: str, rel_path: str, *, allow_root: bool = True) -> Path:
     """Resolves a user-supplied relative path against the chosen root and
-    refuses to leave it (blocks ../ traversal, absolute paths, symlink escape)."""
+    refuses to leave it (blocks ../ traversal, absolute paths, symlink escape).
+    `allow_root=False` (the deletes) refuses the root itself too: deleting it,
+    or everything in it, would take every user's store and every running
+    job's files with it."""
     root = _get_root(root_name)
     candidate = (root / rel_path).resolve()
     if not candidate.is_relative_to(root):
         raise HTTPException(status_code=400, detail="Invalid path")
+    if not allow_root and candidate == root:
+        raise HTTPException(status_code=400, detail="The root cannot be deleted")
     return candidate
 
 
@@ -372,6 +377,8 @@ def browse(request: Request, root: str = DEFAULT_ROOT, path: str = ""):
         roots=list(ROOTS.keys()),
         current_root=root,
         current_path=path,
+        # "Delete all" is refused at the root (`_safe_path`), so not offered.
+        at_root=_safe_path(root, path) == _get_root(root),
         parent=parent,
         dirs=dirs,
         files=files,
@@ -425,7 +432,7 @@ def download(path: str, root: str = DEFAULT_ROOT):
 def delete_one(
     path: Annotated[str, Form()], root: Annotated[str, Form()] = DEFAULT_ROOT
 ):
-    target = _safe_path(root, path)
+    target = _safe_path(root, path, allow_root=False)
     if target.is_file():
         target.unlink()
     elif target.is_dir():
@@ -447,7 +454,7 @@ def delete_one(
 def delete_all(
     path: Annotated[str, Form()] = "", root: Annotated[str, Form()] = DEFAULT_ROOT
 ):
-    directory = _safe_path(root, path)
+    directory = _safe_path(root, path, allow_root=False)
     if not directory.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
