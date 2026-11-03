@@ -158,6 +158,12 @@ class ScopedDrive(ReadOnlyDrive):
         self._inside(parent_id)
         return self._inner.upload(parent_id, path, name, mime_type)
 
+    def trash_file(self, item_id: str) -> None:  # type: ignore[override]
+        """Only what sits in a folder it may write in."""
+        if not self._writable.intersection(self._inner.file(item_id).parents):
+            raise DriveError(_READ_ONLY)
+        self._inner.trash_file(item_id)
+
 
 def _guard(drive: DriveApi) -> DriveApi:
     """The Drive as callers get it: read-only in live-read mode, else as is."""

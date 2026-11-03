@@ -23,6 +23,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.repositories import CookieRepository
 from ofmhelpers.db.stores.watched_profiles import watchers
 from ofmhelpers.features.phones.catalog import cookie_sites
@@ -48,11 +49,21 @@ def _repository() -> CookieRepository:
     return CookieRepository()
 
 
+def _readable(user_id: int) -> dict | None:
+    """The stored row; None when the vault key cannot read it: a download runs
+    logged out, /cookies offers an upload, never a crash."""
+    try:
+        return _repository().get(user_id)
+    except VaultError as exc:
+        logger.warning("user %s: cookies unreadable: %s", user_id, exc)
+        return None
+
+
 def for_user(user_id: int | None) -> str | None:
     """`user_id`'s cookies.txt text, or None (no user, none uploaded)."""
     if user_id is None:
         return None
-    row = _repository().get(user_id)
+    row = _readable(user_id)
     return row["cookies"] if row else None
 
 
@@ -65,7 +76,7 @@ def for_watched(username: str) -> str | None:
 
 def saved(user_id: int) -> SavedCookies | None:
     """What /cookies shows of `user_id`'s cookies (no value), or None."""
-    row = _repository().get(user_id)
+    row = _readable(user_id)
     if row is None:
         return None
     try:

@@ -1,8 +1,18 @@
-"""The snapchat-US pipeline: a light touch (colours and sound vary ~5%,
-CapCut sharpen 5, framing barely moves; user 2026-10-30: the stealth_wild
-mix "fucks up colors"), mirrored and turned 2 degrees, a Snapchat caption
-bar, recorded as an iPhone 16 Pro Max in 4K30 HDR in the USA. The knobs live in `snapchat_iphone16_usa.json` next to this
-file; edit the JSON, not the code.
+"""The snapchat-US pipeline: a light touch (colours stay the source's, sound
+varies ~5%, CapCut sharpen 5, framing barely moves; user 2026-10-30: the
+stealth_wild mix "fucks up colors"; 2026-11-03: still too dark, too zoomed),
+mirrored and turned 1 degree, a Snapchat caption bar, recorded as an iPhone 16
+Pro Max in 4K30 HDR in the USA. The knobs live in `snapchat_iphone16_usa.json`
+next to this file; edit the JSON, not the code.
+
+Colours (measured 2026-11-03, geometry off, against the source, as the page
+shows the copy): the way to HLG and back takes 1% of the brightness, and the old
+draws (brightness +-0.02, gamma +-3%) moved it from -7.5% to +5%. So brightness
+and gamma only ever draw up, by about what the way there takes.
+
+Zoom: a turned frame must be scaled up to still cover the output. The old mix
+cut 12% of the picture away: the 2 degree turn 7%, the corner zoom 1.5%, tilt
+and drift 3%. Now 6.5%: the 1 degree turn is 4% of it.
 
     from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import run
     run("in.mp4", "out.mp4", caption="Going a little too far?", seed=7)
@@ -33,14 +43,14 @@ def run(
     timeout_s: int = 600,
 ) -> RunResult:
     """The JSON preset, then the pipeline's own fixed look: mirrored, turned
-    2 degrees, the caption bar; recorded on the iphone16_usa device."""
+    1 degree, the caption bar; recorded on the iphone16_usa device."""
     job = Repurpose(
         src, dst, seed=seed, recorded_at=recorded_at, timeout_s=timeout_s
     ).apply_json_preset(str(_PRESET))
     job.video = job.video.model_copy(
         update={
             "mirror": 1.0,  # every copy, not a chance
-            "rotate": 2.0,  # degrees
+            "rotate": 1.0,  # degrees: the main zoom, see the docstring
             "snapchat_caption": caption,
         }
     )

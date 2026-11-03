@@ -80,6 +80,7 @@
         const div = document.createElement("div");
         div.className = "result-item";
         attachJobData(div, job);
+        div.dataset.fileIndex = item.index;
 
         // Not media (a zip): no preview element, just the name -- same as
         // _asset_media.html's fallback, so it matches a reloaded card.

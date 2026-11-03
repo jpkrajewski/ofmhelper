@@ -16,7 +16,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.jobs.sweeps import running, sweeps
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, instrument_app
-from ofmhelpers.web.exceptions import unhandled
+from ofmhelpers.web.exceptions import exception_handlers
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
     CanonicalHostMiddleware,
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Ascend Global LLC — Content Ops",
     lifespan=lifespan,
-    exception_handlers={Exception: unhandled},
+    exception_handlers=exception_handlers(),
 )
 instrument_app(app)
 

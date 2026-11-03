@@ -1,13 +1,13 @@
 """The RQ jobs behind /trials (module-level: the worker imports them by
 reference). Each takes reels of the folder's state through one step --
 download the POSTED reels and run the snapchat pipeline on them with AI
-captions, make one reel again, upload the approved copies into a TRIALS
-folder next to POSTED -- and records each reel as it lands, so the page can
-show each copy as soon as it is made. Jobs run side by side (a caption
-applied while Generate trials runs): every write goes through
-`state.change`, never a whole state held across a pipeline run. The page
-shows the short `reel.error`/`state.problem` texts; the detail goes to the
-log."""
+captions, make one reel again, write one reel's captions, replace what is in
+the TRIALS folder next to POSTED with the approved copies -- and records each
+reel as it lands, so the page can show each copy as soon as it is made. Jobs
+run side by side (a caption applied while Generate trials runs): every write
+goes through `state.change`, never a whole state held across a pipeline run.
+The page shows the short `reel.error`/`state.problem` texts; the detail goes to
+the log."""
 
 import contextvars
 import random
@@ -20,9 +20,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.drive.folders import review_target
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.trials import media
-from ofmhelpers.features.trials.captions import caption_for, understand
+from ofmhelpers.features.trials.captions import captions_for, understand
 from ofmhelpers.features.trials.state import (
-    CAPTION_MAX,
     FolderState,
     ReelState,
     at,
@@ -32,7 +31,12 @@ from ofmhelpers.features.trials.state import (
     locked,
     work_dir,
 )
-from ofmhelpers.integrations.gdrive import DriveApi, DriveError
+from ofmhelpers.integrations.gdrive import (
+    DriveApi,
+    DriveError,
+    DriveFile,
+    FolderGoneError,
+)
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import (
     run as pipeline_run,
@@ -43,18 +47,20 @@ logger = get_logger(__name__)
 DRIVE_PROBLEM = "Google Drive did not answer. Connect it again."
 DOWNLOAD_FAILED = "Could not download it from Drive"
 MAKE_FAILED = "Could not make it"
+CAPTIONS_FAILED = "Could not write captions"
 UPLOAD_FAILED = "Could not upload it"
+NOTHING_NEW = "No new reels in POSTED"
+
+
+def _not_made(count: int) -> str:
+    reels = "1 new reel" if count == 1 else f"{count} new reels"
+    return f"Could not make {reels}. Click Generate trials to try again."
 
 
 def _seed(key: str, made: int) -> int:
     """A reel's seed per make: Regenerate draws a new variant, a rerun of
     the same make draws the same one."""
     return zlib.crc32(f"{key}:{made}".encode()) & 0x7FFFFFFF
-
-
-def _clean_caption(text: str) -> str:
-    one_line = " ".join(text.split())
-    return one_line.strip('"').strip()[:CAPTION_MAX]
 
 
 def _on_disk(user_id: int, login_id: int, reel: ReelState) -> bool:
@@ -109,53 +115,71 @@ def _download(drive: DriveApi, user_id: int, login_id: int) -> None:
         )
 
 
-def merge_posted(state: FolderState, videos: dict[str, str]) -> None:
-    """`state` matched to POSTED's videos (id -> name): new ones added,
-    ones gone dropped unless their copy was made."""
-    state.reels = [r for r in state.reels if r.out or r.key in videos]
-    known = {r.key for r in state.reels}
-    state.reels += [
-        ReelState(key=key, name=name)
-        for key, name in videos.items()
-        if key not in known
+def merge_posted(state: FolderState, videos: list[DriveFile]) -> None:
+    """`state` matched to POSTED's videos, newest first as Drive lists them:
+    new ones added, ones gone dropped unless their copy was made, and all in
+    the page's order, newest in POSTED first. The list may be the last sweep's,
+    older than the state: a reel it does not name keeps its place."""
+    known = {r.key: r for r in state.reels}
+    listed = {f.id for f in videos}
+    new = [
+        ReelState(key=f.id, name=f.name, posted_at=f.created_time)
+        for f in videos
+        if f.id not in known
     ]
+    for f in videos:
+        if f.id in known and f.created_time:
+            known[f.id].posted_at = f.created_time
+    kept = [r for r in state.reels if r.out or r.key in listed]
+    state.reels = sorted([*new, *kept], key=ReelState.posted_or_never, reverse=True)
 
 
-def _list_posted(drive: DriveApi, user_id: int, login_id: int) -> None:
+def _list_posted(drive: DriveApi, user_id: int, login_id: int) -> bool:
     """POSTED as it is now into the state (the page shows the last sweep's
-    read; a video posted since is picked up here)."""
+    read; a video posted since is picked up here). False when it was not read:
+    nobody can say what is new in it."""
     posted_id = load(user_id, login_id).posted_folder_id
     if not posted_id:
-        return
+        return False
     try:
         files = drive.children(posted_id)
     except DriveError:
         logger.warning("trials: POSTED of %s unreadable", login_id, exc_info=True)
-        return
-    videos = {f.id: f.name for f in files if f.kind == "video"}
+        change(user_id, login_id, lambda s: s.report(DRIVE_PROBLEM))
+        return False
+    videos = [f for f in files if f.kind == "video"]
     change(user_id, login_id, lambda s: merge_posted(s, videos))
+    return True
 
 
 def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> dict:
     """Generate trials: POSTED read again, the reels not on disk downloaded,
-    then every reel with no copy yet is made. Drive unreachable: what is on
-    disk is still made, and the page says to connect Drive again."""
+    then every reel with no copy yet is made; a copy already made is left
+    alone. Drive unreachable: what is on disk is still made, and the page says
+    to connect Drive again. The status line says what it left: nothing new in
+    POSTED, or how many it could not make (the next click tries them again)."""
     found = _drive(refresh_token, user_id, login_id)
+    read = found is not None and _list_posted(found[0], user_id, login_id)
     if found is not None:
-        _list_posted(found[0], user_id, login_id)
         _download(found[0], user_id, login_id)
     state = load(user_id, login_id)
     keys = [r.key for r in state.todo if _on_disk(user_id, login_id, r)]
-    return generate_reels(user_id=user_id, login_id=login_id, keys=keys)
+    if read and not state.todo:
+        change(user_id, login_id, lambda s: s.tell(NOTHING_NEW))
+    done = generate_reels(user_id=user_id, login_id=login_id, keys=keys)
+    if left := len(load(user_id, login_id).todo):
+        change(user_id, login_id, lambda s: s.tell(_not_made(left)))
+    return done
 
 
 def generate_reels(
     *, user_id: int, login_id: int, keys: list[str] | None = None
 ) -> dict:
     """The snapchat pipeline on each downloaded reel (`keys`: only those),
-    captioned by the AI the first time, then by the caption it has (the
-    user's own, or the AI's: Regenerate never asks the AI again);
-    `settings.trials.parallel` reels at once, each saved as it lands."""
+    the AI writing its captions the first time and the copy made with the
+    first; then with the caption it has (one chosen, the user's own: Regenerate
+    never asks the AI again); `settings.trials.parallel` reels at once, each
+    saved as it lands."""
     state = load(user_id, login_id)
     wanted = [r.key for r in state.reels if keys is None or r.key in keys]
     workers = min(settings.trials.parallel, len(wanted)) or 1
@@ -184,7 +208,8 @@ def _make(user_id: int, login_id: int, key: str) -> bool:
         if not _on_disk(user_id, login_id, reel):
             raise FileNotFoundError(reel.local)  # noqa: TRY301 - same handling
         src = root / str(reel.local)
-        caption = reel.caption or _clean_caption(caption_for(understand(src), used=[]))
+        choices = reel.captions or ([] if reel.caption else _written(src))
+        caption = reel.caption or choices[0]
         making.parent.mkdir(parents=True, exist_ok=True)
         pipeline_run(src, making, caption=caption, seed=_seed(key, reel.made))
         making.replace(out)
@@ -195,8 +220,33 @@ def _make(user_id: int, login_id: int, key: str) -> bool:
         error = MAKE_FAILED if reel.local else DOWNLOAD_FAILED
         change_reel(user_id, login_id, key, lambda r: r.mark_failed(error))
         return False
-    change_reel(user_id, login_id, key, lambda r: r.mark_made(caption, out_rel))
+    change_reel(
+        user_id, login_id, key, lambda r: r.mark_made(caption, out_rel, choices)
+    )
     return True
+
+
+def _written(src: Path) -> list[str]:
+    """The AI watches the reel and writes its captions."""
+    return captions_for(understand(src))
+
+
+def write_captions(*, user_id: int, login_id: int, key: str) -> dict:
+    """Captions to choose from for a reel made before there were any; its copy
+    stays as it is until one is chosen."""
+    reel = load(user_id, login_id).reel(key)
+    try:
+        if reel is None or not _on_disk(user_id, login_id, reel):
+            raise FileNotFoundError(key)  # noqa: TRY301 - same handling
+        choices = _written(work_dir(user_id, login_id) / str(reel.local))
+    except Exception:  # the page says it short; the copy is untouched
+        logger.warning("trials: captions of %s failed", key, exc_info=True)
+        change_reel(
+            user_id, login_id, key, lambda r: r.captions_failed(CAPTIONS_FAILED)
+        )
+        return {"captions": 0}
+    change_reel(user_id, login_id, key, lambda r: r.mark_captions(choices))
+    return {"captions": len(choices)}
 
 
 # Long enough for three Drive calls; two uploads starting together must
@@ -233,8 +283,8 @@ def _camera_name(source: str, taken: set[str], rng: random.Random) -> str:
 
 def _open_trials(
     refresh_token: str, user_id: int, login_id: int, account_folder_id: str
-) -> tuple[DriveApi, str, set[str]] | None:
-    """The owner's Drive, TRIALS' id (remembered in the state) and the names
+) -> tuple[DriveApi, str, list[DriveFile]] | None:
+    """The owner's Drive, TRIALS' id (remembered in the state) and what is
     already in it, or None with `state.problem` set."""
     found = _drive(refresh_token, user_id, login_id)
     if found is None:
@@ -243,16 +293,34 @@ def _open_trials(
     try:
         trials_id = _trials_folder(drive, root, user_id, login_id, account_folder_id)
         change(user_id, login_id, lambda s: s.remember_trials_folder(trials_id))
-        taken = {f.name for f in drive.children(trials_id)}
+        return drive, trials_id, drive.children(trials_id)
     except DriveError:
         logger.warning("trials: TRIALS folder for %s failed", login_id, exc_info=True)
         change(user_id, login_id, lambda s: s.report(DRIVE_PROBLEM))
         return None
-    return drive, trials_id, taken
 
 
-def _upload_failed(user_id: int, login_id: int, key: str) -> None:
-    change_reel(user_id, login_id, key, lambda r: r.upload_failed(UPLOAD_FAILED))
+def _batch_failed(user_id: int, login_id: int, keys: list[str]) -> None:
+    def back(state: FolderState) -> None:
+        for reel in state.reels:
+            if reel.key in keys:
+                reel.upload_failed(UPLOAD_FAILED)
+
+    change(user_id, login_id, back)
+
+
+def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
+    """Into Drive's trash (restorable there for 30 days); True when all went."""
+    fine = True
+    for file_id in file_ids:
+        try:
+            drive.trash_file(file_id)
+        except FolderGoneError:
+            continue  # gone already: what was wanted
+        except DriveError:
+            logger.warning("trials: trashing %s failed", file_id, exc_info=True)
+            fine = False
+    return fine
 
 
 def upload_trials(
@@ -263,31 +331,43 @@ def upload_trials(
     account_folder_id: str,
     keys: list[str],
 ) -> dict:
-    """The reels `keys` (claimed for this job by the page) into TRIALS, each
-    under a fresh VID_XXXX.mp4. Uploads run side by side, each over its own
-    reels; one that fails goes back to selectable and says so."""
+    """The reels `keys` (claimed for this job by the page) replace the videos
+    in TRIALS, each under a fresh VID_XXXX.mp4. All or nothing, new ones first:
+    one that fails takes back those it went up with, what was in TRIALS stays,
+    and the batch is selected again. Only then the old ones go to Drive's trash,
+    and their reels can be selected again."""
     opened = _open_trials(refresh_token, user_id, login_id, account_folder_id)
     if opened is None:
-        for key in keys:
-            _upload_failed(user_id, login_id, key)
+        _batch_failed(user_id, login_id, keys)
         return {"uploaded": 0}
-    drive, trials_id, taken = opened
+    drive, trials_id, old = opened
     rng = random.Random()  # noqa: S311 - a file name, not a secret
-    done = 0
+    taken = {f.name for f in old}
     state = load(user_id, login_id)
-    for key in keys:
-        reel = state.reel(key)
-        path = at(user_id, login_id, reel.out) if reel else None
-        if reel is None or path is None or not path.is_file():
-            continue
-        name = _camera_name(reel.name, taken, rng)
-        try:
-            drive.upload(trials_id, path, name, "video/mp4")
-        except DriveError:
-            logger.warning("trials: upload of %s failed", key, exc_info=True)
-            _upload_failed(user_id, login_id, key)
-            continue
-        taken.add(name)
-        change_reel(user_id, login_id, key, partial(ReelState.mark_uploaded, name=name))
-        done += 1
-    return {"uploaded": done}
+    landed: dict[str, DriveFile] = {}
+    try:
+        for key in keys:
+            reel = state.reel(key)
+            path = at(user_id, login_id, reel.out) if reel else None
+            if reel is None or path is None or not path.is_file():
+                raise FileNotFoundError(key)
+            name = _camera_name(reel.name, taken, rng)
+            landed[key] = drive.upload(trials_id, path, name, "video/mp4")
+            taken.add(name)
+    except (DriveError, OSError):
+        logger.warning("trials: upload to %s failed", login_id, exc_info=True)
+        _trash(drive, [f.id for f in landed.values()])
+        _batch_failed(user_id, login_id, keys)
+        return {"uploaded": 0}
+    replaced = _trash(drive, [f.id for f in old if f.kind == "video"])
+
+    def in_drive(now: FolderState) -> None:
+        for reel in now.reels:
+            if reel.key in landed:
+                reel.mark_uploaded(landed[reel.key].name)
+            else:
+                reel.left_drive()
+        now.report(None if replaced else DRIVE_PROBLEM)
+
+    change(user_id, login_id, in_drive)
+    return {"uploaded": len(landed)}

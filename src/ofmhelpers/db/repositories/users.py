@@ -44,7 +44,7 @@ def _to_dict(row: UserRow) -> dict:
         "active": row.active,
         "created_at": row.created_at,
         "last_login_at": row.last_login_at,
-        "drive_connected": bool(row.google_refresh_token),
+        "drive_connected": row.drive_connected,
         "has_password": bool(row.password_hash),
         "drive_root_id": row.drive_root_id,
         "is_password_account": row.is_password_account,

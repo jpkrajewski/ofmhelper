@@ -56,7 +56,7 @@
             <form method="post" action="/trials/{{ t.login_id }}/generate" class="tr-generate">
                 {% if p.making %}{{ ui.button("Making… " ~ p.ready ~ " of " ~ p.total, href="/trials/" ~ t.login_id, icon="play") }}
                 {% elif p.ready %}{{ ui.button("See generated", href="/trials/" ~ t.login_id, icon="play") }}{% endif %}
-                {{ ui.button("Generate trials", "primary", icon="sparkles", type="submit", attrs={"disabled": not posted}) }}
+                {{ ui.button("Generate trials", "primary", icon="sparkles", type="submit", attrs={"disabled": not c.account_folder_id}) }}
             </form>
         </div>
     </article>

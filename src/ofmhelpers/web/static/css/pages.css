@@ -1418,6 +1418,12 @@ a.ph-login-user:hover { text-decoration: underline; }
 .tr-video { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-control); background: var(--ink); }
 /* Being made: the gallery cards' generating box, at the video's 9:16. */
 .tr-pending { aspect-ratio: 9 / 16; min-height: 0; }
+/* The AI's captions: a whole-width button each, wrapping; the one on the copy
+   takes the accent. */
+.tr-choices { display: flex; flex-direction: column; gap: var(--gap-inline); }
+.tr-choices form { display: contents; }
+.tr-choice { width: 100%; height: auto; min-height: var(--control-h); justify-content: flex-start; text-align: left; white-space: normal; font-weight: 400; line-height: 1.3; }
+.tr-choice[aria-pressed="true"]:disabled { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); font-weight: 600; }
 .tr-caption textarea { display: block; width: 100%; min-height: 4.5em; resize: vertical; font: inherit; font-size: var(--step-0); line-height: 1.4; }
 /* Wraps rather than overflows: buttons never shrink below their label. */
 .tr-reel-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }

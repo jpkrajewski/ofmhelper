@@ -7,13 +7,13 @@ registry and /clone and /pictures call it, so it stays here as a thin wrapper.""
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from starlette.datastructures import FormData
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.generate import service
 from ofmhelpers.features.generate.service import (
     TASK,
-    GenerateRefusedError,
     describe,
     pending_message,
     start_runs,
@@ -40,7 +40,7 @@ async def _form(request: Request) -> FormData:
 
 
 @router.get("/fields")
-def fields(request: Request, model: Annotated[str, Query()]):
+def fields(request: Request, model: Annotated[str, Query()]) -> Response:
     """The picked model's settings and pickers, swapped into the form. With
     an ETag: the browser revalidates and gets a bodiless 304 while the
     model's schema is unchanged (ai-form.js also keeps it for the page)."""
@@ -58,10 +58,7 @@ def run(
     owner_id: OwnerId,
     actor: Actor,
 ) -> JobsQueued:
-    try:
-        return start_runs(form, assets_root, owner_id, actor, run_ai)
-    except GenerateRefusedError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return start_runs(form, assets_root, owner_id, actor, run_ai)
 
 
 def run_ai(

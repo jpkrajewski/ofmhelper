@@ -1,18 +1,17 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores.jobs import create_job, run_job
 from ofmhelpers.media.metadata_cleaner import clean_metadata
 from ofmhelpers.schemas import JobQueued, ResultFile
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor, AssetsRoot
 from ofmhelpers.web.routers.task_helpers import (
     IMAGE_KINDS,
     UPLOADS_ROOT,
     add_job_routes,
-    assets_root_for,
     convert_heic_upload,
     make_job_dir,
     register_generated_asset,
@@ -39,9 +38,10 @@ def _run_clean(job_dir: str, assets_root: str) -> list[ResultFile]:
 
 @router.post("/run")
 def run(
-    request: Request,
+    actor: Actor,
+    assets_root: AssetsRoot,
     files: Annotated[list[UploadFile] | None, File()] = None,
-):
+) -> JobQueued:
     uploads = [convert_heic_upload(f) for f in files or [] if f.filename]
     if not uploads:
         raise HTTPException(status_code=400, detail="At least one image is required")
@@ -59,13 +59,13 @@ def run(
     job_id = create_job(
         "clean_images",
         {"dir": str(job_dir), "files": saved_names},
-        actor=AuthMiddleware.actor(request),
+        actor=actor,
     )
     enqueue(
         run_job,
         job_id,
         _run_clean,
-        {"job_dir": str(job_dir), "assets_root": str(assets_root_for(request))},
+        {"job_dir": str(job_dir), "assets_root": str(assets_root)},
     )
 
     return JobQueued(job_id=job_id)

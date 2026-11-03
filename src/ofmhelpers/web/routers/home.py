@@ -2,7 +2,7 @@
 from `schemas.nav.NAV`) and /health (the Docker and uptime probe, public)."""
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from ofmhelpers.web.templates_config import render
@@ -15,7 +15,7 @@ class Health(BaseModel):
 
 
 @router.get("/home", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request) -> Response:
     return render(request, "home.html")
 
 

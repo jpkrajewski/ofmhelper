@@ -19,23 +19,16 @@ images/{n}` to whoever may see the preset.
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import picture_presets
-from ofmhelpers.db.stores.jobs import (
-    count_hidden_jobs,
-    create_job,
-    list_jobs_page,
-    run_job,
-)
+from ofmhelpers.db.stores.jobs import start_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
-from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import (
@@ -46,13 +39,12 @@ from ofmhelpers.schemas import (
     ResultFile,
     TaskCard,
 )
-from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import Actor, ApiKeys, AssetsRoot, OwnerId
+from ofmhelpers.web.forms import Files, FormModel, PaidForm, Stripped
+from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.generation.ai import run_ai
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
-    assets_root_for,
-    assets_root_for_user,
     build_ordered_paths,
     classify_kind,
     save_asset,
@@ -66,15 +58,29 @@ LABEL = "Pictures"
 
 router = APIRouter(prefix="/pictures", tags=["pictures"])
 
+gallery = Gallery({TASK})
+
 # Short: an edited preset may put another image under the same index.
 _IMAGE_CACHE = {"Cache-Control": "private, max-age=60"}
 
-PresetName = Annotated[str, Form(min_length=1, max_length=80)]
-PresetPrompt = Annotated[str, Form(min_length=1, max_length=20000)]
 # The shapes a preset may fix every run to ("" in the form: the picture's
 # own); a model without one gets its nearest.
 PRESET_ASPECTS = ("1:1", "3:4", "4:5", "2:3", "9:16", "4:3", "3:2", "16:9")
-PresetAspect = Annotated[str, Form(max_length=16)]
+
+
+class PresetForm(FormModel):
+    name: Stripped = Field(min_length=1, max_length=80)
+    prompt: Stripped = Field(min_length=1, max_length=20000)
+    aspect_ratio: str = Field("", max_length=16)
+    images: Files
+
+
+class PresetEditForm(PresetForm):
+    keep: list[int] = Field(default_factory=list)
+
+
+class PresetDeleted(BaseModel):
+    deleted: int
 
 
 class PictureTarget(BaseModel):
@@ -224,24 +230,18 @@ def _card(job: Job) -> TaskCard:
     return task_card(job)
 
 
-def _gallery_page(
-    request: Request, offset: int, hidden: bool = False
-) -> tuple[list[TaskCard], int | None]:
-    limit = settings.web.gallery_limit
-    jobs, total = list_jobs_page(
-        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
-    )
-    next_offset = offset + limit
-    return [_card(j) for j in jobs], next_offset if next_offset < total else None
-
-
 @router.get("")
-def page(request: Request, preset: Annotated[int | None, Query()] = None):
-    viewer = AuthMiddleware.owner_id(request)
-    presets = picture_presets.visible(viewer)
+def page(
+    request: Request,
+    owner_id: OwnerId,
+    actor: Actor,
+    api_keys: ApiKeys,
+    preset: Annotated[int | None, Query()] = None,
+) -> Response:
+    presets = picture_presets.visible(owner_id)
     ids = [p.id for p in presets]
     selected = preset if preset in ids else (ids[0] if ids else None)
-    gallery, next_offset = _gallery_page(request, 0)
+    first = gallery.page(actor)
     return render(
         request,
         "pictures.html",
@@ -249,57 +249,55 @@ def page(request: Request, preset: Annotated[int | None, Query()] = None):
         selected=selected,
         providers=ProviderChoice.all(list(PICTURE_TARGETS)),
         selected_provider=default_provider(),
-        api_keys=get_api_keys(request),
+        api_keys=api_keys,
         max_images={name: t.max_images for name, t in PICTURE_TARGETS.items()},
         preset_max_images=settings.pictures.preset_max_images,
         aspects=PRESET_ASPECTS,
         default_aspect=settings.pictures.aspect_ratio,
         max_pictures=settings.pictures.max_pictures,
-        gallery=gallery,
-        next_offset=next_offset,
-        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
+        gallery=[_card(j) for j in first.jobs],
+        next_offset=first.next_offset,
+        hidden_count=gallery.hidden_count(actor),
         live_poll_s=settings.web.gallery_live_poll_s,
     )
 
 
 @router.get("/gallery")
-def gallery_page(
-    request: Request,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    hidden: Annotated[bool, Query()] = False,
-):
-    gallery, next_offset = _gallery_page(request, offset, hidden)
+def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
+    found = gallery.page(actor, query)
     return render(
         request,
         "generate_gallery_fragment.html",
-        gallery=gallery,
-        next_offset=next_offset,
+        gallery=[_card(j) for j in found.jobs],
+        next_offset=found.next_offset,
     )
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request):
-    gallery, _ = _gallery_page(request, 0)
+def gallery_latest(request: Request, actor: Actor) -> Response:
     return render_polled(
-        request, "generate_gallery_fragment.html", gallery=gallery, next_offset=None
+        request,
+        "generate_gallery_fragment.html",
+        gallery=[_card(j) for j in gallery.page(actor).jobs],
+        next_offset=None,
     )
 
 
 # --- presets -------------------------------------------------------------------
 
 
-def _visible(request: Request, preset_id: int) -> PicturePreset:
-    found = picture_presets.get(preset_id, AuthMiddleware.owner_id(request))
+def _visible(preset_id: int, owner_id: int) -> PicturePreset:
+    found = picture_presets.get(preset_id, owner_id)
     if found is None:
         raise HTTPException(status_code=404, detail="No such preset")
     return found
 
 
 @router.get("/presets/{preset_id}/images/{index}")
-def preset_image(request: Request, preset_id: int, index: int) -> FileResponse:
+def preset_image(preset_id: int, index: int, owner_id: OwnerId) -> FileResponse:
     """A preset image as a small webp (made once and kept): a reference can
     be a 25 MB PNG."""
-    preset = _visible(request, preset_id)
+    preset = _visible(preset_id, owner_id)
     if not 0 <= index < len(preset.images) or not Path(preset.images[index]).is_file():
         raise HTTPException(status_code=404, detail="No such image")
     try:
@@ -312,10 +310,9 @@ def preset_image(request: Request, preset_id: int, index: int) -> FileResponse:
     return FileResponse(thumb, media_type="image/webp", headers=_IMAGE_CACHE)
 
 
-def _saved_images(request: Request, uploads: list[UploadFile]) -> list[str]:
+def _saved_images(uploads: list[UploadFile], root: Path) -> list[str]:
     """New preset images into the owner's asset store (deduped by
     content); anything but an image is refused."""
-    root = assets_root_for_user(AuthMiddleware.owner_id(request))
     paths = []
     for upload in uploads:
         if not upload.filename:
@@ -338,94 +335,79 @@ def _checked(images: list[str]) -> list[str]:
 
 @router.post("/presets")
 def create_preset(
-    request: Request,
-    name: PresetName,
-    prompt: PresetPrompt,
-    aspect_ratio: PresetAspect = "",
-    images: Annotated[list[UploadFile] | None, File()] = None,
+    form: Annotated[PresetForm, Form()],
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
 ) -> PicturePreset:
-    aspect = _preset_aspect(aspect_ratio)
-    paths = _checked(_saved_images(request, images or []))
-    try:
-        return picture_presets.create(
-            AuthMiddleware.owner_id(request),
-            name.strip(),
-            prompt.strip(),
-            paths,
-            aspect,
-        )
-    except picture_presets.DuplicateError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from None
+    aspect = _preset_aspect(form.aspect_ratio)
+    paths = _checked(_saved_images(form.images, assets_root))
+    return picture_presets.create(owner_id, form.name, form.prompt, paths, aspect)
 
 
 @router.post("/presets/{preset_id}")
 def update_preset(
-    request: Request,
     preset_id: int,
-    name: PresetName,
-    prompt: PresetPrompt,
-    aspect_ratio: PresetAspect = "",
-    keep: Annotated[list[int] | None, Form()] = None,
-    images: Annotated[list[UploadFile] | None, File()] = None,
+    form: Annotated[PresetEditForm, Form()],
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
 ) -> PicturePreset:
     """`keep`: the indexes of the current images to keep, in order; new
     images go after them."""
-    preset = _visible(request, preset_id)
+    preset = _visible(preset_id, owner_id)
     if not preset.mine:
         raise HTTPException(status_code=403, detail="Only its owner edits a preset")
-    kept = [preset.images[i] for i in keep or [] if 0 <= i < len(preset.images)]
-    paths = _checked(kept + _saved_images(request, images or []))
-    try:
-        saved = picture_presets.update(
-            preset_id,
-            preset.owner_id,
-            name.strip(),
-            prompt.strip(),
-            paths,
-            _preset_aspect(aspect_ratio),
-        )
-    except picture_presets.DuplicateError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from None
+    kept = [preset.images[i] for i in form.keep if 0 <= i < len(preset.images)]
+    paths = _checked(kept + _saved_images(form.images, assets_root))
+    saved = picture_presets.update(
+        preset_id,
+        preset.owner_id,
+        form.name,
+        form.prompt,
+        paths,
+        _preset_aspect(form.aspect_ratio),
+    )
     if saved is None:
         raise HTTPException(status_code=404, detail="No such preset")
     return saved
 
 
 @router.post("/presets/{preset_id}/delete")
-def delete_preset(request: Request, preset_id: int) -> dict[str, int]:
-    if not picture_presets.delete(preset_id, AuthMiddleware.owner_id(request)):
+def delete_preset(preset_id: int, owner_id: OwnerId) -> PresetDeleted:
+    if not picture_presets.delete(preset_id, owner_id):
         raise HTTPException(status_code=404, detail="No such preset of yours")
-    return {"deleted": preset_id}
+    return PresetDeleted(deleted=preset_id)
 
 
 # --- runs ------------------------------------------------------------------------
 
 
+class PictureRunForm(PaidForm):
+    # The app's default provider may have no Nano Banana Pro.
+    provider: str = Field(default_factory=default_provider)
+    preset: int
+    pictures: Files
+    pictures_manifest: str = "[]"
+
+
 @router.post("/run")
 def run(
-    request: Request,
-    preset: Annotated[int, Form()],
-    api_key: Annotated[str, Form()] = "",
-    provider: Annotated[str, Form()] = "",
-    pictures: Annotated[list[UploadFile] | None, File()] = None,
-    pictures_manifest: Annotated[str, Form()] = "[]",
+    form: Annotated[PictureRunForm, Form()],
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
 ) -> JobsQueued:
     """One job per picture to recreate, each checked against the model
     before anything is queued."""
-    chosen = _visible(request, preset)
-    provider = provider or default_provider()
-    target = PICTURE_TARGETS.get(provider)
+    chosen = _visible(form.preset, owner_id)
+    target = PICTURE_TARGETS.get(form.provider)
     if target is None:
         raise HTTPException(
             status_code=400, detail="That provider has no Nano Banana Pro"
         )
-    if not api_key.strip():
+    if not form.api_key:
         raise HTTPException(status_code=400, detail="API key is required")
     paths = build_ordered_paths(
-        pictures_manifest,
-        pictures or [],
-        assets_root_for(request),
-        user_id=AuthMiddleware.owner_id(request),
+        form.pictures_manifest, form.pictures, assets_root, user_id=owner_id
     )
     most = settings.pictures.max_pictures
     if not 1 <= len(paths) <= most:
@@ -460,28 +442,24 @@ def run(
         }
         for path in paths
     ]
-    try:
-        for params in runs:
-            spec.check(_values(target, params))
-    except InvalidInputError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
-    actor = AuthMiddleware.actor(request)
+    for params in runs:
+        spec.check(_values(target, params))
     job_ids = []
     for params in runs:
-        job_params = {"provider": provider, "model": target.model, **params}
-        job_id = create_job(TASK, job_params, actor=actor)
-        enqueue(
-            run_job,
-            job_id,
-            run_picture,
-            {
-                "job_id": job_id,
-                "api_key": api_key.strip(),
-                "assets_root": str(assets_root_for(request)),
-                **job_params,
-            },
+        job_params = {"provider": form.provider, "model": target.model, **params}
+        job_ids.append(
+            start_job(
+                TASK,
+                job_params,
+                run_picture,
+                {
+                    "api_key": form.api_key,
+                    "assets_root": str(assets_root),
+                    **job_params,
+                },
+                actor=actor,
+            )
         )
-        job_ids.append(job_id)
     return JobsQueued(job_ids=job_ids)
 
 

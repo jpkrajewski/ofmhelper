@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
-{# One login's trials: the copies made (video, caption, select to upload),
-   then the ones Generate trials is still making. trials.js runs the page:
+{# One login's trials, newest in POSTED first: the ones Generate trials is still
+   making, then the copies made (video, captions to choose from, select to
+   upload); Upload asks first, it replaces what is in TRIALS. trials.js runs the page:
    every button is a fetch answered at once, and while anything runs it
    polls `data-live` and swaps in only the cards that changed. #}
 {% block title %}Trials — @{{ card.target.handle }} — Ascend Global LLC{% endblock %}
@@ -19,7 +20,7 @@
             {{ ui.button("Upload to Drive", icon="upload", type="submit", hook="tr-upload-btn", attrs={"disabled": true}) }}
         </form>
         <form method="post" action="/trials/{{ t.login_id }}/generate" id="tr-generate">
-            {{ ui.button("Generate trials", "primary", icon="sparkles", type="submit", attrs={"disabled": view.making or not state.todo}) }}
+            {{ ui.button("Generate trials", "primary", icon="sparkles", type="submit", attrs={"disabled": view.making}) }}
         </form>
     </div>
 </div>
@@ -35,6 +36,17 @@
 {% with reels=state.ready, pending=view.pending %}{% include "_trials_cards.html" %}{% endwith %}
 </div>
 {{ ui.empty("No trials yet", attrs={"id": "tr-empty", "hidden": (state.ready|length + view.pending|length) > 0}) }}
+
+<dialog class="accounts-dialog" id="tr-replace">
+    <form method="dialog">
+        <h2>Replace trials in Drive?</h2>
+        <p>Every trial now in the TRIALS folder gets deleted and replaced with <strong id="tr-replace-count"></strong>.</p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", attrs={"id": "tr-replace-back"}) }}
+            {{ ui.button("Delete and upload", "primary", attrs={"id": "tr-replace-go"}) }}
+        </div>
+    </form>
+</dialog>
 
 <script src="{{ static_url('js/trials.js') }}"></script>
 {% endblock %}

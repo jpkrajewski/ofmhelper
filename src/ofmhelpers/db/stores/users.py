@@ -29,6 +29,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.repositories import UserRepository
 from ofmhelpers.integrations.signin.passwords import (
     hash_password,
@@ -36,8 +37,11 @@ from ofmhelpers.integrations.signin.passwords import (
     new_link_token,
     verify_password,
 )
+from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import LinkedAccount, Role, User, UserForm
 from ofmhelpers.schemas.users import normalized_email
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from ofmhelpers.integrations.signin import Identity
@@ -296,12 +300,23 @@ def set_drive_root(user_id: int, folder_id: str | None) -> None:
 
 
 def refresh_token(user_id: int) -> str:
-    """The Google refresh token Drive uploads go up with; "" when none."""
-    return _repository().refresh_token(user_id)
+    """The Google refresh token Drive uploads go up with; "" when none, or
+    when the vault key cannot read it: not connected, never a crash."""
+    try:
+        return _repository().refresh_token(user_id)
+    except VaultError as exc:
+        logger.warning("user %s: Google token unreadable: %s", user_id, exc)
+        return ""
 
 
 def api_keys(user_id: int) -> dict[str, str]:
-    return _repository().api_keys(user_id)
+    """The user's saved keys; none when the vault key cannot read them: the
+    forms open with their key box empty, never a crash."""
+    try:
+        return _repository().api_keys(user_id)
+    except VaultError as exc:
+        logger.warning("user %s: saved API keys unreadable: %s", user_id, exc)
+        return {}
 
 
 def set_api_key(user_id: int, provider: str, api_key: str) -> None:

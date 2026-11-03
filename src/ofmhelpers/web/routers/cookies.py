@@ -7,18 +7,18 @@ background scan and download uses).
 """
 
 from fastapi import APIRouter, Request, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores import cookies
 from ofmhelpers.features.accounts.tracker import rescan_limited
 from ofmhelpers.features.reels.watch import unlock_gated
-from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.dependencies import OwnerId
+from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/cookies", tags=["cookies"])
 
-_PRIVATE = {"Cache-Control": "no-store"}
 _NOTES = {
     "uploaded": "Cookies saved. Your accounts synced without a login are syncing again.",
     "removed": "Cookies removed. Your downloads and scans now run logged out.",
@@ -27,6 +27,7 @@ _NOTES = {
 
 def _page(
     request: Request,
+    owner_id: int,
     *,
     note: str | None = None,
     error: str | None = None,
@@ -35,18 +36,18 @@ def _page(
     response = render(
         request,
         "cookies_form.html",
-        saved=cookies.saved(AuthMiddleware.owner_id(request)),
+        saved=cookies.saved(owner_id),
         message=_NOTES.get(note or ""),
         error=error,
         status_code=status_code,
     )
-    response.headers.update(_PRIVATE)
+    response.headers.update(NO_STORE)
     return response
 
 
 @router.get("")
-def form(request: Request, note: str | None = None):
-    return _page(request, note=note)
+def form(request: Request, owner_id: OwnerId, note: str | None = None) -> Response:
+    return _page(request, owner_id, note=note)
 
 
 def _after_upload(user_id: int) -> None:
@@ -57,23 +58,22 @@ def _after_upload(user_id: int) -> None:
 
 
 @router.post("")
-def upload_cookies(request: Request, file: UploadFile) -> Response:
+def upload_cookies(request: Request, owner_id: OwnerId, file: UploadFile) -> Response:
     """A plain `def`, so FastAPI runs it in its threadpool: the file is read,
     parsed and stored -- and the page re-rendered on a refusal -- off the
     event loop. A file over the limit is refused by its size before it is
     read into memory."""
-    user_id = AuthMiddleware.owner_id(request)
     try:
         if file.size is not None:
             cookies.check_size(file.size)
-        cookies.save(user_id, file.file.read(), (file.filename or "cookies.txt")[:255])
+        cookies.save(owner_id, file.file.read(), (file.filename or "cookies.txt")[:255])
     except cookies.CookieFileError as exc:
-        return _page(request, error=str(exc), status_code=400)
-    _after_upload(user_id)
-    return RedirectResponse(url="/cookies?note=uploaded", status_code=303)
+        return _page(request, owner_id, error=str(exc), status_code=400)
+    _after_upload(owner_id)
+    return see_other("/cookies?note=uploaded")
 
 
 @router.post("/delete")
-def remove_cookies(request: Request) -> Response:
-    cookies.remove(AuthMiddleware.owner_id(request))
-    return RedirectResponse(url="/cookies?note=removed", status_code=303)
+def remove_cookies(owner_id: OwnerId) -> Response:
+    cookies.remove(owner_id)
+    return see_other("/cookies?note=removed")

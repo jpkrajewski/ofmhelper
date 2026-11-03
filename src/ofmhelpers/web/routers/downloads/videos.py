@@ -1,12 +1,13 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form
 
 from ofmhelpers.db.stores import cookies as login_cookies
 from ofmhelpers.integrations.downloaders.generic import download_all
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.schemas import JobQueued
+from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.downloads.shared import queue_downloads
 from ofmhelpers.web.routers.task_helpers import add_job_routes, register_grouped_results
 
@@ -25,8 +26,15 @@ def _run_downloads(
 
 
 @router.post("/run")
-def run(request: Request, urls: Annotated[str, Form()]) -> JobQueued:
-    return queue_downloads(request, "download_videos", urls, _run_downloads)
+def run(
+    urls: Annotated[str, Form()],
+    actor: Actor,
+    owner_id: OwnerId,
+    assets_root: AssetsRoot,
+) -> JobQueued:
+    return queue_downloads(
+        "download_videos", urls, _run_downloads, actor, owner_id, assets_root
+    )
 
 
 add_job_routes(

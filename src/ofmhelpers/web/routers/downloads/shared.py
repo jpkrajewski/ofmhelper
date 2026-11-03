@@ -1,38 +1,43 @@
-"""What the download routes share: a pasted box becomes one queued job."""
+"""What the download routes share: a pasted box becomes one queued job, and
+the answer that sends the page on to another one."""
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
+from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores.jobs import create_job, run_job
-from ofmhelpers.integrations.downloaders.urls import NotALinkError, read_links
+from ofmhelpers.integrations.downloaders.urls import read_links
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.task_helpers import assets_root_for
+
+
+class Redirect(BaseModel):
+    """The URL the page opens next, with the picked videos on its query."""
+
+    redirect: str
 
 
 def queue_downloads(
-    request: Request, task: str, pasted: str, run: Callable[..., Any]
+    task: str,
+    pasted: str,
+    run: Callable[..., Any],
+    actor: str,
+    owner_id: int,
+    assets_root: Path,
 ) -> JobQueued:
     """One job of `task` for the links pasted in the box, run by `run`
     (`_run_downloads` of the route's own module: RQ stores that path)."""
-    try:
-        links = read_links(pasted)
-    except NotALinkError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+    links = read_links(pasted)
     if not links:
         raise HTTPException(status_code=400, detail="At least one URL is required")
-    job_id = create_job(task, {"urls": links}, actor=AuthMiddleware.actor(request))
+    job_id = create_job(task, {"urls": links}, actor=actor)
     enqueue(
         run_job,
         job_id,
         run,
-        {
-            "urls": links,
-            "assets_root": str(assets_root_for(request)),
-            "user_id": AuthMiddleware.owner_id(request),
-        },
+        {"urls": links, "assets_root": str(assets_root), "user_id": owner_id},
     )
     return JobQueued(job_id=job_id)

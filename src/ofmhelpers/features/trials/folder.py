@@ -148,12 +148,16 @@ class FolderView(BaseModel):
             return f"Uploading {len(self.uploading)} to Drive…"
         if self.busy:
             return f"Making {len(self.busy)}…"
-        return ""
+        return self.state.note or ""
 
     def stamp(self, reel: ReelState) -> str:
         """Changes whenever the reel's card would look different."""
         busy = "uploading" if reel.key in self.uploading else reel.key in self.busy
-        return f"{reel.made}.{reel.status}.{busy}.{reel.approved}.{reel.error or ''}"
+        choices = len(reel.captions)
+        return (
+            f"{reel.made}.{reel.status}.{busy}.{reel.approved}.{choices}"
+            f".{reel.error or ''}"
+        )
 
     def made_among(self, keys: set[str]) -> list[ReelState]:
         return [r for r in self.state.ready if r.key in keys]
@@ -162,8 +166,9 @@ class FolderView(BaseModel):
         return [r for r in self.pending if f"pending-{r.key}" in keys]
 
     def live(self) -> FolderLive:
-        cards = [CardStamp(key=r.key, stamp=self.stamp(r)) for r in self.state.ready]
-        cards += [CardStamp(key=f"pending-{r.key}", stamp="") for r in self.pending]
+        """Cards in page order: what is being made is the newest in POSTED."""
+        cards = [CardStamp(key=f"pending-{r.key}", stamp="") for r in self.pending]
+        cards += [CardStamp(key=r.key, stamp=self.stamp(r)) for r in self.state.ready]
         return FolderLive(
             running=bool(self.active),
             making=self.making,
@@ -192,8 +197,7 @@ def _synced(card: DriveCard, state: FolderState) -> None:
     state.posted_folder_id = card.posted_folder_id or ""
     if not card.posted_folder_id or card.error or card.unread:
         return
-    videos = {f.id: f.name for f in card.scan.posted if f.kind == "video"}
-    tasks.merge_posted(state, videos)
+    tasks.merge_posted(state, [f for f in card.scan.posted if f.kind == "video"])
 
 
 def _sync_state(
@@ -275,14 +279,15 @@ class _Claim:
 def generate(
     uid: int, scope: int | None, login_id: int, enqueue: Callable[..., object]
 ) -> Started:
-    """Download what is not on disk yet, make every copy not made yet; a
-    second click while it runs does nothing."""
+    """POSTED read for new reels: those downloaded and made, a copy already
+    made left alone; a second click while it runs does nothing."""
     _sync_state(scope, uid, login_id)
     claim = _Claim(uid, login_id, "Making trials")
 
     def take(state: FolderState) -> None:
         if not _at_work(uid, state.job_id):
             state.job_id = claim.job()
+            state.tell(None)
 
     state = change(uid, login_id, take)
     if claim.job_id:
@@ -318,10 +323,29 @@ def remake(
     return Started(started=bool(claim.job_id))
 
 
+def ask_captions(
+    uid: int, login_id: int, key: str, enqueue: Callable[..., object]
+) -> Started:
+    """A reel made before there were captions to choose from gets them, as its
+    own job (a click on one that has them does nothing: it would cost quota)."""
+    claim = _Claim(uid, login_id, "Writing captions")
+
+    def take(reel: ReelState) -> None:
+        if not reel.captions and not _at_work(uid, reel.job_id):
+            reel.claim_captions(claim.job())
+
+    state = change_reel(uid, login_id, key, take)
+    if state.reel(key) is None:
+        raise NotFoundError(NO_REEL)
+    if claim.job_id:
+        claim.launch(enqueue, tasks.write_captions, 1, key=key)
+    return Started(started=bool(claim.job_id))
+
+
 def apply_caption(
     uid: int, login_id: int, key: str, caption: str, enqueue: Callable[..., object]
 ) -> Started:
-    """The user's own caption: saved, then the reel is made again with it."""
+    """A caption chosen or written: saved, then the reel is made again with it."""
     text = " ".join(caption.split())[:CAPTION_MAX]
     # An empty box changes nothing: "" would mean "ask the AI", which costs quota.
     if not text:
@@ -342,23 +366,24 @@ def upload(
     approved: list[str] | None,
     enqueue: Callable[..., object],
 ) -> Uploading:
-    """The selected copies into TRIALS: each claimed for this upload (one
-    being made or uploaded already is left out), so a second Upload while the
-    first runs takes the other reels."""
+    """The selected copies replace what is in TRIALS: each claimed for this
+    upload (one being made is left out; one already in Drive can go up again,
+    or it would be deleted with the rest). One upload at a time: two at once
+    would delete each other's."""
     wanted = set(approved or [])
     claim = _Claim(uid, login_id, "Uploading")
     claimed: list[str] = []
 
     def take(state: FolderState) -> None:
-        if not state.account_folder_id:
+        if not state.account_folder_id or any(
+            r.status == ReelStatus.UPLOADING and _at_work(uid, r.job_id)
+            for r in state.reels
+        ):
             return
         for reel in state.ready:
-            if reel.key not in wanted or reel.status == ReelStatus.UPLOADED:
-                continue
-            if _at_work(uid, reel.job_id):
-                continue
-            reel.claim_upload(claim.job())
-            claimed.append(reel.key)
+            if reel.key in wanted and not _at_work(uid, reel.job_id):
+                reel.claim_upload(claim.job())
+                claimed.append(reel.key)
 
     state = change(uid, login_id, take)
     if claim.job_id:
