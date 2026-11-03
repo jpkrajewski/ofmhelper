@@ -13,7 +13,9 @@ entrypoints only -- web/main.py ("ascend-web") and each RQ worker process
   (the cache's reads are noise);
 - the app's own `logging` records go to Logfire too (`log.py` adds
   `logfire_handler()` to the root logger), so a log line lands inside the
-  trace of the request or job that wrote it.
+  trace of the request or job that wrote it;
+- every process forked after it (rq workers, their work horses) renews its
+  connections to Logfire, and a horse's last flush is capped.
 
 Nothing is sent without a token (`LOGFIRE_TOKEN`): tests, CI and a fresh
 checkout run with telemetry off and unchanged behaviour.
@@ -31,12 +33,19 @@ like password, secret, api_key, cookie, ...; not `confirm`, `current`, `token`,
 from __future__ import annotations
 
 import contextvars
+import gc
+import os
+import threading
+import weakref
 from typing import TYPE_CHECKING, Any
 
 import logfire
+from logfire._internal.exporters.otlp import OTLPExporterHttpSession
+from logfire._internal.http_transport import install_connection_policy
 from opentelemetry.sdk.trace import Event, SpanProcessor
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.redact import redact
 
 if TYPE_CHECKING:
@@ -46,6 +55,8 @@ if TYPE_CHECKING:
     from fastapi import FastAPI, Request, WebSocket
     from opentelemetry.context import Context
     from opentelemetry.sdk.trace import ReadableSpan, Span
+
+logger = get_logger(__name__)
 
 _configured: list[str] = []
 
@@ -143,6 +154,7 @@ def configure_telemetry(service: str) -> None:
         # Runs before Logfire's exporter, which comes later in its pipeline.
         additional_span_processors=[_Redactor()],
     )
+    _renew_connections_at_fork()
     # Not Redis: the cache's GET/SET per request were ~40% of all records
     # (2026-10-22) and never what a bug was about.
     logfire.instrument_sqlalchemy()
@@ -166,9 +178,51 @@ def in_this_trace[T](fn: Callable[..., T]) -> Callable[..., T]:
 
 def flush_telemetry() -> None:
     """Sends what is buffered now: an rq work horse exits with `os._exit`,
-    which skips the exporter's own flush at exit (worker.py)."""
-    if enabled():
-        logfire.force_flush(timeout_millis=5_000)
+    which skips the exporter's own flush at exit (worker.py). At most
+    `flush_timeout_s`: the SDK's batch flush ignores its timeout, and a horse
+    still flushing holds its worker until RQ's job timeout."""
+    if not enabled():
+        return
+    limit_s = settings.telemetry.flush_timeout_s
+    flush = threading.Thread(
+        target=logfire.force_flush,
+        kwargs={"timeout_millis": int(limit_s * 1000)},
+        name="telemetry-flush",
+        daemon=True,
+    )
+    flush.start()
+    flush.join(limit_s)
+    if flush.is_alive():
+        logger.warning("telemetry not sent within %.1f s, going on without it", limit_s)
+
+
+def _renew_connections_at_fork() -> None:
+    """Every forked child gets its own connections to Logfire. A child is a
+    copy taken at one instant: a connection-pool lock an export thread held
+    then stays held for good (the thread is not copied), so every export and
+    the last flush wait forever -- `rq worker-pool` forks its workers and
+    each worker a work horse per job, while their export threads run (prod
+    2026-10-26: 2 of 10 workers sent nothing for two days, their horses hung
+    after every job). Pooled sockets and the retry folder are the parent's
+    too. Logfire renews its forwarding sessions at a fork but not this one,
+    which `configure` makes and does not expose: found on the heap."""
+    sessions = weakref.WeakSet(
+        o for o in gc.get_objects() if isinstance(o, OTLPExporterHttpSession)
+    )
+    if sessions:
+        os.register_at_fork(after_in_child=lambda: _renew_connections(sessions))
+
+
+def _renew_connections(sessions: weakref.WeakSet[OTLPExporterHttpSession]) -> None:
+    for session in sessions:
+        # Logfire's own adapter, new: its own pool and locks.
+        install_connection_policy(session)
+        # Made again on the next failed export, with its own lock and folder.
+        retryer = session.__dict__.pop("retryer", None)
+        if retryer is not None:
+            # Unreferenced now, so freed at once: Logfire's exit cleanup
+            # never empties the parent's retry folder.
+            retryer.thread = None
 
 
 def _drop_connect_spans() -> None:
