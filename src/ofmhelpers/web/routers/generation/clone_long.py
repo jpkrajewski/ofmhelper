@@ -1,5 +1,5 @@
 """
-/clone-long: one subject image + one video of any length (web/clone_long).
+/clone-long: one subject image + one video of any length (features/clone_long).
 The page prices the pick live; `/run` measures the video itself, re-prices
 it, checks every piece against the model and only then queues the job --
 the stored price is the server's, never the browser's. Results are the
@@ -15,11 +15,15 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
-from ofmhelpers.aigenproviders.errors import InvalidInputError
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.clone_long import (
+from ofmhelpers.db.stores.jobs import (
+    count_hidden_jobs,
+    create_job,
+    list_jobs_page,
+    run_job,
+)
+from ofmhelpers.features.clone_long import (
     RESOLUTIONS,
     TARGETS,
     LongClone,
@@ -28,6 +32,9 @@ from ofmhelpers.web.clone_long import (
     rate,
     run_long_clone,
 )
+from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
+from ofmhelpers.schemas import Job, ProviderChoice, TaskCard
+from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
@@ -36,13 +43,6 @@ from ofmhelpers.web.routers.task_helpers import (
     classify_kind,
     job_assets,
     keep_videos,
-)
-from ofmhelpers.web.schemas import Job, ProviderChoice, TaskCard
-from ofmhelpers.web.stores.jobs import (
-    count_hidden_jobs,
-    create_job,
-    list_jobs_page,
-    run_job,
 )
 from ofmhelpers.web.templates_config import render
 
@@ -103,7 +103,7 @@ def page(request: Request, video: Annotated[list[str] | None, Query()] = None):
         selected_provider=settings.aigen.default_provider,
         api_keys=get_api_keys(request),
         rates={name: rate(name).model_dump() for name in TARGETS},
-        max_piece_s=min(t.max_piece_s for t in TARGETS.values()),
+        max_piece_s=min(t.max_reference_s for t in TARGETS.values()),
         max_video_s=settings.clone_long.max_video_s,
         resolutions=RESOLUTIONS,
         default_resolution=DEFAULT_RESOLUTION,

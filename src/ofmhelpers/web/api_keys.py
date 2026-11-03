@@ -8,9 +8,9 @@ gets the .env one (`Provider.default_key`). Empty: they paste one in.
 
 from starlette.requests import Request
 
-from ofmhelpers.aigenproviders.base import provider_class, provider_classes
+from ofmhelpers.db.stores.users import api_keys
+from ofmhelpers.integrations.ai_providers.base import provider_class, provider_classes
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.stores.users import api_keys
 
 
 def get_api_keys(request: Request) -> dict[str, str]:

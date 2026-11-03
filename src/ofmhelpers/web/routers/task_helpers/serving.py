@@ -10,14 +10,11 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
+from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.features.previews import render as previews
 from ofmhelpers.log import get_logger
-from ofmhelpers.web import previews
-from ofmhelpers.web.download_names import download_name
-from ofmhelpers.web.routers.task_helpers.uploads import (
-    MEDIA_KINDS,
-    classify_kind,
-)
-from ofmhelpers.web.schemas import Job
+from ofmhelpers.schemas import Job
+from ofmhelpers.web.routers.task_helpers.uploads import MEDIA_KINDS, classify_kind
 
 logger = get_logger(__name__)
 
@@ -107,7 +104,7 @@ def _result_media(job: Job | None, index: int, kinds: set[str]) -> tuple[Job, Pa
 
 def serve_job_preview(job: Job | None, index: int) -> FileResponse:
     """'/files/{job_id}/{index}/preview': a result image or video small
-    enough for a slow connection (see web/previews.py) -- made by the
+    enough for a slow connection (see features/previews/render.py) -- made by the
     preview worker when the job finished. A video's not made yet, or one that
     cannot be made: the original instead (a slow picture beats none); an
     image's is made now (milliseconds)."""

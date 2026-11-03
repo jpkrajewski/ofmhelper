@@ -12,13 +12,13 @@ what it does:
 - `responses.py`  the status/polling payloads every tool renders
 - `serving.py`    handing a stored file back to the browser
 - `routes.py`     the status page / polling / download endpoints of a job
-- `web/download_names.py` (re-exported)  what a downloaded result is saved as
+- `features/assets/names.py` (re-exported)  what a downloaded result is saved as
 
 Import from this package, not the submodules: every tool router imports from
 here, and which submodule a helper lives in is not their business.
 """
 
-from ofmhelpers.web.download_names import download_name
+from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.web.routers.task_helpers.manifests import (
     build_ordered_paths,
     keep_videos,

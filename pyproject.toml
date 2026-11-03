@@ -38,7 +38,7 @@ dependencies = [
     "pillow-heif>=1.8.1",
     "higgsfield-client>=0.2.0",
     "jsonschema>=4.23",
-    # Fernet for the /phones vault (web/db/encrypted.py): logins and backup
+    # Fernet for the /phones vault (db/encrypted.py): logins and backup
     # codes are encrypted at rest. >=50.0.0: CVE-2026-69247 and older fixes.
     "cryptography>=50.0.0",
     # /phones Excel export (web/exports/devices_xlsx.py), write-only.
@@ -173,13 +173,13 @@ ignore-variadic-names = true
 # Lazy singletons that rebuild when the configured URL changes -- `global`
 # is inherent to the pattern.
 "src/ofmhelpers/cache/redis.py" = ["PLW0603"]
-"src/ofmhelpers/web/db/session.py" = ["PLW0603"]
+"src/ofmhelpers/db/session.py" = ["PLW0603"]
 # Same: a once-per-process "already configured" flag.
 "src/ofmhelpers/log.py" = ["PLW0603"]
 # `lifespan(app)` is Starlette's required signature.
 "src/ofmhelpers/web/main.py" = ["ARG001"]
 # DSP helpers share one (audio, sr, ...) positional shape by design.
-"src/ofmhelpers/utils/radio_comms_fx.py" = ["ARG001"]
+"src/ofmhelpers/media/radio_comms_fx.py" = ["ARG001"]
 # Standalone scripts and migrations aren't importable packages.
 "scripts/**" = ["INP001"]
 "alembic/**" = ["INP001"]
@@ -230,3 +230,7 @@ ignore = "J018,H052,H023,H030,H031"
 # Inline style only where the value is data (a batch's hue) or the page is
 # deliberately self-contained (the public landing page).
 per-file-ignores = { "reachmodel.html" = "H021", "_clone_batch.html" = "H021" }
+
+[tool.ruff.lint.isort]
+# Also the old paths of moved modules (ofmhelpers/_moved.py), which tests still name.
+known-first-party = ["ofmhelpers"]

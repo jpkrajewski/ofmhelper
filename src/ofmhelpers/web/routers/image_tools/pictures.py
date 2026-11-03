@@ -24,15 +24,30 @@ from fastapi.responses import FileResponse
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel
 
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.errors import InvalidInputError
-from ofmhelpers.aigenproviders.spec import ModelSpec
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores import picture_presets
+from ofmhelpers.db.stores.jobs import (
+    count_hidden_jobs,
+    create_job,
+    list_jobs_page,
+    run_job,
+)
+from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
+from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas import (
+    Job,
+    JobsQueued,
+    PicturePreset,
+    ProviderChoice,
+    ResultFile,
+    TaskCard,
+)
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.previews import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.web.routers.generation.ai import run_ai
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
@@ -41,21 +56,6 @@ from ofmhelpers.web.routers.task_helpers import (
     build_ordered_paths,
     classify_kind,
     save_asset,
-)
-from ofmhelpers.web.schemas import (
-    Job,
-    JobsQueued,
-    PicturePreset,
-    ProviderChoice,
-    ResultFile,
-    TaskCard,
-)
-from ofmhelpers.web.stores import picture_presets
-from ofmhelpers.web.stores.jobs import (
-    count_hidden_jobs,
-    create_job,
-    list_jobs_page,
-    run_job,
 )
 from ofmhelpers.web.templates_config import render, render_polled
 
@@ -219,9 +219,7 @@ def run_picture(
 
 
 def _card(job: Job) -> TaskCard:
-    from ofmhelpers.web.routers.registry import (
-        task_card,
-    )
+    from ofmhelpers.web.routers.registry import task_card
 
     return task_card(job)
 

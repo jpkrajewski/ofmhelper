@@ -9,7 +9,7 @@ filters, period, sort and paging are the query string
 account's analytics for the same period.
 
 Adding accounts queues their first scan on the worker (with any other
-account due for its rescan, web/account_tracker.py), so no request waits on
+account due for its rescan, features/accounts/tracker.py), so no request waits on
 a platform; static/js/accounts.js reloads while a row is still scanning.
 """
 
@@ -19,11 +19,21 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.socials import platforms
-from ofmhelpers.web.account_removal import remove_accounts
-from ofmhelpers.web.account_tracker import queue_due_scans
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.schemas import (
+from ofmhelpers.db.stores.devices import phones_by_account
+from ofmhelpers.db.stores.short_links import links_by_account
+from ofmhelpers.db.stores.tracked_accounts import (
+    assign_creator,
+    get_account,
+    get_history,
+    list_accounts,
+    list_creators,
+    set_notes,
+    track,
+)
+from ofmhelpers.features.accounts.removal import remove_accounts
+from ofmhelpers.features.accounts.tracker import queue_due_scans
+from ofmhelpers.integrations.socials import platforms
+from ofmhelpers.schemas import (
     AccountPage,
     AccountQuery,
     AccountSort,
@@ -36,17 +46,7 @@ from ofmhelpers.web.schemas import (
     Period,
     SelectedAccounts,
 )
-from ofmhelpers.web.stores.devices import phones_by_account
-from ofmhelpers.web.stores.short_links import links_by_account
-from ofmhelpers.web.stores.tracked_accounts import (
-    assign_creator,
-    get_account,
-    get_history,
-    list_accounts,
-    list_creators,
-    set_notes,
-    track,
-)
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -133,7 +133,7 @@ def creator(request: Request, body: AssignCreator) -> _Count:
 
 @router.post("/delete")
 def delete(request: Request, body: SelectedAccounts) -> _Count:
-    """Removes the accounts everywhere (web/account_removal.py): tracking
+    """Removes the accounts everywhere (features/accounts/removal.py): tracking
     stops (history kept), their logins leave the phones (archived, password
     kept), their Drive folders go to the trash."""
     return _Count(count=remove_accounts(body.ids, AuthMiddleware.scope(request)))

@@ -1,7 +1,7 @@
 """
 /viral: one Instagram profile in, its most played reels out. A search is a
 job (task `viral_reels`): on the worker Apify reads the profile's newest
-`OFM_VIRAL_SCAN` reels (`ofmhelpers.viral`), the `OFM_VIRAL_TOP` (30) most
+`OFM_VIRAL_SCAN` reels (`ofmhelpers.features.viral`), the `OFM_VIRAL_TOP` (30) most
 played are downloaded, and the page shows them most played first, each with
 Download, all of them as one zip. The page shows the search picked
 (`?job=`), else the newest, and lists the earlier ones.
@@ -19,22 +19,22 @@ from starlette.background import BackgroundTask
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.instagram import ProfileHandle
-from ofmhelpers.viral import find_viral
+from ofmhelpers.db.stores.jobs import (
+    create_job,
+    get_job,
+    list_jobs_page,
+    merge_params,
+    run_job,
+)
+from ofmhelpers.features.viral import find_viral
+from ofmhelpers.integrations.instagram import ProfileHandle
+from ofmhelpers.schemas import Job, JobQueued, ViralFile, ViralSearch
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
     add_job_routes,
     job_assets,
     make_job_dir,
-)
-from ofmhelpers.web.schemas import Job, JobQueued, ViralFile, ViralSearch
-from ofmhelpers.web.stores.jobs import (
-    create_job,
-    get_job,
-    list_jobs_page,
-    merge_params,
-    run_job,
 )
 from ofmhelpers.web.templates_config import render
 

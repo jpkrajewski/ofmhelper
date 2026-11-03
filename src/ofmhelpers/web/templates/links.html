@@ -22,7 +22,7 @@
 {% if not p.has_key %}
 {% call ui.notice(kind="warn") %}No {{ p.label }} API key. <a href="/account">Add it on Account</a>{% endcall %}
 {% elif p.error %}
-{% call ui.notice(kind="fail") %}{{ p.label }}: {{ p.error }}{% endcall %}
+{% call ui.notice(kind="fail") %}{{ p.label }}: {{ p.error.split(" (")[0] }}{% endcall %}
 {% elif p.usage and p.usage.full %}
 {% call ui.notice(kind="warn") %}{{ p.label }} plan is full ({{ p.usage.used }} / {{ p.usage.limit }}): new links will fail{% endcall %}
 {% elif p.usage and p.usage.room == 0 %}

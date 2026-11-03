@@ -4,257 +4,103 @@ videos -> one Wan 3.0 run per video, every run getting all the images; each
 run is its own card in the gallery, the same card as /generate's
 (`_gallery_card.html`), newest first.
 
-Wan 3.0 runs on whichever provider is picked: `CLONE_TARGETS` names, per
-provider, its Wan 3.0 reference-to-video model and which of that model's
-fields take the subject, the video and the audio switch. Each run goes
-through `ai.run_ai`, like any /generate job; a provider joins /clone by one
-entry there. A job's params stay provider-neutral (`reference_images`,
-`reference_videos`, `resolution` ...), so the page and Recreate read every
-run the same way.
-
-Each run's duration is its source video's length, clamped to the model's
-schema range. Every video is probed, held to the target's
-`max_reference_s`, and every run checked against the model's schema before
-any job is queued, so a bad file fails the whole submit
-up front instead of after some runs were already paid for.
-
-Each generated video is then exported as the job's `export`
-(`ofmhelpers.exports`: original, CapCut, or a phone's camera recording;
-default `settings.exports.default`); the exported copy becomes the result
-and the provider's hosted original is dropped from it. The provider's raw
-file is never the result: an export is tried `settings.exports.attempts`
-times, and when every try fails the run fails ("Export failed", user rule
-2026-10-25) keeping its paid request, so recovery runs it again -- the same
-request resumed, never paid twice -- up to `settings.exports.reruns` runs
-(`EXPORT_FAILURES` on the job counts them).
-
-A finished run's video can be uploaded into one or more Instagram accounts'
-Drive folders, picked in the card's Drive dialog (`/clone/drive-upload`,
-web/drive_uploads.py); each card says where its video went.
+Routes only; what they do is in `features/clone/` (the Wan 3.0 table, pricing,
+the submit's checks, cards, Drive picker, export). `_run_clone` stays here: RQ
+pickles a job's function by path. `run_ai`, `duration_s` and `_exported` are
+looked up here when called and handed on, so this module stays their one seam.
 """
 
-import subprocess
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Annotated, Any
-from zoneinfo import ZoneInfoNotFoundError
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel
 
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.errors import InvalidInputError
-from ofmhelpers.aigenproviders.spec import ModelSpec
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.exports import ExportOptions, exports, get_export
-from ofmhelpers.gdrive import DriveError
-from ofmhelpers.log import get_logger
-from ofmhelpers.utils.video_probe import duration_s
-from ofmhelpers.web.api_keys import get_api_keys
-from ofmhelpers.web.drive_uploads import (
+from ofmhelpers.db.stores.jobs import count_hidden_jobs, get_job, start_job
+from ofmhelpers.db.stores.jobs import gallery_page as job_gallery_page
+from ofmhelpers.features.clone.export import (
+    EXPORT_FAILURES,
+    ExportFailedError,
+    export_choice,
+    export_results,
+)
+from ofmhelpers.features.clone.export import exported_file as _exported
+from ofmhelpers.features.clone.pricing import clip_duration, clone_pricing
+from ofmhelpers.features.clone.service import (
+    FILES_PREFIX,
+    PREFIX,
+    TASK,
+    CloneRefusedError,
+    CloneRun,
+    cards,
+    check_choices,
+    drive_picker,
+    plan_runs,
+    upload_states,
+    video_seconds,
+)
+from ofmhelpers.features.clone.service import card as _card
+from ofmhelpers.features.clone.targets import (
+    DEFAULT_RESOLUTION,
+    CloneTarget,
+    clone_targets,
+    offered_resolutions,
+)
+from ofmhelpers.features.clone.targets import clone_values as _clone_values
+from ofmhelpers.features.drive.uploads import (
     UploadRefusedError,
     queue_uploads,
     remove_upload,
 )
-from ofmhelpers.web.drive_uploads import targets as drive_targets
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.routers.generation.ai import run_ai
-from ofmhelpers.web.routers.task_helpers import (
-    add_job_routes,
-    assets_root_for,
-    build_ordered_paths,
-    classify_kind,
-    job_assets,
-    keep_videos,
-    register_generated_asset,
-)
-from ofmhelpers.web.schemas import (
+from ofmhelpers.integrations.gdrive import DriveError
+from ofmhelpers.media.exports import ExportOptions, exports
+from ofmhelpers.media.video_probe import duration_s
+from ofmhelpers.schemas import (
     CloneCard,
     CloneQueued,
     DriveUpload,
-    Job,
     ProviderChoice,
     ResultFile,
     UploadRequest,
     UploadsQueued,
 )
-from ofmhelpers.web.stores import drive_uploads as upload_store
-from ofmhelpers.web.stores.jobs import (
-    count_hidden_jobs,
-    create_job,
-    get_job,
-    list_jobs_page,
-    merge_params,
-    run_job,
+from ofmhelpers.web.dependencies import (
+    Actor,
+    ApiKeys,
+    AssetsRoot,
+    CurrentUser,
+    OwnerId,
 )
-from ofmhelpers.web.stores.users import refresh_token
+from ofmhelpers.web.routers.generation.ai import run_ai
+from ofmhelpers.web.routers.task_helpers import (
+    add_job_routes,
+    build_ordered_paths,
+    keep_videos,
+)
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
-logger = get_logger(__name__)
+# What other modules and the tests read here (same objects as the package's).
+__all__ = [
+    "CLONE_TARGETS",
+    "DEFAULT_PROMPT",
+    "EXPORT_FAILURES",
+    "FILES_PREFIX",
+    "TASK",
+    "CloneTarget",
+    "ExportFailedError",
+    "_card",
+    "_clone_values",
+    "_exported",
+    "_run_clone",
+    "clip_duration",
+    "router",
+]
 
-router = APIRouter(prefix="/clone", tags=["clone"])
-
-FILES_PREFIX = f"{router.prefix}/files"
-
-TASK = "clone"
+router = APIRouter(prefix=PREFIX, tags=["clone"])
 
 DEFAULT_PROMPT = settings.web.clone_default_prompt
 
-# Offered in the form; each provider gets them in its own spelling.
-RESOLUTIONS = ("480P", "720P", "1080P")
-DEFAULT_RESOLUTION = "720P"
-
-# A job param: how many of its runs' exports failed every try.
-EXPORT_FAILURES = "export_failures"
-
-
-class ExportFailedError(RuntimeError):
-    """Every try of a run's export failed: the run fails with this, never
-    with the provider's raw file as its result. `keep_request`: its paid
-    request stays remembered (`stores.jobs.resumable`), so recovery's re-run
-    exports again without paying -- until `settings.exports.reruns` runs
-    failed so."""
-
-    def __init__(self, export: str) -> None:
-        super().__init__(f"Export failed ({export}): run it again")
-        self.keep_request = True
-
-
-class CloneTarget(BaseModel):
-    """One provider's Wan 3.0 reference-to-video: the catalog model, and the
-    fields of its schema the subject, the video and the audio switch go in,
-    and the longest reference video it takes: Wan 3.0 caps the input at
-    15 s on every provider (kie.ai answers a longer one with a 422)."""
-
-    model: str
-    images: str
-    video: str
-    audio: str
-    # Sent "adaptive" (the shape follows the video); None = left out, for a
-    # provider that has no "adaptive" and picks the shape from the inputs
-    # itself (Elyum).
-    aspect: str | None = "aspect_ratio"
-    max_reference_s: int = 15
-
-    @property
-    def spec(self) -> ModelSpec:
-        return get_spec(self.model)
-
-
-class ClonePrice(BaseModel):
-    """One provider's clone price, as the form's live estimate
-    (clone-cost.js) reads it: credits per second of source video by
-    resolution, what a credit costs, and the longest reference it takes.
-    `unit`: what the provider bills in (its credits, or a currency)."""
-
-    credits_per_video_s: dict[str, float]
-    usd_per_credit: float
-    max_reference_s: int
-    note: str
-    unit: str = "credits"
-
-
-def clone_pricing() -> dict[str, ClonePrice]:
-    """Every clone provider's price. A provider missing here gets no
-    estimate (the panel hides)."""
-    web = settings.web
-    return {
-        "kie": ClonePrice(
-            credits_per_video_s=web.clone_credits_per_video_s,
-            usd_per_credit=web.kie_usd_per_credit,
-            max_reference_s=CLONE_TARGETS["kie"].max_reference_s,
-            note="$0.08 a second at 720P, video and result both billed · $50 = 10,000 credits",
-        ),
-        "higgsfield": ClonePrice(
-            credits_per_video_s=web.clone_hf_credits_per_video_s,
-            usd_per_credit=web.hf_usd_per_credit,
-            max_reference_s=CLONE_TARGETS["higgsfield"].max_reference_s,
-            note="Measured on your runs: $0.43 per second of video at 720P · $1 = 16 credits",
-        ),
-        "runninghub": ClonePrice(
-            credits_per_video_s=web.clone_rh_usd_per_video_s,
-            usd_per_credit=1.0,
-            max_reference_s=CLONE_TARGETS["runninghub"].max_reference_s,
-            note="$0.07 a second at 720P, video and result both billed",
-            unit="USD",
-        ),
-        "elyum": ClonePrice(
-            credits_per_video_s=web.clone_elyum_usd_per_video_s,
-            usd_per_credit=1.0,
-            max_reference_s=CLONE_TARGETS["elyum"].max_reference_s,
-            note="$0.0792 a second at 720P, video and result both billed",
-            unit="USD",
-        ),
-    }
-
-
-CLONE_TARGETS = {
-    "kie": CloneTarget(
-        model="kie:wan/3-0-video",
-        images="reference_image_urls",
-        video="reference_video_urls",
-        audio="audio",
-    ),
-    "higgsfield": CloneTarget(
-        model="higgsfield:alibaba/wan-3.0/reference-to-video",
-        images="image_urls",
-        video="video_urls",
-        audio="generate_audio",
-    ),
-    "runninghub": CloneTarget(
-        model="runninghub:alibaba/wan-3.0/reference-to-video",
-        images="imageUrls",
-        video="videoUrls",
-        audio="audio",
-        aspect="aspectRatio",
-    ),
-    "elyum": CloneTarget(
-        model="elyum:alibaba/wan-3.0/reference-to-video",
-        images="image_urls",
-        video="video_urls",
-        audio="audio",
-        aspect=None,
-    ),
-}
-
-
-def _enum_value(spec: ModelSpec, field: str, value: str) -> str:
-    """`value` in the spelling `spec` takes ("720P" vs "720p")."""
-    allowed = spec.properties[field].enum or []
-    return next((str(v) for v in allowed if str(v).lower() == value.lower()), value)
-
-
-def clip_duration(spec: ModelSpec, seconds: float) -> int:
-    """A source video's length as the nearest duration `spec` accepts."""
-    field = spec.properties["duration"]
-    whole = round(seconds)
-    low = int(field.minimum) if field.minimum is not None else 1
-    high = int(field.maximum) if field.maximum is not None else max(whole, low)
-    return min(max(whole, low), high)
-
-
-def _clone_values(
-    target: CloneTarget,
-    prompt: str,
-    resolution: str,
-    duration: int,
-    audio: bool,
-    images: list[str],
-    video: str,
-) -> dict[str, Any]:
-    """One run's inputs, in the target model's own field names."""
-    values: dict[str, Any] = {
-        "prompt": prompt,
-        "resolution": _enum_value(target.spec, "resolution", resolution),
-        "duration": duration,
-        target.audio: audio,
-        target.images: images,
-        target.video: [video],
-    }
-    if target.aspect:
-        values[target.aspect] = "adaptive"
-    return values
+CLONE_TARGETS = clone_targets()
 
 
 def _run_clone(
@@ -277,9 +123,6 @@ def _run_clone(
     `clone_index`) are stored on the job for the page only, but for
     `EXPORT_FAILURES` (earlier runs whose export failed). `capcut` is the
     choice of jobs from before `export` (re-run by recovery)."""
-    failures = int(page_keys.get(EXPORT_FAILURES) or 0)
-    del page_keys
-    export = export_choice(export, capcut)
     target = CLONE_TARGETS[provider]
     values = _clone_values(
         target,
@@ -296,243 +139,128 @@ def _run_clone(
     return export_results(
         job_id,
         results,
-        export,
+        export_choice(export, capcut),
         ExportOptions(mirror=mirror),
         Path(assets_root),
-        failures=failures,
+        failures=int(page_keys.get(EXPORT_FAILURES) or 0),
+        exported=_exported,
     )
-
-
-def export_choice(export: str | None, capcut: bool = False) -> str:
-    """The export a job asked for; jobs from before `export` stored only
-    the `capcut` bool."""
-    return export or ("capcut" if capcut else "original")
-
-
-def export_results(
-    job_id: str,
-    results: list[ResultFile],
-    export: str,
-    options: ExportOptions,
-    assets_root: Path,
-    *,
-    failures: int,
-) -> list[ResultFile]:
-    """Every result exported (`_exported`). An export that failed every try
-    is counted on the job (`failures`: earlier runs'), its paid request kept
-    for recovery's re-run while fewer than `settings.exports.reruns` runs
-    failed so; then raised."""
-    try:
-        return [_exported(r, export, options, assets_root) for r in results]
-    except ExportFailedError as exc:
-        failures += 1
-        merge_params(job_id, {EXPORT_FAILURES: failures})
-        exc.keep_request = failures < settings.exports.reruns
-        logger.exception(
-            "job %s: %s export failed (run %d of %d)",
-            job_id,
-            export,
-            failures,
-            settings.exports.reruns,
-        )
-        raise
-
-
-def _exported(
-    result: ResultFile, export: str, options: ExportOptions, assets_root: Path
-) -> ResultFile:
-    """`result` exported as `export` with `options`, next to the original and registered
-    as a reusable asset like it. A remote-only result (the local download
-    failed) has nothing to export and is kept as it is. The export is tried
-    `settings.exports.attempts` times; every try failing raises
-    `ExportFailedError` -- the provider's raw file is never the result."""
-    if result.path is None:
-        return result
-    src = Path(result.path)
-    tries = settings.exports.attempts
-    for attempt in range(1, tries + 1):
-        try:
-            dst = get_export(export).render(src, options)
-            break
-        except (
-            OSError,
-            RuntimeError,
-            ValueError,
-            ZoneInfoNotFoundError,
-            subprocess.SubprocessError,
-        ):
-            logger.warning(
-                "%s export of %s failed (try %d of %d)",
-                export,
-                src.name,
-                attempt,
-                tries,
-                exc_info=True,
-            )
-    else:
-        raise ExportFailedError(export)
-    if dst == src:
-        return result
-    register_generated_asset(dst, assets_root)
-    return ResultFile(name=dst.name, path=str(dst), remote_url=None)
 
 
 def _video_seconds(path: str) -> float:
-    try:
-        return duration_s(Path(path), settings.web.ffmpeg_timeout_s)
-    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-        name = Path(path).name.split("__", 1)[-1]
-        raise HTTPException(
-            status_code=400, detail=f"Could not read the length of {name}"
-        ) from exc
-
-
-def _require_max_length(paths: list[str], seconds: list[float], limit: int) -> None:
-    for path, length in zip(paths, seconds, strict=True):
-        if length > limit:
-            name = Path(path).name.split("__", 1)[-1]
-            raise HTTPException(
-                status_code=400,
-                detail=f"{name} is {length:.1f} s; Wan 3.0 takes at most {limit} s",
-            )
-
-
-def _require_kind(paths: list[str], kind: str, label: str) -> None:
-    wrong = [p for p in paths if classify_kind(p) != kind]
-    if wrong:
-        raise HTTPException(status_code=400, detail=f"{label} must be {kind} files")
+    return video_seconds(path, duration_s)
 
 
 def _gallery_page(
-    request: Request, offset: int, hidden: bool = False
+    actor: str, offset: int, hidden: bool = False
 ) -> tuple[list[CloneCard], int | None]:
     """One page of the session's clone cards, newest first, and the next
     page's offset (None after the last). `hidden`: only the hidden cards."""
-    limit = settings.web.gallery_limit
-    jobs, total = list_jobs_page(
-        {TASK}, offset, limit, AuthMiddleware.actor(request), hidden=hidden
+    jobs, next_offset = job_gallery_page(
+        {TASK}, offset, settings.web.gallery_limit, actor, hidden
     )
-    next_offset = offset + limit
-    return _cards(jobs), next_offset if next_offset < total else None
+    return cards(jobs), next_offset
 
 
-def _cards(jobs: list[Job]) -> list[CloneCard]:
-    uploads: dict[str, list[DriveUpload]] = {}
-    for upload in upload_store.for_jobs([j.id for j in jobs]):
-        uploads.setdefault(upload.job_id, []).append(upload)
-    return [_card(j, uploads.get(j.id, [])) for j in jobs]
-
-
-def _drive_context(request: Request) -> dict[str, Any]:
-    """What the cards' Drive dialog needs: the folders this person may
-    upload into, and whether Google Drive is connected."""
-    user = AuthMiddleware.user(request)
-    found = drive_targets(user.id)
-    return {
-        # Where content is needed first: fewest files waiting unposted
-        # (never read: last), then the most followed.
-        "drive_targets": sorted(
-            found,
-            key=lambda t: (t.waiting is None, t.waiting or 0, -(t.followers or 0)),
-        ),
-        "drive_ready": bool(refresh_token(user.id)),
-    }
-
-
-def _export_label(params: dict[str, Any]) -> str:
-    """What the run was exported as (Original, CapCut, a phone), by its
-    label; runs from before `export` stored only the `capcut` bool."""
-    name = export_choice(params.get("export"), bool(params.get("capcut")))
-    choice = exports().get(name)
-    return choice.label if choice else name
-
-
-def _card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
-    return CloneCard.from_job(
-        job,
-        *job_assets(job, FILES_PREFIX),
-        task_label=_export_label(job.params),
-        poll_prefix="/clone",
-        result_kind="video",
-        drive_uploads=uploads,
+def _queue(run: CloneRun, api_key: str, assets_root: Path, actor: str) -> str:
+    """One run's job. The key goes to the worker only, never into the
+    params its page shows."""
+    params = run.model_dump()
+    return start_job(
+        TASK,
+        params,
+        _run_clone,
+        {"api_key": api_key, "assets_root": str(assets_root), **params},
+        actor=actor,
     )
 
 
-def _prefill_videos(request: Request, paths: list[str]) -> list[str]:
-    """The `?video=` paths /reels or a download hands over, kept only where
-    they are a video in this session's part of the store; a stale link just
-    opens with fewer videos picked."""
-    return keep_videos(paths, assets_root_for(request))
+def _rendered_cards(job_ids: list[str], actor: str, user_id: int) -> str:
+    """These jobs' cards, newest first like the gallery."""
+    jobs = [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
+    picker = dict(drive_picker(user_id))
+    return "".join(
+        render_partial("_clone_card.html", job=card, **picker) for card in cards(jobs)
+    )
 
 
 @router.get("")
-def form(request: Request, video: Annotated[list[str] | None, Query()] = None):
-    gallery, next_offset = _gallery_page(request, 0)
+def form(
+    request: Request,
+    actor: Actor,
+    user: CurrentUser,
+    api_keys: ApiKeys,
+    assets_root: AssetsRoot,
+    video: Annotated[list[str] | None, Query()] = None,
+):
+    gallery, next_offset = _gallery_page(actor, 0)
     return render(
         request,
         "clone.html",
         gallery=gallery,
         next_offset=next_offset,
-        hidden_count=count_hidden_jobs({TASK}, AuthMiddleware.actor(request)),
+        hidden_count=count_hidden_jobs({TASK}, actor),
         providers=ProviderChoice.all(list(CLONE_TARGETS)),
         selected_provider=settings.aigen.default_provider,
-        api_keys=get_api_keys(request),
+        api_keys=api_keys,
         pricing={name: price.model_dump() for name, price in clone_pricing().items()},
         default_prompt=DEFAULT_PROMPT,
         default_resolution=DEFAULT_RESOLUTION,
-        resolutions=RESOLUTIONS,
+        resolutions=offered_resolutions(),
         max_videos=settings.web.clone_max_videos,
         max_images=settings.web.clone_max_images,
         live_poll_s=settings.web.gallery_live_poll_s,
-        prefill_videos=_prefill_videos(request, video or []),
+        # The `?video=` paths /reels or a download hands over; a stale link
+        # just opens with fewer videos picked.
+        prefill_videos=keep_videos(video or [], assets_root),
         max_reference_s=min(t.max_reference_s for t in CLONE_TARGETS.values()),
         exports=list(exports().values()),
         default_export=settings.exports.default,
         default_mirror=settings.exports.mirror,
-        **_drive_context(request),
+        **dict(drive_picker(user.id)),
     )
 
 
 @router.get("/gallery")
 def gallery_page(
     request: Request,
+    actor: Actor,
+    user: CurrentUser,
     offset: Annotated[int, Query(ge=0)] = 0,
     hidden: Annotated[bool, Query()] = False,
 ):
     """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    gallery, next_offset = _gallery_page(request, offset, hidden)
+    gallery, next_offset = _gallery_page(actor, offset, hidden)
     return render(
         request,
         "clone_gallery_fragment.html",
         gallery=gallery,
         next_offset=next_offset,
-        **_drive_context(request),
+        **dict(drive_picker(user.id)),
     )
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request):
+def gallery_latest(request: Request, actor: Actor, user: CurrentUser):
     """The newest page of cards, no sentinel: what live-gallery.js polls to
     show runs started in other sessions."""
-    gallery, _ = _gallery_page(request, 0)
+    gallery, _ = _gallery_page(actor, 0)
     return render_polled(
         request,
         "clone_gallery_fragment.html",
         gallery=gallery,
         next_offset=None,
-        **_drive_context(request),
+        **dict(drive_picker(user.id)),
     )
 
 
 @router.post("/drive-upload")
-def drive_upload(request: Request, body: UploadRequest) -> UploadsQueued:
+def drive_upload(user: CurrentUser, body: UploadRequest) -> UploadsQueued:
     """These runs' videos into each picked account's Drive folder, on the
     worker, as the clicker's Google account."""
     try:
-        uploads = queue_uploads(
-            AuthMiddleware.user(request), body.job_ids, body.login_ids
-        )
+        uploads = queue_uploads(user, body.job_ids, body.login_ids)
     except UploadRefusedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return UploadsQueued(
@@ -541,10 +269,10 @@ def drive_upload(request: Request, body: UploadRequest) -> UploadsQueued:
 
 
 @router.post("/drive-uploads/{upload_id}/remove")
-def drive_upload_remove(request: Request, upload_id: int) -> DriveUpload:
+def drive_upload_remove(user: CurrentUser, upload_id: int) -> DriveUpload:
     """Takes an uploaded video back out of its account folder (Drive trash)."""
     try:
-        return remove_upload(AuthMiddleware.user(request), upload_id)
+        return remove_upload(user, upload_id)
     except UploadRefusedError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DriveError as exc:
@@ -553,36 +281,19 @@ def drive_upload_remove(request: Request, upload_id: int) -> DriveUpload:
 
 @router.get("/drive-uploads")
 def drive_upload_states(
-    request: Request, job: Annotated[list[str], Query(max_length=200)]
+    actor: Actor, job: Annotated[list[str], Query(max_length=200)]
 ) -> list[DriveUpload]:
     """Where these runs' videos are in Drive: what clone.js polls while
     uploads run. Only runs this session may see."""
-    actor = AuthMiddleware.actor(request)
-    mine = [j for j in job if get_job(j, actor) is not None]
-    return upload_store.for_jobs(mine)
-
-
-def _queue(request: Request, api_key: str, params: dict[str, Any]) -> str:
-    """One run's job. The key goes to the worker only, never into the
-    params its page shows."""
-    job_id = create_job(TASK, params, actor=AuthMiddleware.actor(request))
-    enqueue(
-        run_job,
-        job_id,
-        _run_clone,
-        {
-            "job_id": job_id,
-            "api_key": api_key,
-            "assets_root": str(assets_root_for(request)),
-            **params,
-        },
-    )
-    return job_id
+    return upload_states(job, actor)
 
 
 @router.post("/run")
 def run(
-    request: Request,
+    actor: Actor,
+    owner: OwnerId,
+    user: CurrentUser,
+    assets_root: AssetsRoot,
     api_key: Annotated[str, Form()] = "",
     provider: Annotated[str, Form()] = "",
     prompt: Annotated[str, Form(min_length=1)] = DEFAULT_PROMPT,
@@ -598,84 +309,25 @@ def run(
     """Queues one run per video and returns their job ids plus their cards
     rendered, newest first like the gallery, so the page shows them without
     a reload."""
-    provider = provider or settings.aigen.default_provider
-    target = CLONE_TARGETS.get(provider)
-    if target is None:
-        raise HTTPException(status_code=400, detail="That provider cannot clone")
-    if not api_key.strip():
-        raise HTTPException(status_code=400, detail="API key is required")
-    export = export or settings.exports.default
-    if export not in exports():
-        raise HTTPException(status_code=400, detail="Unknown export")
-    if resolution.upper() not in RESOLUTIONS:
-        raise HTTPException(status_code=400, detail="Unknown resolution")
-    assets_root = assets_root_for(request)
-    user_id = AuthMiddleware.owner_id(request)
-    image_paths = build_ordered_paths(
-        image_manifest, image or [], assets_root, user_id=user_id
-    )
-    video_paths = build_ordered_paths(
-        videos_manifest, videos or [], assets_root, user_id=user_id
-    )
-
-    max_images = settings.web.clone_max_images
-    if not 1 <= len(image_paths) <= max_images:
-        raise HTTPException(
-            status_code=400, detail=f"Pick between 1 and {max_images} subject images"
-        )
-    max_videos = settings.web.clone_max_videos
-    if not 1 <= len(video_paths) <= max_videos:
-        raise HTTPException(
-            status_code=400, detail=f"Pick between 1 and {max_videos} videos"
-        )
-    _require_kind(image_paths, "image", "The subject")
-    _require_kind(video_paths, "video", "Videos")
-    # Probed side by side (each is its own ffprobe process), in picked order;
-    # the first unreadable video still fails the whole submit.
-    with ThreadPoolExecutor(settings.web.clone_probe_workers) as pool:
-        seconds = list(pool.map(_video_seconds, video_paths))
-    _require_max_length(video_paths, seconds, target.max_reference_s)
-    durations = [clip_duration(target.spec, s) for s in seconds]
     try:
-        for path, duration in zip(video_paths, durations, strict=True):
-            target.spec.check(
-                _clone_values(
-                    target, prompt, resolution, duration, audio, image_paths, path
-                )
-            )
-    except InvalidInputError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
-
-    shared = {
-        "provider": provider,
-        "model": target.model,
-        "prompt": prompt,
-        "resolution": resolution.upper(),
-        "audio": audio,
-        "export": export,
-        "mirror": mirror,
-        "reference_images": image_paths,
-    }
-    job_ids = [
-        _queue(
-            request,
-            api_key.strip(),
-            {
-                **shared,
-                "duration": duration,
-                "reference_videos": [path],
-            },
+        choices = check_choices(provider, api_key, export, resolution)
+        runs = plan_runs(
+            choices,
+            prompt,
+            audio,
+            mirror,
+            build_ordered_paths(
+                image_manifest, image or [], assets_root, user_id=owner
+            ),
+            build_ordered_paths(
+                videos_manifest, videos or [], assets_root, user_id=owner
+            ),
+            _video_seconds,
         )
-        for path, duration in zip(video_paths, durations, strict=True)
-    ]
-
-    actor = AuthMiddleware.actor(request)
-    jobs = [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
-    html = "".join(
-        render_partial("_clone_card.html", job=card, **_drive_context(request))
-        for card in _cards(jobs)
-    )
-    return CloneQueued(job_ids=job_ids, html=html)
+    except CloneRefusedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    job_ids = [_queue(r, choices.api_key, assets_root, actor) for r in runs]
+    return CloneQueued(job_ids=job_ids, html=_rendered_cards(job_ids, actor, user.id))
 
 
 add_job_routes(

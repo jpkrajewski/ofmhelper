@@ -4,8 +4,9 @@ stored under: its label and the router that serves it. The /generate and
 tool is one entry here instead of one in each of them."""
 
 from ofmhelpers.cache import CLONE_LINKS_QUEUE
-from ofmhelpers.web.clone_long import run_long_clone
-from ofmhelpers.web.clone_long import time_limit as clone_long_time_limit
+from ofmhelpers.features.clone_long import run_long_clone
+from ofmhelpers.features.clone_long import time_limit as clone_long_time_limit
+from ofmhelpers.schemas import Job, TaskCard, Tool
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.clone import _run_clone
@@ -13,7 +14,6 @@ from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
 from ofmhelpers.web.routers.image_tools import character_sheet, pictures
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
-from ofmhelpers.web.schemas import Job, TaskCard, Tool
 
 # The /generate gallery: every /ai job, plus the jobs of the per-model tools
 # it replaced (their pages still answer, see generation/legacy.py).
@@ -64,7 +64,7 @@ TOOLS = {
 }
 
 
-# Tasks recovery can finish by re-running the job (see web/recovery.py).
+# Tasks recovery can finish by re-running the job (see features/jobs/recovery.py).
 RESUMABLE = {task: tool.run for task, tool in TOOLS.items() if tool.run}
 # Their RQ time limits, where longer than the queue's default.
 JOB_TIMEOUTS = {

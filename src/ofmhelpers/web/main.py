@@ -2,7 +2,7 @@
 The FastAPI application: logging, middleware, static files, lifespan, and
 the router registration loop. Nothing feature-specific lives here -- a new
 page is added to `routers/__init__.py`'s ROUTERS list and a new background
-sweep to `web/sweeps.py`, not to this file.
+sweep to `features/jobs/sweeps.py`, not to this file.
 """
 
 from contextlib import asynccontextmanager
@@ -13,8 +13,10 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.jobs.sweeps import running, sweeps
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, instrument_app
+from ofmhelpers.web.exceptions import unhandled
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
     CanonicalHostMiddleware,
@@ -22,7 +24,6 @@ from ofmhelpers.web.middleware import (
     WriteRateLimitMiddleware,
 )
 from ofmhelpers.web.routers import ROUTERS
-from ofmhelpers.web.sweeps import running, sweeps
 
 # Before anything else in the process logs: uvicorn imports this module to
 # find `app`, so this runs ahead of the first request and ahead of uvicorn's
@@ -34,7 +35,7 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # The background sweeps (web/sweeps.py) run while the app does: on
+    # The background sweeps (features/jobs/sweeps.py) run while the app does: on
     # shutdown each is cancelled and awaited.
     async with running(sweeps()):
         logger.info("startup complete: sweeps running")
@@ -42,7 +43,11 @@ async def lifespan(app: FastAPI):
     logger.info("shutdown: sweeps stopped")
 
 
-app = FastAPI(title="Ascend Global LLC — Content Ops", lifespan=lifespan)
+app = FastAPI(
+    title="Ascend Global LLC — Content Ops",
+    lifespan=lifespan,
+    exception_handlers={Exception: unhandled},
+)
 instrument_app(app)
 
 # --- Middleware -------------------------------------------------------

@@ -12,7 +12,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from ofmhelpers.config import settings
-from ofmhelpers.web.db.models import Base
+from ofmhelpers.db.models import Base
 
 config = context.config
 
@@ -27,23 +27,9 @@ config.set_main_option("sqlalchemy.url", settings.infra.database_url)
 
 target_metadata = Base.metadata
 
-# Tables whose feature was removed but whose data is kept on purpose. They
-# are no longer in Base.metadata, so without this autogenerate would emit a
-# DROP for each of them.
-RETIRED_TABLES = frozenset(
-    {
-        "todos",
-        "approval_tokens",
-        "models",
-        "instagram_accounts",
-        "model_contacts",
-        "competitor_profiles",
-        "instagram_stats",
-        # /drive's day folders, replaced by one POSTED folder per account
-        # (2026-10-21). Kept: a rollback to the old code still finds them.
-        "drive_day_folders",
-    }
-)
+# Unmapped but kept: /drive's old day folders hold rows a downgrade must give
+# back. Without this autogenerate would emit a DROP.
+RETIRED_TABLES = frozenset({"drive_day_folders"})
 
 
 def include_object(obj, name, type_, _reflected, _compare_to):

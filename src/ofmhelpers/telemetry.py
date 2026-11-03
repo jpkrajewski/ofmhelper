@@ -16,25 +16,108 @@ entrypoints only -- web/main.py ("ascend-web") and each RQ worker process
   trace of the request or job that wrote it.
 
 Nothing is sent without a token (`LOGFIRE_TOKEN`): tests, CI and a fresh
-checkout run with telemetry off and unchanged behaviour. Logfire's default
-scrubbing drops values of attributes named like secrets (password, token,
-api_key, cookie, ...); keys never go into span attributes here.
+checkout run with telemetry off and unchanged behaviour.
+
+What keeps secrets out, on top of Logfire's default scrubbing (attributes named
+like password, secret, api_key, cookie, ...; not `confirm`, `current`, `token`,
+`backup_codes`, and never `http.url`, `url.full`, `url.query` or
+`exception.message`, which it treats as safe):
+- a request's arguments go through an allow-list (`_request_attributes`): a value
+  shows only for a name in `_LOGGED_ARGUMENTS`;
+- `_Redactor` masks credentials (`redact.py`) in every text attribute of every
+  span, including the safe ones and the log messages.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import contextvars
+from typing import TYPE_CHECKING, Any
 
 import logfire
+from opentelemetry.sdk.trace import Event, SpanProcessor
 
 from ofmhelpers.config import settings
+from ofmhelpers.redact import redact
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Callable, Mapping
 
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request, WebSocket
+    from opentelemetry.context import Context
+    from opentelemetry.sdk.trace import ReadableSpan, Span
 
 _configured: list[str] = []
+
+# Route arguments whose value is useful in a trace and holds no secret or
+# personal data. Any other argument shows its name only, so a new form field
+# stays out of Logfire until it is added here.
+_LOGGED_ARGUMENTS = frozenset(
+    {
+        "account_id",
+        "active",
+        "application_id",
+        "approved",
+        "aspect_ratio",
+        "audio",
+        "batch",
+        "color",
+        "copies",
+        "device",
+        "device_id",
+        "dl",
+        "download",
+        "export",
+        "file_id",
+        "group",
+        "hidden",
+        "image_manifest",
+        "index",
+        "job",
+        "job_id",
+        "keep",
+        "kind",
+        "limit",
+        "link",
+        "links",
+        "login_id",
+        "mirror",
+        "mirror_pct",
+        "model",
+        "offset",
+        "output_name",
+        "page",
+        "path",
+        "pictures_manifest",
+        "posted",
+        "preset",
+        "preset_id",
+        "preset_name",
+        "profile",
+        "profiles",
+        "prompt",
+        "provider",
+        "rank",
+        "ratio",
+        "resolution",
+        "role",
+        "root",
+        "section",
+        "selected",
+        "size",
+        "special",
+        "strength",
+        "target",
+        "trim_secs",
+        "upload",
+        "upload_id",
+        "urls",
+        "user_id",
+        "video_manifest",
+        "videos_manifest",
+    }
+)
+_HIDDEN = "[hidden]"
 
 
 def enabled() -> bool:
@@ -57,6 +140,8 @@ def configure_telemetry(service: str) -> None:
         environment=settings.infra.environment,
         # The app's own log formatter already writes to stdout.
         console=False,
+        # Runs before Logfire's exporter, which comes later in its pipeline.
+        additional_span_processors=[_Redactor()],
     )
     # Not Redis: the cache's GET/SET per request were ~40% of all records
     # (2026-10-22) and never what a bug was about.
@@ -65,6 +150,18 @@ def configure_telemetry(service: str) -> None:
     logfire.instrument_requests()
     logfire.instrument_httpx()
     _configured.append(service)
+
+
+def in_this_trace[T](fn: Callable[..., T]) -> Callable[..., T]:
+    """`fn` for a pool thread, in the calling thread's trace: a new thread
+    starts with an empty context, so its spans would each be a trace of their
+    own (and log lines of nothing)."""
+    context = contextvars.copy_context()
+
+    def call(*args: Any, **kwargs: Any) -> T:
+        return context.copy().run(fn, *args, **kwargs)
+
+    return call
 
 
 def flush_telemetry() -> None:
@@ -88,7 +185,68 @@ def _drop_connect_spans() -> None:
 def instrument_app(app: FastAPI) -> None:
     """Web requests, each its own trace (web/main.py owns `app`). Health
     checks are left out: one every 30 s is noise."""
-    logfire.instrument_fastapi(app, excluded_urls="/health,/static/.*")
+    logfire.instrument_fastapi(
+        app,
+        excluded_urls="/health,/static/.*",
+        request_attributes_mapper=_request_attributes,
+    )
+
+
+def _request_attributes(
+    _request: Request | WebSocket, attributes: dict[str, Any]
+) -> dict[str, Any]:
+    """A route's arguments as they go to Logfire: values only for allowed names,
+    and no `input` on a validation error (it repeats what was submitted)."""
+    values = attributes.get("values") or {}
+    errors = attributes.get("errors") or []
+    return {
+        **attributes,
+        "values": {
+            name: value if name in _LOGGED_ARGUMENTS else _HIDDEN
+            for name, value in values.items()
+        },
+        "errors": [
+            {key: value for key, value in error.items() if key != "input"}
+            for error in errors
+        ],
+    }
+
+
+def _masked(value: Any) -> Any:
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, tuple):
+        return tuple(_masked(item) for item in value)
+    return value
+
+
+def _masked_attributes(attributes: Mapping[str, Any] | None) -> dict[str, Any]:
+    return {name: _masked(value) for name, value in (attributes or {}).items()}
+
+
+class _Redactor(SpanProcessor):
+    """Masks credentials in a span's text before it is exported. At the start
+    too: Logfire sends a placeholder of a long span with what it had by then,
+    through its exporter only."""
+
+    def on_start(
+        self,
+        span: Span,
+        parent_context: Context | None = None,  # noqa: ARG002 -- SpanProcessor's signature
+    ) -> None:
+        attributes = span.attributes or {}
+        for name, value in _masked_attributes(attributes).items():
+            if value != attributes[name]:
+                span.set_attribute(name, value)
+
+    def on_end(self, span: ReadableSpan) -> None:
+        # OpenTelemetry has no public way to change an ended span, and the next
+        # processor in line (the exporter) reads this same object.
+        span._attributes = _masked_attributes(span.attributes)  # noqa: SLF001
+        span._events = tuple(  # noqa: SLF001
+            Event(event.name, _masked_attributes(event.attributes), event.timestamp)
+            for event in span.events
+        )
 
 
 def logfire_handler() -> logging.Handler:

@@ -4,7 +4,7 @@ RQ queue the API enqueues background work onto, and the worker container
 running a job in-process, a route does `enqueue(run_job, job_id, fn, kwargs)`
 and returns immediately (logged by function name only -- the kwargs carry
 API keys); a separate worker process runs it, writing status to
-Postgres (see web/stores/jobs.py) that the API can then read back.
+Postgres (see db/stores/jobs.py) that the API can then read back.
 
 It lives beside `redis.py` because that is what it is built on -- the queue is
 the durable half of what this app keeps in Redis, the caches are the
@@ -25,10 +25,10 @@ logger = get_logger(__name__)
 # The queue name both the API (enqueue) and the worker (rq worker-pool, which
 # defaults to this queue) agree on.
 QUEUE_NAME = "default"
-# Gallery previews (web/previews.py): ffmpeg encodes, consumed by their own
+# Gallery previews (features/previews/render.py): ffmpeg encodes, consumed by their own
 # low-priority worker so they never hold a generation worker.
 PREVIEWS_QUEUE = "previews"
-# /clone-links runs (web/clone_links/run.py): a 30-120 link Generate on its
+# /clone-links runs (features/clone_links/run.py): a 30-120 link Generate on its
 # own worker pool (compose `clone-links-worker`), so it never holds the
 # default queue for hours.
 CLONE_LINKS_QUEUE = "clone-links"

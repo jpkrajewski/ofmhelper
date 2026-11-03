@@ -1,5 +1,5 @@
 """
-/repurpose: one video in, N repurposed copies out (`ofmhelpers.repurpose`),
+/repurpose: one video in, N repurposed copies out (`ofmhelpers.media.repurpose`),
 each scored against its source (`repurpose.checker`). Every knob is on the
 page; a ready-made preset fills them; the current knobs download as a preset
 JSON; a card's only button, Recreate, puts its video, preset and knobs
@@ -16,9 +16,19 @@ from pydantic import ValidationError
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.repurpose import Repurpose
-from ofmhelpers.repurpose.devices import device_names, load_device
-from ofmhelpers.repurpose.presets import Preset, load_preset, preset_names
+from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page, run_job
+from ofmhelpers.media.repurpose import Repurpose
+from ofmhelpers.media.repurpose.devices import device_names, load_device
+from ofmhelpers.media.repurpose.presets import Preset, load_preset, preset_names
+from ofmhelpers.schemas import Job, JobQueued
+from ofmhelpers.schemas.repurpose import (
+    CopyScore,
+    Medium,
+    MethodScore,
+    RepurposeCard,
+    RepurposeResult,
+    knob_groups,
+)
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
@@ -28,20 +38,10 @@ from ofmhelpers.web.routers.task_helpers import (
     job_assets,
     make_job_dir,
 )
-from ofmhelpers.web.schemas import Job, JobQueued
-from ofmhelpers.web.schemas.repurpose import (
-    CopyScore,
-    Medium,
-    MethodScore,
-    RepurposeCard,
-    RepurposeResult,
-    knob_groups,
-)
-from ofmhelpers.web.stores.jobs import create_job, get_job, list_jobs_page, run_job
 from ofmhelpers.web.templates_config import render
 
 if TYPE_CHECKING:
-    from ofmhelpers.repurpose.checker import CheckReport
+    from ofmhelpers.media.repurpose.checker import CheckReport
 
 router = APIRouter(prefix="/repurpose", tags=["repurpose"])
 
@@ -139,7 +139,7 @@ def _run_repurpose(
 ) -> list[RepurposeResult]:
     """Every copy with its own seed, then scored against the source."""
     # Deferred: imagehash/scipy load only where a job runs.
-    from ofmhelpers.repurpose.checker import check
+    from ofmhelpers.media.repurpose.checker import check
 
     del preset_name, special  # the page's, kept on the job for Recreate
     directory = Path(job_dir)

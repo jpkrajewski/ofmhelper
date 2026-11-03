@@ -1,0 +1,60 @@
+{
+  "kie": {
+    "model": "kie:wan/3-0-video",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "audio",
+    "aspect": "aspect_ratio",
+    "resolutions": ["480P", "720P", "1080P"],
+    "max_reference_s": 15,
+    "long_clone": true,
+    "price": {
+      "per_second": "clone_credits_per_video_s",
+      "usd_per_credit": "kie_usd_per_credit",
+      "note": "$0.08 a second at 720P, video and result both billed · $50 = 10,000 credits"
+    }
+  },
+  "higgsfield": {
+    "model": "higgsfield:alibaba/wan-3.0/reference-to-video",
+    "images": "image_urls",
+    "video": "video_urls",
+    "audio": "generate_audio",
+    "aspect": "aspect_ratio",
+    "resolutions": ["480P", "720P", "1080P"],
+    "max_reference_s": 15,
+    "long_clone": true,
+    "price": {
+      "per_second": "clone_hf_credits_per_video_s",
+      "usd_per_credit": "hf_usd_per_credit",
+      "note": "Measured on your runs: $0.43 per second of video at 720P · $1 = 16 credits"
+    }
+  },
+  "runninghub": {
+    "model": "runninghub:alibaba/wan-3.0/reference-to-video",
+    "images": "imageUrls",
+    "video": "videoUrls",
+    "audio": "audio",
+    "aspect": "aspectRatio",
+    "resolutions": ["480P", "720P", "1080P"],
+    "max_reference_s": 15,
+    "price": {
+      "per_second": "clone_rh_usd_per_video_s",
+      "unit": "USD",
+      "note": "$0.07 a second at 720P, video and result both billed"
+    }
+  },
+  "elyum": {
+    "model": "elyum:alibaba/wan-3.0/reference-to-video",
+    "images": "image_urls",
+    "video": "video_urls",
+    "audio": "audio",
+    "aspect": null,
+    "resolutions": ["480P", "720P", "1080P"],
+    "max_reference_s": 15,
+    "price": {
+      "per_second": "clone_elyum_usd_per_video_s",
+      "unit": "USD",
+      "note": "$0.0792 a second at 720P, video and result both billed"
+    }
+  }
+}

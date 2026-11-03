@@ -1,5 +1,5 @@
 """
-/links: short links on link providers (Oopsie, Bouncy; `ofmhelpers.links`)
+/links: short links on link providers (Oopsie, Bouncy; `ofmhelpers.integrations.short_links`)
 with their views, clicks and CTR over one period
 (`settings.links.periods_days`, picked on the page), the Instagram account
 each bridges from, its creator (model) and target page; KPI totals over
@@ -9,7 +9,7 @@ link.
 
 "Generate links" makes one 18+ gated link per picked Instagram account of
 a model, all to one target page. Making, syncing, the 18+ fix and deleting
-run on the worker (web/link_sync.py); static/js/links.js reloads while a
+run on the worker (features/links/sync.py); static/js/links.js reloads while a
 row is still being made or deleted.
 """
 
@@ -20,10 +20,11 @@ from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.links import provider_infos, targets
-from ofmhelpers.web import link_sync
-from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.schemas import (
+from ofmhelpers.db.stores import short_links
+from ofmhelpers.db.stores.tracked_accounts import list_accounts, list_creators
+from ofmhelpers.features.links import sync as link_sync
+from ofmhelpers.integrations.short_links import provider_infos, targets
+from ofmhelpers.schemas import (
     AssignLinkCreator,
     GenerateLinks,
     LinkPage,
@@ -35,8 +36,7 @@ from ofmhelpers.web.schemas import (
     ProviderState,
     SelectedLinks,
 )
-from ofmhelpers.web.stores import short_links
-from ofmhelpers.web.stores.tracked_accounts import list_accounts, list_creators
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/links", tags=["links"])

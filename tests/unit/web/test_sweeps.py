@@ -3,6 +3,8 @@ sweep never takes its loop down, a gated round is skipped, and nothing
 outlives the app."""
 
 import asyncio
+from collections.abc import Coroutine
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -10,16 +12,23 @@ from ofmhelpers.web import account_tracker, sweeps
 from ofmhelpers.web.sweeps import Sweep, running
 
 
+def _run(scenario: Coroutine) -> None:
+    """In a thread of its own: e2e tests in the same worker leave Playwright's
+    event loop running in this one, and `asyncio.run` refuses to nest. A stuck
+    runner fails on the timeout instead of hanging the suite."""
+    with ThreadPoolExecutor(1) as pool:
+        pool.submit(asyncio.run, asyncio.wait_for(scenario, timeout=5)).result()
+
+
 def _until(seen: list, count: int, *all_sweeps: Sweep) -> None:
-    """Run `all_sweeps` until `seen` has `count` entries; a stuck runner fails
-    on the timeout instead of hanging the suite."""
+    """Run `all_sweeps` until `seen` has `count` entries."""
 
     async def scenario() -> None:
         async with running(list(all_sweeps)):
             while len(seen) < count:  # noqa: ASYNC110 -- filled from the sweep's thread
                 await asyncio.sleep(0.01)
 
-    asyncio.run(asyncio.wait_for(scenario(), timeout=5))
+    _run(scenario())
 
 
 def test_a_failed_run_is_logged_and_the_next_one_still_comes(caplog):
@@ -110,7 +119,7 @@ def test_every_sweep_is_cancelled_and_awaited_on_exit():
             if task.get_name().startswith("sweep ")
         )
 
-    asyncio.run(asyncio.wait_for(scenario(), timeout=5))
+    _run(scenario())
 
     assert left == []
 

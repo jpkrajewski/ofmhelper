@@ -13,7 +13,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.utils.uniqify import MetadataMode, Strength, generate_variants
+from ofmhelpers.db.stores.jobs import create_job, list_jobs_page, run_job
+from ofmhelpers.media.uniqify import MetadataMode, Strength, generate_variants
+from ofmhelpers.schemas import Job, JobCard, JobQueued, ResultFile
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.task_helpers import (
     UPLOADS_ROOT,
@@ -24,8 +26,6 @@ from ofmhelpers.web.routers.task_helpers import (
     require_upload_kind,
     safe_filename,
 )
-from ofmhelpers.web.schemas import Job, JobCard, JobQueued, ResultFile
-from ofmhelpers.web.stores.jobs import create_job, list_jobs_page, run_job
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/uniqify", tags=["uniqify"])

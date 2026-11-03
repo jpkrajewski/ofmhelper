@@ -1,4 +1,4 @@
-"""Rebuild `aigenproviders/runninghub/catalog.json` from RunningHub's docs.
+"""Rebuild `integrations/ai_providers/runninghub/catalog.json` from RunningHub's docs.
 
 RunningHub lists every documented endpoint in
 `https://www.runninghub.ai/runninghub-api-doc-en/llms.txt`; each Standard
@@ -51,7 +51,7 @@ from sync_kie_catalog import (  # noqa: E402
 )
 
 DOCS = "https://www.runninghub.ai/runninghub-api-doc-en"
-OUT = ROOT / "src/ofmhelpers/aigenproviders/runninghub/catalog.json"
+OUT = ROOT / "src/ofmhelpers/integrations/ai_providers/runninghub/catalog.json"
 API = "/openapi/v2/"
 KINDS = {
     "Video Generation & Processing": "video",

@@ -10,12 +10,8 @@ from urllib.parse import quote
 
 from fastapi import HTTPException
 
-from ofmhelpers.web.download_names import download_name
-from ofmhelpers.web.routers.task_helpers.uploads import (
-    classify_kind,
-    strip_asset_hash_prefix,
-)
-from ofmhelpers.web.schemas import (
+from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.schemas import (
     AssetCard,
     FailedSource,
     InputFileGroup,
@@ -24,6 +20,10 @@ from ofmhelpers.web.schemas import (
     JobInputs,
     JobStatusPayload,
     ReferenceAsset,
+)
+from ofmhelpers.web.routers.task_helpers.uploads import (
+    classify_kind,
+    strip_asset_hash_prefix,
 )
 
 
@@ -50,7 +50,7 @@ def asset_card(
 
     An image or video with a local copy also gets `preview_url` (what a
     gallery shows) and a video `poster_url` (shown until played); see
-    web/previews.py."""
+    features/previews/render.py."""
     local_url = f"{files_prefix}/{index}"
     kind = classify_kind(name)
     previewed = local and kind in ("image", "video")

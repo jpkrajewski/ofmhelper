@@ -4,11 +4,11 @@ Every `requests` call the app makes to an outside service goes through a
 session `mount`ed here, or through `get` / `head`. Normally that changes
 nothing. Under OFM_FAKE_EXTERNALS (`settings.infra.fake_externals`, e2e) every
 such request is answered in-process by the fake of its host -- Instagram and
-its CDN (`instagram/fake.py`), kie.ai (`aigenproviders/kaiai/fake.py`),
-Higgsfield's file host (`aigenproviders/higgsfield/fake.py`), Google's and
+its CDN (`instagram/fake.py`), kie.ai (`integrations/ai_providers/kie/fake.py`),
+Higgsfield's file host (`integrations/ai_providers/higgsfield/fake.py`), Google's and
 Apple's sign-in token endpoints (`signin/fake.py`), Oopsie and Bouncy
 (`links/fake.py`), Apify (`apify/fake.py`), RunningHub
-(`aigenproviders/runninghub/fake.py`), Elyum (`aigenproviders/elyum/fake.py`) -- and a
+(`integrations/ai_providers/runninghub/fake.py`), Elyum (`integrations/ai_providers/elyum/fake.py`) -- and a
 host without a fake is refused with a connection error: nothing reaches the
 internet. Higgsfield's API (httpx, its SDK) and Drive (googleapiclient)
 are switched in their own clients.
@@ -66,15 +66,15 @@ FakeHandler = Callable[[requests.PreparedRequest, Mapping[str, str]], FakeReply]
 def _routes() -> dict[str, FakeHandler]:
     """Host -> its fake. Imported on first use: the fakes import the
     clients' models, which import this module."""
-    from ofmhelpers.aigenproviders.elyum.fake import routes as elyum_routes
-    from ofmhelpers.aigenproviders.higgsfield.fake import routes as hf_routes
-    from ofmhelpers.aigenproviders.kaiai.fake import routes as kie_routes
-    from ofmhelpers.aigenproviders.runninghub.fake import routes as rh_routes
-    from ofmhelpers.apify.fake import routes as apify_routes
-    from ofmhelpers.downloaders.savers_fake import routes as savers_routes
-    from ofmhelpers.instagram.fake import routes as instagram_routes
-    from ofmhelpers.links.fake import routes as links_routes
-    from ofmhelpers.signin.fake import routes as signin_routes
+    from ofmhelpers.integrations.ai_providers.elyum.fake import routes as elyum_routes
+    from ofmhelpers.integrations.ai_providers.higgsfield.fake import routes as hf_routes
+    from ofmhelpers.integrations.ai_providers.kie.fake import routes as kie_routes
+    from ofmhelpers.integrations.ai_providers.runninghub.fake import routes as rh_routes
+    from ofmhelpers.integrations.apify.fake import routes as apify_routes
+    from ofmhelpers.integrations.downloaders.savers_fake import routes as savers_routes
+    from ofmhelpers.integrations.instagram.fake import routes as instagram_routes
+    from ofmhelpers.integrations.short_links.fake import routes as links_routes
+    from ofmhelpers.integrations.signin.fake import routes as signin_routes
 
     return {
         **instagram_routes(),

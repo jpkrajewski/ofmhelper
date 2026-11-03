@@ -2,13 +2,13 @@
 Every HTTP route in the app, grouped by what it is *for*:
 
 - `generation/` -- AI generation: `ai.py` runs every model of every provider
-  (aigenproviders/), `index.py` is its /generate page, `clone.py` is /clone,
+  (integrations/ai_providers/), `index.py` is its /generate page, `clone.py` is /clone,
   and `legacy.py` keeps the job pages of the per-model tools it replaced.
 - `downloads/`  -- pulling media in from elsewhere: videos, images, the
   metadata cleaner, their picker page, and the viral-reel finder.
 - `tracking/`   -- social accounts' numbers over time (/accounts, every
-  platform of `ofmhelpers.socials`) and their short links' clicks (/links,
-  every provider of `ofmhelpers.links`).
+  platform of `ofmhelpers.integrations.socials`) and their short links' clicks (/links,
+  every provider of `ofmhelpers.integrations.short_links`).
 - `inventory/`  -- what each person owns and signs in with (/phones: their
   physical phones and logins; /drive: those Instagram accounts' folders in
   the owner's own Google Drive).
@@ -29,7 +29,7 @@ upload/job/serve plumbing those routers are built out of).
 
 `ROUTERS` below is the registration list -- `web/main.py` loops over it, so
 **adding a page means one import and one entry here** (plus its `NavItem` in
-`web/schemas/nav.py`; a background-job tool also gets its `Tool` in
+`schemas/nav.py`; a background-job tool also gets its `Tool` in
 `registry.py`), and main.py is never touched.
 """
 

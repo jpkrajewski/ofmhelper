@@ -1,6 +1,6 @@
 """
 /drive: each phone owner's own Google Drive "ALL ACCOUNTS" folder
-(web/drive_folders.py). A card per Instagram login on an active phone (a
+(features/drive/folders.py). A card per Instagram login on an active phone (a
 signed-in person's own phones, admins included),
 with what waits in its folder (previews for images and videos, proxied
 through `/drive/thumb/{login}/{id}`: the owner's token never leaves the
@@ -14,17 +14,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 
-from ofmhelpers.gdrive import DriveError
+from ofmhelpers.db.stores import drive_uploads as upload_store
+from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.integrations.gdrive import DriveError
+from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
-from ofmhelpers.signin import SignInError
-from ofmhelpers.web import drive_folders
+from ofmhelpers.schemas import SyncReport, UploadPick
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.routers.generation.clone import FILES_PREFIX as CLONE_FILES
 from ofmhelpers.web.routers.generation.clone import TASK as CLONE_TASK
 from ofmhelpers.web.routers.task_helpers import job_assets
-from ofmhelpers.web.schemas import SyncReport, UploadPick
-from ofmhelpers.web.stores import drive_uploads as upload_store
-from ofmhelpers.web.stores.jobs import get_job
 from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)

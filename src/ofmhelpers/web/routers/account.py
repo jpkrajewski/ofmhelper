@@ -13,15 +13,15 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse, Response
 
-from ofmhelpers.aigenproviders.base import provider_classes
 from ofmhelpers.config import settings
-from ofmhelpers.links.providers import link_providers
-from ofmhelpers.signin import linkable, providers
-from ofmhelpers.web.drive_space import DriveSpace, drive_space
-from ofmhelpers.web.link_sync import sync_now
+from ofmhelpers.db.stores import users
+from ofmhelpers.features.drive.space import DriveSpace, drive_space
+from ofmhelpers.features.links.sync import sync_now
+from ofmhelpers.integrations.ai_providers.base import provider_classes
+from ofmhelpers.integrations.short_links.providers import link_providers
+from ofmhelpers.integrations.signin import linkable, providers
+from ofmhelpers.schemas import ApiKeysForm
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.schemas import ApiKeysForm
-from ofmhelpers.web.stores import users
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/account", tags=["account"])
@@ -91,7 +91,7 @@ def drive_space_now(request: Request) -> DriveSpace | None:
     """The signed-in person's Google Drive space, for every page's
     drive-alert.js: `low` (the full pop-up) or `reconnect` (Google refused
     their token: the Reconnect pop-up); null without Google connected or
-    when Drive did not answer. Cached (web/drive_space.py): Google is asked
+    when Drive did not answer. Cached (features/drive/space.py): Google is asked
     at most once per TTL per person, whatever it answers."""
     return drive_space(AuthMiddleware.user(request).id)
 

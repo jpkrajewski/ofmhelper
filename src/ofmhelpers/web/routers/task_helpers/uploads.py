@@ -16,15 +16,15 @@ from fastapi import HTTPException, Request
 from starlette.datastructures import UploadFile
 
 from ofmhelpers.config import settings
-from ofmhelpers.downloaders.models import DownloadResult
-from ofmhelpers.log import get_logger
-from ofmhelpers.utils.heic import HEIC_EXTENSIONS, heic_to_jpeg
-from ofmhelpers.web.media_kinds import (
+from ofmhelpers.features.assets.kinds import (
     AUDIO_EXTS,
     IMAGE_EXTS,
     VIDEO_EXTS,
     classify_kind,
 )
+from ofmhelpers.integrations.downloaders.models import DownloadResult
+from ofmhelpers.log import get_logger
+from ofmhelpers.media.heic import HEIC_EXTENSIONS, heic_to_jpeg
 from ofmhelpers.web.middleware import AuthMiddleware
 
 logger = get_logger(__name__)
@@ -56,7 +56,7 @@ def assets_root_for_user(user_id: int) -> Path:
     The agency (the password account) keeps the store root, where its files
     lived before per-user folders -- minus `users/` (`in_asset_root`).
     Reads ASSETS_ROOT at call time: it is the seam tests move."""
-    from ofmhelpers.web.stores.users import get_user
+    from ofmhelpers.db.stores.users import get_user
 
     user = get_user(user_id)
     if user is not None and user.is_password_account:
@@ -179,8 +179,19 @@ def make_job_dir(upload_root: Path) -> Path:
     return job_dir
 
 
+def _free_name(job_dir: Path, name: str) -> Path:
+    """`name` in `job_dir`, numbered when taken: iOS names every shared photo
+    "image.jpg", and the second must not overwrite the first."""
+    dest = job_dir / name
+    number = 1
+    while dest.exists():
+        number += 1
+        dest = job_dir / f"{Path(name).stem}_{number}{Path(name).suffix}"
+    return dest
+
+
 def save_upload(job_dir: Path, upload: UploadFile) -> str:
-    dest = job_dir / safe_filename(upload.filename)
+    dest = _free_name(job_dir, safe_filename(upload.filename))
     with dest.open("wb") as out:
         shutil.copyfileobj(upload.file, out)
     return str(dest)

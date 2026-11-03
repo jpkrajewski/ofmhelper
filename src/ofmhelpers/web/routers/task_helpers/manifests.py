@@ -5,14 +5,15 @@ client says "entry 2 is the file you already have at this path", and this is
 the only place that claim is validated against the asset store.
 """
 
-import json
 from collections.abc import Sequence
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import HTTPException
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from starlette.datastructures import UploadFile
 
-from ofmhelpers.web import ref_usage
+from ofmhelpers.features.assets import ref_usage
 from ofmhelpers.web.routers.task_helpers.uploads import (
     classify_kind,
     in_asset_root,
@@ -26,7 +27,7 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     doesn't actually exist -- never trust a client-supplied path as-is.
 
     Pure: it reads the store and never writes to it. "This file was just
-    picked" is recorded by the caller (`web/ref_usage.record_use`), which is
+    picked" is recorded by the caller (`features/assets/ref_usage.record_use`), which is
     the only place that knows a resolve meant a real reuse."""
     resolved = Path(raw_path).resolve()
     if not in_asset_root(allowed_root, resolved):
@@ -55,6 +56,18 @@ def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
     return kept
 
 
+class ManifestEntry(BaseModel):
+    """One picked file of a form: a new upload, or one already in the store."""
+
+    kind: str = "new"
+    path: str = ""
+
+
+@lru_cache(maxsize=1)
+def _manifest_adapter() -> TypeAdapter[list[ManifestEntry]]:
+    return TypeAdapter(list[ManifestEntry])
+
+
 def build_ordered_paths(
     manifest_json: str,
     new_files: Sequence[UploadFile],
@@ -68,15 +81,15 @@ def build_ordered_paths(
     resolved by path, never re-uploaded -- together this is what prevents
     duplicate files on disk. Each file counts as used by `user_id`."""
     try:
-        manifest = json.loads(manifest_json)
-    except json.JSONDecodeError:
-        manifest = [{"kind": "new"} for _ in new_files]
+        manifest = _manifest_adapter().validate_json(manifest_json)
+    except ValidationError:
+        manifest = [ManifestEntry() for _ in new_files]
 
     new_files_iter = iter(new_files)
     paths: list[str] = []
     for entry in manifest:
-        if entry.get("kind") == "existing":
-            resolved = resolve_existing_ref(entry["path"], allowed_root)
+        if entry.kind == "existing":
+            resolved = resolve_existing_ref(entry.path, allowed_root)
         else:
             upload = next(new_files_iter, None)
             if upload is None or not upload.filename:
