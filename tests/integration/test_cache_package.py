@@ -74,20 +74,14 @@ def test_a_job_can_carry_its_own_time_limit(monkeypatch):
     queued with its own (`job_timeout`), others with the default."""
     import ofmhelpers.cache.queue as queue_module
 
-    queued = []
-
-    class FakeQueue:
-        def enqueue(self, *_args, **kwargs):
-            queued.append(kwargs)
-
     monkeypatch.setenv("OFM_RQ_ASYNC", "true")
     monkeypatch.setenv("OFM_RQ_JOB_TIMEOUT_S", "2700")
-    monkeypatch.setattr(queue_module, "get_queue", lambda _name="default": FakeQueue())
 
-    queue_module.enqueue(print, "a", job_timeout=6900)
-    queue_module.enqueue(print, "b")
+    long_job = queue_module.enqueue(print, "a", job_timeout=6900)
+    other_job = queue_module.enqueue(print, "b")
 
-    assert [q["job_timeout"] for q in queued] == [6900, 2700]
+    assert [long_job.timeout, other_job.timeout] == [6900, 2700]
+    queue_module.get_redis().flushdb()
 
 
 def test_inline_mode_never_hands_the_time_limit_to_the_function(monkeypatch):

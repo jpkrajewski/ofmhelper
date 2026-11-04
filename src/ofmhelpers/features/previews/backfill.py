@@ -12,7 +12,7 @@ jobs. Read-only on the history: it lists jobs unhealed
 deleted.
 """
 
-from ofmhelpers.cache import PREVIEWS_QUEUE, enqueue_to, get_redis
+from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import list_finished_jobs
 from ofmhelpers.features.previews.render import is_warm, warm_previews
@@ -35,7 +35,7 @@ def backfill() -> int:
         sources = job.local_paths()
         if is_warm(job.id, sources):
             continue
-        enqueue_to(PREVIEWS_QUEUE, warm_previews, job.id, sources)
+        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, sources)
         queued += 1
     logger.info("preview backfill: %d jobs queued", queued)
     return queued

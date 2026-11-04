@@ -8,10 +8,10 @@ so there is one URL, one pool, one place a test points at a test broker.
 """
 
 from ofmhelpers.cache.queue import (
-    CLONE_LINKS_QUEUE,
     JOB_QUEUES,
-    PREVIEWS_QUEUE,
-    QUEUE_NAME,
+    JobQueue,
+    QueueJob,
+    QueueName,
     active_job_ids,
     enqueue,
     enqueue_to,
@@ -20,10 +20,10 @@ from ofmhelpers.cache.queue import (
 from ofmhelpers.cache.redis import delete_text, get_redis, get_text, set_text
 
 __all__ = [
-    "CLONE_LINKS_QUEUE",
     "JOB_QUEUES",
-    "PREVIEWS_QUEUE",
-    "QUEUE_NAME",
+    "JobQueue",
+    "QueueJob",
+    "QueueName",
     "active_job_ids",
     "delete_text",
     "enqueue",

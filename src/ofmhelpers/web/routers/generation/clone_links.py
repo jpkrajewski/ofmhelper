@@ -41,7 +41,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
-from ofmhelpers.cache import CLONE_LINKS_QUEUE, enqueue_to, get_redis
+from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import clone_from_links
 from ofmhelpers.db.stores.jobs import (
@@ -277,7 +277,7 @@ def _queue(actor: str, assets_root: Path, api_key: str, params: dict[str, Any]) 
     job_id = create_job(TASK, params, actor=actor)
     try:
         enqueue_to(
-            CLONE_LINKS_QUEUE,
+            QueueName.CLONE_LINKS,
             run_job,
             job_id,
             run_clone_link,

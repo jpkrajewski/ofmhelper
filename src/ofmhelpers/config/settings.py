@@ -18,15 +18,66 @@ config/__init__.py's docstring for why.
 from __future__ import annotations
 
 import datetime
+from enum import IntEnum, StrEnum
 from typing import Literal
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ofmhelpers.media.image_fit import ImageLimits
 from ofmhelpers.media.recorder.models import GeoPoint, Place
 
 _DAILY_AT_MSG = "rescan_daily_at must be HH:MM"
+
+
+class QueueName(StrEnum):
+    """The background job queues (`cache/queue.py`), first in first out, highest
+    priority first. A new one: a member here, its entry in `InfraSettings.queues`,
+    its compose service, both deploys (tests/unit/test_worker_services.py)."""
+
+    # Generations, downloads, uploads: the queue a job is on unless it says otherwise.
+    DEFAULT = "default"
+    # /clone-links runs (features/clone_links/run.py): a 30-120 link Generate on
+    # its own worker pool, so it never holds the default queue for hours.
+    CLONE_LINKS = "clone-links"
+    # Gallery previews (features/previews/render.py): ffmpeg encodes, on their own
+    # low-priority worker so they never hold a generation worker.
+    PREVIEWS = "previews"
+    # Local encodes of big videos (/trials copies), one at a time: a 4K one holds
+    # 1.5 GB, and six at once on prod's 7.75 GB had the kernel killing them
+    # (2026-11-04).
+    MEDIA = "media"
+
+
+# Every queue `run_job` is put on: what `cache.active_job_ids` reads.
+JOB_QUEUES = (QueueName.DEFAULT, QueueName.CLONE_LINKS, QueueName.MEDIA)
+
+
+class QueuePriority(IntEnum):
+    """Who gets the CPU when the box is busy: a queue's worker processes, and the
+    ffmpeg they start, run at this Linux nice value (bigger = further back)."""
+
+    HIGHEST = 0
+    HIGH = 5
+    LOW = 15
+    LOWEST = 19
+
+
+class QueueConfig(BaseModel):
+    """`workers`: how many of the queue's jobs run at once."""
+
+    model_config = ConfigDict(frozen=True)
+
+    workers: int
+    priority: QueuePriority
 
 
 class SessionSettings(BaseSettings):
@@ -309,6 +360,28 @@ class InfraSettings(BaseSettings):
     clone_links_workers: int = Field(
         default=5, ge=1, validation_alias="OFM_CLONE_LINKS_WORKERS"
     )
+    # The media pool (`python -m ofmhelpers.worker media`): how many local encodes
+    # of big videos run at once. One (see `QueueName.MEDIA`).
+    media_workers: int = Field(default=1, ge=1, validation_alias="OFM_MEDIA_WORKERS")
+
+    @property
+    def queues(self) -> dict[QueueName, QueueConfig]:
+        """Every queue, top priority first: the default one on top, the heavy
+        encodes at the bottom."""
+        return {
+            QueueName.DEFAULT: QueueConfig(
+                workers=self.rq_workers, priority=QueuePriority.HIGHEST
+            ),
+            QueueName.CLONE_LINKS: QueueConfig(
+                workers=self.clone_links_workers, priority=QueuePriority.HIGH
+            ),
+            QueueName.PREVIEWS: QueueConfig(
+                workers=self.preview_workers, priority=QueuePriority.LOW
+            ),
+            QueueName.MEDIA: QueueConfig(
+                workers=self.media_workers, priority=QueuePriority.LOWEST
+            ),
+        }
 
     # Everything the app writes on behalf of a user lives under one root:
     # uploads/assets (the shared reference store), plus a subdir per tool.
@@ -1529,16 +1602,11 @@ class RepurposeSettings(BaseSettings):
 
 
 class TrialsSettings(BaseSettings):
-    """/trials (`ofmhelpers.features.trials`): how many reels one Generate makes at
-    once. Each is an LLM wait + an ffmpeg chain that is mostly one thread
-    (filters, zscale): side by side they overlap; above the cores they only
-    queue."""
+    """/trials (`ofmhelpers.features.trials`): how long its jobs may take. How
+    many run at once is the media queue's (`InfraSettings.media_workers`)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    parallel: int = Field(
-        default=3, ge=1, le=16, validation_alias="OFM_TRIALS_PARALLEL"
-    )
     # Seconds per reel a job may take (pipeline encode + the LLM, an upload),
     # even made one after another. Prod 2026-10-30 (4 vCPU, 2 at once): 21 4K
     # copies in 110 min, ~10.5 min each; 240 s (dev's pace) killed Generate at

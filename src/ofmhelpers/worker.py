@@ -1,53 +1,44 @@
 """
-Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker
-[queue]` -- the default queue (generations, downloads, ...) with
-`rq_workers` processes, `clone-links` (/clone-links runs) with
-`clone_links_workers`, or `previews` (gallery previews, features/previews/render.py)
-with `preview_workers`. One compose service per queue.
+Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker [queue]`,
+a `QueueName` (the default queue if none is named). One compose service per queue.
 
-Exists purely so the worker gets the same logging setup the API does. The
-compose file used to invoke `rq worker-pool` directly, which meant job code
-ran with logging never configured -- every record from a background job fell
-back to logging's default handler and came out in a different shape from the
-API's, or (below WARNING) not at all.
-
-Everything else -- pool size, queue, timeouts -- still comes from RQ's own
-CLI and from settings.infra, so this stays a thin shim rather than a second
-place worker behavior is defined.
+`QueueWorkers` runs RQ's own `WorkerPool` (its signal handling and graceful
+shutdown, no pool of ours) with the processes and priority
+`settings.infra.queues` gives the queue, each process a `ConfiguredWorker`: the
+pool's children are separate processes, so without it job code runs with logging
+never configured -- every record from a background job fell back to logging's
+default handler and came out in a different shape from the API's, or (below
+WARNING) not at all.
 """
 
 from __future__ import annotations
 
-import sys
-from typing import Any
+import argparse
+import os
+from typing import TYPE_CHECKING
 
 import logfire
 from rq import Worker
-from rq.cli import main as rq_main
+from rq.worker_pool import WorkerPool
 
-from ofmhelpers.cache import CLONE_LINKS_QUEUE, PREVIEWS_QUEUE, QUEUE_NAME
+from ofmhelpers.cache import QueueJob, QueueName, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
+
+if TYPE_CHECKING:
+    from rq import Queue
+    from rq.job import Job
 
 # Not __name__: under `python -m ofmhelpers.worker` that's "__main__", which
 # tells you nothing in a log line.
 logger = get_logger("ofmhelpers.worker")
 
 
-def _function_of(job: Any) -> str:
-    """What a queued job runs. Reading it unpickles the job, which may fail: rq
-    then fails the job itself, the span is no reason to."""
-    try:
-        return str(job.func_name)
-    except Exception:  # a span name, never worth a failed job
-        return "unknown"
-
-
 class ConfiguredWorker(Worker):
     """A Worker that installs the app's logging config in its OWN process.
 
-    `rq worker-pool` runs each worker in a separate child process (see
+    `WorkerPool` runs each worker in a separate child process (see
     rq.worker_pool.run_worker), so configure_logging() in the parent never
     reaches them -- and Worker.work() then calls rq's setup_loghandlers(),
     which installs rq's own format because the fresh child has no handler
@@ -60,12 +51,13 @@ class ConfiguredWorker(Worker):
         configure_logging()
         return super().work(*args, **kwargs)
 
-    def perform_job(self, job, queue) -> bool:
+    def perform_job(self, job: Job, queue: Queue) -> bool:
         """Runs in the forked work horse, which rq ends with `os._exit` --
         no atexit, so the job's buffered spans and logs are sent here or
         never."""
+        taken = QueueJob.taken(job, queue)
         try:
-            with logfire.span("rq {func}", func=_function_of(job)) as span:
+            with logfire.span("rq {func}", **taken.model_dump(mode="json")) as span:
                 performed = super().perform_job(job, queue)
                 if not performed:
                     span.set_level("error")
@@ -74,40 +66,43 @@ class ConfiguredWorker(Worker):
             flush_telemetry()
 
 
+class QueueWorkers:
+    """The worker processes of one queue."""
+
+    def __init__(self, queue: QueueName) -> None:
+        self.queue = queue
+
+    def run(self) -> None:
+        """Until a shutdown signal; `compose stop` lets each finish its job."""
+        config = settings.infra.queues[self.queue]
+        logger.info(
+            "starting rq worker-pool: %d workers, queue=%r, priority=%s",
+            config.workers,
+            self.queue.value,
+            config.priority.name,
+        )
+        # The workers and the ffmpeg they start inherit it.
+        os.nice(config.priority)
+        WorkerPool(
+            [self.queue.value],
+            connection=get_redis(),
+            num_workers=config.workers,
+            worker_class=ConfiguredWorker,
+        ).start()
+
+
 def main() -> None:
     configure_telemetry("ascend-worker")
     configure_logging()
-
-    infra = settings.infra
-    queue = sys.argv[1] if len(sys.argv) > 1 else QUEUE_NAME
-    pools = {
-        QUEUE_NAME: infra.rq_workers,
-        CLONE_LINKS_QUEUE: infra.clone_links_workers,
-        PREVIEWS_QUEUE: infra.preview_workers,
-    }
-    if queue not in pools:
-        msg = f"unknown queue {queue!r}; one of {sorted(pools)}"
-        raise SystemExit(msg)
-    workers = pools[queue]
-    logger.info("starting rq worker-pool: %d workers, queue=%r", workers, queue)
-
-    # Hand off to RQ's own CLI so every flag it supports keeps working, and
-    # so we inherit its signal handling / graceful shutdown rather than
-    # reimplementing a pool here.
-    sys.argv = [
-        "rq",
-        "worker-pool",
-        "--num-workers",
-        str(workers),
-        "--url",
-        infra.redis_url,
-        # Dotted path, not the class object: worker-pool spawns children by
-        # importing this name in the new process.
-        "--worker-class",
-        "ofmhelpers.worker.ConfiguredWorker",
-        queue,
-    ]
-    rq_main()
+    parser = argparse.ArgumentParser(prog="ofmhelpers.worker")
+    parser.add_argument(
+        "queue",
+        nargs="?",
+        type=QueueName,
+        choices=list(QueueName),
+        default=QueueName.DEFAULT,
+    )
+    QueueWorkers(parser.parse_args().queue).run()
 
 
 if __name__ == "__main__":

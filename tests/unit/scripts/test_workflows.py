@@ -55,6 +55,15 @@ def test_there_are_workflows():
     assert {p.name for p in WORKFLOWS} >= {"ci.yml", "deploy.yml", "promote.yml"}
 
 
+def test_a_promote_pr_starts_no_ci_run_and_main_still_gates_the_deploy():
+    """promote.yml's PR into main is opened by github-actions[bot]; its run sat
+    waiting for approval and failed on merge (ci.yml says why, 2026-11-04)."""
+    ci = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    on = ci[True]  # YAML 1.1 reads the `on:` key as the boolean True
+    assert on["pull_request"]["branches"] == ["dev"]
+    assert on["push"]["branches"] == ["dev", "main"]
+
+
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_job_names_its_runner_image(path: Path):
     for name, job in _load(path).jobs.items():

@@ -12,13 +12,13 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 from repo_paths import REPO
 
-from ofmhelpers.cache import CLONE_LINKS_QUEUE, PREVIEWS_QUEUE, QUEUE_NAME
+from ofmhelpers.cache import QueueName
 
 DEPLOYS = [
     REPO / "scripts" / "deploy.sh",
     REPO / ".github" / "workflows" / "deploy.yml",
 ]
-WORKERS = {"worker", "clone-links-worker"}
+WORKERS = {"worker", "clone-links-worker", "media-worker"}
 
 
 class Service(BaseModel):
@@ -51,7 +51,7 @@ def _worker_queues() -> dict[str, str]:
         cmd = service.command
         if "ofmhelpers.worker" in cmd:
             rest = cmd[cmd.index("ofmhelpers.worker") + 1 :]
-            found[name] = rest[0] if rest else QUEUE_NAME
+            found[name] = rest[0] if rest else QueueName.DEFAULT
     return found
 
 
@@ -69,9 +69,10 @@ def _compose_calls(path: Path, verb: str) -> list[set[str]]:
 
 def test_every_queue_has_its_own_worker_service():
     assert _worker_queues() == {
-        "worker": QUEUE_NAME,
-        "clone-links-worker": CLONE_LINKS_QUEUE,
-        "preview-worker": PREVIEWS_QUEUE,
+        "worker": QueueName.DEFAULT,
+        "clone-links-worker": QueueName.CLONE_LINKS,
+        "preview-worker": QueueName.PREVIEWS,
+        "media-worker": QueueName.MEDIA,
     }
 
 

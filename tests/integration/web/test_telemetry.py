@@ -101,9 +101,14 @@ def test_a_work_horse_flushes_its_spans_before_it_exits(monkeypatch):
     from rq.worker import Worker
 
     from ofmhelpers import worker
+    from ofmhelpers.cache import QueueJob, QueueName
 
     flushed: list[bool] = []
     monkeypatch.setattr(worker, "flush_telemetry", lambda: flushed.append(True))
+    taken = QueueJob(
+        rq_job_id="r", func="f", queue=QueueName.MEDIA, waited_s=0, waiting=0
+    )
+    monkeypatch.setattr(QueueJob, "taken", lambda job, queue: taken)
 
     def failing(self, job, queue):
         msg = "job blew up"

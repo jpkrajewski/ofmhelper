@@ -16,8 +16,7 @@ import worker_tasks
 from rq import SimpleWorker, Worker
 
 from ofmhelpers.cache import (
-    CLONE_LINKS_QUEUE,
-    QUEUE_NAME,
+    QueueName,
     active_job_ids,
     enqueue,
     enqueue_to,
@@ -94,12 +93,12 @@ def _queue_run(queue: str) -> tuple[str, str]:
 
 
 def test_a_clone_links_run_waits_and_runs_on_its_own_queue():
-    job_id, _ = _queue_run(CLONE_LINKS_QUEUE)
+    job_id, _ = _queue_run(QueueName.CLONE_LINKS)
 
     assert get_queue().get_job_ids() == []
     assert active_job_ids() == {job_id}
 
-    SimpleWorker([get_queue(CLONE_LINKS_QUEUE)], connection=get_redis()).work(
+    SimpleWorker([get_queue(QueueName.CLONE_LINKS)], connection=get_redis()).work(
         burst=True
     )
     assert get_job(job_id).status == "done"
@@ -110,9 +109,9 @@ def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
     and only the work horse sets `current_job` later. In between it is in
     neither the queue nor a worker, and a sweep failed it as cut off."""
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
-    default_id, _ = _queue_run(QUEUE_NAME)
-    links_id, _ = _queue_run(CLONE_LINKS_QUEUE)
-    for name in (QUEUE_NAME, CLONE_LINKS_QUEUE):
+    default_id, _ = _queue_run(QueueName.DEFAULT)
+    links_id, _ = _queue_run(QueueName.CLONE_LINKS)
+    for name in (QueueName.DEFAULT, QueueName.CLONE_LINKS):
         queue = get_queue(name)
         get_redis().lmove(queue.key, queue.intermediate_queue_key)  # the dequeue
         assert queue.get_job_ids() == []
@@ -124,8 +123,8 @@ def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
 
 
 def test_a_job_a_live_worker_runs_counts():
-    job_id, rq_id = _queue_run(CLONE_LINKS_QUEUE)
-    queue = get_queue(CLONE_LINKS_QUEUE)
+    job_id, rq_id = _queue_run(QueueName.CLONE_LINKS)
+    queue = get_queue(QueueName.CLONE_LINKS)
     get_redis().lrem(queue.key, 1, rq_id)  # taken off every list
     worker = Worker([queue], connection=get_redis())
     worker.register_birth()

@@ -13,7 +13,7 @@ from ofmhelpers.aigenproviders.base import TaskState
 from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
-from ofmhelpers.cache import CLONE_LINKS_QUEUE, QUEUE_NAME
+from ofmhelpers.cache import QueueName
 from ofmhelpers.web import recovery
 from ofmhelpers.web.routers.registry import RESUMABLE
 from ofmhelpers.web.stores.jobs import create_job, fail_job, get_job, run_job
@@ -196,7 +196,7 @@ def test_a_clone_job_is_rerun_through_clone(status, reruns):
 
     [(_run_job, _id, fn, _kwargs)] = reruns
     assert fn is _run_clone
-    assert reruns.queues == [QUEUE_NAME]
+    assert reruns.queues == [QueueName.DEFAULT]
 
 
 def test_a_clone_links_job_is_rerun_on_its_own_queue(status, reruns):
@@ -210,7 +210,7 @@ def test_a_clone_links_job_is_rerun_on_its_own_queue(status, reruns):
 
     [(_run_job, rerun_id, fn, _kwargs)] = reruns
     assert (rerun_id, fn) == (job_id, RESUMABLE["clone_links"])
-    assert reruns.queues == [CLONE_LINKS_QUEUE]
+    assert reruns.queues == [QueueName.CLONE_LINKS]
 
 
 def test_one_unreachable_provider_never_stops_the_sweep(status, reruns, monkeypatch):

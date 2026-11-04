@@ -33,7 +33,7 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.aigenproviders import tasks
 from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_KEY
-from ofmhelpers.cache import CLONE_LINKS_QUEUE
+from ofmhelpers.cache import QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.web.clone_links.links import NOT_A_VIDEO_SITE
 from ofmhelpers.web.clone_links.models import LinkPreview
@@ -238,8 +238,8 @@ def test_generate_queues_one_run_per_link_on_the_clone_links_queue(queued):
     ids = answer["job_ids"]
     assert re.fullmatch(clone_links.BATCH, answer["batch"])
     assert [(q, fn, args[0], args[1]) for q, fn, args in queued] == [
-        (CLONE_LINKS_QUEUE, run_job, ids[0], clone_links.run_clone_link),
-        (CLONE_LINKS_QUEUE, run_job, ids[1], clone_links.run_clone_link),
+        (QueueName.CLONE_LINKS, run_job, ids[0], clone_links.run_clone_link),
+        (QueueName.CLONE_LINKS, run_job, ids[1], clone_links.run_clone_link),
     ]
     assert [args[2]["api_key"] for _q, _fn, args in queued] == [KIE_KEY, KIE_KEY]
     jobs = [get_job(j) for j in ids]

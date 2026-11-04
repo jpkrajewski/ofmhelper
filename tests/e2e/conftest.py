@@ -208,6 +208,7 @@ def base_url(
         [sys.executable, "-m", "ofmhelpers.worker"],
         [sys.executable, "-m", "ofmhelpers.worker", "clone-links"],
         [sys.executable, "-m", "ofmhelpers.worker", "previews"],
+        [sys.executable, "-m", "ofmhelpers.worker", "media"],
     ]
     with app_log.open("w") as log:
         procs = [

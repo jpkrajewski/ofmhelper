@@ -9,14 +9,11 @@ goes through `state.change`, never a whole state held across a pipeline run.
 The page shows the short `reel.error`/`state.problem` texts; the detail goes to
 the log."""
 
-import contextvars
 import random
 import zlib
-from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 
-from ofmhelpers.config import settings
 from ofmhelpers.features.drive.folders import review_target
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.trials import media
@@ -178,17 +175,10 @@ def generate_reels(
     """The snapchat pipeline on each downloaded reel (`keys`: only those),
     the AI writing its captions the first time and the copy made with the
     first; then with the caption it has (one chosen, the user's own: Regenerate
-    never asks the AI again); `settings.trials.parallel` reels at once, each
-    saved as it lands."""
+    never asks the AI again); one after another, each saved as it lands."""
     state = load(user_id, login_id)
     wanted = [r.key for r in state.reels if keys is None or r.key in keys]
-    workers = min(settings.trials.parallel, len(wanted)) or 1
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [
-            pool.submit(contextvars.copy_context().run, _make, user_id, login_id, key)
-            for key in wanted
-        ]
-        made = [f.result() for f in futures]
+    made = [_make(user_id, login_id, key) for key in wanted]
     return {"generated": made.count(True), "failed": made.count(False)}
 
 

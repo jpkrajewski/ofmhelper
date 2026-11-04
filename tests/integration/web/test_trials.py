@@ -9,15 +9,18 @@ never the exception."""
 import os
 import re
 import subprocess
+import time
 from html.parser import HTMLParser
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
+import worker_tasks
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
+from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.gdrive import DriveError, DriveFile
 from ofmhelpers.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
 from ofmhelpers.trials import media, tasks
@@ -257,8 +260,8 @@ def test_a_job_has_time_for_prod_copies_made_one_after_another(
     limits: list[int] = []
     monkeypatch.setattr(
         trials_router,
-        "enqueue",
-        lambda *_a, job_timeout, **_k: limits.append(job_timeout),
+        "_encodes",
+        lambda: lambda *_a, job_timeout, **_k: limits.append(job_timeout),
     )
     login = _login(drive, *(f"{i}.mp4" for i in range(26)))
     client = _client()
@@ -1002,3 +1005,129 @@ def test_the_ai_watches_a_small_proxy_with_its_sound(tmp_path):
     assert sorted(streams) == ["audio", "video,640"]
     assert proxy.stat().st_size < reel.stat().st_size
     assert media.ai_proxy(reel) == proxy  # made once
+
+
+@pytest.fixture
+def real_queue(monkeypatch):
+    """Jobs wait in Redis from here on, instead of running inline."""
+
+    def switch_on() -> None:
+        monkeypatch.setenv("OFM_RQ_ASYNC", "true")
+        get_redis().flushdb()
+
+    yield switch_on
+    get_redis().flushdb()
+
+
+def test_copies_are_made_one_after_another(drive, made, monkeypatch):
+    """Prod 2026-11-04: 3 folders x 2 reels at once = 6 encodes of 1.5 GB on
+    7.75 GB, the kernel killing one every 30 s and nothing finishing."""
+    login = _login(drive, "a.mp4", "b.mp4", "c.mp4")
+    at_once = most = 0
+
+    def pipeline(src, out, *, caption, seed):
+        nonlocal at_once, most
+        at_once += 1
+        most = max(most, at_once)
+        time.sleep(0.02)
+        out.write_bytes(b"copy")
+        at_once -= 1
+
+    monkeypatch.setattr(tasks, "pipeline_run", pipeline)
+
+    _client().post(f"/trials/{login}/generate")
+
+    assert len(_state(login).ready) == 3
+    assert most == 1
+
+
+def test_generate_waits_its_turn_and_the_pages_say_so(drive, made, real_queue):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    real_queue()
+    JobQueue(QueueName.MEDIA).put(worker_tasks.note_down, "before")
+
+    client.post(f"/trials/{login}/generate")
+
+    assert made == []
+    assert get_queue(QueueName.MEDIA).count == 2
+    card = client.get("/trials").text
+    assert "In queue · 1 ahead" in card
+    assert "Making… 0 of 1" not in card
+    page = client.get(f"/trials/{login}").text
+    assert "In queue · 1 ahead" in page
+    assert "in queue…" in page
+    assert "generating…" not in page
+    live = client.get(f"/trials/{login}/live").json()
+    assert live["status"] == "In queue · 1 ahead"
+    (pending,) = _state(login).reels
+    assert live["cards"] == [{"key": f"pending-{pending.key}", "stamp": "queued"}]
+
+
+def test_the_first_in_line_with_nothing_running_is_next(drive, made, real_queue):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    real_queue()
+
+    client.post(f"/trials/{login}/generate")
+
+    assert client.get(f"/trials/{login}/live").json()["status"] == "In queue · next"
+
+
+def test_regenerate_waits_in_the_same_line(drive, made, real_queue):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    (reel,) = _state(login).ready
+    real_queue()
+
+    client.post(f"/trials/{login}/reel/{reel.key}/regenerate")
+
+    assert get_queue(QueueName.MEDIA).count == 1
+    page = client.get(f"/trials/{login}").text
+    assert "in queue…" in page
+    assert client.get(f"/trials/{login}/live").json()["status"] == "In queue · next"
+
+
+def test_the_status_line_counts_what_failed_while_the_run_goes_on(
+    drive, made, monkeypatch
+):
+    """Prod 2026-11-04: reels killed one by one and the page just stayed empty."""
+    login = _login(drive, "a.mp4", "b.mp4")
+
+    def pipeline(src, out, *, caption, seed):
+        msg = "ffmpeg failed: -9"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(tasks, "pipeline_run", pipeline)
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    job_id = _running_job()
+    trial_state.change(users.agency_id(), login, lambda s: setattr(s, "job_id", job_id))
+
+    status = client.get(f"/trials/{login}/live").json()["status"]
+
+    assert status == "Making trials… 0 of 2 ready, 2 failed"
+
+
+def test_a_new_generate_takes_the_failed_reels_again(
+    drive, made, monkeypatch, real_queue
+):
+    login = _login(drive, "a.mp4")
+
+    def pipeline(src, out, *, caption, seed):
+        msg = "ffmpeg failed: -9"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(tasks, "pipeline_run", pipeline)
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    assert len(_state(login).failed) == 1
+    real_queue()
+
+    client.post(f"/trials/{login}/generate")
+
+    assert _state(login).failed == []
+    (pending,) = _state(login).reels
+    live = client.get(f"/trials/{login}/live").json()
+    assert live["cards"] == [{"key": f"pending-{pending.key}", "stamp": "queued"}]

@@ -1,6 +1,6 @@
 """End to end, in a real browser against the app the suite starts, every
 outside service faked (see conftest.py):
-log in, open every page, make a fake asset and download it, carry picked
+log in, open every VA page, make a fake asset and download it, carry picked
 files across providers' models, run clones with a wrong kie.ai key, price a clone pick live,
 click through every /reels filter and download three reels, track an
 Instagram account on /accounts end to end, generate 18+ gated links for it
@@ -13,6 +13,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from app_pages import ADMIN_ONLY_PAGES, VA_PAGES
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
@@ -21,35 +22,6 @@ from ofmhelpers.web.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.stores import devices, watched_profiles
 
 pytestmark = pytest.mark.e2e
-
-# Header order: the bar, then "More" (Uniqify, Account, Cookies, then the admin pages).
-VA_PAGES = [
-    "/generate",
-    "/clone",
-    "/clone-long",
-    "/clone-links",
-    "/download-assets",
-    "/accounts",
-    "/links",
-    "/phones",
-    "/drive",
-    "/viral",
-    "/pictures",
-    "/reels",
-    "/uniqify",
-    "/trials",
-    "/repurpose",
-    "/account",
-    "/cookies",
-]
-ADMIN_ONLY_PAGES = [
-    "/users",
-    "/character-sheet",
-    "/applications",
-    "/file-manager",
-    "/styleguide",
-    "/action-log",
-]
 
 # A generation is polled with backoff; a fake one takes ~1 s plus the poll.
 RESULT_TIMEOUT_MS = 30_000
@@ -63,16 +35,6 @@ def _nav_paths(session: Session) -> list[str]:
     session.goto("/generate")
     links = session.page.locator(".site-header nav a")
     return [links.nth(i).get_attribute("href") for i in range(links.count())]
-
-
-def test_admin_opens_every_page(admin: Session):
-    assert _nav_paths(admin) == VA_PAGES + ADMIN_ONLY_PAGES
-
-    for path in VA_PAGES + ADMIN_ONLY_PAGES:
-        assert admin.goto(path) == 200, path
-        expect(admin.page.locator(".site-header nav")).to_be_visible()
-
-    assert admin.js_errors == []
 
 
 def test_the_header_switches_to_dark_and_back_and_it_sticks(va: Session):
