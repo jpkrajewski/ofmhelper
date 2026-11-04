@@ -79,6 +79,15 @@
         return null;
     }
 
+    // data-required: an empty list stops the form as a required input does. The
+    // input itself is always empty (each pick moves into the list), so its
+    // validity is set by hand. A disabled fieldset's input is never checked.
+    function checkRequired(picker) {
+        if (!("required" in picker.dataset)) return;
+        const message = picker._items.length ? "" : `Pick at least one ${picker.dataset.kind}`;
+        picker.querySelector(".file-add-input").setCustomValidity(message);
+    }
+
     function renderList(picker) {
         picker.querySelector(".file-picker-missing")?.remove();
         // data-max caps the list wherever items came from (file input, paste,
@@ -143,6 +152,7 @@
             li.append(up, down, remove);
             listEl.appendChild(li);
         });
+        checkRequired(picker);
         // Every change to the list ends here, so this is the one place a page
         // (clone-cost.js) can watch what is picked.
         picker.dispatchEvent(new CustomEvent("filepicker:change", { bubbles: true }));
@@ -340,9 +350,11 @@
             renderList(picker);
         });
 
+        checkRequired(picker);
+
         const toggle = picker.querySelector(".ref-toggle");
         const browser = picker.querySelector(".ref-browser");
-        toggle.addEventListener("click", () => {
+        toggle?.addEventListener("click", () => {
             if (!browser.hidden) {
                 browser.hidden = true;
                 return;

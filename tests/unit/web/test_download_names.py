@@ -57,3 +57,13 @@ def test_one_file_always_gets_the_same_name_and_files_differ():
     assert download_name("a.png") == download_name("a.png")
     names = {download_name(f"result_{i}.png") for i in range(50)}
     assert len(names) > 40
+
+
+def test_one_name_in_two_jobs_saves_under_two_names():
+    """Every clean run's first image is IMG_0001.png; each saved as the same
+    IMG_3133.png, and the browser made it "IMG_3133 (9).png"."""
+    assert download_name("IMG_0001.png") == "IMG_3133.png"
+    one = download_name("IMG_0001.png", "job-one")
+    assert one == download_name("IMG_0001.png", "job-one")
+    assert one != download_name("IMG_0001.png", "job-two")
+    assert one != "IMG_3133.png"

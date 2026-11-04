@@ -357,6 +357,7 @@
                     gallery.prepend(extra);
                     track(extra, id);
                 }
+                form.dispatchEvent(new CustomEvent("generation:queued"));
             })
             .catch((err) => {
                 // The optimistic card can't become a result now -- turn it

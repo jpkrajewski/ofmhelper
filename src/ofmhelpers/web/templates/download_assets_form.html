@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
 {% block content %}
 {{ ui.page_header("Download") }}
 {% include "_gallery_hidden.html" %}
@@ -26,10 +27,7 @@
     </fieldset>
 
     <fieldset class="tool-fields" data-tool="clean_images" disabled hidden>
-        <div class="field">
-            <label for="clean-files">Images</label>
-            <input type="file" id="clean-files" name="files" multiple accept="image/*" required>
-        </div>
+        {{ fp.file_picker('files', 'image', 'Images', multiple=true, reuse=false, required=true) }}
     </fieldset>
 
     {{ ui.button("Run", "primary", type="submit") }}
@@ -66,6 +64,11 @@ document.getElementById('tool-select').addEventListener('change', (e) => {
     });
 });
 
+// Picks add up, so a batch that went out must not go out again with the next.
+document.getElementById('download-assets-form').addEventListener('generation:queued', () => {
+    window.FilePicker.clearPicker(document.querySelector('.file-picker[data-field="files"]'));
+});
+
 // ↻ Recreate: restore a past run's inputs. urls come back as a list ->
 // rejoin one-per-line into the textarea. File uploads (clean images) can't
 // be restored -- browsers don't allow setting a file input's value.
@@ -100,6 +103,7 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
 {# download.js clones this into a video card that finishes while the page is
    open; a reloaded card carries the same markup from _download_gallery_card. #}
 <template id="card-send-to">{% import "components/ui.html" as ui %}<div class="send-to">{% call ui.segmented("Clone this download") %}{{ ui.button("Clone", icon="sparkles", hook="send-to-clone") }}{{ ui.button("Clone long", icon="film", hook="send-to-long") }}{% endcall %}</div></template>
+<script src="{{ static_url('js/file-picker.js') }}"></script>
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/hidden-cards.js') }}"></script>
