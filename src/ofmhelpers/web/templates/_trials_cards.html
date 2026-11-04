@@ -5,8 +5,8 @@
    data-stamp moved). Expects `view` (`trials.folder.FolderView`), `reels`
    (made copies), `pending` (reels Generate trials is still making). #}
 {% for reel in pending %}
-{% call ui.card(hook="tr-reel", attrs={"data-key": "pending-" ~ reel.key, "data-stamp": "", "data-busy": true}) %}
-    <div class="result-file tr-pending"><span class="spinner"></span> generating…</div>
+{% call ui.card(hook="tr-reel", attrs={"data-key": "pending-" ~ reel.key, "data-stamp": view.pending_stamp, "data-busy": true}) %}
+    <div class="result-file tr-pending"><span class="spinner"></span> {{ "in queue…" if view.pending_stamp else "generating…" }}</div>
 {% endcall %}
 {% endfor %}
 {% for reel in reels %}
@@ -14,7 +14,7 @@
 {% call ui.card(hook="tr-reel", attrs={"id": "reel-" ~ reel.key, "data-key": reel.key, "data-stamp": view.stamp(reel), "data-busy": busy}) %}
     {% set file = "/trials/files/" ~ view.login_id ~ "/" ~ reel.key %}
     {% if busy %}
-    <div class="result-file tr-pending"><span class="spinner"></span> {{ "uploading…" if reel.key in view.uploading else "generating…" }}</div>
+    <div class="result-file tr-pending"><span class="spinner"></span> {{ "uploading…" if reel.key in view.uploading else ("in queue…" if reel.key in view.queued else "generating…") }}</div>
     {% else %}
     <video class="tr-video" src="{{ file }}?v={{ reel.made }}" poster="{{ file }}/poster?v={{ reel.made }}" controls playsinline preload="none"></video>
     {% endif %}

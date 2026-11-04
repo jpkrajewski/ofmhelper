@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from redis.exceptions import RedisError
 from rq.timeouts import JobTimeoutException
 
-from ofmhelpers.cache import PREVIEWS_QUEUE, QUEUE_NAME, enqueue_to
+from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.db.repositories import JobRepository
 from ofmhelpers.db.stores.users import agency_id
 from ofmhelpers.features.previews.render import warm_previews
@@ -141,7 +141,7 @@ def start_job(
     kwargs: dict,
     *,
     actor: str | None,
-    queue: str | None = None,
+    queue: QueueName | None = None,
     job_timeout: int | None = None,
 ) -> str:
     """A new job and its run on `queue` (default: the default queue).
@@ -150,7 +150,7 @@ def start_job(
     came and the row stays `running`: recovery settles it as cut off."""
     job_id = create_job(task, params, actor=actor)
     enqueue_to(
-        queue or QUEUE_NAME,
+        queue or QueueName.DEFAULT,
         run_job,
         job_id,
         run,
@@ -187,7 +187,7 @@ def _queue_previews(job_id: str) -> None:
     if job is None:
         return
     try:
-        enqueue_to(PREVIEWS_QUEUE, warm_previews, job.id, job.local_paths())
+        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, job.local_paths())
     except RedisError:
         logger.warning("could not queue previews of job %s", job_id, exc_info=True)
 

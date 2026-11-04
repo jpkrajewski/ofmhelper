@@ -98,6 +98,11 @@ class ReelState(BaseModel):
     def mark_failed(self, error: str) -> None:
         self.status, self.error, self.job_id = ReelStatus.FAILED, error, None
 
+    def try_again(self) -> None:
+        """A new Generate takes it again: no longer counted as failed."""
+        self.status = ReelStatus.DOWNLOADED if self.local else ReelStatus.PENDING
+        self.error = None
+
     def mark_captions(self, captions: list[str]) -> None:
         self.captions, self.job_id, self.error = captions, None, None
 
@@ -153,6 +158,11 @@ class FolderState(BaseModel):
     def ready(self) -> list[ReelState]:
         """Reels with a generated copy, the page's results."""
         return [r for r in self.reels if r.out]
+
+    @property
+    def failed(self) -> list[ReelState]:
+        """Reels with no copy that the last Generate could not make."""
+        return [r for r in self.todo if r.status == ReelStatus.FAILED]
 
     @property
     def trials_url(self) -> str | None:

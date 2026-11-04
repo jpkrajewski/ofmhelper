@@ -1,42 +1,48 @@
 """
-RQ queue the API enqueues background work onto, and the worker container
-(`rq worker-pool`) consumes. This replaces FastAPI BackgroundTasks: instead of
-running a job in-process, a route does `enqueue(run_job, job_id, fn, kwargs)`
-and returns immediately (logged by function name only -- the kwargs carry
-API keys); a separate worker process runs it, writing status to
-Postgres (see db/stores/jobs.py) that the API can then read back.
+The job queues: first in, first out, on RQ. A route does
+`JobQueue(QueueName.MEDIA).put(run_job, job_id, fn, kwargs)` (`enqueue(...)` for
+the default queue) and returns at once; a worker process takes the job at the
+front of the line and writes its status to Postgres (db/stores/jobs.py), which
+the API reads back.
 
-It lives beside `redis.py` because that is what it is built on -- the queue is
-the durable half of what this app keeps in Redis, the caches are the
-throwaway half.
+Which queues exist, how many worker processes each has and their priority is
+configuration (`config/settings.py`: `QueueName`, `InfraSettings.queues`); one
+process is one job at a time. A module moves its work onto a queue by calling its
+`put`.
+
+Logfire: every `put` logs the queue, the function and how many are ahead of it;
+every run is the worker's `rq {func}` span with its queue and how long it waited
+(worker.py); `rq_job_id` ties the two together. Never a job's arguments: they
+carry API keys.
+
+It lives beside `redis.py` because that is what it is built on -- the queues are
+the durable half of what this app keeps in Redis, the caches are the throwaway
+half.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Self, cast
+
+import logfire
+from pydantic import BaseModel
 from rq import Queue, Worker
 from rq.job import Job
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.config.settings import JOB_QUEUES, QueueName
 from ofmhelpers.log import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
-# The queue name both the API (enqueue) and the worker (rq worker-pool, which
-# defaults to this queue) agree on.
-QUEUE_NAME = "default"
-# Gallery previews (features/previews/render.py): ffmpeg encodes, consumed by their own
-# low-priority worker so they never hold a generation worker.
-PREVIEWS_QUEUE = "previews"
-# /clone-links runs (features/clone_links/run.py): a 30-120 link Generate on its
-# own worker pool (compose `clone-links-worker`), so it never holds the
-# default queue for hours.
-CLONE_LINKS_QUEUE = "clone-links"
-# Every queue `run_job` is put on: what `active_job_ids` reads.
-JOB_QUEUES = (QUEUE_NAME, CLONE_LINKS_QUEUE)
 
-
-def get_queue(name: str = QUEUE_NAME) -> Queue:
+def get_queue(name: QueueName = QueueName.DEFAULT) -> Queue:
     """A Queue bound to the shared Redis connection, with the generous default
     job timeout our long-polling generation jobs need (see settings).
 
@@ -44,11 +50,96 @@ def get_queue(name: str = QUEUE_NAME) -> Queue:
     forces synchronous execution so enqueue() runs the job inline, matching the
     old BackgroundTasks behavior TestClient relied on."""
     return Queue(
-        name,
+        name.value,
         connection=get_redis(),
         default_timeout=settings.infra.rq_job_timeout_s,
         is_async=settings.infra.rq_async,
     )
+
+
+class QueueJob(BaseModel):
+    """A job a worker took off a queue: what its span records."""
+
+    rq_job_id: str
+    func: str
+    queue: QueueName
+    waited_s: float
+    waiting: int
+
+    @classmethod
+    def taken(cls, job: Job, queue: Queue) -> Self:
+        """`func` is the description `JobQueue.put` gave it, and `enqueued_at`
+        was set by enqueuing it (RQ types it optional)."""
+        waited = datetime.now(UTC) - cast("datetime", job.enqueued_at)
+        return cls(
+            rq_job_id=job.id,
+            func=cast("str", job.description),
+            queue=QueueName(queue.name),
+            waited_s=round(waited.total_seconds(), 1),
+            waiting=queue.count,
+        )
+
+
+@dataclass(frozen=True)
+class JobQueue:
+    """One first-in first-out line of background work: `put` joins the back,
+    the queue's worker processes take from the front."""
+
+    name: QueueName
+
+    def put(
+        self,
+        fn: Callable[..., Any],
+        *args: Any,
+        job_timeout: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """`fn(*args, **kwargs)` to the back of the line. `job_timeout`: its time
+        limit once started, when it may run longer than the default (a long
+        /clone video, made in pieces); waiting in line does not count.
+
+        In synchronous mode (settings.infra.rq_async is False -- the test suite)
+        it is called directly, in-process: no RQ, no serialization, so tests can
+        still monkeypatch a task fn with a lambda."""
+        if not settings.infra.rq_async:
+            return fn(*args, **kwargs)
+        queue = get_queue(self.name)
+        ahead = queue.count + queue.started_job_registry.count
+        # RQ's default description -- what the worker logs for every job it
+        # starts -- is the call with its arguments, and those carry the kie.ai
+        # API key a job runs with. The function name is all the log needs.
+        rq_job = queue.enqueue(
+            fn,
+            *args,
+            description=f"{fn.__module__}.{fn.__qualname__}",
+            job_timeout=job_timeout or settings.infra.rq_job_timeout_s,
+            **kwargs,
+        )
+        logfire.info(
+            "queue {queue}: {func} in line, {ahead} ahead",
+            queue=self.name.value,
+            func=fn.__qualname__,
+            ahead=ahead,
+            rq_job_id=rq_job.id,
+        )
+        return rq_job
+
+    def line(self) -> dict[str, int]:
+        """Who waits, first in line first: app job id (`run_job`'s first
+        argument) -> how many jobs are ahead of it, the ones being run included.
+        Empty when nothing waits or it cannot tell (the synchronous test mode,
+        Redis down)."""
+        if not settings.infra.rq_async:
+            return {}
+        try:
+            queue = get_queue(self.name)
+            running = queue.started_job_registry.count
+            waiting = Job.fetch_many(queue.get_job_ids(), connection=get_redis())
+            ids = [str(j.args[0]) for j in waiting if j is not None and j.args]
+        except Exception:
+            logger.warning("could not read queue %s", self.name, exc_info=True)
+            return {}
+        return {job_id: running + place for place, job_id in enumerate(ids)}
 
 
 def active_job_ids() -> set[str] | None:
@@ -85,29 +176,10 @@ def active_job_ids() -> set[str] | None:
 
 
 def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
-    """`enqueue_to` the default queue (see below)."""
-    return enqueue_to(QUEUE_NAME, fn, *args, job_timeout=job_timeout, **kwargs)
+    """`put` on the default queue."""
+    return JobQueue(QueueName.DEFAULT).put(fn, *args, job_timeout=job_timeout, **kwargs)
 
 
-def enqueue_to(queue: str, fn, *args, job_timeout: int | None = None, **kwargs):
-    """Swap `background_tasks.add_task(fn, ...)` for `enqueue(fn, ...)` with the
-    least possible delta.
-
-    In synchronous mode (settings.infra.rq_async is False -- the test suite)
-    the function is called directly, in-process, exactly like the old
-    BackgroundTasks: no RQ, no serialization, so tests can still monkeypatch a
-    task fn with a lambda. In async mode (prod) it goes onto the queue for the
-    worker. `job_timeout`: this job's time limit, when it may run longer than
-    the queue's default (a long /clone video, made in pieces)."""
-    if not settings.infra.rq_async:
-        return fn(*args, **kwargs)
-    # RQ's default description -- what the worker logs for every job it
-    # starts -- is the call with its arguments, and those carry the kie.ai
-    # API key a job runs with. The function name is all the log needs.
-    return get_queue(queue).enqueue(
-        fn,
-        *args,
-        description=f"{fn.__module__}.{fn.__qualname__}",
-        job_timeout=job_timeout or settings.infra.rq_job_timeout_s,
-        **kwargs,
-    )
+def enqueue_to(queue: QueueName, fn, *args, job_timeout: int | None = None, **kwargs):
+    """`put` on `queue`."""
+    return JobQueue(queue).put(fn, *args, job_timeout=job_timeout, **kwargs)

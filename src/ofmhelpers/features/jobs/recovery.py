@@ -31,7 +31,7 @@ line here.
 
 import time
 
-from ofmhelpers.cache import QUEUE_NAME, enqueue_to
+from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.cache.queue import active_job_ids
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import (
@@ -102,7 +102,7 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
     reopen_job(job.id)
     timeout = JOB_TIMEOUTS.get(job.task)
     enqueue_to(
-        QUEUES.get(job.task, QUEUE_NAME),
+        QUEUES.get(job.task, QueueName.DEFAULT),
         run_job,
         job.id,
         run,

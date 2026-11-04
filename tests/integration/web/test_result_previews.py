@@ -20,7 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from ofmhelpers.cache import PREVIEWS_QUEUE
+from ofmhelpers.cache import QueueName
 from ofmhelpers.web import preview_backfill, previews
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import asset_card
@@ -255,7 +255,9 @@ def test_a_finished_job_queues_its_previews_on_the_previews_queue(
 
     job_id = _done_job(pic)
 
-    assert queued == [(PREVIEWS_QUEUE, previews.warm_previews, (job_id, [str(pic)]))]
+    assert queued == [
+        (QueueName.PREVIEWS, previews.warm_previews, (job_id, [str(pic)]))
+    ]
 
 
 def test_a_failed_job_queues_nothing(monkeypatch):

@@ -10,7 +10,10 @@ import os
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+from html.parser import HTMLParser
+
 import pytest
+from app_pages import ADMIN_ONLY_PAGES, VA_PAGES
 from fastapi.testclient import TestClient
 from signin import sign_in
 
@@ -30,12 +33,38 @@ PROTECTED_PAGES = [
     "/cookies",
 ]
 
-ADMIN_ONLY_PAGES = [
-    "/character-sheet",
-    "/applications",
-    "/file-manager",
-    "/action-log",
-]
+
+def _nav_paths(html: str) -> list[str]:
+    """The header's page links, in order."""
+
+    class SiteNav(HTMLParser):
+        inside = False
+        paths: tuple[str, ...] = ()
+
+        def handle_starttag(self, tag, attrs):
+            found = dict(attrs)
+            if tag == "nav" and found.get("id") == "site-nav":
+                self.inside = True
+            elif tag == "a" and self.inside:
+                self.paths += (found["href"],)
+
+        def handle_endtag(self, tag):
+            if tag == "nav":
+                self.inside = False
+
+    parser = SiteNav()
+    parser.feed(html)
+    return list(parser.paths)
+
+
+def test_admin_opens_every_page():
+    client = TestClient(app)
+    client.post("/login", data={"password": "test-admin", "next": "/"})
+
+    for path in VA_PAGES + ADMIN_ONLY_PAGES:
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert _nav_paths(r.text) == VA_PAGES + ADMIN_ONLY_PAGES, path
 
 
 @pytest.mark.parametrize(

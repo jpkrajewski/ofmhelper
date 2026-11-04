@@ -5,6 +5,10 @@ importing its function by module path, so these must live at real module level
 without a `test_` prefix so pytest doesn't try to collect it as a test module.
 """
 
+import json
+
+from ofmhelpers.cache import JobQueue, QueueName, get_redis
+
 
 def make_result(name):
     """Mimics a generator task fn: returns the one-file-per-entry result shape."""
@@ -15,3 +19,13 @@ def always_fails():
     """Mimics a task that raises (e.g. a bad API key)."""
     msg = "Wrong API Key"
     raise ValueError(msg)
+
+
+def note_down(name):
+    """Leaves its name in Redis, in the order the jobs ran."""
+    get_redis().rpush("ran", name)
+
+
+def note_the_line():
+    """Leaves the media queue's line as it looks while this job runs."""
+    get_redis().set("line_seen", json.dumps(JobQueue(QueueName.MEDIA).line()))

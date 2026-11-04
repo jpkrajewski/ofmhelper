@@ -162,6 +162,40 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
+  # Local encodes of big videos (`QueueName.MEDIA`: /trials copies). One
+  # process, so one encode at a time, first in first out, however many wait: a
+  # 4K copy holds 1.5 GB, and six at once on prod's 7.75 GB had the kernel
+  # killing them (2026-11-04). Lowest priority (`InfraSettings.queues`) on 3 of 4
+  # cores: the site stays quick.
+  media-worker:
+    build: .
+    container_name: ofmhelpers-media-worker
+    restart: unless-stopped
+    command: ["python", "-m", "ofmhelpers.worker", "media"]
+    cpus: 3.0
+    stop_grace_period: 120s
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    volumes: *app-volumes
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
   # Gallery previews (features/previews/render.py): one ffmpeg encode at a
   # time, at low CPU priority and capped at two cores, so a backlog (every old
   # result after a deploy) never slows the app or the generation workers.
@@ -169,7 +203,7 @@ services:
     build: .
     container_name: ofmhelpers-preview-worker
     restart: unless-stopped
-    command: ["nice", "-n", "15", "python", "-m", "ofmhelpers.worker", "previews"]
+    command: ["python", "-m", "ofmhelpers.worker", "previews"]
     cpus: 2.0
     healthcheck:
       disable: true

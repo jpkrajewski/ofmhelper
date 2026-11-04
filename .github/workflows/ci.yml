@@ -1,13 +1,18 @@
 name: CI
 
-# Runs on every push to dev/main and on every PR into them. This is the gate
+# Runs on every push to dev/main and on every PR into dev. This is the gate
 # the deploy workflow waits for -- main is only ever deployed after this has
 # gone green on the same commit.
+#
+# No PRs into main: promote.yml opens those as github-actions[bot], whose run
+# waits for an approval and fails when the PR merges ("This workflow run
+# required approval but was not approved before it expired"). That commit's
+# push to dev already ran CI, and the PR shows those checks.
 on:
   push:
     branches: [dev, main]
   pull_request:
-    branches: [dev, main]
+    branches: [dev]
   workflow_dispatch:
 
 # A second push to the same branch cancels the first: no point burning a

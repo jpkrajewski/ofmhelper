@@ -13,17 +13,23 @@ each card's stamp) and swaps in only the cards that changed (`/cards`).
 Both roles; a user only ever sees their own phones' folders (the same scope
 as /drive). The work behind each route: `features.trials.folder`."""
 
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 
-from ofmhelpers.cache import enqueue
+from ofmhelpers.cache import JobQueue, QueueName, enqueue
 from ofmhelpers.features.trials import folder
 from ofmhelpers.web.dependencies import CurrentUser, Scope
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/trials", tags=["trials"])
+
+
+def _encodes() -> Callable[..., object]:
+    """What makes a copy waits its turn: 4K encodes, one at a time."""
+    return JobQueue(QueueName.MEDIA).put
 
 
 @router.get("")
@@ -70,14 +76,14 @@ def cards(
 
 @router.post("/{login_id}/generate")
 def generate(login_id: int, user: CurrentUser, scope: Scope) -> folder.Started:
-    return folder.generate(user.id, scope, login_id, enqueue)
+    return folder.generate(user.id, scope, login_id, _encodes())
 
 
 @router.post("/{login_id}/reel/{key}/regenerate")
 def regenerate(login_id: int, key: str, user: CurrentUser) -> folder.Started:
     """The pipeline again on one reel, a new variant with its caption as it
     is: no AI call (its daily quota is small)."""
-    return folder.remake(user.id, login_id, key, enqueue)
+    return folder.remake(user.id, login_id, key, _encodes())
 
 
 @router.post("/{login_id}/reel/{key}/caption")
@@ -87,7 +93,7 @@ def set_caption(
     caption: Annotated[str, Form()],
     user: CurrentUser,
 ) -> folder.Started:
-    return folder.apply_caption(user.id, login_id, key, caption, enqueue)
+    return folder.apply_caption(user.id, login_id, key, caption, _encodes())
 
 
 @router.post("/{login_id}/reel/{key}/captions")

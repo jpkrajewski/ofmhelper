@@ -2,8 +2,8 @@
 page shows right now (`FolderView`) and the claims that start its jobs. All of
 it answers at once: the Drive and ffmpeg work is a job (`tasks`). A claim
 checks and takes its reels in one locked write: ten clicks at once start one
-job, the rest do nothing. Jobs run side by side; a reel being made or uploaded
-is the only thing blocked."""
+job, the rest do nothing. What encodes waits its turn on the media queue, the
+rest runs beside it; a reel being made or uploaded is the only thing blocked."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -11,6 +11,7 @@ from typing import Self
 
 from pydantic import BaseModel
 
+from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import drive_folders as drive_store
 from ofmhelpers.db.stores.jobs import create_job, get_job, run_job, running_jobs
@@ -57,20 +58,34 @@ class Uploading(BaseModel):
     uploading: list[str]
 
 
+def _in_line(ahead: int) -> str:
+    return f"In queue · {ahead} ahead" if ahead else "In queue · next"
+
+
 class FolderProgress(BaseModel):
-    """A phone card's trials: copies made, reels in all, Generate running."""
+    """A phone card's trials: copies made, reels in all, Generate running, and
+    how many jobs are before it while it waits in the queue."""
 
     ready: int
     total: int
     making: bool
+    ahead: int | None = None
 
     @classmethod
-    def of(cls, state: FolderState, running: set[str]) -> Self:
+    def of(cls, state: FolderState, running: set[str], line: dict[str, int]) -> Self:
         return cls(
             ready=len(state.ready),
             total=len(state.reels),
             making=state.job_id in running,
+            ahead=line.get(state.job_id or ""),
         )
+
+    @property
+    def label(self) -> str:
+        """The card's button while Generate runs."""
+        if self.ahead is not None:
+            return _in_line(self.ahead)
+        return f"Making… {self.ready} of {self.total}"
 
 
 class CardStamp(BaseModel):
@@ -109,6 +124,8 @@ class FolderView(BaseModel):
     making: bool
     busy: set[str]
     uploading: set[str]
+    # The media queue: app job id -> jobs ahead of it.
+    line: dict[str, int]
 
     @classmethod
     def of(cls, uid: int, state: FolderState) -> Self:
@@ -125,6 +142,7 @@ class FolderView(BaseModel):
                 for r in state.reels
                 if r.key in busy and r.status == ReelStatus.UPLOADING
             },
+            line=JobQueue(QueueName.MEDIA).line() if active else {},
         )
 
     @property
@@ -139,20 +157,50 @@ class FolderView(BaseModel):
         return [r for r in self.state.todo if r.status != ReelStatus.FAILED]
 
     @property
+    def ahead(self) -> int | None:
+        """Jobs before this folder's Generate, while it waits in the queue."""
+        return self.line.get(self.state.job_id or "") if self.making else None
+
+    @property
+    def queued(self) -> set[str]:
+        """The reels whose own job (Regenerate, Apply caption) waits in the queue."""
+        return {r.key for r in self.state.reels if r.job_id in self.line}
+
+    @property
+    def pending_stamp(self) -> str:
+        """Moves when the pending cards stop waiting in the queue."""
+        return "queued" if self.ahead is not None else ""
+
+    @property
     def status(self) -> str:
         """The page's status line."""
+        if self.ahead is not None:
+            return _in_line(self.ahead)
         if self.making:
             ready, total = len(self.state.ready), len(self.state.reels)
-            return f"Making trials… {ready} of {total} ready"
+            made = f"Making trials… {ready} of {total} ready"
+            failed = len(self.state.failed)
+            return f"{made}, {failed} failed" if failed else made
         if self.uploading:
             return f"Uploading {len(self.uploading)} to Drive…"
+        waiting = [
+            self.line[r.job_id]
+            for r in self.state.reels
+            if r.job_id and r.job_id in self.line
+        ]
+        if waiting:
+            return _in_line(min(waiting))
         if self.busy:
             return f"Making {len(self.busy)}…"
         return self.state.note or ""
 
     def stamp(self, reel: ReelState) -> str:
         """Changes whenever the reel's card would look different."""
-        busy = "uploading" if reel.key in self.uploading else reel.key in self.busy
+        busy: str | bool = reel.key in self.busy
+        if reel.key in self.uploading:
+            busy = "uploading"
+        elif reel.key in self.queued:
+            busy = "queued"
         choices = len(reel.captions)
         return (
             f"{reel.made}.{reel.status}.{busy}.{reel.approved}.{choices}"
@@ -167,7 +215,10 @@ class FolderView(BaseModel):
 
     def live(self) -> FolderLive:
         """Cards in page order: what is being made is the newest in POSTED."""
-        cards = [CardStamp(key=f"pending-{r.key}", stamp="") for r in self.pending]
+        cards = [
+            CardStamp(key=f"pending-{r.key}", stamp=self.pending_stamp)
+            for r in self.pending
+        ]
         cards += [CardStamp(key=r.key, stamp=self.stamp(r)) for r in self.state.ready]
         return FolderLive(
             running=bool(self.active),
@@ -220,8 +271,11 @@ def phone_cards(
     """/drive's last read and each card's trials."""
     board = drive_folders.board(owner=scope, viewer=uid, live=False)
     running = {j.id for j in running_jobs() if j.actor == str(uid)}
+    line = JobQueue(QueueName.MEDIA).line()
     progress = {
-        c.target.login_id: FolderProgress.of(load(uid, c.target.login_id), running)
+        c.target.login_id: FolderProgress.of(
+            load(uid, c.target.login_id), running, line
+        )
         for c in board.cards
     }
     return board, progress
@@ -288,6 +342,8 @@ def generate(
         if not _at_work(uid, state.job_id):
             state.job_id = claim.job()
             state.tell(None)
+            for reel in state.failed:
+                reel.try_again()
 
     state = change(uid, login_id, take)
     if claim.job_id:
