@@ -1,11 +1,15 @@
 {# max: keep at most this many items, newest winning (0 = unlimited).
-   multiple: let the file dialog pick several files at once. #}
-{% macro file_picker(field, kind, label, max=0, multiple=false) %}
-<div class="field file-picker" data-field="{{ field }}" data-kind="{{ kind }}"{% if max %} data-max="{{ max }}"{% endif %}>
+   multiple: let the file dialog pick several files at once.
+   reuse: offer the files already uploaded (a tool that takes only new files: false).
+   required: an empty list stops the form, as a required input does. #}
+{% macro file_picker(field, kind, label, max=0, multiple=false, reuse=true, required=false) %}
+<div class="field file-picker" data-field="{{ field }}" data-kind="{{ kind }}"{% if max %} data-max="{{ max }}"{% endif %}{% if required %} data-required{% endif %}>
     <label>{{ label }}</label>
     <input type="file" accept="{{ kind }}/*" class="file-add-input"{% if multiple %} multiple{% endif %}>
+    {% if reuse %}
     <button type="button" class="ref-toggle">Reuse an uploaded {{ kind }}</button>
     <div class="ref-browser" hidden></div>
+    {% endif %}
     <ul class="file-order-list"></ul>
 </div>
 {% endmacro %}

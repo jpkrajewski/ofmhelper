@@ -34,6 +34,7 @@ def asset_card(
     source: str | None = None,
     remote_url: str | None = None,
     local: bool = True,
+    job_id: str = "",
 ) -> AssetCard:
     """One entry for the generic asset grid / status page: what kind of
     preview to render, and the two URLs a client can already reach (never
@@ -60,7 +61,7 @@ def asset_card(
         kind=kind,
         view_url=remote_url or local_url,
         download_url=remote_url or f"{local_url}?dl=1",
-        download_name=download_name(name),
+        download_name=download_name(name, job_id),
         local_fallback_url=local_url if remote_url else None,
         preview_url=f"{local_url}/preview" if previewed else None,
         poster_url=f"{local_url}/poster" if previewed and kind == "video" else None,
@@ -80,7 +81,12 @@ def job_assets(
     if not job.is_grouped:
         assets = [
             asset_card(
-                f.name, idx, prefix, remote_url=f.remote_url, local=f.path is not None
+                f.name,
+                idx,
+                prefix,
+                remote_url=f.remote_url,
+                local=f.path is not None,
+                job_id=job.id,
             )
             for idx, f in enumerate(job.result_files())
         ]
@@ -92,7 +98,9 @@ def job_assets(
             failed_sources.append(FailedSource(source=r.url, error=r.error or ""))
             continue
         for path in r.output_paths:
-            assets.append(asset_card(path.name, len(assets), prefix, r.url))
+            assets.append(
+                asset_card(path.name, len(assets), prefix, r.url, job_id=job.id)
+            )
     return assets, failed_sources
 
 

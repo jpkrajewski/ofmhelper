@@ -17,9 +17,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from signin import sign_in
 
 from ofmhelpers.downloaders.generic import DownloadResult
+from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import clean_image as clean_image_router
 from ofmhelpers.web.routers.downloads import images as download_images_router
@@ -109,6 +111,55 @@ def test_clean_images_json_run_and_status(client, monkeypatch, tmp_path):
     assert status["status"] == "done"
     assert status["result"][0]["name"] == "photo.png"
     assert status["result"][0]["kind"] == "image"
+
+
+def test_clean_images_keeps_two_images_with_one_name(client, monkeypatch, tmp_path):
+    """Picks add up across folders, so two can share a name."""
+    monkeypatch.setattr(clean_image_router, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(clean_image_router, "clean_metadata", lambda d: None)
+
+    files = [
+        ("files", ("image.png", io.BytesIO(b"first"), "image/png")),
+        ("files", ("image.png", io.BytesIO(b"second"), "image/png")),
+    ]
+    r = client.post("/clean-images/run", files=files)
+
+    status = client.get(f"/clean-images/jobs/{r.json()['job_id']}/status").json()
+    assert [f["name"] for f in status["result"]] == ["image.png", "image_2.png"]
+
+
+def test_a_cleaned_image_saves_under_a_name_of_its_own_job(
+    client, monkeypatch, tmp_path
+):
+    """Every run's first image is IMG_0001.png. From that name alone each saved
+    as IMG_3133.png: "IMG_3133 (9).png" on disk."""
+    monkeypatch.setattr(clean_image_router, "UPLOAD_ROOT", tmp_path)
+
+    def cleaned() -> tuple[str, dict]:
+        image = io.BytesIO()
+        Image.new("RGB", (8, 8), "red").save(image, "PNG")
+        image.seek(0)
+        files = [("files", ("photo.png", image, "image/png"))]
+        job = client.post("/clean-images/run", files=files).json()["job_id"]
+        (card,) = client.get(f"/clean-images/jobs/{job}/status").json()["result"]
+        return job, card
+
+    for job, card in (cleaned(), cleaned()):
+        assert card["name"] == "IMG_0001.png"
+        assert card["download_name"] == download_name("IMG_0001.png", job)
+        # What the browser saves is what the card says.
+        saved = client.get(card["download_url"]).headers["content-disposition"]
+        assert f'filename="{card["download_name"]}"' in saved
+
+
+def test_clean_images_offers_the_adding_picker_without_reuse(client):
+    html = client.get("/download-assets").text
+    fieldset = html.split('data-tool="clean_images"')[1].split("</fieldset>")[0]
+    assert 'data-field="files"' in fieldset
+    assert "data-required" in fieldset
+    assert 'class="file-add-input" multiple' in fieldset
+    assert "ref-toggle" not in fieldset
+    assert "js/file-picker.js" in html
 
 
 def test_empty_submissions_rejected_cleanly(client):

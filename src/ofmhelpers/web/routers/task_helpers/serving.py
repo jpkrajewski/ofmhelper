@@ -86,7 +86,7 @@ def serve_job_file(
     if as_attachment:
         response = FileResponse(
             path,
-            filename=download_name(path.name),
+            filename=download_name(path.name, job.id if job else ""),
             media_type="application/octet-stream",
         )
     else:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from e2e_session import Session
+from PIL import Image
 from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
@@ -55,6 +56,63 @@ def test_hiding_a_card_hides_its_whole_download(va: Session, tmp_path: Path):
     cards.first.locator(".menu summary").click()
     cards.first.locator(".hide-btn").click()
     expect(cards).to_have_count(0)
+
+
+def _image(path: Path, colour: str) -> str:
+    Image.new("RGB", (64, 64), colour).save(path, "PNG")
+    return str(path)
+
+
+def test_clean_images_adds_each_pick_and_cleans_them_all(va: Session, tmp_path: Path):
+    """A second pick used to replace the first (a plain file input)."""
+    first = _image(tmp_path / "first.png", "red")
+    second = _image(tmp_path / "second.png", "green")
+    third = _image(tmp_path / "third.png", "blue")
+    va.goto("/download-assets")
+    page = va.page
+    runs: list[str] = []
+    page.on(
+        "request",
+        lambda r: runs.append(r.url) if r.url.endswith("/clean-images/run") else None,
+    )
+    page.select_option("#tool-select", "clean_images")
+    picks = page.locator('.file-picker[data-field="files"]')
+    add = picks.locator(".file-add-input")
+    listed = picks.locator(".file-order-list li")
+    run = page.locator('#download-assets-form [type="submit"]')
+
+    run.click()  # nothing picked: the form stops itself
+    assert add.evaluate("e => e.validationMessage") == "Pick at least one image"
+    assert runs == []
+
+    add.set_input_files(first)
+    add.set_input_files([second, third])
+    expect(listed).to_have_count(3)
+    listed.first.locator("button", has_text="✕").click()
+    expect(listed).to_have_count(2)
+    add.set_input_files(first)
+    expect(listed).to_have_count(3)
+    run.click()
+
+    cards = page.locator('#results-panel .results > [data-task="clean_images"]')
+    expect(cards.locator("img")).to_have_count(3, timeout=RESULT_TIMEOUT_MS)
+    expect(listed).to_have_count(0)  # the next batch starts empty
+    assert len(runs) == 1
+    assert va.js_errors == []
+
+
+def test_the_download_tool_runs_with_the_clean_picker_left_empty(va: Session):
+    """The picker's stop applies only while its tool is the one chosen."""
+    va.goto("/download-assets")
+    page = va.page
+
+    page.locator("#dl-urls").fill("https://www.example.com/watch/picker-empty")
+    page.locator('#download-assets-form [type="submit"]').click()
+
+    expect(page.locator("#results-panel .results > .result-item").first).to_be_visible(
+        timeout=RESULT_TIMEOUT_MS
+    )
+    assert va.js_errors == []
 
 
 def test_a_download_finishing_on_the_page_clones_its_video(va: Session):
