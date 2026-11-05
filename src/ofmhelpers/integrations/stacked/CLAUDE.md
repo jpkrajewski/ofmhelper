@@ -1,0 +1,52 @@
+# Stacked API
+
+`openapi.json` = official spec, OpenAPI 3.1, `1.0.0-beta`, user-supplied 2026-11-04 (newest changelog entry 2026-10-25). Docs are not linked from stacked.com; `https://www.stacked.com/api`, `/docs`, `/developers` serve the normal site page.
+
+- `client.py` — `StackedClient(key)`, read calls only: `me()`, `creators()`, `chats(creator)` (lazy pages), `messages(creator, channel, limit, before_message_id)`. Same class for a creator key and an agency key. `reachable(keys)`: every creator the keys reach, once, with the client to use for it; a dead key is logged and skipped. Retries a dropped connection, 429 (its `Retry-After`) and 5xx; URL, page size, tries and waits are in `settings.stacked`.
+- `errors.py` — 401 `StackedAuthError`, 403 `StackedForbiddenError`, else `StackedError`.
+- `models.py` — the fields the app reads; every `created_at` is a UTC datetime (ms and seconds on the wire).
+- `history.py` — `new_reads(client, creator, username, seen, oldest, open_channels)`: each chat's new messages, for /chatting (`features/chatting/sync.py` stores them). Opens chats whose last message changed, one call per changed chat, and reads the newest message of each chat with a fan waiting (reactions).
+- `webhooks.py` — `verified` (Svix signature, stdlib only), `message_read`, `EVENTS` = `message.created`, `message.deleted`, `mass_message.completed`. `features/chatting/webhooks.py` makes each model's destination (a sweep, on a server with a public HTTPS address or `OFM_CHATTING_WEBHOOK_BASE_URL`) and stores deliveries; `POST /events/stacked` is public, signed. Webhooks come first: a model whose reply arrived by webhook in the last `OFM_CHATTING_WEBHOOK_QUIET_S` (10 min), with no fan past the limit, is read only every `OFM_CHATTING_WEBHOOK_SYNC_INTERVAL_S` (1 h); any other, every minute. A key holds one destination per creator, and only one at this server's own address is ever replaced, so dev and production cannot take each other's. A signed delivery that cannot be understood is logged and answered 200; failing the signature 30 times from one address gets it turned away. Seen 2026-11-05, 33 real deliveries: 3.4 s from sent to delivered; `type` empty, `customType` set (`VIDEO`). A failed read is safe: `_get` tries 4 times (about 6 s), one chat that cannot be read is skipped till next round, `OFM_CHATTING_SYNC_MAX_FAILED_CHATS` (5) in a row or a failed chat list end the round, and the sweep tries again next minute from where it stopped. Order does not matter: each delivery and each sync write takes that chat's lock, and a fan message is answered by the first model message at or after it, whichever arrived first (`chat_model_messages`, times only). Measured 2026-11-05 before this: 50 of 50 fan messages landing with their reply stuck on No reply yet.
+- `source.py` — `StackedSource`, this platform's `ChatSource` (`integrations/chat_source.py`): how /chatting, its webhook route and its sync use all of the above.
+- `fake.py` — `api.stacked.com` under OFM_FAKE_EXTERNALS: `CREATOR_KEY`, `AGENCY_KEY`, chats via `add_chat`/`add_message`, `fail_next`, `calls`.
+
+Keys: one `.env` line per account, `STACKED_API_KEY_<NAME>` (`settings.stacked.api_keys`), creator or agency alike; `GET /me` says which. A creator key may hold all scopes incl. writes: treat it as able to message fans. Contract tests: `tests/contract/test_stacked_contract.py` (real half under `live`; the agency half skips until an agency key exists).
+
+## Seen on the real API (2026-11-04, one creator's key)
+- 700 chats, 7 pages, 7.4 s. Sorted as documented, every `customType` `DIRECT`.
+- `messageCount` is 0 on all 700. `unreadMessageCount` was above 0 on 1 chat while a fan 4.7 min into waiting showed 0, so neither says who is waiting.
+- After a bulk message most chats are under 24 h old, so a round reads every page (8 calls, 5.2 s).
+- 664 chats have 2 members, 36 have 1 (only the creator left). 14 fans have a block flag set.
+- Errors: 401 `invalid API key`, 400 `creatorUserId is required ...`, 403 `api key does not have access to this creator`, 404 `failed to fetch chat`, 400 `only one message pagination parameter may be provided`, bad cursor 400 `failed to list chats`.
+- `Message.userId` is **empty** on `ADMM` / `SENDBIRD:AUTO_EVENT_MESSAGE` (provider events), though the spec calls it required. None was a chat's `lastMessage` here.
+
+## Access
+- `https://api.stacked.com`, `Authorization: Bearer stk_live_...`. Direct key access needs approval per account (Developer page in the dashboard, or support@stacked.com); key from External API settings, shown once.
+- Creator key = one creator. Agency key = every creator with an accepted agency link; survives the person who made it leaving. `GET /external-service/v1/creators` lists them.
+- Every chat call needs `creatorUserId` (query) or `X-Stacked-Creator-User-Id` (header). Scope for reading chats: `chat:read`. Webhooks: `webhooks:manage`.
+- OAuth ("Connect Stacked") = PKCE S256, access token 1 h, one live token per grant, refresh token 90 days from last use. Owner-scoped app works immediately but still needs approved API access.
+- Rate limit: 600 req/min per key, fixed window. 429 carries `Retry-After`. Reads and 429/502 are safe to retry. Errors: `{"error": "message"}`; branch on status, not text.
+
+## Chats
+- `GET /external-service/v1/chats` -> `{chats: [ChatSummary], nextCursor}`, newest last message first, `limit` max 100, stop when `nextCursor` is absent; a page can be short with more pages left. Filters: `unreadOnly`, `memberUserId`, `search`, `showEmpty` (default true).
+- `ChatSummary`: `channelUrl`, `name`, `customType`, `memberUserIds`, `messageCount`, `unreadMessageCount`, `lastMessage`, `members`.
+- `Message`: `messageId`, `userId` (sender), `createdAt` (epoch **ms**), `text`, `type` (MESG, FILE), `customType`, `isRemoved`, `metadata`. Chat `createdAt` is epoch **seconds**; webhook envelope `createdAt` is RFC3339.
+- `ChatMember`: `userId`, `nickname`, `displayName`, `isOnline`, `lastSeenAt`, `isBlockedByCreator`, `isBlockingCreator`.
+- `GET /external-service/v1/chats/{channelUrl}/messages`: newest first, `limit` max 100, `afterMessageId` / `beforeMessageId`.
+- `POST /external-service/v1/chats/{channelUrl}/read` marks a chat read. Never call it from monitoring: it changes the unread count chatters work from.
+
+## Webhooks
+- `POST /external-service/v1/webhooks` `{url, events}`; HTTPS only; secret shown once; one destination per key+creator, max 3 per creator. Agency key without `creatorUserId` = one agency-wide destination, creators told apart by `data.creatorUserId`.
+- `message.created|updated|deleted` carry `data.channel`, `data.message`, `data.sender`, sent as they happen. Svix-signed (verify raw bytes), at least once, can arrive out of order, retried for 7 days; store `id` in a unique column.
+
+## Unanswered chats
+The API has no "unanswered" field or event, and a webhook only fires when something happens, never on silence: a timer on our side is needed either way.
+
+Every admin's page shows "Chats unanswered (N): @model", one per model, N = its fans waiting (`features/chatting/alerts.py`, `static/js/chats-alert.js`), read from the store webhooks and the sync fill. Rule: a fan has waited over `OFM_CHATTING_UNANSWERED_AFTER_S` (5 min), counted from their first message since the model's last one (the chat list's last message alone would let a fan who keeps writing restart the clock: seen 2026-11-05, 7 min waiting, newest message 2 min old). A fan still waiting counts until answered, however long ago they wrote; `OFM_CHATTING_LOOKBACK_S` (24 h) only bounds the average and how far back a chat's first read goes. Closed (x), the pop-up stays away on every page until a new fan is waiting (remembered per wait in the browser). `unreadOnly` is not usable: a chat that was read but not answered would be dropped.
+
+Checked on one creator's chats (2026-11-04):
+- Replies: chats have only creator + fan as members, and 1,046 messages across 25 chats had no third sender, so a chatter's reply can only show as the creator. Not proven: no agency key tried yet.
+- **Bulk messages look like answers.** 630 of 690 chats whose last message is the creator's end in one identical text, carrying no flag (`MESG`, `customType` "", no metadata), and `GET /mass-messages` lists none of them (2026-11-05: 0 listed, with 631 chats ending on one image sent over 5 min), so `mass_message.completed` may not fire for these; not yet seen on a real delivery. Only the same text across many chats gives it away. In the newest 120 chats, 1 fan message (52 h old) sat hidden behind one. A later one (2026-11-04, 23:09-23:14 UTC) was an image: 637 chats, `FILE` / `customType` `IMAGE`, one `data`. A mass message counts as a reply, the user's decision (2026-11-05): it clears any waiting fan, in the pop-up and on /chatting.
+- Tips and unlocks: no fan-sent event of that kind in the sample; fans sent only `MESG` and `FILE` (`IMAGE`, `MULTIPLE_IMAGES`). PPV and payment requests are the creator's.
+- Skip when alerting: chats with a block flag or only 1 member; the fan cannot be answered. They were 8 of the 11 chats ending on a fan's message (6 blocked, 2 fan gone, 26 h to 11 days old); the other 3 were under 5 min old.
+- A model's emoji reaction answers the fan (owner's decision 2026-11-05). Seen 2026-11-05: `reactions` (`key`, `userIds`, `updatedAt` ms) is on a chat's messages only, not on the chat list's `lastMessage`, a reaction does not change the last message id, and no webhook announces it, so `history.new_reads` reads the newest message of each chat with a fan waiting, every round. Only one on the fan's newest message counts.

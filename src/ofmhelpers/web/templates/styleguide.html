@@ -105,6 +105,11 @@
     </div>
     {% endcall %}
 
+    {% call ui.card("Time zone") %}
+    {{ ui.clock_now(time_zones[0]) }}
+    {{ ui.time_zone_menu(time_zones, time_zones[0]) }}
+    {% endcall %}
+
     {% call ui.card("Links and empty state") %}
     {{ ui.back_link("#", "Back") }}
     {{ ui.empty("Nothing here yet.") }}

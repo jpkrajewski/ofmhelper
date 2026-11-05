@@ -91,6 +91,7 @@
     --fail-wash: color-mix(in srgb, var(--red) 6%, var(--paper));
     --fail-border: color-mix(in srgb, var(--red) 25%, var(--paper));
     --warn: var(--ink);
+    --warn-ink: var(--accent-ink);
     --warn-wash: var(--wash);
 
     /* Overlay scrims (dialogs, hover captions on media). */
@@ -235,6 +236,7 @@
     --fail-wash: rgba(251, 113, 133, 0.12);
     --fail-border: #6b2a3a;
     --warn: #fbbf24;
+    --warn-ink: var(--bg);
     --warn-wash: rgba(251, 191, 36, 0.12);
 
     --scrim: rgba(4, 4, 8, 0.6);

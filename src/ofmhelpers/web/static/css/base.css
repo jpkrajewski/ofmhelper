@@ -320,9 +320,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
         animation: none;
     }
     .nav-links { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
-    .nav-links a { padding: var(--s-2) var(--s-3); font-size: var(--step--1); white-space: nowrap; }
+    .nav-links a { padding: var(--s-2); font-size: var(--step--1); white-space: nowrap; }
     .nav-more { position: relative; }
-    .nav-more > details > summary { padding: var(--s-2) var(--s-3); font-size: var(--step--1); white-space: nowrap; }
+    .nav-more > details > summary { padding: var(--s-2); font-size: var(--step--1); white-space: nowrap; }
     .nav-more-links {
         position: absolute;
         top: calc(100% + var(--s-1));
@@ -335,9 +335,17 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-6) 0; }
         background: var(--surface);
         box-shadow: var(--shadow);
     }
-    /* Brand left, nav next to it, log out pinned to the far right. */
-    .brand { margin-right: var(--s-6); }
-    .logout-form { margin-left: auto; padding-left: var(--s-4); border-left: 1px solid var(--border); }
+    /* Brand left, nav next to it, log out pinned to the far right. One row at
+       1440 px, the clock included. */
+    .site-header-inner { gap: var(--s-2); }
+    .brand { margin-right: var(--s-2); }
+    .theme-toggle { margin-left: 0; }
+    .logout-form { margin-left: auto; padding-left: var(--s-2); border-left: 1px solid var(--border); }
+}
+/* An admin's ten links and the clock stay on one row at 1440 px. */
+@media (min-width: 980px) and (max-width: 1599px) {
+    .nav-links a,
+    .nav-more > details > summary { padding: var(--s-2) var(--s-1); }
 }
 
 /* ---------------------------------------------------------------------

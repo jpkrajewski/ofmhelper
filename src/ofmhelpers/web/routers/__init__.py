@@ -18,9 +18,11 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `admin/`      -- admin-only surfaces: who may sign in (/users), landing-page
   applications, file manager, action log.
 
-Seven modules sit at this level because they belong to no single feature:
+Nine modules sit at this level because they belong to no single feature:
 `auth` (signing in and out: Google, Apple, password), `account` (your own
 sign-ins, Drive connection and API keys), `cookies` (your own cookies.txt),
+`chatting` (the agency's chat platforms and models, admins), `webhooks`
+(outside services calling in, signed),
 `jobs` (hiding your own job's card from its gallery, any tool),
 `apply` (the public landing-page application form's
 POST target -- its CRM view is `admin/applications.py`), `refs` (the shared
@@ -33,7 +35,17 @@ upload/job/serve plumbing those routers are built out of).
 `registry.py`), and main.py is never touched.
 """
 
-from ofmhelpers.web.routers import account, apply, auth, cookies, home, jobs, refs
+from ofmhelpers.web.routers import (
+    account,
+    apply,
+    auth,
+    chatting,
+    cookies,
+    home,
+    jobs,
+    refs,
+    webhooks,
+)
 from ofmhelpers.web.routers.admin import action_log, file_manager
 from ofmhelpers.web.routers.admin import applications as admin_applications
 from ofmhelpers.web.routers.admin import styleguide as admin_styleguide
@@ -59,6 +71,8 @@ ROUTERS = [
     auth.router,
     account.router,
     cookies.router,
+    chatting.router,
+    webhooks.router,
     jobs.router,
     apply.router,
     refs.router,

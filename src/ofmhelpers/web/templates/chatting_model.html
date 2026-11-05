@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Chatting: @{{ report.username }}{% endblock %}
+{% block content %}
+{{ ui.back_link("/chatting/" ~ platform.value, platform.label) }}
+{{ ui.page_header("@" ~ report.username) }}
+<div class="stat-grid">
+    {{ ui.stat("Average response time", report.average_response_time or "No replies yet", "Last " ~ report.period_h ~ " h") }}
+</div>
+{% call ui.card("Not answered within " ~ report.late_after_min ~ " min", attrs={"data-zone-times": true}) %}
+{% if report.late %}
+{% call ui.table(hook="chatting-waits") %}
+<thead>
+    <tr>
+        <th>Sent</th>
+        <th>Replied</th>
+        <th>Waited</th>
+        <th>Fan</th>
+        <th>Message</th>
+    </tr>
+</thead>
+<tbody>
+    {% for wait in report.late %}
+    <tr>
+        <td>{{ wait.sent }}</td>
+        <td>{{ wait.replied }}</td>
+        <td>{{ wait.waited }}</td>
+        <td>{{ wait.fan_name }}</td>
+        <td>{{ wait.text }}</td>
+    </tr>
+    {% endfor %}
+</tbody>
+{% endcall %}
+{% else %}
+{{ ui.empty("None.") }}
+{% endif %}
+{% endcall %}
+{% endblock %}

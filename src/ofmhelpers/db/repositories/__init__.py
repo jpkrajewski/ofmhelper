@@ -23,6 +23,7 @@ by domain and a domain may grow a second module.
 """
 
 from ofmhelpers.db.repositories.applications import ApplicationRepository
+from ofmhelpers.db.repositories.chats import ChatRepository
 from ofmhelpers.db.repositories.clone_ai_checks import CloneAiCheckRepository
 from ofmhelpers.db.repositories.clone_from_links import CloneFromLinkRepository
 from ofmhelpers.db.repositories.cookies import CookieRepository
@@ -38,6 +39,7 @@ from ofmhelpers.db.repositories.watched_profiles import WatchedProfileRepository
 
 __all__ = [
     "ApplicationRepository",
+    "ChatRepository",
     "CloneAiCheckRepository",
     "CloneFromLinkRepository",
     "CookieRepository",

@@ -3,6 +3,7 @@ __pycache__
 **/__pycache__
 *.pyc
 .env
+.env.bak*
 .pytest_cache
 .ruff_cache
 *.egg-info

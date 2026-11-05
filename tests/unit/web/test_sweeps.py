@@ -124,13 +124,15 @@ def test_every_sweep_is_cancelled_and_awaited_on_exit():
     assert left == []
 
 
-def test_the_web_process_runs_all_six_sweeps():
+def test_the_web_process_runs_all_eight_sweeps():
     assert {sweep.name for sweep in sweeps.sweeps()} == {
         "recovery",
         "reel watch",
         "account tracker",
         "link sync",
         "drive",
+        "chat webhooks",
+        "chat history",
         "preview backfill",
     }
 

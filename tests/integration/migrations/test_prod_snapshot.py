@@ -507,3 +507,15 @@ def test_preset_aspect_adds_an_empty_column_and_changes_no_row(db):
     assert {t: n for t, n in _row_counts(db).items() if t in before} == before
     command.downgrade(_alembic(), "-1")
     assert "aspect_ratio" not in _columns(db, "picture_presets")
+
+
+CHAT_ACCOUNTS_SERVER = "c9b8a7f6e5d4"
+
+
+def test_chat_accounts_remember_their_server_and_open_waits_get_an_index(db):
+    needs(CHAT_ACCOUNTS_SERVER)(db)
+    command.upgrade(_alembic(), CHAT_ACCOUNTS_SERVER)
+
+    assert "connected_from" in _columns(db, "chat_accounts")
+    indexes = {i["name"] for i in inspect(db).get_indexes("chat_fan_messages")}
+    assert "ix_chat_fan_messages_open" in indexes

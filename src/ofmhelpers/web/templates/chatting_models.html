@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Chatting: {{ platform.label }}{% endblock %}
+{% block content %}
+{{ ui.back_link("/chatting", "Chatting") }}
+{% if can_connect %}
+{% call ui.page_header(platform.label) %}
+{{ ui.button("Connect Fanvue", "primary", href="/chatting/fanvue/connect") }}
+{% endcall %}
+{% else %}
+{{ ui.page_header(platform.label) }}
+{% endif %}
+{% if note %}
+{{ ui.notice(note[0], kind=note[1]) }}
+{% endif %}
+{% for username in reconnect %}
+{{ ui.notice("Connect Fanvue again: @" ~ username, kind="warn") }}
+{% endfor %}
+{% if models %}
+<div class="card-grid">
+    {% for username in models %}
+    {{ ui.link_card("/chatting/" ~ platform.value ~ "/" ~ username, "@" ~ username, "user") }}
+    {% endfor %}
+</div>
+{% else %}
+{{ ui.empty("Not connected yet.") }}
+{% endif %}
+{% endblock %}

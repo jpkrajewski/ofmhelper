@@ -62,6 +62,7 @@ def test_bar_links_then_the_rest_under_more(client):
         "/links",
         "/phones",
         "/drive",
+        "/chatting",
     ]
     # The /reels watch list left the bar (2026-10-23); /viral (one profile's
     # top reels, 2026-10-31) leads More: a 10th bar link wraps "More".

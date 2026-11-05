@@ -32,12 +32,14 @@ from pydantic_settings import BaseSettings
 from ofmhelpers.config.settings import (
     AccountsSettings,
     AigenSettings,
+    ChattingSettings,
     CloneAiCheckSettings,
     CloneLinksSettings,
     CloneLongSettings,
     DownloadersSettings,
     ElyumSettings,
     ExportSettings,
+    FanvueSettings,
     GDriveSettings,
     HiggsfieldSettings,
     InfraSettings,
@@ -51,6 +53,7 @@ from ofmhelpers.config.settings import (
     RunningHubSettings,
     SessionSettings,
     SignInSettings,
+    StackedSettings,
     TelemetrySettings,
     TrialsSettings,
     VaultSettings,
@@ -204,6 +207,18 @@ class Settings:
     @property
     def viral(self) -> ViralSettings:
         return self._group(ViralSettings)
+
+    @property
+    def stacked(self) -> StackedSettings:
+        return self._group(StackedSettings)
+
+    @property
+    def fanvue(self) -> FanvueSettings:
+        return self._group(FanvueSettings)
+
+    @property
+    def chatting(self) -> ChattingSettings:
+        return self._group(ChattingSettings)
 
     @property
     def logging(self) -> LoggingSettings:
