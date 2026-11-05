@@ -43,6 +43,8 @@ class FakeHiggsfield:
         self.submitted: list[str] = []
         # Idempotency-Key -> its request: a resent submit gets the same one.
         self.keys: dict[str, str] = {}
+        # The next submit is made, then its answer never arrives (a timeout).
+        self.lose_next = False
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
 
@@ -76,6 +78,10 @@ class FakeHiggsfield:
                     self.submitted.append(request_id)
                 if key:
                     self.keys[key] = request_id
+                lost, self.lose_next = self.lose_next, False
+            if lost:
+                msg = "fake: the answer was lost"
+                raise httpx.ReadTimeout(msg, request=request)
             return httpx.Response(
                 200,
                 json={

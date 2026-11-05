@@ -72,13 +72,85 @@ def recall(job_id: str, part: int = 0) -> ProviderTask | None:
     return ProviderTask.model_validate_json(raw) if raw else None
 
 
+_SENT_PREFIX = "aigen:sent:"
+
+
+def _sent_key(job_id: str, part: int) -> str:
+    return f"{_SENT_PREFIX}{job_id}:{part}"
+
+
 def forget(job_id: str) -> None:
-    """Every part of the job."""
+    """Every part of the job, and every submit of it still waiting for its
+    answer: a callback after this finds nothing to finish (a job forgotten
+    after a refusal must not come back to life and pay for its pieces
+    again)."""
     try:
         redis = get_redis()
-        redis.delete(_key(job_id), *redis.scan_iter(f"{_PREFIX}{job_id}:*"))
+        redis.delete(
+            _key(job_id),
+            *redis.scan_iter(f"{_PREFIX}{job_id}:*"),
+            *redis.scan_iter(f"{_SENT_PREFIX}{job_id}:*"),
+        )
     except RedisError:
         logger.warning("could not forget the task of job %s", job_id, exc_info=True)
+
+
+def waiting(job_id: str) -> bool:
+    """Whether a submit of the job is still waiting for its answer: until its
+    callback names it, the job must not be run again (that would send it again
+    and maybe pay twice)."""
+    try:
+        return any(get_redis().scan_iter(f"{_SENT_PREFIX}{job_id}:*"))
+    except RedisError:
+        logger.warning("could not read the submits of job %s", job_id, exc_info=True)
+        return True
+
+
+def remember_sent(task: ProviderTask) -> None:
+    """A submit is on its way and its id not known yet (`task_id` empty): if
+    the answer is lost (a timeout after the provider made it), the provider's
+    callback names the id and `found` turns this into the job's task. Not
+    under `_PREFIX`, so recovery never sweeps it."""
+    try:
+        get_redis().set(
+            _sent_key(task.job_id, task.part),
+            task.model_dump_json(),
+            ex=settings.aigen.resume_max_age_s,
+        )
+    except RedisError:
+        logger.warning(
+            "could not note the submit of job %s", task.job_id, exc_info=True
+        )
+
+
+def sent(job_id: str, part: int = 0) -> ProviderTask | None:
+    """The submit of `job_id`'s `part` whose answer never came, if any."""
+    try:
+        raw = get_redis().get(_sent_key(job_id, part))
+    except RedisError:
+        logger.warning("could not read the submit of job %s", job_id, exc_info=True)
+        return None
+    return ProviderTask.model_validate_json(raw) if raw else None
+
+
+def forget_sent(job_id: str, part: int = 0) -> None:
+    try:
+        get_redis().delete(_sent_key(job_id, part))
+    except RedisError:
+        logger.warning("could not drop the submit of job %s", job_id, exc_info=True)
+
+
+def found(job_id: str, part: int, task_id: str) -> ProviderTask | None:
+    """The lost answer of a noted submit, told by the provider: remembered as
+    the job's task (the waiting run picks it up, or recovery once the job
+    failed). None when nothing was waiting for it."""
+    noted = sent(job_id, part)
+    if noted is None:
+        return None
+    task = noted.model_copy(update={"task_id": task_id, "created_at": time.time()})
+    remember(task)
+    forget_sent(job_id, part)
+    return task
 
 
 def remembered() -> list[ProviderTask]:

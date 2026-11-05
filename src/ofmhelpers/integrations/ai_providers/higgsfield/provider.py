@@ -172,7 +172,9 @@ def _mapped_errors(action: str) -> Iterator[None]:
         raise _refused(action, exc) from exc
     except httpx.TransportError as exc:
         msg = f"Higgsfield {action}: unreachable ({exc.__class__.__name__})"
-        raise ProviderUnavailableError(msg) from exc
+        # No connection made: the request never left.
+        never_sent = isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
+        raise ProviderUnavailableError(msg, maybe_made=not never_sent) from exc
     except (ValueError, KeyError, httpx.HTTPError) as exc:
         # After TransportError (an HTTPError): the SDK's "Unknown status", a
         # 200 that is not JSON, a shape the models refuse. The request may
@@ -228,6 +230,9 @@ class HiggsfieldProvider(Provider):
     name = "higgsfield"
     label = "Higgsfield"
     rank = 10
+    # `_submit_key` is stable for one intent: a resend answers the request a
+    # lost answer made (docs concepts/idempotency), even one already ended.
+    idempotent_submit = True
 
     def __init__(self, api_key: str) -> None:
         super().__init__(api_key)

@@ -1,14 +1,17 @@
 """kie.ai behind the shared `Provider` interface."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.ai_providers import self_heal
 from ofmhelpers.integrations.ai_providers.base import (
     Provider,
     TaskState,
     register_provider,
 )
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
+from ofmhelpers.integrations.ai_providers.kie import callback
 from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient
 from ofmhelpers.integrations.ai_providers.kie.models import FAIL, SUCCESS, KieRecord
 from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
@@ -34,8 +37,25 @@ class KieProvider(Provider):
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
         """kie.ai has no idempotency key; a re-run never resubmits anyway
         (the runner resumes the remembered task), and createTask is never
-        retried by the client."""
-        return self.client.create_task(spec.model_id, payload, job_id=idempotency_key)
+        retried by the client. Its callback names a task whose answer was
+        lost."""
+        return self.client.create_task(
+            spec.model_id,
+            payload,
+            job_id=idempotency_key,
+            callback_url=self.callback_url(idempotency_key),
+        )
+
+    def callback_url(self, job_key: str) -> str:
+        return self_heal.callback_url(self.name, job_key)
+
+    @classmethod
+    def callback_task_id(cls, raw: bytes, headers: Mapping[str, str]) -> str | None:
+        return callback.task_id(raw, headers)
+
+    @classmethod
+    def callback_signed(cls) -> bool:
+        return settings.kieai.webhook_hmac_key is not None
 
     def status(self, task_id: str) -> TaskState:
         record = self.client.get_task(task_id)

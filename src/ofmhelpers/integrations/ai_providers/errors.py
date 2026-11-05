@@ -50,9 +50,16 @@ class ProviderGenerationError(ProviderError):
 
 class ProviderUnavailableError(ProviderError):
     """Network trouble, rate limiting or a 5xx that outlived the client's own
-    retries."""
+    retries. `maybe_made`: the request may have reached the provider and only
+    its answer was lost (a read timeout, a 5xx, an answer nothing can read);
+    False when it never left (connection refused, DNS, connect timeout), so a
+    submit failing so made nothing."""
 
     retryable = True
+
+    def __init__(self, message: str, *, maybe_made: bool = True) -> None:
+        super().__init__(message)
+        self.maybe_made = maybe_made
 
 
 class ProviderRateLimitError(ProviderUnavailableError):

@@ -16,7 +16,7 @@ import responses
 from repo_paths import FIXTURES
 from responses import matchers, registries
 
-from ofmhelpers.aigenproviders import runner, tasks
+from ofmhelpers.aigenproviders import tasks
 from ofmhelpers.aigenproviders.catalog import get_spec
 from ofmhelpers.aigenproviders.errors import (
     ProviderAuthError,
@@ -30,6 +30,7 @@ from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.aigenproviders.runner import generate
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.ai_providers import self_heal
 
 PROVIDER_FIXTURES = FIXTURES / "providers"
 KIE_SPEC = get_spec("kie:seedream/5-lite-text-to-image")
@@ -58,7 +59,7 @@ def slept(monkeypatch) -> list[float]:
     ):
         monkeypatch.delenv(name, raising=False)
     waits: list[float] = []
-    monkeypatch.setattr(runner, "_sleep", waits.append)
+    monkeypatch.setattr(self_heal, "_sleep", waits.append)
     return waits
 
 
@@ -158,6 +159,20 @@ def test_kie_create_failing_is_unavailable_and_never_resent(
     assert _calls(kie, "createTask") == 1
     assert slept == []
     assert tasks.recall("job-1") is None
+
+
+def test_kie_create_waits_longer_than_a_status_read(kie):
+    """createTask answers once kie.ai has the references: Wan 3.0 went past
+    30 s on prod 2026-11-05 and the job failed 'Timed out'."""
+    kie.post(_jobs("createTask"), json=_body("kie/create_ok"))
+    _record(kie, "record_success")
+    kie.get("https://tempfile.aiquickdraw.com/results/task_seedream_0001.png", body=PNG)
+
+    generate(KieProvider("key"), KIE_SPEC, {"prompt": "x"}, "job-1")
+
+    create, status = (c.request.req_kwargs["timeout"] for c in kie.calls[:2])
+    assert create == settings.kieai.create_timeout_s == 180
+    assert status == settings.kieai.request_timeout_s == 30
 
 
 def test_kie_rate_limited_create_is_sent_again_and_pays_once(kie, slept):

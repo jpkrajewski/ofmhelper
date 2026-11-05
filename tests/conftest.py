@@ -112,7 +112,7 @@ def _test_environment(tmp_path_factory):
     os.environ["OFM_RATE_LIMIT_ENABLED"] = "false"
     # The runner's waits before resending a rate-limited submit or a failed
     # result download (review #11, #54): no real sleeps in tests; a test
-    # timing them patches `runner._sleep`.
+    # timing them patches `self_heal._sleep`.
     os.environ["OFM_AIGEN_DOWNLOAD_RETRY_WAITS_S"] = "[0, 0]"
     os.environ["OFM_AIGEN_RATE_LIMIT_WAITS_S"] = "[0, 0, 0]"
     # A throwaway vault key: /phones logins encrypt with it (a test that

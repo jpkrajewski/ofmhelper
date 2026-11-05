@@ -187,12 +187,19 @@ class KieAIClient:
     # ------------------------------------------------------------------
     # The task queue every Market model shares.
     # ------------------------------------------------------------------
-    def create_task(self, model: str, payload: Payload, job_id: str = "") -> str:
+    def create_task(
+        self, model: str, payload: Payload, job_id: str = "", callback_url: str = ""
+    ) -> str:
+        """`callback_url`: where kie.ai POSTs the task when it ends -- how a
+        task made after this call gave up is still found (`kie/callback.py`)."""
+        body: dict[str, Any] = {"model": model, "input": payload}
+        if callback_url:
+            body["callBackUrl"] = callback_url
         response = self._call(
             "POST",
             f"{self.JOBS_BASE}/createTask",
-            json={"model": model, "input": payload},
-            timeout=settings.kieai.request_timeout_s,
+            json=body,
+            timeout=settings.kieai.create_timeout_s,
         )
         created = parsed(response, KieCreateResponse, PROVIDER)
         created.raise_for_code()

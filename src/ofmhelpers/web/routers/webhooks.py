@@ -8,6 +8,10 @@ read, and an address sending deliveries that fail the signature is turned away.
 A platform set up on its own site sends to whatever address was typed there, so a path
 under the platform's is heard too (seen 2026-11-05: Fanvue at
 /events/fanvue/creator-events, a 404 until then).
+
+An AI provider's callback (`/events/ai/<provider>/<job key>`,
+`integrations/ai_providers/self_heal.py`) names the request it made for a job: what
+finds one whose submit answer was lost.
 """
 
 from fastapi import APIRouter, Request, status
@@ -17,10 +21,18 @@ from fastapi.responses import Response
 from ofmhelpers.config import settings
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.webhooks import receive
+from ofmhelpers.integrations.ai_providers.self_heal import Heard, heard
 from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.web.middleware.ratelimit import record_refused_webhook, webhook_blocked
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+_HEARD_STATUS = {
+    Heard.FOUND: status.HTTP_200_OK,
+    Heard.IGNORED: status.HTTP_200_OK,
+    Heard.REFUSED: status.HTTP_401_UNAUTHORIZED,
+    Heard.UNKNOWN: status.HTTP_404_NOT_FOUND,
+}
 
 
 async def _capped_body(request: Request) -> bytes | None:
@@ -54,3 +66,18 @@ async def delivery(platform: ChatPlatform, request: Request) -> Response:
         return Response(status_code=status.HTTP_200_OK)
     await run_in_threadpool(record_refused_webhook, request)
     return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+@router.post("/ai/{provider}/{job_key}")
+async def provider_callback(provider: str, job_key: str, request: Request) -> Response:
+    """A 2xx ends the provider's delivery: a genuine callback is never answered
+    with an error (kie.ai's retries are few or undocumented)."""
+    if await run_in_threadpool(webhook_blocked, request):
+        return Response(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+    raw = await _capped_body(request)
+    if raw is None:
+        return Response(status_code=status.HTTP_413_CONTENT_TOO_LARGE)
+    outcome = await run_in_threadpool(heard, provider, job_key, raw, request.headers)
+    if outcome == Heard.REFUSED:
+        await run_in_threadpool(record_refused_webhook, request)
+    return Response(status_code=_HEARD_STATUS[outcome])

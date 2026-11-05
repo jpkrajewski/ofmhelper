@@ -95,6 +95,11 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
         pending = pending or state.state == "pending"
     if pending:
         return "pending"
+    if tasks.waiting(job_id):
+        # A piece whose submit answer was lost (`tasks.remember_sent`): a
+        # re-run now would send it again and maybe pay twice. Its callback
+        # names it, and the next sweep re-runs the job then.
+        return "waiting"
     run = RESUMABLE.get(job.task)
     if run is None:
         tasks.forget(job_id)

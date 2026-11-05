@@ -9,7 +9,8 @@ output: an mp4 for a video model of the catalog, else a png. A repeated
 `Idempotency-Key` returns the generation already made (no second one).
 `refuse_next` makes the next create answer that (HTTP status, code,
 message) instead (402 insufficient_balance, 429 concurrency ...),
-`fail_next` the next generation end `failed` with that (code, message);
+`fail_next` the next generation end `failed` with that (code, message),
+`lose_next` the next create be made but its answer time out;
 `created` records each (body, Idempotency-Key), `uploads` each uploaded
 file name.
 """
@@ -24,13 +25,13 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
+import requests
+
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    import requests
 
 FAKE_KEY = "ek_live_fake-elyum-key"
 HOST = "api.elyum.ai"
@@ -66,6 +67,8 @@ class FakeElyum:
         self.created: list[tuple[dict[str, Any], str]] = []
         self.refuse_next: tuple[int, str, str] | None = None
         self.fail_next: tuple[str, str] | None = None
+        # The next create is made, then its answer never arrives (a timeout).
+        self.lose_next = False
         self.uploads: list[str] = []
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
@@ -128,6 +131,10 @@ class FakeElyum:
             }
             if key:
                 self.by_key[key] = generation_id
+            lost, self.lose_next = self.lose_next, False
+        if lost:
+            msg = "fake: the answer was lost"
+            raise requests.ReadTimeout(msg)
         return self._generation(generation_id, "queued", status=202)
 
     def _get(self, generation_id: str) -> FakeReply:

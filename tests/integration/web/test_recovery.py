@@ -444,3 +444,30 @@ def test_a_one_piece_job_is_rerun_with_the_queues_limit(status, reruns):
     recovery.run_recovery_once()
 
     assert reruns.timeouts == [None]
+
+
+def test_a_job_with_a_piece_whose_answer_was_lost_is_not_run_again_yet(status, reruns):
+    """A long clone's piece 1 sent createTask and lost its answer (noted,
+    `tasks.remember_sent`): a re-run now would send it again and maybe pay
+    twice. Once its callback names it, the next sweep re-runs the job."""
+    job_id = _job()
+    _remember(job_id, part=0)
+    tasks.remember_sent(
+        tasks.ProviderTask(
+            job_id=job_id,
+            part=1,
+            provider="kie",
+            model=MODEL,
+            task_id="",
+            api_key="key-1",
+        )
+    )
+    status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
+
+    assert recovery.run_recovery_once() == {job_id: "waiting"}
+    assert reruns == []
+
+    tasks.found(job_id, 1, "t2")
+
+    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    assert len(reruns) == 1

@@ -3,7 +3,7 @@
 Everything here sends a request exactly once. A POST that reached the provider
 and lost its answer may have started a paid generation, so nothing in this
 module resends it; the only resend of a submit is the runner's, on a rate-limit
-refusal (nothing was created).
+refusal (nothing was created) or for a provider whose submit is idempotent.
 """
 
 from collections.abc import Callable
@@ -11,6 +11,7 @@ from typing import Any, NoReturn
 
 import requests
 from pydantic import BaseModel, ConfigDict
+from urllib3.exceptions import NewConnectionError
 
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.utils import outbound
@@ -32,6 +33,18 @@ def bearer_session(api_key: str) -> requests.Session:
     return session
 
 
+def _never_sent(exc: requests.RequestException) -> bool:
+    """No connection was made, so the request never left: a connect timeout,
+    a refused connection, a name that does not resolve. A connection reset
+    or a read timeout comes after the request was sent."""
+    if isinstance(exc, requests.ConnectTimeout):
+        return True
+    cause = exc.args[0] if exc.args else None
+    return isinstance(exc, requests.ConnectionError) and isinstance(
+        getattr(cause, "reason", cause), NewConnectionError
+    )
+
+
 def call(
     session: requests.Session,
     label: str,
@@ -46,7 +59,7 @@ def call(
         response = session.request(method, url, **kwargs)
     except requests.RequestException as exc:
         msg = f"{label} unreachable: {exc.__class__.__name__}"
-        raise ProviderUnavailableError(msg) from exc
+        raise ProviderUnavailableError(msg, maybe_made=not _never_sent(exc)) from exc
     if response.status_code >= _HTTP_ERROR:
         refused(response)
     return response

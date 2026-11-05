@@ -31,6 +31,11 @@ Python 3.12, FastAPI, PostgreSQL, Redis, RQ. Prod = Linux/Docker.
 FIRST OF ALL, DUMP PROD DATA INTO DEV, CHECK IF YOU CHANGES WORK ON DEV LIKE EXPECTED,
 COMPARE PROD AND DEV
 
+EVERYTHING THAT NEEDS TO BE FIXED CAN BE DUMPED FROM PROD AND CHECKED ON DEV. WE DON'T NEED TO PRODUCE NEW SHIT.
+- A prod failure is proven fixed by replaying THAT failed job on dev: prod snapshot into dev, dev put in the state prod was in, the real ids and answers fed in, the app's own workers and sweeps finish it.
+- No new paid generation, upload or run to prove a fix. A new paid run only when the owner asks for that run, cost named first.
+- Example (2026-11-05): the kie.ai createTask lost on prod (job 5e57aa92) was healed on dev from its real task id by the callback route + recovery sweep: 0 credits.
+
 Every check runs in Docker dev, never on the host. `C="docker compose -f docker-compose.yml -f docker-compose.dev.yml"`:
 - Tests: `scripts/test.sh [preset]` (see Testing). `live` = real TikTok/Instagram/kie.ai/Higgsfield/Drive sandbox; local only, not on CI (Instagram rate-limits runner IPs).
 - `$C run --rm tests uv run --frozen mypy` / `ruff check src tests` / `ruff format --check src tests`.
