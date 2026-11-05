@@ -24,6 +24,7 @@ from ofmhelpers.integrations.fanvue.models import (
     SubscriptionEvent,
     WebhookEnvelope,
 )
+from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import (
     ChatDelivery,
     ChatEvent,
@@ -33,6 +34,8 @@ from ofmhelpers.schemas.chatting import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+logger = get_logger(__name__)
 
 _PROBE = "fanvue.webhook.verification"
 _SIGNATURE = "x-fanvue-signature"
@@ -187,4 +190,5 @@ def deliveries(raw: bytes) -> list[ChatDelivery]:
                 at=payment.paid_at.timestamp() if payment.paid_at else None,
             )
         ]
+    logger.info("fanvue %s delivery: nothing to do", envelope.type)
     return []

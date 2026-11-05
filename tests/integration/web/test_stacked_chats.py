@@ -2,23 +2,30 @@
 destinations made here, one per creator. What every platform does is in
 test_chat_platforms.py."""
 
+import os
 import time
+from http import HTTPStatus
+
+os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 import requests
 from chat_platforms import StackedDriver
+from fastapi.testclient import TestClient
 
 from ofmhelpers.db.stores import chats
 from ofmhelpers.features.chatting.alerts import chat_alerts
-from ofmhelpers.features.chatting.sync import sync
+from ofmhelpers.features.chatting.sync import run_when_due, sync
 from ofmhelpers.features.chatting.webhooks import ensure_destinations
 from ofmhelpers.integrations.stacked import fake as stacked_fake
 from ofmhelpers.integrations.stacked.models import Message
-from ofmhelpers.schemas.chatting import ChatPlatform
+from ofmhelpers.schemas.chatting import ChatDelivery, ChatPlatform, DeliveryKind
+from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.usefixtures("fake_externals")
 
 LATE = 600
+HOUR = 3600
 PLATFORM = ChatPlatform.STACKED
 
 
@@ -132,3 +139,115 @@ def test_a_timeout_while_making_a_destination_stops_only_that_round(side, monkey
     ensure_destinations()
 
     assert side.fake.webhooks.get(stacked_fake.CREATOR, []) == []
+
+
+@pytest.fixture
+def three_chats_are_a_bulk_send(monkeypatch):
+    monkeypatch.setenv("OFM_CHATTING_MASS_MIN_CHATS", "3")
+
+
+def _two_rounds() -> None:
+    """The first reads what was sent, the next sees it stored."""
+    run_when_due(PLATFORM)
+    run_when_due(PLATFORM)
+
+
+def _sent_to(side, fans, ago=60):
+    for fan in fans:
+        side.model_replies(fan, time.time() - ago)
+
+
+def _mass_event(side, mass_id):
+    raw, headers = side.signed(side.mass(mass_id))
+    answer = TestClient(app).post(
+        f"/events/{PLATFORM.value}", content=raw, headers=headers
+    )
+    assert answer.status_code == HTTPStatus.OK
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_a_bulk_send_with_no_event_is_one_mass_message_popup(side):
+    _sent_to(side, ["ann", "bob", "cat"])
+
+    _two_rounds()
+
+    assert _popups() == [f"Mass message sent: @{side.model}"]
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_a_bulk_send_still_going_out_stays_one_popup(side):
+    _sent_to(side, ["ann", "bob", "cat"])
+    _two_rounds()
+
+    _sent_to(side, ["dan", "eve", "fay"], ago=10)
+    _two_rounds()
+
+    assert _popups() == [f"Mass message sent: @{side.model}"]
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_a_chatter_answering_two_chats_is_not_a_bulk_send(side):
+    _sent_to(side, ["ann", "bob"])
+
+    _two_rounds()
+
+    assert _popups() == []
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_many_messages_in_one_chat_are_not_a_bulk_send(side):
+    _sent_to(side, ["ann", "ann", "ann"])
+
+    _two_rounds()
+
+    assert _popups() == []
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_a_bulk_send_from_before_the_window_is_not_news(side):
+    _sent_to(side, ["ann", "bob", "cat"], ago=HOUR)
+
+    _two_rounds()
+
+    assert _popups() == []
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_the_next_bulk_send_after_the_gap_is_its_own_popup(side):
+    side.model_replies("ann", time.time() - 60)
+    run_when_due(PLATFORM)
+    chats.save_notification(
+        PLATFORM,
+        ChatDelivery(
+            kind=DeliveryKind.MASS,
+            model_id="",
+            event_id="bulk:earlier",
+            at=time.time() - 2 * HOUR,
+        ),
+        side.model,
+    )
+    _sent_to(side, ["bob", "cat"])
+
+    _two_rounds()
+
+    assert _popups() == [f"Mass message sent: @{side.model}"] * 2
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_stackeds_own_event_for_a_noticed_bulk_send_is_the_same_send(side):
+    _sent_to(side, ["ann", "bob", "cat"])
+    _two_rounds()
+
+    _mass_event(side, "mass-1")
+
+    assert _popups() == [f"Mass message sent: @{side.model}"]
+
+
+@pytest.mark.usefixtures("three_chats_are_a_bulk_send")
+def test_a_bulk_send_stacked_already_told_of_is_not_noticed_again(side):
+    _mass_event(side, "mass-1")
+    _sent_to(side, ["ann", "bob", "cat"])
+
+    _two_rounds()
+
+    assert _popups() == [f"Mass message sent: @{side.model}"]

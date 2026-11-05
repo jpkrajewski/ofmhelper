@@ -26,6 +26,8 @@ class StackedSource:
     platform = ChatPlatform.STACKED
     # Expected from the spec's `message.created`; not yet seen on a real mass send.
     mass_reaches_chats = True
+    # Seen 2026-11-05: 650 chats in 10 minutes, no flag and no `mass_message.completed`.
+    bulk_sends_unflagged = True
     events = webhooks.EVENTS
 
     def configured(self) -> bool:

@@ -35,6 +35,9 @@ class ChatSource(Protocol):
     # Whether a mass message also delivers a message event for each chat it
     # reaches. If not, the sync has to read which waits it answered.
     mass_reaches_chats: bool
+    # Whether a bulk send can go out with no event saying so. The model reaching many
+    # chats at once is then the only sign of one.
+    bulk_sends_unflagged: bool
     # What a webhook destination must deliver. One missing gets it remade.
     events: list[str]
 

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from signin import sign_in_admin
 from sqlalchemy import text
 
-from ofmhelpers.cache import get_text
+from ofmhelpers.cache import delete_text, get_text
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import chats
 from ofmhelpers.features.chatting.alerts import chat_alerts
@@ -354,10 +354,35 @@ def test_every_read_of_messages_asks_not_to_mark_them_read(side):
     assert {q["markAsRead"] for q in reads} == {"false"}
 
 
+def test_many_chats_answered_at_once_are_not_a_mass_message_here(side, monkeypatch):
+    """Fanvue says when it sends one."""
+    monkeypatch.setenv("OFM_CHATTING_MASS_MIN_CHATS", "2")
+    now = time.time()
+    side.model_replies("ann", now - 60)
+    side.model_replies("bob", now - 60)
+
+    run_when_due(PLATFORM)
+    run_when_due(PLATFORM)
+
+    assert _popups() == []
+
+
+def test_a_chat_past_the_lookback_waits_for_the_full_round(side):
+    run_when_due(PLATFORM)
+    side.fan_writes("ann", time.time() - 40 * 86400)
+
+    run_when_due(PLATFORM)
+    assert _popups() == []
+
+    delete_text(sync_done_key(PLATFORM))
+    run_when_due(PLATFORM)
+    assert _popups() == [f"Chats unanswered (1): @{HANDLE}"]
+
+
 def test_a_mass_message_answers_only_once_a_full_round_has_read_it(client, side):
     now = time.time()
     side.fan_writes("ann", now - LATE)
-    run_when_due()
+    run_when_due(PLATFORM)
     assert _popups() == [f"Chats unanswered (1): @{HANDLE}"]
     assert get_text(sync_done_key(PLATFORM)) == "1"
 
@@ -367,7 +392,7 @@ def test_a_mass_message_answers_only_once_a_full_round_has_read_it(client, side)
     assert _post(client, side, side.mass("mass-1")).status_code == HTTPStatus.OK
     assert get_text(mass_pending_key(PLATFORM)) == "1"
 
-    run_when_due()
+    run_when_due(PLATFORM)
 
     assert get_text(mass_pending_key(PLATFORM)) is None
     assert _popups() == [f"Mass message sent: @{HANDLE}"]

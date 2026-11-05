@@ -16,7 +16,9 @@ from ofmhelpers.schemas.chatting import (
     ChatRead,
     ChatTokens,
     ChatWebhook,
+    DeliveryKind,
     FanMessage,
+    ModelReach,
     OpenWait,
     StoredNotification,
 )
@@ -83,6 +85,21 @@ def save_notification(
         delivery.detail,
         delivery.at or time.time(),
     )
+
+
+def models_reaching_chats(
+    platform: ChatPlatform, since: float, min_chats: int
+) -> list[ModelReach]:
+    return [
+        ModelReach.model_validate(row)
+        for row in _repository().models_reaching_chats(platform, since, min_chats)
+    ]
+
+
+def recent_mass_messages(
+    platform: ChatPlatform, username: str, since: float
+) -> list[str]:
+    return _repository().recent_events(platform, username, DeliveryKind.MASS, since)
 
 
 def notifications(since: float) -> list[StoredNotification]:

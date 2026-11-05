@@ -3,11 +3,14 @@ sweep never takes its loop down, a gated round is skipped, and nothing
 outlives the app."""
 
 import asyncio
+import threading
 from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from ofmhelpers.features.chatting import sync as chat_history
+from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.web import account_tracker, sweeps
 from ofmhelpers.web.sweeps import Sweep, running
 
@@ -124,7 +127,26 @@ def test_every_sweep_is_cancelled_and_awaited_on_exit():
     assert left == []
 
 
-def test_the_web_process_runs_all_eight_sweeps():
+def test_a_hanging_chat_platform_does_not_hold_up_the_next(monkeypatch):
+    fanvue_ran = threading.Event()
+    stacked_saw: list[bool] = []
+
+    def run_platform(source) -> None:
+        if source.platform == ChatPlatform.STACKED:
+            stacked_saw.append(fanvue_ran.wait(timeout=2))
+        else:
+            fanvue_ran.set()
+
+    monkeypatch.setattr(chat_history, "_run_platform", run_platform)
+    monkeypatch.setattr(chat_history, "enabled", lambda _platform: True)
+    chat_sweeps = [s for s in sweeps.sweeps() if s.name.startswith("chat history")]
+
+    _until(stacked_saw, 1, *chat_sweeps)
+
+    assert stacked_saw == [True]
+
+
+def test_the_web_process_runs_all_nine_sweeps():
     assert {sweep.name for sweep in sweeps.sweeps()} == {
         "recovery",
         "reel watch",
@@ -132,7 +154,8 @@ def test_the_web_process_runs_all_eight_sweeps():
         "link sync",
         "drive",
         "chat webhooks",
-        "chat history",
+        "chat history stacked",
+        "chat history fanvue",
         "preview backfill",
     }
 

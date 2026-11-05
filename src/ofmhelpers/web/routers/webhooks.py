@@ -4,6 +4,10 @@ each platform's `ChatSource`. Public (`settings.web.public_prefixes`) and left o
 the write rate limit, since a mass message can deliver hundreds at once: what guards
 these is each delivery's signature, not a session. So the body is capped before it is
 read, and an address sending deliveries that fail the signature is turned away.
+
+A platform set up on its own site sends to whatever address was typed there, so a path
+under the platform's is heard too (seen 2026-11-05: Fanvue at
+/events/fanvue/creator-events, a 404 until then).
 """
 
 from fastapi import APIRouter, Request, status
@@ -35,6 +39,7 @@ async def _capped_body(request: Request) -> bytes | None:
 
 
 @router.post("/{platform}")
+@router.post("/{platform}/{destination}")
 async def delivery(platform: ChatPlatform, request: Request) -> Response:
     """A 2xx tells the platform the event is stored; anything else, it retries."""
     source = source_for(platform)
