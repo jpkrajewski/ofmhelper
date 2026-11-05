@@ -41,6 +41,8 @@ class ElyumProvider(Provider):
     name = "elyum"
     label = PROVIDER
     rank = 30
+    # Idempotency-Key = our job key: a resend answers the generation made.
+    idempotent_submit = True
 
     def __init__(self, api_key: str) -> None:
         super().__init__(api_key)

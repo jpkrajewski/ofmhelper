@@ -14,6 +14,7 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
+from ofmhelpers.integrations.ai_providers import self_heal
 
 SPEC = get_spec("kie:wan/3-0-video")
 
@@ -24,6 +25,7 @@ class ScriptedProvider:
 
     name = "kie"
     label = "Scripted"
+    idempotent_submit = False
 
     def __init__(self, states, submit_errors=(), download_errors=()):
         self.api_key = "key"
@@ -38,6 +40,10 @@ class ScriptedProvider:
         if self.submit_errors:
             raise self.submit_errors.pop(0)
         return f"task-{len(self.submitted)}"
+
+    def callback_url(self, job_key):
+        del job_key
+        return ""
 
     def status(self, task_id):
         del task_id
@@ -72,7 +78,7 @@ def slept(monkeypatch) -> list[float]:
     monkeypatch.setenv("OFM_AIGEN_RATE_LIMIT_MAX_WAIT_S", "180")
     monkeypatch.setenv("OFM_AIGEN_DOWNLOAD_RETRY_WAITS_S", "[5, 15]")
     waits: list[float] = []
-    monkeypatch.setattr(runner, "_sleep", waits.append)
+    monkeypatch.setattr(self_heal, "_sleep", waits.append)
     return waits
 
 

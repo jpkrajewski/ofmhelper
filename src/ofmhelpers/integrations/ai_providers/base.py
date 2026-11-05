@@ -16,7 +16,7 @@ import importlib
 import inspect
 import pkgutil
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import lru_cache, partial
 from pathlib import Path
@@ -59,9 +59,33 @@ class Provider(ABC):
     needs_key: ClassVar[bool] = True
     # Where it sits in the provider select, lowest first.
     rank: ClassVar[int] = 100
+    # A submit resent with the same idempotency key answers the request
+    # already made: one whose answer was lost is sent again, never paid twice.
+    idempotent_submit: ClassVar[bool] = False
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
+
+    def callback_url(self, job_key: str) -> str:  # noqa: ARG002 -- none by default
+        """Where the provider tells of the request it made for `job_key`, so a
+        submit whose answer was lost is still found (runner, recovery); empty
+        when it cannot, or this server has no public address."""
+        return ""
+
+    @classmethod
+    def callback_task_id(
+        cls,
+        raw: bytes,  # noqa: ARG003 -- none by default
+        headers: Mapping[str, str],  # noqa: ARG003
+    ) -> str | None:
+        """The task id a genuine callback names; None for anything else."""
+        return None
+
+    @classmethod
+    def callback_signed(cls) -> bool:
+        """Whether `callback_task_id` checks the provider's signature: then the
+        task needs no check with the job's key before it is believed."""
+        return False
 
     @classmethod
     def catalog_path(cls) -> Path:

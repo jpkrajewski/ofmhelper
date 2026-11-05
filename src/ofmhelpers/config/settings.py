@@ -474,6 +474,21 @@ class KieAISettings(ProviderSettings):
     # task-queue calls are small JSON round trips.
     upload_timeout_s: int = 900
     request_timeout_s: float = 30
+    # createTask answers once kie.ai has read the references: Wan 3.0 took
+    # 1-3 s, then 17.5 s and over 30 s (a ReadTimeout that failed the job) on
+    # prod 2026-11-05. It is never resent, so waiting is the only way through.
+    create_timeout_s: float = 180
+    # kie.ai Settings page "webhookHmacKey" (`KIE_AI_WEBHOOK_HMAC_KEY`, in dev + prod .env since 2026-11-05; proven with a real signed callback): with it, a callback must carry its
+    # signature (X-Webhook-Signature over `<taskId>.<X-Webhook-Timestamp>`) no
+    # older than `callback_tolerance_s`. Without it a callback is still only
+    # believed for a task the job's own key can read.
+    webhook_hmac_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "KIE_AI_WEBHOOK_HMAC_KEY", "OFM_KIEAI_WEBHOOK_HMAC_KEY"
+        ),
+    )
+    callback_tolerance_s: int = 300
     # The best-effort HEAD behind the upload cache: it fails closed into a
     # re-upload, so waiting on it is never worth much.
     remote_check_timeout_s: int = 10

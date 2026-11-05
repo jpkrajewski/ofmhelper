@@ -98,6 +98,12 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "LOGFIRE_TOKEN": "",
         # Sweeps only when a test asks (the Sync button), never between.
         "OFM_GDRIVE_CHECK_INTERVAL_S": "86400",
+        # The daily posting window (18:45-00:45 UTC) never opens here: inside
+        # it every page adds its "Start posting content" desktop notification,
+        # and the chat pop-up tests failed only when the suite ran at night
+        # (2026-11-05 22:40 UTC). The window's own rules: test_drive.py.
+        "OFM_GDRIVE_POSTING_BEFORE_H": "0",
+        "OFM_GDRIVE_POSTING_AFTER_H": "0",
         "OFM_LOG_ACCESS": "true",
         # The admin's link providers: the fakes' keys (links/fake.py).
         "OOPSIE_API_KEY_ADMIN": OOPSIE_FAKE_KEY,

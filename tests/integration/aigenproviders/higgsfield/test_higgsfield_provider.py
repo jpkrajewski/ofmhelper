@@ -25,6 +25,7 @@ from ofmhelpers.aigenproviders.higgsfield.fake import FAKE_KEY, fake_higgsfield
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.runner import generate
 from ofmhelpers.cache import get_redis
+from ofmhelpers.integrations.ai_providers import self_heal
 from ofmhelpers.utils import fake_media
 from ofmhelpers.web.schemas.errors import error_reason
 
@@ -333,19 +334,24 @@ def test_a_rate_limited_submit_is_sent_once_with_the_wait(
 
 @pytest.mark.parametrize("status", [408, 502, 503, 504])
 def test_an_unanswered_submit_is_resent_under_one_key_then_remembers_nothing(
-    wire, provider, no_backoff, status
+    wire, provider, no_backoff, status, monkeypatch
 ):
     """2026-10-25 review #61: the SDK resent a 5xx/408 submit with no key --
     up to 3 paid requests. With the key a resend returns the request a lost
-    answer made (docs: concepts/idempotency)."""
+    answer made (docs: concepts/idempotency), so the runner sends it again
+    too (`idempotent_submit`, waits 10/30/60 s): the SDK's 3 tries, 4 times,
+    one key."""
+    waits: list[float] = []
+    monkeypatch.setattr(self_heal, "_sleep", waits.append)
     fake = wire({SUBMIT: (status, {"detail": "busy"})})
 
     with pytest.raises(ProviderUnavailableError):
         generate(provider, SPEC, {"prompt": "a"}, "job-1")
 
     keys = {c["headers"]["idempotency-key"] for c in fake.calls}
-    assert len(fake.calls) == 3
+    assert len(fake.calls) == 12
     assert len(keys) == 1
+    assert len(waits) == 3
     assert tasks.recall("job-1") is None
 
 
