@@ -10,6 +10,7 @@
 - `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
 - `accounts.py` -- a tracked social account (/accounts), its list query and history.
 - `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
+- `chatting.py` -- chat platforms, stored fan messages and what /chatting shows.
 - `drive.py` -- an Instagram login's Drive folders (/drive): what waits, what was posted.
 - `users.py` -- who signs in (/users, /login, /account) and their role.
 - `cookies.py` -- a user's own cookies.txt as /cookies shows it (no values).

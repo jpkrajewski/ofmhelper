@@ -21,10 +21,20 @@ VA_PAGES = [
     "/cookies",
 ]
 ADMIN_ONLY_PAGES = [
+    "/chatting",
     "/users",
     "/character-sheet",
     "/applications",
     "/file-manager",
     "/styleguide",
     "/action-log",
+]
+
+# An admin's header: their one extra bar link comes right after the shared ones.
+SHARED_BAR_LINKS = 9
+ADMIN_HEADER = [
+    *VA_PAGES[:SHARED_BAR_LINKS],
+    "/chatting",
+    *VA_PAGES[SHARED_BAR_LINKS:],
+    *ADMIN_ONLY_PAGES[1:],
 ]

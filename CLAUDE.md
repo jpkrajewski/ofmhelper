@@ -80,7 +80,7 @@ Before ssh, psql or reading logs: query Logfire (`src/ofmhelpers/telemetry.py`).
 One rule: `web/` is HTTP only. Where a new thing goes:
 - `web/` app, middleware, `routers/<area>/`, templates, static. A route: params -> one call -> render.
 - `features/<page>/` what a page or background job does (`service.py`, `jobs.py`, `models.py`). Math and static data in their own files, not next to the logic.
-- `integrations/` everything that talks to an outside service: `ai_providers/<name>/`, `gdrive`, `instagram`, `llm`, `short_links`, `apify`, `downloaders`, `signin`, `socials`.
+- `integrations/` everything that talks to an outside service: `ai_providers/<name>/`, `gdrive`, `instagram`, `llm`, `short_links`, `apify`, `stacked`, `fanvue`, `downloaders`, `signin`, `socials`.
 - `media/` local video and image work (ffmpeg, recorder, repurpose, exports).
 - `db/` session, models, `repositories/`, `stores/`. `schemas/` shared Pydantic shapes. `config/`, `cache/`, `utils/`.
 - `_moved.py`: old import paths of moved modules (RQ jobs in the queue, frozen tests). New code imports the new path; never add to it except when moving a module.

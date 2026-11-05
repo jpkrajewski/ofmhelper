@@ -40,7 +40,11 @@ def get_engine() -> Engine:
         # telemetry instrumentation (telemetry.py) wraps
         # `sqlalchemy.create_engine` after this module is imported, and only
         # an engine made through the wrapper gets a span per query.
-        _engine = sqlalchemy.create_engine(url, pool_pre_ping=True, future=True)
+        # hide_parameters: a failed statement's message is logged, and the values
+        # are fan messages, tokens and passwords.
+        _engine = sqlalchemy.create_engine(
+            url, pool_pre_ping=True, future=True, hide_parameters=True
+        )
         _engine_url = url
     return _engine
 

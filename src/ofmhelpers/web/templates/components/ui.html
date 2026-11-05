@@ -62,9 +62,9 @@
    body. One open at a time; outside click, Escape or picking an item closes
    it (static/js/menu.js). `hook` adds JS-hook classes.
    {% call ui.menu("Actions for Phone 01") %}{{ ui.menu_item("Edit", "pencil", "ph-edit") }}{% endcall %} #}
-{% macro menu(label, hook="") -%}
+{% macro menu(label, hook="", icon="ellipsis") -%}
 <details class="menu{{ ' ' ~ hook if hook else '' }}">
-    {{ menu_toggle("ellipsis", label) }}
+    {{ menu_toggle(icon, label) }}
     <div class="menu-list">{{ caller() }}</div>
 </details>
 {%- endmacro %}
@@ -119,6 +119,22 @@
     <strong class="stat-value">{{ value }}</strong>
     {% if note %}<span class="stat-note">{{ note }}</span>{% endif %}
 </div>
+{%- endmacro %}
+
+{# The date and time now in `zone`: Thursday, Nov 5 · 01:39 AM
+   (static/js/time-zone.js fills it). #}
+{% macro clock_now(zone, hook="") -%}
+<span class="clock-now{{ ' ' ~ hook if hook else '' }}" data-zone="{{ zone.zone }}">
+    <span class="clock-date"></span><span class="clock-dot"> · </span><span class="clock-time"></span>
+</span>
+{%- endmacro %}
+
+{# The globe's menu: the zones to choose from, a check on the chosen one
+   (static/js/time-zone.js). #}
+{% macro time_zone_menu(zones, current) -%}
+{% call menu("Time zone", hook="time-zone-menu", icon="globe") %}
+{% for tz in zones %}{{ menu_item(tz.label, "check", "time-zone-choice", attrs={"data-zone": tz.zone, "aria-current": "true" if tz.zone == current.zone else none}) }}{% endfor %}
+{% endcall %}
 {%- endmacro %}
 
 {# Nothing to show yet: one short sentence (or markup as the call body). #}

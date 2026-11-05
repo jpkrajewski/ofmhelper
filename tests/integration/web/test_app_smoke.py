@@ -13,7 +13,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 from html.parser import HTMLParser
 
 import pytest
-from app_pages import ADMIN_ONLY_PAGES, VA_PAGES
+from app_pages import ADMIN_HEADER, ADMIN_ONLY_PAGES, VA_PAGES
 from fastapi.testclient import TestClient
 from signin import sign_in
 
@@ -64,7 +64,7 @@ def test_admin_opens_every_page():
     for path in VA_PAGES + ADMIN_ONLY_PAGES:
         r = client.get(path)
         assert r.status_code == 200, path
-        assert _nav_paths(r.text) == VA_PAGES + ADMIN_ONLY_PAGES, path
+        assert _nav_paths(r.text) == ADMIN_HEADER, path
 
 
 @pytest.mark.parametrize(

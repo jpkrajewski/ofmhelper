@@ -245,7 +245,8 @@ def instrument_app(app: FastAPI) -> None:
     checks are left out: one every 30 s is noise."""
     logfire.instrument_fastapi(
         app,
-        excluded_urls="/health,/static/.*",
+        # The Fanvue callback's URL holds its one-time login code.
+        excluded_urls="/health,/static/.*,/chatting/fanvue/callback",
         request_attributes_mapper=_request_attributes,
     )
 

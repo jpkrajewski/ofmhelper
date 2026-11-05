@@ -45,6 +45,7 @@ from __future__ import annotations
 import json
 import logging
 import logging.config
+import re
 import sys
 from typing import Any
 
@@ -58,6 +59,10 @@ _configured = False
 _RESERVED = frozenset(
     logging.LogRecord("", 0, "", 0, "", None, None).__dict__
 ) | frozenset({"asctime", "message", "taskName"})
+
+
+_ACCESS_ARGS = 5
+_LOGIN_CODE = re.compile(r"([?&]code=)[^&\s]+")
 
 
 class JsonFormatter(logging.Formatter):
@@ -83,6 +88,24 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+class _HideLoginCodes(logging.Filter):
+    """An access line holds the full URL, and a sign-in's callback carries its one-time
+    code. uvicorn's args: client, method, path with query, HTTP version, status."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == _ACCESS_ARGS:
+            client, method, path, version, status = args
+            record.args = (
+                client,
+                method,
+                _LOGIN_CODE.sub(r"\1***", str(path)),
+                version,
+                status,
+            )
+        return True
+
+
 def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
     formatters: dict[str, Any] = {
         "text": {
@@ -101,6 +124,7 @@ def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
         # here is the classic way to silence half an app by accident.
         "disable_existing_loggers": False,
         "formatters": formatters,
+        "filters": {"hide_login_codes": {"()": _HideLoginCodes}},
         "handlers": {
             "stdout": {
                 "class": "logging.StreamHandler",
@@ -119,6 +143,7 @@ def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
                 "handlers": [],
                 "propagate": access_log,
                 "level": "INFO" if access_log else "CRITICAL",
+                "filters": ["hide_login_codes"],
             },
             # RQ checks for an "effective handler" before installing its own
             # colorizing stdout/stderr pair (rq.logutils.setup_loghandlers).

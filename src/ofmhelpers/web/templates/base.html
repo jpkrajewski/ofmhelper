@@ -19,6 +19,8 @@
     <script src="{{ static_url('js/notify.js') }}" defer></script>
     <script src="{{ static_url('js/posting.js') }}" defer></script>
     <script src="{{ static_url('js/drive-alert.js') }}" defer></script>
+    <script src="{{ static_url('js/chats-alert.js') }}" defer></script>
+    <script src="{{ static_url('js/time-zone.js') }}" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -28,6 +30,7 @@
     {# schemas/nav.py NAV: a new page is one entry there. #}
     {% set pages = nav(is_admin) %}
     {% set here = request.url.path %}
+    {% set chosen_zone = time_zone(request.cookies.get("ofm_timezone")) %}
 
     <header class="site-header">
         <div class="site-header-inner">
@@ -53,8 +56,14 @@
                             </ul>
                         </details>
                     </li>
+                    {# On a phone the bar has no room: the clock is in the menu. #}
+                    {% if signed_in_as %}
+                    <li class="clock-drawer">{{ ui.clock_now(chosen_zone) }}</li>
+                    {% endif %}
                 </ul>
             </nav>
+
+            {% if signed_in_as %}{{ ui.clock_now(chosen_zone, hook="clock-bar") }}{% endif %}
 
             {# Log out lives in the bar itself, not in the nav list: it is
                not a destination, and on a phone it must not be hidden
@@ -63,6 +72,8 @@
                 {% if signed_in_as %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% endif %}
                 {{ ui.button("Log out", "ghost", type="submit") }}
             </form>
+
+            {% if signed_in_as %}{{ ui.time_zone_menu(time_zones, chosen_zone) }}{% endif %}
 
             {# Light / dark (static/js/theme.js): the icon shows the mode a click gives. #}
             {% call ui.icon_button("moon", "Switch light or dark", hook="theme-toggle") %}{{ ic.icon("moon") }}{{ ic.icon("sun") }}{% endcall %}
@@ -80,7 +91,10 @@
            sign-in Google refused (web/drive_space.py, signed in only):
            static/js/drive-alert.js asks for the space and shows the one that
            applies; dismissed, it stays away for the day. Each chimes and
-           notifies the desktop once (static/js/notify.js). #}
+           notifies the desktop once (static/js/notify.js). Models with a
+           chat nobody answered, and mass messages just finished
+           (features/chatting/alerts.py, admins only): static/js/chats-alert.js
+           fills and shows them. #}
         <div class="page-alerts">
         {% set pw = posting_window() %}
         {% call ui.notice(hook="posting-banner", attrs={"data-start": pw.start|int, "data-end": pw.end|int, "hidden": true}) %}
@@ -99,6 +113,16 @@
             {{ ui.button("Reconnect Google Drive", href="/account", hook="drive-reconnect-link") }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-reconnect-dismiss") }}
         {% endcall %}
+        {% endif %}
+        {% if is_admin %}
+        {% for kind in ("info", "warn") %}
+        <template id="chat-popup-{{ kind }}">
+        {% call ui.notice(kind=kind, hook="chat-popup") %}
+            <span><span class="chat-popup-text"></span>: <span class="chat-popup-link"></span></span>
+            {{ ui.icon_button("x", "Dismiss", hook="chat-popup-dismiss") }}
+        {% endcall %}
+        </template>
+        {% endfor %}
         {% endif %}
         </div>
     </header>

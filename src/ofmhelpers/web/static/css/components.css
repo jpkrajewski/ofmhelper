@@ -827,3 +827,31 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface-3); }
 .menu-item .icon { width: 20px; height: 20px; }
 .menu-item-danger { color: var(--fail); }
+
+/* The header's clock, on the far side of the divider from the account, and
+   the globe's zone menu next to light / dark. On a phone the clock is in the
+   menu. Under 1600 px one line does not fit beside the links, so it stacks. */
+.clock-now {
+    display: inline-flex;
+    flex: none;
+    font-size: var(--step--1);
+    line-height: 1.2;
+    color: var(--text-muted);
+    white-space: pre;
+}
+.clock-bar { display: none; }
+.clock-drawer { padding: var(--s-2) var(--s-4); }
+@media (min-width: 980px) {
+    .clock-bar { display: inline-flex; margin-left: auto; }
+    .clock-bar + .logout-form { margin-left: 0; }
+    .clock-drawer { display: none; }
+}
+@media (min-width: 980px) and (max-width: 1599px) {
+    .clock-bar { flex-direction: column; }
+    .clock-bar .clock-dot { display: none; }
+}
+.time-zone-menu > summary .icon { width: 16px; height: 16px; }
+/* Above the pop-ups under the header (.page-alerts), like the More menu. */
+.time-zone-menu .menu-list { z-index: 110; }
+.time-zone-choice .icon { visibility: hidden; }
+.time-zone-choice[aria-current="true"] .icon { visibility: visible; }

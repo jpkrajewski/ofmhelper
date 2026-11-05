@@ -1,7 +1,7 @@
 """How often you may ask: fixed-window rate limiting, counters and enforcement
 in one place.
 
-Two users, both here:
+Three users, all here:
 
 - `WriteRateLimitMiddleware` -- a blunt per-IP ceiling on POST/PUT/PATCH/DELETE
   so no write endpoint can be hammered, without tuning a limit per route.
@@ -9,6 +9,8 @@ Two users, both here:
   routers/auth.py's /login route. Only *failed* logins are counted, so a
   legitimate user is never locked out by their own successful traffic, and a
   correct password clears the counter.
+- `record_refused_webhook` / `webhook_blocked`, called by routers/webhooks.py.
+  Only deliveries failing the signature count: a real one is never turned away.
 
 The counters live on the one Redis connection in the repo
 (`ofmhelpers.cache.get_redis`) -- shared state, so the limit holds across every
@@ -47,6 +49,7 @@ WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 _LOGIN_BUCKET = "login_failures"
 _WRITE_BUCKET = "write"
+_WEBHOOK_BUCKET = "webhook_refused"
 
 
 def client_id(request: Request) -> str:
@@ -115,13 +118,34 @@ def clear_failed_logins(request: Request) -> None:
     _clear(_LOGIN_BUCKET, client_id(request))
 
 
+def webhook_blocked(request: Request) -> bool:
+    """True once this client has sent too many deliveries failing the signature."""
+    if not settings.web.rate_limit_enabled:
+        return False
+    count = _count(_WEBHOOK_BUCKET, client_id(request))
+    return count >= settings.chatting.webhook_max_refused
+
+
+def record_refused_webhook(request: Request) -> None:
+    _hit(
+        _WEBHOOK_BUCKET,
+        client_id(request),
+        settings.chatting.webhook_refused_window_s,
+    )
+
+
 class WriteRateLimitMiddleware(BaseHTTPMiddleware):
     """Deliberately generous: this is an anti-hammering backstop, not a quota
     -- a real user uploading a batch of reference files must never see a 429."""
 
     async def dispatch(self, request: Request, call_next):
         s = settings.web
-        if not s.rate_limit_enabled or request.method not in WRITE_METHODS:
+        # A provider's webhooks are signed, and a mass message delivers hundreds.
+        if (
+            not s.rate_limit_enabled
+            or request.method not in WRITE_METHODS
+            or request.url.path.startswith("/events/")
+        ):
             return await call_next(request)
 
         identifier = client_id(request)

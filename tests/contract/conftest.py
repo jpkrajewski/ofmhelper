@@ -26,11 +26,14 @@ from ofmhelpers.config.settings import (
     LinksSettings,
     LLMSettings,
     RunningHubSettings,
+    StackedSettings,
     ViralSettings,
 )
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.fake import _fake_drive
 from ofmhelpers.instagram.fake import fake_instagram
+from ofmhelpers.integrations.fanvue.fake import fake_fanvue
+from ofmhelpers.integrations.stacked.fake import fake_stacked
 from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.llm.cerebras.fake import fake_cerebras
 from ofmhelpers.llm.gemini.fake import fake_gemini
@@ -48,6 +51,7 @@ _REAL_SETTINGS = (
     LinksSettings,
     LLMSettings,
     RunningHubSettings,
+    StackedSettings,
     ViralSettings,
 )
 
@@ -65,6 +69,8 @@ def _reset_fakes() -> None:
         fake_groq,
         fake_cerebras,
         fake_apify,
+        fake_stacked,
+        fake_fanvue,
         fake_runninghub,
         fake_elyum,
         fake_media.mp4,

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}Chatting{% endblock %}
+{% block content %}
+{{ ui.page_header("Chatting") }}
+<div class="card-grid">
+    {% for platform in platforms %}
+    {{ ui.link_card("/chatting/" ~ platform.value, platform.label, "message") }}
+    {% endfor %}
+</div>
+{% if recent %}
+<h2 class="col-title chatting-recent-title">Recently checked</h2>
+<div class="card-grid">
+    {% for model in recent %}
+    {{ ui.link_card("/chatting/" ~ model.platform.value ~ "/" ~ model.username, "@" ~ model.username ~ " · " ~ model.platform.label, "user") }}
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -58,6 +58,8 @@ PAGES = [
     Shot(name="cookies", path="/cookies"),
     Shot(name="users", path="/users"),
     Shot(name="character-sheet", path="/character-sheet"),
+    Shot(name="chatting", path="/chatting"),
+    Shot(name="chatting-stacked", path="/chatting/stacked"),
     Shot(name="applications", path="/applications"),
     Shot(name="file-manager", path="/file-manager"),
     Shot(name="action-log", path="/action-log"),

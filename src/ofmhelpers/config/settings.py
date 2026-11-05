@@ -30,12 +30,19 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    SettingsConfigDict,
+)
 
 from ofmhelpers.media.image_fit import ImageLimits
 from ofmhelpers.media.recorder.models import GeoPoint, Place
 
 _DAILY_AT_MSG = "rescan_daily_at must be HH:MM"
+# Pydantic-settings lowercases the names it reads.
+_STACKED_KEY_PREFIX = "stacked_api_key_"
 
 
 class QueueName(StrEnum):
@@ -124,7 +131,7 @@ class WebSettings(BaseSettings):
         validation_alias="OFM_PUBLIC_PATHS",
     )
     public_prefixes: tuple[str, ...] = Field(
-        default=("/static/", "/auth/", "/password/"),
+        default=("/static/", "/auth/", "/password/", "/events/"),
         validation_alias="OFM_PUBLIC_PREFIXES",
     )
     kie_ai_api_key_admin: str | None = None
@@ -1663,6 +1670,174 @@ class ViralSettings(BaseSettings):
     def max_usd(self) -> float:
         """The most one search costs: every scanned reel charged."""
         return self.scan * self.usd_per_reel + self.usd_per_run
+
+
+class ChattingSettings(BaseSettings):
+    """/chatting and its pop-ups, whichever platform (`features/chatting/`)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # A fan waiting longer than this with no reply = "Chats unanswered".
+    unanswered_after_s: int = Field(
+        default=300, ge=1, validation_alias="OFM_CHATTING_UNANSWERED_AFTER_S"
+    )
+    # The period the average covers, and how far back a chat's first read goes. A fan
+    # still waiting counts however long ago they wrote.
+    lookback_s: int = Field(
+        default=86400, ge=1, validation_alias="OFM_CHATTING_LOOKBACK_S"
+    )
+    # How often the sync is asked if it is due.
+    check_interval_s: float = Field(
+        default=60, gt=0, validation_alias="OFM_CHATTING_CHECK_INTERVAL_S"
+    )
+    # How often pages ask for the pop-ups: a chatter's reply should show at once.
+    alerts_check_s: float = Field(
+        default=10, gt=0, validation_alias="OFM_CHATTING_ALERTS_CHECK_S"
+    )
+    # This server's public address for webhooks. Unset: APP_BASE_URL when it is public
+    # HTTPS, else no webhooks and the sync does the work.
+    webhook_base_url: str = Field(
+        default="", validation_alias="OFM_CHATTING_WEBHOOK_BASE_URL"
+    )
+    # How often the sync reads everything once webhooks deliver messages; also how
+    # often a model's destination is checked.
+    webhook_sync_interval_s: float = Field(
+        default=3600, gt=0, validation_alias="OFM_CHATTING_WEBHOOK_SYNC_INTERVAL_S"
+    )
+    # A model with no delivery for this long counts as not delivering, and is read
+    # every minute: all a dead webhook can cost.
+    webhook_quiet_s: int = Field(
+        default=600, ge=1, validation_alias="OFM_CHATTING_WEBHOOK_QUIET_S"
+    )
+    # How old a signed delivery may be: an older one is a recording played back.
+    webhook_tolerance_s: int = Field(
+        default=300, ge=1, validation_alias="OFM_CHATTING_WEBHOOK_TOLERANCE_S"
+    )
+    # Far above a real delivery, far below what could hurt the server.
+    webhook_max_body_bytes: int = Field(
+        default=1_048_576, ge=1, validation_alias="OFM_CHATTING_WEBHOOK_MAX_BODY_BYTES"
+    )
+    # Deliveries failing the signature from one address before it is turned away.
+    webhook_max_refused: int = Field(
+        default=30, ge=1, validation_alias="OFM_CHATTING_WEBHOOK_MAX_REFUSED"
+    )
+    webhook_refused_window_s: int = Field(
+        default=300, ge=1, validation_alias="OFM_CHATTING_WEBHOOK_REFUSED_WINDOW_S"
+    )
+    # A sale above this many cents, before fees, is worth a pop-up.
+    sale_notify_cents: int = Field(
+        default=5000, ge=0, validation_alias="OFM_CHATTING_SALE_NOTIFY_CENTS"
+    )
+    # How long a mass message, a new subscriber or a big sale can show, unless closed.
+    notification_shown_s: int = Field(
+        default=86400, ge=1, validation_alias="OFM_CHATTING_NOTIFICATION_SHOWN_S"
+    )
+    # How many creators /chatting offers as recently checked.
+    recent_models_shown: int = Field(
+        default=3, ge=1, validation_alias="OFM_CHATTING_RECENT_MODELS"
+    )
+    # This many chats in a row that cannot be read end a sync round: the platform is
+    # down, and each one costs its retries.
+    sync_max_failed_chats: int = Field(
+        default=5, ge=1, validation_alias="OFM_CHATTING_SYNC_MAX_FAILED_CHATS"
+    )
+
+
+class FanvueSettings(BaseSettings):
+    """Fanvue's API (`ofmhelpers.integrations.fanvue`)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    client_id: str = Field(default="", validation_alias="FANVUE_CLIENT_ID")
+    client_secret: str = Field(
+        default="", repr=False, validation_alias="FANVUE_CLIENT_SECRET"
+    )
+    # The app's one signing secret, from the Events tab of Fanvue's Developer Area.
+    event_secret: str = Field(
+        default="", repr=False, validation_alias="FANVUE_EVENT_SECRET"
+    )
+    api_url: str = Field(
+        default="https://api.fanvue.com/v1", validation_alias="OFM_FANVUE_API_URL"
+    )
+    authorize_url: str = Field(
+        default="https://auth.fanvue.com/oauth2/auth",
+        validation_alias="OFM_FANVUE_AUTHORIZE_URL",
+    )
+    token_url: str = Field(
+        default="https://auth.fanvue.com/oauth2/token",
+        validation_alias="OFM_FANVUE_TOKEN_URL",
+    )
+    api_version: str = Field(
+        default="2025-06-26", validation_alias="OFM_FANVUE_API_VERSION"
+    )
+    # Each must also be enabled on the app in Fanvue's Developer Area.
+    scopes: str = Field(
+        default="openid offline_access offline read:self read:chat read:creator",
+        validation_alias="OFM_FANVUE_SCOPES",
+    )
+    timeout_s: float = Field(default=30, gt=0, validation_alias="OFM_FANVUE_TIMEOUT_S")
+    # 50 is the API's largest page.
+    page_size: int = Field(
+        default=50, ge=1, le=50, validation_alias="OFM_FANVUE_PAGE_SIZE"
+    )
+    tries: int = Field(default=4, ge=1, validation_alias="OFM_FANVUE_TRIES")
+    retry_wait_s: float = Field(
+        default=2.0, ge=0, validation_alias="OFM_FANVUE_RETRY_WAIT_S"
+    )
+    max_wait_s: float = Field(
+        default=65.0, ge=0, validation_alias="OFM_FANVUE_MAX_WAIT_S"
+    )
+    # A token this close to expiring is refreshed before it is used.
+    token_refresh_margin_s: int = Field(
+        default=120, ge=0, validation_alias="OFM_FANVUE_TOKEN_REFRESH_MARGIN_S"
+    )
+    # A refresh whose answer got lost is presented again at once, this many tries.
+    refresh_tries: int = Field(
+        default=3, ge=1, validation_alias="OFM_FANVUE_REFRESH_TRIES"
+    )
+    # How long someone has to finish connecting in their browser.
+    connect_ttl_s: int = Field(
+        default=600, ge=1, validation_alias="OFM_FANVUE_CONNECT_TTL_S"
+    )
+
+
+class StackedSettings(BaseSettings):
+    """Stacked's API (`ofmhelpers.integrations.stacked`)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    api_url: str = Field(
+        default="https://api.stacked.com/external-service/v1",
+        validation_alias="OFM_STACKED_API_URL",
+    )
+    timeout_s: float = Field(default=30, gt=0, validation_alias="OFM_STACKED_TIMEOUT_S")
+    # 100 is the API's largest page.
+    page_size: int = Field(
+        default=100, ge=1, le=100, validation_alias="OFM_STACKED_PAGE_SIZE"
+    )
+    # Reads are safe to retry, a 429 after its Retry-After (API docs, "Retries").
+    tries: int = Field(default=4, ge=1, validation_alias="OFM_STACKED_TRIES")
+    retry_wait_s: float = Field(
+        default=2.0, ge=0, validation_alias="OFM_STACKED_RETRY_WAIT_S"
+    )
+    # Rate limits are one-minute windows, so no real wait is longer.
+    max_wait_s: float = Field(
+        default=65.0, ge=0, validation_alias="OFM_STACKED_MAX_WAIT_S"
+    )
+
+    @property
+    def api_keys(self) -> dict[str, str]:
+        """Each `STACKED_API_KEY_<NAME>` as {name: key}, sorted. A new creator
+        or agency = a new line in .env; the API says which kind a key is."""
+        found = {
+            **DotEnvSettingsSource(type(self)).env_vars,
+            **EnvSettingsSource(type(self)).env_vars,
+        }
+        return {
+            name.removeprefix(_STACKED_KEY_PREFIX): key
+            for name, key in sorted(found.items())
+            if name.startswith(_STACKED_KEY_PREFIX) and key
+        }
 
 
 class PicturesSettings(BaseSettings):

@@ -13,6 +13,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.drive.posting import window as posting_window
 from ofmhelpers.schemas.accounts import ago
 from ofmhelpers.schemas.nav import nav
+from ofmhelpers.schemas.time_zones import TIME_ZONES, time_zone
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -92,6 +93,8 @@ def get_templates() -> Jinja2Templates:
     templates.env.globals["static_url"] = static_url
     # The header, its More menu and the home cards all read schemas.nav.NAV.
     templates.env.globals["nav"] = nav
+    templates.env.globals["time_zones"] = TIME_ZONES
+    templates.env.globals["time_zone"] = time_zone
     # The daily posting window: base.html's "Start posting content".
     templates.env.globals["posting_window"] = posting_window
     templates.env.filters["utc"] = utc

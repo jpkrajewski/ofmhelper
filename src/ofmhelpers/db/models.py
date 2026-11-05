@@ -34,6 +34,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, column_property, mapped_column
@@ -139,6 +140,120 @@ class UserCookiesRow(Base):
     cookies: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     uploaded_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class ChatThreadRow(Base):
+    """One chat of a model on a chat platform (alembic f3e2d1c0b9a8): how far
+    the /chatting sweep has read it."""
+
+    __tablename__ = "chat_threads"
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    channel_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    model_username: Mapped[str] = mapped_column(String(255), nullable=False)
+    last_message_id: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class ChatFanMessageRow(Base):
+    """A fan's message and when the model answered it (alembic f3e2d1c0b9a8):
+    what /chatting's numbers and list come from."""
+
+    __tablename__ = "chat_fan_messages"
+    __table_args__ = (
+        Index(
+            "ix_chat_fan_messages_model_sent", "platform", "model_username", "sent_at"
+        ),
+        Index("ix_chat_fan_messages_channel", "platform", "channel_id"),
+        Index(
+            "ix_chat_fan_messages_open",
+            "platform",
+            "model_username",
+            "channel_id",
+            "sent_at",
+            postgresql_where=text("replied_at IS NULL"),
+        ),
+    )
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    message_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    channel_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    model_username: Mapped[str] = mapped_column(String(255), nullable=False)
+    fan_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_at: Mapped[float] = mapped_column(Float, nullable=False)
+    replied_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class ChatModelMessageRow(Base):
+    """When a model message was sent, no text (alembic d9c8b7a6e5f4): a fan
+    message arriving after the reply that answers it finds it here."""
+
+    __tablename__ = "chat_model_messages"
+    __table_args__ = (
+        Index(
+            "ix_chat_model_messages_channel_sent", "platform", "channel_id", "sent_at"
+        ),
+        Index("ix_chat_model_messages_sent", "sent_at"),
+    )
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    message_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    channel_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    sent_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class ChatAccountRow(Base):
+    """Someone who connected a chat platform that has no API keys (alembic
+    b7a6c5d4e3f2). Tokens are encrypted, and rotate on every refresh. `connected_from`:
+    the server it was connected on (alembic c9b8a7f6e5d4), the only one that may spend
+    them: dev runs on a copy of production's database."""
+
+    __tablename__ = "chat_accounts"
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_agency: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    needs_reconnect: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    access_token: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    refresh_token: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    expires_at: Mapped[float] = mapped_column(Float, nullable=False)
+    connected_from: Mapped[str] = mapped_column(
+        String(2048), nullable=False, default="", server_default=""
+    )
+
+
+class ChatNotificationRow(Base):
+    """A finished mass message, a new subscriber or a big sale (alembic
+    a9b8c7d6e5f4). `event_id` keeps a repeated delivery from showing twice."""
+
+    __tablename__ = "chat_notifications"
+    __table_args__ = (Index("ix_chat_notifications_at", "at"),)
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    model_username: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    detail: Mapped[str] = mapped_column(String(64), nullable=False)
+    at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class ChatWebhookRow(Base):
+    """The webhook destination made for a model on a chat platform (alembic
+    e2d3c4b5a6f7). Its signing secret is shown once, when it is made."""
+
+    __tablename__ = "chat_webhooks"
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    model_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    model_username: Mapped[str] = mapped_column(String(255), nullable=False)
+    webhook_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    secret: Mapped[str] = mapped_column(EncryptedText, nullable=False)
 
 
 class JobRow(Base):
