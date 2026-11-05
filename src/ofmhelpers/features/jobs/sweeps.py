@@ -12,12 +12,14 @@ down, Drive refusing) never takes its loop down. A new sweep is one entry in
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.accounts import tracker as account_tracker
+from ofmhelpers.features.chatting import sources as chat_sources
 from ofmhelpers.features.chatting import sync as chat_history
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
 from ofmhelpers.features.drive import folders as drive_folders
@@ -96,12 +98,16 @@ def sweeps() -> list[Sweep]:
             enabled=chat_webhooks.can_make_webhooks,
         ),
         # What webhooks missed, and all there is without them: /chatting and the
-        # "Chats unanswered" pop-up read what it stores.
-        Sweep(
-            name="chat history",
-            run=chat_history.run_when_due,
-            interval_s=lambda: settings.chatting.check_interval_s,
-            enabled=chat_history.enabled,
+        # "Chats unanswered" pop-up read what it stores. One sweep per platform, so a
+        # slow or hanging one does not hold up the next.
+        *(
+            Sweep(
+                name=f"chat history {platform.value}",
+                run=partial(chat_history.run_when_due, platform),
+                interval_s=lambda: settings.chatting.check_interval_s,
+                enabled=partial(chat_history.enabled, platform),
+            )
+            for platform in chat_sources.platforms()
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),

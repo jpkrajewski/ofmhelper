@@ -133,6 +133,13 @@ class FanMessage(BaseModel):
     replied_at: float | None = None
 
 
+class ModelReach(BaseModel):
+    """A model writing in many chats at once, since `started_at`."""
+
+    model_username: str
+    started_at: float
+
+
 class OpenWait(BaseModel):
     """A chat whose fan is waiting, since their first unanswered message."""
 

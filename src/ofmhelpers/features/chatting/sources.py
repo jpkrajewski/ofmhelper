@@ -22,6 +22,11 @@ def _all() -> dict[ChatPlatform, ChatSource]:
     }
 
 
+def platforms() -> list[ChatPlatform]:
+    """Those with an API here, configured or not."""
+    return list(_all())
+
+
 def source_for(platform: ChatPlatform) -> ChatSource | None:
     return _all().get(platform)
 

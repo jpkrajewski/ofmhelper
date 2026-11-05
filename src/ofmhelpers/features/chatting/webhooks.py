@@ -13,6 +13,7 @@ proves nothing, so a model counts as delivering only while its replies actually 
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _SHARED_DESTINATION = "shared"
+# A bulk send noticed by its size, not told of by the platform.
+_BULK_SEND = "bulk:"
 
 
 def _public_base() -> str:
@@ -196,6 +199,44 @@ def ensure_destinations() -> None:
                 )
 
 
+def note_bulk_sends(source: ChatSource) -> None:
+    """A bulk send with no event of its own becomes a mass message pop-up, the one
+    time, however long it takes to go out."""
+    if not source.bulk_sends_unflagged:
+        return
+    platform = source.platform
+    now = time.time()
+    config = settings.chatting
+    for reach in chats.models_reaching_chats(
+        platform, now - config.mass_window_s, config.mass_min_chats
+    ):
+        username = reach.model_username
+        if chats.recent_mass_messages(platform, username, now - config.mass_gap_s):
+            continue
+        chats.save_notification(
+            platform,
+            ChatDelivery(
+                kind=DeliveryKind.MASS,
+                model_id="",
+                event_id=f"{_BULK_SEND}{username}:{int(reach.started_at)}",
+                at=reach.started_at,
+            ),
+            username,
+        )
+        logger.info("%s bulk send by %s", platform.value, username)
+
+
+def _already_noticed(source: ChatSource, username: str) -> bool:
+    """A platform's mass message event for a bulk send already shown by its size."""
+    if not source.bulk_sends_unflagged:
+        return False
+    since = time.time() - settings.chatting.mass_gap_s
+    return any(
+        event.startswith(_BULK_SEND)
+        for event in chats.recent_mass_messages(source.platform, username, since)
+    )
+
+
 def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> None:
     platform = source.platform
     username = webhook.model_username
@@ -205,7 +246,8 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
     elif delivery.kind == DeliveryKind.DELETED:
         chats.forget_message(platform, delivery.message_id)
     elif delivery.kind == DeliveryKind.MASS:
-        chats.save_notification(platform, delivery, username)
+        if not _already_noticed(source, username):
+            chats.save_notification(platform, delivery, username)
         if not source.mass_reaches_chats:
             set_text(
                 mass_pending_key(platform),
@@ -217,6 +259,10 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
         and ((delivery.amount_cents or 0) > settings.chatting.sale_notify_cents)
     ):
         chats.save_notification(platform, delivery, username)
+    elif delivery.kind == DeliveryKind.SALE:
+        logger.info(
+            "%s sale of %s cents: no pop-up", platform.value, delivery.amount_cents
+        )
 
 
 def _shows_replies(delivery: ChatDelivery) -> bool:

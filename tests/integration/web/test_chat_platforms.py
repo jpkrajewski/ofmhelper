@@ -31,6 +31,7 @@ pytestmark = pytest.mark.usefixtures("fake_externals")
 
 MIN = 60
 LATE = 10 * MIN
+DAY = 24 * 60 * MIN
 
 
 @pytest.fixture(params=sorted(PLATFORMS))
@@ -244,6 +245,39 @@ def test_a_deleted_fan_message_stops_waiting(client, side):
     assert _popups() == []
 
 
+def test_a_destination_at_a_longer_address_is_heard(client, side):
+    """A platform set up on its own site sends to whatever address was typed there."""
+    body = side.message("ann", side.new_id(), from_fan=True, at=time.time() - LATE)
+    raw, headers = side.signed(body)
+
+    answer = client.post(
+        f"/events/{side.platform.value}/creator-events", content=raw, headers=headers
+    )
+
+    assert answer.status_code == HTTPStatus.OK
+    assert _popups() == [f"Chats unanswered (1): @{side.model}"]
+
+
+def test_a_longer_address_does_not_get_around_the_signature(client, side):
+    body = side.message("ann", side.new_id(), from_fan=True, at=time.time() - LATE)
+    raw, headers = side.signed(body, secret=side.secret[:-4] + "AAA=")
+
+    answer = client.post(
+        f"/events/{side.platform.value}/creator-events", content=raw, headers=headers
+    )
+
+    assert answer.status_code == HTTPStatus.UNAUTHORIZED
+    assert _popups() == []
+
+
+def test_a_fan_waiting_for_days_is_found_on_the_first_read(side):
+    side.fan_writes("ann", time.time() - 40 * DAY)
+
+    run_when_due(side.platform)
+
+    assert _popups() == [f"Chats unanswered (1): @{side.model}"]
+
+
 def test_each_mass_message_is_its_own_popup_and_only_once(client, side):
     for mass_id in ("mass-1", "mass-2", "mass-1"):
         assert _post(client, side, side.mass(mass_id)).status_code == HTTPStatus.OK
@@ -346,29 +380,29 @@ def test_a_platform_answering_500_loses_nothing(side):
     side.fail_next_reads(100)
 
     with pytest.raises(ChatSourceError):
-        run_when_due()
+        run_when_due(side.platform)
     side.fake.fail_next.clear()
 
-    run_when_due()
+    run_when_due(side.platform)
     assert _popups() == [f"Chats unanswered (1): @{side.model}"]
 
 
 def test_a_failed_full_round_is_tried_again_next_minute(side):
     side.fail_next_reads(100)
     with pytest.raises(ChatSourceError):
-        run_when_due()
+        run_when_due(side.platform)
     assert get_text(sync_done_key(side.platform)) is None
 
     side.fake.fail_next.clear()
-    run_when_due()
+    run_when_due(side.platform)
     assert get_text(sync_done_key(side.platform)) == "1"
 
 
 def test_a_model_with_nothing_delivered_is_read_every_minute(side):
-    run_when_due()
+    run_when_due(side.platform)
     side.fan_writes("ann", time.time() - LATE)
 
-    run_when_due()
+    run_when_due(side.platform)
 
     assert _popups() == [f"Chats unanswered (1): @{side.model}"]
 
@@ -380,7 +414,7 @@ def test_a_delivered_reply_lets_the_sync_rest_but_a_waiting_fan_does_not(
     url = f"https://example.invalid/events/{side.platform.value}"
     for hook in chats.webhooks(side.platform):
         chats.save_webhook(side.platform, hook.model_copy(update={"url": url}))
-    run_when_due()
+    run_when_due(side.platform)
     assert models_delivering(side.platform) == set()
 
     _fan_waits(client, side, "ann", ago=MIN)
@@ -392,11 +426,11 @@ def test_a_delivered_reply_lets_the_sync_rest_but_a_waiting_fan_does_not(
     # Delivering, and a fan past the limit: read anyway, or an emoji or a reply no
     # webhook told of would keep them reported for an hour.
     before = side.chat_reads()
-    run_when_due()
+    run_when_due(side.platform)
     assert side.chat_reads() == before
 
     _fan_waits(client, side, "bob", ago=LATE)
-    run_when_due()
+    run_when_due(side.platform)
     assert side.chat_reads() > before
 
 

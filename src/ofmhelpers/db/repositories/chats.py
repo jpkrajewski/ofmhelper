@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.db.models import (
@@ -251,6 +251,49 @@ class ChatRepository:
                     at=at,
                 )
                 .on_conflict_do_nothing()
+            )
+
+    def models_reaching_chats(
+        self, platform: str, since: float, min_chats: int
+    ) -> list[dict]:
+        """Who wrote in at least `min_chats` chats since `since`, and from when."""
+        reached = func.count(ChatModelMessageRow.channel_id.distinct())
+        with session_scope() as s:
+            rows = s.execute(
+                select(
+                    ChatThreadRow.model_username,
+                    func.min(ChatModelMessageRow.sent_at).label("started_at"),
+                )
+                .join(
+                    ChatThreadRow,
+                    and_(
+                        ChatThreadRow.platform == ChatModelMessageRow.platform,
+                        ChatThreadRow.channel_id == ChatModelMessageRow.channel_id,
+                    ),
+                )
+                .where(
+                    ChatModelMessageRow.platform == platform,
+                    ChatModelMessageRow.sent_at >= since,
+                )
+                .group_by(ChatThreadRow.model_username)
+                .having(reached >= min_chats)
+            )
+            return [dict(row) for row in rows.mappings()]
+
+    def recent_events(
+        self, platform: str, username: str, kind: str, since: float
+    ) -> list[str]:
+        """The ids of a model's notifications of this kind since `since`."""
+        with session_scope() as s:
+            return list(
+                s.execute(
+                    select(ChatNotificationRow.event_id).where(
+                        ChatNotificationRow.platform == platform,
+                        ChatNotificationRow.model_username == username,
+                        ChatNotificationRow.kind == kind,
+                        ChatNotificationRow.at >= since,
+                    )
+                ).scalars()
             )
 
     def notifications(self, since: float) -> list[dict]:

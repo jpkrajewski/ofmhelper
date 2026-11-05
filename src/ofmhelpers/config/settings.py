@@ -1728,6 +1728,18 @@ class ChattingSettings(BaseSettings):
     sale_notify_cents: int = Field(
         default=5000, ge=0, validation_alias="OFM_CHATTING_SALE_NOTIFY_CENTS"
     )
+    # A bulk send with no event of its own: the model reaching this many chats within
+    # the window. Measured 2026-11-05: 600+ in a bulk send, a chatter at most 21 messages
+    # in 10 minutes. Within the gap it is the same send, however long it takes to go out.
+    mass_min_chats: int = Field(
+        default=50, ge=2, validation_alias="OFM_CHATTING_MASS_MIN_CHATS"
+    )
+    mass_window_s: int = Field(
+        default=600, ge=1, validation_alias="OFM_CHATTING_MASS_WINDOW_S"
+    )
+    mass_gap_s: int = Field(
+        default=3600, ge=1, validation_alias="OFM_CHATTING_MASS_GAP_S"
+    )
     # How long a mass message, a new subscriber or a big sale can show, unless closed.
     notification_shown_s: int = Field(
         default=86400, ge=1, validation_alias="OFM_CHATTING_NOTIFICATION_SHOWN_S"

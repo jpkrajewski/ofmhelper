@@ -59,6 +59,7 @@ class FanvueSource:
     # `creator.message.mass_sent` fires once and names no recipients, so what it
     # answered is only found by reading those chats.
     mass_reaches_chats = False
+    bulk_sends_unflagged = False
     events = webhooks.EVENTS
 
     def __init__(self, tokens: TokenKeeper) -> None:
@@ -188,9 +189,10 @@ def _fan_name(chat: FanvueChat) -> str:
 
 def _new_reads(model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
     """Latest activity first, so a quick round stops at the first chat with nothing
-    new, and a thorough one at the first past `oldest`. A mass message changes every
-    chat it reached and Fanvue allows 200 calls a minute, so a chat it was last in is
-    opened only if a fan there is waiting: that is the only one it can have answered."""
+    new or past `oldest`. A thorough one goes through them all: a fan still waiting
+    counts however long ago they wrote. A mass message changes every chat it reached
+    and Fanvue allows 200 calls a minute, so a chat it was last in is opened only if a
+    fan there is waiting: that is the only one it can have answered."""
     handle: _Handle = model.client
     failed = 0
     for chat in handle.client.chats(handle.creator_uuid):
@@ -202,7 +204,11 @@ def _new_reads(model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
             if scope.thorough:
                 continue
             return
-        if last.sent_at is not None and last.sent_at < scope.oldest:
+        if (
+            not scope.thorough
+            and last.sent_at is not None
+            and last.sent_at < scope.oldest
+        ):
             return
         events: list[ChatEvent] = []
         if last.type not in _MASS_TYPES or channel in scope.open_channels:

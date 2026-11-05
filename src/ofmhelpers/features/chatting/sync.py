@@ -6,8 +6,9 @@ quiet, or one with a fan left waiting is read every minute: a dead webhook costs
 minutes, never an hour, and nobody is called unanswered on what a webhook did not say.
 
 A failed round (a platform answering 500) is logged by the sweep and costs nothing:
-what was read is saved, and the next round carries on from there. One platform or
-model failing does not stop the others.
+what was read is saved, and the next round carries on from there. A model failing does
+not stop the others, and each platform has its own sweep, so one failing, slow or
+hanging does not hold up the next.
 """
 
 from __future__ import annotations
@@ -22,11 +23,12 @@ from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
-from ofmhelpers.features.chatting.sources import configured_sources
+from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.webhooks import (
     cover_models,
     mass_pending_key,
     models_delivering,
+    note_bulk_sends,
     sync_done_key,
 )
 from ofmhelpers.integrations.chat_source import ChatSourceError
@@ -42,8 +44,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def enabled() -> bool:
-    return bool(configured_sources())
+def enabled(platform: ChatPlatform) -> bool:
+    source = source_for(platform)
+    return source is not None and source.configured()
 
 
 def _sync_model(source: ChatSource, model: ChatModel, scope: ReadScope) -> int:
@@ -127,6 +130,8 @@ def _run_platform(source: ChatSource) -> None:
     those resting. A failed full round is not remembered as done, so it is tried again
     next minute."""
     platform = source.platform
+    # First: what is stored already says it, whatever the read below does.
+    note_bulk_sends(source)
     if get_text(mass_pending_key(platform)):
         # Done forgotten first: a failed round is then tried again next minute.
         delete_text(sync_done_key(platform))
@@ -140,16 +145,9 @@ def _run_platform(source: ChatSource) -> None:
     )
 
 
-def run_when_due() -> None:
-    """The sweep, asked every minute. One platform failing does not stop the next;
-    the round then raises, so the sweep logs it."""
-    failed = []
-    for source in configured_sources():
-        try:
-            _run_platform(source)
-        except (AppError, SQLAlchemyError):
-            logger.warning("%s sync failed", source.platform.value, exc_info=True)
-            failed.append(source.platform.label)
-    if failed:
-        msg = f"Not read in full: {', '.join(failed)}"
-        raise ChatSourceError(msg)
+def run_when_due(platform: ChatPlatform) -> None:
+    """A platform's sweep, asked every minute. A failed round raises, so the sweep
+    logs it."""
+    source = source_for(platform)
+    if source is not None:
+        _run_platform(source)
