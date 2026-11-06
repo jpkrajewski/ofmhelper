@@ -27,12 +27,14 @@ from ofmhelpers.config.settings import (
     LLMSettings,
     RunningHubSettings,
     StackedSettings,
+    TelegramSettings,
     ViralSettings,
 )
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.fake import _fake_drive
 from ofmhelpers.instagram.fake import fake_instagram
 from ofmhelpers.integrations.fanvue.fake import fake_fanvue
+from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 from ofmhelpers.integrations.stacked.fake import fake_stacked
 from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.llm.cerebras.fake import fake_cerebras
@@ -52,6 +54,7 @@ _REAL_SETTINGS = (
     LLMSettings,
     RunningHubSettings,
     StackedSettings,
+    TelegramSettings,
     ViralSettings,
 )
 
@@ -73,6 +76,7 @@ def _reset_fakes() -> None:
         fake_fanvue,
         fake_runninghub,
         fake_elyum,
+        fake_telegram,
         fake_media.mp4,
     ):
         cached.cache_clear()

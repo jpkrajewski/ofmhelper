@@ -17,6 +17,7 @@ from ofmhelpers.db.models import (
     ChatFanMessageRow,
     ChatModelMessageRow,
     ChatNotificationRow,
+    ChatSaleRow,
     ChatThreadRow,
     ChatWebhookRow,
 )
@@ -205,7 +206,8 @@ class ChatRepository:
 
     def open_waits(self, before: float) -> list[dict]:
         """Every platform's chats whose fan has waited since before `before`, however
-        long ago. A chat's unanswered messages are one wait, from the first."""
+        long ago. A chat's unanswered messages are one wait, from the first; the fan's
+        name as their messages carry it."""
         started_at = func.min(ChatFanMessageRow.sent_at).label("started_at")
         with session_scope() as s:
             rows = s.execute(
@@ -214,6 +216,7 @@ class ChatRepository:
                     ChatFanMessageRow.model_username,
                     ChatFanMessageRow.channel_id,
                     started_at,
+                    func.max(ChatFanMessageRow.fan_name).label("fan_name"),
                 )
                 .where(ChatFanMessageRow.replied_at.is_(None))
                 .group_by(
@@ -252,6 +255,67 @@ class ChatRepository:
                 )
                 .on_conflict_do_nothing()
             )
+
+    def save_sale(
+        self,
+        platform: str,
+        event_id: str,
+        username: str,
+        gross_cents: int,
+        currency: str,
+        source: str,
+        at: float,
+    ) -> None:
+        """Every sale once, however often the platform repeats it."""
+        with session_scope() as s:
+            s.execute(
+                insert(ChatSaleRow)
+                .values(
+                    platform=platform,
+                    event_id=event_id,
+                    model_username=username,
+                    gross_cents=gross_cents,
+                    currency=currency,
+                    source=source,
+                    at=at,
+                )
+                .on_conflict_do_nothing()
+            )
+
+    def sales_between(self, since: float, until: float) -> list[dict]:
+        """Each model's sales in [since, until): how many, and their gross."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(
+                    ChatSaleRow.platform,
+                    ChatSaleRow.model_username,
+                    func.count().label("count"),
+                    func.sum(ChatSaleRow.gross_cents).label("cents"),
+                )
+                .where(ChatSaleRow.at >= since, ChatSaleRow.at < until)
+                .group_by(ChatSaleRow.platform, ChatSaleRow.model_username)
+            )
+            return [dict(row) for row in rows.mappings()]
+
+    def counts_between(self, kind: str, since: float, until: float) -> list[dict]:
+        """Each model's notifications of `kind` in [since, until)."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(
+                    ChatNotificationRow.platform,
+                    ChatNotificationRow.model_username,
+                    func.count().label("count"),
+                )
+                .where(
+                    ChatNotificationRow.kind == kind,
+                    ChatNotificationRow.at >= since,
+                    ChatNotificationRow.at < until,
+                )
+                .group_by(
+                    ChatNotificationRow.platform, ChatNotificationRow.model_username
+                )
+            )
+            return [dict(row) for row in rows.mappings()]
 
     def models_reaching_chats(
         self, platform: str, since: float, min_chats: int

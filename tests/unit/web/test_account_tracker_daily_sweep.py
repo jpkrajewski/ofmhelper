@@ -1,66 +1,74 @@
-"""The account tracker sweep's optional daily window (`daily_sweep_due`):
-once a day, not before `rescan_daily_at` local time plus a per-day random
-jitter -- a fixed schedule is what gets a login flagged as automation."""
+"""The account tracker's fixed scan times (`OFM_ACCOUNTS_SCAN_TIMES`, owner
+2026-11-06: 13:50 Warsaw, 10 min before the 14:00 Telegram report, and 18:00): a
+scan may be as old as the last scan time that came, so one missed (the app down)
+runs on the next pass."""
 
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from ofmhelpers.web import account_tracker
+from ofmhelpers.features.accounts import tracker as account_tracker
 
-# tz-aware values; the function only compares wall-clock fields, and the
-# tz keeps ruff's DTZ rules happy.
-_TZ = UTC
+_WARSAW = ZoneInfo("Europe/Warsaw")
+
+
+def _at(hour: int, minute: int, day: int = 6) -> datetime:
+    return datetime(2026, 11, day, hour, minute, tzinfo=_WARSAW)
 
 
 @pytest.fixture
-def daily_at_5(monkeypatch):
-    monkeypatch.setenv("OFM_ACCOUNTS_RESCAN_DAILY_AT", "05:00")
-    monkeypatch.setenv("OFM_ACCOUNTS_RESCAN_DAILY_JITTER_S", "600")
+def clock(monkeypatch):
+    """The tracker's clock, set by the test."""
+    now: list[datetime] = []
+
+    class _Now(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now[0].astimezone(tz)
+
+    monkeypatch.setattr(account_tracker, "datetime", _Now)
+    return now
 
 
-def test_unset_window_is_always_due(monkeypatch):
-    monkeypatch.delenv("OFM_ACCOUNTS_RESCAN_DAILY_AT", raising=False)
-    assert account_tracker.daily_sweep_due(datetime(2026, 10, 29, 2, 0, tzinfo=_TZ))
+@pytest.mark.parametrize(
+    ("now", "age_s"),
+    [
+        (_at(14, 0), 600),
+        (_at(18, 5), 300),
+        (_at(3, 0), 9 * 3600),
+        (_at(13, 49), 19 * 3600 + 49 * 60),
+    ],
+    ids=[
+        "after 13:50",
+        "after 18:00",
+        "night: since 18:00",
+        "before 13:50: since 18:00",
+    ],
+)
+def test_a_scan_may_be_as_old_as_the_last_scan_time_that_came(clock, now, age_s):
+    clock.append(now)
+
+    assert account_tracker._rescan_interval_s() == pytest.approx(age_s)
 
 
-def test_before_the_daily_time_is_never_due(daily_at_5):
-    # The jitter never makes the window earlier than 05:00.
-    assert not account_tracker.daily_sweep_due(
-        datetime(2026, 10, 29, 4, 59, tzinfo=_TZ)
-    )
+def test_summer_time_keeps_the_times_on_warsaws_clock(clock):
+    clock.append(datetime(2026, 7, 1, 14, 0, tzinfo=_WARSAW))
+
+    assert account_tracker._rescan_interval_s() == pytest.approx(600)
 
 
-def test_past_the_max_jitter_is_always_due(daily_at_5):
-    # The jitter never pushes the window past 05:10.
-    assert account_tracker.daily_sweep_due(datetime(2026, 10, 29, 5, 11, tzinfo=_TZ))
+def test_no_scan_times_is_the_interval(clock, monkeypatch):
+    monkeypatch.setenv("OFM_ACCOUNTS_SCAN_TIMES", "")
+    clock.append(_at(14, 0))
+
+    assert account_tracker._rescan_interval_s() == 6 * 3600
 
 
-def test_jitter_is_stable_within_a_day(daily_at_5):
-    now = datetime(2026, 10, 29, 5, 3, tzinfo=_TZ)
-    assert account_tracker.daily_sweep_due(now) == account_tracker.daily_sweep_due(now)
+def test_scan_times_are_normalized_and_validated():
+    groups = account_tracker.settings.accounts.__class__
 
-
-def test_jitter_shifts_the_window_by_day(daily_at_5):
-    # The same clock time lands differently across days: the run time is
-    # 05:00 + that day's jitter, so at 05:03 some days are inside the
-    # window, some are not.
-    outcomes = {
-        account_tracker.daily_sweep_due(datetime(2026, 10, day, 5, 3, tzinfo=_TZ))
-        for day in range(1, 29)
-    }
-    assert outcomes == {True, False}
-
-
-def test_daily_at_is_normalized_and_validated(monkeypatch):
-    monkeypatch.delenv("OFM_ACCOUNTS_RESCAN_DAILY_AT", raising=False)
-    fresh = account_tracker.settings.accounts.__class__(
-        OFM_ACCOUNTS_RESCAN_DAILY_AT="5:3"
-    )
-    assert fresh.rescan_daily_at == "05:03"
-    with pytest.raises(ValueError, match="HH:MM"):
-        account_tracker.settings.accounts.__class__(
-            OFM_ACCOUNTS_RESCAN_DAILY_AT="25:00"
-        )
-    with pytest.raises(ValueError, match="HH:MM"):
-        account_tracker.settings.accounts.__class__(OFM_ACCOUNTS_RESCAN_DAILY_AT="five")
+    assert groups(OFM_ACCOUNTS_SCAN_TIMES="5:3, 13:50").scan_times == "05:03,13:50"
+    for wrong in ("25:00", "five"):
+        with pytest.raises(ValueError, match="HH:MM"):
+            groups(OFM_ACCOUNTS_SCAN_TIMES=wrong)

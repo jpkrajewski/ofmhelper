@@ -254,15 +254,17 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
                 "1",
                 int(settings.chatting.webhook_sync_interval_s),
             )
-    elif delivery.kind == DeliveryKind.SUBSCRIBED or (
-        delivery.kind == DeliveryKind.SALE
-        and ((delivery.amount_cents or 0) > settings.chatting.sale_notify_cents)
-    ):
+    elif delivery.kind == DeliveryKind.SUBSCRIBED:
         chats.save_notification(platform, delivery, username)
     elif delivery.kind == DeliveryKind.SALE:
-        logger.info(
-            "%s sale of %s cents: no pop-up", platform.value, delivery.amount_cents
-        )
+        # Every sale for the daily report; a big one also for the pop-up.
+        chats.save_sale(platform, delivery, username)
+        if (delivery.amount_cents or 0) > settings.chatting.sale_notify_cents:
+            chats.save_notification(platform, delivery, username)
+        else:
+            logger.info(
+                "%s sale of %s cents: no pop-up", platform.value, delivery.amount_cents
+            )
 
 
 def _shows_replies(delivery: ChatDelivery) -> bool:

@@ -18,7 +18,7 @@ DEPLOYS = [
     REPO / "scripts" / "deploy.sh",
     REPO / ".github" / "workflows" / "deploy.yml",
 ]
-WORKERS = {"worker", "clone-links-worker", "media-worker"}
+WORKERS = {"worker", "clone-links-worker", "media-worker", "events-worker"}
 
 
 class Service(BaseModel):
@@ -73,6 +73,7 @@ def test_every_queue_has_its_own_worker_service():
         "clone-links-worker": QueueName.CLONE_LINKS,
         "preview-worker": QueueName.PREVIEWS,
         "media-worker": QueueName.MEDIA,
+        "events-worker": QueueName.EVENTS,
     }
 
 

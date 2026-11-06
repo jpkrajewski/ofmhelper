@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import threading
+from datetime import datetime
 from functools import lru_cache
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
@@ -47,6 +48,9 @@ class FakeStacked:
         self.chats: dict[str, list[dict[str, Any]]] = {}
         self.webhooks: dict[str, list[dict[str, Any]]] = {}
         self.fail_next: list[FakeReply] = []
+        # creator -> [(epoch s, gross cents)] and [(epoch s, 1)]: `sold`, `subscribed`.
+        self.sales: dict[str, list[tuple[float, int]]] = {}
+        self.subscribers: dict[str, list[tuple[float, int]]] = {}
         self._messages: dict[str, list[dict[str, Any]]] = {}
         self._last_id = 1000
         self._lock = threading.Lock()
@@ -117,6 +121,14 @@ class FakeStacked:
             {"key": "fire", "userIds": [user_id], "updatedAt": at_ms}
         )
 
+    def sold(self, creator: str, gross_cents: int, at: float) -> None:
+        """A sale `/earnings` counts in a window holding `at`."""
+        self.sales.setdefault(creator, []).append((at, gross_cents))
+
+    def subscribed(self, creator: str, at: float) -> None:
+        """A new subscriber `/subscribers/summary` counts."""
+        self.subscribers.setdefault(creator, []).append((at, 1))
+
     # --- the API ------------------------------------------------------------
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
@@ -152,11 +164,50 @@ class FakeStacked:
             )
         if parts == ["chats"]:
             return self._chats(creator, query)
+        if parts == ["earnings"]:
+            return self._earnings(creator, query)
+        if parts == ["subscribers", "summary"]:
+            return self._subscribers(creator, query)
         if parts[0] == "webhooks":
             return self._webhooks(request, creator, parts)
         if len(parts) == 3 and parts[0] == "chats" and parts[2] == "messages":  # noqa: PLR2004 -- chats/{channelUrl}/messages
             return self._chat_messages(creator, unquote(parts[1]), query)
         return _error(HTTPStatus.NOT_FOUND, "not found")
+
+    def _in_window(
+        self, items: list[tuple[float, int]], query: Mapping[str, str]
+    ) -> list[int]:
+        start = _seconds(query["startTime"])
+        end = _seconds(query["endTime"])
+        return [value for at, value in items if start <= at < end]
+
+    def _earnings(self, creator: str, query: Mapping[str, str]) -> FakeReply:
+        """`sold` within the window, summed like the real one (gross, cents)."""
+        gross = sum(self._in_window(self.sales.get(creator, []), query))
+        summary = {
+            "creatorUserId": creator,
+            "currency": "usd",
+            "grossUnitAmount": gross,
+            "netUnitAmount": gross * 9 // 10,
+            "windowStart": query["startTime"],
+            "windowEnd": query["endTime"],
+            "series": [],
+        }
+        return FakeReply.json_body({"earnings": [summary]})
+
+    def _subscribers(self, creator: str, query: Mapping[str, str]) -> FakeReply:
+        new = len(self._in_window(self.subscribers.get(creator, []), query))
+        summary = {
+            "creatorUserId": creator,
+            "activeSubscribers": new,
+            "newSubscribers": new,
+            "canceledSubscribers": 0,
+            "resubscribers": 0,
+            "windowStart": query["startTime"],
+            "windowEnd": query["endTime"],
+            "series": [],
+        }
+        return FakeReply.json_body({"summaries": [summary]})
 
     def _webhooks(
         self, request: requests.PreparedRequest, creator: str, parts: list[str]
@@ -211,6 +262,10 @@ _REACHABLE = {
     CREATOR_KEY: [CREATOR],
     AGENCY_KEY: [CREATOR, OTHER_CREATOR],
 }
+
+
+def _seconds(rfc3339: str) -> float:
+    return datetime.fromisoformat(rfc3339).timestamp()
 
 
 def _me(token: str) -> dict[str, Any]:

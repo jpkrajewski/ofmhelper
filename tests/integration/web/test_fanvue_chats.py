@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
@@ -69,6 +70,11 @@ def _subscribed(event_id, creator=fanvue_fake.CREATOR):
     }
 
 
+def _an_hour_ago() -> str:
+    at = datetime.now(UTC) - timedelta(hours=1)
+    return at.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def _payment(invoice, gross, source="post", reason="one_time", currency="USD"):
     return {
         "id": f"evt-{invoice}",
@@ -81,7 +87,9 @@ def _payment(invoice, gross, source="post", reason="one_time", currency="USD"):
             "billing_reason": reason,
             "gross": gross,
             "currency": currency,
-            "paid_at": "2026-11-05T01:00:00.000Z",
+            # Within the pop-ups' 24 h whenever the suite runs (a fixed date
+            # failed every run from a day after it).
+            "paid_at": _an_hour_ago(),
             "creator": {"uuid": fanvue_fake.CREATOR},
         },
     }

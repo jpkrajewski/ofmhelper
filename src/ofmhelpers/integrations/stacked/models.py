@@ -160,3 +160,31 @@ class MessageEventData(_Api):
 class MassMessageEventData(_Api):
     creator_user_id: str = Field(alias="creatorUserId")
     mass_message_id: str = Field(alias="massMessageId")
+
+
+class Earnings(_Api):
+    """`GET /earnings` for one creator: realized sales in the window, in the
+    creator's currency's minor unit (cents: seen 2026-11-06, `usd`, 77486 =
+    $774.86). Gross = before platform, agency and affiliate fees."""
+
+    currency: str
+    gross_cents: int = Field(alias="grossUnitAmount")
+    net_cents: int = Field(alias="netUnitAmount")
+
+
+class EarningsPage(_Api):
+    earnings: list[Earnings]
+
+
+class SubscriberSummary(_Api):
+    """`GET /subscribers/summary` for one creator's window: `new` = first
+    subscription started in it, `returning` = came back."""
+
+    new: int = Field(alias="newSubscribers")
+    returning: int = Field(alias="resubscribers")
+    canceled: int = Field(alias="canceledSubscribers")
+    active: int = Field(alias="activeSubscribers")
+
+
+class SubscriberSummaryPage(_Api):
+    summaries: list[SubscriberSummary]

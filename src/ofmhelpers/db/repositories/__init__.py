@@ -32,6 +32,7 @@ from ofmhelpers.db.repositories.drive_folders import DriveFolderRepository
 from ofmhelpers.db.repositories.drive_uploads import DriveUploadRepository
 from ofmhelpers.db.repositories.jobs import JobRepository
 from ofmhelpers.db.repositories.picture_presets import PicturePresetRepository
+from ofmhelpers.db.repositories.report_runs import ReportRunRepository
 from ofmhelpers.db.repositories.short_links import ShortLinkRepository
 from ofmhelpers.db.repositories.tracked_accounts import TrackedAccountRepository
 from ofmhelpers.db.repositories.users import OwnsDataError, UserRepository
@@ -50,6 +51,7 @@ __all__ = [
     "JobRepository",
     "OwnsDataError",
     "PicturePresetRepository",
+    "ReportRunRepository",
     "ShortLinkRepository",
     "TrackedAccountRepository",
     "UserRepository",

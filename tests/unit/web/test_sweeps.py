@@ -7,11 +7,9 @@ import threading
 from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
-
 from ofmhelpers.features.chatting import sync as chat_history
 from ofmhelpers.schemas.chatting import ChatPlatform
-from ofmhelpers.web import account_tracker, sweeps
+from ofmhelpers.web import sweeps
 from ofmhelpers.web.sweeps import Sweep, running
 
 
@@ -146,7 +144,7 @@ def test_a_hanging_chat_platform_does_not_hold_up_the_next(monkeypatch):
     assert stacked_saw == [True]
 
 
-def test_the_web_process_runs_all_nine_sweeps():
+def test_the_web_process_runs_all_eleven_sweeps():
     assert {sweep.name for sweep in sweeps.sweeps()} == {
         "recovery",
         "reel watch",
@@ -156,29 +154,7 @@ def test_the_web_process_runs_all_nine_sweeps():
         "chat webhooks",
         "chat history stacked",
         "chat history fanvue",
+        "chat wait events",
+        "daily report",
         "preview backfill",
     }
-
-
-@pytest.mark.parametrize(("due", "expected"), [(False, []), (True, ["scan"])])
-def test_the_account_tracker_sweep_waits_for_its_daily_window(
-    monkeypatch, due, expected
-):
-    """OFM_ACCOUNTS_RESCAN_DAILY_AT: a fixed schedule gets a login flagged as
-    automation, so a closed window means no scan at all."""
-    scans = []
-    checks = []
-
-    def daily_sweep_due() -> bool:
-        checks.append("check")
-        return due
-
-    monkeypatch.setattr(account_tracker, "daily_sweep_due", daily_sweep_due)
-    monkeypatch.setattr(
-        account_tracker, "queue_due_scans", lambda: scans.append("scan")
-    )
-    sweep = next(s for s in sweeps.sweeps() if s.name == "account tracker")
-
-    _until(checks, 3, sweep.model_copy(update={"interval_s": lambda: 0}))
-
-    assert scans[:1] == expected

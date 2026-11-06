@@ -114,6 +114,33 @@ def sync(
         raise ChatSourceError(msg)
 
 
+def read_now(source: ChatSource, usernames: set[str]) -> set[str]:
+    """Those of `usernames` (as the platform names them) read again now, what
+    changed only; one that cannot be read is left out (logged) and does not take
+    the others with it."""
+    platform = source.platform
+    oldest = datetime.now(UTC) - timedelta(seconds=settings.chatting.lookback_s)
+    scope = ReadScope(
+        seen=chats.last_read(platform),
+        oldest=oldest,
+        open_channels=chats.open_channels(platform),
+        thorough=False,
+    )
+    read = set()
+    for model in source.models().found:
+        if model.username not in usernames:
+            continue
+        try:
+            _sync_model(source, model, scope)
+        except AppError:
+            logger.warning(
+                "%s %s not read", platform.value, model.username, exc_info=True
+            )
+            continue
+        read.add(model.username)
+    return read
+
+
 def _models_resting(platform: ChatPlatform) -> set[str]:
     """Those delivering, with no fan past the limit: nothing a read would change."""
     late = time.time() - settings.chatting.unanswered_after_s

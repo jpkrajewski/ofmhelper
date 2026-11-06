@@ -19,6 +19,7 @@ from ofmhelpers.schemas.chatting import (
     DeliveryKind,
     FanMessage,
     ModelReach,
+    ModelTotal,
     OpenWait,
     StoredNotification,
 )
@@ -85,6 +86,35 @@ def save_notification(
         delivery.detail,
         delivery.at or time.time(),
     )
+
+
+def save_sale(platform: ChatPlatform, delivery: ChatDelivery, username: str) -> None:
+    """Every sale, small ones too (the daily report sums them)."""
+    _repository().save_sale(
+        platform,
+        delivery.event_id,
+        username,
+        delivery.amount_cents or 0,
+        delivery.currency or "USD",
+        delivery.detail,
+        delivery.at or time.time(),
+    )
+
+
+def sales_between(since: float, until: float) -> list[ModelTotal]:
+    """Each model's sales in [since, until), every platform."""
+    return [
+        ModelTotal.model_validate(row)
+        for row in _repository().sales_between(since, until)
+    ]
+
+
+def counts_between(kind: DeliveryKind, since: float, until: float) -> list[ModelTotal]:
+    """Each model's new subscribers or mass messages in [since, until)."""
+    return [
+        ModelTotal.model_validate(row)
+        for row in _repository().counts_between(kind, since, until)
+    ]
 
 
 def models_reaching_chats(

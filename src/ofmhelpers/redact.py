@@ -19,6 +19,9 @@ _KEY_SHAPES = (
     r"csk-[A-Za-z0-9]{16,}",  # Cerebras
     r"AIza[0-9A-Za-z_-]{30,}",  # Google / Gemini
     r"apify_api_[A-Za-z0-9]{16,}",  # Apify
+    # Telegram bot token, `<bot id>:<35-char secret>`: in every Bot API URL
+    # (/bot<token>/). Exact lengths, so `20261106:<uuid>` is left alone.
+    r"(?<!\d)\d{8,10}:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])",
     r"Bearer\s+[A-Za-z0-9._~+/-]{16,}=*",
 )
 KEY_PATTERN = "|".join(_KEY_SHAPES)

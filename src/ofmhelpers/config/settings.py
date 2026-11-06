@@ -40,7 +40,7 @@ from pydantic_settings import (
 from ofmhelpers.media.image_fit import ImageLimits
 from ofmhelpers.media.recorder.models import GeoPoint, Place
 
-_DAILY_AT_MSG = "rescan_daily_at must be HH:MM"
+_SCAN_TIMES_MSG = "OFM_ACCOUNTS_SCAN_TIMES must be HH:MM, comma-separated"
 # Pydantic-settings lowercases the names it reads.
 _STACKED_KEY_PREFIX = "stacked_api_key_"
 
@@ -52,6 +52,9 @@ class QueueName(StrEnum):
 
     # Generations, downloads, uploads: the queue a job is on unless it says otherwise.
     DEFAULT = "default"
+    # Events going out to the senders (features/events: Telegram, ...): short jobs on
+    # their own worker, so a message never waits behind a 45-min generation.
+    EVENTS = "events"
     # /clone-links runs (features/clone_links/run.py): a 30-120 link Generate on
     # its own worker pool, so it never holds the default queue for hours.
     CLONE_LINKS = "clone-links"
@@ -370,6 +373,10 @@ class InfraSettings(BaseSettings):
     # The media pool (`python -m ofmhelpers.worker media`): how many local encodes
     # of big videos run at once. One (see `QueueName.MEDIA`).
     media_workers: int = Field(default=1, ge=1, validation_alias="OFM_MEDIA_WORKERS")
+    # The events pool (`python -m ofmhelpers.worker events`). One: sends go out in
+    # the order they were queued (a retried one comes later), each paced to what
+    # its service takes (`Sender.pace_s`).
+    events_workers: int = Field(default=1, ge=1, validation_alias="OFM_EVENTS_WORKERS")
 
     @property
     def queues(self) -> dict[QueueName, QueueConfig]:
@@ -378,6 +385,9 @@ class InfraSettings(BaseSettings):
         return {
             QueueName.DEFAULT: QueueConfig(
                 workers=self.rq_workers, priority=QueuePriority.HIGHEST
+            ),
+            QueueName.EVENTS: QueueConfig(
+                workers=self.events_workers, priority=QueuePriority.HIGHEST
             ),
             QueueName.CLONE_LINKS: QueueConfig(
                 workers=self.clone_links_workers, priority=QueuePriority.HIGH
@@ -833,29 +843,37 @@ class AccountsSettings(BaseSettings):
     claim_ttl_s: int = Field(
         default=2 * 60 * 60, ge=60, validation_alias="OFM_ACCOUNTS_CLAIM_TTL_S"
     )
-    # features/accounts/tracker.py: pin the periodic sweep to once a day, not
-    # before this local time plus a per-day random delay -- a fixed schedule
-    # is what gets an Instagram login flagged as automation. None: the
-    # interval alone decides, whenever an account falls due.
-    rescan_daily_at: str | None = Field(
-        default=None, validation_alias="OFM_ACCOUNTS_RESCAN_DAILY_AT"
+    # features/accounts/tracker.py: when every account is scanned, on
+    # `scan_timezone`'s clock (owner, 2026-11-06: 13:50 = 10 min before the 14:00
+    # Telegram report, and 18:00). Empty: every `rescan_interval_s` instead.
+    scan_times: str = Field(
+        default="13:50,18:00", validation_alias="OFM_ACCOUNTS_SCAN_TIMES"
     )
-    # How far past `rescan_daily_at` the day's run may land.
-    rescan_daily_jitter_s: int = Field(
-        default=600, ge=0, validation_alias="OFM_ACCOUNTS_RESCAN_DAILY_JITTER_S"
+    scan_timezone: str = Field(
+        default="Europe/Warsaw", validation_alias="OFM_ACCOUNTS_SCAN_TIMEZONE"
     )
 
-    @field_validator("rescan_daily_at")
+    @field_validator("scan_times")
     @classmethod
-    def _daily_at(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        try:
-            hour, minute = (int(part) for part in value.split(":"))
-            datetime.time(hour, minute)  # ValueError outside 0..23 / 0..59
-        except ValueError:
-            raise ValueError(_DAILY_AT_MSG) from None
-        return f"{hour:02d}:{minute:02d}"
+    def _hh_mm_list(cls, value: str) -> str:
+        found = []
+        for part in (p.strip() for p in value.split(",")):
+            if not part:
+                continue
+            try:
+                hour, minute = (int(n) for n in part.split(":"))
+                datetime.time(hour, minute)  # ValueError outside 0..23 / 0..59
+            except ValueError:
+                raise ValueError(_SCAN_TIMES_MSG) from None
+            found.append(f"{hour:02d}:{minute:02d}")
+        return ",".join(found)
+
+    def scan_time_list(self) -> list[datetime.time]:
+        return [
+            datetime.time(int(t[:2]), int(t[3:]))
+            for t in self.scan_times.split(",")
+            if t
+        ]
 
     # Accounts per worker job: jobs run in parallel on the worker pool, each
     # rotating through the platform's proxies from its own starting point.
@@ -1709,6 +1727,21 @@ class ChattingSettings(BaseSettings):
     alerts_check_s: float = Field(
         default=10, gt=0, validation_alias="OFM_CHATTING_ALERTS_CHECK_S"
     )
+    # How often the "Chats unanswered" message (features/chatting/wait_events.py, to
+    # Telegram) goes out while fans wait (owner, 2026-11-06: every 15 min).
+    wait_events_check_s: float = Field(
+        default=900, gt=0, validation_alias="OFM_CHATTING_WAIT_EVENTS_CHECK_S"
+    )
+    # Chat platforms left out of everything chatting sends to Telegram (the
+    # unanswered list, the daily report's mass messages), comma-separated; the site
+    # still shows them (owner, 2026-11-06: Fanvue for now).
+    events_platforms_off: str = Field(
+        default="fanvue", validation_alias="OFM_CHATTING_EVENTS_PLATFORMS_OFF"
+    )
+
+    def events_off(self) -> set[str]:
+        return {p.strip() for p in self.events_platforms_off.split(",") if p.strip()}
+
     # This server's public address for webhooks. Unset: APP_BASE_URL when it is public
     # HTTPS, else no webhooks and the sync does the work.
     webhook_base_url: str = Field(
@@ -1865,6 +1898,110 @@ class StackedSettings(BaseSettings):
             for name, key in sorted(found.items())
             if name.startswith(_STACKED_KEY_PREFIX) and key
         }
+
+
+def _names(value: str) -> list[str]:
+    """A comma-separated .env list, blanks dropped."""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+class ReportsSettings(BaseSettings):
+    """features/reports: the daily report to the senders (Telegram)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    daily_enabled: bool = Field(
+        default=True, validation_alias="OFM_REPORTS_DAILY_ENABLED"
+    )
+    # When it goes out, on `timezone`'s clock (summer time included).
+    daily_at: str = Field(default="14:00", validation_alias="OFM_REPORTS_DAILY_AT")
+    timezone: str = Field(
+        default="Europe/Warsaw", validation_alias="OFM_REPORTS_TIMEZONE"
+    )
+    # How often the web process looks whether it is due.
+    check_s: float = Field(default=60, gt=0, validation_alias="OFM_REPORTS_CHECK_S")
+
+    @field_validator("daily_at")
+    @classmethod
+    def _hh_mm(cls, value: str) -> str:
+        try:
+            hour, minute = (int(part) for part in value.split(":"))
+            datetime.time(hour, minute)
+        except ValueError as exc:
+            msg = "OFM_REPORTS_DAILY_AT must be HH:MM"
+            raise ValueError(msg) from exc
+        return value
+
+    def daily_time(self) -> datetime.time:
+        hour, minute = (int(part) for part in self.daily_at.split(":"))
+        return datetime.time(hour, minute)
+
+
+class EventsSettings(BaseSettings):
+    """features/events: what happens to an event after `emit`."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Senders switched off, by name (`telegram`): an event goes to every other
+    # sender that is set up.
+    senders_off: str = Field(default="", validation_alias="OFM_EVENTS_SENDERS_OFF")
+    # An event with a `key` goes out once per key in this long.
+    key_ttl_s: int = Field(
+        default=30 * 24 * 3600, ge=1, validation_alias="OFM_EVENTS_KEY_TTL_S"
+    )
+    # Waits before each new try of a send that failed (RQ retries); its length is
+    # the number of tries after the first.
+    retry_waits_s: list[int] = Field(
+        default=[10, 60, 300], validation_alias="OFM_EVENTS_RETRY_WAITS_S"
+    )
+    # A service asking to wait this long or less (a rate limit) is waited out in
+    # place, keeping the order; a longer ask is an ordinary retry.
+    max_wait_s: float = Field(
+        default=60, ge=0, validation_alias="OFM_EVENTS_MAX_WAIT_S"
+    )
+    # One send's time limit: its pace, a rate-limit wait, the call itself.
+    send_timeout_s: int = Field(
+        default=180, ge=1, validation_alias="OFM_EVENTS_SEND_TIMEOUT_S"
+    )
+    # A send that failed every try stays in RQ's failed registry this long, to be
+    # looked at or requeued (`rq requeue --queue events --all`).
+    failed_keep_s: int = Field(
+        default=14 * 24 * 3600, ge=1, validation_alias="OFM_EVENTS_FAILED_KEEP_S"
+    )
+
+    def senders_off_list(self) -> list[str]:
+        return _names(self.senders_off)
+
+
+class TelegramSettings(BaseSettings):
+    """integrations/senders/telegram: the app's bot (made with @BotFather) and the
+    chats it posts events to. No token or no chat: Telegram gets nothing."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    bot_token: SecretStr | None = Field(
+        default=None, validation_alias="OFM_TELEGRAM_BOT_TOKEN"
+    )
+    # Comma-separated chat ids: a person (they pressed Start on the bot) or a group
+    # the bot was added to (negative id). `TelegramClient.chats()` lists them.
+    chat_ids: str = Field(default="", validation_alias="OFM_TELEGRAM_CHAT_IDS")
+    api_url: str = Field(
+        default="https://api.telegram.org", validation_alias="OFM_TELEGRAM_API_URL"
+    )
+    timeout_s: float = Field(
+        default=15, gt=0, validation_alias="OFM_TELEGRAM_TIMEOUT_S"
+    )
+    # Least seconds between two messages to one chat: a group takes about 20 a
+    # minute, a private chat about one a second (Bot API FAQ).
+    group_pace_s: float = Field(
+        default=3.0, ge=0, validation_alias="OFM_TELEGRAM_GROUP_PACE_S"
+    )
+    chat_pace_s: float = Field(
+        default=1.0, ge=0, validation_alias="OFM_TELEGRAM_CHAT_PACE_S"
+    )
+
+    def chat_id_list(self) -> list[str]:
+        return _names(self.chat_ids)
 
 
 class PicturesSettings(BaseSettings):

@@ -38,6 +38,7 @@ from ofmhelpers.config.settings import (
     CloneLongSettings,
     DownloadersSettings,
     ElyumSettings,
+    EventsSettings,
     ExportSettings,
     FanvueSettings,
     GDriveSettings,
@@ -49,11 +50,13 @@ from ofmhelpers.config.settings import (
     LLMSettings,
     LoggingSettings,
     PicturesSettings,
+    ReportsSettings,
     RepurposeSettings,
     RunningHubSettings,
     SessionSettings,
     SignInSettings,
     StackedSettings,
+    TelegramSettings,
     TelemetrySettings,
     TrialsSettings,
     VaultSettings,
@@ -223,6 +226,18 @@ class Settings:
     @property
     def logging(self) -> LoggingSettings:
         return self._group(LoggingSettings)
+
+    @property
+    def reports(self) -> ReportsSettings:
+        return self._group(ReportsSettings)
+
+    @property
+    def events(self) -> EventsSettings:
+        return self._group(EventsSettings)
+
+    @property
+    def telegram(self) -> TelegramSettings:
+        return self._group(TelegramSettings)
 
 
 settings = Settings()
