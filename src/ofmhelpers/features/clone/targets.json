@@ -56,5 +56,20 @@
       "unit": "USD",
       "note": "$0.0792 a second at 720P, video and result both billed"
     }
+  },
+  "apiyi": {
+    "model": "apiyi:wan3.0-video",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "audio",
+    "aspect": "aspect_ratio",
+    "resolutions": ["480P", "720P", "1080P"],
+    "max_reference_s": 15,
+    "long_clone": true,
+    "price": {
+      "per_second": "clone_apiyi_usd_per_video_s",
+      "unit": "USD",
+      "note": "$0.0588 a second at 720P, video and result both billed"
+    }
   }
 }

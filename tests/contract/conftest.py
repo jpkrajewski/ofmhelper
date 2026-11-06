@@ -18,6 +18,7 @@ from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
 from ofmhelpers.apify.fake import fake_apify
 from ofmhelpers.config import settings as app_settings
 from ofmhelpers.config.settings import (
+    ApiyiSettings,
     ElyumSettings,
     GDriveSettings,
     HiggsfieldSettings,
@@ -33,6 +34,7 @@ from ofmhelpers.config.settings import (
 from ofmhelpers.gdrive import client as drive_client
 from ofmhelpers.gdrive.fake import _fake_drive
 from ofmhelpers.instagram.fake import fake_instagram
+from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
 from ofmhelpers.integrations.fanvue.fake import fake_fanvue
 from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 from ofmhelpers.integrations.stacked.fake import fake_stacked
@@ -45,6 +47,7 @@ from ofmhelpers.utils import fake_media, outbound
 FAKE = "fake"
 REAL = "real"
 _REAL_SETTINGS = (
+    ApiyiSettings,
     ElyumSettings,
     GDriveSettings,
     HiggsfieldSettings,
@@ -76,6 +79,7 @@ def _reset_fakes() -> None:
         fake_fanvue,
         fake_runninghub,
         fake_elyum,
+        fake_apiyi,
         fake_telegram,
         fake_media.mp4,
     ):

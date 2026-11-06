@@ -220,6 +220,7 @@ def fake_externals(monkeypatch, tmp_path):
     from ofmhelpers.apify.fake import fake_apify
     from ofmhelpers.gdrive.fake import _fake_drive
     from ofmhelpers.instagram.fake import fake_instagram
+    from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
     from ofmhelpers.integrations.fanvue.fake import fake_fanvue
     from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
     from ofmhelpers.integrations.stacked.fake import fake_stacked
@@ -245,6 +246,7 @@ def fake_externals(monkeypatch, tmp_path):
         fake_fanvue,
         fake_runninghub,
         fake_elyum,
+        fake_apiyi,
         fake_telegram,
         fake_media.mp4,
     )

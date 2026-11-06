@@ -30,6 +30,7 @@ from ofmhelpers.aigenproviders.errors import (
 from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
 from ofmhelpers.web import recovery
 from ofmhelpers.web.clone_long import (
     TARGETS,
@@ -44,7 +45,11 @@ from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.stores.jobs import fail_job, get_job, list_jobs
 
 NEW = json.dumps([{"kind": "new"}])
-PROVIDERS = {"kie": KieProvider, "higgsfield": HiggsfieldProvider}
+PROVIDERS = {
+    "kie": KieProvider,
+    "higgsfield": HiggsfieldProvider,
+    "apiyi": ApiyiProvider,
+}
 
 
 @pytest.fixture(autouse=True)

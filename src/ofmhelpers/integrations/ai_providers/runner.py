@@ -77,7 +77,8 @@ def wait(provider: Provider, task_id: str, kind: OutputKind) -> TaskState:
     s = settings.aigen
     timeout_s = s.video_poll_timeout_s if kind == "video" else s.poll_timeout_s
     deadline = time.monotonic() + timeout_s
-    interval = s.poll_interval_s
+    floor = provider.min_poll_interval_s()
+    interval = max(s.poll_interval_s, floor)
     while time.monotonic() < deadline:
         try:
             state = provider.status(task_id)
@@ -93,7 +94,7 @@ def wait(provider: Provider, task_id: str, kind: OutputKind) -> TaskState:
                 # would pay again on the next run.
                 logger.warning("task %s finished without a result yet", task_id)
         time.sleep(interval)
-        interval = min(interval * 1.5, s.poll_max_interval_s)
+        interval = max(min(interval * 1.5, s.poll_max_interval_s), floor)
     msg = (
         f"{provider.label} is still generating (task {task_id}, waited "
         f"{timeout_s}s). No action needed -- recovery finishes this job once "

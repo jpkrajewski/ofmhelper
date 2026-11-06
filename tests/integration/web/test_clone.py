@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 from signin import sign_in
 
@@ -363,6 +364,57 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
     assert statuses == ["done", "done"]
 
 
+def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
+    """The `apiyi` row of targets.json through /clone, real ffprobe and the
+    provider's own wire body; only APIYI's calls are stubbed."""
+    from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
+    from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
+
+    sent: list[dict] = []
+
+    def submit(_self, path, **kwargs):
+        sent.append(kwargs["json"])
+        answer = requests.Response()
+        answer.status_code = 200
+        answer._content = json.dumps({"output": {"task_id": f"t{len(sent)}"}}).encode()
+        return answer
+
+    def download(_self, url, dest):
+        msg = "no download in tests"
+        raise ProviderUnavailableError(msg)
+
+    monkeypatch.setattr(
+        ApiyiProvider, "upload", lambda _self, p, max_bytes=None: f"https://up/{p.name}"
+    )
+    monkeypatch.setattr(ApiyiClient, "submit", submit)
+    monkeypatch.setattr(
+        ApiyiProvider,
+        "status",
+        lambda _self, tid: TaskState(state="done", urls=[f"https://res/{tid}.mp4"]),
+    )
+    monkeypatch.setattr(ApiyiProvider, "download", download)
+
+    r = _post_clips(
+        client, [_clip(tmp_path / "a.mp4", 3)], {"provider": "apiyi", "audio": "true"}
+    )
+
+    assert r.status_code == 200, r.text
+    [body] = sent
+    assert body["model"] == "wan3.0-video"
+    parameters = body["parameters"]
+    assert (parameters["resolution"], parameters["duration"]) == ("720P", 3)
+    assert (parameters["ratio"], parameters["audio"]) == ("adaptive", True)
+    image, video = body["input"]["media"]
+    assert image["type"] == "reference_image"
+    assert image["url"].endswith("face.png")
+    assert video["type"] == "reference_video"
+    assert video["url"].endswith("a.mp4")
+    assert body["input"]["prompt"] == (
+        clone.DEFAULT_PROMPT.replace("@Video1", "Video 1").replace("@Image1", "Image 1")
+    )
+    assert get_job(r.json()["job_ids"][0]).status == "done"
+
+
 def test_run_on_higgsfield_sends_its_own_field_names(client, tmp_path, monkeypatch):
     sent = []
     _stub(HiggsfieldProvider, monkeypatch, sent)
@@ -607,9 +659,10 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     assert pricing["kie"]["max_reference_s"] == 15
     assert pricing["higgsfield"]["credits_per_video_s"] == {"720P": 2.0}
     assert pricing["higgsfield"]["max_reference_s"] == 15
-    # RunningHub and Elyum price in dollars.
+    # RunningHub, Elyum and APIYI price in dollars.
     assert pricing["runninghub"]["unit"] == "USD"
     assert pricing["elyum"]["unit"] == "USD"
+    assert pricing["apiyi"]["unit"] == "USD"
     assert 'id="clone-cost"' in client.get("/clone").text
 
 
@@ -627,12 +680,12 @@ def test_higgsfield_default_rate_matches_the_measured_runs(client):
 
 @pytest.mark.parametrize(
     ("provider", "usd_per_billed_s"),
-    [("kie", 0.08), ("runninghub", 0.07), ("elyum", 0.0792)],
+    [("kie", 0.08), ("runninghub", 0.07), ("elyum", 0.0792), ("apiyi", 0.0588)],
 )
 def test_billed_by_video_plus_result_costs_twice_the_rate_per_source_second(
     client, provider, usd_per_billed_s
 ):
-    """kie.ai, RunningHub and Elyum bill the reference video's seconds and
+    """kie.ai, RunningHub, Elyum and APIYI bill the reference video's seconds and
     the result's: a source second costs two billed seconds at 720P, and
     480P/1080P are half/double."""
     price = _pricing(client)[provider]

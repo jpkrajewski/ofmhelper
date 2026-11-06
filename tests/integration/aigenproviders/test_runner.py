@@ -45,6 +45,9 @@ class ScriptedProvider:
         del job_key
         return ""
 
+    def min_poll_interval_s(self):
+        return 0
+
     def status(self, task_id):
         del task_id
         state = self.states.pop(0)

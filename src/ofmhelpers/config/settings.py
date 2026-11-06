@@ -133,8 +133,10 @@ class WebSettings(BaseSettings):
         default={"/login", "/health", "/home", "/", "/apply"},
         validation_alias="OFM_PUBLIC_PATHS",
     )
+    # /files/ai/: reference files handed to a provider without an upload
+    # endpoint (ai_providers/hosting.py), each behind its own random token.
     public_prefixes: tuple[str, ...] = Field(
-        default=("/static/", "/auth/", "/password/", "/events/"),
+        default=("/static/", "/auth/", "/password/", "/events/", "/files/ai/"),
         validation_alias="OFM_PUBLIC_PREFIXES",
     )
     kie_ai_api_key_admin: str | None = None
@@ -325,6 +327,14 @@ class WebSettings(BaseSettings):
     clone_elyum_usd_per_video_s: dict[str, float] = Field(
         default={"480P": 0.0792, "720P": 0.1584, "1080P": 0.3168},
         validation_alias="OFM_CLONE_ELYUM_USD_PER_VIDEO_S",
+    )
+    # The same estimate on APIYI, in dollars per source second: wan3.0-video
+    # is $0.0294 / $0.0588 / $0.1176 per billed second (480P/720P/1080P,
+    # docs.apiyi.com wan3 overview, 2026-11-06: Alibaba's 30% launch discount,
+    # raised when it ends), billed = reference video + output, so twice that.
+    clone_apiyi_usd_per_video_s: dict[str, float] = Field(
+        default={"480P": 0.0588, "720P": 0.1176, "1080P": 0.2352},
+        validation_alias="OFM_CLONE_APIYI_USD_PER_VIDEO_S",
     )
 
 
@@ -580,6 +590,19 @@ class AigenSettings(BaseSettings):
     fake_video_duration_s: int = Field(
         default=3, validation_alias="OFM_FAKE_AI_VIDEO_DURATION_SECONDS"
     )
+    # A provider with no upload endpoint (APIYI) fetches each reference from
+    # this server: a link of its own per file (ai_providers/hosting.py), alive
+    # this long. The provider fetches when its task starts (minutes after the
+    # submit); a resumed task needs no reference again. A link is reused for
+    # at most half of it, so a reused one still has hours left.
+    hosted_ttl_s: int = Field(
+        default=3 * 3600, ge=3600, validation_alias="OFM_AIGEN_HOSTED_TTL_S"
+    )
+    # The public HTTPS address those links start with; unset = APP_BASE_URL.
+    # Dev sets a tunnel's address here (APP_BASE_URL stays localhost).
+    public_base_url: str | None = Field(
+        default=None, validation_alias="OFM_AIGEN_PUBLIC_BASE_URL"
+    )
 
 
 class HiggsfieldSettings(ProviderSettings):
@@ -646,6 +669,57 @@ class ElyumSettings(ProviderSettings):
     @property
     def max_file_bytes(self) -> int:
         return self.ref_image_max_bytes
+
+
+class ApiyiSettings(ProviderSettings):
+    """integrations/ai_providers/apiyi/ (api.apiyi.com: one gateway in front of
+    several APIs -- Wan/HappyHorse over DashScope, Seedance, Veo, Nano Banana
+    over Gemini, GPT-Image/Seedream/FLUX over OpenAI images; `apiyi/families/`).
+    No upload endpoint: references go as this server's own links
+    (ai_providers/hosting.py) or inline. The admin's keys pre-fill their form
+    like the other providers' keys; unset = the key field starts empty."""
+
+    model_config = SettingsConfigDict(env_prefix="OFM_APIYI_")
+
+    # One APIYI key reaches one token group's models: Wan/HappyHorse need a
+    # key of the Wan&HappyHorse group (a `default` group key is answered "no
+    # available channels", dev 2026-11-06), Seedance the SeeDance2 group's,
+    # images and Veo the default group's. The Wan key is the admins' default
+    # (the form pre-fills it); `apiyi/keys.py` picks the group's key per
+    # model.
+    api_key_admin: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "APIYI_API_KEY_WAN", "APIYI_API_KEY", "APIYI_API_KEY_ADMIN"
+        ),
+    )
+    api_key_seedance: str | None = Field(
+        default=None, validation_alias="APIYI_API_KEY_SEEDANCE"
+    )
+    api_key_default: str | None = Field(
+        default=None, validation_alias="APIYI_API_KEY_DEFAULT"
+    )
+    base_url: str = "https://api.apiyi.com"
+    # A submit answers once the task is queued (references are fetched after).
+    request_timeout_s: float = 180
+    # How long a hosted reference's link is reused for the next run; below
+    # AigenSettings.hosted_ttl_s, so a reused link outlives that run too.
+    upload_cache_ttl_s: int = 20 * 3600
+    # A key that passed the check (GET /v1/models) is not asked again for this.
+    key_check_ttl_s: int = 3600
+    # Wan 3.0's own limits (Model Studio wan3 API reference, 2026-11-06):
+    # images JPEG/PNG/BMP/WebP, 20 MB, 240-8000 px a side; video MP4/MOV,
+    # 100 MB, 4096 px, 1-15 s; audio WAV/MP3, 15 MB.
+    ref_image_max_bytes: int = 20 * 1000 * 1000
+    max_video_bytes: int = 100 * 1000 * 1000
+    max_audio_bytes: int = 15 * 1000 * 1000
+    # A .webm/.mkv/.m4v reference is sent as an MP4 copy (utils/video_mp4.py).
+    video_convert_timeout_s: int = 900
+    # Docs: poll every 5-10 s, never faster than 3 s (runner.wait's floor).
+    min_poll_interval_s: float = 5
+    # Image models answer in the one request (no task to poll): the docs'
+    # longest advised wait (gpt-image-2 high / Nano Banana Pro 4K: 600 s).
+    image_timeout_s: float = 600
 
 
 class DownloadersSettings(BaseSettings):

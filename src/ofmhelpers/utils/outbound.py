@@ -8,7 +8,8 @@ its CDN (`instagram/fake.py`), kie.ai (`integrations/ai_providers/kie/fake.py`),
 Higgsfield's file host (`integrations/ai_providers/higgsfield/fake.py`), Google's and
 Apple's sign-in token endpoints (`signin/fake.py`), Oopsie and Bouncy
 (`links/fake.py`), Apify (`apify/fake.py`), Stacked (`stacked/fake.py`), Fanvue (`fanvue/fake.py`), RunningHub
-(`integrations/ai_providers/runninghub/fake.py`), Elyum (`integrations/ai_providers/elyum/fake.py`),
+(`integrations/ai_providers/runninghub/fake.py`), Elyum (`integrations/ai_providers/elyum/fake.py`), APIYI
+(`integrations/ai_providers/apiyi/fake.py`),
 Telegram (`integrations/senders/telegram/fake.py`) -- and a
 host without a fake is refused with a connection error: nothing reaches the
 internet. Higgsfield's API (httpx, its SDK) and Drive (googleapiclient)
@@ -67,6 +68,7 @@ FakeHandler = Callable[[requests.PreparedRequest, Mapping[str, str]], FakeReply]
 def _routes() -> dict[str, FakeHandler]:
     """Host -> its fake. Imported on first use: the fakes import the
     clients' models, which import this module."""
+    from ofmhelpers.integrations.ai_providers.apiyi.fake import routes as apiyi_routes
     from ofmhelpers.integrations.ai_providers.elyum.fake import routes as elyum_routes
     from ofmhelpers.integrations.ai_providers.higgsfield.fake import routes as hf_routes
     from ofmhelpers.integrations.ai_providers.kie.fake import routes as kie_routes
@@ -92,6 +94,7 @@ def _routes() -> dict[str, FakeHandler]:
         **fanvue_routes(),
         **rh_routes(),
         **elyum_routes(),
+        **apiyi_routes(),
         **telegram_routes(),
     }
 

@@ -1,4 +1,4 @@
-"""kie.ai, Higgsfield, RunningHub and Elyum behind the shared interface, on
+"""kie.ai, Higgsfield, RunningHub, Elyum and APIYI behind the shared interface, on
 their fakes and on the real APIs: a wrong key is refused the same way
 everywhere (free), and the cheapest job runs end to end (its real side is
 marked `paid`: a few cents per provider, run only by `scripts/test.sh paid`;
@@ -18,6 +18,8 @@ from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.aigenproviders.runner import generate
 from ofmhelpers.aigenproviders.runninghub.fake import FAKE_KEY as RH_FAKE_KEY
 from ofmhelpers.aigenproviders.runninghub.provider import RunningHubProvider
+from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY as APIYI_FAKE_KEY
+from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
 
 BAD_KEY = "contract-test-invalid-key"
 PROVIDERS = {
@@ -25,6 +27,7 @@ PROVIDERS = {
     "higgsfield": (HiggsfieldProvider, f"{BAD_KEY}:{BAD_KEY}", HF_FAKE_KEY),
     "runninghub": (RunningHubProvider, BAD_KEY, RH_FAKE_KEY),
     "elyum": (ElyumProvider, f"ek_live_{BAD_KEY}", ELYUM_FAKE_KEY),
+    "apiyi": (ApiyiProvider, f"sk-{BAD_KEY}", APIYI_FAKE_KEY),
 }
 # A task id nobody has, in each provider's own format: RunningHub's are
 # numeric, and it refuses a UUID with 1007 "failed to parse request body"
@@ -34,6 +37,7 @@ UNKNOWN_TASK = {
     "higgsfield": "00000000-0000-0000-0000-000000000000",
     "runninghub": "1904152012345678901",
     "elyum": "g_000000000000",
+    "apiyi": "00000000-0000-4000-8000-000000000000",
 }
 # Presumed cheapest model per provider (Lite / Turbo tier); Elyum's
 # catalog has video only: Wan 3.0 at its shortest and lowest, $0.08.
@@ -42,8 +46,13 @@ CHEAPEST = {
     "higgsfield": "higgsfield:z-image/turbo",
     "runninghub": "runninghub:seedream-v5-lite/text-to-image",
     "elyum": "elyum:alibaba/wan-3.0/text-to-video",
+    "apiyi": "apiyi:wan3.0-video",
 }
-CHEAPEST_SETTINGS = {"elyum": {"resolution": "480p", "duration": 2, "audio": False}}
+CHEAPEST_SETTINGS = {
+    "elyum": {"resolution": "480p", "duration": 2, "audio": False},
+    # APIYI: Wan 3.0 at 480P, 2 s: $0.0588.
+    "apiyi": {"resolution": "480P", "duration": 2, "audio": False},
+}
 
 
 @pytest.fixture(params=list(PROVIDERS))
@@ -81,6 +90,7 @@ def _cheapest_job(cls, key: str) -> None:
 def fast_polls(monkeypatch):
     monkeypatch.setenv("OFM_AIGEN_POLL_INTERVAL_S", "0.01")
     monkeypatch.setenv("OFM_AIGEN_POLL_MAX_INTERVAL_S", "0.02")
+    monkeypatch.setenv("OFM_APIYI_MIN_POLL_INTERVAL_S", "0")
 
 
 def test_the_cheapest_job_runs_end_to_end_on_the_fake(
