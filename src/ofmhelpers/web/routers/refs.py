@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets import ref_usage
+from ofmhelpers.features.edit.service import STAGING as EDIT_STAGING
 from ofmhelpers.features.previews.render import (
     PREVIEW_ERRORS,
     write_atomic,
@@ -72,7 +73,8 @@ def _entry(path: str, mtime: float, used_at: float | None = None) -> RefEntry:
 
 def stored_files(root: Path, kind: str | None) -> dict[str, float]:
     """Every file under `root` (the session's part of the asset store,
-    `in_asset_root`), optionally of one kind, minus the thumbnail cache, as
+    `in_asset_root`), optionally of one kind, minus the thumbnail cache and
+    /edit's `.edit/` (kept a day, never offered for reuse), as
     path -> mtime. No separate metadata store, this is the real files: one
     walk, one stat per file; the thumbnail cache (one file per source per
     size) and other people's folders are never descended into."""
@@ -82,6 +84,7 @@ def stored_files(root: Path, kind: str | None) -> dict[str, float]:
             d
             for d in dirnames
             if Path(dirpath, d) != THUMBS_DIR
+            and d != EDIT_STAGING
             and in_asset_root(root, Path(dirpath, d, "_"))
         ]
         for name in filenames:

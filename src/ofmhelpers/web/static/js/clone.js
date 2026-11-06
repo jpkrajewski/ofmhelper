@@ -1,7 +1,8 @@
 /*
  * /clone page controller.
  *
- * Submit: one POST queues a Wan 3.0 run per video and answers with their
+ * Submit: the Start dialog asks first (clone-picks.js), then one POST
+ * queues a Wan 3.0 run per video and answers with their
  * cards already rendered (the same _clone_card.html the gallery uses,
  * newest first), so they go in place -- no reload -- and generation.js
  * polls them like any other card. XHR rather than fetch only for upload
@@ -113,15 +114,18 @@
             if (uploading) e.preventDefault();
         });
 
-        form.addEventListener("submit", (e) => {
+        form.addEventListener("submit", async (e) => {
             e.preventDefault();
             if (uploading) return;
-            const formData = window.FilePicker.collectFormData(new FormData(form));
-            const invalid = validate(form, formData);
+            const invalid = validate(form, window.FilePicker.collectFormData(new FormData(form)));
             if (invalid) {
                 setStatus(statusEl, invalid, true);
                 return;
             }
+            // Start asks first (clone-picks.js); its chips may change the
+            // prompt or audio, so the form is read again after.
+            if (!(await window.ClonePicks.confirm(form))) return;
+            const formData = window.FilePicker.collectFormData(new FormData(form));
 
             uploading = true;
             submitBtn.disabled = true;

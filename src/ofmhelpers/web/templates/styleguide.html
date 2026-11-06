@@ -48,6 +48,14 @@
     {% call ui.field("Select", "sg-select") %}<select id="sg-select"><option>One</option><option>Two</option></select>{% endcall %}
     {% call ui.field("Textarea", "sg-area") %}<textarea id="sg-area" rows="3"></textarea>{% endcall %}
     <label class="check-field"><input type="checkbox" checked> Checkbox</label>
+    {% call ui.chip_row() %}
+        {{ ui.chip("Off chip") }}
+        {{ ui.chip("On chip", pressed=true) }}
+    {% endcall %}
+    {% call ui.photo_tiles("Pictures") %}
+        {{ ui.photo_tile("/static/img/apple-touch-icon.png", "Picture") }}
+        {{ ui.photo_tile("/static/img/apple-touch-icon.png", "Picked picture", pressed=true) }}
+    {% endcall %}
     {% endcall %}
 
     {% call ui.card("Notices and badges") %}

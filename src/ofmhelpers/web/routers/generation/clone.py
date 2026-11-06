@@ -19,6 +19,7 @@ from pydantic import Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import get_job, start_job
+from ofmhelpers.features.clone.addons import prompt_addons
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
     ExportFailedError,
@@ -36,6 +37,7 @@ from ofmhelpers.features.clone.service import (
     check_choices,
     drive_picker,
     plan_runs,
+    subject_picks,
     upload_states,
     video_seconds,
 )
@@ -213,6 +215,8 @@ def form(
         # The `?video=` paths /reels or a download hands over; a stale link
         # just opens with fewer videos picked.
         prefill_videos=keep_videos(video or [], assets_root),
+        subjects=subject_picks(actor, assets_root),
+        addons=prompt_addons(),
         max_reference_s=min(t.max_reference_s for t in CLONE_TARGETS.values()),
         exports=list(exports().values()),
         default_export=settings.exports.default,

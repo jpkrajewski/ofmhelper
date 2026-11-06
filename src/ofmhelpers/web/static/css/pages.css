@@ -1497,3 +1497,168 @@ a.ph-login-user:hover { text-decoration: underline; }
 @media (min-width: 720px) {
     .chatting-recent-title + .card-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* /clone's Start dialog (clone-picks.js): the subject, the prompt and its
+   checks on the left; a divider; the videos, playable, on the right. */
+.clone-confirm { width: min(1100px, calc(100vw - 2 * var(--s-4))); }
+.clone-confirm-body {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: var(--s-5);
+    margin-bottom: var(--s-4);
+}
+.clone-confirm-side { display: grid; align-content: start; gap: var(--s-3); }
+.clone-confirm-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--gap-inline);
+}
+.clone-confirm-images img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+.clone-confirm-prompt {
+    margin: 0;
+    padding: var(--pad-inset);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+.clone-confirm .chip-row { margin: 0; }
+.clone-confirm-videos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    align-content: start;
+    gap: var(--gap-inline);
+    max-height: 70vh;
+    padding-inline-start: var(--s-5);
+    overflow-y: auto;
+    border-inline-start: 1px solid var(--border);
+}
+.clone-confirm-videos video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+@media (max-width: 719px) {
+    .clone-confirm-body { grid-template-columns: 1fr; }
+    .clone-confirm-videos {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: var(--s-4) 0 0;
+        border-inline-start: 0;
+        border-top: 1px solid var(--border);
+    }
+}
+
+/* /edit (edit.js): the player, then the frame strip with the Start and End
+   handles (two range inputs over it; the strip takes the pointer: edit.js),
+   the parts outside them shaded, the playhead at --at. */
+.edit { display: grid; gap: var(--gap-stack); }
+.edit-player {
+    display: block;
+    max-width: 100%;
+    max-height: 60vh;
+    margin: 0 auto;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+.edit-timeline {
+    --start: 0%;
+    --end: 100%;
+    --at: 0%;
+    position: relative;
+    height: 72px;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    cursor: ew-resize;
+    touch-action: none;
+}
+.edit-strip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+.edit-timeline-bare .edit-strip { display: none; }
+.edit-shade { position: absolute; top: 0; bottom: 0; background: var(--scrim-strong); pointer-events: none; }
+.edit-pick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--start);
+    width: calc(var(--end) - var(--start));
+    border-block: 3px solid var(--accent);
+    pointer-events: none;
+}
+.edit-shade-start { left: 0; width: var(--start); }
+.edit-shade-end { right: 0; width: calc(100% - var(--end)); }
+.edit-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--at);
+    width: 2px;
+    background: var(--accent-ink);
+    pointer-events: none;
+}
+.edit-handle {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    pointer-events: none;
+}
+/* A focused input gets the form fill (components.css input:focus): over
+   the strip it would hide every frame. The thumb shows the focus instead. */
+.edit-handle:focus { border: 0; background: transparent; box-shadow: none; }
+.edit-handle::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+.edit-handle::-moz-range-track { height: 100%; background: transparent; }
+.edit-handle::-webkit-slider-thumb {
+    width: 14px;
+    height: 72px;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    appearance: none;
+}
+.edit-handle::-moz-range-thumb {
+    width: 14px;
+    height: 72px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+}
+.edit-handle:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-ring); }
+.edit-handle:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--accent-ring); }
+/* Play | the part's times and length, centred | Clone it, Download, Cut. */
+.edit-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--gap-inline); }
+.edit-bar-side { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
+.edit-bar-end { justify-content: flex-end; }
+.edit-bar-middle { display: flex; align-items: baseline; gap: var(--gap-inline); font-variant-numeric: tabular-nums; }
+.edit-times { color: var(--text-muted); }
+.edit-length-over { color: var(--fail); }
+@media (max-width: 719px) {
+    .edit-bar { grid-template-columns: 1fr; justify-items: center; }
+    .edit-bar-end { justify-content: center; }
+}
+/* /clone's "Trim it!" in a cost line too long for the model. */
+.cost-line .trim-btn { min-height: var(--control-h-sm); }
+
+/* /home's Server section (admins; home-server.js). */
+.server { margin-top: var(--gap-section); }
+.server-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-inline); }
+.server-head .col-title { margin: 0; }
+#server-body { display: grid; gap: var(--gap-stack); margin-top: var(--gap-stack); }
+#server-body .stat-grid { margin-bottom: 0; }
+.server-title { margin: var(--s-3) 0 0; font-size: var(--step-0); }

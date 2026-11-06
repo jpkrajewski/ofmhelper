@@ -61,4 +61,8 @@
     document.addEventListener("DOMContentLoaded", () => {
         document.querySelectorAll("textarea.prompt-input").forEach(initPromptHighlight);
     });
+
+    // A prompt shown as text somewhere else (/clone's Start dialog): its
+    // references marked the same way, as safe HTML.
+    window.PromptHighlight = { html: highlight };
 })();

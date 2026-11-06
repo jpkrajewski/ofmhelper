@@ -1,0 +1,48 @@
+[
+  {
+    "key": "same_clothes",
+    "label": "Same clothes",
+    "text": "wearing the same clothes as in @Video1",
+    "pattern": "same clothes|clothes (from|as)[^,]*@video1",
+    "check": true
+  },
+  {
+    "key": "text_overlay",
+    "label": "Remove text overlay",
+    "text": "remove text overlay",
+    "pattern": "text ?overlay|overlay ?text|over ?lay text|watermark",
+    "check": true
+  },
+  {
+    "key": "tattoos",
+    "label": "No tattoos",
+    "text": "no tattoos",
+    "pattern": "\\btat+o+s?\\b",
+    "check": true
+  },
+  {
+    "key": "clothes_image2",
+    "label": "Clothes from @Image2",
+    "text": "wearing the clothes from @Image2",
+    "pattern": "(clothes|outfit|skirt|hoodie)[^,]*@image2"
+  },
+  {
+    "key": "reflections",
+    "label": "Replace reflections",
+    "text": "also replace the subject in reflections and screens",
+    "pattern": "reflection|screen"
+  },
+  {
+    "key": "jewelry",
+    "label": "No jewelry",
+    "text": "no jewelry or piercings",
+    "pattern": "jewel|pierc|\\bear+ings?\\b|\\bchain\\b",
+    "check": true
+  },
+  {
+    "key": "face",
+    "label": "Face visible",
+    "text": "showing face",
+    "pattern": "\\bface\\b"
+  }
+]

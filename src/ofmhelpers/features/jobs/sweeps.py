@@ -24,6 +24,7 @@ from ofmhelpers.features.chatting import sync as chat_history
 from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
 from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.edit import cleanup as edit_cleanup
 from ofmhelpers.features.jobs import recovery
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.features.previews import backfill as preview_backfill
@@ -123,6 +124,12 @@ def sweeps() -> list[Sweep]:
             run=daily_report.run,
             interval_s=lambda: settings.reports.check_s,
             enabled=lambda: settings.reports.daily_enabled,
+        ),
+        # /edit's uploads, cuts and frame strips older than a day: nothing kept.
+        Sweep(
+            name="edit cleanup",
+            run=edit_cleanup.remove_old,
+            interval_s=lambda: settings.web.edit_sweep_s,
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),

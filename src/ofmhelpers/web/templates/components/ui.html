@@ -174,3 +174,27 @@
     <span class="link-card-title">{{ label }}</span>
 </a>
 {%- endmacro %}
+
+{# An on/off choice as a small pill (a prompt add-on): `pressed` = on, a
+   plus while off, a check while on. Page JS flips `aria-pressed`. #}
+{% macro chip(label, hook="", pressed=false, attrs={}) -%}
+<button type="button" class="chip{{ ' ' ~ hook if hook else '' }}" aria-pressed="{{ 'true' if pressed else 'false' }}"{{ _attrs(attrs) }}><span class="chip-off">{{ ic.icon("plus", 14) }}</span><span class="chip-on">{{ ic.icon("check", 14) }}</span>{{ label }}</button>
+{%- endmacro %}
+
+{# A picture picked with one click (a subject image); `pressed` = picked.
+   `src` is its thumbnail, `label` what a screen reader says. Put them in
+   a `photo_tiles` row. #}
+{% macro photo_tile(src, label, hook="", pressed=false, attrs={}) -%}
+<button type="button" class="photo-tile{{ ' ' ~ hook if hook else '' }}" aria-pressed="{{ 'true' if pressed else 'false' }}" aria-label="{{ label }}"{{ _attrs(attrs) }}><img src="{{ src }}" alt="" loading="lazy" decoding="async"></button>
+{%- endmacro %}
+
+{# The row `chip`s sit in; the call body is the chips. #}
+{% macro chip_row(hook="", attrs={}) -%}
+<div class="chip-row{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}>{{ caller() }}</div>
+{%- endmacro %}
+
+{# A row of `photo_tile`s under a short `label` ("Last used"); the call body
+   is the tiles. #}
+{% macro photo_tiles(label, hook="", attrs={}) -%}
+<div class="photo-tiles{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}><span class="photo-tiles-label">{{ label }}</span>{{ caller() }}</div>
+{%- endmacro %}

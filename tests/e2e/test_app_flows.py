@@ -252,6 +252,8 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
 
     with va.page.expect_response(lambda r: r.url.endswith("/clone/run")) as run:
         va.page.click('#clone-form button[type="submit"]')
+        # Start asks first: the subject, the videos, the prompt.
+        va.page.click("#clone-confirm-go")
     body = run.value.json()
     assert len(body["job_ids"]) == len(source_videos)
     cards = ", ".join(f'#clone-gallery > [data-job-id="{j}"]' for j in body["job_ids"])
@@ -529,6 +531,8 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     )
     with va.page.expect_response(lambda r: r.url.endswith("/clone/run")) as run:
         va.page.click('#clone-form button[type="submit"]')
+        # Start asks first: the subject, the videos, the prompt.
+        va.page.click("#clone-confirm-go")
     body = run.value.json()
     assert len(body["job_ids"]) == len(picked)
     # Higgsfield is the default provider; the wrong key fails on it.

@@ -15,6 +15,7 @@ VA_PAGES = [
     "/pictures",
     "/reels",
     "/uniqify",
+    "/edit",
     "/trials",
     "/repurpose",
     "/account",

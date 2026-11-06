@@ -47,6 +47,7 @@ NAV = (
     NavItem(href="/pictures", label="Pictures", icon="image", place=NavPlace.MORE),
     NavItem(href="/reels", label="Viral watch", icon="flame", place=NavPlace.MORE),
     NavItem(href="/uniqify", label="Uniqify", icon="shuffle", place=NavPlace.MORE),
+    NavItem(href="/edit", label="Edit", icon="scissors", place=NavPlace.MORE),
     NavItem(href="/trials", label="Trials", icon="flame", place=NavPlace.MORE),
     NavItem(href="/repurpose", label="Repurpose", icon="sparkles", place=NavPlace.MORE),
     NavItem(href="/account", label="Account", icon="user", place=NavPlace.MORE),
