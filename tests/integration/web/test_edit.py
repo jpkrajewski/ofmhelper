@@ -300,12 +300,12 @@ def test_the_sweep_deletes_what_edit_made_a_day_ago_unless_a_job_needs_it(store)
     _age(needed, 2 * 86400)
     create_job("clone", {"reference_videos": [str(needed)]})
     strips = Path(settings.infra.uploads_root) / ".previews" / "strips"
-    strips.mkdir(parents=True)
+    strips.mkdir(parents=True, exist_ok=True)  # the strip test's, same worker
     old_strip = strips / "s.jpg"
     old_strip.write_bytes(b"j")
     _age(old_strip, 2 * 86400)
     left = Path(settings.infra.uploads_root) / ".edit" / "tmpabc"
-    left.mkdir(parents=True)
+    left.mkdir(parents=True, exist_ok=True)
     _age(left, 3600)
 
     cleanup.remove_old()
