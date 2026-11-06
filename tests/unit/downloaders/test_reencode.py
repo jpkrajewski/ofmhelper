@@ -52,6 +52,18 @@ def test_a_failing_re_encode_keeps_the_original_and_no_partial(monkeypatch, tmp_
     assert not (tmp_path / "clip_h264.mp4").exists()
 
 
+def test_the_re_encode_is_veryfast_at_crf_18(tmp_path):
+    """Every TikTok is re-encoded (its best format is HEVC only): medium took
+    twice as long for the same quality (2026-11-06)."""
+    cmd = DownloadConfig(output_dir=tmp_path).ffmpeg_cmd(
+        tmp_path / "a.mp4", tmp_path / "b.mp4"
+    )
+
+    assert cmd[cmd.index("-preset") + 1] == "veryfast"
+    assert cmd[cmd.index("-crf") + 1] == "18"
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+
+
 def test_a_finished_re_encode_replaces_the_original(monkeypatch, tmp_path):
     _ffmpeg(monkeypatch, _DONE)
     original = _original(tmp_path)

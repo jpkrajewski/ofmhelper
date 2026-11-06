@@ -415,15 +415,15 @@
         const empty = document.getElementById("clone-links-empty");
         let busy = false;
 
-        window.addEventListener("beforeunload", (e) => {
-            if (busy) e.preventDefault();
-        });
         // New links, new Generate.
         box.addEventListener("input", () => {
             delete box.dataset.batch;
         });
 
+        // Leaving the page asks first while the send goes up (upload-guard.js).
+        let guarded = () => {};
         const idle = () => {
+            guarded();
             busy = false;
             submitBtn.disabled = false;
         };
@@ -485,6 +485,7 @@
                 unsure(pending);
             });
             xhr.send(formData);
+            guarded = window.UploadGuard.begin();
         }
 
         form.addEventListener("submit", async (e) => {

@@ -117,7 +117,11 @@ class DownloadConfig(BaseModel):
     reencode_tiktok_to_h264: bool = True
     delete_original_after_reencode: bool = True
     crf: int = 18
-    preset: str = "medium"
+    # TikTok serves its best quality as HEVC only (1440x1080 bytevc1; H.264
+    # tops out at 540p), so every TikTok goes through this. veryfast: half of
+    # medium's time at the same quality (an 8 s 1440x1080 60 fps reel, 2 CPUs:
+    # 7.7 s -> 3.7 s, SSIM 0.9949 -> 0.9945, 4% smaller; 2026-11-06).
+    preset: str = "veryfast"
     audio_bitrate: str = "192k"
 
     # Workaround for YouTube's SABR rollout, ONLY needed if you do NOT have

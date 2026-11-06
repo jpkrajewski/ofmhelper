@@ -13,7 +13,8 @@
  * Rather than teach every call site about 401s, fetch is wrapped once here:
  * any 401 carrying a login_url takes over the whole tab. Loaded before every
  * other script in base.html, so the wrap is in place by the time anything
- * else can fire a request.
+ * else can fire a request. An XMLHttpRequest (an upload with progress,
+ * generation.js) is not wrapped: it calls `SessionExpiry.expire` itself.
  */
 (() => {
     // How long the "Session expired" overlay is shown before the redirect --
@@ -102,4 +103,8 @@
     }
 
     document.addEventListener("DOMContentLoaded", scheduleIdleExpiry);
+
+    // For requests fetch cannot make: an upload with progress is an
+    // XMLHttpRequest (generation.js), whose 401 takes the tab the same way.
+    window.SessionExpiry = { expire };
 })();

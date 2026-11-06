@@ -199,12 +199,13 @@ services:
   # /edit cuts (features/edit), one at a time (`OFM_EDIT_WORKERS` 1): its own
   # worker so a cut never waits behind a /trials batch on media, and its own CPU
   # and RAM cap so an ffmpeg that runs away is killed in here, never Postgres.
+  # 3 CPUs: a 14 s 1440p 60 fps cut takes 15 s at 1.5, 7 s at 3 (2026-11-06).
   edit-worker:
     build: .
     container_name: ofmhelpers-edit-worker
     restart: unless-stopped
     command: ["python", "-m", "ofmhelpers.worker", "edit"]
-    cpus: 1.5
+    cpus: 3.0
     mem_limit: 2g
     stop_grace_period: 120s
     healthcheck:

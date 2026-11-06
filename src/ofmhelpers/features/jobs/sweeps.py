@@ -111,12 +111,19 @@ def sweeps() -> list[Sweep]:
             )
             for platform in chat_sources.platforms()
         ),
-        # "Chats unanswered" to Telegram every 15 min while fans wait, the newest list
+        # "Chats unanswered" to Telegram every 10 min while fans wait, the newest list
         # replacing the one before.
         Sweep(
             name="chat wait events",
             run=chat_wait_events.emit_waiting,
             interval_s=lambda: settings.chatting.wait_events_check_s,
+        ),
+        # ... and 5 min after each fan message (chatting/rechecks.py), if that fan
+        # still waits untold.
+        Sweep(
+            name="chat wait rechecks",
+            run=chat_wait_events.recheck_due,
+            interval_s=lambda: settings.chatting.wait_recheck_poll_s,
         ),
         # The daily report (14:00 Warsaw) to Telegram; a baseline the first time.
         Sweep(

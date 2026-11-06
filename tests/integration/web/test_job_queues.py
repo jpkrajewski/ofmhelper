@@ -100,6 +100,15 @@ def test_default_is_on_top_and_media_at_the_bottom_one_at_a_time():
     assert QueueName.MEDIA in JOB_QUEUES
 
 
+def test_a_cut_someone_waits_for_gets_the_cpu_before_exports_and_trials():
+    """Prod 2026-11-06: at nice 15 next to four clone exports at nice 0, a 14 s
+    1440p cut took 40 s."""
+    queues = settings.infra.queues
+    assert queues[QueueName.EDIT].priority == QueuePriority.HIGHEST
+    assert queues[QueueName.EDIT].workers == 1
+    assert queues[QueueName.EDIT].priority < queues[QueueName.MEDIA].priority
+
+
 def test_joining_a_line_is_logged_without_the_jobs_arguments(capfire: CaptureLogfire):
     media = JobQueue(QueueName.MEDIA)
     media.put(worker_tasks.note_down, "before")

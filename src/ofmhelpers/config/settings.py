@@ -55,16 +55,19 @@ class QueueName(StrEnum):
     # Events going out to the senders (features/events: Telegram, ...): short jobs on
     # their own worker, so a message never waits behind a 45-min generation.
     EVENTS = "events"
+    # /edit cuts (features/edit): one at a time on their own worker with its own
+    # CPU and RAM cap, so a cut neither waits behind a /trials batch nor takes
+    # the box down (an 8K cut held 5.8 GB before it was capped, 2026-11-06).
+    # Top priority: someone watches the page for it. At nice 15 next to four
+    # clone exports at nice 0, a 14 s 1440p cut took 40 s (prod 2026-11-06;
+    # 15 s on an idle box).
+    EDIT = "edit"
     # /clone-links runs (features/clone_links/run.py): a 30-120 link Generate on
     # its own worker pool, so it never holds the default queue for hours.
     CLONE_LINKS = "clone-links"
     # Gallery previews (features/previews/render.py): ffmpeg encodes, on their own
     # low-priority worker so they never hold a generation worker.
     PREVIEWS = "previews"
-    # /edit cuts (features/edit): one at a time on their own worker with its own
-    # CPU and RAM cap, so a cut neither waits behind a /trials batch nor takes
-    # the box down (an 8K cut held 5.8 GB before it was capped, 2026-11-06).
-    EDIT = "edit"
     # Local encodes of big videos (/trials copies), one at a time: a 4K one holds
     # 1.5 GB, and six at once on prod's 7.75 GB had the kernel killing them
     # (2026-11-04).
@@ -453,14 +456,14 @@ class InfraSettings(BaseSettings):
             QueueName.EVENTS: QueueConfig(
                 workers=self.events_workers, priority=QueuePriority.HIGHEST
             ),
+            QueueName.EDIT: QueueConfig(
+                workers=self.edit_workers, priority=QueuePriority.HIGHEST
+            ),
             QueueName.CLONE_LINKS: QueueConfig(
                 workers=self.clone_links_workers, priority=QueuePriority.HIGH
             ),
             QueueName.PREVIEWS: QueueConfig(
                 workers=self.preview_workers, priority=QueuePriority.LOW
-            ),
-            QueueName.EDIT: QueueConfig(
-                workers=self.edit_workers, priority=QueuePriority.LOW
             ),
             QueueName.MEDIA: QueueConfig(
                 workers=self.media_workers, priority=QueuePriority.LOWEST
@@ -1859,9 +1862,14 @@ class ChattingSettings(BaseSettings):
         default=10, gt=0, validation_alias="OFM_CHATTING_ALERTS_CHECK_S"
     )
     # How often the "Chats unanswered" message (features/chatting/wait_events.py, to
-    # Telegram) goes out while fans wait (owner, 2026-11-06: every 15 min).
+    # Telegram) goes out while fans wait (owner, 2026-11-06: every 10 min).
     wait_events_check_s: float = Field(
-        default=900, gt=0, validation_alias="OFM_CHATTING_WAIT_EVENTS_CHECK_S"
+        default=600, gt=0, validation_alias="OFM_CHATTING_WAIT_EVENTS_CHECK_S"
+    )
+    # How often the rechecks due 5 min after each fan message are looked for
+    # (features/chatting/rechecks.py): a fan is told about that late at most.
+    wait_recheck_poll_s: float = Field(
+        default=15, gt=0, validation_alias="OFM_CHATTING_WAIT_RECHECK_POLL_S"
     )
     # Chat platforms left out of everything chatting sends to Telegram (the
     # unanswered list, the daily report's mass messages), comma-separated; the site
