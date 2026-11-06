@@ -37,6 +37,15 @@ def get_redis() -> Redis:
     return _redis
 
 
+def used_bytes() -> int | None:
+    """The memory Redis holds (queues, caches); None when it cannot be read."""
+    try:
+        return int(get_redis().info("memory")["used_memory"])
+    except (RedisError, KeyError, ValueError):
+        logger.warning("could not read Redis memory", exc_info=True)
+        return None
+
+
 def get_text(key: str) -> str | None:
     """Cached string for `key`, or None on a miss *or* an unreachable broker."""
     try:

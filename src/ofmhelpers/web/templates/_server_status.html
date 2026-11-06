@@ -1,0 +1,81 @@
+{% import "components/ui.html" as ui %}
+{# /home's Server section body (routers/home.py server, features/server). #}
+{% set h = server.host %}
+{% macro used(u) %}{{ u.used|filesizeformat(true) }} of {{ u.total|filesizeformat(true) }}{% endmacro %}
+{% for problem in server.problems %}{{ ui.notice(problem, "warn") }}{% else %}{{ ui.notice("All normal", "ok") }}{% endfor %}
+<div class="stat-grid">
+    {{ ui.stat("CPU", "%.0f%%"|format(h.cpu_percent), "load %.1f · %.1f · %.1f on %d CPUs"|format(h.load[0], h.load[1], h.load[2], h.cpus)) }}
+    {{ ui.stat("RAM", "%.0f%%"|format(h.memory.percent), used(h.memory) ~ (" · swap " ~ used(h.swap) if h.swap.total else "")) }}
+    {{ ui.stat("Disk", "%.0f%%"|format(h.disk.percent), used(h.disk) ~ " · " ~ (h.disk.total - h.disk.used)|filesizeformat(true) ~ " free") }}
+    {{ ui.stat("Database", server.database_bytes|filesizeformat(true) if server.database_bytes is not none else "—") }}
+    {{ ui.stat("Redis", server.redis_bytes|filesizeformat(true) if server.redis_bytes is not none else "—") }}
+    {{ ui.stat("Up", duration(h.uptime_s)) }}
+</div>
+
+<h3 class="server-title">Queues</h3>
+{% call ui.table() %}
+    <thead>
+        <tr>
+            <th scope="col">Queue</th>
+            <th scope="col" class="num">Workers busy</th>
+            <th scope="col" class="num">Waiting</th>
+            <th scope="col" class="num">First waiting</th>
+            <th scope="col" class="num">Failed</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for q in server.queues %}
+        <tr>
+            <td>{{ q.name }}</td>
+            <td class="num">{{ q.busy }} of {{ q.workers }}</td>
+            <td class="num">{{ q.waiting }}</td>
+            <td class="num">{{ duration(q.oldest_wait_s) if q.oldest_wait_s is not none else "—" }}</td>
+            <td class="num">{{ q.failed }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">Queues could not be read</td></tr>
+        {% endfor %}
+    </tbody>
+{% endcall %}
+
+<h3 class="server-title">Running jobs</h3>
+{% call ui.table() %}
+    <thead>
+        <tr>
+            <th scope="col">Job</th>
+            <th scope="col">Who</th>
+            <th scope="col" class="num">For</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for j in server.jobs %}
+        <tr>
+            <td>{{ j.task }}</td>
+            <td>{{ j.who }}</td>
+            <td class="num">{{ duration(j.running_s) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">Nothing running</td></tr>
+        {% endfor %}
+    </tbody>
+{% endcall %}
+
+<h3 class="server-title">Uploads</h3>
+{% call ui.table() %}
+    <thead>
+        <tr>
+            <th scope="col">Folder</th>
+            <th scope="col" class="num">Size</th>
+            <th scope="col" class="num">Files</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for f in server.folders %}
+        <tr>
+            <td>{{ f.name }}</td>
+            <td class="num">{{ f.bytes|filesizeformat(true) }}</td>
+            <td class="num">{{ "{:,}".format(f.files) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+{% endcall %}

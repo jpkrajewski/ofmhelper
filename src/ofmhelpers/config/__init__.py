@@ -54,6 +54,7 @@ from ofmhelpers.config.settings import (
     ReportsSettings,
     RepurposeSettings,
     RunningHubSettings,
+    ServerSettings,
     SessionSettings,
     SignInSettings,
     StackedSettings,
@@ -235,6 +236,10 @@ class Settings:
     @property
     def reports(self) -> ReportsSettings:
         return self._group(ReportsSettings)
+
+    @property
+    def server(self) -> ServerSettings:
+        return self._group(ServerSettings)
 
     @property
     def events(self) -> EventsSettings:

@@ -182,6 +182,54 @@ def active_job_ids() -> set[str] | None:
         return None
 
 
+class QueueLoad(BaseModel):
+    """One job queue right now (/home's Server section)."""
+
+    name: str
+    workers: int
+    busy: int
+    waiting: int
+    failed: int
+    # How long the first job in line has waited (None: nobody waits).
+    oldest_wait_s: float | None
+
+
+def _waited_s(queue: Queue) -> float | None:
+    first = queue.get_job_ids(0, 1)
+    job = Job.fetch_many(first, connection=get_redis())[0] if first else None
+    if job is None or job.enqueued_at is None:
+        return None
+    at = job.enqueued_at
+    at = at if at.tzinfo else at.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - at).total_seconds()
+
+
+def queue_loads() -> list[QueueLoad]:
+    """Every queue (`QueueName`): its worker processes (busy = running a
+    job), how many wait, how many failed (rq keeps them a while), how long
+    the first in line has waited. Empty when Redis cannot be read."""
+    try:
+        workers = Worker.all(connection=get_redis())
+        loads = []
+        for name in QueueName:
+            queue = get_queue(name)
+            mine = [w for w in workers if name.value in w.queue_names()]
+            loads.append(
+                QueueLoad(
+                    name=name.value,
+                    workers=len(mine),
+                    busy=sum(1 for w in mine if w.get_state() == "busy"),
+                    waiting=queue.count,
+                    failed=queue.failed_job_registry.count,
+                    oldest_wait_s=_waited_s(queue),
+                )
+            )
+    except Exception:
+        logger.warning("could not read the queues", exc_info=True)
+        return []
+    return loads
+
+
 def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
     """`put` on the default queue."""
     return JobQueue(QueueName.DEFAULT).put(fn, *args, job_timeout=job_timeout, **kwargs)

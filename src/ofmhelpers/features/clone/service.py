@@ -11,6 +11,7 @@ A finished run's video can be uploaded into one or more Instagram accounts'
 Drive folders, picked in the card's Drive dialog (`/clone/drive-upload`,
 features/drive/uploads.py); each card says where its video went."""
 
+import re
 import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +22,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.stores.jobs import get_job, last_used_firsts, most_used_firsts
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.clone.export import export_choice
@@ -36,6 +37,10 @@ from ofmhelpers.telemetry import in_this_trace
 TASK = "clone"
 PREFIX = "/clone"
 FILES_PREFIX = f"{PREFIX}/files"
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+# Runs whose subjects /clone's tiles offer: /clone-links runs take the same
+# people's pictures.
+SUBJECT_TASKS = {TASK, "clone_links"}
 
 
 class CloneRefusedError(Exception):
@@ -231,6 +236,67 @@ def drive_picker(user_id: int) -> DrivePicker:
         ),
         drive_ready=bool(refresh_token(user_id)),
     )
+
+
+class SubjectPicks(BaseModel):
+    """/clone's one-click subject tiles: the last used subjects, then the
+    most used ones (a picture can be in both rows: user decision
+    2026-11-06). Paths still in the person's store."""
+
+    last_used: list[str]
+    most_used: list[str]
+
+
+def subject_picks(actor: str, assets_root: Path) -> SubjectPicks:
+    """`actor`'s subjects (first subject image of a run) from their /clone
+    and /clone-links runs, `clone_last_subjects` last used then
+    `clone_top_subjects` most used."""
+    web = settings.web
+    return SubjectPicks(
+        last_used=_stored(
+            last_used_firsts, actor, assets_root, web.clone_last_subjects
+        ),
+        most_used=_stored(most_used_firsts, actor, assets_root, web.clone_top_subjects),
+    )
+
+
+def _digest(path: str) -> str:
+    return Path(path).name.split("__", 1)[0]
+
+
+def _stored(
+    query: Callable[[set[str], str, str, int], list[str]],
+    actor: str,
+    assets_root: Path,
+    limit: int,
+) -> list[str]:
+    """Up to `limit` of `query`'s subjects still in the store. Asks for
+    more than it keeps: some may be gone."""
+    found: list[str] = []
+    for path in query(SUBJECT_TASKS, actor, "reference_images", limit * 3):
+        if len(found) == limit:
+            break
+        if copy := _stored_copy(path, assets_root):
+            found.append(copy)
+    return found
+
+
+def _stored_copy(path: str, assets_root: Path) -> str | None:
+    """`path` if it is still an image in this store; else the same file name
+    at the top of the store (a job stored under another root); else another
+    stored name of the same picture (`<sha256>__<name>`, looked for only
+    when the name starts with a real hash); else None."""
+    from ofmhelpers.web.routers.task_helpers import keep_files
+
+    if kept := keep_files(
+        [path, str(assets_root / Path(path).name)], assets_root, "image"
+    ):
+        return kept[0]
+    digest = _digest(path)
+    if not _SHA256.fullmatch(digest):
+        return None
+    others = sorted(str(p) for p in assets_root.glob(f"{digest}__*"))
+    return next(iter(keep_files(others, assets_root, "image")), None)
 
 
 def upload_states(job_ids: list[str], actor: str) -> list[DriveUpload]:

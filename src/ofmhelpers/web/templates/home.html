@@ -10,4 +10,17 @@
     {{ ui.link_card(item.href, item.label, item.icon) }}
     {% endfor %}
 </div>
+
+{# Admins: where the box stands (routers/home.py /home/server, fetched by
+   static/js/home-server.js so /home itself never waits for it). #}
+{% if request.session.get("role") == "admin" %}
+<section class="server" id="server" data-src="/home/server">
+    <div class="server-head">
+        <h2 class="col-title">Server</h2>
+        {{ ui.button("Refresh", icon="refresh", hook="server-refresh") }}
+    </div>
+    <div id="server-body" aria-live="polite"><span class="spinner"></span></div>
+</section>
+<script src="{{ static_url('js/home-server.js') }}"></script>
+{% endif %}
 {% endblock %}

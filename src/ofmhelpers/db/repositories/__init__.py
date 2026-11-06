@@ -27,6 +27,7 @@ from ofmhelpers.db.repositories.chats import ChatRepository
 from ofmhelpers.db.repositories.clone_ai_checks import CloneAiCheckRepository
 from ofmhelpers.db.repositories.clone_from_links import CloneFromLinkRepository
 from ofmhelpers.db.repositories.cookies import CookieRepository
+from ofmhelpers.db.repositories.database import DatabaseRepository
 from ofmhelpers.db.repositories.devices import DeviceRepository, DuplicateError
 from ofmhelpers.db.repositories.drive_folders import DriveFolderRepository
 from ofmhelpers.db.repositories.drive_uploads import DriveUploadRepository
@@ -44,6 +45,7 @@ __all__ = [
     "CloneAiCheckRepository",
     "CloneFromLinkRepository",
     "CookieRepository",
+    "DatabaseRepository",
     "DeviceRepository",
     "DriveFolderRepository",
     "DriveUploadRepository",

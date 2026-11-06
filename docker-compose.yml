@@ -196,6 +196,39 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
+  # /edit cuts (features/edit), one at a time (`OFM_EDIT_WORKERS` 1): its own
+  # worker so a cut never waits behind a /trials batch on media, and its own CPU
+  # and RAM cap so an ffmpeg that runs away is killed in here, never Postgres.
+  edit-worker:
+    build: .
+    container_name: ofmhelpers-edit-worker
+    restart: unless-stopped
+    command: ["python", "-m", "ofmhelpers.worker", "edit"]
+    cpus: 1.5
+    mem_limit: 2g
+    stop_grace_period: 120s
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    volumes: *app-volumes
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
   # Events going out to the senders (features/events: Telegram, ...), seconds each.
   # Its own queue at the top priority, one process (`OFM_EVENTS_WORKERS`): they go
   # out in order, and never wait behind a 45-min generation on the default queue.

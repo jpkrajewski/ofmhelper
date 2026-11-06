@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
+{# /edit (routers/video_tools/edit.py, static/js/edit.js): the video over a
+   strip of its frames, two handles for where the part starts and ends,
+   Play plays the part, Cut queues it on the edit worker (edit.js polls):
+   Clone it / Download. Nothing it makes is kept past a day. #}
+{% block content %}
+{{ ui.page_header("Edit") }}
+
+{% set video = page.video %}
+{% if video %}
+{% call ui.card() %}
+<div class="edit" id="edit" data-video="{{ video.path }}" data-seconds="{{ video.seconds }}"
+     data-limit="{{ limit_s }}" data-min="{{ min_s }}" data-max="{{ max_part_s }}">
+    <video class="edit-player" id="edit-player" src="{{ video.url }}" playsinline preload="metadata"></video>
+    <div class="edit-timeline" id="edit-timeline">
+        <img class="edit-strip" src="/edit/strip?video={{ video.path|urlencode }}" alt="">
+        <div class="edit-shade edit-shade-start"></div>
+        <div class="edit-shade edit-shade-end"></div>
+        <div class="edit-pick"></div>
+        <div class="edit-playhead" id="edit-playhead"></div>
+        <input type="range" class="edit-handle" id="edit-start" aria-label="Start"
+               min="0" max="{{ video.seconds }}" step="0.1" value="0">
+        <input type="range" class="edit-handle" id="edit-end" aria-label="End"
+               min="0" max="{{ video.seconds }}" step="0.1" value="{{ [video.seconds, limit_s]|min }}">
+    </div>
+    <div class="edit-bar">
+        <div class="edit-bar-side">
+            {{ ui.button("Play", "primary", icon="play", hook="edit-play") }}
+            {{ ui.button("Pause", "primary", icon="pause", hook="edit-pause", attrs={"hidden": true}) }}
+        </div>
+        <div class="edit-bar-middle">
+            <span class="edit-times"><span id="edit-from"></span> – <span id="edit-to"></span></span>
+            <strong class="edit-length" id="edit-length"></strong>
+        </div>
+        <div class="edit-bar-side edit-bar-end">
+            {{ ui.button("Clone it", "primary", icon="film", href="#", attrs={"id": "edit-clone", "hidden": true}) }}
+            {{ ui.button("Download", icon="download", href="#", attrs={"id": "edit-download", "download": "", "hidden": true}) }}
+            {{ ui.button("Cut", "primary", icon="scissors", attrs={"id": "edit-cut"}) }}
+        </div>
+    </div>
+    <div class="generation-status" id="edit-status" role="status" aria-live="polite"></div>
+</div>
+{% endcall %}
+{% else %}
+{% if page.problem %}{{ ui.notice(page.problem, "warn") }}{% endif %}
+{% call ui.card() %}
+<form id="edit-open" novalidate>
+    {{ fp.file_picker('video', 'video', 'Video', max=1) }}
+    <div class="generation-status" id="edit-status" role="status" aria-live="polite"></div>
+</form>
+{% endcall %}
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+{% endif %}
+<script src="{{ static_url('js/edit.js') }}"></script>
+{% endblock %}

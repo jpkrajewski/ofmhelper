@@ -2,6 +2,7 @@
 {% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
 {% import "_icons.html" as ic %}
+{% macro addon_chip(a) %}{{ ui.chip(a.label, hook="addon-chip", attrs={"data-text": a.text, "data-pattern": a.pattern}) }}{% endmacro %}
 {% block content %}
 {{ ui.page_header("Clone") }}
 {% include "_gallery_hidden.html" %}
@@ -14,11 +15,20 @@
       data-prefill-videos='{{ prefill_videos|tojson }}'
       data-pricing='{{ pricing|tojson }}' novalidate>
     {% include "_provider_fields.html" %}
-    {{ fp.file_picker('image', 'image', 'Subject', max=max_images, multiple=true) }}
+    {% call fp.file_picker('image', 'image', 'Subject', max=max_images, multiple=true) %}
+    {% for label, paths in [("Last used", subjects.last_used), ("Most used", subjects.most_used)] if paths %}
+    {% call ui.photo_tiles(label, hook="subject-tiles") %}
+    {% for path in paths %}{{ ui.photo_tile("/refs/thumb?path=" ~ path|urlencode ~ "&size=200", label ~ " " ~ loop.index, hook="subject-tile", attrs={"data-path": path}) }}{% endfor %}
+    {% endcall %}
+    {% endfor %}
+    {% endcall %}
     {{ fp.file_picker('videos', 'video', 'Videos', multiple=true) }}
     <div class="field">
         <label for="clone-prompt">Prompt</label>
         <textarea id="clone-prompt" name="prompt" class="prompt-input" rows="3" required>{{ default_prompt }}</textarea>
+        {% call ui.chip_row(attrs={"aria-label": "Add to the prompt"}) %}
+        {% for a in addons %}{{ addon_chip(a) }}{% endfor %}
+        {% endcall %}
     </div>
     <div class="field clone-output">
         <span class="field-label">Output</span>
@@ -83,16 +93,45 @@
 </div>
 </div>
 
+{# A video too long for the model: its cost line offers this (clone-cost.js). #}
+<template id="trim-button">{{ ui.button("Trim it!", hook="trim-btn") }}</template>
+
 {% if drive_targets %}
 {# What clone.js adds to a card that finishes while the page is open. #}
 <template id="card-drive-item">{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}</template>
 <template id="card-drive-remove">{{ ui.icon_button("x", "Remove from Drive", hook="drive-remove") }}</template>
 {% endif %}
 
+{# Start asks first (clone-picks.js): on the left the subject, the prompt,
+   the add-ons re-runs most often had to add and audio; on the right the
+   videos, playable. #}
+<dialog class="accounts-dialog clone-confirm" id="clone-confirm">
+    <form method="dialog">
+        <h2 id="clone-confirm-title"></h2>
+        <div class="clone-confirm-body">
+            <div class="clone-confirm-side">
+                <div class="clone-confirm-images" id="clone-confirm-images"></div>
+                <p class="clone-confirm-prompt" id="clone-confirm-prompt"></p>
+                {% call ui.chip_row(attrs={"aria-label": "In the prompt"}) %}
+                {% for a in addons if a.check %}{{ addon_chip(a) }}{% endfor %}
+                {{ ui.chip("Audio", hook="audio-chip") }}
+                {% endcall %}
+            </div>
+            <div class="clone-confirm-videos" id="clone-confirm-videos"></div>
+        </div>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", type="submit", attrs={"value": "cancel"}) }}
+            {{ ui.button("Start", "primary", type="submit", attrs={"value": "confirm", "id": "clone-confirm-go"}) }}
+        </div>
+    </form>
+</dialog>
+
 <script src="{{ static_url('js/file-picker.js') }}"></script>
 {% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/prompt-highlight.js') }}"></script>
+<script src="{{ static_url('js/clone-picks.js') }}"></script>
+<script src="{{ static_url('js/clone-return.js') }}"></script>
 <script src="{{ static_url('js/clone.js') }}"></script>
 <script src="{{ static_url('js/clone-cost.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>

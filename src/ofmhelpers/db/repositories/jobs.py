@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import ColumnElement, delete, func, select, type_coerce, update
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array_agg
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.models import JobRow
@@ -289,6 +289,64 @@ class JobRepository(CachedRepository):
                 )
             ).scalars()
             return set(found)
+
+    @cached
+    def last_used_firsts(
+        self, tasks: tuple[str, ...], actor: str, field: str, limit: int
+    ) -> list[str]:
+        """The first file of the list param `field` (`reference_images`: the
+        subject) of `actor`'s jobs of `tasks` (sorted tuple: stable cache
+        key), last used first, one path per file (`_firsts`)."""
+        return self._firsts(
+            tasks, actor, field, limit, [func.max(JobRow.created_at).desc()]
+        )
+
+    @cached
+    def most_used_firsts(
+        self, tasks: tuple[str, ...], actor: str, field: str, limit: int
+    ) -> list[str]:
+        """As `last_used_firsts`, the one in the most jobs first (a tie: the
+        last used)."""
+        return self._firsts(
+            tasks,
+            actor,
+            field,
+            limit,
+            [func.count().desc(), func.max(JobRow.created_at).desc()],
+        )
+
+    def _firsts(
+        self,
+        tasks: tuple[str, ...],
+        actor: str,
+        field: str,
+        limit: int,
+        order: list[Any],
+    ) -> list[str]:
+        """A file is its content: the store names it `<sha256>__<name>`, and
+        one picture sits under several names and paths (prod 2026-11-06: 44
+        paths, 36 pictures), so files group by that hash; each group answers
+        the path its newest job used."""
+        first = JobRow.params[field][0].astext
+        content = func.split_part(func.regexp_replace(first, "^.*/", ""), "__", 1)
+        with session_scope() as s:
+            return list(
+                s.execute(
+                    select(
+                        array_agg(aggregate_order_by(first, JobRow.created_at.desc()))[
+                            1
+                        ]
+                    )
+                    .where(
+                        JobRow.task.in_(tasks),
+                        JobRow.actor == actor,
+                        first.is_not(None),
+                    )
+                    .group_by(content)
+                    .order_by(*order)
+                    .limit(limit)
+                ).scalars()
+            )
 
     @cached
     def count_hidden(self, tasks: tuple[str, ...], actor: str) -> int:

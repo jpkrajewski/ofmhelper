@@ -719,6 +719,54 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 }
 
 /* ---------------------------------------------------------------------
+   11b. One-click picks: chips (ui.chip) and picture tiles (ui.photo_tile)
+   --------------------------------------------------------------------- */
+.chip-row { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-top: var(--s-2); }
+.chip {
+    gap: var(--s-1);
+    min-height: var(--control-h-sm);
+    padding: 0 var(--s-3);
+    border-radius: var(--radius-pill);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+.chip .chip-on,
+.chip[aria-pressed="true"] .chip-off { display: none; }
+.chip[aria-pressed="true"] .chip-on { display: inline-flex; }
+.chip[aria-pressed="true"],
+.chip[aria-pressed="true"]:hover {
+    border-color: var(--accent);
+    background: var(--accent-wash);
+    color: var(--text);
+}
+.photo-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: var(--gap-inline);
+    margin-bottom: var(--s-2);
+}
+.photo-tiles-label {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    font-weight: 500;
+}
+.photo-tile {
+    aspect-ratio: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+.photo-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.photo-tile[aria-pressed="true"],
+.photo-tile[aria-pressed="true"]:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+/* ---------------------------------------------------------------------
    12. Prompt reference highlighting (static/js/prompt-highlight.js)
    --------------------------------------------------------------------- */
 /* The backdrop mirrors the textarea's text behind it -- its font/padding/
@@ -748,6 +796,9 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     white-space: pre-wrap;
     overflow-wrap: break-word;
 }
+/* A reference marked in a prompt shown as text (PromptHighlight.html): the
+   backdrop's mark colour, the text itself visible. */
+.ref-mark { border-radius: 3px; background: var(--accent-ring); color: inherit; }
 .prompt-backdrop mark { color: transparent; border-radius: 3px; }
 /* One highlight for every kind: the reference name says which it is. */
 .prompt-backdrop .ref-mark-image,

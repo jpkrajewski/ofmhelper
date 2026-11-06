@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from ofmhelpers.db.repositories import DuplicateError
 from ofmhelpers.features.clone.service import CloneRefusedError
 from ofmhelpers.features.drive.uploads import UploadRefusedError
+from ofmhelpers.features.edit.service import EditRefusedError
 from ofmhelpers.features.generate.service import GenerateRefusedError
 from ofmhelpers.features.trials.folder import NotFoundError
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
@@ -34,6 +35,7 @@ MESSAGE = "Something went wrong. Try again."
 
 REFUSALS: dict[type[Exception], int] = {
     CloneRefusedError: 400,
+    EditRefusedError: 400,
     GenerateRefusedError: 400,
     InvalidInputError: 400,
     NotALinkError: 400,

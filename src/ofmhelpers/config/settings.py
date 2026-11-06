@@ -61,6 +61,10 @@ class QueueName(StrEnum):
     # Gallery previews (features/previews/render.py): ffmpeg encodes, on their own
     # low-priority worker so they never hold a generation worker.
     PREVIEWS = "previews"
+    # /edit cuts (features/edit): one at a time on their own worker with its own
+    # CPU and RAM cap, so a cut neither waits behind a /trials batch nor takes
+    # the box down (an 8K cut held 5.8 GB before it was capped, 2026-11-06).
+    EDIT = "edit"
     # Local encodes of big videos (/trials copies), one at a time: a 4K one holds
     # 1.5 GB, and six at once on prod's 7.75 GB had the kernel killing them
     # (2026-11-04).
@@ -68,7 +72,7 @@ class QueueName(StrEnum):
 
 
 # Every queue `run_job` is put on: what `cache.active_job_ids` reads.
-JOB_QUEUES = (QueueName.DEFAULT, QueueName.CLONE_LINKS, QueueName.MEDIA)
+JOB_QUEUES = (QueueName.DEFAULT, QueueName.CLONE_LINKS, QueueName.MEDIA, QueueName.EDIT)
 
 
 class QueuePriority(IntEnum):
@@ -268,6 +272,44 @@ class WebSettings(BaseSettings):
     uniqify_encode_timeout_s: int = Field(
         default=600, validation_alias="OFM_UNIQIFY_ENCODE_TIMEOUT_S"
     )
+    # /edit (features/edit): one cut's ffmpeg bound (it re-encodes, on the
+    # edit worker), the shortest and longest part it cuts, the longest and
+    # biggest video it opens, the cut's short side cap (a 4K/8K source comes
+    # out 1080), ffmpeg threads per cut/strip, the timeline's frame strip
+    # (frames, px tall, its own bound; past `edit_strip_all_frames_s` it
+    # reads keyframes only), how long a cut or an /edit upload is kept
+    # (then the hourly sweep deletes it), and how often that sweep runs.
+    edit_cut_timeout_s: int = Field(
+        default=300, validation_alias="OFM_EDIT_CUT_TIMEOUT_S"
+    )
+    edit_min_s: float = Field(default=0.5, gt=0, validation_alias="OFM_EDIT_MIN_S")
+    edit_max_part_s: float = Field(
+        default=60, gt=0, validation_alias="OFM_EDIT_MAX_PART_S"
+    )
+    edit_max_input_s: float = Field(
+        default=600, gt=0, validation_alias="OFM_EDIT_MAX_INPUT_S"
+    )
+    edit_max_upload_mb: int = Field(
+        default=1024, ge=1, validation_alias="OFM_EDIT_MAX_UPLOAD_MB"
+    )
+    edit_short_side: int = Field(
+        default=1080, ge=144, validation_alias="OFM_EDIT_SHORT_SIDE"
+    )
+    edit_threads: int = Field(default=2, ge=1, validation_alias="OFM_EDIT_THREADS")
+    edit_strip_timeout_s: int = Field(
+        default=30, ge=1, validation_alias="OFM_EDIT_STRIP_TIMEOUT_S"
+    )
+    edit_strip_all_frames_s: float = Field(
+        default=60, ge=0, validation_alias="OFM_EDIT_STRIP_ALL_FRAMES_S"
+    )
+    edit_keep_s: int = Field(default=86400, ge=60, validation_alias="OFM_EDIT_KEEP_S")
+    edit_sweep_s: int = Field(default=3600, ge=60, validation_alias="OFM_EDIT_SWEEP_S")
+    edit_strip_frames: int = Field(
+        default=20, ge=1, le=60, validation_alias="OFM_EDIT_STRIP_FRAMES"
+    )
+    edit_strip_height: int = Field(
+        default=96, ge=16, le=360, validation_alias="OFM_EDIT_STRIP_HEIGHT"
+    )
     # /clone (routers/generation/clone.py): videos per submit -- each one is a
     # paid Wan 3.0 run, so this caps what one mis-click can spend -- and how
     # many recent clone jobs the page groups into batches.
@@ -276,6 +318,16 @@ class WebSettings(BaseSettings):
     # sent to every run. Wan 3.0 takes at most 10 reference images.
     clone_max_images: int = Field(
         default=10, ge=1, le=10, validation_alias="OFM_CLONE_MAX_IMAGES"
+    )
+    # /clone's one-click subject tiles (a run's first image) from the
+    # person's /clone and /clone-links runs: this many last used, then this
+    # many most used (prod 2026-11-06: one image was 326 of 393 runs,
+    # picked by hand every time; user decision: 5 + 5).
+    clone_last_subjects: int = Field(
+        default=5, ge=0, validation_alias="OFM_CLONE_LAST_SUBJECTS"
+    )
+    clone_top_subjects: int = Field(
+        default=5, ge=0, validation_alias="OFM_CLONE_TOP_SUBJECTS"
     )
     # The /clone form's starting prompt.
     clone_default_prompt: str = Field(
@@ -387,6 +439,8 @@ class InfraSettings(BaseSettings):
     # the order they were queued (a retried one comes later), each paced to what
     # its service takes (`Sender.pace_s`).
     events_workers: int = Field(default=1, ge=1, validation_alias="OFM_EVENTS_WORKERS")
+    # The /edit pool (`python -m ofmhelpers.worker edit`): cuts at once. One.
+    edit_workers: int = Field(default=1, ge=1, validation_alias="OFM_EDIT_WORKERS")
 
     @property
     def queues(self) -> dict[QueueName, QueueConfig]:
@@ -404,6 +458,9 @@ class InfraSettings(BaseSettings):
             ),
             QueueName.PREVIEWS: QueueConfig(
                 workers=self.preview_workers, priority=QueuePriority.LOW
+            ),
+            QueueName.EDIT: QueueConfig(
+                workers=self.edit_workers, priority=QueuePriority.LOW
             ),
             QueueName.MEDIA: QueueConfig(
                 workers=self.media_workers, priority=QueuePriority.LOWEST
@@ -2009,6 +2066,32 @@ class ReportsSettings(BaseSettings):
     def daily_time(self) -> datetime.time:
         hour, minute = (int(part) for part in self.daily_at.split(":"))
         return datetime.time(hour, minute)
+
+
+class ServerSettings(BaseSettings):
+    """features/server: /home's Server section (admins): the box's CPU, RAM,
+    disk, queues and running jobs, and when a number is worth a warning."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # CPU busy is two reads of /proc/stat this far apart.
+    cpu_sample_s: float = Field(
+        default=0.3, gt=0, le=2, validation_alias="OFM_SERVER_CPU_SAMPLE_S"
+    )
+    # CPU, RAM or disk at or over this many percent: a warning.
+    warn_percent: int = Field(
+        default=85, ge=1, le=100, validation_alias="OFM_SERVER_WARN_PERCENT"
+    )
+    # A job waiting in a queue longer than this: a warning.
+    wait_warn_s: int = Field(
+        default=300, ge=1, validation_alias="OFM_SERVER_WAIT_WARN_S"
+    )
+    # A job running longer than this: a warning.
+    run_warn_s: int = Field(
+        default=3600, ge=1, validation_alias="OFM_SERVER_RUN_WARN_S"
+    )
+    # Running jobs listed (oldest first).
+    jobs_shown: int = Field(default=10, ge=1, validation_alias="OFM_SERVER_JOBS_SHOWN")
 
 
 class EventsSettings(BaseSettings):

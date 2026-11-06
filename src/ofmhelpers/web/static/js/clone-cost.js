@@ -9,7 +9,9 @@
  * no price for. Lengths are read in the browser from each video's metadata
  * -- a local File or a reused server file alike -- and remembered, so
  * reordering or switching resolution or provider recalculates instantly. A
- * video over the provider's reference limit is flagged and left out.
+ * video over the provider's reference limit is flagged and left out, with
+ * "Trim it!": /edit opens it (a new file is uploaded first, /edit/upload),
+ * the form saved first so Clone it brings it back (clone-return.js).
  */
 (() => {
     const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -73,9 +75,53 @@
         meta.textContent = detail;
         const value = document.createElement("span");
         value.className = "cost-line-price";
-        value.textContent = price;
+        value.append(price);
         li.append(label, meta, value);
         return li;
+    }
+
+    // Opens /edit on this video: a stored one by its path, a new one after
+    // uploading it.
+    function trimButton(item) {
+        const btn = document.getElementById("trim-button").content.firstElementChild.cloneNode(true);
+        btn.addEventListener("click", async () => {
+            const form = btn.closest("form");
+            const go = async (path) => {
+                await window.CloneReturn.save(form, path);
+                window.location.href = `/edit?video=${encodeURIComponent(path)}`;
+            };
+            if (item.path) {
+                await go(item.path);
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = "Uploading…";
+            const data = new FormData();
+            data.append("file", item.file, item.name);
+            const r = await fetch("/edit/upload", { method: "POST", body: data }).catch(() => null);
+            const body = r ? await r.json().catch(() => ({})) : {};
+            if (r?.ok) {
+                // The video saved by its new stored path: the cut replaces it.
+                window.FilePicker.setItems(
+                    "videos",
+                    window.FilePicker.items(form.querySelector('.file-picker[data-field="videos"]')).map(
+                        (other) => (other.file === item.file ? { path: body.path } : other)
+                    )
+                );
+                await go(body.path);
+                return;
+            }
+            btn.disabled = false;
+            // A refusal's own sentence; anything else one fixed one.
+            btn.textContent = !r
+                ? "No connection: try again"
+                : r.status === 413
+                  ? "Too big to open"
+                  : r.status === 400 && typeof body.detail === "string"
+                    ? body.detail
+                    : "Upload failed: try again";
+        });
+        return btn;
     }
 
     function init(form) {
@@ -117,7 +163,7 @@
                 }
                 if (maxSeconds && length > maxSeconds) {
                     const detail = `${length.toFixed(1)} s · over ${maxSeconds} s, ${providerName} rejects it`;
-                    lines.append(line(i + 1, item.name, detail, "—", true));
+                    lines.append(line(i + 1, item.name, detail, trimButton(item), true));
                     return;
                 }
                 const lineCredits = length * rate;

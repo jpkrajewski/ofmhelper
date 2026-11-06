@@ -39,11 +39,11 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     return resolved
 
 
-def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
-    """Of the `?video=` refs a page was handed (one tool sending its result
-    to /clone or /clone-long), the ones that are a video still in this
-    session's part of the store. A stale or forged path is dropped, never a
-    400: the page just opens with fewer picked. Each kept path is absolute,
+def keep_files(raw_paths: Sequence[str], allowed_root: Path, kind: str) -> list[str]:
+    """Of stored paths a page is about to offer (refs another tool handed
+    over, a person's most used files), the ones that are a `kind` file still
+    in this session's part of the store. A stale or forged path is dropped,
+    never a 400: the page just offers fewer. Each kept path is absolute,
     ready to hand a file picker as an existing pick."""
     kept: list[str] = []
     for raw in raw_paths:
@@ -51,9 +51,15 @@ def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
             resolved = resolve_existing_ref(raw, allowed_root)
         except HTTPException:
             continue
-        if classify_kind(resolved.name) == "video":
+        if classify_kind(resolved.name) == kind:
             kept.append(str(resolved))
     return kept
+
+
+def keep_videos(raw_paths: Sequence[str], allowed_root: Path) -> list[str]:
+    """Of the `?video=` refs a page was handed (one tool sending its result
+    to /clone or /clone-long), the videos still in this session's store."""
+    return keep_files(raw_paths, allowed_root, "video")
 
 
 class ManifestEntry(BaseModel):

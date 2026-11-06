@@ -422,6 +422,22 @@
         return dropMissing(picker);
     }
 
+    // Replace a field's list with what `items()` gave earlier -- a new
+    // item's File, a reused one's path -- in that order: /clone puts its
+    // form back after Trim it! (clone-return.js), files not uploaded yet
+    // included. Gone stored files leave the list as in setExisting.
+    function setItems(field, saved) {
+        const pickers = [...document.querySelectorAll(`.file-picker[data-field="${field}"]`)];
+        const picker = pickers.find(isActive) || pickers[0];
+        if (!picker || !picker._items) return;
+        picker._items = saved.map((item) =>
+            item.file
+                ? { kind: "new", file: item.file }
+                : { kind: "existing", path: item.path, name: displayName(item.path) }
+        );
+        return dropMissing(picker);
+    }
+
     // A restored file that is gone (deleted since, or never on this server)
     // leaves the list, and the picker says which (2026-10-23: Recreate
     // filled the boxes with files that 404ed, found out only at Start).
@@ -485,5 +501,13 @@
     }
 
     // init: wire pickers a page inserts after load (/generate's model fields).
-    window.FilePicker = { init: initPicker, collectFormData, clearPicker, setExisting, carryOver, items };
+    window.FilePicker = {
+        init: initPicker,
+        collectFormData,
+        clearPicker,
+        setExisting,
+        setItems,
+        carryOver,
+        items,
+    };
 })();

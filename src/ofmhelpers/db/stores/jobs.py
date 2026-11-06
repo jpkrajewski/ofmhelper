@@ -328,6 +328,19 @@ def redone_links(task: str, actor: str, links: list[str], after: float) -> set[s
     return _repository().redone_links(task, actor, links, after)
 
 
+def last_used_firsts(tasks: set[str], actor: str, field: str, limit: int) -> list[str]:
+    """The first file of `actor`'s jobs' list param `field` (the subject of
+    `reference_images`) in their jobs of `tasks`, last used first, one path
+    per picture (same content = same file). The path may be gone since: the
+    caller checks."""
+    return _repository().last_used_firsts(tuple(sorted(tasks)), actor, field, limit)
+
+
+def most_used_firsts(tasks: set[str], actor: str, field: str, limit: int) -> list[str]:
+    """As `last_used_firsts`, the one in the most jobs first."""
+    return _repository().most_used_firsts(tuple(sorted(tasks)), actor, field, limit)
+
+
 def count_hidden_jobs(tasks: set[str], actor: str) -> int:
     """How many of `actor`'s jobs of `tasks` are hidden from the galleries."""
     return _repository().count_hidden(tuple(sorted(tasks)), actor)
