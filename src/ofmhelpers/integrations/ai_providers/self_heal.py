@@ -14,9 +14,9 @@ found again; nothing here names one:
   key>`), and a callback after the job gave up hands it to recovery
   (`features/jobs/recovery.py`), which re-runs the job resuming it -- never
   paying twice. A noted submit is never sent again;
-- neither (RunningHub: no idempotency key, no webhook, no task list on its
-  model API): a submit is never resent, so never paid twice, and a lost answer
-  fails the job.
+- neither (RunningHub, APIYI: no idempotency key, no webhook, no task list
+  on their APIs): a submit is never resent, so never paid twice, and a lost
+  answer fails the job.
 
 Every provider: a rate-limited submit is resent (nothing was made); a submit
 that never left (connection refused, DNS, connect timeout:

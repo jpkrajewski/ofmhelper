@@ -66,6 +66,11 @@ class Provider(ABC):
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
 
+    def min_poll_interval_s(self) -> float:
+        """The least wait between two status reads the provider allows (APIYI:
+        never faster than 3 s); 0 = `AigenSettings.poll_interval_s` alone."""
+        return 0
+
     def callback_url(self, job_key: str) -> str:  # noqa: ARG002 -- none by default
         """Where the provider tells of the request it made for `job_key`, so a
         submit whose answer was lost is still found (runner, recovery); empty

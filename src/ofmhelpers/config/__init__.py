@@ -32,6 +32,7 @@ from pydantic_settings import BaseSettings
 from ofmhelpers.config.settings import (
     AccountsSettings,
     AigenSettings,
+    ApiyiSettings,
     ChattingSettings,
     CloneAiCheckSettings,
     CloneLinksSettings,
@@ -142,6 +143,10 @@ class Settings:
     @property
     def elyum(self) -> ElyumSettings:
         return self._group(ElyumSettings)
+
+    @property
+    def apiyi(self) -> ApiyiSettings:
+        return self._group(ApiyiSettings)
 
     @property
     def pictures(self) -> PicturesSettings:

@@ -15,6 +15,8 @@ _KEY_SHAPES = (
     # Higgsfield: KEY_ID:KEY_SECRET.
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{32,}",
     r"ek_live_[A-Za-z0-9_-]{8,}",  # Elyum
+    # APIYI (one-api style `sk-` + 48); not inside a word ("task-<hex>").
+    r"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9]{32,}",
     r"gsk_[A-Za-z0-9]{16,}",  # Groq
     r"csk-[A-Za-z0-9]{16,}",  # Cerebras
     r"AIza[0-9A-Za-z_-]{30,}",  # Google / Gemini

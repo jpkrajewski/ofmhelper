@@ -118,6 +118,14 @@ PICTURE_TARGETS = {
         aspect="aspectRatio",
         resolution="resolution",
     ),
+    # Gemini's own Nano Banana Pro through APIYI ($0.09 a picture, 1K-4K);
+    # references inline, so no public address is needed.
+    "apiyi": PictureTarget(
+        model="apiyi:gemini-3-pro-image",
+        images="image_urls",
+        aspect="aspect_ratio",
+        resolution="resolution",
+    ),
 }
 
 

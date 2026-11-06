@@ -36,7 +36,14 @@ KIE_MODELS = {
 
 
 def test_providers_in_select_order():
-    assert provider_names() == ["kie", "higgsfield", "runninghub", "elyum", "fake"]
+    assert provider_names() == [
+        "kie",
+        "higgsfield",
+        "runninghub",
+        "elyum",
+        "apiyi",
+        "fake",
+    ]
 
 
 def test_every_kie_model_is_still_offered():
