@@ -12,6 +12,7 @@
 - `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
 - `chatting.py` -- chat platforms, stored fan messages and what /chatting shows.
 - `drive.py` -- an Instagram login's Drive folders (/drive): what waits, what was posted.
+- `events.py` -- an `Event` going out to the senders (features/events): any producer.
 - `users.py` -- who signs in (/users, /login, /account) and their role.
 - `cookies.py` -- a user's own cookies.txt as /cookies shows it (no values).
 - `links.py` -- a link on a link provider (/links), its list query and the Generate form.

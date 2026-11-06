@@ -9,6 +9,7 @@ chat read."""
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -27,10 +28,14 @@ from ofmhelpers.integrations.stacked.models import (
     ChatSummary,
     CreatedWebhook,
     CreatorsPage,
+    Earnings,
+    EarningsPage,
     ErrorReply,
     Me,
     Message,
     MessagesPage,
+    SubscriberSummary,
+    SubscriberSummaryPage,
     WebhookDestination,
     WebhooksPage,
 )
@@ -106,6 +111,26 @@ class StackedClient:
                 beforeMessageId=before_message_id,
             ),
         ).messages
+
+    def earnings(
+        self, creator_user_id: str, start: datetime, end: datetime
+    ) -> Earnings | None:
+        """Realized sales in [start, end) (any window, to the second; refunds
+        left out). Scope `insights:read`. None when Stacked has no row."""
+        page = _parsed(
+            EarningsPage, self._get("earnings", **_window(creator_user_id, start, end))
+        )
+        return page.earnings[0] if page.earnings else None
+
+    def subscriber_summary(
+        self, creator_user_id: str, start: datetime, end: datetime
+    ) -> SubscriberSummary | None:
+        """Subscribers gained and lost in [start, end). Scope `insights:read`."""
+        page = _parsed(
+            SubscriberSummaryPage,
+            self._get("subscribers/summary", **_window(creator_user_id, start, end)),
+        )
+        return page.summaries[0] if page.summaries else None
 
     def webhooks(self, creator_user_id: str) -> list[WebhookDestination]:
         """The destinations this key made for the creator."""
@@ -212,6 +237,20 @@ def reach(api_keys: Iterable[str]) -> Reach:
 def reachable(api_keys: Iterable[str]) -> list[tuple[StackedClient, AccessibleCreator]]:
     """Just the creators, for a caller that does not care who may be missing."""
     return reach(api_keys).found
+
+
+def _rfc3339(at: datetime) -> str:
+    return at.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _window(creator_user_id: str, start: datetime, end: datetime) -> dict[str, str]:
+    """An insights call's creator and window: `startTime` inclusive, `endTime`
+    exclusive, RFC3339 UTC."""
+    return {
+        "creatorUserId": creator_user_id,
+        "startTime": _rfc3339(start),
+        "endTime": _rfc3339(end),
+    }
 
 
 def _parsed[T: BaseModel](model: type[T], reply: Any) -> T:

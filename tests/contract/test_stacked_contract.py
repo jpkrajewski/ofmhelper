@@ -1,6 +1,8 @@
 """Stacked's API as the client reads it: on the fake, and on the real accounts
 (`STACKED_API_KEY_<NAME>` in .env; read-only calls, free)."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from ofmhelpers.config import settings
@@ -90,3 +92,20 @@ def test_a_wrong_key_is_refused(backend):
 def test_a_creator_the_key_cannot_reach_is_refused(creator_key):
     with pytest.raises(StackedForbiddenError):
         next(StackedClient(creator_key).chats(_NOBODY))
+
+
+def test_insights_answer_for_any_window(creator_key):
+    """The daily report's subscribers and sales (scope `insights:read`)."""
+    client = StackedClient(creator_key)
+    creator = client.me().account.id
+    end = datetime.now(UTC)
+    start = end - timedelta(days=1)
+
+    sold = client.earnings(creator, start, end)
+    subs = client.subscriber_summary(creator, start, end)
+
+    assert sold is not None
+    assert sold.currency
+    assert sold.gross_cents >= sold.net_cents >= 0
+    assert subs is not None
+    assert min(subs.new, subs.returning, subs.canceled, subs.active) >= 0

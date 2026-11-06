@@ -106,6 +106,24 @@ class _HideLoginCodes(logging.Filter):
         return True
 
 
+class _HideJobArguments(logging.Filter):
+    """RQ logs a failed job with its arguments as `extra` (`arguments`, `kwargs`;
+    rq/worker/base.py `handle_exception`), and every extra becomes a Logfire
+    attribute and a JSON field. Job arguments carry API keys and send targets
+    (a chat id, a webhook URL): the record keeps the function and the job id,
+    never those."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for name in _JOB_ARGUMENTS:
+            if name in record.__dict__:
+                setattr(record, name, _HIDDEN)
+        return True
+
+
+_JOB_ARGUMENTS = ("arguments", "kwargs")
+_HIDDEN = "[hidden]"
+
+
 def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
     formatters: dict[str, Any] = {
         "text": {
@@ -124,7 +142,10 @@ def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
         # here is the classic way to silence half an app by accident.
         "disable_existing_loggers": False,
         "formatters": formatters,
-        "filters": {"hide_login_codes": {"()": _HideLoginCodes}},
+        "filters": {
+            "hide_login_codes": {"()": _HideLoginCodes},
+            "hide_job_arguments": {"()": _HideJobArguments},
+        },
         "handlers": {
             "stdout": {
                 "class": "logging.StreamHandler",
@@ -152,6 +173,8 @@ def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
             # this format, on one stream. Listed explicitly so the coupling
             # is visible if RQ ever changes that behavior.
             "rq": {"level": "INFO", "propagate": True},
+            # A logger's own filter runs before any handler (stdout, Logfire).
+            "rq.worker": {"filters": ["hide_job_arguments"], "propagate": True},
             # Chatty third-party libs: their INFO is our DEBUG. Raise them
             # explicitly rather than raising the root level and going blind.
             # httpx2 is the fork this project actually depends on (see the

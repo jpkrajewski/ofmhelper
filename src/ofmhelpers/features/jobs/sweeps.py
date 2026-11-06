@@ -21,12 +21,14 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.features.chatting import sources as chat_sources
 from ofmhelpers.features.chatting import sync as chat_history
+from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs import recovery
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
+from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
@@ -75,7 +77,6 @@ def sweeps() -> list[Sweep]:
             name="account tracker",
             run=account_tracker.queue_due_scans,
             interval_s=lambda: settings.accounts.rescan_check_interval_s,
-            enabled=account_tracker.daily_sweep_due,
         ),
         # Syncs /links' links and their clicks when due.
         Sweep(
@@ -108,6 +109,20 @@ def sweeps() -> list[Sweep]:
                 enabled=partial(chat_history.enabled, platform),
             )
             for platform in chat_sources.platforms()
+        ),
+        # "Chats unanswered" to Telegram every 15 min while fans wait, the newest list
+        # replacing the one before.
+        Sweep(
+            name="chat wait events",
+            run=chat_wait_events.emit_waiting,
+            interval_s=lambda: settings.chatting.wait_events_check_s,
+        ),
+        # The daily report (14:00 Warsaw) to Telegram; a baseline the first time.
+        Sweep(
+            name="daily report",
+            run=daily_report.run,
+            interval_s=lambda: settings.reports.check_s,
+            enabled=lambda: settings.reports.daily_enabled,
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),

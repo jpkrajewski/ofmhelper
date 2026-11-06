@@ -140,6 +140,16 @@ class ModelReach(BaseModel):
     started_at: float
 
 
+class ModelTotal(BaseModel):
+    """One model's events of a kind in a window: how many, and (sales) their gross
+    in cents."""
+
+    platform: ChatPlatform
+    model_username: str
+    count: int
+    cents: int = 0
+
+
 class OpenWait(BaseModel):
     """A chat whose fan is waiting, since their first unanswered message."""
 
@@ -147,6 +157,7 @@ class OpenWait(BaseModel):
     model_username: str
     channel_id: str
     started_at: float
+    fan_name: str = ""
 
     @property
     def id(self) -> str:

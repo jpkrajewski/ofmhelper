@@ -519,3 +519,23 @@ def test_chat_accounts_remember_their_server_and_open_waits_get_an_index(db):
     assert "connected_from" in _columns(db, "chat_accounts")
     indexes = {i["name"] for i in inspect(db).get_indexes("chat_fan_messages")}
     assert "ix_chat_fan_messages_open" in indexes
+
+
+DAILY_REPORT = "e7f8a9b0c1d2"
+
+
+def test_daily_report_tables_start_with_every_stored_sale(db):
+    """chat_sales starts with the sales production kept for the pop-up; no report
+    has run yet."""
+    needs(DAILY_REPORT)(db)
+    command.upgrade(_alembic(), CHAT_ACCOUNTS_SERVER)
+    kept = _scalar(
+        db,
+        "SELECT count(*) FROM chat_notifications"
+        " WHERE kind = 'sale' AND amount_cents IS NOT NULL",
+    )
+
+    command.upgrade(_alembic(), DAILY_REPORT)
+
+    assert _scalar(db, "SELECT count(*) FROM chat_sales") == kept
+    assert _scalar(db, "SELECT count(*) FROM report_runs") == 0

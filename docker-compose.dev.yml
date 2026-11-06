@@ -85,6 +85,12 @@ services:
     volumes:
       - ./src:/app/src
 
+  events-worker:
+    # Same as the worker: no reloader, restart it after changing event or sender code.
+    dns: *public-dns
+    volumes:
+      - ./src:/app/src
+
   migrate:
     # Migrates from the working tree: revision files and models without a
     # rebuild.

@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 import logfire
 from pydantic import BaseModel
-from rq import Queue, Worker
+from rq import Queue, Retry, Worker
 from rq.job import Job
 
 from ofmhelpers.cache.redis import get_redis
@@ -92,11 +92,16 @@ class JobQueue:
         fn: Callable[..., Any],
         *args: Any,
         job_timeout: int | None = None,
+        retry: Retry | None = None,
+        failure_ttl: int | None = None,
         **kwargs: Any,
     ) -> Any:
         """`fn(*args, **kwargs)` to the back of the line. `job_timeout`: its time
         limit once started, when it may run longer than the default (a long
-        /clone video, made in pieces); waiting in line does not count.
+        /clone video, made in pieces); waiting in line does not count. `retry`:
+        RQ tries it again after it raised (the worker pool runs RQ's scheduler,
+        so the waits hold). `failure_ttl`: how long RQ keeps it once it failed
+        for good (RQ's default: a year).
 
         In synchronous mode (settings.infra.rq_async is False -- the test suite)
         it is called directly, in-process: no RQ, no serialization, so tests can
@@ -113,6 +118,8 @@ class JobQueue:
             *args,
             description=f"{fn.__module__}.{fn.__qualname__}",
             job_timeout=job_timeout or settings.infra.rq_job_timeout_s,
+            retry=retry,
+            failure_ttl=failure_ttl,
             **kwargs,
         )
         logfire.info(

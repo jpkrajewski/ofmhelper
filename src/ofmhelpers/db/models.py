@@ -242,6 +242,39 @@ class ChatNotificationRow(Base):
     at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class ChatSaleRow(Base):
+    """Every sale a platform announced (alembic e7f8a9b0c1d2), small ones too:
+    what the daily report sums. `gross_cents` is what the fan paid, before fees;
+    `event_id` keeps a repeated delivery from counting twice. The big ones also
+    go to `chat_notifications` for the pop-up."""
+
+    __tablename__ = "chat_sales"
+    __table_args__ = (Index("ix_chat_sales_at", "at"),)
+
+    platform: Mapped[str] = mapped_column(String(32), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    model_username: Mapped[str] = mapped_column(String(255), nullable=False)
+    gross_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class ReportRunRow(Base):
+    """One day's run of a report (alembic e7f8a9b0c1d2): the row is the claim (a
+    report goes out once a day), `ran_at` where the next one's window starts,
+    `marks` the counters it saw (each link's daily clicks), so the next one
+    counts what came in since."""
+
+    __tablename__ = "report_runs"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    ran_at: Mapped[float] = mapped_column(Float, nullable=False)
+    sent: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    marks: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
 class ChatWebhookRow(Base):
     """The webhook destination made for a model on a chat platform (alembic
     e2d3c4b5a6f7). Its signing secret is shown once, when it is made."""

@@ -3,9 +3,9 @@ ofmhelpers/web/account_tracker.py
 
 Rescans every tracked social account every `rescan_interval_s` (6 h by
 default), so /accounts' followers, views and growth stay current without
-anyone pressing a button. The periodic sweep can be pinned to once a day at
-`rescan_daily_at` local time plus a per-day random delay (`daily_sweep_due`)
--- a fixed schedule is what gets an Instagram login flagged as automation.
+anyone pressing a button. The periodic sweep runs at fixed times instead: `OFM_ACCOUNTS_SCAN_TIMES`
+(13:50 Warsaw, 10 min before the daily Telegram report, and 18:00) on
+`OFM_ACCOUNTS_SCAN_TIMEZONE`'s clock (`_rescan_interval_s`).
 Platform-agnostic: everything platform-specific is
 behind `socials.Platform.fetch`.
 
@@ -25,7 +25,8 @@ their login).
 
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -227,41 +228,26 @@ def rescan_limited(user_id: int) -> list[int]:
     return limited
 
 
-def daily_sweep_due(now: datetime | None = None) -> bool:
-    """The periodic sweep's daily window. `rescan_daily_at` unset: always
-    due (the interval alone decides). Set: not before that local time plus
-    today's jitter, seeded by the date so every sweep pass agrees on the
-    day's run time. There is no upper edge on the window: an overnight
-    outage runs late on the next pass rather than skipping the day. First
-    scans (a login just added) and a fresh cookies upload bypass this --
-    they queue directly, not through this loop."""
-    daily_at = settings.accounts.rescan_daily_at
-    if not daily_at:
-        return True
-    now = now or datetime.now()  # noqa: DTZ005 -- naive local time is the point: the window is local
-    return now >= _window_opens(now, daily_at)
-
-
-def _window_opens(day: datetime, daily_at: str) -> datetime:
-    """When `day`'s window opens: `daily_at` plus that day's jitter."""
-    hour, minute = (int(part) for part in daily_at.split(":"))
-    jitter = random.Random(day.strftime("%Y-%m-%d")).uniform(  # noqa: S311 -- per-day jitter, not crypto
-        0, settings.accounts.rescan_daily_jitter_s
-    )
-    opens = day.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    return opens + timedelta(seconds=jitter)
+def _times_come(now: datetime) -> list[datetime]:
+    """Today's and yesterday's scan times (`OFM_ACCOUNTS_SCAN_TIMES` on
+    `OFM_ACCOUNTS_SCAN_TIMEZONE`'s clock) that have come by `now`."""
+    zone = ZoneInfo(settings.accounts.scan_timezone)
+    here = now.astimezone(zone)
+    found = [
+        datetime.combine(here.date() - timedelta(days=back), at, zone)
+        for back in (0, 1)
+        for at in settings.accounts.scan_time_list()
+    ]
+    return [at for at in found if at <= here]
 
 
 def _rescan_interval_s() -> float:
-    """How old a scan may get. With a daily window: not older than the window's
-    last opening, so the run stays at that time. "24 h since the last scan"
-    slides later every day and never comes back (prod: window 05:00, scans at
-    21:00, 2026-10-29..11-02)."""
-    daily_at = settings.accounts.rescan_daily_at
-    if not daily_at:
+    """How old a scan may get. With scan times: not older than the last one that
+    came, so the runs stay at those times, and one missed (the app down at 18:00)
+    runs on the next pass. "24 h since the last scan" slides later every day and
+    never comes back (prod: window 05:00, scans at 21:00, 2026-10-29..11-02). First
+    scans (a login just added) and a fresh cookies upload queue directly."""
+    if not settings.accounts.scan_time_list():
         return settings.accounts.rescan_interval_s
-    now = datetime.now()  # noqa: DTZ005 -- naive local time is the point: the window is local
-    opens = _window_opens(now, daily_at)
-    if opens > now:
-        opens = _window_opens(now - timedelta(days=1), daily_at)
-    return (now - opens).total_seconds()
+    now = datetime.now(UTC)
+    return (now - max(_times_come(now))).total_seconds()
