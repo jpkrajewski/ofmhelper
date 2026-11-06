@@ -21,6 +21,7 @@
     <script src="{{ static_url('js/drive-alert.js') }}" defer></script>
     <script src="{{ static_url('js/chats-alert.js') }}" defer></script>
     <script src="{{ static_url('js/time-zone.js') }}" defer></script>
+    <script src="{{ static_url('js/upload-guard.js') }}" defer></script>
 </head>
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -108,6 +109,8 @@
             {{ ui.button("Buy more space", href="https://one.google.com/storage", hook="drive-full-buy", attrs={"target": "_blank", "rel": "noopener"}) }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-full-dismiss") }}
         {% endcall %}
+        {# While images/videos still go up (static/js/upload-guard.js). #}
+        {{ ui.notice("Images/videos are still uploading to server. Wait till they are uploaded.", "warn", hook="upload-wait", attrs={"hidden": true}) }}
         {% call ui.notice(kind="fail", hook="drive-reconnect-banner", attrs={"hidden": true}) %}
             <span>Google Drive disconnected</span>
             {{ ui.button("Reconnect Google Drive", href="/account", hook="drive-reconnect-link") }}
@@ -136,5 +139,17 @@
             <span class="footer-brand"><strong>ASCEND GLOBAL LLC</strong> © 2026</span>
         </div>
     </footer>
+
+    {# A link clicked while images/videos still go up (static/js/upload-guard.js). #}
+    <dialog class="accounts-dialog" id="upload-leave">
+        <form method="dialog">
+            <h2>Leave site?</h2>
+            <p>Images/videos are still uploading to server. Wait till they are uploaded.</p>
+            <div class="accounts-dialog-actions">
+                {{ ui.button("Leave", "ghost", attrs={"id": "upload-leave-go"}) }}
+                {{ ui.button("Wait", "primary", attrs={"id": "upload-leave-stay"}) }}
+            </div>
+        </form>
+    </dialog>
 </body>
 </html>

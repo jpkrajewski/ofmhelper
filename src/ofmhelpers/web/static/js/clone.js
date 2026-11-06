@@ -110,10 +110,6 @@
                 document.querySelector(".ph-toolbar:not([hidden]) .hidden-toggle") !== null;
         };
 
-        window.addEventListener("beforeunload", (e) => {
-            if (uploading) e.preventDefault();
-        });
-
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             if (uploading) return;
@@ -134,7 +130,11 @@
             const pending = buildUploadingCard(manifestCount(formData, "videos"));
             gallery.prepend(pending);
 
+            // Leaving the page asks first while the videos go up
+            // (upload-guard.js).
+            let guarded = () => {};
             const done = () => {
+                guarded();
                 uploading = false;
                 submitBtn.disabled = false;
             };
@@ -184,6 +184,7 @@
                 setStatus(statusEl, "Upload failed — check your connection and try again.", true);
             });
             xhr.send(formData);
+            guarded = window.UploadGuard.begin();
         });
     }
 

@@ -94,6 +94,13 @@ def test_the_clone_links_worker_is_the_worker_on_its_own_queue():
     ].model_dump(exclude=differ)
 
 
+def test_the_edit_worker_has_three_cpus_and_two_gb():
+    """A 14 s 1440p 60 fps cut: 15 s at 1.5 CPUs, 7 s at 3 (2026-11-06); the
+    RAM cap keeps a runaway ffmpeg in its own container."""
+    edit = _compose().services["edit-worker"].model_dump()
+    assert (edit["cpus"], edit["mem_limit"]) == (3.0, "2g")
+
+
 def test_a_worker_finishes_its_job_on_compose_stop():
     """Docker's default 10 s SIGKILLed /clone-links reviews mid-LLM call or
     mid-upload on every deploy (review #4)."""

@@ -23,6 +23,7 @@ from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
+from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.webhooks import (
     cover_models,
@@ -61,6 +62,7 @@ def _sync_model(source: ChatSource, model: ChatModel, scope: ReadScope) -> int:
                 continue
             if read.events:
                 chats.record_events(platform, read)
+                rechecks.plan(platform, read)
                 changed += 1
             chats.mark_read(platform, read)
         except SQLAlchemyError:

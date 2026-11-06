@@ -23,6 +23,7 @@ from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
+from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.sources import configured_sources
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import (
@@ -243,6 +244,7 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
     if delivery.kind == DeliveryKind.MESSAGE and delivery.read:
         read = delivery.read.model_copy(update={"model_username": username})
         chats.record_events(platform, read)
+        rechecks.plan(platform, read)
     elif delivery.kind == DeliveryKind.DELETED:
         chats.forget_message(platform, delivery.message_id)
     elif delivery.kind == DeliveryKind.MASS:

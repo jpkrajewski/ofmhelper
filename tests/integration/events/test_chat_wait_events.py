@@ -1,25 +1,39 @@
-"""The "Chats unanswered" message to Telegram every 15 minutes
+"""The "Chats unanswered" message to Telegram every 10 minutes
 (features/chatting/wait_events.py): one message per look naming, per platform,
 each model with fans waiting and how long each has waited, by the pop-up's own
 5-minute rule -- nothing when nobody waits, and only after those chats were read
 from the platform again. Fanvue is left out for now
-(`OFM_CHATTING_EVENTS_PLATFORMS_OFF`)."""
+(`OFM_CHATTING_EVENTS_PLATFORMS_OFF`).
 
+And 5 minutes after each fan message, by webhook or sync (rechecks.py): the list
+at once if that fan still waits and nobody was told yet (prod 2026-11-06: three
+fans who wrote at 18:50-18:55 were told at 19:07, by the look)."""
+
+import os
+import threading
 import time
+from http import HTTPStatus
+
+os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from chat_platforms import StackedDriver
+from fastapi.testclient import TestClient
 
 import ofmhelpers.features.events.dispatch as dispatch_module
 from ofmhelpers.db.models import ChatFanMessageRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.features.chatting import wait_events
+from ofmhelpers.features.chatting import rechecks, wait_events
 from ofmhelpers.features.chatting.sync import sync
-from ofmhelpers.features.chatting.wait_events import emit_waiting, waited
+from ofmhelpers.features.chatting.wait_events import emit_waiting, recheck_due, waited
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
+from ofmhelpers.schemas.chatting import ChatEvent, ChatPlatform, ChatRead
+from ofmhelpers.web.main import app
 
 NOW = time.time()
-LOOK = 900
+LOOK = 600
+# The pop-up's rule: a fan waiting longer is unanswered.
+LIMIT = 300
 
 
 @pytest.fixture(autouse=True)
@@ -281,3 +295,229 @@ def test_nobody_listening_reads_nothing(monkeypatch, every_platform_read):
     assert emit_waiting(NOW) == 0
 
     assert every_platform_read == []
+
+
+# --- 5 minutes after each fan message (rechecks.py) -----------------------------
+
+
+def _one_list(*fans_waited: tuple[str, str], model: str = "fake_creator") -> str:
+    lines = [f"- {fan} (unanswered {w})" for fan, w in fans_waited]
+    head = f"Chats unanswered ({len(lines)}): @{model}"
+    return "\n".join(["Chatting:", "", "Stacked:", "", head, *lines])
+
+
+def test_a_fan_by_webhook_is_told_five_minutes_after_writing(stacked):
+    now = time.time()
+    message_id = stacked.fan_writes("ann", now)
+    raw, headers = stacked.signed(
+        stacked.message("ann", message_id, from_fan=True, at=now)
+    )
+    reply = TestClient(app).post("/events/stacked", content=raw, headers=headers)
+    assert reply.status_code == HTTPStatus.OK
+
+    assert recheck_due(now + LIMIT - 10) == 0
+    assert _sent() == []
+    assert recheck_due(now + LIMIT + 2) == 1
+    assert _sent() == [_one_list(("ann", "5m"))]
+
+
+def test_a_fan_read_by_the_sync_is_told_once_however_often_they_write(stacked):
+    now = time.time()
+    for ago in (60, 40, 20):
+        stacked.fan_writes("ann", now - ago)
+    sync(stacked.source)
+
+    told = [recheck_due(now - ago + LIMIT + 2) for ago in (60, 40, 20)]
+
+    assert told == [1, 0, 0]
+    assert _sent() == [_one_list(("ann", "5m"))]
+
+
+def test_a_fan_answered_within_five_minutes_is_not_told(stacked):
+    now = time.time()
+    stacked.fan_writes("ann", now - 60)
+    sync(stacked.source)
+    stacked.model_replies("ann", now - 30)  # only the fresh read sees it
+    reads = stacked.chat_reads()
+
+    assert recheck_due(now + LIMIT) == 0
+
+    assert stacked.chat_reads() > reads  # the recheck did read the chat again
+    assert _sent() == []
+
+
+def test_a_fan_the_look_named_is_not_named_again_by_their_recheck(stacked):
+    now = time.time()
+    stacked.fan_writes("ann", now - 400)
+    sync(stacked.source)
+
+    assert emit_waiting(now) == 1
+    assert recheck_due(now) == 0
+
+    assert len(_sent()) == 1
+
+
+def test_a_new_fan_is_told_at_once_with_the_one_already_told(stacked):
+    now = time.time()
+    stacked.fan_writes("ann", now - 400)
+    sync(stacked.source)
+    emit_waiting(now)
+    stacked.fan_writes("bob", now - 10)
+    sync(stacked.source)
+
+    assert recheck_due(now + LIMIT) == 1
+
+    assert _sent()[-1] == _one_list(("ann", "11m"), ("bob", "5m"))
+    assert len(_sent()) == 2
+
+
+def test_a_chats_history_plans_no_recheck_the_look_covers_it(stacked):
+    now = time.time()
+    stacked.fan_writes("ann", now - 3600)
+    stacked.fan_writes("bob", now - 60)
+    sync(stacked.source)
+
+    due = rechecks.take_due(now + LIMIT)
+
+    assert [r.chat for r in due] == [("stacked", stacked.channel("bob"))]
+
+
+def test_a_recheck_is_taken_by_one_caller_only(stacked):
+    now = time.time()
+    stacked.fan_writes("ann", now - 60)
+    sync(stacked.source)
+
+    first = rechecks.take_due(now + LIMIT)
+    second = rechecks.take_due(now + LIMIT)
+
+    assert [r.chat for r in first] == [("stacked", stacked.channel("ann"))]
+    assert second == []
+
+
+def test_fanvue_messages_plan_no_recheck_while_it_is_off():
+    read = ChatRead(
+        channel_id="c1",
+        model_username="m",
+        fan_name="f",
+        last_message_id="1",
+        events=[ChatEvent(message_id="1", from_fan=True, at=NOW)],
+    )
+
+    rechecks.plan(ChatPlatform.FANVUE, read, NOW)
+    assert rechecks.take_due(NOW + LIMIT + 2) == []
+    rechecks.plan(ChatPlatform.STACKED, read, NOW)
+    assert [r.chat for r in rechecks.take_due(NOW + LIMIT + 2)] == [("stacked", "c1")]
+
+
+@pytest.mark.usefixtures("every_platform_read")
+def test_prod_2026_11_06_each_fan_is_told_within_five_minutes_and_a_poll():
+    """Three fans of one Stacked model wrote at 18:50:45, 18:51:19 and 18:55:08;
+    the 15-minute look alone told them at 19:07. Each is named by the first
+    15 s poll after their 5 minutes."""
+    base = NOW - 3600  # 18:50:00
+    wrote = {"fan_a": base + 45, "fan_b": base + 79, "fan_c": base + 308}
+    for fan, at in wrote.items():
+        _fan_wrote(fan, NOW - at, platform="stacked", model="danewalkerjohnson")
+        read = ChatRead(
+            channel_id=f"chat-{fan}",
+            model_username="danewalkerjohnson",
+            fan_name=fan,
+            last_message_id=fan,
+            events=[ChatEvent(message_id=fan, from_fan=True, at=at)],
+        )
+        rechecks.plan(ChatPlatform.STACKED, read, at)
+
+    named_at: dict[str, float] = {}
+    for poll in range(int(17 * 60 / 15)):  # 18:50:00 .. 19:07:00
+        at = base + poll * 15
+        if recheck_due(at):
+            for fan in wrote:
+                if fan in _sent()[-1]:
+                    named_at.setdefault(fan, at)
+
+    assert named_at.keys() == wrote.keys()
+    assert all(named_at[f] - wrote[f] <= LIMIT + 1 + 15 for f in wrote)
+    assert len(_sent()) == 3  # a new list per fan, each replacing the last
+
+
+def _carl_planned(at: float) -> None:
+    """Carl wrote at `at`, his recheck planned."""
+    _fan_wrote("Carl", NOW - at, platform="stacked", model="danewalkerjohnson")
+    read = ChatRead(
+        channel_id="chat-Carl",
+        model_username="danewalkerjohnson",
+        fan_name="Carl",
+        last_message_id="c1",
+        events=[ChatEvent(message_id="c1", from_fan=True, at=at)],
+    )
+    rechecks.plan(ChatPlatform.STACKED, read, at)
+
+
+def test_a_recheck_whose_chat_could_not_be_read_is_tried_at_the_next_poll(
+    monkeypatch,
+):
+    reads: list[set[str]] = []
+
+    def down_once(_platform, usernames):
+        reads.append(usernames)
+        return set() if len(reads) == 1 else usernames
+
+    monkeypatch.setattr(wait_events, "_fresh", down_once)
+    _carl_planned(NOW)
+    due = NOW + LIMIT + 2
+
+    assert recheck_due(due) == 0
+    assert recheck_due(due + 15) == 1
+
+    assert len(reads) == 2
+    assert len(_sent()) == 1
+
+
+@pytest.mark.usefixtures("every_platform_read")
+def test_a_recheck_whose_list_failed_is_tried_at_the_next_poll(monkeypatch):
+    real = wait_events._waiting
+    calls: list[float] = []
+
+    def db_down_once(now):
+        calls.append(now)
+        if len(calls) == 1:
+            msg = "the database blinked"
+            raise RuntimeError(msg)
+        return real(now)
+
+    monkeypatch.setattr(wait_events, "_waiting", db_down_once)
+    _carl_planned(NOW)
+    due = NOW + LIMIT + 2
+
+    with pytest.raises(RuntimeError, match="blinked"):
+        recheck_due(due)
+    assert recheck_due(due + 15) == 1
+
+    assert len(_sent()) == 1
+
+
+def test_a_recheck_during_a_look_waits_for_it_and_sends_nothing_more(monkeypatch):
+    """The look and the recheck are two sweeps: at once, both would find Carl untold
+    and both send."""
+    reading, go = threading.Event(), threading.Event()
+
+    def slow_read(_platform, usernames):
+        reading.set()
+        go.wait(10)
+        return usernames
+
+    monkeypatch.setattr(wait_events, "_fresh", slow_read)
+    _carl_planned(NOW - 400)
+    look = threading.Thread(target=emit_waiting, args=(NOW,))
+    look.start()
+    assert reading.wait(10)
+    recheck = threading.Thread(target=recheck_due, args=(NOW,))
+    recheck.start()
+    recheck.join(1)  # it waits on the lock the look holds
+    assert recheck.is_alive()
+
+    go.set()
+    look.join(10)
+    recheck.join(10)
+
+    assert len(_sent()) == 1

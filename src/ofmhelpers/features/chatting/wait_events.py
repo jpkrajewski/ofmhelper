@@ -1,7 +1,10 @@
 """The "Chats unanswered" message, to the senders (Telegram), not in the daily
-report: every `OFM_CHATTING_WAIT_EVENTS_CHECK_S` (15 min) a sweep lists every model
+report: every `OFM_CHATTING_WAIT_EVENTS_CHECK_S` (10 min) a sweep lists every model
 with fans waiting past the pop-up's own rule (`OFM_CHATTING_UNANSWERED_AFTER_S`,
-5 min), and nothing when nobody waits:
+5 min), and nothing when nobody waits. And 5 min after each fan message
+(`rechecks.py`, webhook or sync alike) the same list goes out at once if that fan
+still waits and was not told yet -- a look alone told fans 17 min late (prod
+2026-11-06):
 
     Chatting:
 
@@ -23,11 +26,14 @@ unchanged."""
 
 from __future__ import annotations
 
+import hashlib
 import time
+from typing import NamedTuple
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
+from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.sync import read_now
 from ofmhelpers.features.events import Event, emit, listening
@@ -96,37 +102,98 @@ def _block(
     return "\n".join(lines)
 
 
-def _event(waiting: dict[_Model, list[OpenWait]], now: float) -> Event:
+def _event(waiting: dict[_Model, list[OpenWait]], now: float, key: str) -> Event:
     blocks = [
         _block(platform, {m: w for m, w in waiting.items() if m[0] == platform}, now)
         for platform in ChatPlatform
         if any(model[0] == platform for model in waiting)
     ]
-    # One message per look, however often the sweep is restarted within it.
-    look = int(now // settings.chatting.wait_events_check_s)
     return Event(
         name="chatting.unanswered",
         title="Chatting:",
         text="\n\n".join(blocks),
-        key=f"chatting.unanswered:{look}",
+        key=key,
         replaces="chatting.unanswered",
     )
 
 
-def emit_waiting(now: float | None = None) -> int:
-    """The list of every model with fans still waiting after a fresh read (nobody
-    waiting: nothing sent); how many models it named."""
-    now = time.time() if now is None else now
+def _untold(
+    waiting: dict[_Model, list[OpenWait]], chats_due: set[tuple[str, str]]
+) -> list[OpenWait]:
+    """The waits of the chats in `chats_due` nobody was told about yet."""
+    due = [
+        wait
+        for waits in waiting.values()
+        for wait in waits
+        if (wait.platform.value, wait.channel_id) in chats_due
+    ]
+    return rechecks.untold(due)
+
+
+class _Told(NamedTuple):
+    """How many models a list named, and the chats due that could not be read."""
+
+    models: int = 0
+    unread: frozenset[tuple[str, str]] = frozenset()
+
+
+def _tell(now: float, key: str | None, chats_due: set[tuple[str, str]] | None) -> _Told:
+    """The list of every model with fans still waiting after a fresh read, one list
+    at a time (`rechecks.one_teller`). `chats_due` (a recheck): only when one of
+    those chats still waits untold, its key then named after those waits; else (a
+    look) `key`."""
     if not listening():
+        return _Told()
+    with rechecks.one_teller():
+        waiting = _waiting(now)
+        due = _untold(waiting, chats_due) if chats_due is not None else []
+        if not waiting or (chats_due is not None and not due):
+            return _Told()
+        fresh: set[_Model] = set()
+        for platform in {platform for platform, _ in waiting}:
+            names = {username for p, username in waiting if p == platform}
+            fresh |= {(platform, username) for username in _fresh(platform, names)}
+        unread = frozenset(
+            (w.platform.value, w.channel_id)
+            for w in due
+            if (w.platform, w.model_username) not in fresh
+        )
+        still = {m: waits for m, waits in _waiting(now).items() if m in fresh}
+        if chats_due is not None:
+            new = _untold(still, chats_due)
+            if not new:
+                return _Told(unread=unread)
+            ids = "\n".join(sorted(wait.id for wait in new)).encode()
+            key = f"chatting.unanswered:wait:{hashlib.sha256(ids).hexdigest()[:32]}"
+        if not still or key is None:
+            return _Told(unread=unread)
+        emit(_event(still, now, key))
+        rechecks.mark_told([wait for waits in still.values() for wait in waits])
+        return _Told(models=len(still), unread=unread)
+
+
+def emit_waiting(now: float | None = None) -> int:
+    """The look: the list of every model with fans still waiting after a fresh read
+    (nobody waiting: nothing sent); how many models it named."""
+    now = time.time() if now is None else now
+    # One message per look, however often the sweep is restarted within it.
+    look = int(now // settings.chatting.wait_events_check_s)
+    return _tell(now, f"chatting.unanswered:{look}", None).models
+
+
+def recheck_due(now: float | None = None) -> int:
+    """The rechecks due by now (`rechecks.plan`, 5 min after a fan message): the
+    list at once when one of those fans still waits and was not told yet; how many
+    models it named. A recheck whose chat could not be read, or a list that failed,
+    is due again at the next poll (`rechecks.again`)."""
+    now = time.time() if now is None else now
+    due = rechecks.take_due(now)
+    if not due:
         return 0
-    waiting = _waiting(now)
-    if not waiting:
-        return 0
-    fresh: set[_Model] = set()
-    for platform in {platform for platform, _ in waiting}:
-        names = {username for p, username in waiting if p == platform}
-        fresh |= {(platform, username) for username in _fresh(platform, names)}
-    still = {model: waits for model, waits in _waiting(now).items() if model in fresh}
-    if still:
-        emit(_event(still, now))
-    return len(still)
+    try:
+        told = _tell(now, None, {r.chat for r in due})
+    except Exception:
+        rechecks.again(due, now)
+        raise
+    rechecks.again([r for r in due if r.chat in told.unread], now)
+    return told.models

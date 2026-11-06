@@ -1,8 +1,9 @@
 /*
  * Shared "submit -> poll -> render inline" behaviour for /generate (every
  * AI provider, through /ai) and the download tools. No page navigation, and non-blocking: every
- * submit immediately prepends its own "generating…" card to the
- * #results-panel gallery and polls `${prefix}/jobs/${job_id}/status` in the
+ * submit immediately prepends its own card to the #results-panel gallery
+ * (upload progress, then "generating…" once the job exists; leaving the
+ * page while it uploads asks first, upload-guard.js) and polls `${prefix}/jobs/${job_id}/status` in the
  * background, so more runs can be fired while earlier ones are still
  * working. When a job finishes, its card is swapped in place for the result
  * (or the error).
@@ -141,6 +142,70 @@
             '<div class="result-file"><span class="spinner"></span> generating…</div>';
         div.appendChild(buildSourceLabel(label));
         return div;
+    }
+
+    // The card while the form and its files go up: a progress bar, the
+    // percentage on the card's line. It becomes the "generating…" card only
+    // once the server answers with the job: until then there is no job, and
+    // leaving the page drops the run (prod 2026-11-06: a big picture on a
+    // slow uplink still uploading after 80 s showed "generating…", a refresh
+    // and it was gone, nginx `400 0`, nothing ever reached the app).
+    function buildUploadingCard() {
+        const div = document.createElement("div");
+        div.className = "result-item";
+        const box = document.createElement("div");
+        box.className = "result-file";
+        const bar = document.createElement("progress");
+        bar.max = 100;
+        bar.value = 0;
+        box.append(bar);
+        const line = buildSourceLabel("");
+        div.append(box, line);
+        div.setProgress = (pct) => {
+            bar.value = pct;
+            line.textContent = pct < 100 ? `Uploading… ${pct}%` : "Starting…";
+        };
+        div.setProgress(0);
+        return div;
+    }
+
+    // POST with upload progress, which fetch does not report; resolves with
+    // the finished XMLHttpRequest whatever its status, rejects only when
+    // nothing came back. Leaving the page asks first until it ends
+    // (upload-guard.js: leaving loses the run), so a redirect the answer asks
+    // for (an expired session) is not held up.
+    function postWithProgress(url, formData, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            let guarded = () => {};
+            const ended = (settle) => () => {
+                guarded();
+                settle();
+            };
+            xhr.open("POST", url);
+            xhr.upload.addEventListener("progress", (ev) => {
+                if (ev.lengthComputable) {
+                    onProgress(Math.floor((ev.loaded / ev.total) * 100));
+                }
+            });
+            xhr.addEventListener("load", ended(() => resolve(xhr)));
+            xhr.addEventListener("error", ended(() =>
+                reject(new Error("Upload failed — check your connection and try again."))
+            ));
+            xhr.addEventListener("abort", ended(() => reject(new Error("Upload stopped."))));
+            xhr.send(formData);
+            // After send: one that throws is never guarded (its events
+            // cannot fire before this line runs).
+            guarded = window.UploadGuard.begin();
+        });
+    }
+
+    function parseJson(text) {
+        try {
+            return JSON.parse(text);
+        } catch {
+            return null;
+        }
     }
 
     // kie.ai's hosted result can be ready well before the server's local
@@ -310,29 +375,39 @@
 
         statusEl.innerHTML = "";
 
-        // The card goes up BEFORE the request, not after it resolves: /run
-        // uploads every reference file to kie.ai inside the request, so the
-        // response can be ~10s away. Waiting for job_id to draw anything left
-        // the user staring at an unchanged page long enough to assume the
-        // click was lost (and click again). The card is real UI immediately;
-        // polling just starts late, once we know what to poll for.
-        const card = buildPendingCard(label);
+        // The card goes up BEFORE the request, not after it resolves: the
+        // files upload inside the request, which on a slow line takes
+        // minutes. Waiting for job_id to draw anything left the user staring
+        // at an unchanged page long enough to assume the click was lost (and
+        // click again). It shows the upload, then "generating…" once the job
+        // exists; polling starts then, once we know what to poll for.
+        const card = buildUploadingCard();
         gallery.prepend(card);
 
-        fetch(form.action, { method: "POST", body: formData })
-            .then(async (r) => {
-                // An expired session never reaches here -- session.js turns
-                // that 401 into a redirect to /login. This is the residual
-                // case: some other non-JSON response (a proxy error page, a
-                // 502), which would otherwise surface as an opaque JSON parse
-                // error that reads like the generator itself broke.
-                if (r.redirected || !isJson(r)) {
+        postWithProgress(form.action, formData, card.setProgress)
+            .then((xhr) => {
+                // session.js wraps fetch only: the same takeover (its
+                // overlay, one redirect however many requests 401) here.
+                if (xhr.status === 401) {
+                    const loginUrl = parseJson(xhr.responseText)?.login_url;
+                    if (loginUrl) {
+                        window.UploadGuard.sessionGone();
+                        window.SessionExpiry.expire(loginUrl);
+                        return;
+                    }
+                }
+                // Some other non-JSON response (a proxy error page, a 502,
+                // a redirect followed to an HTML page) would otherwise
+                // surface as an opaque JSON parse error that reads like the
+                // generator itself broke.
+                const data = parseJson(xhr.responseText);
+                const type = xhr.getResponseHeader("content-type") || "";
+                if (!type.includes("json") || data === null) {
                     throw new Error(
-                        `Unexpected non-JSON response (${r.status}) -- try again.`
+                        `Unexpected non-JSON response (${xhr.status}) -- try again.`
                     );
                 }
-                const data = await r.json();
-                if (!r.ok) {
+                if (xhr.status < 200 || xhr.status >= 300) {
                     throw new Error(data.detail || "Request failed.");
                 }
 
@@ -351,7 +426,9 @@
                 // /ai/run answers with one id per image (a batch); other
                 // tools answer with a single job_id.
                 const ids = data.job_ids || [data.job_id];
-                track(card, ids[0]);
+                const first = buildPendingCard(label);
+                card.replaceWith(first);
+                track(first, ids[0]);
                 for (const id of ids.slice(1)) {
                     const extra = buildPendingCard(label);
                     gallery.prepend(extra);
