@@ -6,25 +6,23 @@ default), so /accounts' followers, views and growth stay current without
 anyone pressing a button. The periodic sweep runs at fixed times instead: `OFM_ACCOUNTS_SCAN_TIMES`
 (13:50 Warsaw, 10 min before the daily Telegram report, and 18:00) on
 `OFM_ACCOUNTS_SCAN_TIMEZONE`'s clock (`_rescan_interval_s`).
-Platform-agnostic: everything platform-specific is
-behind `socials.Platform.fetch`.
+Platform-agnostic: a scan goes through the platform's sources in turn
+(`socials.Platform.sources`, `socials.scan_through`: Apify, our client
+through the proxies, our client logged in), each taking only what the ones
+before it left unread.
 
 The sweeper claims due accounts in one atomic UPDATE (a second API process
 cannot claim the same ones) and queues them per platform in jobs of
-`batch_size`; each job scans its accounts one after another, rotating
-through the platform's proxies from its own starting point, so parallel
-jobs spread over the IPs. A claim that never completes (worker killed by a
-deploy, batch stopped by a rate limit) expires after `claim_ttl_s` and the
-account is picked up again.
+`batch_size`, each starting on its own proxy, so parallel jobs spread over
+the IPs. A claim that never completes (worker killed by a deploy, every
+source down) expires after `claim_ttl_s` and the account is picked up again.
+/accounts Sync (`sync_now`) makes all of a user's accounts due at once.
 
-Each account is scanned with its owner's own cookies.txt
-(`stores.cookies.for_user`), never another user's; an owner without one gets
-the logged-out view, marked `limited` (the /accounts banner asks them for
-their login).
+Only the last source logs in, with the owner's own cookies.txt
+(`stores.cookies.for_user`), never another user's.
 """
 
-import random
-import time
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -35,34 +33,26 @@ from ofmhelpers.db.stores.tracked_accounts import (
     claim_due,
     get_account,
     list_accounts,
+    make_due,
     mark_due,
     record_scan,
     track,
 )
 from ofmhelpers.features.phones.catalog import services
 from ofmhelpers.integrations.socials import (
-    Platform,
-    RateLimitedError,
-    RetryableError,
-    SocialError,
+    AccountStats,
+    ScanTarget,
     get_platform,
+    scan_through,
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import TrackedAccount
-from ofmhelpers.utils.proxy_pool import ProxyPool
 
 logger = get_logger(__name__)
 
-
-class _OfflineError(Exception):
-    """Even a direct connection fails: our own network is down, so the rest
-    of the batch would only fail the same way."""
-
-
-def _failure(answered: list[RetryableError], tries: int) -> str:
-    """What the row shows once the platform itself answered a failure on
-    every try that reached it. The previous numbers stay."""
-    return f"{answered[-1]} ({tries} tries) -- retried at the next rescan"
+# An account no source could reach this time (keys out of credit, proxies
+# rate-limited, no login): the row says so, its numbers stay.
+UNREACHED = "No source could read it now -- retried at the next scan"
 
 
 def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
@@ -100,96 +90,70 @@ def track_login(service: str, username: str, *, user_id: int, revive: bool) -> b
     return True
 
 
-def scan_account(
-    account: TrackedAccount,
-    platform: Platform,
-    pool: ProxyPool,
-    tries: int,
-    cookies: str | None = None,
+def _targets(accounts: list[TrackedAccount]) -> list[ScanTarget]:
+    """The accounts as the sources read them, each with its owner's own
+    cookies (read once per owner; only the login source uses them)."""
+    owners: dict[int, str | None] = {}
+    targets = []
+    for account in accounts:
+        if account.user_id not in owners:
+            owners[account.user_id] = login_cookies.for_user(account.user_id)
+        targets.append(
+            ScanTarget(
+                key=str(account.id),
+                handle=account.handle,
+                cookies=owners[account.user_id],
+            )
+        )
+    return targets
+
+
+def _save(
+    account_id: int, stats: AccountStats | None, error: str | None = None
 ) -> None:
-    """One account, up to `tries` times, each through the pool's next proxy
-    after a jittered pause, logged in with `cookies` (its owner's); a dead
-    proxy leaves the pool. Raises
-    RateLimitedError when every try was rate-limited and _OfflineError when
-    a direct connection fails -- the batch stops on both. Tries that never
-    reached the platform record nothing (not the account's fault): it stays
-    claimed and is retried when the claim expires."""
-    failures: list[RetryableError] = []
-    for attempt in range(tries):
-        if attempt:
-            time.sleep(random.uniform(0, settings.accounts.retry_jitter_s))  # noqa: S311 -- jitter, not crypto
-        proxy = pool.next()
-        try:
-            stats = platform.fetch(account.handle, proxy, cookies)
-        except RetryableError as exc:
-            failures.append(exc)
-            if not exc.reached and proxy is None:
-                raise _OfflineError from exc
-            if exc.dead_proxy:
-                pool.drop(proxy)
-            logger.warning(
-                "%s @%s: try %d failed (%s)",
-                platform.key,
-                account.handle,
-                attempt + 1,
-                exc,
-            )
-            continue
-        except SocialError as exc:
-            logger.warning(
-                "%s @%s: scan refused: %s", platform.key, account.handle, exc
-            )
-            record_scan(account.id, None, str(exc))
-            return
-        record_scan(account.id, stats)
-        return
-    if all(isinstance(f, RateLimitedError) for f in failures):
-        raise failures[-1]
-    answered = [f for f in failures if f.reached]
-    if not answered:
-        logger.warning("%s @%s: no try got through", platform.key, account.handle)
-        return
-    logger.warning(
-        "%s @%s: all %d tries failed", platform.key, account.handle, len(failures)
-    )
-    record_scan(account.id, None, _failure(answered, len(failures)))
+    """One account's outcome; a failure to save it is logged and never costs
+    the rest of the batch theirs."""
+    try:
+        record_scan(account_id, stats, error)
+    except Exception:
+        logger.exception("saving the scan of account %d failed", account_id)
 
 
 def scan_accounts(platform_key: str, account_ids: list[int], start: int = 0) -> None:
-    """The worker job: one platform's claimed accounts, one at a time, each
-    tried on up to 1 + `proxy_retries` of the platform's proxies (direct
-    without any), starting at proxy `start`. An account removed since it
-    was claimed (or untracked) is skipped. Each is scanned with its own
-    owner's cookies, read once per owner per job."""
+    """The worker job: one platform's claimed accounts through its sources
+    in turn, the proxied ones starting at proxy `start`. An account removed
+    since it was claimed (or untracked) is skipped. Read: its numbers saved
+    the moment its source answered (a job killed later never pays for that
+    read again). Unread: the platform's own answer (not found, refused on
+    every try), else `UNREACHED`, saved as its error -- numbers kept, the
+    claim released, retried at the next scan with the failure backoff (a
+    claim left standing would be re-tried, and Apify paid, every
+    `claim_ttl_s`, and Sync stay greyed out that long)."""
     platform = get_platform(platform_key)
-    pool = ProxyPool(platform.proxies(), start)
-    retries = settings.accounts.proxy_retries
-    owners: dict[int, str | None] = {}
-    for done, account_id in enumerate(account_ids):
-        account = get_account(account_id)
-        if account is None or account.untracked_at is not None:
+    accounts = [
+        a
+        for account_id in account_ids
+        if (a := get_account(account_id)) is not None and a.untracked_at is None
+    ]
+    answers = scan_through(
+        platform.sources(start),
+        _targets(accounts),
+        lambda key, stats: _save(int(key), stats),
+    )
+    for account in accounts:
+        if str(account.id) in answers.stats:
             continue
-        if account.user_id not in owners:
-            owners[account.user_id] = login_cookies.for_user(account.user_id)
-        tries = 1 + min(retries, max(len(pool) - 1, 0))
-        try:
-            scan_account(account, platform, pool, tries, owners[account.user_id])
-        except RateLimitedError:
-            logger.warning(
-                "%s rate-limited after %d of %d accounts; the rest retry later",
-                platform_key,
-                done,
-                len(account_ids),
-            )
-            return
-        except _OfflineError:
-            logger.warning(
-                "network down after %d of %d accounts; the rest retry later",
-                done,
-                len(account_ids),
-                exc_info=True,
-            )
-            return
+        refusal = answers.refusals.get(str(account.id))
+        message = refusal.message if refusal and refusal.reached else UNREACHED
+        logger.warning("%s @%s: not read: %s", platform_key, account.handle, message)
+        _save(account.id, None, message)
+    logger.info(
+        "%s: %d of %d accounts read, by source %s",
+        platform_key,
+        len(answers.stats),
+        len(accounts),
+        dict(Counter(s.source for s in answers.stats.values())),
+    )
 
 
 def _batches(due: list[int]) -> list[tuple[str, list[int]]]:
@@ -226,6 +190,16 @@ def rescan_limited(user_id: int) -> list[int]:
     mark_due(limited)
     queue_due_scans()
     return limited
+
+
+def sync_now(user_id: int) -> int:
+    """/accounts Sync: every account of `user_id` scanned now, not at the
+    next scan time. One already queued or running is left to finish. How
+    many were queued."""
+    due = make_due(user_id)
+    queue_due_scans()
+    logger.info("sync: %d accounts of user %d queued", len(due), user_id)
+    return len(due)
 
 
 def _times_come(now: datetime) -> list[datetime]:

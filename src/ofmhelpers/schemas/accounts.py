@@ -139,6 +139,9 @@ class TrackedAccount(BaseModel):
     notes: str = ""
     added_at: float
     scanned_at: float | None = None
+    claimed_at: float | None = None
+    # Its scan is queued or running (claimed, the claim not expired).
+    syncing: bool = False
     # Set once removed from tracking: not synced or listed, history kept.
     untracked_at: float | None = None
     error: str | None = None

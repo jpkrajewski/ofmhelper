@@ -31,14 +31,19 @@ def _repository() -> TrackedAccountRepository:
     return TrackedAccountRepository()
 
 
+def _account(row: dict) -> TrackedAccount:
+    """`syncing`: its scan is queued or running (claimed, claim not expired)."""
+    claimed = row.get("claimed_at")
+    since = time.time() - settings.accounts.claim_ttl_s
+    return TrackedAccount.model_validate(
+        {**row, "syncing": claimed is not None and claimed > since}
+    )
+
+
 def list_accounts(owner: int | None = None) -> list[TrackedAccount]:
     """`owner`'s tracked accounts of a registered platform, newest first."""
     rows = _repository().list_all(settings.accounts.periods_days, owner)
-    return [
-        TrackedAccount.model_validate(row)
-        for row in rows
-        if row["platform"] in platforms()
-    ]
+    return [_account(row) for row in rows if row["platform"] in platforms()]
 
 
 def get_account(account_id: int, owner: int | None = None) -> TrackedAccount | None:
@@ -47,7 +52,7 @@ def get_account(account_id: int, owner: int | None = None) -> TrackedAccount | N
         return None
     if owner is not None and row["user_id"] != owner:
         return None
-    return TrackedAccount.model_validate(row)
+    return _account(row)
 
 
 def get_history(account_id: int) -> AccountHistory:
@@ -96,6 +101,12 @@ def untrack(account_ids: list[int], owner: int | None = None) -> int:
 def mark_due(account_ids: list[int]) -> None:
     if account_ids:
         _repository().mark_due(account_ids)
+
+
+def make_due(owner: int) -> list[int]:
+    """All of `owner`'s accounts due now, but none whose scan is already
+    queued or running (see the repository)."""
+    return _repository().make_due(owner, settings.accounts.claim_ttl_s)
 
 
 def claim_due(

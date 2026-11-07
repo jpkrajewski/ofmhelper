@@ -9,7 +9,8 @@
  *   + Add account    -> POST /accounts/add, then reload (new rows syncing)
  *   selected rows    -> POST /accounts/creator (assign; "" unassigns) or
  *                       /accounts/delete, from the bar above the table
- * While a row is still on its first sync the list reloads every POLL_MS,
+ *   Sync             -> POST /accounts/sync (every account now), then reload
+ * While anything is syncing ([data-syncing]) the page reloads every POLL_MS,
  * unless something on it is being edited.
  */
 (() => {
@@ -159,8 +160,24 @@
         });
     }
 
-    // --- first syncs ----------------------------------------------------------
-    if (document.querySelector('tr[data-status="scanning"]')) {
+    // --- sync: every account now ---------------------------------------------
+    const sync = $("accounts-sync");
+    if (sync) {
+        sync.addEventListener("click", async () => {
+            sync.disabled = true;
+            setStatus(statusEl, "Syncing…");
+            try {
+                await postJson("/accounts/sync");
+                window.location.reload();
+            } catch (error) {
+                setStatus(statusEl, error.message, true);
+                sync.disabled = false;
+            }
+        });
+    }
+
+    // --- syncing rows: reload until their numbers are in ----------------------
+    if (document.querySelector("[data-syncing]")) {
         window.setInterval(() => {
             const busy = (dialog?.open) || picks().length
                 || document.activeElement.matches("input, textarea, select");

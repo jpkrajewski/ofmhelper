@@ -7,6 +7,7 @@ import os
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -165,6 +166,46 @@ def test_add_tracks_and_scans(client, fetches):
     assert "1,000" in html
     assert "All reachable" in html
     assert "data-problem" not in html
+
+
+def test_sync_scans_every_account_now(client, fetches):
+    for handle in ("a", "b"):
+        track("instagram", handle)
+    html = client.get("/accounts").text
+    assert re.search(r'<button[^>]*id="accounts-sync"(?![^>]*disabled)[^>]*>', html)
+
+    r = client.post("/accounts/sync")
+
+    assert r.json() == {"count": 2}
+    assert sorted(h for h, _ in fetches) == ["a", "b"]
+    assert all(a.followers == 1000 for a in list_accounts())
+
+
+def test_sync_leaves_a_scan_already_queued_alone(client, fetches):
+    """A second click, or Sync while the 13:50 sweep runs, queues nothing
+    twice: the claimed rows show syncing until their scan lands."""
+    track("instagram", "a")
+    claim_due(0, 3600)
+    fetches.clear()
+
+    assert client.post("/accounts/sync").json() == {"count": 0}
+    assert fetches == []
+    assert get_account(_id("a")).syncing
+    html = client.get("/accounts").text
+    assert "data-syncing" in html
+    # Nothing to click while it syncs.
+    assert re.search(r'<button[^>]*id="accounts-sync"[^>]*disabled', html)
+    assert "Syncing…" in html
+    assert "data-syncing" in client.get(f"/accounts/{_id('a')}").text
+
+
+def test_analytics_actions_sit_in_one_row(client, fetches):
+    track("instagram", "a")
+    record_scan(_id("a"), _stats("a"))
+    html = client.get(f"/accounts/{_id('a')}").text
+    actions = html.split('class="toolbar-actions"', 1)[1]
+    assert actions.index('name="period"') < actions.index("Assign link")
+    assert "data-syncing" not in html
 
 
 def test_adding_again_only_assigns_the_creator(client, fetches):
@@ -1101,11 +1142,14 @@ def test_rate_limit_on_every_try_stops_the_batch(monkeypatch):
     used = _failing(monkeypatch, [RateLimitedError("429")] * 2)
     account_tracker.scan_accounts("instagram", [_id("x"), _id("y")])
     assert len(used) == 2
-    # Nothing recorded: both keep their claim and retry later.
-    assert all(a.status == "scanning" and a.error is None for a in list_accounts())
+    # Nobody got through: each row says so, its claim released for the next
+    # scan (a standing claim would retry, and pay Apify, every claim TTL).
+    assert all(
+        a.error == account_tracker.UNREACHED and not a.syncing for a in list_accounts()
+    )
 
 
-def test_never_reached_records_nothing_and_dead_proxies_leave(monkeypatch):
+def test_never_reached_says_so_and_dead_proxies_leave(monkeypatch):
     monkeypatch.setenv("OFM_IG_PROXIES", "a:1,b:2,c:3")
     monkeypatch.setenv("OFM_ACCOUNTS_PROXY_RETRIES", "1")
     for h in ("x", "y"):
@@ -1114,7 +1158,7 @@ def test_never_reached_records_nothing_and_dead_proxies_leave(monkeypatch):
     used = _failing(monkeypatch, [dead, dead, "ok"])
     account_tracker.scan_accounts("instagram", [_id("x"), _id("y")])
     assert used == ["http://a:1", "http://b:2", "http://c:3"]
-    assert get_account(_id("x")).error is None
+    assert get_account(_id("x")).error == account_tracker.UNREACHED
     assert get_account(_id("y")).status == "active"
 
 

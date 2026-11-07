@@ -1,8 +1,8 @@
 """Apify's API faked at the wire (OFM_FAKE_EXTERNALS, tests).
 
 Answers the calls `client.ApifyClient` makes the way Apify does: an
-account's limits, a run of the Instagram reel scraper (RUNNING when started,
-SUCCEEDED at its first poll) and its dataset. The reels are the Instagram
+account's limits, a run of the Instagram reel scraper or profile scraper
+(RUNNING when started, SUCCEEDED at its first poll) and its dataset. The reels are the Instagram
 fake's (`instagram/fake.py` profiles, newest first, videos on its fake CDN);
 a private one stores the actor's `no_items` error item ("Empty or private
 data"), an unknown one its `not_found` item. API keys: `BROKE_KEY` has no
@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from ofmhelpers.integrations.instagram.fake import fake_instagram
+from ofmhelpers.integrations.instagram.fake import CDN, fake_instagram
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 HOST = "api.apify.com"
 REEL_SCRAPER = "apify~instagram-reel-scraper"
+PROFILE_SCRAPER = "apify~instagram-profile-scraper"
 BROKE_KEY = "fake-apify-broke"
 WRONG_KEY = "fake-apify-wrong"
 # The real actor's Free-plan prices.
@@ -45,13 +47,47 @@ class FakeApify:
         self.datasets: dict[str, list[dict[str, Any]]] = {}
         self.calls: list[tuple[str, str]] = []
         self.inputs: list[dict[str, Any]] = []
+        # Tests' switches: a key's credit left (default CREDIT_USD), actors
+        # whose runs end ABORTED with half their items (credit gone mid-run).
+        self.credit_left: dict[str, float] = {}
+        self.cut_short: set[str] = set()
         self._lock = threading.Lock()
 
     # --- the reel scraper --------------------------------------------------
 
     @staticmethod
-    def reel_items(username: str, limit: int) -> list[dict[str, Any]]:
-        """What the reel scraper stores for `username`'s newest `limit`."""
+    def profile_items(username: str) -> list[dict[str, Any]]:
+        """What the profile scraper stores for `username`."""
+        profile = fake_instagram().profiles.get(username)
+        if profile is None:
+            return [
+                {
+                    "url": f"https://www.instagram.com/{username}",
+                    "error": "not_found",
+                    "errorDescription": "Profile does not exist",
+                }
+            ]
+        return [
+            {
+                "inputUrl": f"https://www.instagram.com/{username}",
+                "id": profile.pk,
+                "username": profile.username,
+                "fullName": profile.full_name,
+                "followersCount": profile.followers,
+                "followsCount": profile.following,
+                "private": profile.is_private,
+                "verified": profile.is_verified,
+                "profilePicUrl": f"{CDN}/avatar-{profile.username}.jpg",
+                "profilePicUrlHD": f"{CDN}/avatar-{profile.username}.jpg",
+            }
+        ]
+
+    @staticmethod
+    def reel_items(
+        username: str, limit: int, newer_than_s: float | None = None
+    ) -> list[dict[str, Any]]:
+        """What the reel scraper stores for `username`'s newest `limit`
+        (only those posted after `newer_than_s` when given)."""
         profile = fake_instagram().profiles.get(username)
         if profile is None:
             return [
@@ -70,7 +106,11 @@ class FakeApify:
                     "errorDescription": "Empty or private data for provided input",
                 }
             ]
-        rows = fake_instagram().rows(profile)[:limit]
+        rows = [
+            row
+            for row in fake_instagram().rows(profile)
+            if newer_than_s is None or row.taken_at >= newer_than_s
+        ][:limit]
         return [
             {
                 "id": row.pk,
@@ -102,7 +142,10 @@ class FakeApify:
         if token == WRONG_KEY:
             return _error(401, "user-or-token-not-found", "User was not found")
         if request.method == "GET" and path == "/v2/users/me/limits":
-            used = CREDIT_USD if token == BROKE_KEY else 0.0
+            left = (
+                0.0 if token == BROKE_KEY else self.credit_left.get(token, CREDIT_USD)
+            )
+            used = CREDIT_USD - left
             return FakeReply.json_body(
                 {
                     "data": {
@@ -123,7 +166,7 @@ class FakeApify:
         return _error(404, "page-not-found", f"No fake for {request.method} {path}")
 
     def _start(self, actor: str, token: str, body: Any) -> FakeReply:
-        if actor != REEL_SCRAPER:
+        if actor not in (REEL_SCRAPER, PROFILE_SCRAPER):
             return _error(404, "record-not-found", f"Actor {actor} was not found")
         if token == BROKE_KEY:
             return _error(
@@ -133,14 +176,25 @@ class FakeApify:
             )
         run_input = json.loads(body or b"{}")
         with self._lock:
-            self.inputs.append(run_input)
-        items = [
-            item
-            for username in run_input.get("username", [])
-            for item in self.reel_items(
-                username, int(run_input.get("resultsLimit", 10))
-            )
-        ]
+            self.inputs.append({"actor": actor, **run_input})
+        if actor == PROFILE_SCRAPER:
+            items = [
+                item
+                for username in run_input.get("usernames", [])
+                for item in self.profile_items(username)
+            ]
+        else:
+            newer = _newer_than(run_input.get("onlyPostsNewerThan"))
+            items = [
+                item
+                for username in run_input.get("username", [])
+                for item in self.reel_items(
+                    username, int(run_input.get("resultsLimit", 10)), newer
+                )
+            ]
+        cut = actor in self.cut_short
+        if cut:
+            items = items[: len(items) // 2]
         run_id = uuid.uuid4().hex[:17]
         dataset_id = uuid.uuid4().hex[:17]
         reels = [i for i in items if "error" not in i]
@@ -149,6 +203,7 @@ class FakeApify:
         run = {
             "id": run_id,
             "status": "RUNNING",
+            "_final": "ABORTED" if cut else "SUCCEEDED",
             "defaultDatasetId": dataset_id,
             "usageTotalUsd": START_USD,
             "chargedEventCounts": {"reel": max(len(reels) - 1, 0), "actor-start": 1},
@@ -165,15 +220,26 @@ class FakeApify:
         with self._lock:
             self.runs[run_id] = run
             self.datasets[dataset_id] = items
-        return FakeReply.json_body({"data": run}, status=201)
+        shown = {k: v for k, v in run.items() if k != "_final"}
+        return FakeReply.json_body({"data": shown}, status=201)
 
     def _poll(self, run_id: str) -> FakeReply:
         with self._lock:
             run = self.runs.get(run_id)
             if run is None:
                 return _error(404, "record-not-found", "Actor run was not found")
-            run["status"] = "SUCCEEDED"
-            return FakeReply.json_body({"data": dict(run)})
+            run["status"] = run["_final"]
+            return FakeReply.json_body(
+                {"data": {k: v for k, v in run.items() if k != "_final"}}
+            )
+
+
+def _newer_than(value: str | None) -> float | None:
+    """The actor's "N days" filter as a timestamp (the only form we send)."""
+    if not value:
+        return None
+    days = int(value.split()[0])
+    return time.time() - days * 86400
 
 
 def _error(status: int, kind: str, message: str) -> FakeReply:

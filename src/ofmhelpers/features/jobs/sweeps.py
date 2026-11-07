@@ -73,11 +73,13 @@ def sweeps() -> list[Sweep]:
             run=reel_watch.queue_due_scans,
             interval_s=lambda: settings.instagram.rescan_check_interval_s,
         ),
-        # Rescans /accounts' tracked social accounts when due.
+        # Rescans /accounts' tracked social accounts when due (production
+        # only unless OFM_ACCOUNTS_SCHEDULED_SCANS: each scan pays Apify).
         Sweep(
             name="account tracker",
             run=account_tracker.queue_due_scans,
             interval_s=lambda: settings.accounts.rescan_check_interval_s,
+            enabled=lambda: settings.accounts.scheduled(settings.infra.production),
         ),
         # Syncs /links' links and their clicks when due.
         Sweep(

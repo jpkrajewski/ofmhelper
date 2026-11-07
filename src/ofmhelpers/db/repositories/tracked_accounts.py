@@ -447,6 +447,26 @@ class TrackedAccountRepository(CachedRepository):
             )
 
     @invalidates_cache
+    def make_due(self, owner: int | None, claim_ttl_s: float) -> list[int]:
+        """Makes every tracked account of `owner` due now, except one
+        claimed within `claim_ttl_s` (its scan is queued or running: a second
+        click or a sweep in progress queues nothing twice). The ids made due."""
+        acc = TrackedAccountRow
+        now = time.time()
+        with session_scope() as s:
+            made = s.execute(
+                update(acc)
+                .where(
+                    acc.untracked_at.is_(None),
+                    *mine(acc.user_id, owner),
+                    or_(acc.claimed_at.is_(None), acc.claimed_at < now - claim_ttl_s),
+                )
+                .values(scanned_at=None, claimed_at=None, failed_scans=0)
+                .returning(acc.id)
+            )
+            return sorted(made.scalars().all())
+
+    @invalidates_cache
     def claim_due(
         self, interval_s: float, claim_ttl_s: float, max_interval_s: float
     ) -> list[int]:
