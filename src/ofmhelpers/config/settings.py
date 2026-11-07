@@ -277,8 +277,9 @@ class WebSettings(BaseSettings):
     )
     # /edit (features/edit): one cut's ffmpeg bound (it re-encodes, on the
     # edit worker), the shortest and longest part it cuts, the longest and
-    # biggest video it opens, the cut's short side cap (a 4K/8K source comes
-    # out 1080), ffmpeg threads per cut/strip, the timeline's frame strip
+    # biggest video it opens (the size a cut comes out at is picked on the
+    # page: features/edit/options.py `Size`), ffmpeg threads per cut/strip,
+    # the timeline's frame strip
     # (frames, px tall, its own bound; past `edit_strip_all_frames_s` it
     # reads keyframes only), how long a cut or an /edit upload is kept
     # (then the hourly sweep deletes it), and how often that sweep runs.
@@ -295,9 +296,6 @@ class WebSettings(BaseSettings):
     edit_max_upload_mb: int = Field(
         default=1024, ge=1, validation_alias="OFM_EDIT_MAX_UPLOAD_MB"
     )
-    edit_short_side: int = Field(
-        default=1080, ge=144, validation_alias="OFM_EDIT_SHORT_SIDE"
-    )
     edit_threads: int = Field(default=2, ge=1, validation_alias="OFM_EDIT_THREADS")
     edit_strip_timeout_s: int = Field(
         default=30, ge=1, validation_alias="OFM_EDIT_STRIP_TIMEOUT_S"
@@ -312,6 +310,34 @@ class WebSettings(BaseSettings):
     )
     edit_strip_height: int = Field(
         default=96, ge=16, le=360, validation_alias="OFM_EDIT_STRIP_HEIGHT"
+    )
+    # The light copy /edit plays (media/trim.py `proxy`, on the edit worker
+    # with the strip): its short side, a keyframe every `gop` frames (a seek
+    # decodes at most that many), its CRF, and the bound on making both.
+    # A frame grab (/edit/frame, in the request: one frame) has its own.
+    edit_proxy_short_side: int = Field(
+        default=540, ge=144, validation_alias="OFM_EDIT_PROXY_SHORT_SIDE"
+    )
+    edit_proxy_gop: int = Field(
+        default=12, ge=1, le=300, validation_alias="OFM_EDIT_PROXY_GOP"
+    )
+    edit_proxy_crf: int = Field(
+        default=30, ge=0, le=51, validation_alias="OFM_EDIT_PROXY_CRF"
+    )
+    edit_prepare_timeout_s: int = Field(
+        default=600, ge=10, validation_alias="OFM_EDIT_PREPARE_TIMEOUT_S"
+    )
+    edit_frame_timeout_s: int = Field(
+        default=30, ge=1, validation_alias="OFM_EDIT_FRAME_TIMEOUT_S"
+    )
+    # Frame grabs at once per web process (each one ffmpeg in a request; an
+    # 8K source's frame holds several hundred MB); the next waits its turn
+    # at most `edit_frame_wait_s` (a waiting sync route holds a thread).
+    edit_frame_parallel: int = Field(
+        default=2, ge=1, validation_alias="OFM_EDIT_FRAME_PARALLEL"
+    )
+    edit_frame_wait_s: float = Field(
+        default=2, ge=0, validation_alias="OFM_EDIT_FRAME_WAIT_S"
     )
     # /clone (routers/generation/clone.py): videos per submit -- each one is a
     # paid Wan 3.0 run, so this caps what one mis-click can spend -- and how

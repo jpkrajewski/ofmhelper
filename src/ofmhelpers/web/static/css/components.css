@@ -182,6 +182,16 @@ button:disabled,
 .btn-segmented > .btn + .btn { margin-inline-start: -1px; }
 .btn-segmented > .btn:hover,
 .btn-segmented > .btn:focus-visible { position: relative; z-index: 1; }
+/* Pick one: the buttons carry aria-pressed (page JS flips it), the picked
+   one looks like a pressed chip. */
+.btn-segmented > .btn[aria-pressed="true"],
+.btn-segmented > .btn[aria-pressed="true"]:hover {
+    position: relative;
+    z-index: 2;
+    border-color: var(--accent);
+    background: var(--accent-wash);
+    color: var(--text);
+}
 /* Float the clone control AND the actions row together to the card's foot.
    Only `.send-to` gets margin-top:auto -- two auto margins in a flex column
    split the free space instead of stacking, which left the clone row

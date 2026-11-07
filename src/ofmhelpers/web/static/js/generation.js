@@ -169,37 +169,6 @@
         return div;
     }
 
-    // POST with upload progress, which fetch does not report; resolves with
-    // the finished XMLHttpRequest whatever its status, rejects only when
-    // nothing came back. Leaving the page asks first until it ends
-    // (upload-guard.js: leaving loses the run), so a redirect the answer asks
-    // for (an expired session) is not held up.
-    function postWithProgress(url, formData, onProgress) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            let guarded = () => {};
-            const ended = (settle) => () => {
-                guarded();
-                settle();
-            };
-            xhr.open("POST", url);
-            xhr.upload.addEventListener("progress", (ev) => {
-                if (ev.lengthComputable) {
-                    onProgress(Math.floor((ev.loaded / ev.total) * 100));
-                }
-            });
-            xhr.addEventListener("load", ended(() => resolve(xhr)));
-            xhr.addEventListener("error", ended(() =>
-                reject(new Error("Upload failed — check your connection and try again."))
-            ));
-            xhr.addEventListener("abort", ended(() => reject(new Error("Upload stopped."))));
-            xhr.send(formData);
-            // After send: one that throws is never guarded (its events
-            // cannot fire before this line runs).
-            guarded = window.UploadGuard.begin();
-        });
-    }
-
     function parseJson(text) {
         try {
             return JSON.parse(text);
@@ -384,7 +353,7 @@
         const card = buildUploadingCard();
         gallery.prepend(card);
 
-        postWithProgress(form.action, formData, card.setProgress)
+        window.UploadGuard.post(form.action, formData, card.setProgress)
             .then((xhr) => {
                 // session.js wraps fetch only: the same takeover (its
                 // overlay, one redirect however many requests 401) here.

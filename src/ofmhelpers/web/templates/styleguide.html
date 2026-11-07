@@ -48,6 +48,11 @@
     {% call ui.field("Select", "sg-select") %}<select id="sg-select"><option>One</option><option>Two</option></select>{% endcall %}
     {% call ui.field("Textarea", "sg-area") %}<textarea id="sg-area" rows="3"></textarea>{% endcall %}
     <label class="check-field"><input type="checkbox" checked> Checkbox</label>
+    {% call ui.segmented("Pick one") %}
+        {{ ui.button("Original", attrs={"aria-pressed": "true"}) }}
+        {{ ui.button("3:4", attrs={"aria-pressed": "false"}) }}
+        {{ ui.button("1:1", attrs={"aria-pressed": "false"}) }}
+    {% endcall %}
     {% call ui.chip_row() %}
         {{ ui.chip("Off chip") }}
         {{ ui.chip("On chip", pressed=true) }}

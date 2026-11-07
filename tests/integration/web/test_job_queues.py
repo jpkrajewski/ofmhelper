@@ -59,6 +59,31 @@ def test_jobs_run_in_the_order_they_joined():
     assert get_redis().lrange("ran", 0, -1) == [b"first", b"second", b"third"]
 
 
+def test_a_job_someone_waits_for_joins_the_front_of_the_line():
+    media = JobQueue(QueueName.MEDIA)
+    media.put(worker_tasks.note_down, "first")
+    media.put(worker_tasks.note_down, "second")
+    media.put(worker_tasks.note_down, "watched", at_front=True)
+
+    _drain_media()
+
+    assert get_redis().lrange("ran", 0, -1) == [b"watched", b"first", b"second"]
+
+
+def test_a_waiting_job_dropped_never_runs_and_leaves_nothing_in_redis():
+    media = JobQueue(QueueName.MEDIA)
+    dropped = _waiting_job()
+    rq_job = media.put(worker_tasks.note_down, dropped)
+    media.put(worker_tasks.note_down, "kept")
+
+    assert media.drop(dropped) is True
+    assert media.drop(dropped) is False  # not waiting any more
+    _drain_media()
+
+    assert get_redis().lrange("ran", 0, -1) == [b"kept"]
+    assert not get_redis().exists(rq_job.key)
+
+
 def test_the_line_says_how_many_are_ahead_of_each_job():
     media = JobQueue(QueueName.MEDIA)
     first, second = _waiting_job(), _waiting_job()

@@ -1,44 +1,92 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
-{# /edit (routers/video_tools/edit.py, static/js/edit.js): the video over a
-   strip of its frames, two handles for where the part starts and ends,
-   Play plays the part, Cut queues it on the edit worker (edit.js polls):
-   Clone it / Download. Nothing it makes is kept past a day. #}
+{# /edit (routers/video_tools/edit.py, static/js/edit.js): the video (its
+   light copy once the edit worker made it) with the crop box over it, a
+   strip of its frames with the marker and two handles for where the part
+   starts and ends, frame steps, Play plays the part at the picked speed,
+   Turn (rotate, mirror) / Crop / Speed / Size, Frame downloads the frame
+   shown, Cut queues the part on the edit worker
+   (edit.js polls): Clone it / Download. Nothing it makes is kept past a
+   day. #}
 {% block content %}
 {{ ui.page_header("Edit") }}
 
 {% set video = page.video %}
 {% if video %}
+{% set ready = page.prepared is not none and page.prepared.status == "done" %}
 {% call ui.card() %}
-<div class="edit" id="edit" data-video="{{ video.path }}" data-seconds="{{ video.seconds }}"
-     data-limit="{{ limit_s }}" data-min="{{ min_s }}" data-max="{{ max_part_s }}">
-    <video class="edit-player" id="edit-player" src="{{ video.url }}" playsinline preload="metadata"></video>
-    <div class="edit-timeline" id="edit-timeline">
-        <img class="edit-strip" src="/edit/strip?video={{ video.path|urlencode }}" alt="">
+<div class="edit" id="edit" data-video="{{ video.path }}" data-name="{{ video.name }}"
+     data-original="{{ video.url }}"
+     data-seconds="{{ video.seconds }}" data-fps="{{ video.fps or '' }}"
+     data-limit="{{ limit_s }}" data-min="{{ min_s }}" data-max="{{ max_part_s }}"
+     data-ready="{{ 'true' if ready else 'false' }}"
+     data-frames="{{ page.prepared.frames_url if ready else '' }}">
+    <div class="edit-stage" id="edit-stage">
+        <video class="edit-player" id="edit-player" playsinline
+               src="{{ page.prepared.proxy_url if ready else video.url }}"
+               preload="{{ 'auto' if ready else 'metadata' }}"></video>
+        <div class="edit-crop" id="edit-crop" hidden>
+            <span class="edit-crop-grip" data-corner="nw"></span>
+            <span class="edit-crop-grip" data-corner="ne"></span>
+            <span class="edit-crop-grip" data-corner="sw"></span>
+            <span class="edit-crop-grip" data-corner="se"></span>
+        </div>
+    </div>
+    <div class="edit-timeline{{ '' if ready else ' edit-timeline-bare' }}" id="edit-timeline">
+        <img class="edit-strip" id="edit-strip" alt=""{% if ready %} src="{{ page.prepared.strip_url }}"{% endif %}>
+        <span class="edit-wait" id="edit-wait">Loading frames…</span>
         <div class="edit-shade edit-shade-start"></div>
         <div class="edit-shade edit-shade-end"></div>
         <div class="edit-pick"></div>
-        <div class="edit-playhead" id="edit-playhead"></div>
         <input type="range" class="edit-handle" id="edit-start" aria-label="Start"
-               min="0" max="{{ video.seconds }}" step="0.1" value="0">
+               min="0" max="{{ video.seconds }}" step="any" value="0">
         <input type="range" class="edit-handle" id="edit-end" aria-label="End"
-               min="0" max="{{ video.seconds }}" step="0.1" value="{{ [video.seconds, limit_s]|min }}">
+               min="0" max="{{ video.seconds }}" step="any" value="{{ [video.seconds, limit_s]|min }}">
+        <div class="edit-playhead" id="edit-playhead"></div>
     </div>
     <div class="edit-bar">
         <div class="edit-bar-side">
             {{ ui.button("Play", "primary", icon="play", hook="edit-play") }}
             {{ ui.button("Pause", "primary", icon="pause", hook="edit-pause", attrs={"hidden": true}) }}
+            {{ ui.icon_button("chevron-left", "Previous frame", hook="edit-back") }}
+            {{ ui.icon_button("chevron-right", "Next frame", hook="edit-next") }}
+            <span class="edit-at" id="edit-at"></span>
         </div>
         <div class="edit-bar-middle">
             <span class="edit-times"><span id="edit-from"></span> – <span id="edit-to"></span></span>
             <strong class="edit-length" id="edit-length"></strong>
+            <span class="edit-size" id="edit-size"></span>
         </div>
         <div class="edit-bar-side edit-bar-end">
+            {{ ui.button("Frame", icon="camera", attrs={"id": "edit-frame"}) }}
             {{ ui.button("Clone it", "primary", icon="film", href="#", attrs={"id": "edit-clone", "hidden": true}) }}
             {{ ui.button("Download", icon="download", href="#", attrs={"id": "edit-download", "download": "", "hidden": true}) }}
             {{ ui.button("Cut", "primary", icon="scissors", attrs={"id": "edit-cut"}) }}
         </div>
+    </div>
+    <div class="edit-options">
+        {% call ui.field("Turn") %}
+        {% call ui.segmented("Turn") %}
+        {{ ui.button("Rotate", icon="rotate-cw", hook="edit-rotate") }}
+        {{ ui.button("Mirror", icon="flip-horizontal", hook="edit-mirror", attrs={"aria-pressed": "false"}) }}
+        {% endcall %}
+        {% endcall %}
+        {% call ui.field("Crop") %}
+        {% call ui.segmented("Crop") %}
+        {% for a in aspects %}{{ ui.button(a.label, hook="edit-aspect", attrs={"data-aspect": a.value, "aria-pressed": "true" if loop.first else "false"}) }}{% endfor %}
+        {% endcall %}
+        {% endcall %}
+        {% call ui.field("Speed") %}
+        {% call ui.segmented("Speed") %}
+        {% for s in speeds %}{{ ui.button("%g×"|format(s), hook="edit-speed", attrs={"data-speed": "%g"|format(s), "aria-pressed": "true" if s == 1 else "false"}) }}{% endfor %}
+        {% endcall %}
+        {% endcall %}
+        {% call ui.field("Size") %}
+        {% call ui.segmented("Size") %}
+        {% for z in sizes %}{{ ui.button(z.label, hook="edit-size-pick", attrs={"data-size": z.value, "aria-pressed": "true" if z == default_size else "false"}) }}{% endfor %}
+        {% endcall %}
+        {% endcall %}
     </div>
     <div class="generation-status" id="edit-status" role="status" aria-live="polite"></div>
 </div>

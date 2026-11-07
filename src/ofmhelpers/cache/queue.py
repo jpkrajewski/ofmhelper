@@ -94,6 +94,7 @@ class JobQueue:
         job_timeout: int | None = None,
         retry: Retry | None = None,
         failure_ttl: int | None = None,
+        at_front: bool = False,
         **kwargs: Any,
     ) -> Any:
         """`fn(*args, **kwargs)` to the back of the line. `job_timeout`: its time
@@ -101,7 +102,10 @@ class JobQueue:
         /clone video, made in pieces); waiting in line does not count. `retry`:
         RQ tries it again after it raised (the worker pool runs RQ's scheduler,
         so the waits hold). `failure_ttl`: how long RQ keeps it once it failed
-        for good (RQ's default: a year).
+        for good (RQ's default: a year). `at_front`: it joins the front of the
+        line, not the back -- work someone watches a spinner for, on a queue
+        that also carries work nobody waits on (an /edit cut ahead of the
+        pages' light copies): it waits at most for the jobs being run.
 
         In synchronous mode (settings.infra.rq_async is False -- the test suite)
         it is called directly, in-process: no RQ, no serialization, so tests can
@@ -109,7 +113,7 @@ class JobQueue:
         if not settings.infra.rq_async:
             return fn(*args, **kwargs)
         queue = get_queue(self.name)
-        ahead = queue.count + queue.started_job_registry.count
+        ahead = queue.started_job_registry.count + (0 if at_front else queue.count)
         # RQ's default description -- what the worker logs for every job it
         # starts -- is the call with its arguments, and those carry the kie.ai
         # API key a job runs with. The function name is all the log needs.
@@ -120,6 +124,7 @@ class JobQueue:
             job_timeout=job_timeout or settings.infra.rq_job_timeout_s,
             retry=retry,
             failure_ttl=failure_ttl,
+            at_front=at_front,
             **kwargs,
         )
         logfire.info(
@@ -130,6 +135,30 @@ class JobQueue:
             rq_job_id=rq_job.id,
         )
         return rq_job
+
+    def drop(self, job_id: str) -> bool:
+        """Takes app job `job_id` (`run_job`'s first argument) out of the line
+        if it still waits; a started one runs on. False when it was not
+        waiting or it cannot tell (the synchronous test mode, Redis down)."""
+        if not settings.infra.rq_async:
+            return False
+        try:
+            queue = get_queue(self.name)
+            waiting = Job.fetch_many(queue.get_job_ids(), connection=get_redis())
+            for rq_job in waiting:
+                if rq_job is None or not rq_job.args or str(rq_job.args[0]) != job_id:
+                    continue
+                # Off the line first (a worker taking it meanwhile wins: 0),
+                # then its record, else it stays in Redis for good.
+                if not queue.remove(rq_job):
+                    return False
+                rq_job.delete(remove_from_queue=False)
+                return True
+        except Exception:
+            logger.warning(
+                "could not drop %s from %s", job_id, self.name, exc_info=True
+            )
+        return False
 
     def line(self) -> dict[str, int]:
         """Who waits, first in line first: app job id (`run_job`'s first
@@ -235,6 +264,15 @@ def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
     return JobQueue(QueueName.DEFAULT).put(fn, *args, job_timeout=job_timeout, **kwargs)
 
 
-def enqueue_to(queue: QueueName, fn, *args, job_timeout: int | None = None, **kwargs):
+def enqueue_to(
+    queue: QueueName,
+    fn,
+    *args,
+    job_timeout: int | None = None,
+    at_front: bool = False,
+    **kwargs,
+):
     """`put` on `queue`."""
-    return JobQueue(queue).put(fn, *args, job_timeout=job_timeout, **kwargs)
+    return JobQueue(queue).put(
+        fn, *args, job_timeout=job_timeout, at_front=at_front, **kwargs
+    )

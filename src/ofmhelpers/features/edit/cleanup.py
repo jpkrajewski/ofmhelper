@@ -4,7 +4,9 @@ is kept.
 Each round deletes, older than `edit_keep_s` (a day): every file in a
 `.edit/` folder of the store (the agency's and each person's: uploads and
 cuts), unless a running job's params name it (a clone queued with a cut
-reads it when it sends the request); every frame strip. And every cut's
+reads it when it sends the request); every light copy and frame strip
+the page plays and shows (`prepared_dir`, and the strips made before it).
+And every cut's
 work folder (`uploads/.edit/tmp*`) older than twice a cut's time limit: a
 worker killed mid-cut leaves one.
 """
@@ -17,7 +19,7 @@ from typing import Any
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import running_jobs
-from ofmhelpers.features.edit.service import STAGING
+from ofmhelpers.features.edit.service import STAGING, prepared_dir
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.log import get_logger
 
@@ -73,10 +75,11 @@ def remove_old() -> None:
             ):
                 path.unlink(missing_ok=True)
                 removed += 1
-    for path in (previews_dir() / "strips").glob("*"):
-        if path.is_file() and _old(path, now, web.edit_keep_s):
-            path.unlink(missing_ok=True)
-            removed += 1
+    for folder in (prepared_dir(), previews_dir() / "strips"):
+        for path in folder.glob("*"):
+            if path.is_file() and _old(path, now, web.edit_keep_s):
+                path.unlink(missing_ok=True)
+                removed += 1
     work = Path(settings.infra.uploads_root) / STAGING
     for path in work.glob("tmp*"):
         if path.is_dir() and _old(path, now, 2 * web.edit_cut_timeout_s):
