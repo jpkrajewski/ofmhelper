@@ -84,18 +84,25 @@ class AccountMetrics(BaseModel):
     posts_scanned: int = 0
     views_scanned: int = 0
     limited: bool = False
+    # The source that answered (`sources.AccountSource.key`); "" before sources.
+    source: str = ""
 
 
 class AccountStats(BaseModel):
     """A platform's whole answer for one account: newest posts first.
     `complete`: the read went past the oldest post it could see (no cap
-    reached). `limited`: the platform showed a restricted view (logged
-    out), so posts it hides from it are missing from the numbers."""
+    reached). `since`: an incomplete read that still has every post from
+    then on (a source reading only the last N days); None: from its oldest
+    post. `limited`: the platform showed a restricted view (logged out), so
+    posts it hides from it are missing from the numbers. `source`: who
+    answered."""
 
     profile: AccountProfile
     posts: list[PostStat] = []
     complete: bool = True
+    since: float | None = None
     limited: bool = False
+    source: str = ""
     scanned_at: float
 
     @computed_field  # type: ignore[prop-decorator]
@@ -109,6 +116,10 @@ class AccountStats(BaseModel):
         complete, else its oldest post (none read: only from now on)."""
         if self.complete:
             return 0.0
+        if self.since is not None:
+            # Only that far was asked for: an older post it brought along (a
+            # pinned one) says nothing about the posts between.
+            return self.since
         return min((p.posted_at for p in self.posts), default=self.scanned_at)
 
     def metrics(self) -> AccountMetrics:
@@ -118,4 +129,5 @@ class AccountStats(BaseModel):
             posts_scanned=len(self.posts),
             views_scanned=self.views_scanned,
             limited=self.limited,
+            source=self.source,
         )

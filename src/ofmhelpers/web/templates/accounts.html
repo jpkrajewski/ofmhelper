@@ -14,7 +14,7 @@
     {{ ui.stat("Tracked accounts", summary.accounts, reach_note) }}
 </div>
 
-{% if summary.limited %}
+{% if ask_for_cookies %}
 {% call ui.notice(kind="warn") %}{{ summary.limited }} account{{ "" if summary.limited == 1 else "s" }} synced without an Instagram login: some reels are missing. <a href="/cookies">Upload cookies</a>{% endcall %}
 {% endif %}
 
@@ -38,6 +38,7 @@
         <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
     </form>
     <div class="toolbar-actions">
+        {{ ui.button("Syncing…" if syncing else "Sync", icon="refresh", attrs={"id": "accounts-sync", "disabled": syncing, "data-syncing": syncing}) }}
         {{ ui.button("Add account", "primary", icon="plus", attrs={"id": "accounts-add-open"}) }}
     </div>
 </div>
@@ -92,7 +93,8 @@
             {% set on_phones = phones.get(a.id, []) %}
             {% set own_links = links.get(a.id, []) %}
             {% set problem = a.error or ("Private account" if a.status == "private" else "") %}
-            <tr data-id="{{ a.id }}" data-status="{{ a.status }}"
+            {% set syncing = a.syncing or a.status == "scanning" %}
+            <tr data-id="{{ a.id }}" data-status="{{ a.status }}" {% if syncing %}data-syncing{% endif %}
                 data-search="{{ (a.handle ~ ' ' ~ a.name ~ ' ' ~ (a.creator or '') ~ ' ' ~ on_phones|map(attribute="label")|join(' ') ~ ' ' ~ on_phones|map(attribute="owner")|join(' ') ~ ' ' ~ own_links|map(attribute="address")|join(' '))|lower }}"
                 {% if problem %}data-problem title="{{ problem }}"{% endif %}>
                 <td class="accounts-pick-cell"><input type="checkbox" class="accounts-pick" aria-label="Select @{{ a.handle }}"></td>
@@ -105,7 +107,7 @@
                         {% endif %}
                         <div class="accounts-who-text">
                             <a class="accounts-name" href="{{ query.link('/accounts/' ~ a.id) }}">{{ a.name }}</a>{% if a.profile and a.profile.is_verified %}{{ num.verified() }}{% endif %}
-                            <div class="accounts-sub"><a href="{{ a.profile_url }}" target="_blank" rel="noopener">@{{ a.handle }}</a>{% if a.status == "scanning" %} · syncing…{% endif %}</div>
+                            <div class="accounts-sub"><a href="{{ a.profile_url }}" target="_blank" rel="noopener">@{{ a.handle }}</a>{% if syncing %} · syncing…{% endif %}</div>
                         </div>
                     </div>
                 </td>

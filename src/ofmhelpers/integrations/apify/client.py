@@ -152,10 +152,10 @@ class ApifyClient:
         raise ApifyError(msg)
 
 
-def richest(tokens: list[str]) -> ApifyClient:
-    """The account with the most credit left this month; one that cannot be
-    read is skipped (logged)."""
-    best: tuple[float, ApifyClient] | None = None
+def by_credit(tokens: list[str]) -> list[tuple[ApifyClient, float]]:
+    """Every account with its credit left this month, most first; one that
+    cannot be read is skipped (logged)."""
+    found: list[tuple[ApifyClient, float]] = []
     for token in tokens:
         client = ApifyClient(token)
         try:
@@ -164,9 +164,14 @@ def richest(tokens: list[str]) -> ApifyClient:
             logger.warning("apify key %s unusable", client.key_hint, exc_info=True)
             continue
         logger.info("apify key %s: $%.2f left", client.key_hint, remaining)
-        if best is None or remaining > best[0]:
-            best = (remaining, client)
-    if best is None:
+        found.append((client, remaining))
+    return sorted(found, key=lambda pair: pair[1], reverse=True)
+
+
+def richest(tokens: list[str]) -> ApifyClient:
+    """The account with the most credit left this month."""
+    found = by_credit(tokens)
+    if not found:
         msg = "No usable Apify API key (APIFY_API_KEYS)"
         raise ApifyAuthError(msg)
-    return best[1]
+    return found[0][0]

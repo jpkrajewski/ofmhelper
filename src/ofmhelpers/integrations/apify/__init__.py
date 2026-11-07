@@ -6,6 +6,7 @@ from ofmhelpers.integrations.apify.client import (
     ApifyClient,
     ApifyCreditError,
     ApifyError,
+    by_credit,
     richest,
 )
 from ofmhelpers.integrations.apify.models import ActorRun, RunStatus
@@ -17,5 +18,6 @@ __all__ = [
     "ApifyCreditError",
     "ApifyError",
     "RunStatus",
+    "by_credit",
     "richest",
 ]

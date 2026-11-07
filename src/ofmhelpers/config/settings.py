@@ -968,12 +968,6 @@ class InstagramSettings(BaseSettings):
     track_max_reels: int = Field(
         default=96, ge=1, validation_alias="OFM_IG_TRACK_MAX_REELS"
     )
-    # /accounts: list reels through the uploaded login (cookies.txt) when it
-    # works -- the only view with an account's sensitive/age-restricted
-    # reels; off, or without a working login, the logged-out tab is used.
-    track_logged_in: bool = Field(
-        default=True, validation_alias="OFM_IG_TRACK_LOGGED_IN"
-    )
 
 
 class AccountsSettings(BaseSettings):
@@ -1012,6 +1006,15 @@ class AccountsSettings(BaseSettings):
     scan_timezone: str = Field(
         default="Europe/Warsaw", validation_alias="OFM_ACCOUNTS_SCAN_TIMEZONE"
     )
+    # The scheduled scans (the sweep). Unset: production only -- dev runs on a
+    # copy of prod's data and would pay Apify again for the same accounts
+    # (owner, 2026-11-07). Sync, Add and a login's first scan work anywhere.
+    scheduled_scans: bool | None = Field(
+        default=None, validation_alias="OFM_ACCOUNTS_SCHEDULED_SCANS"
+    )
+
+    def scheduled(self, production: bool) -> bool:
+        return production if self.scheduled_scans is None else self.scheduled_scans
 
     @field_validator("scan_times")
     @classmethod
@@ -1034,6 +1037,44 @@ class AccountsSettings(BaseSettings):
             for t in self.scan_times.split(",")
             if t
         ]
+
+    # integrations/socials/sources.py: where a scan reads an account, in
+    # order; what one leaves unread goes to the next. `api` = the platform's
+    # scraping API (Apify), `proxy` = our client logged out through the
+    # proxies, `login` = our client as the owner (cookies: flaky, can get the
+    # login banned -- last). Comma-separated.
+    sources: str = Field(
+        default="api,proxy,login", validation_alias="OFM_ACCOUNTS_SOURCES"
+    )
+
+    def source_list(self) -> list[str]:
+        return [s.strip() for s in self.sources.split(",") if s.strip()]
+
+    # The Apify source (keys: APIFY_API_KEYS, `settings.viral.api_keys`):
+    # reels of the last `apify_days` only (older ones keep their last
+    # views); a key takes as many accounts as its credit covers at
+    # `apify_usd_per_item` x (1 profile + `apify_est_reels` reels).
+    apify_days: int = Field(default=7, ge=1, validation_alias="OFM_ACCOUNTS_APIFY_DAYS")
+    apify_profile_actor: str = Field(
+        default="apify~instagram-profile-scraper",
+        validation_alias="OFM_ACCOUNTS_APIFY_PROFILE_ACTOR",
+    )
+    apify_reel_actor: str = Field(
+        default="apify~instagram-reel-scraper",
+        validation_alias="OFM_ACCOUNTS_APIFY_REEL_ACTOR",
+    )
+    apify_usd_per_item: float = Field(
+        default=0.0026, ge=0, validation_alias="OFM_ACCOUNTS_APIFY_USD_PER_ITEM"
+    )
+    apify_usd_per_run: float = Field(
+        default=0.001, ge=0, validation_alias="OFM_ACCOUNTS_APIFY_USD_PER_RUN"
+    )
+    apify_est_reels: int = Field(
+        default=15, ge=0, validation_alias="OFM_ACCOUNTS_APIFY_EST_REELS"
+    )
+    apify_run_timeout_s: int = Field(
+        default=600, ge=60, validation_alias="OFM_ACCOUNTS_APIFY_RUN_TIMEOUT_S"
+    )
 
     # Accounts per worker job: jobs run in parallel on the worker pool, each
     # rotating through the platform's proxies from its own starting point.

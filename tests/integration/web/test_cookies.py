@@ -19,7 +19,7 @@ from signin import sign_in
 from sqlalchemy import text
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.socials import AccountProfile, AccountStats
+from ofmhelpers.socials import AccountProfile, AccountStats, SocialError
 from ofmhelpers.socials.platforms.instagram import InstagramPlatform
 from ofmhelpers.web import account_tracker, reel_watch
 from ofmhelpers.web.db.session import session_scope
@@ -203,18 +203,53 @@ def _id(handle: str, owner: int) -> int:
     return next(a.id for a in list_accounts(owner) if a.handle == handle)
 
 
-def test_each_accounts_scan_logs_in_as_its_owner_only(ann, bob, fetched):
+def test_a_scan_reads_logged_out_first(ann, bob, fetched):
+    """Cookies are flaky and can get a login banned: a scan that works
+    logged out never uses them."""
+    _upload(ann[0], _jar(ANN_SECRET))
+    track("instagram", "anns_account", user_id=ann[1])
+    fetched.clear()
+
+    account_tracker.scan_accounts("instagram", [_id("anns_account", ann[1])])
+
+    assert fetched == {"anns_account": None}
+
+
+REFUSED = "Instagram changed its query"
+
+
+def test_the_last_resort_logs_in_as_the_accounts_owner_only(ann, bob, monkeypatch):
+    """Logged out fails: the login source reads each account as its own
+    owner; one whose owner has no cookies keeps the logged-out failure."""
+    tries: list[tuple[str, str | None]] = []
+
+    def fetch(_self, handle, proxy, cookies=None):
+        tries.append((handle, cookies))
+        if cookies is None:
+            raise SocialError(REFUSED)
+        return AccountStats(
+            profile=AccountProfile(handle=handle, followers=10),
+            posts=[],
+            scanned_at=time.time(),
+        )
+
+    monkeypatch.setattr(InstagramPlatform, "fetch", fetch)
     _upload(ann[0], _jar(ANN_SECRET))
     track("instagram", "anns_account", user_id=ann[1])
     track("instagram", "bobs_account", user_id=bob[1])
-    fetched.clear()
+    tries.clear()
 
     account_tracker.scan_accounts(
         "instagram", [_id("anns_account", ann[1]), _id("bobs_account", bob[1])]
     )
 
-    assert ANN_SECRET in (fetched["anns_account"] or "")
-    assert fetched["bobs_account"] is None
+    logged_in = [(h, c) for h, c in tries if c is not None]
+    assert [h for h, _ in logged_in] == ["anns_account"]
+    assert ANN_SECRET in (logged_in[0][1] or "")
+    assert get_account(_id("anns_account", ann[1])).error is None
+    assert (
+        get_account(_id("bobs_account", bob[1])).error == "Instagram changed its query"
+    )
 
 
 def test_an_upload_resyncs_only_the_uploaders_limited_accounts(ann, bob, fetched):
@@ -232,7 +267,6 @@ def test_an_upload_resyncs_only_the_uploaders_limited_accounts(ann, bob, fetched
     _upload(ann[0], _jar(ANN_SECRET))
 
     assert list(fetched) == ["anns"]
-    assert ANN_SECRET in (fetched["anns"] or "")
     assert not get_account(_id("anns", ann[1])).metrics.limited
     assert get_account(_id("bobs", bob[1])).metrics.limited
     # Bob's banner still asks him for his own login; Ann's is gone.
@@ -294,3 +328,49 @@ def test_cookies_of_other_sites_are_only_counted(ann):
     assert "1 cookie of other sites" in html
     assert "example.org" not in html
     assert "tracker" not in html
+
+
+def test_two_users_tracking_one_handle_never_share_a_login_read(ann, bob, monkeypatch):
+    """Answers are per tracked account: Ann's login reads only Ann's row."""
+
+    def fetch(_self, handle, proxy, cookies=None):
+        if cookies is None:
+            raise SocialError(REFUSED)
+        return AccountStats(
+            profile=AccountProfile(handle=handle, followers=10),
+            posts=[],
+            scanned_at=time.time(),
+        )
+
+    monkeypatch.setattr(InstagramPlatform, "fetch", fetch)
+    _upload(ann[0], _jar(ANN_SECRET))
+    track("instagram", "shared", user_id=ann[1])
+    track("instagram", "shared", user_id=bob[1])
+
+    account_tracker.scan_accounts(
+        "instagram", [_id("shared", ann[1]), _id("shared", bob[1])]
+    )
+
+    assert get_account(_id("shared", ann[1])).followers == 10
+    bobs = get_account(_id("shared", bob[1]))
+    assert bobs.followers is None
+    assert bobs.error == REFUSED
+
+
+def test_a_user_with_cookies_is_not_asked_for_them(ann, fetched):
+    """Logins are the last resort now: uploading again would change nothing."""
+    _upload(ann[0], _jar(ANN_SECRET))
+    track("instagram", "anns", user_id=ann[1])
+    record_scan(
+        _id("anns", ann[1]),
+        AccountStats(
+            profile=AccountProfile(handle="anns", followers=1),
+            posts=[],
+            scanned_at=time.time(),
+            limited=True,
+        ),
+    )
+
+    assert "without an Instagram login" not in ann[0].get("/accounts").text
+    page = ann[0].get(f"/accounts/{_id('anns', ann[1])}").text
+    assert "without an Instagram login" not in page

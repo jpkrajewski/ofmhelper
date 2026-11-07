@@ -138,7 +138,7 @@ def test_working_login_lists_every_reel(fake_client):
     8 of 15 visible logged out, 2026-10-20); the login sees them all."""
     hidden = [ReelSummary(pk=_pk(NOW - i * 3600), code=f"R{i}") for i in range(15)]
     made = fake_client(reels=hidden[:8], logged_in=hidden)
-    stats = get_platform("instagram").fetch("yuki", None)
+    stats = get_platform("instagram").fetch("yuki", None, "owner-jar")
     assert len(stats.posts) == 15
     assert not stats.limited
     assert not made[0].reels_read
@@ -157,18 +157,19 @@ def test_without_a_working_login_the_logged_out_view_is_marked_limited(
     fake_client, login
 ):
     fake_client(reels=[ReelSummary(pk=_pk(NOW), code="A")], logged_in=login)
-    stats = get_platform("instagram").fetch("yuki", None)
+    stats = get_platform("instagram").fetch("yuki", None, "owner-jar")
     assert [p.id for p in stats.posts] == ["A"]
     assert stats.limited
     assert stats.metrics().limited
 
 
-def test_logged_in_listing_can_be_switched_off(fake_client, monkeypatch):
-    monkeypatch.setenv("OFM_IG_TRACK_LOGGED_IN", "false")
-    fake_client(reels=[], logged_in=[ReelSummary(pk=_pk(NOW), code="A")])
+def test_without_cookies_the_logged_out_tab_is_read(fake_client):
+    """The proxy source reads logged out: the login is never tried."""
+    made = fake_client(reels=[], logged_in=[ReelSummary(pk=_pk(NOW), code="A")])
     stats = get_platform("instagram").fetch("yuki", None)
     assert stats.posts == []
     assert stats.limited
+    assert made[0].reels_read
 
 
 def test_instagram_private_account_keeps_its_numbers_without_reels(fake_client):
@@ -205,6 +206,19 @@ def test_instagram_lasting_error_is_a_social_error(fake_client):
     with pytest.raises(SocialError) as caught:
         get_platform("instagram").fetch("yuki", None)
     assert not isinstance(caught.value, RetryableError)
+
+
+def test_a_read_of_the_last_days_covers_only_those_days():
+    """An older post it brought along (a pinned one) says nothing about the
+    posts between: coverage stops at what was asked for."""
+    stats = AccountStats(
+        profile=AccountProfile(handle="y", followers=1),
+        posts=[PostStat(id="pinned", url="u", views=5, posted_at=NOW - 60 * DAY)],
+        complete=False,
+        since=NOW - 7 * DAY,
+        scanned_at=NOW,
+    )
+    assert stats.reach == NOW - 7 * DAY
 
 
 def test_metrics_are_the_scan_totals():

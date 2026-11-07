@@ -632,8 +632,9 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-identity-text { flex: 1 1 240px; min-width: 0; }
 .accounts-identity h1 { margin: 0 0 var(--s-1); }
 .accounts-identity .badge { margin-right: var(--s-2); }
+.accounts-identity .toolbar-actions { align-items: center; }
 .accounts-period { margin: 0; }
-.accounts-period select { width: auto; }
+.accounts-period select { width: var(--control-w-filter); }
 .accounts-card {
     margin-bottom: var(--s-5);
     padding: var(--pad-card);
@@ -802,7 +803,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .links-accounts label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--step--1); }
 .links-accounts label[hidden] { display: none; }
 /* /accounts' Links column: each link of the account, its clicks and CTR. */
-.accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; white-space: nowrap; }
+.accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; }
 .accounts-link:hover span { text-decoration: underline; }
 .accounts-link small { color: var(--text-faint); }
 

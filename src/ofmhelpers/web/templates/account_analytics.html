@@ -13,26 +13,29 @@
     {% else %}
     <span class="accounts-avatar accounts-avatar-lg" aria-hidden="true"></span>
     {% endif %}
-    <div class="accounts-identity-text">
+    {% set syncing = account.syncing or account.status == "scanning" %}
+    <div class="accounts-identity-text" {% if syncing %}data-syncing{% endif %}>
         <h1>{{ account.name }}{% if account.profile and account.profile.is_verified %}{{ num.verified() }}{% endif %}</h1>
         <p class="accounts-sub">
             <a href="{{ account.profile_url }}" target="_blank" rel="noopener">@{{ account.handle }}</a>
             {% if account.creator %} · <span class="accounts-creator-tag">{{ account.creator }}</span>{% endif %}
+            {% if syncing %} · syncing…{% endif %}
         </p>
-        {% if account.status == "scanning" %}<p class="accounts-sub">Syncing…</p>{% endif %}
+    </div>
+    <div class="toolbar-actions">
+        <form method="get" class="accounts-period" data-autosubmit>
+            {% for key, value in query.model_dump(mode="json").items() if value not in (none, "") and key not in ("period", "page") %}
+            <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endfor %}
+            <select name="period" aria-label="Reporting period">
+                {% for p in periods %}
+                <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
+                {% endfor %}
+            </select>
+            <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
+        </form>
         {{ ui.button("Assign link", href="/links?account=" ~ account.id, icon="link") }}
     </div>
-    <form method="get" class="accounts-period" data-autosubmit>
-        {% for key, value in query.model_dump(mode="json").items() if value not in (none, "") and key not in ("period", "page") %}
-        <input type="hidden" name="{{ key }}" value="{{ value }}">
-        {% endfor %}
-        <select name="period" aria-label="Reporting period">
-            {% for p in periods %}
-            <option value="{{ p.days }}" {% if p.days == period.days %}selected{% endif %}>{{ p.label }}</option>
-            {% endfor %}
-        </select>
-        <noscript>{{ ui.button("Apply", type="submit") }}</noscript>
-    </form>
 </div>
 
 {% if account.untracked_at %}
@@ -42,7 +45,7 @@
 {{ ui.notice("Unreachable: " ~ account.error, "fail") }}
 {% elif account.status == "private" %}
 {{ ui.notice("Private account", "fail") }}
-{% elif account.metrics and account.metrics.limited %}
+{% elif ask_for_cookies %}
 {% call ui.notice(kind="warn") %}Synced without an Instagram login: some reels are missing. <a href="/cookies">Upload cookies</a>{% endcall %}
 {% endif %}
 

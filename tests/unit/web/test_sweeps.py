@@ -160,3 +160,26 @@ def test_the_web_process_runs_all_thirteen_sweeps():
         "edit cleanup",
         "preview backfill",
     }
+
+
+def _account_sweep() -> Sweep:
+    return next(s for s in sweeps.sweeps() if s.name == "account tracker")
+
+
+def test_scheduled_account_scans_run_on_production_only(monkeypatch):
+    """Dev runs on a copy of prod's data: its own scans would pay Apify again
+    for the same accounts (owner, 2026-11-07)."""
+    monkeypatch.delenv("OFM_ACCOUNTS_SCHEDULED_SCANS", raising=False)
+    monkeypatch.setenv("OFM_ENV", "development")
+    assert not _account_sweep().enabled()
+    monkeypatch.setenv("OFM_ENV", "production")
+    assert _account_sweep().enabled()
+
+
+def test_scheduled_account_scans_can_be_switched(monkeypatch):
+    monkeypatch.setenv("OFM_ENV", "development")
+    monkeypatch.setenv("OFM_ACCOUNTS_SCHEDULED_SCANS", "true")
+    assert _account_sweep().enabled()
+    monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("OFM_ACCOUNTS_SCHEDULED_SCANS", "false")
+    assert not _account_sweep().enabled()

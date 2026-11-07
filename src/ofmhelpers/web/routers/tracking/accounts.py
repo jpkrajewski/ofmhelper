@@ -20,6 +20,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores import cookies as login_cookies
 from ofmhelpers.db.stores.devices import phones_by_account
 from ofmhelpers.db.stores.short_links import links_by_account
 from ofmhelpers.db.stores.tracked_accounts import (
@@ -32,7 +33,7 @@ from ofmhelpers.db.stores.tracked_accounts import (
     track,
 )
 from ofmhelpers.features.accounts.removal import remove_accounts
-from ofmhelpers.features.accounts.tracker import queue_due_scans
+from ofmhelpers.features.accounts.tracker import queue_due_scans, sync_now
 from ofmhelpers.integrations.socials import platforms
 from ofmhelpers.schemas import (
     AccountPage,
@@ -66,6 +67,12 @@ def _periods() -> list[Period]:
     return [Period(days=d) for d in settings.accounts.periods_days]
 
 
+def _ask_for_cookies(limited: bool, user_id: int) -> bool:
+    """The "Upload cookies" banner: a sync read without a login, and the
+    user has none saved (one who has gains nothing from uploading again)."""
+    return limited and login_cookies.saved(user_id) is None
+
+
 class _Count(BaseModel):
     """How many accounts a bulk action touched."""
 
@@ -76,9 +83,11 @@ class _Count(BaseModel):
 def index(request: Request, query: ListQuery, scope: Scope) -> Response:
     s = settings.accounts
     period = _period(query)
-    matching = [a for a in list_accounts(scope) if query.matches(a)]
+    mine = list_accounts(scope)
+    matching = [a for a in mine if query.matches(a)]
     accounts = query.ordered(matching, period.days)
     page = AccountPage.of(accounts, query.page, query.per_page or s.default_page_size)
+    summary = AccountSummary.of(matching, period.days)
     return render(
         request,
         "accounts.html",
@@ -87,7 +96,10 @@ def index(request: Request, query: ListQuery, scope: Scope) -> Response:
         links=links_by_account(scope),
         # Link numbers are per UTC day: "today", not "24h", for period 1.
         link_period=LinkPeriod(days=period.days),
-        summary=AccountSummary.of(matching, period.days),
+        summary=summary,
+        ask_for_cookies=_ask_for_cookies(summary.limited > 0, scope),
+        # Sync waits while any of them still syncs (filtered out or not).
+        syncing=any(a.syncing for a in mine),
         query=query,
         period=period,
         periods=_periods(),
@@ -122,6 +134,13 @@ def add(body: AddAccounts, owner_id: OwnerId) -> AddResult:
     ]
     queue_due_scans()
     return AddResult(added=added, existing=len(handles) - len(added))
+
+
+@router.post("/sync")
+def sync(owner_id: OwnerId) -> _Count:
+    """Every account of the user scanned now (features/accounts/tracker.py
+    `sync_now`); one already syncing is not queued twice."""
+    return _Count(count=sync_now(owner_id))
 
 
 @router.post("/creator")
@@ -163,6 +182,9 @@ def analytics(
         account=account,
         chart=get_history(account_id).follower_chart(period.days, s.rescan_interval_s),
         top=account.top_posts(period.days, s.top_posts),
+        ask_for_cookies=_ask_for_cookies(
+            bool(account.metrics and account.metrics.limited), scope
+        ),
         query=query,
         period=period,
         periods=_periods(),

@@ -8,6 +8,7 @@ itself is down."""
 import pytest
 
 from ofmhelpers.instagram.fake import fake_instagram
+from ofmhelpers.integrations.socials import client_source
 from ofmhelpers.web import account_tracker
 from ofmhelpers.web.stores import tracked_accounts as store
 
@@ -25,7 +26,7 @@ def instagram(fake_externals, monkeypatch):
 @pytest.fixture
 def pauses(monkeypatch) -> list[float]:
     slept: list[float] = []
-    monkeypatch.setattr(account_tracker.time, "sleep", slept.append)
+    monkeypatch.setattr(client_source.time, "sleep", slept.append)
     return slept
 
 
@@ -79,6 +80,18 @@ def test_a_scan_gives_up_after_its_tries_and_says_so(instagram, pauses):
     assert error == "profile not found (3 tries) -- retried at the next rescan"
 
 
+def test_the_error_names_the_account_not_a_busy_proxy(instagram, pauses):
+    """A deleted account read "rate-limiting" after its "not found"s (dev
+    2026-11-07): the row says what the account is."""
+    instagram.proxy_modes.update({P1: "banned", P2: "banned", P3: "rate_limited"})
+    (account,) = _track("sheep_love33")
+
+    account_tracker.scan_accounts("instagram", [account])
+
+    error = store.get_account(account).error
+    assert error == "profile not found (3 tries) -- retried at the next rescan"
+
+
 def test_a_batch_stops_when_every_try_is_rate_limited(instagram, pauses):
     for proxy in (P1, P2, P3):
         instagram.proxy_modes[proxy] = "rate_limited"
@@ -88,9 +101,12 @@ def test_a_batch_stops_when_every_try_is_rate_limited(instagram, pauses):
 
     assert len(_page_proxies(instagram, "sheep_love33")) == 3
     assert _page_proxies(instagram, "brookslockvip") == []
-    # Not the accounts' fault: nothing is recorded against them.
-    assert store.get_account(first).error is None
-    assert store.get_account(second).scanned_at is None
+    # Nobody got through: each row says so and is free for the next scan
+    # (a claim left standing would keep Sync greyed out for hours).
+    for account in (first, second):
+        scanned = store.get_account(account)
+        assert scanned.error == account_tracker.UNREACHED
+        assert not scanned.syncing
 
 
 def test_a_batch_stops_when_the_network_itself_is_down(instagram, pauses, monkeypatch):
@@ -102,4 +118,4 @@ def test_a_batch_stops_when_the_network_itself_is_down(instagram, pauses, monkey
 
     assert len(_page_proxies(instagram, "sheep_love33")) == 1
     assert _page_proxies(instagram, "brookslockvip") == []
-    assert store.get_account(first).scanned_at is None
+    assert store.get_account(first).error == account_tracker.UNREACHED
