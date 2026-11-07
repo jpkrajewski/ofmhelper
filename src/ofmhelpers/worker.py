@@ -14,6 +14,7 @@ WARNING) not at all.
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
 from typing import TYPE_CHECKING
 
@@ -66,6 +67,16 @@ class ConfiguredWorker(Worker):
             flush_telemetry()
 
 
+def _preload_jobs() -> None:
+    """Every job's code, imported once in the pool's parent: its workers and
+    their work horses are forks of it (rq 2.10 `ForkProcess`) and start with
+    it. Without it each horse imported the whole app itself when RQ looked up
+    its function (`ofmhelpers.web.routers...`): ~4 s before every job's work
+    started, on every queue, prod and dev (Logfire 2026-11-07: `rq {func}`
+    span to `job {task}` span 3.8-4.4 s; py-spy: the horse in imports)."""
+    importlib.import_module("ofmhelpers.web.routers")
+
+
 class QueueWorkers:
     """The worker processes of one queue."""
 
@@ -83,6 +94,7 @@ class QueueWorkers:
         )
         # The workers and the ffmpeg they start inherit it.
         os.nice(config.priority)
+        _preload_jobs()
         WorkerPool(
             [self.queue.value],
             connection=get_redis(),

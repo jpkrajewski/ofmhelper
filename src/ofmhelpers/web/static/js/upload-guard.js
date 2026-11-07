@@ -13,6 +13,12 @@
  * site?" box -- its words are the browser's, no page can change them, so the
  * notice says it on the page behind it. `UploadGuard.sessionGone()`: the tab
  * is on its way to the login page, nothing is asked any more.
+ *
+ * `UploadGuard.post(url, formData, onProgress)`: the POST with upload
+ * progress (fetch reports none) and the guard around it. Resolves with the
+ * finished XMLHttpRequest whatever its status, rejects only when nothing
+ * came back, so a redirect the answer asks for (an expired session) is not
+ * held up.
  */
 (() => {
     let running = 0;
@@ -74,8 +80,36 @@
         });
     });
 
+    function post(url, formData, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            let guarded = () => {};
+            const ended = (settle) => () => {
+                guarded();
+                settle();
+            };
+            xhr.open("POST", url);
+            xhr.upload.addEventListener("progress", (ev) => {
+                if (ev.lengthComputable) {
+                    onProgress(Math.floor((ev.loaded / ev.total) * 100));
+                }
+            });
+            xhr.addEventListener("load", ended(() => resolve(xhr)));
+            xhr.addEventListener(
+                "error",
+                ended(() => reject(new Error("Upload failed — check your connection and try again.")))
+            );
+            xhr.addEventListener("abort", ended(() => reject(new Error("Upload stopped."))));
+            xhr.send(formData);
+            // After send: one that throws is never guarded (its events
+            // cannot fire before this line runs).
+            guarded = begin();
+        });
+    }
+
     window.UploadGuard = {
         begin,
+        post,
         sessionGone: () => {
             quiet = true;
         },

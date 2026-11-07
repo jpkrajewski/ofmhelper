@@ -143,8 +143,10 @@ def start_job(
     actor: str | None,
     queue: QueueName | None = None,
     job_timeout: int | None = None,
+    at_front: bool = False,
 ) -> str:
-    """A new job and its run on `queue` (default: the default queue).
+    """A new job and its run on `queue` (default: the default queue), at the
+    front of its line with `at_front` (`JobQueue.put`).
     `kwargs`: what `run` gets besides `job_id`; a key goes there, never in
     `params`, which the job's page shows. A queue failure is raised as it
     came and the row stays `running`: recovery settles it as cut off."""
@@ -156,6 +158,7 @@ def start_job(
         run,
         {"job_id": job_id, **kwargs},
         job_timeout=job_timeout,
+        at_front=at_front,
     )
     return job_id
 
@@ -200,6 +203,13 @@ def running_jobs() -> list[Job]:
 def reopen_job(job_id: str) -> None:
     """Back to running, error cleared, for a job about to be run again."""
     _repository().update_status(job_id, "running", error=None)
+
+
+def drop_job(job_id: str, reason: str) -> None:
+    """A job taken out of its queue before it ran (a newer one replaced it):
+    settled as failed with `reason`, logged at info -- nothing went wrong."""
+    logger.info("job %s dropped: %s", job_id, reason)
+    _repository().update_status(job_id, "failed", error=reason)
 
 
 def fail_job(job_id: str, error: str) -> None:
