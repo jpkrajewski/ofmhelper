@@ -1,14 +1,9 @@
 """A downloaded reel's sound: whether the file has any, and putting a
 separately served audio stream back in (ffmpeg, streams copied)."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _TIMEOUT_S = 120
 

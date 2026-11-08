@@ -15,10 +15,10 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import ADMIN_EMAIL, USER_EMAIL, sign_in
 
+from ofmhelpers.db.stores import users
+from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.schemas import Role
-from ofmhelpers.web.stores import users
 
 
 def _login(password: str) -> TestClient:

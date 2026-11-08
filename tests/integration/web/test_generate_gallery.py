@@ -24,9 +24,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.jobs import create_job, run_job
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import index as gallery_index
-from ofmhelpers.web.stores.jobs import create_job, run_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

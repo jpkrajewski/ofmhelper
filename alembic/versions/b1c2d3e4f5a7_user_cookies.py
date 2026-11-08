@@ -24,8 +24,8 @@ import sqlalchemy as sa
 
 from alembic import op
 from ofmhelpers.config import settings
+from ofmhelpers.db.encrypted import encrypt
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.db.encrypted import encrypt
 
 revision: str = "b1c2d3e4f5a7"
 down_revision: str | None = "a1c2e3f4b5d6"

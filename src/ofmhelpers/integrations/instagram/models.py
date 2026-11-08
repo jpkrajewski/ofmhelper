@@ -336,13 +336,13 @@ class ReelMedia(BaseModel):
     taken_at: int
 
     @classmethod
-    def from_page(cls, page: MediaPage) -> "ReelMedia | None":
+    def from_page(cls, page: MediaPage) -> ReelMedia | None:
         """None when the reel has no video or no readable length -- gated
         for logged-out visitors (some accounts' reels all are), or removed."""
         return cls.from_dash(page.info) if page.info else None
 
     @classmethod
-    def from_dash(cls, info: "_MediaInfo") -> "ReelMedia | None":
+    def from_dash(cls, info: _MediaInfo) -> ReelMedia | None:
         """A logged-out media node (reel query or timeline): length from its
         DASH manifest. None for a photo, or a video without a manifest."""
         if not info.video_versions:
@@ -358,7 +358,7 @@ class ReelMedia(BaseModel):
         )
 
     @classmethod
-    def from_info(cls, info: MediaInfo) -> "ReelMedia | None":
+    def from_info(cls, info: MediaInfo) -> ReelMedia | None:
         item = info.items[0] if info.items else None
         if item is None or not item.video_versions or item.video_duration is None:
             return None

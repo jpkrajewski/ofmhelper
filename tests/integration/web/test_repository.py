@@ -15,8 +15,8 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 from redis import Redis
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.web.db.repositories import JobRepository
-from ofmhelpers.web.db.repositories.cached_repository import RepositoryCache
+from ofmhelpers.db.repositories import JobRepository
+from ofmhelpers.db.repositories.cached_repository import RepositoryCache
 
 
 def test_job_create_get_round_trip():
@@ -72,8 +72,8 @@ def test_update_status_failure_path_records_error_not_result():
 
 
 def test_job_get_is_served_from_cache_until_a_write_invalidates_it():
-    from ofmhelpers.web.db.models import JobRow
-    from ofmhelpers.web.db.session import session_scope
+    from ofmhelpers.db.models import JobRow
+    from ofmhelpers.db.session import session_scope
 
     namespace = "test-job-cache"
     cache = RepositoryCache(get_redis(), namespace)
@@ -163,7 +163,7 @@ def test_pages_answer_while_the_cache_is_down(monkeypatch):
     sign_in(client, "ann@example.com")
     dead = _dead_redis()
     monkeypatch.setattr(
-        "ofmhelpers.web.db.repositories.cached_repository.get_redis", lambda: dead
+        "ofmhelpers.db.repositories.cached_repository.get_redis", lambda: dead
     )
     assert client.get("/generate").status_code == 200
     assert client.get("/generate/gallery?hidden=1").status_code == 200

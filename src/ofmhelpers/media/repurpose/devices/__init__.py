@@ -25,8 +25,8 @@ from typing import Literal
 from pydantic import BaseModel
 
 from ofmhelpers.media.recorder.models import Place
-from ofmhelpers.media.repurpose.probe import Source
 from ofmhelpers.media.repurpose.values import Value, even
+lazy from ofmhelpers.media.repurpose.probe import Source
 
 _HERE = Path(__file__).parent
 

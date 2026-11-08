@@ -10,7 +10,7 @@ here (a lost answer would start, and charge, a second task). Through
 from pathlib import Path
 from typing import Any, NoReturn
 
-import requests
+lazy import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError

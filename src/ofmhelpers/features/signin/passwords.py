@@ -4,7 +4,7 @@ the request: the only reason these take one."""
 
 from urllib.parse import urlencode
 
-from fastapi import Request
+lazy from fastapi import Request
 
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.signin.outcome import Outcome, signed_in

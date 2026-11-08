@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from ofmhelpers.utils.character_sheet import combine_side_by_side
+from ofmhelpers.media.character_sheet import combine_side_by_side
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.image_tools import character_sheet
 

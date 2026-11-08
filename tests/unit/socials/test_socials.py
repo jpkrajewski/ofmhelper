@@ -4,14 +4,14 @@ client (and its errors) onto the generic shapes, and the scan numbers."""
 import pytest
 import requests
 
-from ofmhelpers.instagram import (
+from ofmhelpers.integrations.instagram import (
     InstagramError,
     InstagramRateLimitedError,
     InstagramUnavailableError,
     ProfileNotFoundError,
 )
-from ofmhelpers.instagram.models import Profile, ReelSummary
-from ofmhelpers.socials import (
+from ofmhelpers.integrations.instagram.models import Profile, ReelSummary
+from ofmhelpers.integrations.socials import (
     AccountProfile,
     AccountStats,
     PostStat,
@@ -23,7 +23,7 @@ from ofmhelpers.socials import (
     get_platform,
     platforms,
 )
-from ofmhelpers.socials.platforms import instagram as ig_platform
+from ofmhelpers.integrations.socials.platforms import instagram as ig_platform
 
 NOW = 1_800_000_000.0
 DAY = 86400

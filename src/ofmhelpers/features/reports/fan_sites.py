@@ -9,8 +9,6 @@ new platform = one class and one entry in `fan_sites()`.
   (every payment, gross). Webhooks reach the production server only.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from typing import Protocol
 

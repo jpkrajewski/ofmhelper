@@ -6,8 +6,8 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.signin.state import SignInState, safe_next, seal, unseal
-from ofmhelpers.integrations.signin import Provider
 from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
+lazy from ofmhelpers.integrations.signin import Provider
 
 
 class ConsentStart(BaseModel):

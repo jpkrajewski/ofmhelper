@@ -3,10 +3,10 @@ save -- driven against an in-memory provider, no HTTP."""
 
 import pytest
 
-from ofmhelpers.aigenproviders import runner, tasks
-from ofmhelpers.aigenproviders.base import TaskState
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.errors import (
+from ofmhelpers.integrations.ai_providers import runner, self_heal, tasks
+from ofmhelpers.integrations.ai_providers.base import TaskState
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
     ProviderGenerationError,
     ProviderNoCreditsError,
@@ -14,7 +14,6 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
-from ofmhelpers.integrations.ai_providers import self_heal
 
 SPEC = get_spec("kie:wan/3-0-video")
 

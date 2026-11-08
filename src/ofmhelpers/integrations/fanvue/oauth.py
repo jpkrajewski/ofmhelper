@@ -4,8 +4,6 @@ HTTP Basic only. Refresh tokens are single-use and rotate, and reusing one kills
 whole authorisation, so whoever refreshes must save the new one first
 (`db/repositories/chats.py` `fresh_token` holds a lock across it)."""
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import secrets
@@ -65,7 +63,7 @@ def _tokens(r: requests.Response) -> ChatTokens:
         raise FanvueError(msg)
     try:
         reply = TokenReply.model_validate(r.json())
-    except (ValueError, ValidationError):
+    except ValueError, ValidationError:
         msg = "Fanvue answered an unexpected token reply"
         raise FanvueError(msg) from None
     return ChatTokens(
@@ -128,5 +126,5 @@ def refresh(refresh_token: str) -> ChatTokens | None:
 def _error_field(r: requests.Response, name: str) -> str:
     try:
         return str(r.json().get(name, ""))
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return ""

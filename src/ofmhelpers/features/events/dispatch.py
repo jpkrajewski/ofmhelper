@@ -29,11 +29,9 @@ lose the job's arguments (log.py `_HideJobArguments`). Lost messages:
 `attributes->>'outcome' = 'gave_up'`.
 """
 
-from __future__ import annotations
-
 import hashlib
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import logfire
 from rq import Retry, get_current_job
@@ -43,9 +41,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations.senders import SendError, senders
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.events import Event
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.senders import Sender
+lazy from ofmhelpers.integrations.senders import Sender
 
 logger = get_logger(__name__)
 

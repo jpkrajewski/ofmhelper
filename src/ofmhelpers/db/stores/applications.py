@@ -8,8 +8,6 @@ admin CRM page (routers/admin/applications.py).
 Durable, unlike job history: a lost application is a lost lead.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import ApplicationRepository

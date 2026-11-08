@@ -11,8 +11,6 @@ box's memory.
 https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 """
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import hmac

@@ -7,7 +7,7 @@ import pytest
 import requests
 from pydantic import ValidationError
 
-from ofmhelpers.instagram import (
+from ofmhelpers.integrations.instagram import (
     InstagramClient,
     InstagramError,
     InstagramRateLimitedError,
@@ -17,7 +17,7 @@ from ofmhelpers.instagram import (
     ReelDownload,
     scan_profile,
 )
-from ofmhelpers.instagram.models import (
+from ofmhelpers.integrations.instagram.models import (
     ClipsPage,
     MediaInfo,
     MediaPage,

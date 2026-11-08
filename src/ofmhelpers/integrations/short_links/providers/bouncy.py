@@ -4,11 +4,11 @@ The 18+ gate is set by `PUT /links/{id}` with `forceAdultWarning` and
 `adult_warning` writes, verified 2026-10-22, links/CLAUDE.md). GET never
 returns them, so a listed link's gate is unknown."""
 
-from __future__ import annotations
-
 from datetime import UTC, date, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import quote
+
+lazy import requests
 
 from ofmhelpers.integrations.short_links.errors import (
     LinkError,
@@ -24,11 +24,7 @@ from ofmhelpers.integrations.short_links.models import (
 )
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    import requests
-
-    from ofmhelpers.integrations.short_links.models import NewLink
+lazy from ofmhelpers.integrations.short_links.models import NewLink
 
 logger = get_logger(__name__)
 

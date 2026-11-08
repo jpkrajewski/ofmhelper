@@ -18,8 +18,6 @@ they are never cached, logged or put in a job's params (RQ keeps those in
 Redis): a job carries the user id and reads the cookies when it runs.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
 
 from ofmhelpers.config import settings

@@ -10,8 +10,6 @@ than the cap a 400, and a schema not in strict form (an open object, an
 optional property) a 400.
 """
 
-from __future__ import annotations
-
 import json
 import threading
 from typing import Any

@@ -5,8 +5,8 @@ removed and the downloaded original kept, as on any ffmpeg failure."""
 import sys
 import time
 
-from ofmhelpers.downloaders import generic
-from ofmhelpers.downloaders.generic import DownloadConfig
+from ofmhelpers.integrations.downloaders import generic
+from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 
 # ffmpeg stand-ins: write the output (argv[1]), then hang / fail / finish.
 _HANG = "import pathlib,sys,time; pathlib.Path(sys.argv[1]).write_bytes(b'p'); time.sleep(60)"

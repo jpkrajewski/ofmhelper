@@ -14,8 +14,6 @@ https://developer.apple.com/documentation/sign_in_with_apple/generate_and_valida
 https://developer.apple.com/documentation/sign_in_with_apple/request_an_authorization_to_the_sign_in_with_apple_server
 """
 
-from __future__ import annotations
-
 import base64
 import json
 import time

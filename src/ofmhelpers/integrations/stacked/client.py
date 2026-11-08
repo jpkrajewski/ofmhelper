@@ -6,15 +6,15 @@ an agency key every linked creator, and `creators()` lists them either way.
 The only writes are webhook destinations: nothing can message a fan or mark a
 chat read."""
 
-from __future__ import annotations
-
 import time
 from datetime import UTC, datetime
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import Any, NamedTuple
+lazy from collections.abc import Iterable, Iterator
 
 import requests
 from pydantic import ValidationError
+lazy from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.stacked.errors import (
@@ -41,11 +41,6 @@ from ofmhelpers.integrations.stacked.models import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
-
-    from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -222,7 +217,7 @@ def reach(api_keys: Iterable[str]) -> Reach:
         client = StackedClient(api_key)
         try:
             creators = client.creators()
-        except (StackedAuthError, StackedForbiddenError):
+        except StackedAuthError, StackedForbiddenError:
             logger.warning("stacked key %s refused", client.key_hint, exc_info=True)
             continue
         except StackedError:
@@ -288,7 +283,7 @@ def _retry_wait(r: requests.Response) -> float:
     """What a 429 asks for (capped), else the plain pause."""
     try:
         return min(float(r.headers["Retry-After"]), settings.stacked.max_wait_s)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         return settings.stacked.retry_wait_s
 
 

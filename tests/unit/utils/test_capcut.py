@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.utils.capcut import (
+from ofmhelpers.media.capcut import (
     DEFAULT_PRESET,
     CapcutPreset,
     Jitter,

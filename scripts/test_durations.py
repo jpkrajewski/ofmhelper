@@ -21,6 +21,11 @@ REPORT = ROOT / "reports/latest/report.json"
 OUT = ROOT / ".test_durations"
 # A full `push` run collects ~6,300; fewer means a partial run.
 MIN_TESTS = 5000
+# What a test costs a CI runner beyond its time here: fresh tables, slower disk
+# and CPU. Without it the group of 4297 quick tests took 6 m 16 s and the group
+# of 1603 slow ones 3 m 20 s, with equal seconds on paper (CI 2026-11-08):
+# (376 s - 200 s) / (4297 - 1603).
+CI_OVERHEAD_S = 0.065
 
 
 class Phase(BaseModel):
@@ -48,7 +53,9 @@ def main() -> int:
         print(f"test_durations: {len(report.tests)} tests in {source}: not a full run")
         return 1
     durations = {
-        t.nodeid: round(t.setup.duration + t.call.duration + t.teardown.duration, 3)
+        t.nodeid: round(
+            t.setup.duration + t.call.duration + t.teardown.duration + CI_OVERHEAD_S, 3
+        )
         for t in report.tests
     }
     OUT.write_text(

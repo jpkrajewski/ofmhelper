@@ -8,7 +8,7 @@ back. Both roles; a user only ever sees their own runs.
 
 import secrets
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import Response
@@ -39,9 +39,7 @@ from ofmhelpers.web.routers.task_helpers import (
     make_job_dir,
 )
 from ofmhelpers.web.templates_config import render
-
-if TYPE_CHECKING:
-    from ofmhelpers.media.repurpose.checker import CheckReport
+lazy from ofmhelpers.media.repurpose.checker import CheckReport, check
 
 router = APIRouter(prefix="/repurpose", tags=["repurpose"])
 
@@ -106,7 +104,7 @@ def _presets() -> dict[str, dict[str, Any]]:
     }
 
 
-def _score(report: "CheckReport") -> CopyScore:
+def _score(report: CheckReport) -> CopyScore:
     """Every method as the share of the copy it finds in the source."""
     shares = [(str(h.kind), h.sequence.share) for h in report.hashes] + [
         (d.kind, d.sequence.share) for d in report.descriptors
@@ -150,9 +148,6 @@ def _run_repurpose(
     special: bool = False,
 ) -> list[RepurposeResult]:
     """Every copy with its own seed, then scored against the source."""
-    # Deferred: imagehash/scipy load only where a job runs.
-    from ofmhelpers.media.repurpose.checker import check
-
     del preset_name, special  # the page's, kept on the job for Recreate
     directory = Path(job_dir)
     preset_file = directory / "preset.json"

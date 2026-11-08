@@ -24,8 +24,8 @@ from enum import StrEnum
 import imagehash
 import numpy as np
 import pdqhash
-from PIL import Image
 from pydantic import BaseModel
+lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker.normalize import dihedral, views
 from ofmhelpers.media.repurpose.checker.sequence import SequenceMatch, best_line

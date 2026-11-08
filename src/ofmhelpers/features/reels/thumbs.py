@@ -74,7 +74,7 @@ def _check_public(url: str) -> None:
         public = bool(found) and all(
             ipaddress.ip_address(a.split("%")[0]).is_global for a in found
         )
-    except (OSError, ValueError):
+    except OSError, ValueError:
         public = False
     if not public:
         msg = f"cover host {host!r} is not on the public internet"

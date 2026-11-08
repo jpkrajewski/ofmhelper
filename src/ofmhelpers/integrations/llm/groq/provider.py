@@ -10,16 +10,13 @@ requests/min, 1,000/day, 8K tokens/min. Key: https://console.groq.com/keys
 Retention is a switch in the console's Data Controls.
 """
 
-from __future__ import annotations
+from typing import Any, ClassVar
 
-from typing import TYPE_CHECKING, Any, ClassVar
+lazy import httpx
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.base import register_llm
 from ofmhelpers.integrations.llm.chat_completions import ChatCompletionsLLM
-
-if TYPE_CHECKING:
-    import httpx
 
 
 @register_llm

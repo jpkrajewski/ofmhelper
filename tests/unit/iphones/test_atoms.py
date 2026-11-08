@@ -3,8 +3,8 @@ the profile was decoded from (identical in all 7)."""
 
 import datetime
 
-from ofmhelpers.iphones import atoms, load_profile
-from ofmhelpers.iphones.models import GeoPoint, Recording
+from ofmhelpers.media.recorder import atoms, load_profile
+from ofmhelpers.media.recorder.models import GeoPoint, Recording
 
 PROFILE = load_profile("iphone17")
 

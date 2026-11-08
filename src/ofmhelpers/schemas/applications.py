@@ -74,7 +74,7 @@ class ApplicationForm(ApplicationFields):
         return v
 
     @model_validator(mode="after")
-    def _one_direct_channel(self) -> "ApplicationForm":
+    def _one_direct_channel(self) -> ApplicationForm:
         if not self.phone and not self.telegram_handle:
             msg = "give a phone number or a Telegram handle"
             raise ValueError(msg)

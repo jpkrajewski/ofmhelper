@@ -6,7 +6,7 @@ The real half uses a reel verified resolvable on both savers (2026-10-29);
 saver sites remove posts too, so if it stops resolving, pick a fresh one.
 """
 
-from ofmhelpers.downloaders import generic, savers
+from ofmhelpers.integrations.downloaders import generic, savers
 
 REEL = "https://www.instagram.com/reel/Dc-i7hPgI7_/"
 

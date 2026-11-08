@@ -92,7 +92,7 @@ class SourceInfo(BaseModel, frozen=True):
     has_audio: bool
 
     @classmethod
-    def from_ffprobe(cls, out: str) -> "SourceInfo":
+    def from_ffprobe(cls, out: str) -> SourceInfo:
         probe = json.loads(out)
         streams = probe.get("streams", [])
         video = next(s for s in streams if s["codec_type"] == "video")
@@ -121,7 +121,7 @@ class Jitter(BaseModel, frozen=True):
     volume: float
 
     @classmethod
-    def sample(cls, rng: random.Random) -> "Jitter":
+    def sample(cls, rng: random.Random) -> Jitter:
         return cls(
             saturation=round(rng.uniform(*_JITTER_SATURATION), 3),
             contrast=round(rng.uniform(*_JITTER_CONTRAST), 3),

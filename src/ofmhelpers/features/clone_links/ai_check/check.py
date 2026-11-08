@@ -47,9 +47,9 @@ from ofmhelpers.integrations.llm import (
     get_llm,
     llm_class,
 )
-from ofmhelpers.integrations.llm.base import Answered
 from ofmhelpers.integrations.llm.frames import contact_sheet, still_times, video_seconds
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.llm.base import Answered
 
 logger = get_logger(__name__)
 

@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageOps
 from pydantic import BaseModel
+lazy import torch
 
 from ofmhelpers.config import settings
 from ofmhelpers.media.repurpose.checker import frames
@@ -62,8 +63,6 @@ def available() -> bool:
 
 @lru_cache(maxsize=1)
 def _model() -> Any:
-    import torch
-
     torch.set_num_threads(settings.repurpose.sscd_threads)
     return torch.jit.load(settings.repurpose.sscd_model).eval()
 
@@ -83,8 +82,6 @@ def _batch(images: list[Image.Image]) -> np.ndarray:
 
 def descriptors(images: list[Image.Image]) -> np.ndarray:
     """(frames, 512), unit length."""
-    import torch
-
     model = _model()
     out = []
     with torch.no_grad():

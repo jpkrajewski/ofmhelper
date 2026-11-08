@@ -7,11 +7,10 @@ pause, a dead proxy dropped for the rest of the job.
 banned. Every try rate-limited, or even a direct connection down, ends the
 source for the rest of the batch -- those accounts go on to the next source."""
 
-from __future__ import annotations
-
 import random
 import time
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
+lazy from collections.abc import Callable
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.socials.errors import (
@@ -27,13 +26,9 @@ from ofmhelpers.integrations.socials.sources import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils.proxy_pool import ProxyPool
+lazy from ofmhelpers.integrations.socials.models import AccountStats
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from ofmhelpers.integrations.socials.models import AccountStats
-
-    Fetch = Callable[[str, str | None, str | None], AccountStats]
+type Fetch = Callable[[str, str | None, str | None], AccountStats]
 
 logger = get_logger(__name__)
 

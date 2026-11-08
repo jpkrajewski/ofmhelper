@@ -54,13 +54,15 @@ logger = get_logger(__name__)
 
 ROOT = "https://www.instagram.com"
 
-_PAGE_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-User": "?1",
-    "Sec-Fetch-Dest": "document",
-}
+_PAGE_HEADERS = frozendict(
+    {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-User": "?1",
+        "Sec-Fetch-Dest": "document",
+    }
+)
 
 _PROFILE_FLAGS = {
     "__relay_internal__pv__PolarisCannesGuardianExperienceEnabledrelayprovider": True,

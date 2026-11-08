@@ -23,26 +23,20 @@ Redis down: logged, nothing planned or marked, the list made unlocked; the
 not planned: the look has it (a first read of a chat's history would otherwise
 plan thousands)."""
 
-from __future__ import annotations
-
 import threading
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, cast
+from typing import cast
+lazy from collections.abc import Generator, Iterable
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 from redis.exceptions import LockError, RedisError
+lazy from redis.lock import Lock
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
-
-    from redis.lock import Lock
-
-    from ofmhelpers.schemas.chatting import ChatPlatform, ChatRead, OpenWait
+lazy from ofmhelpers.schemas.chatting import ChatPlatform, ChatRead, OpenWait
 
 logger = get_logger(__name__)
 
@@ -176,7 +170,7 @@ def one_teller() -> Generator[bool]:
         renewing.join()
         try:
             lock.release()
-        except (RedisError, LockError):
+        except RedisError, LockError:
             logger.warning("chat telling lock not released", exc_info=True)
 
 
@@ -185,7 +179,7 @@ def _renew(lock: Lock, done: threading.Event) -> None:
     while not done.wait(_TELL_LOCK_S / 3):
         try:
             lock.reacquire()
-        except (RedisError, LockError):
+        except RedisError, LockError:
             logger.warning("chat telling lock not renewed", exc_info=True)
             return
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.web.clone_long import Piece, Plan, Shape, VideoTools
+from ofmhelpers.features.clone_long import Piece, Plan, Shape, VideoTools
 
 pytestmark = pytest.mark.slow
 

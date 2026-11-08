@@ -29,9 +29,9 @@ from redis.exceptions import LockError, RedisError
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
 
@@ -218,7 +218,7 @@ def upload_lock(cache_key: str) -> Iterator[None]:
         if held and lock is not None:
             try:
                 lock.release()
-            except (RedisError, LockError):
+            except RedisError, LockError:
                 # Expired mid-upload (longer than OFM_UPLOAD_LOCK_S) or
                 # Redis lost it: the upload itself went through.
                 logger.warning("upload lock for %s not released", cache_key)

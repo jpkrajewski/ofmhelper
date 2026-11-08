@@ -1,8 +1,6 @@
 """AI checks (`clone_ai_checks`). Uncached: each row is written once and read
 rarely (debugging, a card's verdict)."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 

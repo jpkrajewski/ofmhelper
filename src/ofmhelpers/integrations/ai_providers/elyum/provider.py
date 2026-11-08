@@ -25,7 +25,7 @@ from ofmhelpers.integrations.ai_providers.elyum.models import (
     SUCCEEDED,
 )
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 # Our schema keyword: the input role a media field's files go in as.
 ROLE = "x-role"

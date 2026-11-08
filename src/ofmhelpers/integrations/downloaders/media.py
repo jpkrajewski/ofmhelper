@@ -16,13 +16,12 @@ A "video" that ffprobe cannot read (a site's web page saved as .mp4,
 gets its turn -- never a broken file reported as downloaded.
 """
 
-from __future__ import annotations
-
 import secrets
 import shutil
 import subprocess
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+lazy from collections.abc import Callable, Iterator
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.downloaders import generic, images, kvs, savers
@@ -31,10 +30,6 @@ from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.integrations.downloaders.sites import images_first
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.video_probe import duration_s
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
-    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -93,7 +88,7 @@ def _broken_video(result: DownloadResult) -> str | None:
             continue
         try:
             duration_s(path, settings.downloaders.probe_timeout_s)
-        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+        except OSError, RuntimeError, ValueError, subprocess.SubprocessError:
             logger.warning("download %s: %s is not a video", result.url, path.name)
             path.unlink(missing_ok=True)
             broken.append(path.name)

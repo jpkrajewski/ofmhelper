@@ -20,15 +20,15 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in
 
-from ofmhelpers.downloaders.generic import DownloadResult
+from ofmhelpers.db.stores import jobs as jobs_store
+from ofmhelpers.db.stores import users
+from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
 from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.integrations.downloaders.generic import DownloadResult
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import clean_image as clean_image_router
 from ofmhelpers.web.routers.downloads import images as download_images_router
 from ofmhelpers.web.routers.downloads import videos as download_reels_router
-from ofmhelpers.web.stores import jobs as jobs_store
-from ofmhelpers.web.stores import users
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
 @pytest.fixture

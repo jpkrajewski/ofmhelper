@@ -1,8 +1,6 @@
 """The data of a long clone: how a video is split, what it costs, what a
 job stores. Pure values -- no I/O."""
 
-from __future__ import annotations
-
 import math
 
 from pydantic import BaseModel, ConfigDict

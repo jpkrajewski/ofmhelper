@@ -7,8 +7,8 @@ import re
 import pytest
 from fastapi import HTTPException
 
+from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers import job_assets, serve_job_file
-from ofmhelpers.web.schemas import Job
 
 
 def _grouped_job(tmp_path):

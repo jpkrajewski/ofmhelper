@@ -25,10 +25,10 @@ import pytest
 from pydantic import JsonValue, RootModel
 from repo_paths import FIXTURES
 
-from ofmhelpers.iphones import load_profile
-from ofmhelpers.iphones.models import Recording
-from ofmhelpers.iphones.recorder import record
-from ofmhelpers.repurpose import Repurpose
+from ofmhelpers.media.recorder import load_profile
+from ofmhelpers.media.recorder.models import Recording
+from ofmhelpers.media.recorder.recorder import record
+from ofmhelpers.media.repurpose import Repurpose
 
 FIXTURE = FIXTURES / "iphones" / "iphone17_img0063.exif.json"
 EXIFTOOL_ARGS = ["-j", "-a", "-G1:4", "-n", "-u"]

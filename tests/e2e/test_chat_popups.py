@@ -3,17 +3,12 @@
 is covered in tests/integration/web/test_chat_platforms.py. Sound and desktop
 notifications are counted: there is no speaker and no desktop here."""
 
-from __future__ import annotations
-
 import json
 import re
-from typing import TYPE_CHECKING
 
 import pytest
 from playwright.sync_api import expect
-
-if TYPE_CHECKING:
-    from e2e_session import Session
+lazy from e2e_session import Session
 
 pytestmark = pytest.mark.e2e
 

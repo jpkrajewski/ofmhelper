@@ -4,8 +4,6 @@ camera layout that tells models apart at a glance (`CameraLayout`). Every
 card and the phone dialog's preview use it, so no photo is stored or
 fetched anywhere. A new layout = one drawing function in `_LAYOUTS`."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from functools import lru_cache
 

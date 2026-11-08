@@ -59,7 +59,7 @@ def _token_problem(token: str) -> str | None:
     s = settings.web
     try:
         served = float(_tokens().loads(token, max_age=s.apply_token_ttl_s))
-    except (BadSignature, TypeError, ValueError):
+    except BadSignature, TypeError, ValueError:
         return "no valid form token"
     if time.time() - served < s.apply_min_fill_s:
         return "filled in too fast"

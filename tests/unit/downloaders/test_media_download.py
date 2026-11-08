@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.downloaders import generic, images, kvs, media, savers
-from ofmhelpers.downloaders.models import DownloadResult
+from ofmhelpers.integrations.downloaders import generic, images, kvs, media, savers
+from ofmhelpers.integrations.downloaders.models import DownloadResult
 
 
 @pytest.fixture(autouse=True)

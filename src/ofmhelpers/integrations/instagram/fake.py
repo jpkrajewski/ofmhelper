@@ -14,15 +14,14 @@ failure: "dead" (ProxyError), "timeout" (ConnectTimeout), "rate_limited"
 records (method, path, proxy) for assertions.
 """
 
-from __future__ import annotations
-
 import json
 import threading
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
+lazy from collections.abc import Mapping
 
 import requests
 from pydantic import BaseModel, Field
@@ -30,9 +29,6 @@ from pydantic import BaseModel, Field
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 HOST = "www.instagram.com"
 CDN = f"https://{GLOBAL_CDN_HOST}/fake"

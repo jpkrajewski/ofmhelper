@@ -46,7 +46,7 @@ from ofmhelpers.integrations.socials import (
     scan_through,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import TrackedAccount
+lazy from ofmhelpers.schemas import TrackedAccount
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
         return found.tracked_platform, get_platform(found.tracked_platform).handle(
             username
         )
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         logger.warning("%s login %r is not a trackable handle", service, username)
         return None
 

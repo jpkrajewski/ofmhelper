@@ -17,7 +17,8 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException, UploadFile
 
-from ofmhelpers.web import ref_usage
+from ofmhelpers.features.assets import ref_usage
+from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     build_ordered_paths,
@@ -27,7 +28,6 @@ from ofmhelpers.web.routers.task_helpers import (
     save_upload,
     serve_job_file,
 )
-from ofmhelpers.web.schemas import Job
 
 # Whose picks build_ordered_paths records.
 USER = 1

@@ -1,6 +1,6 @@
 import pytest
 
-from ofmhelpers.exports import (
+from ofmhelpers.media.exports import (
     CapcutExport,
     DeviceExport,
     ExportOptions,
@@ -8,7 +8,7 @@ from ofmhelpers.exports import (
     exports,
     get_export,
 )
-from ofmhelpers.iphones import available
+from ofmhelpers.media.recorder import available
 
 
 def test_registry_lists_original_capcut_then_every_device_profile():
@@ -34,7 +34,7 @@ MIRROR = ExportOptions(mirror=True)
 
 
 def test_mirror_switch_reaches_the_device_recording(monkeypatch, tmp_path):
-    import ofmhelpers.exports as module
+    import ofmhelpers.media.exports as module
 
     seen = []
     monkeypatch.setattr(module, "record", lambda *a: seen.append(a[3].mirror))
@@ -48,7 +48,7 @@ def test_mirror_switch_reaches_the_device_recording(monkeypatch, tmp_path):
 
 
 def test_mirror_switch_reaches_the_capcut_preset(monkeypatch, tmp_path):
-    import ofmhelpers.exports as module
+    import ofmhelpers.media.exports as module
 
     seen = []
     monkeypatch.setattr(module, "apply_preset", lambda *a: seen.append(a[2].mirror))
@@ -65,7 +65,7 @@ def test_original_is_untouched_without_switches(tmp_path):
 
 
 def test_original_with_mirror_is_flipped(monkeypatch, tmp_path):
-    import ofmhelpers.exports as module
+    import ofmhelpers.media.exports as module
 
     seen = []
     monkeypatch.setattr(module, "binary", lambda name: name)

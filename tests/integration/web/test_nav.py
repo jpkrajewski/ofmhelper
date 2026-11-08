@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 from repo_paths import SRC
 from signin import sign_in, sign_in_admin
 
+from ofmhelpers.schemas.nav import NAV, NavPlace, nav
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas.nav import NAV, NavPlace, nav
 
 ICONS = (SRC / "web" / "templates" / "_icons.html").read_text("utf-8")
 

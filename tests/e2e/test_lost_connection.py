@@ -10,21 +10,15 @@ slow uplink still uploading after 80 s showed "generating…", a refresh and
 it was gone (nginx `400 0`, the app never saw it). The card shows the
 upload, and leaving the page meanwhile asks first."""
 
-from __future__ import annotations
-
 import os
 import re
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 import pytest
 from PIL import Image
 from playwright.sync_api import expect
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from e2e_session import Session
-    from playwright.sync_api import Dialog, Route
+lazy from e2e_session import Session
+lazy from playwright.sync_api import Dialog, Route
 
 pytestmark = pytest.mark.e2e
 

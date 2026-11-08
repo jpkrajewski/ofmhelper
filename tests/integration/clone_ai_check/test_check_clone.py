@@ -10,16 +10,22 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ofmhelpers.clone_ai_check import RULES, Verdict, check_clone, sheet_at, still_count
-from ofmhelpers.clone_ai_check import check as check_module
-from ofmhelpers.clone_ai_check.check import NO_ANSWER, NO_MODEL, TOO_LONG
 from ofmhelpers.config import settings
-from ofmhelpers.llm.base import Answered
-from ofmhelpers.llm.gemini.fake import FAKE_KEY, FAKE_KEY_2, fake_gemini
-from ofmhelpers.llm.groq.fake import FAKE_KEY as GROQ_KEY
-from ofmhelpers.llm.groq.fake import fake_groq
-from ofmhelpers.utils import fake_media
-from ofmhelpers.web.clone_links.folders import folder_for
+from ofmhelpers.features.clone_links.ai_check import (
+    RULES,
+    Verdict,
+    check_clone,
+    sheet_at,
+    still_count,
+)
+from ofmhelpers.features.clone_links.ai_check import check as check_module
+from ofmhelpers.features.clone_links.ai_check.check import NO_ANSWER, NO_MODEL, TOO_LONG
+from ofmhelpers.features.clone_links.folders import folder_for
+from ofmhelpers.integrations.llm.base import Answered
+from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY, FAKE_KEY_2, fake_gemini
+from ofmhelpers.integrations.llm.groq.fake import FAKE_KEY as GROQ_KEY
+from ofmhelpers.integrations.llm.groq.fake import fake_groq
+from ofmhelpers.media import fake_media
 
 GLITCHY = {
     "reasoning": "The left hand grows a sixth finger at 0:01.0.",

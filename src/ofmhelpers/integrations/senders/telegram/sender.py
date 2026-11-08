@@ -1,10 +1,6 @@
 """Events as Telegram messages from the app's bot, one chat per target
 (`OFM_TELEGRAM_CHAT_IDS`)."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.senders.telegram.client import (
     TelegramClient,
@@ -13,9 +9,7 @@ from ofmhelpers.integrations.senders.telegram.client import (
 )
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas.events import Event
+lazy from ofmhelpers.schemas.events import Event
 
 logger = get_logger(__name__)
 

@@ -3,8 +3,6 @@ mp4 a browser can start, and still images. Made once per process; the mp4
 by ffmpeg (in every image), cached under `settings.infra.fakes_dir` when set
 so the app and the test seeding it serve the same bytes."""
 
-from __future__ import annotations
-
 import io
 import os
 import tempfile

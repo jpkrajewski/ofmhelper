@@ -24,12 +24,12 @@ from clone_links_helpers import (
     clone_links_env,  # noqa: F401 -- the fixture, used by `pytestmark`
 )
 
-from ofmhelpers.downloaders.models import VideoInfo
-from ofmhelpers.instagram.fake import CDN
-from ofmhelpers.web.clone_links import preview as preview_module
-from ofmhelpers.web.clone_links.preview import CANNOT_OPEN, TOO_SLOW, Price
-from ofmhelpers.web.stores import cookies as login_cookies
-from ofmhelpers.web.stores import users
+from ofmhelpers.db.stores import cookies as login_cookies
+from ofmhelpers.db.stores import users
+from ofmhelpers.features.clone_links import preview as preview_module
+from ofmhelpers.features.clone_links.preview import CANNOT_OPEN, TOO_SLOW, Price
+from ofmhelpers.integrations.downloaders.models import VideoInfo
+from ofmhelpers.integrations.instagram.fake import CDN
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
 

@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from ofmhelpers.downloaders import kvs
-from ofmhelpers.downloaders.kvs import KvsPage
+from ofmhelpers.integrations.downloaders import kvs
+from ofmhelpers.integrations.downloaders.kvs import KvsPage
 
 PAGE = Path(__file__).parents[2] / "fixtures" / "downloads" / "kvs_page.html"
 URL = "https://www.gayhub.com/video/168792/clip/"

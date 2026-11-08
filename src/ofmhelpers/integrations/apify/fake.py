@@ -11,24 +11,20 @@ works. `calls` records (method, path) and `inputs` each run's input, for
 assertions.
 """
 
-from __future__ import annotations
-
 import json
 import threading
 import time
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlsplit
+lazy from collections.abc import Mapping
+
+lazy import requests
 
 from ofmhelpers.integrations.instagram.fake import CDN, fake_instagram
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 HOST = "api.apify.com"
 REEL_SCRAPER = "apify~instagram-reel-scraper"

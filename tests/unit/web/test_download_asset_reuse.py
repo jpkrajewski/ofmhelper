@@ -14,7 +14,7 @@ import io
 import pytest
 from PIL import Image
 
-from ofmhelpers.downloaders.generic import DownloadResult
+from ofmhelpers.integrations.downloaders.generic import DownloadResult
 from ofmhelpers.web.routers import task_helpers
 from ofmhelpers.web.routers.downloads import clean_image
 from ofmhelpers.web.routers.downloads import images as download_images

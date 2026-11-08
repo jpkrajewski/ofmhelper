@@ -220,7 +220,7 @@ def locked(
         if held:
             try:
                 lock.release()
-            except (RedisError, LockError):
+            except RedisError, LockError:
                 logger.warning(
                     "trials: state lock of %s/%s not released", user_id, login_id
                 )

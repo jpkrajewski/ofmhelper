@@ -12,20 +12,17 @@ traps the docs warn about:
 - The images API: the official gpt-image-2 refuses `response_format`.
 """
 
-from __future__ import annotations
-
 import base64
 import itertools
 import json
 import re
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+lazy import requests
 
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeReply
-
-if TYPE_CHECKING:
-    import requests
 
 FILES_HOST = "fake-oss.apiyi.com"
 _PART = re.compile(

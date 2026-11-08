@@ -7,10 +7,14 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from ofmhelpers.aigenproviders import base
-from ofmhelpers.aigenproviders.base import Provider, TaskState, provider_names
-from ofmhelpers.aigenproviders.catalog import catalog, get_spec, models_for
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
+from ofmhelpers.integrations.ai_providers import base
+from ofmhelpers.integrations.ai_providers.base import (
+    Provider,
+    TaskState,
+    provider_names,
+)
+from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec, models_for
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 
 # What /generate offered as kie.ai models before /ai: none may go missing
 # (jobs and /clone's CloneTarget name them).

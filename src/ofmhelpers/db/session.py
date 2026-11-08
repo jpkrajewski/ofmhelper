@@ -10,19 +10,14 @@ set when the module first loaded. The engine is cached per URL, so production
 fresh one.
 """
 
-from __future__ import annotations
-
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator
 
 import sqlalchemy
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from ofmhelpers.config import settings
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 _engine: Engine | None = None
 _engine_url: str | None = None

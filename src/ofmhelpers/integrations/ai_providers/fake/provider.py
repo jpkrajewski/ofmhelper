@@ -8,7 +8,6 @@ spending credits. References are "uploaded" by path only -- nothing reads
 them.
 """
 
-import shutil
 import subprocess
 import time
 import uuid
@@ -26,7 +25,7 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderGenerationError,
     ProviderInputError,
 )
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 _SCHEME = "fake://"
 
@@ -107,5 +106,5 @@ class FakeProvider(Provider):
         return TaskState(state="done", urls=[f"{_SCHEME}{found[0].name}"])
 
     def download(self, url: str, dest: Path) -> Path:
-        shutil.move(_workdir() / url.removeprefix(_SCHEME), dest)
+        (_workdir() / url.removeprefix(_SCHEME)).move(dest)
         return dest

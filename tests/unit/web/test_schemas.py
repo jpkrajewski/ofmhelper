@@ -5,9 +5,9 @@ import os
 
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+from ofmhelpers.schemas import ResultFile
 from ofmhelpers.web.routers import ROUTERS
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, GENERATE_TOOLS, TOOLS
-from ofmhelpers.web.schemas import ResultFile
 
 
 def test_result_file_stores_only_the_fields_that_were_set():

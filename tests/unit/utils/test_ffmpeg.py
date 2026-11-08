@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from ofmhelpers.utils.ffmpeg import binary, run, run_bytes
+from ofmhelpers.media.ffmpeg import binary, run, run_bytes
 
 FAILS = (
     "import sys; sys.stderr.write(chr(10).join('abc') + chr(10) + 'boom'); sys.exit(1)"

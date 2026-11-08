@@ -12,6 +12,7 @@ $TEMP/kimi-<name>.md. Warns when the checkout changed during the run (Kimi
 shares this working tree with every other agent).
 """
 
+import io
 import json
 import os
 import shutil
@@ -87,6 +88,11 @@ def _answer(stream: str) -> tuple[str, str]:
 
 
 def main() -> int:
+    # Windows consoles and redirects default to cp1250/cp1252: Kimi's
+    # arrows and quotes crashed the print (2026-11-08) before 3.15 made
+    # UTF-8 the default.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if len(sys.argv) < 3 or sys.argv[1] not in RULES:  # noqa: PLR2004
         print(__doc__)
         return 2

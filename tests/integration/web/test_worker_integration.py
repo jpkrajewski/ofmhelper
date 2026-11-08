@@ -23,8 +23,8 @@ from ofmhelpers.cache import (
     get_queue,
     get_redis,
 )
-from ofmhelpers.web import recovery
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.features.jobs import recovery
 
 
 @pytest.fixture(autouse=True)
@@ -75,7 +75,7 @@ def test_worker_log_description_never_carries_the_job_arguments():
         run_job, job_id, worker_tasks.make_result, {"name": "secret-api-key"}
     )
 
-    assert rq_job.description == "ofmhelpers.web.stores.jobs.run_job"
+    assert rq_job.description == "ofmhelpers.db.stores.jobs.run_job"
     _drain_queue()
     assert get_job(job_id).status == "done"
 

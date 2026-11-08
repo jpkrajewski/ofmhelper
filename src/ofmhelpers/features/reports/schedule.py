@@ -6,17 +6,12 @@ Never run before: a baseline at once (the counters only, nothing sent), so the
 first report counts from then. Taken before today's time it stands for
 yesterday's run, so today's still goes out; taken after, today's."""
 
-from __future__ import annotations
-
 from datetime import date, datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from ofmhelpers.config import settings
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas.reports import ReportRun
+lazy from ofmhelpers.schemas.reports import ReportRun
 
 
 class Due(StrEnum):

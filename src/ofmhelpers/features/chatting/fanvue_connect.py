@@ -1,8 +1,6 @@
 """Connecting a Fanvue account: Fanvue has no API keys, so someone authorises the app
 once in their browser. A connected account is read from the next sync on."""
 
-from __future__ import annotations
-
 import secrets
 
 from ofmhelpers.cache import delete_text, get_text, set_text

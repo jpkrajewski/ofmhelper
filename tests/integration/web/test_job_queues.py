@@ -20,7 +20,7 @@ from ofmhelpers.cache import (
 )
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import QueuePriority
-from ofmhelpers.web.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, run_job
 from ofmhelpers.worker import ConfiguredWorker
 
 

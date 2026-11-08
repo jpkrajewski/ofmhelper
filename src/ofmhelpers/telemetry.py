@@ -33,32 +33,27 @@ like password, secret, api_key, cookie, ...; not `confirm`, `current`, `token`,
   span, including the safe ones and the log messages.
 """
 
-from __future__ import annotations
-
 import contextvars
 import gc
 import os
 import threading
 import weakref
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy import logging
+lazy from collections.abc import Callable, Mapping
 
 import logfire
 from logfire._internal.exporters.otlp import OTLPExporterHttpSession
 from logfire._internal.http_transport import install_connection_policy
 from opentelemetry.sdk.trace import Event, SpanProcessor
+lazy from fastapi import FastAPI, Request, WebSocket
+lazy from opentelemetry.context import Context
+lazy from opentelemetry.sdk.trace import ReadableSpan, Span
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
 from ofmhelpers.redact import redact
 from ofmhelpers.web.forms import LoggedFields
-
-if TYPE_CHECKING:
-    import logging
-    from collections.abc import Callable, Mapping
-
-    from fastapi import FastAPI, Request, WebSocket
-    from opentelemetry.context import Context
-    from opentelemetry.sdk.trace import ReadableSpan, Span
 
 logger = get_logger(__name__)
 

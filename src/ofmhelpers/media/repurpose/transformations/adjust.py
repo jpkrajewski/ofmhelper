@@ -88,7 +88,7 @@ class AdjustDraws(BaseModel, frozen=True):
     vignette: float | None
 
     @classmethod
-    def sample(cls, s: AdjustSettings, rng: random.Random) -> "AdjustDraws":
+    def sample(cls, s: AdjustSettings, rng: random.Random) -> AdjustDraws:
         return cls(
             **{
                 name: draw(getattr(s, name), rng)

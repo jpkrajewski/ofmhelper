@@ -1,10 +1,9 @@
 """One profile's most played reels: Apify reads its newest reels with their
 play counts, the top ones are downloaded from Instagram's CDN."""
 
-from __future__ import annotations
-
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from pathlib import Path
 
 import requests
 from pydantic import ValidationError
@@ -22,9 +21,6 @@ from ofmhelpers.integrations.apify import ApifyError, RunStatus, richest
 from ofmhelpers.log import get_logger
 from ofmhelpers.telemetry import in_this_trace
 from ofmhelpers.utils import outbound
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -121,7 +117,7 @@ def _save(reels: list[ApifyReel], folder: Path) -> list[SavedReel]:
     def one(reel: ApifyReel) -> SavedReel | None:
         try:
             return SavedReel(reel=reel, path=_download(reel, folder))
-        except (OSError, RuntimeError, requests.RequestException):
+        except OSError, RuntimeError, requests.RequestException:
             logger.warning("viral: reel %s did not download", reel.code, exc_info=True)
             return None
 

@@ -11,8 +11,13 @@ from collections.abc import Iterator
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.gdrive import DriveApi, DriveError, FolderGoneError, connect
-from ofmhelpers.gdrive.fake import FakeDrive
+from ofmhelpers.integrations.gdrive import (
+    DriveApi,
+    DriveError,
+    FolderGoneError,
+    connect,
+)
+from ofmhelpers.integrations.gdrive.fake import FakeDrive
 
 FAKE_ROOT = "contract-root"
 

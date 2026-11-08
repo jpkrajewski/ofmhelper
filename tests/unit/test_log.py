@@ -171,7 +171,9 @@ def test_app_loggers_still_emit_at_info_when_third_parties_are_muted(
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
 
-    get_logger("ofmhelpers.aigenproviders.kaiai.client").info("upload starting")
+    get_logger("ofmhelpers.integrations.ai_providers.kie.client").info(
+        "upload starting"
+    )
 
     assert "upload starting" in capsys.readouterr().out
 

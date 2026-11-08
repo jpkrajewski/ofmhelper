@@ -21,23 +21,19 @@ next submit be made but its answer time out; `created` records each submit
 body.
 """
 
-from __future__ import annotations
-
 import itertools
 import json
 import threading
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlsplit
+lazy from collections.abc import Mapping
 
 import requests
 
 from ofmhelpers.integrations.ai_providers.apiyi.fake_families import FakeFamilies
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 FAKE_KEY = "sk-fakeApiyiKey0123456789abcdefghijklmnopqrstuv"
 HOST = "api.apiyi.com"

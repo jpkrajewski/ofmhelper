@@ -19,18 +19,12 @@ Drive failures never block a removal: logged, the folder stays (/drive
 lists it under folders no login owns).
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from ofmhelpers.db.stores import devices
 from ofmhelpers.db.stores.tracked_accounts import untrack
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.phones.catalog import services
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas import Device, DeviceLogin
+lazy from ofmhelpers.schemas import Device, DeviceLogin
 
 logger = get_logger(__name__)
 

@@ -14,7 +14,7 @@ from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.kie import callback
 from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient
 from ofmhelpers.integrations.ai_providers.kie.models import FAIL, SUCCESS, KieRecord
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 
 @register_provider

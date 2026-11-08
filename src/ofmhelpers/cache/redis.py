@@ -14,8 +14,6 @@ must not silently lose a write (the RQ queue, the rate-limit counters) uses
 `get_redis()` directly and decides its own failure policy.
 """
 
-from __future__ import annotations
-
 from redis import Redis
 from redis.exceptions import RedisError
 
@@ -41,7 +39,7 @@ def used_bytes() -> int | None:
     """The memory Redis holds (queues, caches); None when it cannot be read."""
     try:
         return int(get_redis().info("memory")["used_memory"])
-    except (RedisError, KeyError, ValueError):
+    except RedisError, KeyError, ValueError:
         logger.warning("could not read Redis memory", exc_info=True)
         return None
 

@@ -63,7 +63,7 @@ def test_work_forwards_its_arguments_to_rq(monkeypatch):
 class _Pool:
     """Stands in for RQ's WorkerPool: what it was given, and that it started."""
 
-    made: ClassVar[list["_Pool"]] = []
+    made: ClassVar[list[_Pool]] = []
     niced: ClassVar[list[int]] = []
 
     def __init__(self, queues, connection, num_workers, worker_class):

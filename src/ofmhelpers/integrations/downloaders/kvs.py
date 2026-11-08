@@ -12,14 +12,13 @@ unscrambles the best quality with yt-dlp's own code and downloads it with
 the page as Referer.
 """
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
 from pydantic import BaseModel
+lazy from yt_dlp.extractor.generic import GenericIE
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.downloaders.models import DownloadResult
@@ -77,8 +76,6 @@ class KvsPage(BaseModel):
 
     def best(self) -> str:
         """The highest quality's real address."""
-        from yt_dlp.extractor.generic import GenericIE
-
         source = max(self.sources, key=lambda s: s.height)
         if not source.url.startswith("function/"):
             return source.url

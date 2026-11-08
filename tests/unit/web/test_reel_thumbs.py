@@ -10,7 +10,7 @@ import pytest
 import requests
 from PIL import Image
 
-from ofmhelpers.web import reel_thumbs
+from ofmhelpers.features.reels import thumbs as reel_thumbs
 
 PUBLIC = "157.240.1.1"
 COVER = "https://cdn.example.com/cover.jpg"

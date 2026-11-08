@@ -23,8 +23,6 @@ Two savers, saveinta then snapreels: each is the other's outage/rate-limit
 backup. A new saver = one entry in `_SAVERS`.
 """
 
-from __future__ import annotations
-
 import json
 import re
 from pathlib import Path
@@ -221,7 +219,7 @@ def _unpack(data: str) -> str:
     try:
         offset, radix = int(offset_s), int(radix_s)
         delimiter = charset[radix]
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         return data
     out: list[str] = []
     for block in packed.split(delimiter):
@@ -232,6 +230,6 @@ def _unpack(data: str) -> str:
             for ch in block:
                 value = value * radix + charset.index(ch)
             out.append(chr(value - offset))
-        except (ValueError, OverflowError):
+        except ValueError, OverflowError:
             return data
     return unquote("".join(out))

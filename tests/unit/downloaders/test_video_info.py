@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from ofmhelpers.downloaders import generic
-from ofmhelpers.downloaders.generic import DownloadConfig
+from ofmhelpers.integrations.downloaders import generic
+from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 
 REEL = "https://www.instagram.com/reel/Dejzz26ILDl/"
 SHORT = "https://www.youtube.com/shorts/abc"

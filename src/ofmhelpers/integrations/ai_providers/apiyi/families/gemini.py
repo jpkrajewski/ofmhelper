@@ -17,13 +17,13 @@ from typing import Any
 from pydantic import Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
 from ofmhelpers.integrations.ai_providers.apiyi.families.sync import Made, SyncImages
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER, Text
 from ofmhelpers.integrations.ai_providers.errors import ProviderGenerationError
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 from ofmhelpers.media.image_fit import ImageLimits
+lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 # Per image before base64 (docs: 7 MB), all of them under APIYI's 100 MB.
 _MAX_IMAGE_BYTES = 7 * 1000 * 1000

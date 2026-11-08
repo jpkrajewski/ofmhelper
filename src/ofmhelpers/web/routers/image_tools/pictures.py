@@ -104,29 +104,31 @@ class PictureTarget(BaseModel):
         return field.max_items or settings.pictures.preset_max_images + 1
 
 
-PICTURE_TARGETS = {
-    "kie": PictureTarget(
-        model="kie:nano-banana-pro",
-        images="image_input",
-        aspect="aspect_ratio",
-        resolution="resolution",
-        fixed={"output_format": "jpg"},
-    ),
-    "runninghub": PictureTarget(
-        model="runninghub:rhart-image-n-pro-official/edit",
-        images="imageUrls",
-        aspect="aspectRatio",
-        resolution="resolution",
-    ),
-    # Gemini's own Nano Banana Pro through APIYI ($0.09 a picture, 1K-4K);
-    # references inline, so no public address is needed.
-    "apiyi": PictureTarget(
-        model="apiyi:gemini-3-pro-image",
-        images="image_urls",
-        aspect="aspect_ratio",
-        resolution="resolution",
-    ),
-}
+PICTURE_TARGETS = frozendict(
+    {
+        "kie": PictureTarget(
+            model="kie:nano-banana-pro",
+            images="image_input",
+            aspect="aspect_ratio",
+            resolution="resolution",
+            fixed={"output_format": "jpg"},
+        ),
+        "runninghub": PictureTarget(
+            model="runninghub:rhart-image-n-pro-official/edit",
+            images="imageUrls",
+            aspect="aspectRatio",
+            resolution="resolution",
+        ),
+        # Gemini's own Nano Banana Pro through APIYI ($0.09 a picture, 1K-4K);
+        # references inline, so no public address is needed.
+        "apiyi": PictureTarget(
+            model="apiyi:gemini-3-pro-image",
+            images="image_urls",
+            aspect="aspect_ratio",
+            resolution="resolution",
+        ),
+    }
+)
 
 
 def default_provider() -> str:
@@ -140,7 +142,7 @@ def _ratio(value: str) -> float | None:
     width, _, height = value.partition(":")
     try:
         return float(width) / float(height)
-    except (ValueError, ZeroDivisionError):
+    except ValueError, ZeroDivisionError:
         return None
 
 
@@ -165,7 +167,7 @@ def aspect_of(path: str, spec: ModelSpec, field: str) -> str:
     try:
         with Image.open(path) as image:
             width, height = ImageOps.exif_transpose(image).size
-    except (OSError, UnidentifiedImageError):
+    except OSError, UnidentifiedImageError:
         return _fallback(spec, field)
     return (
         nearest_aspect(width / height, spec, field)

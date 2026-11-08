@@ -3,7 +3,7 @@ the URL alone (no request), None when only Generic would try the page."""
 
 import pytest
 
-from ofmhelpers.downloaders.generic import site_of
+from ofmhelpers.integrations.downloaders.generic import site_of
 
 
 @pytest.mark.parametrize(

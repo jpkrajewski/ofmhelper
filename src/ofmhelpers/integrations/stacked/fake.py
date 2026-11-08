@@ -8,22 +8,18 @@ in it. `fail_next` answers the next calls with an error, `calls` records
 (method, path), for assertions.
 """
 
-from __future__ import annotations
-
 import json
 import threading
 from datetime import datetime
 from functools import lru_cache
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
+lazy from collections.abc import Mapping
+
+lazy import requests
 
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 HOST = "api.stacked.com"
 _PREFIX = "/external-service/v1/"

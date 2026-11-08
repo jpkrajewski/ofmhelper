@@ -17,9 +17,9 @@ from app_pages import ADMIN_ONLY_PAGES, VA_PAGES
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
-from ofmhelpers.gdrive.fake import FakeDrive
-from ofmhelpers.web.schemas import DeviceFields, LoginFields
-from ofmhelpers.web.stores import devices, watched_profiles
+from ofmhelpers.db.stores import devices, watched_profiles
+from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.schemas import DeviceFields, LoginFields
 
 pytestmark = pytest.mark.e2e
 
@@ -934,7 +934,7 @@ def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     Instagram login (its folder made by Sync), a finished clone run:
     the card's ⋯ menu -> "Upload to Drive" -> the picker puts the video in
     that folder, and the card says where it went."""
-    from ofmhelpers.web.stores.jobs import create_job, run_job
+    from ofmhelpers.db.stores.jobs import create_job, run_job
 
     connect_google(va, "va.google@example.com")
     expect(va.page.locator(".card").nth(1)).to_contain_text("Connected")

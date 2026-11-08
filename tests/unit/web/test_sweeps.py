@@ -8,9 +8,9 @@ from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
 
 from ofmhelpers.features.chatting import sync as chat_history
+from ofmhelpers.features.jobs import sweeps
+from ofmhelpers.features.jobs.sweeps import Sweep, running
 from ofmhelpers.schemas.chatting import ChatPlatform
-from ofmhelpers.web import sweeps
-from ofmhelpers.web.sweeps import Sweep, running
 
 
 def _run(scenario: Coroutine) -> None:

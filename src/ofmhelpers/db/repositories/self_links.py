@@ -9,8 +9,6 @@ list is cached (the public bridge checks the host on every hit) and bumped on
 every domain write; the click reads are uncached and never bump the cache, so
 recording a hit does not invalidate the host list."""
 
-from __future__ import annotations
-
 import time
 from datetime import UTC, date, datetime
 from typing import Any

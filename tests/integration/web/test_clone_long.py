@@ -20,29 +20,29 @@ from fastapi.testclient import TestClient
 from rq.timeouts import JobTimeoutException
 from signin import sign_in
 
-from ofmhelpers.aigenproviders import tasks
-from ofmhelpers.aigenproviders.base import TaskState
-from ofmhelpers.aigenproviders.errors import (
-    ProviderAuthError,
-    ProviderGenerationError,
-    ProviderUnavailableError,
-)
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
-from ofmhelpers.web import recovery
-from ofmhelpers.web.clone_long import (
+from ofmhelpers.db.stores.jobs import fail_job, get_job, list_jobs
+from ofmhelpers.features.clone_long import (
     TARGETS,
     LongClone,
     LongCloneParams,
     Shape,
     service,
 )
+from ofmhelpers.features.jobs import recovery
+from ofmhelpers.integrations.ai_providers import tasks
+from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
+from ofmhelpers.integrations.ai_providers.base import TaskState
+from ofmhelpers.integrations.ai_providers.errors import (
+    ProviderAuthError,
+    ProviderGenerationError,
+    ProviderUnavailableError,
+)
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.registry import JOB_TIMEOUTS, RESUMABLE
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.stores.jobs import fail_job, get_job, list_jobs
 
 NEW = json.dumps([{"kind": "new"}])
 PROVIDERS = {
@@ -825,7 +825,7 @@ def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeyp
     """A run killed mid-way (a deploy, RQ's limit) with every piece done
     is re-run once, through clone-long, with its own limit."""
     params = _params(tmp_path).model_dump()
-    from ofmhelpers.web.stores.jobs import create_job
+    from ofmhelpers.db.stores.jobs import create_job
 
     job_id = create_job("clone_long", params, actor="1")
     fail_job(job_id, "Task exceeded maximum timeout value")

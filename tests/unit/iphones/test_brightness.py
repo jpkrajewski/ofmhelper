@@ -7,9 +7,9 @@ import subprocess
 
 import pytest
 
-from ofmhelpers.iphones import load_profile
-from ofmhelpers.iphones.recorder import _video_filter
-from ofmhelpers.utils.capcut import SourceInfo
+from ofmhelpers.media.capcut import SourceInfo
+from ofmhelpers.media.recorder import load_profile
+from ofmhelpers.media.recorder.recorder import _video_filter
 
 BT2408_WHITE_CODE = 721  # 64 + 0.75 * (940 - 64)
 

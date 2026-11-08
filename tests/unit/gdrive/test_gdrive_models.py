@@ -2,7 +2,7 @@
 
 import pytest
 
-from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile
+from ofmhelpers.integrations.gdrive.models import FOLDER_MIME, DriveFile
 
 
 @pytest.mark.parametrize(

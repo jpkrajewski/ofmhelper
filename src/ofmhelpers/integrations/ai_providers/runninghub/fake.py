@@ -14,22 +14,18 @@ FAILED with it; `submitted` records each (model path, body), `uploads`
 each uploaded file name.
 """
 
-from __future__ import annotations
-
 import itertools
 import json
 import threading
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlsplit
+lazy from collections.abc import Mapping
+
+lazy import requests
 
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 FAKE_KEY = "fake-runninghub-key"
 HOST = "www.runninghub.ai"

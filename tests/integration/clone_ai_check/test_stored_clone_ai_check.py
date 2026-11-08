@@ -1,8 +1,8 @@
 """A check kept in `clone_ai_checks` comes back whole: why it has no verdict
 (kind + raw detail) and the tokens an answer used."""
 
-from ofmhelpers.clone_ai_check import CloneAiCheck, Verdict, unanswered
-from ofmhelpers.web.stores import clone_ai_checks
+from ofmhelpers.db.stores import clone_ai_checks
+from ofmhelpers.features.clone_links.ai_check import CloneAiCheck, Verdict, unanswered
 
 
 def test_a_failed_check_keeps_its_kind_and_raw_detail(tmp_path):

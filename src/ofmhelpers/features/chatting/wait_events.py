@@ -24,8 +24,6 @@ be old. `OFM_CHATTING_EVENTS_PLATFORMS_OFF` (Fanvue for now) leaves platforms
 out on purpose. The site's pop-up (`alerts.py`, `chats-alert.js`) is its own and
 unchanged."""
 
-from __future__ import annotations
-
 import hashlib
 import time
 from typing import NamedTuple
@@ -170,7 +168,7 @@ def _tell(now: float, key: str | None, chats_due: set[tuple[str, str]] | None) -
         if not still or key is None:
             return _Told(unread=unread)
         emit(_event(still, now, key))
-        rechecks.mark_told([wait for waits in still.values() for wait in waits])
+        rechecks.mark_told([*waits for waits in still.values()])
         return _Told(models=len(still), unread=unread)
 
 

@@ -1,8 +1,6 @@
 """The database itself (not one table): how big it is. Not cached: read
 when an admin opens /home."""
 
-from __future__ import annotations
-
 from sqlalchemy import func, select
 
 from ofmhelpers.db.session import session_scope

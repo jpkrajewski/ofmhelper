@@ -1,7 +1,5 @@
 """What a model's /chatting page shows, from the stored history."""
 
-from __future__ import annotations
-
 import time
 from datetime import datetime
 from statistics import mean

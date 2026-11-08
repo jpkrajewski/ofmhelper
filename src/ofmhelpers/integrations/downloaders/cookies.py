@@ -7,24 +7,19 @@ what its tool takes here: a temporary file for yt-dlp / gallery-dl
 `requests` (`load_jar`). Nothing here logs a cookie value.
 """
 
-from __future__ import annotations
-
 import os
 import tempfile
 from contextlib import contextmanager
 from http.cookiejar import LoadError, MozillaCookieJar
 from pathlib import Path
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator, Sequence
+lazy from http.cookiejar import Cookie
 
 from ofmhelpers.integrations.downloaders.models import (
     CookieJarSummary,
     CookieSite,
     SiteCookies,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
-    from http.cookiejar import Cookie
 
 _INSTAGRAM = "instagram.com"
 _INSTAGRAM_LOGIN = "sessionid"

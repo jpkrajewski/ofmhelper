@@ -25,7 +25,7 @@ from ofmhelpers.integrations.ai_providers.base import (
     TaskState,
     register_provider,
 )
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 
 @register_provider

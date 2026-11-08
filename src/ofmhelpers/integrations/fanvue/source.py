@@ -2,10 +2,10 @@
 OAuth, with tokens kept outside this package (integrations do not touch the database,
 so the keeper is handed in)."""
 
-from __future__ import annotations
-
 from functools import partial
-from typing import TYPE_CHECKING, NamedTuple, Protocol
+from typing import NamedTuple, Protocol
+lazy from collections.abc import Iterator, Mapping
+lazy from datetime import datetime
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.fanvue import webhooks
@@ -24,12 +24,7 @@ from ofmhelpers.schemas.chatting import (
     ReadScope,
     Subscription,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
-    from datetime import datetime
-
-    from ofmhelpers.integrations.fanvue.models import FanvueChat, FanvueMessage
+lazy from ofmhelpers.integrations.fanvue.models import FanvueChat, FanvueMessage
 
 logger = get_logger(__name__)
 

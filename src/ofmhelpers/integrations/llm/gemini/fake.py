@@ -17,8 +17,6 @@ reports `USAGE` (`usageMetadata`). State is per process (memory): the app
 under e2e and its tests never share it.
 """
 
-from __future__ import annotations
-
 import itertools
 import json
 import threading

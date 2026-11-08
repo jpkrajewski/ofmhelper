@@ -20,7 +20,7 @@ from unittest import mock
 import pytest
 from redis.exceptions import RedisError
 
-from ofmhelpers.web import ref_usage
+from ofmhelpers.features.assets import ref_usage
 
 # Ids no real user has: the keys are the tests' own.
 ANN, BOB = 990_001, 990_002

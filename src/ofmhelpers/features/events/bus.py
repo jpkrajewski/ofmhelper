@@ -20,21 +20,17 @@ An event is sent when `emit` runs, not when a surrounding database transaction
 commits: emit after the write it reports.
 """
 
-from __future__ import annotations
-
 import asyncio
 import functools
 import inspect
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
+from typing import Any, ParamSpec, TypeVar, cast
+lazy from collections.abc import Callable
 
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.features.events.dispatch import dispatch
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.events import Event
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = get_logger(__name__)
 

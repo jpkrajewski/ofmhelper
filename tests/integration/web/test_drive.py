@@ -22,14 +22,15 @@ import time_machine
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
-from ofmhelpers.gdrive import FolderGoneError
-from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.web import drive_folders, posting
+from ofmhelpers.db.stores import devices, users
+from ofmhelpers.db.stores import drive_folders as store
+from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.drive import posting
+from ofmhelpers.integrations.gdrive import FolderGoneError
+from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.schemas import DeviceFields, LoginFields, UserForm
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas import DeviceFields, LoginFields, UserForm
-from ofmhelpers.web.stores import devices, users
-from ofmhelpers.web.stores import drive_folders as store
-from ofmhelpers.web.stores.tracked_accounts import list_accounts, track
 
 # The agency's Google account (the password admin's, who owns the phones
 # `_phone` makes): its My Drive, and the "DEV - ALL ACCOUNTS" in it.
@@ -965,8 +966,8 @@ def test_the_folder_owners_files_are_theirs(drive):
 
 
 def test_cards_are_ordered_by_the_accounts_followers(drive):
-    from ofmhelpers.socials.models import AccountProfile, AccountStats
-    from ofmhelpers.web.stores import tracked_accounts
+    from ofmhelpers.db.stores import tracked_accounts
+    from ofmhelpers.integrations.socials.models import AccountProfile, AccountStats
 
     for label, handle, followers in (
         ("Phone 01", "small.ig", 500),

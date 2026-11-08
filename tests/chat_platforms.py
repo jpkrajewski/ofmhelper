@@ -2,8 +2,6 @@
 so a test says what happens and runs against every platform. A new platform = one class
 here and one entry in `PLATFORMS`; the tests in test_chat_platforms.py then cover it."""
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import hmac
@@ -11,7 +9,7 @@ import json
 import time
 from datetime import UTC, datetime
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ofmhelpers.db.stores import chats
 from ofmhelpers.features.chatting.sources import source_for
@@ -26,9 +24,7 @@ from ofmhelpers.schemas.chatting import (
     ChatWebhook,
 )
 from ofmhelpers.utils.outbound import FakeReply
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.chat_source import ChatSource
+lazy from ofmhelpers.integrations.chat_source import ChatSource
 
 STACKED_SECRET = (
     "whsec_" + base64.b64encode(b"stacked-test-secret-not-real-0001").decode()

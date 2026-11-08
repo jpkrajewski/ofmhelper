@@ -1,17 +1,12 @@
 """Every chat platform with an API here. A new platform = one line in `_all`."""
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.features.chatting.fanvue_tokens import FanvueTokens
 from ofmhelpers.integrations.fanvue import FanvueSource
 from ofmhelpers.integrations.stacked.source import StackedSource
 from ofmhelpers.schemas.chatting import ChatPlatform
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.chat_source import ChatSource
+lazy from ofmhelpers.integrations.chat_source import ChatSource
 
 
 @lru_cache(maxsize=1)

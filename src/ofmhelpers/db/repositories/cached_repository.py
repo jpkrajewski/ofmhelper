@@ -16,22 +16,17 @@ not broken. Every page read the signed-in user through it, so a Redis stall
 (dev's Docker VM saturated, 2026-10-24) answered 500 everywhere.
 """
 
-from __future__ import annotations
-
 import json
 from functools import wraps
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import Protocol, TypeVar
+lazy from collections.abc import Callable
 
 from redis.exceptions import RedisError
+lazy from redis import Redis
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from redis import Redis
 
 # Safety-net expiry in case a code path ever reads without writing through
 # this layer -- invalidation is driven by bump(), not by this TTL.

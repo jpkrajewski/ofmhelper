@@ -64,7 +64,7 @@ class AudioSettings(BaseModel, frozen=True):
     # Measure the copy against the source and add the lost level back.
     match_level: bool = False
 
-    def merged(self, extra: "AudioSettings | None") -> "AudioSettings":
+    def merged(self, extra: AudioSettings | None) -> AudioSettings:
         """These settings with `extra`'s set knobs on top."""
         if extra is None:
             return self

@@ -9,16 +9,16 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 
-from ofmhelpers.gdrive import (
+from ofmhelpers.features.drive.folders import _is_root, root_name
+from ofmhelpers.integrations.gdrive import (
     DriveError,
     ReadOnlyDrive,
     ScopedDrive,
     connect,
     read_live_mode,
 )
-from ofmhelpers.gdrive.fake import FakeDrive, FakePersonDrive
-from ofmhelpers.gdrive.models import DriveFolder
-from ofmhelpers.web.drive_folders import _is_root, root_name
+from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive
+from ofmhelpers.integrations.gdrive.models import DriveFolder
 
 
 class _Reads:

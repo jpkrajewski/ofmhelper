@@ -1,7 +1,5 @@
 """Submissions of the public landing-page application form."""
 
-from __future__ import annotations
-
 import time
 import uuid
 

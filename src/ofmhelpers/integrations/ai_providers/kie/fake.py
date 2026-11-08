@@ -9,23 +9,18 @@ shows "kie.ai: wrong API key"). A task reports "generating" for
 result host. Nothing is paid, nothing leaves the process.
 """
 
-from __future__ import annotations
-
 import itertools
 import json
 import threading
 from functools import lru_cache
-from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
+lazy from collections.abc import Mapping
+
+lazy import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 FAKE_KEY = "fake-kie-key"
 RESULT_HOST = "fake-results.kie.ai"

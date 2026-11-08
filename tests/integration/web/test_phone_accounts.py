@@ -12,11 +12,11 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
+from ofmhelpers.db.stores import devices as store
+from ofmhelpers.db.stores.tracked_accounts import list_accounts, untrack
+from ofmhelpers.schemas import DeviceFields
+from ofmhelpers.schemas.devices import _compact
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas import DeviceFields
-from ofmhelpers.web.schemas.devices import _compact
-from ofmhelpers.web.stores import devices as store
-from ofmhelpers.web.stores.tracked_accounts import list_accounts, untrack
 
 
 @pytest.fixture
@@ -133,7 +133,7 @@ def test_editing_a_login_never_brings_back_an_account_removed_by_hand(admin):
 
 
 def test_a_failing_tracker_never_fails_the_saved_login(admin, monkeypatch):
-    from ofmhelpers.web import account_tracker
+    from ofmhelpers.features.accounts import tracker as account_tracker
 
     def broken(*_args, **_kwargs):
         msg = "redis is down"
@@ -156,7 +156,7 @@ def test_the_sort_the_page_leaves_out_of_the_url_is_the_servers_default(admin):
     server's default -- and "Sort: Name" must stay in it."""
     from repo_paths import SRC
 
-    from ofmhelpers.web.schemas import PhoneQuery
+    from ofmhelpers.schemas import PhoneQuery
 
     html = admin.get("/phones").text
     assert f'data-default="{PhoneQuery().sort}"' in html

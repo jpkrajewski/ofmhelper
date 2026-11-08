@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.clone_ai_check import CloneAiVerdict, Verdict
-from ofmhelpers.clone_ai_check.check import prompt_text
 from ofmhelpers.config import settings
+from ofmhelpers.features.clone_links.ai_check import CloneAiVerdict, Verdict
+from ofmhelpers.features.clone_links.ai_check.check import prompt_text
 
 
 def _answer(severities: list[str], percent: int) -> CloneAiVerdict:

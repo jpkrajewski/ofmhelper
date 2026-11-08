@@ -10,7 +10,7 @@ Starlette's 9.
 """
 
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
-from starlette.types import ASGIApp
+lazy from starlette.types import ASGIApp
 
 EXCLUDED_CONTENT_TYPES = (*DEFAULT_EXCLUDED_CONTENT_TYPES, "application/octet-stream")
 

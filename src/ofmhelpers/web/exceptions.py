@@ -33,16 +33,18 @@ logger = get_logger(__name__)
 
 MESSAGE = "Something went wrong. Try again."
 
-REFUSALS: dict[type[Exception], int] = {
-    CloneRefusedError: 400,
-    EditRefusedError: 400,
-    GenerateRefusedError: 400,
-    InvalidInputError: 400,
-    NotALinkError: 400,
-    UploadRefusedError: 400,
-    NotFoundError: 404,
-    DuplicateError: 409,
-}
+REFUSALS: frozendict[type[Exception], int] = frozendict(
+    {
+        CloneRefusedError: 400,
+        EditRefusedError: 400,
+        GenerateRefusedError: 400,
+        InvalidInputError: 400,
+        NotALinkError: 400,
+        UploadRefusedError: 400,
+        NotFoundError: 404,
+        DuplicateError: 409,
+    }
+)
 
 
 async def unhandled(request: Request, exc: Exception) -> Response:

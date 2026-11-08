@@ -4,14 +4,14 @@ and what the AI decision button and panel say."""
 
 import pytest
 
-from ofmhelpers.web.schemas import Job
-from ofmhelpers.web.schemas.clone_ai_checks import (
+from ofmhelpers.schemas import Job
+from ofmhelpers.schemas.clone_ai_checks import (
     CHECK_FAILED,
     CloneFromLink,
     ReviewReason,
     StoredCloneAiCheck,
 )
-from ofmhelpers.web.schemas.gallery import CloneLinksCard
+from ofmhelpers.schemas.gallery import CloneLinksCard
 
 NOW = 1_800_000_000.0
 STALE_S = 1800

@@ -17,17 +17,17 @@ import requests
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-import ofmhelpers.exports as exports_module
-from ofmhelpers.aigenproviders.base import TaskState
-from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
-from ofmhelpers.utils.video_probe import duration_s
+import ofmhelpers.media.exports as exports_module
+from ofmhelpers.db.stores.jobs import get_job, list_jobs
+from ofmhelpers.integrations.ai_providers.base import TaskState
+from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
+from ofmhelpers.media.video_probe import duration_s
+from ofmhelpers.schemas import Job, ResultFile
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.schemas import Job, ResultFile
-from ofmhelpers.web.stores.jobs import get_job, list_jobs
 from ofmhelpers.web.templates_config import render_partial
 
 NEW = json.dumps([{"kind": "new"}])

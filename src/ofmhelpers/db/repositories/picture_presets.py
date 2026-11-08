@@ -1,11 +1,9 @@
 """/pictures presets (`picture_presets`). Nothing cached: a handful of rows,
 read once per page."""
 
-from __future__ import annotations
-
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -13,9 +11,6 @@ from sqlalchemy.exc import IntegrityError
 from ofmhelpers.db.models import PicturePresetRow
 from ofmhelpers.db.repositories.devices import DuplicateError
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 
 def _row(row: PicturePresetRow) -> dict:

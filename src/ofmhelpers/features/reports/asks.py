@@ -13,10 +13,8 @@ retried, in Logfire). Only on a server that talks to Telegram: not with
 `telegram` in `OFM_EVENTS_SENDERS_OFF` (dev, whose bot token is prod's: two
 servers reading one bot take each other's messages)."""
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
+lazy from collections.abc import Callable
 
 from redis.exceptions import RedisError
 
@@ -30,11 +28,7 @@ from ofmhelpers.integrations.senders.telegram.client import (
     TelegramError,
 )
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from ofmhelpers.schemas.events import Event
+lazy from ofmhelpers.schemas.events import Event
 
 logger = get_logger(__name__)
 
@@ -94,7 +88,7 @@ def answer_asks() -> None:
             # No chat id: the app never logs where a message goes (senders/CLAUDE.md).
             logger.info("telegram: %r asked", ask.word)
         inbox.confirm(found)
-    except (TelegramError, RedisError):
+    except TelegramError, RedisError:
         state.failed = True
         logger.warning("telegram asks not read", exc_info=True)
         return

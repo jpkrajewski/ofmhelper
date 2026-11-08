@@ -1,8 +1,6 @@
 """Clone results uploaded into account Drive folders (`drive_uploads`).
 Uncached: the clone page polls it while uploads run."""
 
-from __future__ import annotations
-
 import time
 
 from sqlalchemy import and_, or_, select, update

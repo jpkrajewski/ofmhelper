@@ -11,8 +11,6 @@ worker processes and the test seeding them share one account. Test hooks:
 analytics report), `set_limit` (the plan's quota); `pages`/`links`/`adult`
 read the state."""
 
-from __future__ import annotations
-
 import fcntl
 import json
 import re
@@ -21,18 +19,15 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
+lazy from collections.abc import Iterator, Mapping
 
 from pydantic import BaseModel, Field
+lazy import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
-
-    import requests
 
 OOPSIE_FAKE_KEY = "gmp_live_fake"
 BOUNCY_FAKE_KEY = "bcy_live_pk_fake"

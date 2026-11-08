@@ -4,11 +4,11 @@ a cent)."""
 
 import pytest
 
-from ofmhelpers.apify import RunStatus, richest
 from ofmhelpers.config import settings
-from ofmhelpers.viral import ViralError, most_played, parse
-from ofmhelpers.viral.media import has_audio
-from ofmhelpers.viral.service import _download, reel_input
+from ofmhelpers.features.viral import ViralError, most_played, parse
+from ofmhelpers.features.viral.media import has_audio
+from ofmhelpers.features.viral.service import _download, reel_input
+from ofmhelpers.integrations.apify import RunStatus, richest
 
 # A public profile with reels on each side.
 _PROFILE = {"fake": "sheep_love33", "real": "natgeo"}

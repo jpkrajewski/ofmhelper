@@ -18,10 +18,8 @@ Provider-agnostic: everything provider-specific is behind
 `links.providers.LinkProvider`.
 """
 
-from __future__ import annotations
-
 from datetime import timedelta
-from typing import TYPE_CHECKING
+lazy from collections.abc import Callable
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
@@ -40,12 +38,8 @@ from ofmhelpers.integrations.short_links import (
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.links import utc_today
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from ofmhelpers.integrations.short_links.providers import LinkProvider
-    from ofmhelpers.schemas import ShortLink
+lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
+lazy from ofmhelpers.schemas import ShortLink
 
 logger = get_logger(__name__)
 

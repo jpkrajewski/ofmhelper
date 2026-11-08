@@ -10,8 +10,6 @@ a removed post answers (status "fail"). saveinta's result comes as the
 same packed script the live site sends; snapreels' as plain HTML.
 """
 
-from __future__ import annotations
-
 import urllib.parse
 from urllib.parse import parse_qs, urlsplit
 

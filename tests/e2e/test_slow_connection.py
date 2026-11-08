@@ -4,23 +4,17 @@ showed for a partner on a slow line (prod, 2026-10-21). In a real browser:
 the page loads posters and small previews only, no video starts loading
 before it is played, and Download still gets the original."""
 
-from __future__ import annotations
-
 import os
 import subprocess
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 import pytest
 from PIL import Image
+lazy from e2e_session import Session
+lazy from playwright.sync_api import Response
 
-from ofmhelpers.web.stores import jobs as jobs_store
-from ofmhelpers.web.stores.jobs import create_job, run_job
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from e2e_session import Session
-    from playwright.sync_api import Response
+from ofmhelpers.db.stores import jobs as jobs_store
+from ofmhelpers.db.stores.jobs import create_job, run_job
 
 pytestmark = pytest.mark.e2e
 

@@ -4,9 +4,9 @@ session cookie."""
 
 import secrets
 
-from fastapi.responses import Response
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from pydantic import BaseModel, ValidationError
+lazy from fastapi.responses import Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.signin import SignInError

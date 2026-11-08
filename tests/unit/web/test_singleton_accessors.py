@@ -8,8 +8,8 @@ what `db/repositories/cached_repository.py` used to carry a whole extra
 lazy-wrapper class to work around.
 """
 
-from ofmhelpers.web.db.repositories import cached_repository as cache_module
-from ofmhelpers.web.stores import applications, jobs
+from ofmhelpers.db.repositories import cached_repository as cache_module
+from ofmhelpers.db.stores import applications, jobs
 from ofmhelpers.web.templates_config import get_templates
 
 STORES = (jobs, applications)

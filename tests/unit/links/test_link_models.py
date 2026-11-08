@@ -6,10 +6,18 @@ from datetime import date, timedelta
 import pytest
 from pydantic import ValidationError
 
-from ofmhelpers.links import Usage, detect_target, provider_infos, targets
-from ofmhelpers.links.providers import get_link_provider, link_providers
-from ofmhelpers.links.providers.bouncy import _spans
-from ofmhelpers.web.schemas import GenerateLinks, LinkPeriod, LinkSummary, ShortLink
+from ofmhelpers.integrations.short_links import (
+    Usage,
+    detect_target,
+    provider_infos,
+    targets,
+)
+from ofmhelpers.integrations.short_links.providers import (
+    get_link_provider,
+    link_providers,
+)
+from ofmhelpers.integrations.short_links.providers.bouncy import _spans
+from ofmhelpers.schemas import GenerateLinks, LinkPeriod, LinkSummary, ShortLink
 
 OOPSIE = provider_infos()["oopsie"].slug
 BOUNCY = provider_infos()["bouncy"].slug

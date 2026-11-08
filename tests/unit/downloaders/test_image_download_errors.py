@@ -5,8 +5,8 @@ gallery-dl."""
 
 import subprocess
 
-from ofmhelpers.downloaders import images
-from ofmhelpers.downloaders.images import ImageDownloadConfig
+from ofmhelpers.integrations.downloaders import images
+from ofmhelpers.integrations.downloaders.images import ImageDownloadConfig
 
 POST = "https://www.instagram.com/p/DGUaB0Rtazx/"
 

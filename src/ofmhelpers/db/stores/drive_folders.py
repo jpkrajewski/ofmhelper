@@ -7,20 +7,14 @@ phone owner's own "ALL ACCOUNTS" folder (features/drive/folders.py makes them),
 and the files seen posted.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
+lazy from contextlib import AbstractContextManager
 
 from ofmhelpers.db.repositories import DriveFolderRepository
 from ofmhelpers.db.stores.devices import list_devices
 from ofmhelpers.db.stores.users import list_users
 from ofmhelpers.schemas import AccountScan, DriveTarget, StoredFolder
-
-if TYPE_CHECKING:
-    from contextlib import AbstractContextManager
-
-    from ofmhelpers.integrations.gdrive import DriveFile
+lazy from ofmhelpers.integrations.gdrive import DriveFile
 
 _SERVICE = "instagram"
 

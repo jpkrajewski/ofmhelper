@@ -15,8 +15,6 @@ module-level singleton of one of these classes directly -- see
 config/__init__.py's docstring for why.
 """
 
-from __future__ import annotations
-
 import datetime
 from enum import IntEnum, StrEnum
 from typing import Literal

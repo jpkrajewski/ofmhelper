@@ -5,8 +5,6 @@ Clone results uploaded into account Drive folders (features/drive/uploads.py
 queues and runs them; /clone shows where each result went).
 """
 
-from __future__ import annotations
-
 import time
 from functools import lru_cache
 

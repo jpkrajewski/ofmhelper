@@ -5,8 +5,8 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 from pydantic import BaseModel
+lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker import audio, frames, sscd, tmk, visual
 from ofmhelpers.media.repurpose.checker.audio import AudioScore

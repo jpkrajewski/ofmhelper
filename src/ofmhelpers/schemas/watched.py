@@ -31,7 +31,7 @@ class WatchedProfile(BaseModel):
         return self.result.views_total if self.result else 0
 
     @classmethod
-    def most_viewed(cls, profiles: list["WatchedProfile"]) -> str | None:
+    def most_viewed(cls, profiles: list[WatchedProfile]) -> str | None:
         """The username with the most window views -- the legendary row --
         or None while no profile has any."""
         top = max(profiles, key=lambda p: p.views_total, default=None)
@@ -39,7 +39,7 @@ class WatchedProfile(BaseModel):
 
     @classmethod
     def most_reels(
-        cls, profiles: list["WatchedProfile"], excluding: str | None
+        cls, profiles: list[WatchedProfile], excluding: str | None
     ) -> str | None:
         """The username with the most feed reels besides `excluding` (the
         most viewed, which already leads), window views breaking a tie; None
@@ -55,12 +55,12 @@ class WatchedProfile(BaseModel):
         return len(self.result.reels) if self.result else 0
 
     @classmethod
-    def by_reels(cls, profiles: list["WatchedProfile"]) -> list["WatchedProfile"]:
+    def by_reels(cls, profiles: list[WatchedProfile]) -> list[WatchedProfile]:
         """The watch list's order: ones still on their first scan on top (so
         an add shows up), then the most feed reels first, total views of
         those breaking a tie."""
 
-        def key(p: "WatchedProfile") -> tuple[bool, int, int]:
+        def key(p: WatchedProfile) -> tuple[bool, int, int]:
             views = sum(r.views for r in p.result.reels) if p.result else 0
             return (p.pending, p.reel_count, views)
 
@@ -77,7 +77,7 @@ class Leaderboard(BaseModel):
     top_reels: str | None
 
     @classmethod
-    def of(cls, profiles: list[WatchedProfile]) -> "Leaderboard":
+    def of(cls, profiles: list[WatchedProfile]) -> Leaderboard:
         top_views = WatchedProfile.most_viewed(profiles)
         top_reels = WatchedProfile.most_reels(profiles, top_views)
         leaders = [u for u in (top_views, top_reels) if u]
@@ -97,7 +97,7 @@ class FeedItem(BaseModel):
     reel: Reel
 
     @classmethod
-    def of(cls, profiles: list[WatchedProfile]) -> list["FeedItem"]:
+    def of(cls, profiles: list[WatchedProfile]) -> list[FeedItem]:
         """Every profile's reels, most viewed first."""
         items = [
             cls(username=p.username, reel=reel)

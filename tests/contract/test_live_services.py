@@ -20,8 +20,8 @@ import yt_dlp
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.instagram import client as instagram_client
-from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
+from ofmhelpers.integrations.instagram import client as instagram_client
+from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 
 pytestmark = pytest.mark.live
 

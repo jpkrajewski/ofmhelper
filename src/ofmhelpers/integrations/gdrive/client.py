@@ -9,24 +9,24 @@ caller acts on it: `FolderGoneError` (404, trashed), `DriveFullError` (no
 room), `DriveAuthError` (Google refused the person's sign-in: reconnect).
 """
 
-from __future__ import annotations
-
 import json
 import re
 import threading
 from functools import lru_cache
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from pathlib import Path
 
-import httplib2
-from google.auth.exceptions import GoogleAuthError, RefreshError
-from google.auth.transport.requests import AuthorizedSession
-from google.oauth2 import service_account
-from google_auth_httplib2 import AuthorizedHttp
-from googleapiclient.discovery import build
-from googleapiclient.errors import Error as GoogleApiError
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+lazy import httplib2
+lazy from google.auth.credentials import Credentials
+lazy from google.auth.exceptions import GoogleAuthError, RefreshError
+lazy from google.auth.transport.requests import AuthorizedSession
+lazy from google.oauth2 import service_account
+lazy from google_auth_httplib2 import AuthorizedHttp
+lazy from googleapiclient.discovery import build
+lazy from googleapiclient.errors import Error as GoogleApiError
+lazy from googleapiclient.errors import HttpError
+lazy from googleapiclient.http import HttpRequest, MediaFileUpload
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.gdrive.base import (
@@ -43,12 +43,6 @@ from ofmhelpers.integrations.gdrive.models import (
     DriveStorage,
 )
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from google.auth.credentials import Credentials
-    from googleapiclient.http import HttpRequest
 
 logger = get_logger(__name__)
 

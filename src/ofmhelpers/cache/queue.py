@@ -20,11 +20,10 @@ the durable half of what this app keeps in Redis, the caches are the throwaway
 half.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import Any, Self, cast
+lazy from collections.abc import Callable
 
 import logfire
 from pydantic import BaseModel
@@ -35,9 +34,6 @@ from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import JOB_QUEUES, QueueName
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = get_logger(__name__)
 

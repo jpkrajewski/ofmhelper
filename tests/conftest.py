@@ -136,7 +136,7 @@ def _test_database(_test_environment):
     from alembic.config import Config
 
     from alembic import command
-    from ofmhelpers.web.db.session import get_engine
+    from ofmhelpers.db.session import get_engine
 
     with get_engine().begin() as conn:
         conn.execute(text("DROP SCHEMA public CASCADE"))
@@ -162,8 +162,8 @@ def _clean_tables(request):
         return
     request.getfixturevalue("_test_database")
     from ofmhelpers.cache import get_redis
-    from ofmhelpers.web.db.models import Base
-    from ofmhelpers.web.db.session import get_engine
+    from ofmhelpers.db.models import Base
+    from ofmhelpers.db.session import get_engine
 
     tables = ", ".join(Base.metadata.tables)
     with get_engine().begin() as conn:
@@ -213,22 +213,23 @@ def pytest_collection_modifyitems(config, items):
 def fake_externals(monkeypatch, tmp_path):
     """OFM_FAKE_EXTERNALS on, every fake fresh (state in `tmp_path`): the
     app's outside services answered in-process, as under e2e."""
-    from ofmhelpers.aigenproviders.elyum.fake import fake_elyum
-    from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
-    from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
-    from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
-    from ofmhelpers.apify.fake import fake_apify
-    from ofmhelpers.gdrive.fake import _fake_drive
-    from ofmhelpers.instagram.fake import fake_instagram
     from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
+    from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
+    from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
+    from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
+    from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
+    from ofmhelpers.integrations.apify.fake import fake_apify
     from ofmhelpers.integrations.fanvue.fake import fake_fanvue
+    from ofmhelpers.integrations.gdrive.fake import _fake_drive
+    from ofmhelpers.integrations.instagram.fake import fake_instagram
+    from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
+    from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
+    from ofmhelpers.integrations.llm.groq.fake import fake_groq
     from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
+    from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
     from ofmhelpers.integrations.stacked.fake import fake_stacked
-    from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
-    from ofmhelpers.llm.cerebras.fake import fake_cerebras
-    from ofmhelpers.llm.gemini.fake import fake_gemini
-    from ofmhelpers.llm.groq.fake import fake_groq
-    from ofmhelpers.utils import fake_media, outbound
+    from ofmhelpers.media import fake_media
+    from ofmhelpers.utils import outbound
 
     caches = (
         outbound._routes,

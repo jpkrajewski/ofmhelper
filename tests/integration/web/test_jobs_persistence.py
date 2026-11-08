@@ -12,9 +12,8 @@ tables between tests, so these never touch dev/prod data.
 
 from pathlib import Path
 
-from ofmhelpers.aigenproviders import tasks
-from ofmhelpers.web.db.repositories import JobRepository
-from ofmhelpers.web.stores.jobs import (
+from ofmhelpers.db.repositories import JobRepository
+from ofmhelpers.db.stores.jobs import (
     create_job,
     fail_job,
     get_job,
@@ -26,6 +25,7 @@ from ofmhelpers.web.stores.jobs import (
     reopen_job,
     run_job,
 )
+from ofmhelpers.integrations.ai_providers import tasks
 
 
 def test_create_job_persists_immediately():
@@ -229,7 +229,7 @@ def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch
 def test_list_jobs_page_filters_and_pages_in_sql():
     """A gallery page is one SQL page: only the asked tasks/actor, newest
     first, with the total before slicing."""
-    from ofmhelpers.web.stores.jobs import create_job, list_jobs_page
+    from ofmhelpers.db.stores.jobs import create_job, list_jobs_page
 
     va = [create_job("wan3", {"i": i}, actor="va") for i in range(3)]
     create_job("wan3", {}, actor="admin")

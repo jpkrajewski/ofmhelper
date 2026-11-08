@@ -27,21 +27,15 @@ range, so `client.host` is the address nginx saw -- never "*", which would
 take the client-written leftmost entry and let anyone pick their bucket.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi.concurrency import run_in_threadpool
 from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+lazy from starlette.requests import Request
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from starlette.requests import Request
 
 logger = get_logger(__name__)
 

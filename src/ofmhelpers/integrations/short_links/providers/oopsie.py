@@ -2,11 +2,9 @@
 (`theme.page_type` "direct") with the 18+ gate (`theme.age_gate`) on.
 API reference: links/CLAUDE.md."""
 
-from __future__ import annotations
-
 import re
 from datetime import UTC, date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import quote
 
 from ofmhelpers.integrations.short_links.errors import (
@@ -21,9 +19,7 @@ from ofmhelpers.integrations.short_links.models import (
     Usage,
 )
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.short_links.models import NewLink
+lazy from ofmhelpers.integrations.short_links.models import NewLink
 
 _CREATED = 201
 # An hourly bucket's label: "07:00".

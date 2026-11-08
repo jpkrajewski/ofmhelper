@@ -6,15 +6,10 @@ counts, per link, what each of those days and the newer ones gained since. That 
 exactly what came in between the two runs (as fresh as the links' last sync,
 which the report runs first)."""
 
-from __future__ import annotations
-
 from datetime import UTC, date, datetime, timedelta
-from typing import TYPE_CHECKING
 
 from ofmhelpers.schemas.reports import DayCount, ReportMarks
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas.links import ShortLink
+lazy from ofmhelpers.schemas.links import ShortLink
 
 
 def marks(links: list[ShortLink], now: float) -> ReportMarks:

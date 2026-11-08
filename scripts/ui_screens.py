@@ -12,8 +12,6 @@ account, so every admin page is shot too. Dev runs on prod data: the
 shots stay in reports/ (gitignored), never in the repo.
 """
 
-from __future__ import annotations
-
 import os
 import sys
 from html import escape

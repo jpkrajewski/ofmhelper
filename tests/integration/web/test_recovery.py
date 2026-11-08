@@ -8,15 +8,15 @@ next sweep. Every provider call is stubbed.
 import pytest
 from rq.timeouts import JobTimeoutException
 
-from ofmhelpers.aigenproviders import tasks
-from ofmhelpers.aigenproviders.base import TaskState
-from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
 from ofmhelpers.cache import QueueName
-from ofmhelpers.web import recovery
+from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job, run_job
+from ofmhelpers.features.jobs import recovery
+from ofmhelpers.integrations.ai_providers import tasks
+from ofmhelpers.integrations.ai_providers.base import TaskState
+from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.web.routers.registry import RESUMABLE
-from ofmhelpers.web.stores.jobs import create_job, fail_job, get_job, run_job
 
 MODEL = "kie:wan/3-0-video"
 

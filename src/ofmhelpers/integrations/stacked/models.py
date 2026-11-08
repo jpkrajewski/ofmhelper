@@ -4,9 +4,7 @@ Chat message times are epoch milliseconds and chat times epoch seconds on the
 wire; pydantic tells the two apart, so every `created_at` here is a UTC
 datetime."""
 
-from __future__ import annotations
-
-from datetime import datetime  # noqa: TC003 -- pydantic reads it at runtime
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 

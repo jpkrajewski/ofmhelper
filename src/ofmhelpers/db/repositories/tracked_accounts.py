@@ -2,13 +2,14 @@
 Each account and creator belongs to a user; `owner` limits a call to that
 user's rows (None: everyone's, for system work). Scans run per row."""
 
-from __future__ import annotations
-
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from collections.abc import Sequence
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+lazy from sqlalchemy import Row
+lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.models import (
     AccountSnapshotRow,
@@ -24,12 +25,6 @@ from ofmhelpers.db.repositories.cached_repository import (
 )
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from sqlalchemy import Row
-    from sqlalchemy.orm import Session
 
 
 def _to_dict(row: TrackedAccountRow, creator: str | None) -> dict:

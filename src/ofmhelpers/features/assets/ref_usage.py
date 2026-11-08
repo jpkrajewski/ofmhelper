@@ -21,19 +21,15 @@ Redis failures are swallowed, like ratelimit.py's: a broker that can't record
 it needs.
 """
 
-from __future__ import annotations
-
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from pathlib import Path
 
 from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 logger = get_logger(__name__)
 

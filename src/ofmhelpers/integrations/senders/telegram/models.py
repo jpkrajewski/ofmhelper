@@ -1,8 +1,6 @@
 """The Bot API's answers, the parts this app reads (core.telegram.org/bots/api,
 Bot API 10.3 checked 2026-11-06)."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from pydantic import BaseModel

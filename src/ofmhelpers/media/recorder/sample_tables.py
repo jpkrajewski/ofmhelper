@@ -24,7 +24,7 @@ class SampleTables(BaseModel):
     sync_samples: list[int]  # 1-based
 
     @classmethod
-    def from_stbl(cls, stbl: Atom) -> "SampleTables":
+    def from_stbl(cls, stbl: Atom) -> SampleTables:
         stts = stbl.child(b"stts")
         ctts = stbl.child(b"ctts")
         stss = stbl.child(b"stss")

@@ -7,19 +7,19 @@ keys from .env)."""
 import pytest
 from PIL import Image
 
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.elyum.fake import FAKE_KEY as ELYUM_FAKE_KEY
-from ofmhelpers.aigenproviders.elyum.provider import ElyumProvider
-from ofmhelpers.aigenproviders.errors import ProviderAuthError
-from ofmhelpers.aigenproviders.higgsfield.fake import FAKE_KEY as HF_FAKE_KEY
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_FAKE_KEY
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
-from ofmhelpers.aigenproviders.runner import generate
-from ofmhelpers.aigenproviders.runninghub.fake import FAKE_KEY as RH_FAKE_KEY
-from ofmhelpers.aigenproviders.runninghub.provider import RunningHubProvider
 from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY as APIYI_FAKE_KEY
 from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.elyum.fake import FAKE_KEY as ELYUM_FAKE_KEY
+from ofmhelpers.integrations.ai_providers.elyum.provider import ElyumProvider
+from ofmhelpers.integrations.ai_providers.errors import ProviderAuthError
+from ofmhelpers.integrations.ai_providers.higgsfield.fake import FAKE_KEY as HF_FAKE_KEY
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_FAKE_KEY
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
+from ofmhelpers.integrations.ai_providers.runner import generate
+from ofmhelpers.integrations.ai_providers.runninghub.fake import FAKE_KEY as RH_FAKE_KEY
+from ofmhelpers.integrations.ai_providers.runninghub.provider import RunningHubProvider
 
 BAD_KEY = "contract-test-invalid-key"
 PROVIDERS = {

@@ -9,11 +9,8 @@ account) with none on the .env one (`LinkProvider.default_key`); nobody
 else ever gets the .env key.
 """
 
-from __future__ import annotations
-
 from datetime import date, timedelta
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import ShortLinkRepository
@@ -31,11 +28,9 @@ from ofmhelpers.integrations.short_links.providers import (
 from ofmhelpers.integrations.socials import get_platform
 from ofmhelpers.schemas import ProviderState, ShortLink
 from ofmhelpers.schemas.links import utc_today
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.short_links import DayStat
-    from ofmhelpers.integrations.short_links.providers import LinkProvider
-    from ofmhelpers.schemas import GenerateLinks, TrackedAccount
+lazy from ofmhelpers.integrations.short_links import DayStat
+lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
+lazy from ofmhelpers.schemas import GenerateLinks, TrackedAccount
 
 # The platform links bridge from (Generate links: one per account).
 SOURCE_PLATFORM = "instagram"

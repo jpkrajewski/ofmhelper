@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 from starlette.datastructures import URL, Headers
 from starlette.responses import RedirectResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+lazy from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ofmhelpers.config import settings
 

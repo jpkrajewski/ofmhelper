@@ -17,63 +17,69 @@ from ofmhelpers.web.routers.video_tools import uniqify
 
 # The /generate gallery: every /ai job, plus the jobs of the per-model tools
 # it replaced (their pages still answer, see generation/legacy.py).
-GENERATE_TOOLS = {
-    ai.TASK: Tool(
-        label="AI generation", router=ai.router, run=ai.run_ai, describe=ai.describe
-    ),
-    **{
-        task: Tool(label=label, router=router, form_params=as_ai_params)
-        for task, (label, router) in LEGACY_TOOLS.items()
-    },
-}
+GENERATE_TOOLS = frozendict(
+    {
+        ai.TASK: Tool(
+            label="AI generation", router=ai.router, run=ai.run_ai, describe=ai.describe
+        ),
+        **{
+            task: Tool(label=label, router=router, form_params=as_ai_params)
+            for task, (label, router) in LEGACY_TOOLS.items()
+        },
+    }
+)
 
 # The /download-assets gallery.
-DOWNLOAD_TOOLS = {
-    media.TASK: Tool(label="Download", router=media.router),
-    # Before /download-media picked the downloader itself: their past jobs.
-    "download_videos": Tool(label="Download videos", router=videos.router),
-    "download_images": Tool(label="Download images", router=images.router),
-    "clean_images": Tool(label="Clean images", router=clean_image.router),
-}
+DOWNLOAD_TOOLS = frozendict(
+    {
+        media.TASK: Tool(label="Download", router=media.router),
+        # Before /download-media picked the downloader itself: their past jobs.
+        "download_videos": Tool(label="Download videos", router=videos.router),
+        "download_images": Tool(label="Download images", router=images.router),
+        "clean_images": Tool(label="Clean images", router=clean_image.router),
+    }
+)
 
 
-TOOLS = {
-    **GENERATE_TOOLS,
-    **DOWNLOAD_TOOLS,
-    "clone": Tool(label="Clone", router=clone.router, run=_run_clone),
-    clone_links.TASK: Tool(
-        label=clone_links.LABEL,
-        router=clone_links.router,
-        run=clone_links.run_clone_link,
-    ),
-    clone_long.TASK: Tool(
-        label=clone_long.LABEL,
-        router=clone_long.router,
-        run=run_long_clone,
-        job_timeout=clone_long_time_limit,
-    ),
-    "character_sheet": Tool(label="Character sheet", router=character_sheet.router),
-    "uniqify": Tool(label="Uniqify", router=uniqify.router),
-    viral.TASK: Tool(label=viral.LABEL, router=viral.router),
-    pictures.TASK: Tool(
-        label=pictures.LABEL,
-        router=pictures.router,
-        run=pictures.run_picture,
-        describe=pictures.describe,
-    ),
-}
+TOOLS = frozendict(
+    {
+        **GENERATE_TOOLS,
+        **DOWNLOAD_TOOLS,
+        "clone": Tool(label="Clone", router=clone.router, run=_run_clone),
+        clone_links.TASK: Tool(
+            label=clone_links.LABEL,
+            router=clone_links.router,
+            run=clone_links.run_clone_link,
+        ),
+        clone_long.TASK: Tool(
+            label=clone_long.LABEL,
+            router=clone_long.router,
+            run=run_long_clone,
+            job_timeout=clone_long_time_limit,
+        ),
+        "character_sheet": Tool(label="Character sheet", router=character_sheet.router),
+        "uniqify": Tool(label="Uniqify", router=uniqify.router),
+        viral.TASK: Tool(label=viral.LABEL, router=viral.router),
+        pictures.TASK: Tool(
+            label=pictures.LABEL,
+            router=pictures.router,
+            run=pictures.run_picture,
+            describe=pictures.describe,
+        ),
+    }
+)
 
 
 # Tasks recovery can finish by re-running the job (see features/jobs/recovery.py).
-RESUMABLE = {task: tool.run for task, tool in TOOLS.items() if tool.run}
+RESUMABLE = frozendict({task: tool.run for task, tool in TOOLS.items() if tool.run})
 # Their RQ time limits, where longer than the queue's default.
-JOB_TIMEOUTS = {
-    task: tool.job_timeout for task, tool in TOOLS.items() if tool.job_timeout
-}
+JOB_TIMEOUTS = frozendict(
+    {task: tool.job_timeout for task, tool in TOOLS.items() if tool.job_timeout}
+)
 # The RQ queue a task's jobs run on, where not the default one: its first
 # run (the router) and recovery's re-run alike. A /clone-links Generate has
 # its own worker pool so it never holds the default queue.
-QUEUES = {clone_links.TASK: QueueName.CLONE_LINKS}
+QUEUES = frozendict({clone_links.TASK: QueueName.CLONE_LINKS})
 
 
 def task_card(job: Job) -> TaskCard:

@@ -1,13 +1,13 @@
-from __future__ import annotations
-
 import random
 import subprocess
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 from urllib.parse import urlsplit
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, Field
+lazy from yt_dlp.extractor import gen_extractor_classes
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.downloaders import fake
@@ -23,9 +23,6 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.utils.proxy_pool import ProxyPool
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -231,8 +228,6 @@ def is_tiktok_url(url: str) -> bool:
 def _site_extractors() -> tuple[Any, ...]:
     """yt-dlp's site extractors (lazy: only their URL patterns load), not
     Generic, which takes any URL and reads the page for a video."""
-    from yt_dlp.extractor import gen_extractor_classes
-
     return tuple(ie for ie in gen_extractor_classes() if ie.ie_key() != "Generic")
 
 
@@ -255,7 +250,7 @@ def reencode_to_h264(path: Path, config: DownloadConfig) -> Path:
 
     try:
         ffmpeg.run_bytes(cmd, settings.downloaders.reencode_timeout_s)
-    except (RuntimeError, FileNotFoundError):
+    except RuntimeError, FileNotFoundError:
         logger.warning(
             "re-encode of %s failed, original kept", path.name, exc_info=True
         )

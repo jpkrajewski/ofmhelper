@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+DONT WRITE CODE TO WRITE CODE, WRITE THE SHORTEST POSSIBLE CODE IMPLEMENTION TO GET THE FEATURE WORKING,
+USER ASKS FOR SCRAPER OF INSTAGRAM IMAGES - > U BUILD SCRAPER THAT WORKS AND DOESNT BREAK -> THEN YOU BUIDL ALL OF THIS BULSHIT AROUND
+FIRST IT MUST WORKS AND SHOW ME IT WORKS -> THEN YOU CLEAN THE CODE MVP WORKING FIRST, THEN REFINE, CLEAN CODE
+
 THIS APLICATION MUST BE USABLE BY EVEN BRAIN DAMAGED PEOLPLE
 NO SHOWING RANDOM ERROS IN FRONT END, NO SMART-ASS UI. NO TRYING BEEING SMART. REDUCE CLICKS AND MENTAL LOAD TO MINUUM.
 USE DEFAULTS ON FRONT END LIKE API KEYS, DEFAULT SETTING THAT ARE MOST USABLE,
@@ -9,7 +13,7 @@ CODE FOR HAPPY PATH FIRST AND SHOWING RESULTS THAT I CAN VERIFY, WORKING CODE ->
 
 
 ## Stack
-Python 3.12, FastAPI, PostgreSQL, Redis, RQ. Prod = Linux/Docker.
+Python 3.15, FastAPI, PostgreSQL, Redis, RQ. Prod = Linux/Docker.
 
 ## Principles
 - No speculative features, but extendable designs: a new variant (device, parser, login method) is a new entry/file, not a rewrite.
@@ -77,7 +81,6 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 - `integrations/` everything that talks to an outside service: `ai_providers/<name>/`, `gdrive`, `instagram`, `llm`, `short_links`, `apify`, `stacked`, `fanvue`, `downloaders`, `signin`, `socials`, `senders/<name>/` (where events go out: Telegram, ...; `features/events` emits).
 - `media/` local video and image work (ffmpeg, recorder, repurpose, exports).
 - `db/` session, models, `repositories/`, `stores/`. `schemas/` shared Pydantic shapes. `config/`, `cache/`, `utils/`.
-- `_moved.py`: old import paths of moved modules (RQ jobs in the queue, frozen tests). New code imports the new path; never add to it except when moving a module.
 
 ## Architecture
 - `DB -> Repository (cached) -> Service`; services never touch the DB.
@@ -90,7 +93,7 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 
 ## Libraries & Tools
 - Preference: stdlib -> vetted Python package (check advisories) -> distro binary (ffmpeg, exiftool) -> custom code last, with the reason stated.
-- Tools live in Docker images, never on the Windows host. Exception: ruff from the host `.venv` (pre-commit, and `.claude/hooks/ruff_on_edit.py`, which formats each .py Claude edits).
+- Tools live in Docker images, never on the Windows host. Exception: `.claude/hooks/ruff_on_edit.py` (formats each .py Claude edits) runs the host `.venv`'s ruff.
 - Dependency bumps: Renovate (`renovate.json`) opens grouped PRs into dev, label `deps` (weekly; yt-dlp/gallery-dl daily; security fixes at once; majors one PR each, never Postgres/Redis majors). Dependabot = GitHub's security alerts only (its PRs would target main). Every `ship` merges the green non-major ones, fixes or reports the red ones, and upgrades any alerted package with no PR (the skill's step 3). Never merge a bot PR into main.
 - `.claude/skills/fastapi/` is FastAPI's own skill, a copy of what the pinned version ships. After upgrading FastAPI: `$C run --rm --no-deps tests uvx library-skills --claude --yes --copy --no-tool-skill --skill fastapi`, then delete the `.agents/` it also writes. Where our code goes against it on purpose, the reason is in `web/routers/CLAUDE.md`.
 
@@ -101,6 +104,11 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 - CSS is `static/css/tokens.css -> base.css -> components.css -> pages.css` (loaded via `_styles.html`). Colours only in the palette in `tokens.css` (`test_palette.py`); spacing/heights/radii only via the role tokens there. Change a token, not a rule.
 - No help paragraphs, page leads that explain, or explanatory tooltips; `title` only for the full text of something truncated.
 - Every UI change: `scripts/ui_screens.py rNN` (screenshots of every page into `reports/ui/`, side by side in `reports/ui/index.html`); the user checks dev before tests run.
+
+## Python 3.15 in this code
+- Heavy or typing-only imports: `lazy import` / `lazy from` at module level, never `if TYPE_CHECKING:`, no `from __future__ import annotations` (annotations are deferred natively). Ruff's `TC001`/`TC002` ask for it. A job-side heavy library also goes in `worker._LAZY_HEAVY`, so a forked job does not pay for it.
+- A lazy name used at import time (base class, decorator, module-level call) loads right there: no gain. A lazy import failing fails at first use: keep "is it installed?" checks eager.
+- Shared never-mutated dicts: `frozendict`. "No value given" markers: `sentinel("_NAME")`. File moves and copies: `Path.move` / `Path.copy`.
 
 ## Data Models
 - Map all data to Pydantic (tool JSON, config, fixtures); no raw dicts or hand parsers. Large static data = package JSON + model.

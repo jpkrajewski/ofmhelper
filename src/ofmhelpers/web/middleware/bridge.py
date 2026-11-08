@@ -14,17 +14,16 @@ byte-identical for every visitor and for a crawler (we never show reviewers a
 different destination): the only thing a crawler changes is that its view is
 not counted."""
 
-from __future__ import annotations
-
 import re
 import time
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 from urllib.parse import urlsplit
 
 from redis.exceptions import RedisError
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import Response
+lazy from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
@@ -32,9 +31,6 @@ from ofmhelpers.db.stores import self_links
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.self_links import SelfClick
 from ofmhelpers.web.templates_config import render
-
-if TYPE_CHECKING:
-    from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = get_logger(__name__)
 

@@ -39,9 +39,9 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import UploadFile
 from pydantic import BaseModel
 from redis.exceptions import RedisError
+lazy from fastapi import UploadFile
 
 from ofmhelpers.cache.queue import JobQueue
 from ofmhelpers.config import settings
@@ -53,7 +53,7 @@ from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim
 from ofmhelpers.media.video_probe import duration_s, frame_rate, frame_times
-from ofmhelpers.schemas import Job
+lazy from ofmhelpers.schemas import Job
 
 logger = get_logger(__name__)
 

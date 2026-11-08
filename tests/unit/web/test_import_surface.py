@@ -9,7 +9,7 @@ test would attribute to the split.
 
 import pytest
 
-from ofmhelpers.web.db import repositories
+from ofmhelpers.db import repositories
 from ofmhelpers.web.routers import task_helpers
 
 REPOSITORIES = ("ApplicationRepository", "JobRepository")

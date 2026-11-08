@@ -1,8 +1,8 @@
 import random
 
-from ofmhelpers.iphones import load_profile
-from ofmhelpers.iphones.recorder import encode_args
-from ofmhelpers.utils.capcut import SourceInfo
+from ofmhelpers.media.capcut import SourceInfo
+from ofmhelpers.media.recorder import load_profile
+from ofmhelpers.media.recorder.recorder import encode_args
 
 TIMING = load_profile("iphone17").video.timing
 

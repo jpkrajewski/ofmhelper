@@ -6,21 +6,15 @@ Under OFM_FAKE_EXTERNALS the providers' consent screens are the app's own
 `/auth/fake-consent` page (routers/auth.py), which mints such a code.
 """
 
-from __future__ import annotations
-
 import base64
 import json
-from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
+lazy from collections.abc import Mapping
 
 from pydantic import BaseModel, ValidationError
+lazy import requests
 
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 _PREFIX = "fake:"
 _HOSTS = ("oauth2.googleapis.com", "appleid.apple.com")
@@ -55,7 +49,7 @@ def _account(code: str) -> FakeAccount | None:
     try:
         decoded = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
         return FakeAccount.model_validate_json(decoded)
-    except (ValueError, ValidationError):
+    except ValueError, ValidationError:
         return None
 
 

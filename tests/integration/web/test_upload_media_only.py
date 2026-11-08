@@ -99,7 +99,7 @@ def test_clean_images_rejects_a_non_image_upload(va_client):
 
 def test_clean_images_accepts_every_extension_the_cleaner_supports(va_client, tmp_path):
     """The allowlist must not be narrower than utils/metadata_cleaner's."""
-    from ofmhelpers.utils.metadata_cleaner import SUPPORTED_EXTENSIONS
+    from ofmhelpers.media.metadata_cleaner import SUPPORTED_EXTENSIONS
     from ofmhelpers.web.routers.task_helpers import IMAGE_KINDS, classify_kind
 
     for ext in SUPPORTED_EXTENSIONS:

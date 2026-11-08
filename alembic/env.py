@@ -4,8 +4,6 @@ Alembic migration environment. Pulls the DB URL from the app's own config
 Base.metadata so `alembic revision --autogenerate` sees the models.
 """
 
-from __future__ import annotations
-
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool

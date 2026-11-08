@@ -1,7 +1,5 @@
 """Background-job history: what every generation/download tool writes."""
 
-from __future__ import annotations
-
 import time
 import uuid
 from typing import Any
@@ -30,7 +28,7 @@ from ofmhelpers.db.session import session_scope
 
 # Sentinel so update_status can tell "leave this column alone" apart from
 # "set it to None" (a failed job explicitly clears result, etc.).
-_UNSET: Any = object()
+_UNSET = sentinel("_UNSET")
 
 
 def _job_to_dict(row: JobRow) -> dict:
@@ -118,7 +116,7 @@ class JobRepository(CachedRepository):
         status: str,
         *,
         result: Any = _UNSET,
-        error: Any = _UNSET,
+        error: str | _UNSET | None = _UNSET,
     ) -> None:
         finished = status in ("done", "failed")
         values: dict[str, Any] = {

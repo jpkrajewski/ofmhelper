@@ -11,11 +11,6 @@ from collections.abc import Iterator
 
 import pytest
 
-from ofmhelpers.aigenproviders.elyum.fake import fake_elyum
-from ofmhelpers.aigenproviders.higgsfield.fake import fake_higgsfield
-from ofmhelpers.aigenproviders.kaiai.fake import fake_kie
-from ofmhelpers.aigenproviders.runninghub.fake import fake_runninghub
-from ofmhelpers.apify.fake import fake_apify
 from ofmhelpers.config import settings as app_settings
 from ofmhelpers.config.settings import (
     ApiyiSettings,
@@ -31,18 +26,24 @@ from ofmhelpers.config.settings import (
     TelegramSettings,
     ViralSettings,
 )
-from ofmhelpers.gdrive import client as drive_client
-from ofmhelpers.gdrive.fake import _fake_drive
-from ofmhelpers.instagram.fake import fake_instagram
 from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
+from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
+from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
+from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
+from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
+from ofmhelpers.integrations.apify.fake import fake_apify
 from ofmhelpers.integrations.fanvue.fake import fake_fanvue
+from ofmhelpers.integrations.gdrive import client as drive_client
+from ofmhelpers.integrations.gdrive.fake import _fake_drive
+from ofmhelpers.integrations.instagram.fake import fake_instagram
+from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
+from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
+from ofmhelpers.integrations.llm.groq.fake import fake_groq
 from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
+from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.integrations.stacked.fake import fake_stacked
-from ofmhelpers.links.fake import _fake_bouncy, _fake_oopsie
-from ofmhelpers.llm.cerebras.fake import fake_cerebras
-from ofmhelpers.llm.gemini.fake import fake_gemini
-from ofmhelpers.llm.groq.fake import fake_groq
-from ofmhelpers.utils import fake_media, outbound
+from ofmhelpers.media import fake_media
+from ofmhelpers.utils import outbound
 
 FAKE = "fake"
 REAL = "real"

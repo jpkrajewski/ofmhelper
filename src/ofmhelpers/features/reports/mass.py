@@ -14,8 +14,6 @@ report's Chatting part is the same message (`daily.py`), so the chat shows only
 the newest. The same list twice goes out once (its key). Platforms in
 `OFM_CHATTING_EVENTS_PLATFORMS_OFF` (Fanvue for now) are left out."""
 
-from __future__ import annotations
-
 import hashlib
 import time
 

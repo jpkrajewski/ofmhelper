@@ -204,7 +204,7 @@ def _failures(source: Path, job_id: str, index: int) -> int:
             return 0
         stamp, _, count = marker.read_text(encoding="utf-8").rpartition(":")
         return int(count) if stamp == _stamp(source) else 0
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return 0
 
 

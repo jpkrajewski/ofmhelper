@@ -11,8 +11,6 @@ How a refusal is told apart (Bot API "Making requests"): 429 carries
 answers with `parameters.migrate_to_chat_id`; any other 4xx (chat not found, bot
 removed or blocked) cannot succeed on a retry; 5xx and network errors can."""
 
-from __future__ import annotations
-
 from http import HTTPStatus
 from typing import Any
 

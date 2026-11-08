@@ -40,8 +40,6 @@ alembic.ini -- that's alembic's convention and it's a one-shot deploy step)
 or an operator CLI whose stdout is its output.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import logging.config

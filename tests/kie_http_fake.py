@@ -14,7 +14,9 @@ import requests
 def kie_http():
     with (
         mock.patch.object(requests.Session, "request") as request,
-        mock.patch("ofmhelpers.aigenproviders.kaiai.client.requests.head") as head,
+        mock.patch(
+            "ofmhelpers.integrations.ai_providers.kie.client.requests.head"
+        ) as head,
     ):
         yield SimpleNamespace(post=request, request=request, head=head)
 

@@ -6,7 +6,7 @@ bill their own provider account. An admin with none saved for a provider
 gets the .env one (`Provider.default_key`). Empty: they paste one in.
 """
 
-from starlette.requests import Request
+lazy from starlette.requests import Request
 
 from ofmhelpers.db.stores.users import api_keys
 from ofmhelpers.integrations.ai_providers.base import provider_class, provider_classes

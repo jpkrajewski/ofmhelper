@@ -6,8 +6,6 @@ Starting a run is a paid POST: it is sent once, never retried (a lost answer
 would start, and pay for, a second run). Reads retry nothing either: a run
 is waited for with `waitForFinish`, one long poll at a time."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 
@@ -160,7 +158,7 @@ def by_credit(tokens: list[str]) -> list[tuple[ApifyClient, float]]:
         client = ApifyClient(token)
         try:
             remaining = client.remaining_usd()
-        except (ApifyError, requests.RequestException):
+        except ApifyError, requests.RequestException:
             logger.warning("apify key %s unusable", client.key_hint, exc_info=True)
             continue
         logger.info("apify key %s: $%.2f left", client.key_hint, remaining)

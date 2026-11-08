@@ -3,8 +3,8 @@ it returns."""
 
 from pathlib import Path
 
-from ofmhelpers.downloaders.generic import DownloadConfig
-from ofmhelpers.downloaders.models import YtDlpInfo
+from ofmhelpers.integrations.downloaders.generic import DownloadConfig
+from ofmhelpers.integrations.downloaders.models import YtDlpInfo
 
 
 def test_info_reads_merged_files_of_a_single_video():

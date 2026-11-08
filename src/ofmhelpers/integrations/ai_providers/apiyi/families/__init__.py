@@ -12,9 +12,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar
 
-from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
-from ofmhelpers.integrations.ai_providers.base import TaskState
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
+lazy from ofmhelpers.integrations.ai_providers.base import TaskState
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 _SEP = ":"
 
