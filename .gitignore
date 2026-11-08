@@ -45,3 +45,6 @@ backlog.txt
 
 # Serena (code-navigation MCP) local project state.
 /.serena/
+
+# Local ops notes (server IP, domain setup): never in this public repo.
+/ops.local/

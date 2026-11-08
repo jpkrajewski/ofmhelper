@@ -5,6 +5,9 @@
 #   scripts/report.sh          serve on http://127.0.0.1:5050 and open it
 #   scripts/report.sh stop     stop the server
 set -euo pipefail
+# The results live in the test_allure volume at /allure-results: a container
+# path Git Bash must not rewrite into C:/...
+export MSYS_NO_PATHCONV=1
 
 cd "$(dirname "$0")/.."
 
@@ -17,12 +20,12 @@ if [[ "${1:-}" == "stop" ]]; then
     exit 0
 fi
 
-if [[ ! -d reports/allure-results ]]; then
-    echo "report.sh: no reports/allure-results yet -- run scripts/test.sh first" >&2
+if [[ ! -d reports/allure-report ]]; then
+    echo "report.sh: no reports/allure-report yet -- run scripts/test.sh first" >&2
     exit 1
 fi
 "${compose[@]}" run --rm --no-deps -T allure generate --clean \
-    -o reports/allure-report reports/allure-results > /dev/null
+    -o reports/allure-report /allure-results > /dev/null
 # Static files: `allure open` refuses to bind anything but loopback inside
 # its container ("intended for local report preview only").
 "${compose[@]}" run -d --no-deps -p 127.0.0.1:5050:5050 --name "$name" tests \

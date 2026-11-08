@@ -3,7 +3,10 @@ name: Promote dev to main
 # When CI goes green on dev, open (or refresh) a PR into main. Deliberately
 # does NOT merge: a green suite means "nothing we test is broken", not "this
 # is safe in production". You press merge; merging main is what deploys.
-on:
+# workflow_run, not a push trigger: the PR must wait for CI. Its known risk
+# (a fork's PR run named after `dev` triggers this with our token) is closed
+# by the `if:` below, which takes only pushes to this repository's own dev.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: [CI]
     branches: [dev]
@@ -19,15 +22,20 @@ jobs:
     name: Open PR into main
     runs-on: ubuntu-24.04
     # Only when the CI run actually succeeded. workflow_run fires on failure
-    # too, and without this a red dev build would still raise a PR.
+    # too, and without this a red dev build would still raise a PR. Never a
+    # pull_request run, and only this repository's: a fork's PR from a
+    # branch it named `dev` also matches `branches: [dev]`.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Open or update the PR
         env:

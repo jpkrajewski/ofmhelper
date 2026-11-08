@@ -31,6 +31,21 @@ repos:
         language: system
         pass_filenames: false
         types_or: [javascript, css]
+      # The deploy paths' remote scripts are single-quoted strings: one
+      # apostrophe in a comment there ends the script.
+      - id: shellcheck
+        name: shellcheck (scripts)
+        entry: uv run shellcheck --severity=warning
+        language: system
+        types: [shell]
+      # Public repo, and the deploy workflow holds the server's SSH key.
+      - id: zizmor
+        name: zizmor (workflow security)
+        entry: uv run zizmor
+        language: system
+        files: ^\.github/workflows/
+        pass_filenames: false
+        args: [.github/workflows]
       # .env is gitignored; this is the backstop (the Drive key lives there).
       - id: no-env-files
         name: forbid .env files

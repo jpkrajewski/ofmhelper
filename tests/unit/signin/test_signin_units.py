@@ -20,6 +20,7 @@ from ofmhelpers.signin.passwords import (
 )
 
 
+@pytest.mark.real_password_hashing
 def test_a_password_verifies_and_another_does_not():
     stored = hash_password("correct horse battery")
     assert stored.startswith("scrypt$131072$8$1$")

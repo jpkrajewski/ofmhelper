@@ -106,9 +106,11 @@ remote_script='
   $compose logs migrate
   # Otherwise every deploy leaves its predecessor dangling on the disk.
   docker image prune -f >/dev/null
-  # Each build also strands ~1GB of build cache (new .venv layer); cap it,
-  # keeping the newest layers so rebuilds stay fast.
-  docker builder prune -f --max-used-space 5gb >/dev/null
+  # Each build also strands ~1GB of build cache (new .venv layer). Only
+  # layers used in the last day are kept (the layers of this build, so the next
+  # rebuild stays fast): `--max-used-space 5gb` left 8 GB on Docker 29 (prod
+  # 2026-11-08, disk at 93%), and a few days of deploys would keep as much.
+  docker builder prune -af --filter until=24h >/dev/null
   echo "== deployed =="
   $compose ps
 '
