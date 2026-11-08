@@ -124,3 +124,15 @@ def test_both_deploys_stop_the_workers_before_the_app(path: Path):
     serves; only then does the app stop for the migration."""
     workers = set(_worker_queues())
     assert _compose_calls(path, "stop") == [workers, {"ofmhelpers"}]
+
+
+@pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
+def test_both_deploys_keep_only_a_days_build_cache(path: Path):
+    """Prod 2026-11-08: `--max-used-space 5gb` left 8 GB of build cache on
+    Docker 29, the disk at 93%."""
+    prunes = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "builder prune" in line and not line.strip().startswith("#")
+    ]
+    assert prunes == ["docker builder prune -af --filter until=24h >/dev/null"]
