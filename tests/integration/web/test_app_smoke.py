@@ -31,6 +31,7 @@ PROTECTED_PAGES = [
     "/file-manager",
     "/action-log",
     "/cookies",
+    "/self-links",
 ]
 
 

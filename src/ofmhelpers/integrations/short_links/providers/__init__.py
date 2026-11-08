@@ -4,9 +4,14 @@ one, its class in `_PROVIDER_TYPES` and its `providers.json` entry."""
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
 from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
+from ofmhelpers.integrations.short_links.providers.self_host import SelfProvider
 
 # Display order of the provider pickers.
-_PROVIDER_TYPES: tuple[type[LinkProvider], ...] = (OopsieProvider, BouncyProvider)
+_PROVIDER_TYPES: tuple[type[LinkProvider], ...] = (
+    SelfProvider,
+    OopsieProvider,
+    BouncyProvider,
+)
 
 
 def link_providers() -> dict[str, type[LinkProvider]]:

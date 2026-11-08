@@ -747,6 +747,14 @@ class ShortLinkRow(Base):
             "user_id", "provider", "remote_id", name="uq_short_links_remote"
         ),
         Index("ix_short_links_account_id", "account_id"),
+        # The public bridge looks a self link up by (domain, slug) on every
+        # hit; partial so it stays small (self + active only).
+        Index(
+            "ix_short_links_bridge",
+            "domain",
+            "slug",
+            postgresql_where=text("provider = 'self' AND status = 'active'"),
+        ),
     )
 
 
@@ -779,6 +787,51 @@ class LinkSyncRow(Base):
     claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
+class SelfLinkDomainRow(Base):
+    """A custom domain we serve our own bridge pages on (provider "self").
+    `owner_id` NULL = shared by everyone; otherwise one user's own. `status`:
+    pending (added, not serving yet) | active (bridge serves it) | disabled."""
+
+    __tablename__ = "self_link_domains"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    host: Mapped[str] = mapped_column(String(253), nullable=False, unique=True)
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    added_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class SelfLinkClickRow(Base):
+    """One hit on a self-hosted bridge page: a landing view (`kind` = view) or
+    a continue-through (`kind` = click). Unlike `short_link_daily_stats` (one
+    row per UTC day) this keeps every hit with its exact time and what
+    Cloudflare told us about the visitor, so any time frame, country, device or
+    referrer can be read back. Raw `ip` is kept on purpose."""
+
+    __tablename__ = "self_link_clicks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    link_id: Mapped[int] = mapped_column(
+        ForeignKey("short_links.id", ondelete="CASCADE"), nullable=False
+    )
+    ts: Mapped[float] = mapped_column(Float, nullable=False)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tz: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    referrer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    platform: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    device: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    browser: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    ua: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (Index("ix_self_link_clicks_link_ts", "link_id", "ts"),)
 
 
 class CloneAiCheckRow(Base):

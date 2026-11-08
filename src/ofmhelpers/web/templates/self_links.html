@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_account_numbers.html" as num %}
+{% import "_link_numbers.html" as ln %}
+{% set range_q = ("from=" ~ query.start.isoformat() ~ "&to=" ~ query.end.isoformat()) if query.start else ("days=" ~ (query.days or 7)) %}
+{% set page_q = ("&page=" ~ page) if page else "" %}
+{% macro breakdown(title, rows) %}
+{% call ui.card(title) %}
+    {% if rows %}
+    {% set top = rows[0].clicks or 1 %}
+    {% set total = rows | sum(attribute="clicks") or 1 %}
+    <ul class="self-break">
+        {% for r in rows %}
+        <li>
+            <span class="self-break-label" title="{{ r.value }}">{{ r.value }}</span>
+            <progress class="accounts-bar" max="{{ top }}" value="{{ r.clicks }}"></progress>
+            <span class="num">{{ num.count(r.clicks) }}</span>
+            <span class="self-break-pct">{{ (r.clicks / total * 100) | round(1) }}%</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    {{ ui.empty("No data") }}
+    {% endif %}
+{% endcall %}
+{% endmacro %}
+{% block title %}Self links — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("Insights", meta="Performance across your own link pages") }}
+
+<div class="self-controls">
+    <label class="self-scope">
+        <select id="self-scope" aria-label="Scope">
+            <option value="/self-links?{{ range_q }}" {% if not page %}selected{% endif %}>All pages</option>
+            {% for p in pages %}
+            <option value="/self-links?{{ range_q }}&page={{ p.slug }}" {% if p.slug == page %}selected{% endif %}>{{ p.domain }}/{{ p.slug }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <nav class="self-tabs" aria-label="Time frame">
+        <a href="/self-links?days=1{{ page_q }}" {% if not query.start and (query.days or 7) == 1 %}aria-current="page"{% endif %}>Today</a>
+        <a href="/self-links?from={{ yesterday.isoformat() }}&to={{ yesterday.isoformat() }}{{ page_q }}" {% if query.start == yesterday and query.end == yesterday %}aria-current="page"{% endif %}>Yesterday</a>
+        <a href="/self-links?days=7{{ page_q }}" {% if not query.start and (query.days or 7) == 7 %}aria-current="page"{% endif %}>7d</a>
+        <a href="/self-links?days=30{{ page_q }}" {% if not query.start and query.days == 30 %}aria-current="page"{% endif %}>30d</a>
+    </nav>
+    <form method="get" action="/self-links" class="self-custom">
+        {% if page %}<input type="hidden" name="page" value="{{ page }}">{% endif %}
+        <input type="date" name="from" value="{{ query.start.isoformat() if query.start else '' }}" aria-label="From">
+        <input type="date" name="to" value="{{ query.end.isoformat() if query.end else '' }}" aria-label="To">
+        {{ ui.button("Apply", type="submit") }}
+    </form>
+</div>
+
+<div class="self-grid">
+    {# --- activity line chart (full width) --- #}
+    {% call ui.card("Activity · " ~ ("by hour" if stats.by_hour else "by day"), hook="span-all") %}
+        <div class="self-head">
+            <div>
+                <div class="self-head-label">Page views</div>
+                <div class="self-head-num">{{ num.count(stats.views) }}</div>
+            </div>
+            <div class="self-head-side">{{ num.count(stats.visitors) }} unique · {{ num.count(stats.clicks) }} to destination</div>
+        </div>
+        {% if stats.chart.points %}
+        {# Positions are data: inline --x/--y/--at custom properties. #}
+        {# djlint:off H021 #}
+        <div class="self-chart" id="self-chart">
+            <div class="self-chart-y">
+                {% for t in stats.chart.y_ticks %}<span style="--at: {{ '%.2f'|format(t.at) }}%">{{ t.label }}</span>{% endfor %}
+            </div>
+            <div class="self-chart-plot">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    {% for t in stats.chart.y_ticks %}<line class="self-chart-grid" x1="0" x2="100" y1="{{ t.at }}" y2="{{ t.at }}"></line>{% endfor %}
+                    <polyline class="self-chart-line" points="{{ stats.chart.line }}"></polyline>
+                </svg>
+                {% for p in stats.chart.points %}<span class="self-chart-dot" style="--x: {{ '%.2f'|format(p.x) }}%; --y: {{ '%.2f'|format(p.y) }}%" data-label="{{ p.label }}" data-views="{{ p.views }}" data-clicks="{{ p.clicks }}"></span>{% endfor %}
+                <div class="self-chart-tip" id="self-chart-tip" hidden></div>
+            </div>
+        </div>
+        <div class="self-chart-x">
+            {% for t in stats.chart.x_ticks %}<span>{{ t.label }}</span>{% endfor %}
+        </div>
+        {# djlint:on #}
+        {% else %}
+        {{ ui.empty("No views in this period") }}
+        {% endif %}
+    {% endcall %}
+
+    {# --- click-through funnel --- #}
+    {% call ui.card("Click-through") %}
+        <div class="stat-grid">
+            {{ ui.stat("Views", num.count(stats.views)) }}
+            {{ ui.stat("To destination", num.count(stats.clicks)) }}
+            {{ ui.stat("Conversion", ln.pct(stats.ctr)) }}
+        </div>
+        <ul class="self-break self-funnel">
+            <li><span class="self-break-label">Saw the page</span><progress class="accounts-bar" max="{{ stats.views or 1 }}" value="{{ stats.views }}"></progress><span class="num">{{ num.count(stats.views) }}</span></li>
+            <li><span class="self-break-label">Tapped through</span><progress class="accounts-bar" max="{{ stats.views or 1 }}" value="{{ stats.clicks }}"></progress><span class="num">{{ num.count(stats.clicks) }}</span></li>
+        </ul>
+    {% endcall %}
+
+    {{ breakdown("Countries", stats.countries) }}
+    {{ breakdown("Traffic sources", stats.platforms) }}
+    {{ breakdown("Devices", stats.devices) }}
+    {{ breakdown("Top browsers", stats.browsers) }}
+    {{ breakdown("Referrers", stats.referrers) }}
+
+    {# --- per link (full width) --- #}
+    {% call ui.card("Link performance", hook="span-all") %}
+        {% if stats.links %}
+        {% call ui.table() %}
+            <thead><tr><th scope="col">Link</th><th scope="col">Target</th><th scope="col" class="num">Views</th><th scope="col" class="num">Clicks</th><th scope="col" class="num">CTR</th></tr></thead>
+            <tbody>
+                {% for x in stats.links %}
+                <tr>
+                    <td><a href="{{ x.url }}" target="_blank" rel="noopener">{{ x.domain }}/{{ x.slug }}</a></td>
+                    <td data-label="Target"><a href="{{ x.destination }}" target="_blank" rel="noopener" title="{{ x.destination }}">{{ x.destination }}</a></td>
+                    <td class="num" data-label="Views">{{ num.count(x.views) }}</td>
+                    <td class="num" data-label="Clicks"><strong>{{ num.count(x.clicks) }}</strong></td>
+                    <td class="num" data-label="CTR">{{ ln.pct(x.ctr) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ui.empty("No self links yet. Add a domain below, then make links on All links.") }}
+        {% endif %}
+    {% endcall %}
+
+    {# --- domains (full width) --- #}
+    {% call ui.card("Domains", hook="span-all") %}
+        <form method="post" action="/self-links/domains" class="self-domain-add">
+            {% call ui.field("Add a domain", for_id="self-domain-host") %}
+            <input type="text" id="self-domain-host" name="host" required autocomplete="off" placeholder="go.ascendglobal.cash">
+            {% endcall %}
+            {{ ui.button("Add", "primary", type="submit") }}
+        </form>
+        {% if domains %}
+        {% call ui.table() %}
+            <thead><tr><th scope="col">Host</th><th scope="col">Status</th><th scope="col"></th></tr></thead>
+            <tbody>
+                {% for d in domains %}
+                <tr>
+                    <td>{{ d.host }}{% if d.owner_id is none %} {{ ui.badge("shared") }}{% endif %}</td>
+                    <td data-label="Status">{{ ui.status_badge(d.status) }}</td>
+                    <td class="self-domain-actions">
+                        {% if d.owner_id is not none %}
+                        <form method="post" action="/self-links/domains/{{ d.id }}/status" class="self-inline">
+                            <input type="hidden" name="status" value="{{ 'disabled' if d.status == 'active' else 'active' }}">
+                            {{ ui.button(("Disable" if d.status == "active" else "Enable"), type="submit") }}
+                        </form>
+                        <form method="post" action="/self-links/domains/{{ d.id }}/delete" class="self-inline" data-confirm="Remove {{ d.host }}? Its links stop serving.">
+                            {{ ui.button("Remove", "ghost", type="submit") }}
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        {% endcall %}
+        {% else %}
+        {{ ui.empty("No domains yet") }}
+        {% endif %}
+    {% endcall %}
+</div>
+
+<script src="{{ static_url('js/self-links.js') }}"></script>
+{% endblock %}

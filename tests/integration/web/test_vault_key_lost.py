@@ -35,6 +35,7 @@ PAGES = [
     "/reels",
     "/uniqify",
     "/trials",
+    "/self-links",
     "/repurpose",
     "/account",
     "/cookies",

@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import short_links
+from ofmhelpers.db.stores import self_links, short_links
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, list_creators
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.integrations.short_links import provider_infos, targets
@@ -77,6 +77,16 @@ class _Count(BaseModel):
     count: int
 
 
+def _infos_with_self_domains(owner: int):
+    """`provider_infos()` with the self provider's domains filled from the
+    live list (it has none in the static config)."""
+    infos = dict(provider_infos())
+    if "self" in infos:
+        hosts = self_links.active_hosts(owner)
+        infos["self"] = infos["self"].model_copy(update={"domains": hosts})
+    return infos
+
+
 @router.get("")
 def index(
     request: Request, query: Annotated[LinkQuery, Query()], scope: Scope
@@ -95,7 +105,7 @@ def index(
         page=page,
         summary=LinkSummary.of(matching, period.days),
         providers=short_links.provider_states(scope),
-        infos=provider_infos(),
+        infos=_infos_with_self_domains(scope),
         targets=targets(),
         accounts=short_links.source_accounts(list_accounts(scope)),
         source_label=short_links.source_label(),
@@ -122,6 +132,11 @@ def generate(body: GenerateLinks, owner_id: OwnerId) -> LinksQueued:
         label = provider_infos()[body.provider].label
         raise HTTPException(
             status_code=400, detail=f"Add your {label} API key on /account first"
+        )
+    if body.provider == "self" and body.domain not in self_links.active_hosts(owner_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Add this domain on Self links first",
         )
     [state] = [
         p for p in short_links.provider_states(owner_id) if p.key == body.provider

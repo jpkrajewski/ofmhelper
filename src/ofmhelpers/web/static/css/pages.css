@@ -232,6 +232,155 @@ summary:hover { color: var(--accent-soft); }
 .login-help { margin-top: var(--s-4); color: var(--text-faint); font-size: var(--step--1); }
 .login-card form .btn-block { margin-top: var(--s-4); }
 
+/* Self links page: the Insights dashboard (self_links.html). Breakdown bars
+   reuse .accounts-bar; the activity line is a 0..100 SVG scaled to the plot. */
+.self-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: var(--s-4);
+    margin-bottom: var(--s-4);
+    flex-wrap: wrap;
+}
+.self-head-label { font-size: var(--step--1); color: var(--text-faint); }
+.self-head-num { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.02em; }
+.self-head-side { font-size: var(--step--1); color: var(--text-faint); }
+
+.self-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-3);
+    margin-top: var(--s-4);
+}
+.self-scope select { min-width: 180px; max-width: 280px; }
+.self-tabs {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    overflow: hidden;
+}
+.self-tabs a {
+    display: inline-flex;
+    align-items: center;
+    height: var(--control-h);
+    padding: 0 var(--s-3);
+    font-size: var(--step--1);
+    color: var(--text-faint);
+    text-decoration: none;
+    border-left: 1px solid var(--border);
+}
+.self-tabs a:first-child { border-left: 0; }
+.self-tabs a[aria-current] { background: var(--accent); color: var(--accent-ink); }
+.self-custom { display: flex; align-items: center; gap: var(--s-2); margin-left: auto; }
+
+.self-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--s-4);
+    margin-top: var(--s-4);
+    align-items: start;
+}
+.self-grid > .span-all { grid-column: 1 / -1; }
+@media (min-width: 60rem) {
+    .self-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.self-break {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    margin: 0;
+    padding: 0;
+}
+.self-break li {
+    display: grid;
+    grid-template-columns: 12ch 1fr auto auto;
+    align-items: center;
+    gap: var(--s-3);
+}
+.self-funnel { margin-top: var(--s-4); }
+.self-funnel li { grid-template-columns: 12ch 1fr auto; }
+.self-break-label {
+    font-size: var(--step--1);
+    color: var(--text-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.self-break-pct {
+    font-size: var(--step--1);
+    color: var(--text-faint);
+    min-width: 4ch;
+    text-align: right;
+}
+
+.self-chart { display: grid; grid-template-columns: 4ch 1fr; gap: var(--s-2); height: 220px; }
+.self-chart-y { position: relative; font-size: var(--step--2); color: var(--text-faint); }
+.self-chart-y span {
+    position: absolute;
+    right: 0;
+    top: var(--at);
+    transform: translateY(-50%);
+}
+.self-chart-plot { position: relative; }
+.self-chart-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.self-chart-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2px;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+.self-chart-grid { stroke: var(--border); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.self-chart-dot {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 8px;
+    height: 8px;
+    margin: -4px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.self-chart-dot.on { opacity: 1; }
+.self-chart-tip {
+    position: absolute;
+    transform: translate(-50%, -125%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    padding: var(--s-1) var(--s-2);
+    font-size: var(--step--2);
+    white-space: nowrap;
+    box-shadow: var(--shadow);
+    pointer-events: none;
+    z-index: 2;
+}
+.self-chart-x {
+    display: flex;
+    justify-content: space-between;
+    margin-left: 4ch;
+    margin-top: var(--s-1);
+    font-size: var(--step--2);
+    color: var(--text-faint);
+}
+
+.self-domain-add {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--s-3);
+    margin-bottom: var(--s-4);
+    flex-wrap: wrap;
+}
+.self-domain-add .field { margin-bottom: 0; flex: 1; min-width: 220px; }
+.self-domain-actions { display: flex; gap: var(--s-2); justify-content: flex-end; }
+.self-inline { display: inline; }
+
 /* Session-expiry overlay -- static/js/session.js drops this in just before
    redirecting to /login, so being signed out reads as a deliberate step
    rather than an unexplained page jump. */

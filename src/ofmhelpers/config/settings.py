@@ -1279,6 +1279,17 @@ class LinksSettings(BaseSettings):
     max_generate: int = Field(
         default=100, ge=1, validation_alias="OFM_LINKS_MAX_GENERATE"
     )
+    # Cap on self-hosted ("self") links a user may have; None = unlimited (we
+    # own the server, so there is no per-link cost to ration).
+    self_link_limit: int | None = Field(
+        default=None, ge=1, validation_alias="OFM_LINKS_SELF_LIMIT"
+    )
+    # Per-IP, per-minute cap on the public bridge's view/click recording (the
+    # bridge runs outside the app write rate limiter). Over it, the page is
+    # still served, only the hit is not logged.
+    bridge_rate_per_min: int = Field(
+        default=240, ge=1, validation_alias="OFM_LINKS_BRIDGE_RATE_PER_MIN"
+    )
 
     @property
     def history_days(self) -> int:

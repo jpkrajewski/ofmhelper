@@ -53,6 +53,11 @@ def _repository() -> ShortLinkRepository:
 
 def api_key(user_id: int, provider: str) -> str | None:
     """The key `user_id`'s calls to `provider` run on, if any."""
+    # A local provider (self) is served from our own data: it needs no saved
+    # key and is always available, its "key" carrying the owner's id.
+    local = get_link_provider(provider).local_key(user_id)
+    if local is not None:
+        return local
     saved = users.api_keys(user_id).get(provider)
     if saved:
         return saved

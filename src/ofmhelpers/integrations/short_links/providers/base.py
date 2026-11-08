@@ -81,6 +81,14 @@ class LinkProvider(ABC):
         (.env). Users only ever run on their own."""
         return settings.links.admin_key(cls.key)
 
+    @classmethod
+    def local_key(cls, user_id: int) -> str | None:  # noqa: ARG003
+        """A provider served from our own data (self) needs no saved API key:
+        every user is always keyed, and the key carries the owner's id so the
+        client knows whose links to read. Remote providers return None and run
+        on a saved key instead."""
+        return None
+
     @abstractmethod
     def _headers(self) -> dict[str, str]: ...
 

@@ -117,6 +117,58 @@ class ShortLinkRepository(CachedRepository):
             ).all()
             return [_to_dict(*r) for r in rows]
 
+    def active_self_link(self, host: str, slug: str) -> dict | None:
+        """The live self-hosted bridge link on `host` with `slug` (the bridge
+        serves it); None when there is no active one."""
+        link = ShortLinkRow
+        with session_scope() as s:
+            row = s.execute(
+                select(link.id, link.destination, link.slug, link.domain).where(
+                    link.provider == "self",
+                    link.domain == host,
+                    link.slug == slug,
+                    link.status == "active",
+                )
+            ).first()
+            if row is None:
+                return None
+            return {
+                "id": row.id,
+                "destination": row.destination,
+                "slug": row.slug,
+                "domain": row.domain,
+            }
+
+    def provider_links(
+        self, user_id: int, provider: str, statuses: tuple[str, ...]
+    ) -> list[dict]:
+        """`user_id`'s links on `provider` in any of `statuses`, as a local
+        provider (self) lists them: the fields of a RemoteLink, read straight
+        from our own rows."""
+        link = ShortLinkRow
+        with session_scope() as s:
+            rows = s.execute(
+                select(link).where(
+                    link.user_id == user_id,
+                    link.provider == provider,
+                    link.status.in_(statuses),
+                )
+            ).scalars()
+            return [
+                {
+                    "remote_id": r.remote_id,
+                    "slug": r.slug,
+                    "domain": r.domain,
+                    "url": r.url,
+                    "destination": r.destination,
+                    "active": r.status == "active",
+                    "adult": r.adult,
+                    "created_at": r.created_at,
+                    "id": r.id,
+                }
+                for r in rows
+            ]
+
     def taken(self, user_id: int, provider: str) -> set[tuple[str, str]]:
         """(domain, slug) of every link `user_id` has on `provider`."""
         with session_scope() as s:

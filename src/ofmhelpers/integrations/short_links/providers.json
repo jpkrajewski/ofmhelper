@@ -1,4 +1,21 @@
 {
+  "self": {
+    "label": "Self",
+    "base_url": "",
+    "docs_url": "",
+    "key_prefix": "",
+    "domains": [],
+    "slug": {
+      "min_length": 1,
+      "max_length": 40,
+      "invalid": "[^a-z0-9._-]+",
+      "unique_per": "domain"
+    },
+    "min_interval_s": 0,
+    "stats_batch": 500,
+    "max_history_days": 3650,
+    "max_span_days": 3650
+  },
   "oopsie": {
     "label": "Oopsie",
     "base_url": "https://oopsie.bio",

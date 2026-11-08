@@ -237,5 +237,28 @@ services:
     cap_drop:
       - ALL
 
+  # A Cloudflare quick tunnel, for testing a self-hosted bridge page on a real
+  # phone: it gives the dev app a public https://<random>.trycloudflare.com
+  # address. Behind the `dev` profile so it stays off unless asked for.
+  #   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev up -d cloudflared
+  #   docker compose -f docker-compose.yml -f docker-compose.dev.yml logs cloudflared | grep trycloudflare.com
+  # Add that host on /self-links (Add a domain), generate a self link on
+  # /links, and open it on the phone. The tunnel sets CF-Connecting-IP and the
+  # visitor-location headers, so dev logs clicks with geo just like prod.
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.1
+    container_name: ofmhelpers-cloudflared
+    profiles:
+      - dev
+    command: ["tunnel", "--no-autoupdate", "--url", "http://ofmhelpers:8000"]
+    depends_on:
+      - ofmhelpers
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   test_pycache:

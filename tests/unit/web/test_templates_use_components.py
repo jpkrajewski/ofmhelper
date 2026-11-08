@@ -27,8 +27,18 @@ HAND_BUTTON = re.compile(r'class="download-btn"')
 STYLE_ATTR = re.compile(r'style="(?!--)')
 
 
+# Public conversion pages served on our own link domains (the bridge), not app
+# UI: self-contained like the rented providers' pages (own dark look, inline
+# styles), so the design-system rules do not apply. See bridge.html.
+EXEMPT = {"bridge.html"}
+
+
 def _pages():
-    return sorted(p for p in TEMPLATES.rglob("*.html") if p.parent.name != "components")
+    return sorted(
+        p
+        for p in TEMPLATES.rglob("*.html")
+        if p.parent.name != "components" and p.name not in EXEMPT
+    )
 
 
 def _problems(text: str) -> list[str]:

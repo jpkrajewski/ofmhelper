@@ -44,8 +44,10 @@ class ProviderInfo(BaseModel):
     base_url: str
     docs_url: str
     key_prefix: str
-    # Short-link domains, the default first.
-    domains: list[str] = Field(min_length=1)
+    # Short-link domains, the default first. Empty for a provider whose
+    # domains are ours and added at runtime (self): the live list is read
+    # from the database and filled in before the dialog or validation sees it.
+    domains: list[str] = Field(default_factory=list)
     slug: SlugRules
     # Pause between two calls of one job (Oopsie allows 60 a minute).
     min_interval_s: float = Field(ge=0)
@@ -59,7 +61,7 @@ class ProviderInfo(BaseModel):
 
     @property
     def default_domain(self) -> str:
-        return self.domains[0]
+        return self.domains[0] if self.domains else ""
 
 
 class Target(BaseModel):

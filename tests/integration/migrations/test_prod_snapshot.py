@@ -539,3 +539,40 @@ def test_daily_report_tables_start_with_every_stored_sale(db):
 
     assert _scalar(db, "SELECT count(*) FROM chat_sales") == kept
     assert _scalar(db, "SELECT count(*) FROM report_runs") == 0
+
+
+SELF_LINKS = "d5e6f7a8b9c0"
+
+
+def test_self_links_adds_two_empty_tables_and_changes_no_row(db):
+    """self_link_domains and self_link_clicks are new and empty; every table
+    production has keeps every row, and a downgrade drops only the two."""
+    needs(SELF_LINKS)(db)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), "head")
+    after = _row_counts(db)
+    assert after["self_link_domains"] == 0
+    assert after["self_link_clicks"] == 0
+    indexes = {i["name"] for i in inspect(db).get_indexes("self_link_clicks")}
+    assert "ix_self_link_clicks_link_ts" in indexes
+    assert {t: n for t, n in after.items() if t in before} == before
+    command.downgrade(_alembic(), DAILY_REPORT)
+    assert _row_counts(db) == before
+
+
+BRIDGE_INDEX = "e6f7a8b9c0d1"
+
+
+def test_bridge_index_and_browser_column_change_no_row(db):
+    """The bridge lookup index and self_link_clicks.browser are added without
+    touching any row count; a downgrade drops only them."""
+    needs(BRIDGE_INDEX)(db)
+    command.upgrade(_alembic(), SELF_LINKS)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), "head")
+    assert "browser" in _columns(db, "self_link_clicks")
+    indexes = {i["name"] for i in inspect(db).get_indexes("short_links")}
+    assert "ix_short_links_bridge" in indexes
+    assert _row_counts(db) == before
+    command.downgrade(_alembic(), SELF_LINKS)
+    assert "browser" not in _columns(db, "self_link_clicks")

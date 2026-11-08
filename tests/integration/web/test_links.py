@@ -92,7 +92,10 @@ def test_page_lists_links_with_quota_and_nav(client, admin):
 
 def test_a_user_without_their_own_key_gets_no_env_key(client):
     user = sign_in(client)
-    assert [s.has_key for s in short_links.provider_states(user.id)] == [False, False]
+    # self is always keyed (served from our own data); the remote providers
+    # need the user's own key and fall back to no env key for a non-admin.
+    keyed = {s.key: s.has_key for s in short_links.provider_states(user.id)}
+    assert keyed == {"self": True, "oopsie": False, "bouncy": False}
     page = client.get("/links")
     assert "No Oopsie API key" in page.text
     ids = _accounts(user.id, "Dane", "dane.walker")

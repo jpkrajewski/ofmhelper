@@ -183,7 +183,8 @@
                 {% for p in providers %}
                 {% set room = p.usage.room if p.usage else none %}
                 {% set full = room is not none and room == 0 %}
-                <option value="{{ p.key }}" {% if room is not none %}data-room="{{ room }}"{% endif %} {% if not p.has_key or full %}disabled{% endif %}>{{ p.label }}{% if not p.has_key %} (no API key){% elif full %} (plan full){% elif room is not none %} ({{ room }} left){% endif %}</option>
+                {% set nodomains = infos[p.key].domains|length == 0 %}
+                <option value="{{ p.key }}" {% if room is not none %}data-room="{{ room }}"{% endif %} {% if not p.has_key or full or nodomains %}disabled{% endif %}>{{ p.label }}{% if not p.has_key %} (no API key){% elif nodomains %} (add a domain){% elif full %} (plan full){% elif room is not none %} ({{ room }} left){% endif %}</option>
                 {% endfor %}
             </select>
         </div>

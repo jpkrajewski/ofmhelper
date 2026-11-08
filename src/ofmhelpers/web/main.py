@@ -19,6 +19,7 @@ from ofmhelpers.telemetry import configure_telemetry, instrument_app
 from ofmhelpers.web.exceptions import exception_handlers
 from ofmhelpers.web.middleware import (
     AuthMiddleware,
+    BridgeMiddleware,
     CanonicalHostMiddleware,
     CompressionMiddleware,
     WriteRateLimitMiddleware,
@@ -66,8 +67,11 @@ app.add_middleware(
 )
 # Outermost: compresses what everything inside produced (pages, JSON, CSS/JS).
 app.add_middleware(CompressionMiddleware)
-# Before all of it: www. of APP_BASE_URL redirects to the one public host.
+# www. of APP_BASE_URL redirects to the one public host.
 app.add_middleware(CanonicalHostMiddleware)
+# Before all of it: our own bridge domains are served here, never touching the
+# session/auth stack; every other host falls through to the app unchanged.
+app.add_middleware(BridgeMiddleware)
 
 app.mount(
     "/static",

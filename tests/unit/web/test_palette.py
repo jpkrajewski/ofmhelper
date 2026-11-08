@@ -92,6 +92,11 @@ def test_landing_colours_live_in_its_token_block():
     assert _hits(text[tokens_end:]) == []
 
 
+# The bridge is a public conversion page on our own link domains, self-contained
+# with its own dark look like the rented providers' pages -- it owns its colours.
+EXEMPT = {"bridge.html"}
+
+
 @pytest.mark.parametrize(
     "path",
     sorted(
@@ -100,6 +105,7 @@ def test_landing_colours_live_in_its_token_block():
             *(WEB / "templates").rglob("*.html"),
             *(WEB / "static" / "js").glob("*.js"),
         ]
+        if p.name not in EXEMPT
     ),
     ids=lambda p: p.name,
 )

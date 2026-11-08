@@ -17,6 +17,7 @@ VA_PAGES = [
     "/uniqify",
     "/edit",
     "/trials",
+    "/self-links",
     "/repurpose",
     "/account",
     "/cookies",

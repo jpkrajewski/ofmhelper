@@ -265,7 +265,10 @@ class GenerateLinks(BaseModel):
         if info is None:
             msg = f"Unknown link provider: {self.provider}"
             raise ValueError(msg)
-        if self.domain not in info.domains:
+        # A provider whose domains are ours and added at runtime (self) has
+        # none in the static config; the route checks its domain against the
+        # live list.
+        if info.domains and self.domain not in info.domains:
             msg = f"{info.label} has no domain {self.domain}"
             raise ValueError(msg)
         target = targets().get(self.target)

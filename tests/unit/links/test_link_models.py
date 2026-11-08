@@ -16,10 +16,12 @@ BOUNCY = provider_infos()["bouncy"].slug
 
 
 def test_every_registered_provider_has_its_config_and_back():
-    assert list(link_providers()) == list(provider_infos()) == ["oopsie", "bouncy"]
+    assert (
+        list(link_providers()) == list(provider_infos()) == ["self", "oopsie", "bouncy"]
+    )
     for key, info in provider_infos().items():
         assert get_link_provider(key).info() is info
-        assert info.default_domain == info.domains[0]
+        assert info.default_domain == (info.domains[0] if info.domains else "")
         assert info.key == key
 
 

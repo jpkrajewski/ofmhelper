@@ -62,7 +62,7 @@ from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
 from ofmhelpers.web.routers.image_tools import character_sheet, pictures
 from ofmhelpers.web.routers.inventory import drive, phones
-from ofmhelpers.web.routers.tracking import accounts, links
+from ofmhelpers.web.routers.tracking import accounts, links, self_links
 from ofmhelpers.web.routers.video_tools import edit, repurpose, trials, uniqify
 
 # Order is presentational only -- FastAPI matches on path and no two routers
@@ -97,6 +97,7 @@ ROUTERS = [
     # tracking/
     accounts.router,
     links.router,
+    self_links.router,
     # inventory/
     phones.router,
     drive.router,

@@ -31,3 +31,80 @@ Generate (`POST /links/generate`) is refused (400) when the batch exceeds `Usage
 - **18+ gate**: not in the REST docs, and not accepted on create. Bouncy's MCP server (`https://mcp.bouncy.ai/mcp`, same API key as Bearer; tools `bouncy_create_deeplink` / `bouncy_update_deeplink` have `adult_warning`) writes `forceAdultWarning` + `adultContentCheckpoint`; REST `PUT /links/{id}` with both returns them in `updatedFields`, and the link's page then shows "Age verification required" (checked on a throwaway link, deleted). GET never returns the flags, so a listed link's gate is unknown (None). Bouncy also gates destinations it knows as adult (OnlyFans, Fansly) automatically; Fanvue/Stacked need the forced flag. The live contract test re-checks the rendered page.
 - Analytics: `GET /analytics/links/{id}?from&to` (not `/analytics/{id}`; `/analytics/summary` is 404 despite the docs) -> `dailyViews [{date, views, clicks, adultClicks}]`. Buckets: one day -> hourly ("YYYY-MM-DD HH"), up to ~60 days daily, 90 days **monthly** ("YYYY-MM") -- hence `max_span_days` 31 and per-day summing. Clicks = 18+ confirmations that went through. One call per link per 31 days: a 90-day sync costs 3 calls/link. A deleted link's analytics answer 404 "Link or website not found": `daily` leaves that link out (logged), since one deleted between the list and the numbers failed the whole sync (2026-10-24).
 - `GET /account/limits` -> `links {active, total, activeLimit, totalLimit}` (-1 = unlimited).
+
+## Own bridge page (research 2026-11-07, nothing built yet)
+What an Oopsie direct link is, read from `oopsie.bio/danywalking` (curl, 6 user agents):
+- One static HTML page, no third-party scripts. Destination sits URL-encoded in the page source (`var dest = "https%3A%2F%2Fwww.stacked.com%2F%40…"`); same bytes for Safari, desktop, Instagram iOS/Android and `facebookexternalhit` -- no crawler cloaking on this page. Headers: `x-robots-tag: noindex, nofollow, noarchive`, `referrer-policy: no-referrer`, `cache-control: no-store`, Cloudflare in front.
+- Server sniffs the user agent: Facebook app (`FBAN/FBIOS`) gets `x-gmp-webview: blocked`, an "Open in your browser" page that re-opens the bridge URL itself (`?_oopsie_external=1`) via `x-safari-https://…` (iOS >= 17) or `intent://host/path#Intent;scheme=https;S.browser_fallback_url=…;end` (Android), auto after 50 ms; the destination never loads in-app. Everyone else gets `x-gmp-webview: age-gate`.
+- Age gate "Continue (18+)": `navigator.sendBeacon('/api/track-direct', {slug, referrer})` (beacon survives Instagram tearing the webview down), then Instagram -> `instagram://extbrowser/?url=<dest>`, X/Telegram -> the x-safari/intent escape, else a plain `location.href`. After 1.5 s a fallback shows "Tap ⋯ -> Open in external browser" + a plain link.
+- `instagram://extbrowser` is undocumented; a vendor (https://linkscale.to/academy/instagram-deeplink-back-linkscale) says Meta stopped automatic hand-offs on 2026-03-18 and only part of iPhone traffic escapes now. Unverified; Oopsie still ships it.
+
+Prices (2026-11-07): Oopsie (https://oopsie.bio, signup on Telegram, crypto only) Free 5 links; Plus 20 = $10/30 d ($0.50/link); Pro 50 = $20 ($0.40); Elite 100 = $30 ($0.30); Business 200 = $50 ($0.25). Bouncy (https://help.bouncy.ai/en/articles/13794064) Growth $35/mo = 5 active links; Scaling $75 = 20; Dominance from $150 = 50, $450 = 300. URLert rates oopsie.bio 0/100, domain ~1 month old (https://www.urlert.com/domains/oopsie.bio).
+What they see: every click (slug, referrer, IP, UA via Cloudflare), the whole roster (model -> Instagram account -> OnlyFans/Stacked page) and they own the redirect: their outage, ban of their shared domain or a swapped destination hits every link at once.
+Bouncy's "Non-Meta" bounce mode sends Meta visitors to the Bouncy homepage instead of the destination (https://help.bouncy.ai/en/articles/13794074). Meta bans Pages for cloaking, i.e. showing its review systems a different destination than users (https://about.fb.com/ltam/news/2017/08/abordando-el-cloaking-para-que-las-personas-vean-mas-posts-autenticos/).
+
+## Self — our own bridge pages (built 2026-11-08)
+A third provider, `self` (first in the picker), is our own bridge served from our
+server on our own domains, counted from our own click log. It is a `LinkProvider`
+like Oopsie/Bouncy so /links, the sync and the reports treat it the same, but
+every method reads/writes our DB -- no HTTP, no API key, no `_call`.
+- `providers/self_host.py` `SelfProvider`: `local_key(user_id)` returns `str(user_id)`
+  (base returns None), so `stores/short_links.api_key` hands the owner id in as the
+  "key" and every user is always keyed (no /account key, `has_key` always True).
+  `create` mints the row live + 18+ gated (remote_id = `domain/slug`), `list_links`
+  = our active/inactive `provider="self"` rows, `daily`/`hourly` aggregate the click
+  log, `delete`/`enable_adult` are no-ops (the row is marked "deleting"/already gated;
+  the next sync drops it). `usage.limit` = `OFM_LINKS_SELF_LIMIT` (None = unlimited).
+- `providers.json` `self`: empty `domains` (they are ours, added at runtime); the
+  Generate dialog fills them live (`routers/tracking/links._infos_with_self_domains`)
+  and the route checks the chosen domain against `self_links.active_hosts(owner)`.
+  `ProviderInfo.domains` is now `default_factory=list` and `default_domain` empty-safe;
+  `GenerateLinks._known` skips the domain check when a provider has no static domains.
+- New provider deviated from the usual steps: NO wire fake and it is NOT in the
+  remote-HTTP contract test (`tests/contract` PROVIDERS stays `["oopsie","bouncy"]`);
+  it has its own DB contract test `tests/integration/links/test_self_provider.py`.
+- Tables (alembic d5e6f7a8b9c0, ORM `SelfLinkDomainRow`/`SelfLinkClickRow`):
+  `self_link_domains` (host unique, owner_id NULL = shared, status), `self_link_clicks`
+  (one row per hit: link_id, ts, kind view|click, ip raw, country/region/city/tz from
+  Cloudflare, referrer, platform, device, ua; index (link_id, ts)). Owned by
+  `db/repositories/self_links.py` + `db/stores/self_links.py` (kept free of
+  `stores/short_links` and the provider registry to avoid an import cycle). Domain
+  reads are `@cached` + bumped on domain writes; click writes never bump.
+- The public bridge: `web/middleware/bridge.py` (outermost, before auth). On a host in
+  `active_hosts()` it serves `GET /{slug}` (the 18+ gate `templates/bridge.html`,
+  destination inlined, Instagram->`instagram://extbrowser`, X/Telegram/FB-app->
+  x-safari/intent, else plain redirect; records a `view`, crawlers excluded) and
+  `POST /api/track-direct` (records a `click` with geo from CF-Connecting-IP /
+  CF-IPCountry / cf-ipcity / cf-region / cf-timezone). Byte-identical to crawlers (no
+  cloaking). Any other host falls through to the app unchanged.
+- `/self-links` (`routers/tracking/self_links.py`, "Self links" in More): manage the
+  domains (add/disable/remove) and read the clicks over any time frame (`SelfRange`:
+  `days` preset or `from`/`to`; a single day shown by the hour) -- totals, a bars chart,
+  country/device/source/referrer breakdowns, per-link. Driven by `self_link_clicks`,
+  so it is NOT limited to the /links `periods_days`. The links themselves still live on
+  /links beside the others.
+- Dev real-phone test: the `cloudflared` dev-profile service (docker-compose.dev.yml)
+  gives a `*.trycloudflare.com` host; add it on /self-links, generate a self link, open
+  on the phone. Prod needs the domains in Cloudflare + nginx passing CF-* headers (see
+  CLAUDE.local.md).
+
+### Self hardening (review 2026-11-08)
+- Bridge lookup `active_self_link(host, slug)` is backed by a **partial index**
+  `ix_short_links_bridge (domain, slug) WHERE provider='self' AND status='active'`
+  (alembic e6f7a8b9c0d1) -- was a seq scan of every user's links on every hit.
+- The bridge write path is **off the event loop**: `web/middleware/bridge.py` is
+  pure ASGI (Starlette doesn't threadpool it), so the lookup, the click INSERT and
+  the Jinja render all run via `run_in_threadpool`; one slow hit no longer stalls
+  every request in the web process. For >100k hits/hour, batch/queue the inserts
+  and add a daily rollup (`self_link_clicks_daily`); not needed below that.
+- The public endpoints (`GET /{slug}` view, `POST /api/track-direct` click) have a
+  **per-IP, per-minute cap** (`OFM_LINKS_BRIDGE_RATE_PER_MIN`, default 240; Redis,
+  fail-open) -- the bridge runs outside `WriteRateLimitMiddleware`, so without this
+  the beacon could flood `self_link_clicks` and poison stats (geo/referrer come
+  from attacker-settable CF-*/body). Over the cap the page still serves; only the
+  recording is skipped. Attacker-settable fields are length-capped in `_visitor`.
+  Trust CF-* only once nginx sets real-IP from Cloudflare ranges (CLAUDE.local.md).
+- `browser` is a **stored column** on `self_link_clicks` (set in `_visitor` like
+  platform/device), not a per-row `ILIKE` CASE; the breakdown is a plain GROUP BY.
+- Destination is re-checked `http(s)` in the bridge before render (defence in
+  depth; it is HttpUrl + a known target host upstream already).
