@@ -9,3 +9,8 @@ verified against the live APIs when the clients were written (see
 placeholders. They were NOT re-recorded during the testing overhaul: that
 needs paid calls. `tests/contract/test_ai_provider_contract.py -m live`
 checks the real APIs still answer this way.
+
+`apiyi/` is recorded, not documented: `task_moderated.json` is the real
+`GET /v1/tasks/{id}` answer of a Wan 3.0 task Alibaba's content check
+refused (prod 2026-11-07, job 1881dd9b), ids and links replaced. The code
+comes only inside the message, `[DataInspectionFailed] ...`.

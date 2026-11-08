@@ -2,7 +2,7 @@
 its light copy, strip and frame times (edit_prepare), a frame grab and a cut
 turned, cropped, sped and sized as asked, queued on the edit worker (inline
 in the suite) and polled, the limits a request cannot get past, nothing kept
-in the Reuse pickers, and the sweep that deletes what /edit made after a day."""
+in the Reuse pickers (the sweep: test_edit_sweep.py)."""
 
 import os
 
@@ -12,7 +12,6 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import io
 import json
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,6 @@ from signin import make_user, sign_in
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
-from ofmhelpers.features.edit import cleanup
 from ofmhelpers.features.edit import service as edit_service
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import assets_root_for_user
@@ -291,38 +289,6 @@ def test_what_edit_makes_never_shows_in_the_reuse_pickers(client, mine):
     assert [f["name"] for f in listed] == ["clip.mp4"]
 
 
-def _age(path: Path, seconds: float) -> None:
-    then = time.time() - seconds
-    os.utime(path, (then, then))
-
-
-def test_the_sweep_deletes_what_edit_made_a_day_ago_unless_a_job_needs_it(store):
-    staging = store / "users" / "7" / ".edit"
-    staging.mkdir(parents=True)
-    old, fresh, needed = (staging / f"{n}.mp4" for n in ("old", "fresh", "needed"))
-    for path in (old, fresh, needed):
-        path.write_bytes(b"v")
-    _age(old, 2 * 86400)
-    _age(needed, 2 * 86400)
-    create_job("clone", {"reference_videos": [str(needed)]})
-    strips = Path(settings.infra.uploads_root) / ".previews" / "strips"
-    strips.mkdir(parents=True, exist_ok=True)  # the strips made before .previews/edit
-    old_strip = strips / "s.jpg"
-    old_strip.write_bytes(b"j")
-    _age(old_strip, 2 * 86400)
-    left = Path(settings.infra.uploads_root) / ".edit" / "tmpabc"
-    left.mkdir(parents=True, exist_ok=True)
-    _age(left, 3600)
-
-    cleanup.remove_old()
-
-    assert not old.exists()
-    assert fresh.exists()
-    assert needed.exists()
-    assert not old_strip.exists()
-    assert not left.exists()
-
-
 # --- the light copy, its strip and frame times (edit_prepare) -------------------
 
 
@@ -464,20 +430,6 @@ def test_the_page_plays_the_original_when_the_queue_is_down(client, mine, monkey
     assert page.status_code == 200
     assert 'data-ready="false"' in page.text
     assert 'src="/refs/file?path=' in page.text
-
-
-def test_the_sweep_deletes_light_copies_a_day_old(store):
-    folder = edit_service.prepared_dir()
-    folder.mkdir(parents=True, exist_ok=True)
-    old, fresh = folder / "old_540p.mp4", folder / "fresh_frames.json"
-    for path in (old, fresh):
-        path.write_bytes(b"x")
-    _age(old, 2 * 86400)
-
-    cleanup.remove_old()
-
-    assert not old.exists()
-    assert fresh.exists()
 
 
 # --- turn, mirror, crop, size, speed --------------------------------------------

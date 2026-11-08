@@ -5,6 +5,7 @@ the Telegram messages the group gets (both fakes at the wire)."""
 
 import time
 from datetime import UTC, datetime, timedelta
+from http import HTTPStatus
 
 import pytest
 
@@ -19,9 +20,10 @@ from ofmhelpers.db.models import (
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import chats, report_runs, users
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, record_scan, track
-from ofmhelpers.features.reports import daily
+from ofmhelpers.features.reports import asks, daily
 from ofmhelpers.features.reports.schedule import Due
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
+from ofmhelpers.integrations.short_links.fake import OOPSIE_FAKE_KEY, fake_oopsie
 from ofmhelpers.integrations.socials import AccountProfile, AccountStats, PostStat
 from ofmhelpers.integrations.stacked.fake import CREATOR, CREATOR_KEY, fake_stacked
 from ofmhelpers.schemas.chatting import ChatDelivery, ChatPlatform, DeliveryKind
@@ -55,18 +57,25 @@ def _written() -> None:
     get_redis().flushdb()
 
 
-def _link(owner: int, destination: str, target: str, creator: str | None) -> int:
+def _link(
+    owner: int, destination: str, target: str, creator: str | None, slug: str
+) -> int:
     with session_scope() as s:
         creator_id = None
         if creator:
-            row = CreatorRow(user_id=owner, name=creator, created_at=NOW)
-            s.add(row)
-            s.flush()
+            row = (
+                s.query(CreatorRow).filter_by(user_id=owner, name=creator).one_or_none()
+            )
+            if row is None:
+                row = CreatorRow(user_id=owner, name=creator, created_at=NOW)
+                s.add(row)
+                s.flush()
             creator_id = row.id
         link = ShortLinkRow(
             user_id=owner,
             provider="oopsie",
-            slug=f"s{abs(hash(destination)) % 10_000}",
+            slug=slug,
+            remote_id=slug,
             domain="oop.si",
             destination=destination,
             target=target,
@@ -134,8 +143,12 @@ def agency() -> int:
 
 
 def _the_day_before(agency: int) -> tuple[int, int]:
-    dane = _link(agency, "https://www.stacked.com/@fake_creator", "stacked", "Dane")
-    rachel = _link(agency, "https://onlyfans.com/rachel.rosee/c1", "onlyfans", None)
+    dane = _link(
+        agency, "https://www.stacked.com/@fake_creator", "stacked", "Dane", "dane1"
+    )
+    rachel = _link(
+        agency, "https://onlyfans.com/rachel.rosee/c1", "onlyfans", None, "rachel1"
+    )
     _days(dane, (YESTERDAY, 100, 80))
     with session_scope() as s:
         s.add(
@@ -185,6 +198,7 @@ _MODELS = """Clicks / Rev (Last 24H):
 
 Dane:
 Clicks: 320
+- oop.si/dane1: 320
 Subs: 8
 CTR: 80%
 Conversion rate: 2.5%
@@ -192,6 +206,7 @@ Sales: $125
 
 rachel.rosee:
 Clicks: 50
+- oop.si/rachel1: 50
 Subs: —
 CTR: 100%
 Conversion rate: —
@@ -298,3 +313,216 @@ def test_fanvue_without_its_webhooks_here_says_nothing_not_zero(agency, monkeypa
     walker = fake_telegram().sent[0].text.split("@walker_dane:")[1]
     assert "Subs: —" in walker
     assert "Sales: —" in walker
+
+
+# --- `money` typed to the bot (features/reports/asks.py) ------------------------
+
+
+_MONEY = """Clicks / Rev (Last 24H):
+
+Dane:
+Clicks: 90
+- oop.si/dane1: 90
+Subs: 8
+CTR: 90%
+Conversion rate: 8.9%
+Sales: $125
+
+@walker_dane:
+Clicks: —
+Subs: 2
+CTR: —
+Conversion rate: —
+Sales: $50.99
+
+rachel.rosee:
+Clicks: 0
+Subs: —
+CTR: —
+Conversion rate: —
+Sales: —"""
+
+
+@pytest.fixture
+def live(agency, monkeypatch) -> None:
+    """The last 24 hours as the providers tell them: Dane's Oopsie page clicked
+    3 hours ago (and 30 hours ago: outside), Rachel's never; the fan sites'
+    subs and sales of `_what_came_in`."""
+    monkeypatch.setenv("OOPSIE_API_KEY_ADMIN", OOPSIE_FAKE_KEY)
+    dane, rachel = _the_day_before(agency)
+    _what_came_in(dane, rachel)
+    fake_oopsie().add_page("dane1", "https://www.stacked.com/@fake_creator")
+    hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    fake_oopsie().set_hour_traffic("dane1", hour - timedelta(hours=3), 100, 90)
+    fake_oopsie().set_hour_traffic("dane1", hour - timedelta(hours=30), 500, 500)
+
+
+@pytest.mark.parametrize("typed", ["money", "Money ", "/money", "/money@ofm_fake_bot"])
+@pytest.mark.usefixtures("live")
+def test_money_typed_in_the_group_is_answered_with_the_last_24_hours(typed):
+    """Clicks asked of the provider by the hour, subs and sales of the same 24
+    hours, in the chat that asked only; the daily report untouched (no run
+    taken, nothing synced)."""
+    fake_telegram().wrote(111, text=typed)
+
+    asks.answer_asks()
+
+    assert [(m.chat_id, m.text) for m in fake_telegram().sent] == [("111", _MONEY)]
+    assert report_runs.last_run(daily.NAME) is None
+
+
+def test_money_from_a_chat_not_listed_or_typed_long_ago_is_not_answered(agency):
+    daily.run(T0)
+    fake_telegram().wrote(999, text="money")
+    fake_telegram().wrote(111, text="money", sent_at=time.time() - 3600)
+    fake_telegram().wrote(111, text="how much money")
+
+    asks.answer_asks()
+
+    assert fake_telegram().sent == []
+
+
+def test_an_ask_is_answered_once(agency):
+    daily.run(T0)
+    fake_telegram().wrote(111, text="money")
+
+    asks.answer_asks()
+    asks.answer_asks()
+
+    assert len(fake_telegram().sent) == 1
+    assert fake_telegram().sent[0].text.startswith("Clicks / Rev (Last 24H):")
+
+
+@pytest.mark.usefixtures("live")
+def test_money_needs_no_report_before_it():
+    fake_telegram().wrote(111, text="money")
+
+    asks.answer_asks()
+
+    assert [m.text for m in fake_telegram().sent] == [_MONEY]
+
+
+def test_a_command_for_another_bot_is_not_answered(agency):
+    daily.run(T0)
+    fake_telegram().wrote(111, text="/money@some_other_bot")
+
+    asks.answer_asks()
+
+    assert fake_telegram().sent == []
+
+
+def test_an_unreadable_update_is_skipped_and_the_next_ask_answered(agency):
+    daily.run(T0)
+    fake_telegram().odd_update()
+    fake_telegram().wrote(111, text="money")
+
+    asks.answer_asks()
+    asks.answer_asks()
+
+    assert len(fake_telegram().sent) == 1
+
+
+@pytest.mark.usefixtures("live")
+def test_money_asks_the_providers_and_syncs_nothing(monkeypatch):
+    synced: list[int] = []
+    monkeypatch.setattr(daily, "sync_links", lambda user, _p: synced.append(user))
+    for _ in range(2):
+        fake_telegram().wrote(111, text="money")
+        asks.answer_asks()
+
+    assert [m.text for m in fake_telegram().sent] == [_MONEY] * 2
+    assert synced == []
+
+
+@pytest.mark.usefixtures("live")
+def test_a_provider_that_cannot_tell_now_is_named(monkeypatch):
+    monkeypatch.setenv("OOPSIE_API_KEY_ADMIN", "gmp_live_wrong")
+    fake_telegram().wrote(111, text="money")
+
+    asks.answer_asks()
+
+    text = fake_telegram().sent[0].text
+    assert text.endswith("Oopsie: clicks could not be read right now")
+    assert "Clicks: 0" in text.split("Dane:\n", 1)[1]
+
+
+def test_a_failed_read_waits_before_the_next(monkeypatch):
+    from ofmhelpers.integrations.senders.telegram.fake import error
+
+    fake_telegram().fail_next.append(error(HTTPStatus.BAD_GATEWAY, "Bad Gateway"))
+
+    asks.answer_asks()
+    assert asks.pause_s() == 20
+
+    asks.answer_asks()
+    assert asks.pause_s() == 1
+
+
+def test_a_report_block_in_parts_keeps_each_part_in_its_own_place():
+    chunks = ["x" * 2500, "y" * 2500]
+
+    parts = daily._events("reports.daily.chatting", "Chatting", chunks, "k", "slot")
+
+    assert [p.replaces for p in parts] == ["slot", "slot:2"]
+
+
+# --- each link's clicks under its model (owner 2026-11-08) ------------------------
+
+
+def _dane_links(agency: int, *slugs: str) -> dict[str, int]:
+    return {
+        slug: _link(
+            agency,
+            f"https://www.stacked.com/@fake_creator/{slug}",
+            "stacked",
+            "Dane",
+            slug,
+        )
+        for slug in slugs
+    }
+
+
+def _dane_block() -> list[str]:
+    text = fake_telegram().sent[0].text
+    return text.split("Dane:\n", 1)[1].split("\n\n", 1)[0].split("\n")
+
+
+def test_each_link_of_a_model_is_listed_under_its_clicks_most_first(agency):
+    links = _dane_links(agency, "danywalking", "walkerronrig", "danenydon")
+    daily.run(T0)
+    _days(links["walkerronrig"], (TODAY, 120, 120))
+    _days(links["danywalking"], (TODAY, 3800, 3800))
+
+    daily.run(NOW)
+
+    # danenydon got no clicks: not listed.
+    assert _dane_block()[:4] == [
+        "Clicks: 3.9k",
+        "- oop.si/danywalking: 3.8k",
+        "- oop.si/walkerronrig: 120",
+        "Subs: 0",
+    ]
+
+
+def test_past_ten_links_the_rest_are_one_line(agency):
+    links = _dane_links(agency, *(f"link{n:02}" for n in range(1, 13)))
+    daily.run(T0)
+    for n, link_id in enumerate(links.values(), start=1):
+        _days(link_id, (TODAY, n, n))
+
+    daily.run(NOW)
+
+    block = _dane_block()
+    assert block[1:12] == [
+        *(f"- oop.si/link{n:02}: {n}" for n in range(12, 2, -1)),
+        "- and 2 more",
+    ]
+
+
+def test_a_model_whose_links_got_no_clicks_lists_none(agency):
+    _dane_links(agency, "danywalking")
+    daily.run(T0)
+
+    daily.run(NOW)
+
+    assert _dane_block()[:2] == ["Clicks: 0", "Subs: 0"]

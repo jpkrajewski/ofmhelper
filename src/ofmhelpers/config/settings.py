@@ -2231,6 +2231,17 @@ class TelegramSettings(BaseSettings):
     chat_pace_s: float = Field(
         default=1.0, ge=0, validation_alias="OFM_TELEGRAM_CHAT_PACE_S"
     )
+    # What people type to the bot (`features/reports/asks.py`): each read waits
+    # this long for a message (long polling, Telegram allows up to 50 s; a read
+    # waiting holds the app's stop up to this long, docker-compose
+    # `stop_grace_period` of `ofmhelpers` 30 s); an ask older than
+    # `ask_max_age_s` (sent while the server was down) is not answered.
+    ask_wait_s: float = Field(
+        default=10, ge=1, le=25, validation_alias="OFM_TELEGRAM_ASK_WAIT_S"
+    )
+    ask_max_age_s: float = Field(
+        default=300, gt=0, validation_alias="OFM_TELEGRAM_ASK_MAX_AGE_S"
+    )
 
     def chat_id_list(self) -> list[str]:
         return _names(self.chat_ids)

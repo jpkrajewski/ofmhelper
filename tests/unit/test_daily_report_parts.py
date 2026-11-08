@@ -172,7 +172,13 @@ def _rows(monkeypatch, links, sites) -> dict[str, tuple[int | None, int | None]]
     previous = ReportRun(
         name="daily", day=_NOV5, ran_at=_RAN, sent=True, marks=ReportMarks()
     )
-    return {r.name: (r.subs, r.cents) for r in daily._model_rows(links, previous, _RAN)}
+    rows = daily._model_rows(
+        links,
+        lambda link: clicks.gained(link, previous.marks, previous.ran_at),
+        previous.ran_at,
+        _RAN,
+    )
+    return {r.name: (r.subs, r.cents) for r in rows}
 
 
 def _to(link_id: int, destination: str, target: str, creator: str | None) -> ShortLink:

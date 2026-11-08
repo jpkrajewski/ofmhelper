@@ -58,6 +58,10 @@ services:
     env_file:
       - .env
     volumes: *app-volumes
+    # A stop waits for the sweeps' threads: the Telegram read (`telegram asks`)
+    # waits up to OFM_TELEGRAM_ASK_WAIT_S (10 s) for a message. Docker's 10 s
+    # default killed the app mid-read about half the time.
+    stop_grace_period: 30s
     depends_on:
       # Never against an un-migrated database: `migrate` must have exited 0.
       migrate:

@@ -1,0 +1,41 @@
+{
+  "action": "text_to_video",
+  "channel_id": 1419,
+  "created": 1794081740,
+  "error": {
+    "message": "[DataInspectionFailed] Green net check rejected image (input)",
+    "type": "task_failed"
+  },
+  "fail_reason": "[DataInspectionFailed] Green net check rejected image (input)",
+  "finish_time": 1794081762,
+  "id": "00000000-0000-4000-8000-000000000001",
+  "object": "task",
+  "platform": "wan",
+  "progress": "100%",
+  "properties": {
+    "input": "<request body>",
+    "model": "wan3.0-video",
+    "ratios": {
+      "base_price": 12.6,
+      "base_quota": 6300000,
+      "billing_type": 1,
+      "duration": 30,
+      "final_quota": 882000,
+      "group_ratio": 1,
+      "model": "wan3.0-video",
+      "model_ratio": 0.24,
+      "quota": 882000,
+      "resolution": "720P",
+      "topup_convert_ratio": 0.14,
+      "user_discount": 1,
+      "video_type": "text_to_video"
+    },
+    "submit": "<request body>"
+  },
+  "start_time": 1794081740,
+  "status": "failed",
+  "submit_time": 1794081740,
+  "task_id": "00000000-0000-4000-8000-000000000001",
+  "task_type": "text_to_video",
+  "user_id": 0
+}

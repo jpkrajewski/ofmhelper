@@ -1,10 +1,14 @@
-"""The /edit sweep (features/jobs/sweeps.py, hourly): nothing /edit makes
-is kept.
+"""The /edit sweep (features/jobs/sweeps.py, hourly): what /edit makes is
+kept a day, unless a job of another tool uses it.
 
 Each round deletes, older than `edit_keep_s` (a day): every file in a
 `.edit/` folder of the store (the agency's and each person's: uploads and
-cuts), unless a running job's params name it (a clone queued with a cut
-reads it when it sends the request); every light copy and frame strip
+cuts), unless a job names it in its params -- a job of another tool whatever
+its status, for as long as the job is there (a clone of a cut sends it when
+it runs and gives it back on Recreate -- prod 2026-11-07: kept only while
+running, the cut of a clone made the day before was gone, Recreate said
+"... is not on this server"), /edit's own cut or light copy only while it
+runs or waits in the edit line (the upload it reads); every light copy and frame strip
 the page plays and shows (`prepared_dir`, and the strips made before it).
 And every cut's
 work folder (`uploads/.edit/tmp*`) older than twice a cut's time limit: a
@@ -18,8 +22,13 @@ from pathlib import Path
 from typing import Any
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import running_jobs
-from ofmhelpers.features.edit.service import STAGING, prepared_dir
+from ofmhelpers.db.stores.jobs import params_naming
+from ofmhelpers.features.edit.service import (
+    PREPARE_TASK,
+    STAGING,
+    TASK,
+    prepared_dir,
+)
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.log import get_logger
 
@@ -38,10 +47,12 @@ def _strings(value: Any) -> Iterator[str]:
 
 
 def _in_use() -> set[Path]:
-    """Every path a running (or queued) job's params name."""
+    """Every `.edit/` path a job's params name; /edit's own jobs only while
+    they run or wait (a cut or a light copy done names the video it was made
+    from: that one still goes after its day)."""
     found: set[Path] = set()
-    for job in running_jobs():
-        for text in _strings(job.params):
+    for params in params_naming(f"/{STAGING}/", {TASK, PREPARE_TASK}):
+        for text in _strings(params):
             if STAGING in text:
                 found.add(Path(text).resolve())
     return found

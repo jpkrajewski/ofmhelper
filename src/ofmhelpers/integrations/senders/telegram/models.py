@@ -55,6 +55,8 @@ class Message(BaseModel):
     message_id: int
     chat: Chat
     text: str = ""
+    # Unix time it was sent.
+    date: int = 0
 
 
 class ChatMemberUpdated(BaseModel):

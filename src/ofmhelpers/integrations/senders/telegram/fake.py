@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from functools import lru_cache
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
@@ -50,9 +51,15 @@ class FakeTelegram:
         self._lock = threading.Lock()
 
     def wrote(
-        self, chat_id: int, first_name: str = "Owner", text: str = "/start"
+        self,
+        chat_id: int,
+        first_name: str = "Owner",
+        text: str = "/start",
+        sent_at: float | None = None,
     ) -> None:
-        """A private chat sending the bot `text` (pressing Start sends /start)."""
+        """A chat sending the bot `text` (pressing Start sends /start): a private
+        chat, or a group for a negative id."""
+        kind = "group" if chat_id < 0 else "private"
         with self._lock:
             self._last_id += 1
             self._updates.append(
@@ -60,15 +67,30 @@ class FakeTelegram:
                     "update_id": self._last_id,
                     "message": {
                         "message_id": self._last_id,
-                        "chat": {
-                            "id": chat_id,
-                            "type": "private",
-                            "first_name": first_name,
-                        },
+                        "chat": {"id": chat_id, "type": kind, "first_name": first_name},
                         "text": text,
+                        "date": int(time.time() if sent_at is None else sent_at),
                     },
                 }
             )
+
+    def odd_update(self) -> None:
+        """An update whose message lacks what every message has (its chat)."""
+        with self._lock:
+            self._last_id += 1
+            self._updates.append(
+                {"update_id": self._last_id, "message": {"text": "money"}}
+            )
+
+    def _updates_from(self, body: dict[str, Any]) -> FakeReply:
+        """getUpdates: an `offset` takes every update before it for good, as
+        Telegram does; nothing is waited for (`timeout`)."""
+        offset = body.get("offset")
+        with self._lock:
+            if offset is not None:
+                self._updates = [u for u in self._updates if u["update_id"] >= offset]
+            found = list(self._updates)
+        return _ok(found)
 
     def _delete(self, body: dict[str, Any]) -> FakeReply:
         with self._lock:
@@ -90,7 +112,7 @@ class FakeTelegram:
         if method == "getMe":
             return _ok(BOT)
         if method == "getUpdates":
-            return _ok(list(self._updates))
+            return self._updates_from(body)
         if method == "sendMessage":
             return self._send(body)
         if method == "deleteMessage":

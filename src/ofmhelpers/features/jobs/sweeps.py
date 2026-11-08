@@ -29,6 +29,7 @@ from ofmhelpers.features.jobs import recovery
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
+from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.log import get_logger
 
@@ -133,6 +134,16 @@ def sweeps() -> list[Sweep]:
             run=daily_report.run,
             interval_s=lambda: settings.reports.check_s,
             enabled=lambda: settings.reports.daily_enabled,
+        ),
+        # What is typed to the bot (`money`): each read itself waits for a
+        # message (`OFM_TELEGRAM_ASK_WAIT_S`), so the next starts a second later
+        # (longer after a failed one). A read still waiting holds the app's stop
+        # up to that long: `stop_grace_period` of `ofmhelpers` covers it.
+        Sweep(
+            name="telegram asks",
+            run=report_asks.answer_asks,
+            interval_s=report_asks.pause_s,
+            enabled=report_asks.enabled,
         ),
         # /edit's uploads, cuts and frame strips older than a day: nothing kept.
         Sweep(

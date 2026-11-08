@@ -69,6 +69,18 @@ def _retry() -> Retry | None:
     return Retry(max=len(waits), interval=waits) if waits else None
 
 
+def _queue_delivery(sender_name: str, target: str, event: dict[str, Any]) -> None:
+    JobQueue(QueueName.EVENTS).put(
+        deliver,
+        sender_name,
+        target,
+        event,
+        job_timeout=settings.events.send_timeout_s,
+        retry=_retry(),
+        failure_ttl=settings.events.failed_keep_s,
+    )
+
+
 def dispatch(event: dict[str, Any]) -> None:
     """RQ job: `event` (an `Event` as JSON) to each sender's targets."""
     found = Event.model_validate(event)
@@ -78,21 +90,20 @@ def dispatch(event: dict[str, Any]) -> None:
             continue
         for target in sender.targets():
             try:
-                JobQueue(QueueName.EVENTS).put(
-                    deliver,
-                    sender.name,
-                    target,
-                    event,
-                    job_timeout=settings.events.send_timeout_s,
-                    retry=_retry(),
-                    failure_ttl=settings.events.failed_keep_s,
-                )
+                _queue_delivery(sender.name, target, event)
             except Exception:
                 logger.exception(
                     "event %s: %s delivery failed or not queued",
                     found.name,
                     sender.name,
                 )
+
+
+def deliver_to(sender_name: str, target: str, event: Event) -> None:
+    """`event` to that one target only (an answer to the chat that asked), the
+    way every delivery goes: paced, retried, skipped while its sender is off.
+    Raises when it could not be queued."""
+    _queue_delivery(sender_name, target, event.model_dump(mode="json"))
 
 
 def _digest(target: str) -> str:

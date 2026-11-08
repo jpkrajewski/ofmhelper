@@ -53,7 +53,11 @@ REASONS = (
     ErrorReason(
         label="Flagged content",
         pattern=r"nsfw|sensitive|flagged|content polic|moderat|prohibited"
-        r"|content verification",
+        r"|content verification"
+        # Alibaba's moderation codes as APIYI cites them in a reason
+        # ("[DataInspectionFailed] ..."): what jobs stored before the
+        # APIYI reader read them (prod 2026-11-07, job 1881dd9b).
+        r"|\[datainspectionfailed\]|\[ipinfringementsuspect\]",
     ),
     ErrorReason(
         label="Rate limited",
