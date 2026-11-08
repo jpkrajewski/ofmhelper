@@ -1,0 +1,71 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Dependency bump PRs into dev (never main: merging main deploys). One click to merge; CI on the PR is the gate.",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "baseBranchPatterns": ["dev"],
+  "timezone": "Europe/Warsaw",
+  "schedule": ["* 0-5 * * 1"],
+  "semanticCommits": "enabled",
+  "labels": ["deps"],
+  "rangeStrategy": "update-lockfile",
+  "minimumReleaseAge": "14 days",
+  "pre-commit": { "enabled": true },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 0-5 * * 1"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null,
+    "labels": ["deps", "security"]
+  },
+  "packageRules": [
+    {
+      "description": "Weekly: every non-major Python package in one PR.",
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python deps"
+    },
+    {
+      "description": "Weekly: GitHub Actions in one PR (tests/unit/scripts/test_workflows.py keeps the Node 24 / pinned-runner rules).",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Weekly: base and service images in one PR.",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "docker images"
+    },
+    {
+      "description": "ruff in pyproject and in .pre-commit-config.yaml move together.",
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
+      "groupName": "ruff"
+    },
+    {
+      "description": "uv: the Dockerfile image and the pre-commit hook move together.",
+      "matchPackageNames": ["ghcr.io/astral-sh/uv", "astral-sh/uv-pre-commit"],
+      "groupName": "uv"
+    },
+    {
+      "description": "Downloaders: site extractors break and get fixed between releases, so daily, no wait, nightlies allowed (yt-dlp is pinned to nightlies on purpose, pyproject.toml).",
+      "matchPackageNames": ["yt-dlp", "yt-dlp-ejs", "gallery-dl", "bgutil-ytdlp-pot-provider"],
+      "groupName": "downloaders",
+      "schedule": ["* 0-5 * * *"],
+      "minimumReleaseAge": null,
+      "ignoreUnstable": false
+    },
+    {
+      "description": "Postgres/Redis majors change the on-disk format of prod data (dump/restore): never as a bump PR.",
+      "matchPackageNames": ["postgres", "redis"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Python stays on 3.12 (prod image, mypy python_version, .python-version) until moved on purpose.",
+      "matchPackageNames": ["python"],
+      "allowedVersions": "<3.13"
+    }
+  ]
+}

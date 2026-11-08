@@ -75,10 +75,18 @@ dev = [
     "pytest-json-report>=1.5.0",
     "pytest-repeat>=0.9.4",
     "pytest-socket>=0.8.1",
+    # CI shards the suite by recorded durations (.test_durations).
+    "pytest-split>=0.11.0",
     "pytest-xdist>=3.8.0",
     "responses>=0.26.3",
     "ruff>=0.16.0",
+    # scripts/*.sh: the deploy paths' remote scripts are single-quoted
+    # strings, where one apostrophe in a comment ends the script.
+    "shellcheck-py>=0.11.0.1",
     "time-machine>=3.5.1",
+    # .github/workflows security (Trail of Bits): this repo is public and
+    # the deploy workflow holds the server's SSH key.
+    "zizmor>=1.31.1",
 ]
 # repurpose/lab: the knob search (Optuna's NSGA-II). Only where the lab
 # runs (a RunPod CPU pod): `uv sync --group lab`.
@@ -183,6 +191,8 @@ ignore-variadic-names = true
 # Standalone scripts and migrations aren't importable packages.
 "scripts/**" = ["INP001"]
 "alembic/**" = ["INP001"]
+# Claude Code hooks: standalone scripts the harness runs.
+".claude/**" = ["INP001"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -206,6 +216,7 @@ markers = [
     "paid: spends money at a provider (a real generation); never in any preset but scripts/test.sh paid",
     "heavy: real ffmpeg/ffprobe encoding; left out of the default run, runs on push (CI, scripts/test.sh push/deploy)",
     "snapshot: migrations on a copy of the production snapshot; scripts/test.sh snapshot",
+    "real_password_hashing: scrypt at production cost (n=2**17); every other test hashes with n=2**4 (tests/conftest.py)",
 ]
 # A plain `pytest` is fast and offline: no browser, no real services, no
 # production data; a later -m on the command line wins. Sockets: only the

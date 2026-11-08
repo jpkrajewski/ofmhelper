@@ -145,6 +145,11 @@ services:
       # destination on the host is explicit (scripts/test.sh writes here).
       - ./reports:/app/reports
       - test_pycache:/pycache
+      # Allure's raw results, two small files per test: written into the
+      # Windows bind mount by 8 workers they doubled the run (2026-11-08,
+      # 676 tests: 51 s, teardown 114 s; on a volume 26 s, teardown 2 s).
+      # The generated report still lands in reports/allure-report.
+      - test_allure:/allure-results
     networks:
       - internal
     depends_on:
@@ -209,6 +214,7 @@ services:
     working_dir: /app
     volumes:
       - ./reports:/app/reports
+      - test_allure:/allure-results
 
   # RQ job dashboard. Reuses the app image (rq-dashboard is a project
   # dependency) so there is no extra unpinned third-party image to trust.
@@ -262,3 +268,4 @@ services:
 
 volumes:
   test_pycache:
+  test_allure:

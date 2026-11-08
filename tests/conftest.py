@@ -308,3 +308,17 @@ def _provider_files_in_tmp(monkeypatch, tmp_path):
     for name, path in defaults.items():
         if name not in os.environ:
             monkeypatch.setenv(name, str(path))
+
+
+@pytest.fixture(autouse=True)
+def _cheap_password_hashing(request, monkeypatch):
+    """Sign-in hashes at OWASP strength (scrypt n=2**17, ~128 MiB, ~0.4 s a
+    derivation) made 595 /ai field renders, each logging in, spend 256 s in
+    setup (2026-11-08; 52 s with n=2**4). Tests hash with n=2**4. A stored
+    hash carries its own parameters, so verifying is the same code path. A
+    test marked `real_password_hashing` keeps the production cost."""
+    if request.node.get_closest_marker("real_password_hashing"):
+        return
+    from ofmhelpers.integrations.signin import passwords
+
+    monkeypatch.setattr(passwords, "_N", 2**4)

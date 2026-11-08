@@ -31,17 +31,23 @@ env:
   UV_FROZEN: "1"
 
 # Runner image pinned (not ubuntu-latest, which moves to a new Ubuntu on
-# GitHub's schedule; 24.04 is what prod runs). Every action is on a Node 24
-# major -- tests/scripts/test_workflows.py holds both lines for all workflows.
+# GitHub's schedule; 24.04 is what prod runs). Every action is pinned to a
+# commit of a Node 24 major -- tests/unit/scripts/test_workflows.py holds
+# these lines for all workflows.
 jobs:
   lint:
-    name: Lint (ruff, djlint, biome)
+    name: Lint (ruff, mypy, djlint, biome, zizmor, shellcheck)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
+      # Third-party actions are pinned to a commit (zizmor unpinned-uses):
+      # a moved tag cannot swap in other code. Renovate bumps the hash and
+      # the version comment together.
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -60,21 +66,79 @@ jobs:
       - name: ruff format
         run: uv run ruff format --check
 
+      # Was pre-commit only: a commit made without the hooks reached main
+      # unchecked.
+      - name: mypy
+        run: uv run mypy
+
       - name: djlint (HTML/Jinja templates)
         run: uv run djlint src/ofmhelpers/web/templates --lint
 
       # Same pinned version as the Dockerfile's test stage.
       - name: Install Biome
-        uses: biomejs/setup-biome@v2
+        uses: biomejs/setup-biome@4c91541eaada48f67d7dbd7833600ce162b68f51 # v2.7.1
         with:
           version: 1.9.4
 
       - name: biome (JS/CSS)
         run: biome lint
 
-  test:
-    name: Tests (pytest)
+      # A token switches on the online audits (known-vulnerable actions,
+      # impostor commits); read-only, like the job.
+      - name: zizmor (workflow security)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run zizmor --format=github .github/workflows
+
+      - name: shellcheck (scripts)
+        run: uv run shellcheck --severity=warning scripts/*.sh
+
+  # Main's push is the promote PR's merge: the tree dev's CI already tested
+  # (scripts/ci_reuse_dev_run.sh). Then only lint runs again and the deploy
+  # starts about a minute after the merge instead of ten. Any other event,
+  # or a tree no green run saw (a hotfix on main): the full suite.
+  gate:
+    name: Reuse a green run of this tree
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      skip: ${{ steps.reuse.outputs.skip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge commit and both its parents.
+          fetch-depth: 2
+
+      - name: Same tree as a green run?
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            bash scripts/ci_reuse_dev_run.sh >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Tests (pytest ${{ matrix.group }}/3)
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-24.04
+    # Three runners, a third of the suite each by recorded durations
+    # (pytest-split, .test_durations), 307-309 s of test time each on the
+    # 2026-11-08 durations; one runner took 9 minutes for all of it. A test
+    # missing from the file still runs, in some group; refresh the file with
+    # scripts/test.sh durations when the groups drift apart.
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
 
     # The exact local setup (CLAUDE.md "Validation"): the Dockerfile's `test`
     # stage -- the same ffmpeg/exiftool versions the export fixtures were
@@ -83,9 +147,12 @@ jobs:
     # tags differently), so nothing runs on the runner itself.
     env:
       COMPOSE: docker compose -f docker-compose.yml -f docker-compose.dev.yml
+      GROUP: ${{ matrix.group }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # No .env exists on a runner (it's gitignored), and that's the point:
       # this proves the app doesn't quietly depend on a developer's local
@@ -101,21 +168,52 @@ jobs:
       # Instagram proxies are (Instagram rate-limits runner IPs).
       # Default run + the heavy ffmpeg tests (left out of local runs).
       - name: Run tests
-        run: $COMPOSE run --rm tests uv run --frozen pytest -n auto --maxprocesses=8 --dist loadgroup -m "not e2e and not live and not snapshot and not paid"
+        run: >-
+          $COMPOSE run --rm tests uv run --frozen pytest
+          -n auto --maxprocesses=8 --dist loadgroup
+          -m "not e2e and not live and not snapshot and not paid"
+          --splits 3 --group "$GROUP" --durations-path .test_durations
+
+  # The browser flows (Playwright, every outside service faked): before this
+  # job they ran only when someone remembered `scripts/test.sh e2e`.
+  e2e:
+    name: E2E (Playwright)
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-24.04
+    env:
+      COMPOSE: docker compose -f docker-compose.yml -f docker-compose.dev.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Empty .env
+        run: touch .env
+
+      - name: Build test image
+        run: $COMPOSE --profile test build tests
+
+      - name: Run e2e
+        run: $COMPOSE run --rm tests uv run --frozen pytest -m e2e
 
   build:
     name: Docker build
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Build only -- the image isn't pushed anywhere. The server builds its
       # own image on deploy (docker compose up -d --build), so this exists to
       # catch a broken Dockerfile before that happens in production.
       - name: Build image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: false
@@ -127,18 +225,35 @@ jobs:
   ci-passed:
     name: CI passed
     runs-on: ubuntu-24.04
-    needs: [lint, test, build]
+    needs: [gate, lint, test, e2e, build]
     if: always()
     steps:
       - name: Verify all checks succeeded
+        env:
+          GATE: ${{ needs.gate.result }}
+          REUSED: ${{ needs.gate.outputs.skip }}
+          LINT: ${{ needs.lint.result }}
+          TEST: ${{ needs.test.result }}
+          E2E: ${{ needs.e2e.result }}
+          BUILD: ${{ needs.build.result }}
         run: |
-          echo "lint:  ${{ needs.lint.result }}"
-          echo "test:  ${{ needs.test.result }}"
-          echo "build: ${{ needs.build.result }}"
-          if [ "${{ needs.lint.result }}" != "success" ] || \
-             [ "${{ needs.test.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ]; then
-            echo "::error::One or more CI jobs failed"
+          echo "gate:  $GATE (tree already tested: $REUSED)"
+          echo "lint:  $LINT"
+          echo "test:  $TEST"
+          echo "e2e:   $E2E"
+          echo "build: $BUILD"
+          if [ "$GATE" != "success" ] || [ "$LINT" != "success" ]; then
+            echo "::error::gate or lint failed"
             exit 1
           fi
+          if [ "$REUSED" = "true" ]; then
+            echo "This tree already passed CI; the suite was not run again."
+            exit 0
+          fi
+          for result in "$TEST" "$E2E" "$BUILD"; do
+            if [ "$result" != "success" ]; then
+              echo "::error::One or more CI jobs failed"
+              exit 1
+            fi
+          done
           echo "All CI checks passed."

@@ -1,5 +1,19 @@
 {
   "worktree": {
     "bgIsolation": "none"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --frozen --no-sync python .claude/hooks/ruff_on_edit.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }

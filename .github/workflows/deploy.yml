@@ -4,7 +4,12 @@ name: Deploy
 # scripts/deploy.sh does by hand (checkout -> build -> stop app -> up, where
 # compose runs `migrate` to completion before the app starts -> health check);
 # the script stays the manual escape hatch.
-on:
+#
+# workflow_run, not a push trigger: the deploy must wait for CI. Its known
+# risk (a fork's PR run from a branch it named `main` triggers this with the
+# SSH key) is closed by the job's `if:`, which takes only this repository's
+# own non-PR runs.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: [CI]
     branches: [main]
@@ -27,10 +32,13 @@ jobs:
     name: Deploy to production
     runs-on: ubuntu-24.04
     # Gate on CI having actually passed for this commit. Without this, a red
-    # main build would still deploy.
+    # main build would still deploy. Never a pull_request run, and only this
+    # repository's: `branches: [main]` matches a fork PR's head branch too.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
 
     # Attach a GitHub Environment so you can add a required reviewer or
     # restrict which branches may deploy in repo settings if you ever want a
@@ -39,7 +47,9 @@ jobs:
       name: production
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Fail with a clear message now, rather than an opaque ssh error later.
       - name: Check required secrets are set
