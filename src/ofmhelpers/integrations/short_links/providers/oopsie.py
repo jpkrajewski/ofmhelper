@@ -4,7 +4,8 @@ API reference: links/CLAUDE.md."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+import re
+from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -13,13 +14,20 @@ from ofmhelpers.integrations.short_links.errors import (
     SlugTakenError,
     UngatedError,
 )
-from ofmhelpers.integrations.short_links.models import DayStat, RemoteLink, Usage
+from ofmhelpers.integrations.short_links.models import (
+    DayStat,
+    HourStat,
+    RemoteLink,
+    Usage,
+)
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 
 if TYPE_CHECKING:
     from ofmhelpers.integrations.short_links.models import NewLink
 
 _CREATED = 201
+# An hourly bucket's label: "07:00".
+_HOUR_LABEL = re.compile(r"\d{2}:00")
 _NOT_FOUND = 404
 _CONFLICT = 409
 
@@ -141,7 +149,37 @@ class OopsieProvider(LinkProvider):
         days = [start + timedelta(d) for d in range((end - start).days + 1)]
         # Labels are "MM-DD": unambiguous within the 93 days a range may span.
         by_label = {d.strftime("%m-%d"): d for d in days}
-        found: dict[str, list[DayStat]] = {}
+        return {
+            slug: [
+                DayStat(day=by_label[label], views=v, clicks=c)
+                for label, v, c in buckets
+                if label in by_label and (v or c)
+            ]
+            for slug, buckets in self._activity(remote_ids, start, end).items()
+        }
+
+    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+        # A one-day range comes back by the hour, labels "HH:00" (UTC: `tz`),
+        # checked on the real API 2026-11-08.
+        return {
+            slug: [
+                HourStat(
+                    hour=datetime.combine(day, time(int(label[:2])), tzinfo=UTC),
+                    views=v,
+                    clicks=c,
+                )
+                for label, v, c in buckets
+                if _HOUR_LABEL.fullmatch(label) and (v or c)
+            ]
+            for slug, buckets in self._activity(remote_ids, day, day).items()
+        }
+
+    def _activity(
+        self, remote_ids: list[str], start: date, end: date
+    ) -> dict[str, list[tuple[str, int, int]]]:
+        """Per page, its buckets (label, views, clicks) over [start, end]: by
+        day, or by the hour for one day (Oopsie picks)."""
+        found: dict[str, list[tuple[str, int, int]]] = {}
         batch = self.info().stats_batch
         for i in range(0, len(remote_ids), batch):
             slugs = remote_ids[i : i + batch]
@@ -166,13 +204,9 @@ class OopsieProvider(LinkProvider):
             if isinstance(series, dict):  # one page: the plain shape
                 series = [{"slug": slugs[0], **series}]
             for item in series:
-                found[item["slug"]] = [
-                    DayStat(day=by_label[label], views=v, clicks=c)
-                    for label, v, c in zip(
-                        per["labels"], item["views"], item["clicks"], strict=True
-                    )
-                    if label in by_label and (v or c)
-                ]
+                found[item["slug"]] = list(
+                    zip(per["labels"], item["views"], item["clicks"], strict=True)
+                )
         return found
 
     def usage(self) -> Usage:

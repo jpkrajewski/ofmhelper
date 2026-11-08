@@ -65,11 +65,23 @@ class FakeAccount(BaseModel):
     active_limit: int | None = None
     adult: list[str] = Field(default_factory=list)
     traffic: dict[str, list[int]] = Field(default_factory=dict)
+    # By the hour, "id|YYYY-MM-DDTHH" -> [views, clicks]: what a one-day range
+    # answers (both services answer it hourly).
+    hours: dict[str, list[int]] = Field(default_factory=dict)
     calls: list[str] = Field(default_factory=list)
 
     def numbers(self, link_id: str, day: date) -> tuple[int, int]:
         views, clicks = self.traffic.get(f"{link_id}|{day.isoformat()}", [0, 0])
         return views, clicks
+
+    def hour_numbers(self, link_id: str, day: date, hour: int) -> tuple[int, int]:
+        """That hour's numbers; a day seeded only as a whole sits in its first
+        hour (so a day's hours add up to it)."""
+        set_hours = [k for k in self.hours if k.startswith(f"{link_id}|{day}T")]
+        if set_hours:
+            views, clicks = self.hours.get(f"{link_id}|{day}T{hour:02}", [0, 0])
+            return views, clicks
+        return self.numbers(link_id, day) if hour == 0 else (0, 0)
 
 
 class _Fake:
@@ -111,6 +123,19 @@ class _Fake:
     def set_traffic(self, link_id: str, day: date, views: int, clicks: int) -> None:
         with self._state() as state:
             state.traffic[f"{link_id}|{day.isoformat()}"] = [views, clicks]
+
+    def set_hour_traffic(
+        self, link_id: str, hour: datetime, views: int, clicks: int
+    ) -> None:
+        """One UTC hour's numbers (`hour`: aware; its day's total follows)."""
+        at = hour.astimezone(UTC)
+        with self._state() as state:
+            state.hours[f"{link_id}|{at.date()}T{at.hour:02}"] = [views, clicks]
+            day = f"{link_id}|{at.date()}"
+            state.traffic[day] = [
+                sum(v[0] for k, v in state.hours.items() if k.startswith(f"{day}T")),
+                sum(v[1] for k, v in state.hours.items() if k.startswith(f"{day}T")),
+            ]
 
     def remove(self, link_id: str) -> None:
         """A link deleted on the provider's own dashboard."""
@@ -224,18 +249,32 @@ class FakeOopsie(_Fake):
 
     def _activity(self, state: FakeAccount, body: dict[str, Any]) -> FakeReply:
         days = _days(body["from"], body["to"])
-        series = [
-            {
-                "slug": slug,
-                "views": [state.numbers(slug, d)[0] for d in days],
-                "clicks": [state.numbers(slug, d)[1] for d in days],
-            }
-            for slug in body["scopeValue"].split(",")
-            if slug in state.links
-        ]
-        labels = [d.strftime("%m-%d") for d in days]
+        slugs = [s for s in body["scopeValue"].split(",") if s in state.links]
+        if len(days) == 1:  # one day: by the hour, labels "HH:00"
+            [day] = days
+            series = [
+                {
+                    "slug": slug,
+                    "views": [state.hour_numbers(slug, day, h)[0] for h in range(24)],
+                    "clicks": [state.hour_numbers(slug, day, h)[1] for h in range(24)],
+                }
+                for slug in slugs
+            ]
+            labels = [f"{h:02}:00" for h in range(24)]
+            interval = "hour"
+        else:
+            series = [
+                {
+                    "slug": slug,
+                    "views": [state.numbers(slug, d)[0] for d in days],
+                    "clicks": [state.numbers(slug, d)[1] for d in days],
+                }
+                for slug in slugs
+            ]
+            labels = [d.strftime("%m-%d") for d in days]
+            interval = "day"
         return self._ok(
-            {"perSlug": {"labels": labels, "interval": "day", "series": series}}
+            {"perSlug": {"labels": labels, "interval": interval, "series": series}}
         )
 
 
@@ -385,9 +424,19 @@ class FakeBouncy(_Fake):
     ) -> FakeReply:
         if link_id not in state.links:
             return FakeReply.json_body({"error": "Not Found"}, 404)
+        days = _days(query["from"], query["to"])
+        if len(days) == 1:  # one day: by the hour, "YYYY-MM-DD HH"
+            [day] = days
+            buckets = [
+                {"date": f"{day} {h:02}", "views": views, "clicks": clicks}
+                for h in range(24)
+                for views, clicks in [state.hour_numbers(link_id, day, h)]
+                if views or clicks
+            ]
+            return FakeReply.json_body({"id": link_id, "dailyViews": buckets})
         daily = [
             {"date": d.isoformat(), "views": views, "clicks": clicks}
-            for d in _days(query["from"], query["to"])
+            for d in days
             for views, clicks in [state.numbers(link_id, d)]
             if views or clicks
         ]

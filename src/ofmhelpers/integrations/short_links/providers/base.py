@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
     from ofmhelpers.integrations.short_links.models import (
         DayStat,
+        HourStat,
         NewLink,
         ProviderInfo,
         RemoteLink,
@@ -183,6 +184,12 @@ class LinkProvider(ABC):
     ) -> dict[str, list[DayStat]]:
         """Per link, its days from `start` to `end` (UTC, both included)
         that had any traffic."""
+
+    @abstractmethod
+    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+        """Per link, the hours of the UTC `day` that had any traffic (what the
+        provider answers for a one-day range: hourly buckets), as fresh as the
+        provider counts. A link gone since it was listed is left out."""
 
     @abstractmethod
     def enable_adult(self, remote_id: str) -> None:

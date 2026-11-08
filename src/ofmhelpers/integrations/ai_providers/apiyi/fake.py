@@ -158,9 +158,16 @@ class FakeApiyi:
             state = "submitted" if polls == 1 else "in_progress"
             return self._read(task_id, state, progress="30%")
         if found["failure"]:
+            # APIYI's real failed task (tests/fixtures/providers/apiyi): the
+            # code only inside the message, no `code` field.
             code, message = found["failure"]
+            said = f"[{code}] {message}"
             return self._read(
-                task_id, "failed", error={"code": code, "message": message}
+                task_id,
+                "failed",
+                progress="100%",
+                error={"message": said, "type": "task_failed"},
+                fail_reason=said,
             )
         url = (
             f"https://{FILES_HOST}/output/{task_id}.mp4"

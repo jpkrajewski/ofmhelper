@@ -2,7 +2,7 @@
 point (`targets.json`), and the shapes every provider client returns."""
 
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -117,6 +117,15 @@ class DayStat(BaseModel):
     """One UTC day of one link: landing views and clicks through."""
 
     day: date
+    views: int = Field(ge=0)
+    clicks: int = Field(ge=0)
+
+
+class HourStat(BaseModel):
+    """One UTC hour of one link: landing views and clicks through. `hour` is
+    its start (aware, UTC)."""
+
+    hour: datetime
     views: int = Field(ge=0)
     clicks: int = Field(ge=0)
 

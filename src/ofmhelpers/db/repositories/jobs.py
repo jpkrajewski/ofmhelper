@@ -6,7 +6,17 @@ import time
 import uuid
 from typing import Any
 
-from sqlalchemy import ColumnElement, delete, func, select, type_coerce, update
+from sqlalchemy import (
+    ColumnElement,
+    Text,
+    cast,
+    delete,
+    func,
+    or_,
+    select,
+    type_coerce,
+    update,
+)
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array_agg
 
 from ofmhelpers.config import settings
@@ -165,6 +175,27 @@ class JobRepository(CachedRepository):
                 .all()
             )
             return [_job_to_dict(r) for r in rows]
+
+    def params_naming(self, fragment: str, while_running: set[str]) -> list[dict]:
+        """The params of every job whose params hold `fragment` anywhere:
+        whatever its status, but a job of `while_running` only while it is
+        running (or queued). Uncached: the /edit sweep keeps the files they
+        name."""
+        with session_scope() as s:
+            rows = (
+                s.execute(
+                    select(JobRow.params).where(
+                        cast(JobRow.params, Text).contains(fragment, autoescape=True),
+                        or_(
+                            JobRow.task.not_in(while_running),
+                            JobRow.status == "running",
+                        ),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return [params or {} for params in rows]
 
     @cached
     def list_all(self) -> list[dict]:

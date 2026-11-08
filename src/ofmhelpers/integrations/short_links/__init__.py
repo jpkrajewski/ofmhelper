@@ -24,6 +24,7 @@ from ofmhelpers.integrations.short_links.errors import (
 )
 from ofmhelpers.integrations.short_links.models import (
     DayStat,
+    HourStat,
     NewLink,
     ProviderInfo,
     RemoteLink,
@@ -35,6 +36,7 @@ from ofmhelpers.integrations.short_links.models import (
 __all__ = [
     "AuthError",
     "DayStat",
+    "HourStat",
     "LinkError",
     "NewLink",
     "ProviderInfo",

@@ -25,6 +25,7 @@ from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
 from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.sources import configured_sources
+from ofmhelpers.features.reports.mass import tell_mass
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import (
     ChatDelivery,
@@ -225,6 +226,7 @@ def note_bulk_sends(source: ChatSource) -> None:
             username,
         )
         logger.info("%s bulk send by %s", platform.value, username)
+        tell_mass()
 
 
 def _already_noticed(source: ChatSource, username: str) -> bool:
@@ -250,6 +252,7 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
     elif delivery.kind == DeliveryKind.MASS:
         if not _already_noticed(source, username):
             chats.save_notification(platform, delivery, username)
+            tell_mass()
         if not source.mass_reaches_chats:
             set_text(
                 mass_pending_key(platform),

@@ -200,6 +200,13 @@ def running_jobs() -> list[Job]:
     return [Job.model_validate(row) for row in _repository().list_running()]
 
 
+def params_naming(fragment: str, while_running: set[str]) -> list[dict[str, Any]]:
+    """The params of every job naming `fragment`, a job of `while_running`
+    only while it runs or waits (the /edit sweep: what a job names, it
+    keeps)."""
+    return _repository().params_naming(fragment, while_running)
+
+
 def reopen_job(job_id: str) -> None:
     """Back to running, error cleared, for a job about to be run again."""
     _repository().update_status(job_id, "running", error=None)

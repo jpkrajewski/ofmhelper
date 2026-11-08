@@ -6,7 +6,7 @@ returns them, so a listed link's gate is unknown."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -16,7 +16,12 @@ from ofmhelpers.integrations.short_links.errors import (
     SlugTakenError,
     UngatedError,
 )
-from ofmhelpers.integrations.short_links.models import DayStat, RemoteLink, Usage
+from ofmhelpers.integrations.short_links.models import (
+    DayStat,
+    HourStat,
+    RemoteLink,
+    Usage,
+)
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 from ofmhelpers.log import get_logger
 
@@ -56,6 +61,14 @@ def _timestamp(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _hour_of(label: str) -> datetime:
+    """A one-day range's bucket, "YYYY-MM-DD HH" (UTC), as its hour; a bare
+    day ("YYYY-MM-DD") as its first hour."""
+    if len(label) > len("YYYY-MM-DD"):
+        return datetime.strptime(label[:13], "%Y-%m-%d %H").replace(tzinfo=UTC)
+    return datetime.fromisoformat(label[:10]).replace(tzinfo=UTC)
 
 
 def _spans(start: date, end: date, size: int) -> list[tuple[date, date]]:
@@ -164,6 +177,22 @@ class BouncyProvider(LinkProvider):
             days = self._days(remote_id, start, end)
             if days is not None:
                 found[remote_id] = days
+        return found
+
+    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+        found: dict[str, list[HourStat]] = {}
+        for remote_id in remote_ids:
+            buckets = self._buckets(remote_id, day, day)
+            if buckets is not None:
+                found[remote_id] = [
+                    HourStat(
+                        hour=_hour_of(bucket["date"]),
+                        views=bucket.get("views", 0),
+                        clicks=bucket.get("clicks", 0),
+                    )
+                    for bucket in buckets
+                    if bucket.get("views") or bucket.get("clicks")
+                ]
         return found
 
     def _days(self, remote_id: str, start: date, end: date) -> list[DayStat] | None:

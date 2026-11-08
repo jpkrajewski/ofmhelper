@@ -146,6 +146,28 @@ def test_fake_reports_the_seeded_traffic(name, fake_externals):
     assert sum(d.clicks for d in days) == 8
 
 
+def test_one_day_comes_back_by_the_hour(provider):
+    """What `money` reads (features/reports/hours.py): both providers answer a
+    one-day range by the hour (Oopsie checked on its real API 2026-11-08)."""
+    day = utc_today()
+    ids = [x.remote_id for x in provider.list_links()][:3]
+    found = provider.hourly(ids, day)
+    assert set(found) <= set(ids)
+    for hours in found.values():
+        assert all(h.hour.date() == day and h.hour.minute == 0 for h in hours)
+        assert all(h.hour.utcoffset() == timedelta(0) for h in hours)
+        assert len({h.hour for h in hours}) == len(hours)
+
+
+@pytest.mark.parametrize("name", PROVIDERS)
+def test_fake_reports_the_seeded_hours(name, fake_externals):
+    provider = _client(name, "fake")
+    [link] = provider.list_links()
+    hours = provider.hourly([link.remote_id], utc_today())[link.remote_id]
+    # The seed's day as a whole: its first hour.
+    assert [(h.hour.hour, h.views, h.clicks) for h in hours] == [(0, 10, 7)]
+
+
 def _round_trip(provider) -> None:
     info = provider_infos()[provider.key]
     slug = f"ofmh-contract-{uuid.uuid4().hex[:8]}"

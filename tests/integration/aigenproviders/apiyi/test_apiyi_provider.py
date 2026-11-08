@@ -489,6 +489,75 @@ def test_a_failed_media_link_is_not_read_as_moderation():
     assert error_reason(task.failure) != "Flagged content"
 
 
+_FIXTURES = Path(__file__).parents[3] / "fixtures" / "providers" / "apiyi"
+
+
+def test_apiyis_real_moderated_task_reads_as_flagged_content():
+    """Prod 2026-11-07, job 1881dd9b: APIYI sends the code only inside the
+    message ("[DataInspectionFailed] ..."), no `code` field; the card read
+    "Failed"."""
+    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
+
+    body = (_FIXTURES / "task_moderated.json").read_text(encoding="utf-8")
+    task = ApiyiTask.model_validate_json(body)
+
+    assert task.state == "failed"
+    assert task.failure == (
+        "APIYI: flagged by moderation: Green net check rejected image (input)"
+        " (DataInspectionFailed)"
+    )
+    assert error_reason(task.failure) == "Flagged content"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {
+            "error": {
+                "code": "DataInspectionFailed",
+                "message": "Input may contain risk",
+            }
+        },
+        {"output": {"task_status": "FAILED", "code": "IPInfringementSuspect"}},
+    ],
+    ids=["gateway code field", "DashScope's own output"],
+)
+def test_a_moderation_code_in_its_own_field_reads_as_flagged_content(body):
+    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
+
+    task = ApiyiTask.model_validate({"status": "failed", **body})
+
+    assert error_reason(task.failure) == "Flagged content"
+
+
+def test_a_moderated_job_stored_before_the_fix_reads_as_flagged_content_too():
+    stored = (
+        "APIYI failed this generation: APIYI: [DataInspectionFailed]"
+        " Green net check rejected image (input)"
+    )
+
+    assert error_reason(stored) == "Flagged content"
+
+
+def test_a_code_cited_in_the_message_that_is_not_moderation_stays_its_reason():
+    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
+
+    task = ApiyiTask.model_validate(
+        {
+            "status": "failed",
+            "error": {
+                "message": "[InvalidParameter] url not reachable: https://s/green_dress.jpg",
+                "type": "task_failed",
+            },
+        }
+    )
+
+    assert task.failure == (
+        "APIYI: url not reachable: https://s/green_dress.jpg (InvalidParameter)"
+    )
+    assert error_reason(task.failure) != "Flagged content"
+
+
 def test_status_reads_wait_at_least_apiyis_floor(provider, monkeypatch):
     """Docs: never faster than every 3 s."""
     import time

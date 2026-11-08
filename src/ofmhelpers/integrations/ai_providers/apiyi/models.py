@@ -60,6 +60,14 @@ _PAY_AS_YOU_GO = "pay-as-you-go"
 # matched on the code only -- a reason echoing a URL ("green_dress.jpg")
 # must not read as moderation.
 _REFUSED_CODE = re.compile(r"inspection|infringement", re.IGNORECASE)
+# A failed task's code as APIYI really sends it: only inside the message,
+# "[DataInspectionFailed] Green net check rejected image (input)", `error`
+# {message, type: task_failed} with no `code` (prod 2026-11-07, job 1881dd9b:
+# the card read "Failed" instead of "Flagged content"). `\w+` on purpose: a
+# dotted code ("[InvalidParameter.DataInspection]", Alibaba's media
+# download/format failure) stays in the text, since `_REFUSED_CODE` would
+# read "inspection" in it as moderation -- narrow that before widening this.
+_CODE_IN_MESSAGE = re.compile(r"^\[(\w+)\]\s*(.*)$", re.DOTALL)
 
 
 def _text(value: Any) -> Any:
@@ -255,8 +263,14 @@ class ApiyiTask(Lenient):
         native = self.output or ApiyiNativeOutput()
         reason = reason or self.fail_reason or native.message
         code = code or native.code
-        if not reason:
+        cited = _CODE_IN_MESSAGE.match(reason.strip())
+        if cited and not code:
+            code, reason = cited.group(1), cited.group(2) or cited.group(1)
+        if not reason and not code:
             return f"{PROVIDER}: task {self.state or 'failed'}"
+        # A code with no words (DashScope's own `output.code` alone) still
+        # says what it was.
+        reason = reason or f"task {self.state or 'failed'}"
         if _REFUSED_CODE.search(code):
             return f"{PROVIDER}: flagged by moderation: {reason} ({code})"
         return f"{PROVIDER}: {reason}" + (f" ({code})" if code else "")

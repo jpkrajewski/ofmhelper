@@ -28,7 +28,10 @@ from ofmhelpers.integrations.senders.telegram.models import (
     Reply,
     Update,
 )
+from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
+
+logger = get_logger(__name__)
 
 
 class TelegramError(SendError):
@@ -71,18 +74,34 @@ class TelegramClient:
 
     def chats(self) -> list[Chat]:
         """The chats that wrote to the bot or added it in the last 24 h (what
-        Telegram keeps): where `OFM_TELEGRAM_CHAT_IDS` comes from."""
+        Telegram keeps): where `OFM_TELEGRAM_CHAT_IDS` comes from. Not while a
+        server reads the bot's messages (`updates`): those are taken by then."""
         updates = [Update.model_validate(u) for u in self._call("getUpdates", {})]
         found = {u.chat.id: u.chat for u in updates if u.chat is not None}
         return list(found.values())
 
-    def _call(self, method: str, payload: dict[str, Any]) -> Any:
+    def updates(self, offset: int | None, wait_s: float) -> list[Update]:
+        """What the bot got from `offset` on (every update before it is taken
+        for good), waiting up to `wait_s` for one when there is none (long
+        polling)."""
+        payload: dict[str, Any] = {
+            "timeout": int(wait_s),
+            "allowed_updates": ["message", "channel_post"],
+        }
+        if offset is not None:
+            payload["offset"] = offset
+        found = self._call("getUpdates", payload, extra_wait_s=wait_s)
+        return [read for raw in found if (read := _update(raw)) is not None]
+
+    def _call(
+        self, method: str, payload: dict[str, Any], extra_wait_s: float = 0
+    ) -> Any:
         try:
             with outbound.mount(requests.Session()) as session:
                 response = session.post(
                     f"{self._base}/{method}",
                     json=payload,
-                    timeout=settings.telegram.timeout_s,
+                    timeout=settings.telegram.timeout_s + extra_wait_s,
                 )
         except requests.RequestException as exc:
             # str(exc) quotes the URL, and the URL holds the token.
@@ -96,6 +115,21 @@ class TelegramClient:
         if not reply.ok:
             raise _refusal(method, reply)
         return reply.result
+
+
+def _update(raw: Any) -> Update | None:
+    """One update, or only its id when the rest cannot be read (so the next read
+    starts past it: one odd update must not hold up every one after it); None
+    without even an id."""
+    try:
+        return Update.model_validate(raw)
+    except ValidationError:
+        update_id = raw.get("update_id") if isinstance(raw, dict) else None
+        if not isinstance(update_id, int):
+            return None
+        # Its id only: the content may be someone's words.
+        logger.warning("telegram update %s unreadable, skipped", update_id)
+        return Update(update_id=update_id)
 
 
 def _refusal(method: str, reply: Reply) -> TelegramError:

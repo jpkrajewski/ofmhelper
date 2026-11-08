@@ -16,10 +16,11 @@ Frame (`frame`) is the frame the page shows, cropped and at that size, as a
 JPEG download. The page steps frame by frame through the frame times
 `run_prepare` reads off the light copy (`FrameTimes`).
 
-Nothing /edit makes is kept: uploads and cuts go to `.edit/` in the
+What /edit makes is kept a day: uploads and cuts go to `.edit/` in the
 person's part of the store, which the Reuse pickers leave out (refs.py),
 and the hourly sweep (cleanup.py) deletes them after `edit_keep_s` (a day)
-unless a running job still names one. Clone it hands the cut to /clone as
+unless a job still names one (a clone made from a cut: for as long as the
+clone is there; a cut or light copy of /edit's own: while it runs or waits). Clone it hands the cut to /clone as
 `?video=`; Download downloads it.
 
 Every message is worded for the page, never a file name or ffmpeg's text
