@@ -117,10 +117,29 @@ def no_warming(monkeypatch):
 
 
 def test_a_local_video_offers_a_preview_and_a_poster():
-    card = asset_card("out.mp4", 0, f"{PREFIX}/files/j1")
+    previews.previews_dir().mkdir(parents=True, exist_ok=True)
+    previews.preview_path("j1", 0, "video").write_bytes(b"small copy")
+
+    card = asset_card("out.mp4", 0, f"{PREFIX}/files/j1", job_id="j1")
+
     assert card.preview_url == f"{PREFIX}/files/j1/0/preview"
     assert card.poster_url == f"{PREFIX}/files/j1/0/poster"
     assert card.download_url == f"{PREFIX}/files/j1/0?dl=1"  # still the original
+
+
+def test_a_video_shows_its_original_until_its_preview_is_made():
+    """Prod 2026-11-07: `/preview` served the original until the preview worker
+    made the small copy, then the small copy; a player that held the original's
+    30 MB length asked for ranges past its 1 MB: 4,637 answers 416 in 48 h. Each
+    URL now has one file: the original's own until the preview exists."""
+    before = asset_card("out.mp4", 0, f"{PREFIX}/files/j1", job_id="j1")
+    previews.previews_dir().mkdir(parents=True, exist_ok=True)
+    previews.preview_path("j1", 0, "video").write_bytes(b"small copy")
+    after = asset_card("out.mp4", 0, f"{PREFIX}/files/j1", job_id="j1")
+
+    assert before.preview_url == f"{PREFIX}/files/j1/0"
+    assert before.poster_url == f"{PREFIX}/files/j1/0/poster"
+    assert after.preview_url == f"{PREFIX}/files/j1/0/preview"
 
 
 def test_a_local_image_offers_a_preview_and_no_poster():
@@ -160,7 +179,8 @@ def test_status_payload_carries_the_preview_urls(client, tmp_path):
 
     (item,) = client.get(f"{PREFIX}/jobs/{job_id}/status").json()["result"]
 
-    assert item["preview_url"] == f"{PREFIX}/files/{job_id}/0/preview"
+    # Not decodable: no preview made, so the gallery plays the original.
+    assert item["preview_url"] == f"{PREFIX}/files/{job_id}/0"
     assert item["poster_url"] == f"{PREFIX}/files/{job_id}/0/poster"
 
 
@@ -209,11 +229,14 @@ def test_a_video_whose_preview_is_not_made_yet_plays_the_original_now(
 
     monkeypatch.setattr(previews, "write_video_preview", never)
 
-    r = client.get(f"{PREFIX}/files/{job_id}/0/preview")
+    r = client.get(f"{PREFIX}/files/{job_id}/0/preview", follow_redirects=False)
 
-    assert r.status_code == 200
-    assert r.content == b"original video bytes"
+    # Sent on to the original's own URL, never its bytes here: once the small
+    # copy is made, this URL serves that (416s, prod 2026-11-07).
+    assert r.status_code == 307
+    assert r.headers["location"] == f"{PREFIX}/files/{job_id}/0"
     assert r.headers["cache-control"] == "no-store"
+    assert client.get(r.headers["location"]).content == b"original video bytes"
     assert list(previews.previews_dir().glob("*.mp4")) == []
 
 
@@ -287,6 +310,97 @@ def test_warmed_previews_are_what_the_route_serves(client, tmp_path, monkeypatch
 
     monkeypatch.setattr(previews, "write_image_thumb", no_encode)
     assert client.get(f"{PREFIX}/files/{job_id}/0/preview").status_code == 200
+
+
+def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
+    tmp_path, monkeypatch, no_warming
+):
+    """Prod 2026-11-04..08: a 61 MB clip's preview timed out (180 s) on every
+    deploy's backfill, 10 times, each holding the only preview worker. Two
+    tries now (one could be a busy CPU), then the gallery plays the original;
+    a replaced file is tried again."""
+    tries: list[Path] = []
+
+    def times_out(source, _dest):
+        tries.append(source)
+        msg = "ffmpeg timed out after 180 s"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(previews, "write_video_preview", times_out)
+    monkeypatch.setattr(
+        previews, "write_video_thumb", lambda _s, dest, _px: dest.write_bytes(b"jpg")
+    )
+    clip = tmp_path / "frank.mp4"
+    clip.write_bytes(b"61 MB that never encodes")
+    job_id = _done_job(clip)
+    sources = [str(clip)]
+
+    previews.warm_previews(job_id, sources)
+    assert not previews.is_warm(job_id, sources)  # one failure: tried again
+    previews.warm_previews(job_id, sources)
+    previews.warm_previews(job_id, sources)
+    with pytest.raises(previews.FailedBeforeError):
+        previews.make_preview(clip, job_id, 0)
+
+    assert len(tries) == 2
+    assert previews.is_warm(job_id, sources)  # the backfill leaves it alone
+    assert previews.poster_path(job_id, 0).is_file()  # its card still has a face
+
+    clip.write_bytes(b"a new export, longer")
+    assert not previews.is_warm(job_id, sources)
+    previews.warm_previews(job_id, sources)
+    assert len(tries) == 3
+
+
+def test_a_poster_that_cannot_be_made_stops_the_backfill_too(
+    tmp_path, monkeypatch, no_warming
+):
+    """A video whose first frame cannot be read was queued again by every
+    deploy's backfill for its poster."""
+    monkeypatch.setattr(
+        previews,
+        "write_video_preview",
+        lambda _s, dest: previews.write_atomic(dest, lambda t: t.write_bytes(b"mp4")),
+    )
+    tries: list[Path] = []
+
+    def no_frame(source, _dest, _px):
+        tries.append(source)
+        msg = "ffmpeg: no frame"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(previews, "write_video_thumb", no_frame)
+    clip = tmp_path / "broken.mp4"
+    clip.write_bytes(b"no frames")
+    job_id = _done_job(clip)
+
+    for _ in range(3):
+        previews.warm_previews(job_id, [str(clip)])
+
+    assert len(tries) == 2
+    assert previews.is_warm(job_id, [str(clip)])
+
+
+def test_an_image_that_cannot_be_previewed_is_not_decoded_on_every_load(
+    client, tmp_path, no_warming, monkeypatch
+):
+    pic = tmp_path / "r.png"
+    pic.write_bytes(b"not a png")
+    job_id = _done_job(pic)
+    real = previews.write_image_thumb
+    tries: list[Path] = []
+
+    def counted(source, dest, size):
+        tries.append(source)
+        real(source, dest, size)
+
+    monkeypatch.setattr(previews, "write_image_thumb", counted)
+
+    for _ in range(4):
+        r = client.get(f"{PREFIX}/files/{job_id}/0/preview")
+        assert r.content == b"not a png"
+
+    assert len(tries) == 2
 
 
 def test_backfill_queues_only_jobs_missing_previews(tmp_path, monkeypatch, no_warming):

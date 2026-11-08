@@ -136,10 +136,15 @@ class WebSettings(BaseSettings):
     #   /apply                    -- the landing page's application form POST,
     #                                see routers/apply.py (rate-limited, not
     #                                unguarded)
+    #   /privacy, /terms          -- the legal pages (routers/legal.py): the
+    #                                Google OAuth consent screen links them and
+    #                                its reviewers fetch them signed out
     public_paths: set[str] = Field(
-        default={"/login", "/health", "/home", "/", "/apply"},
+        default={"/login", "/health", "/home", "/", "/apply", "/privacy", "/terms"},
         validation_alias="OFM_PUBLIC_PATHS",
     )
+    # The contact the legal pages show (empty: Telegram only).
+    contact_email: str = Field(default="", validation_alias="OFM_CONTACT_EMAIL")
     # /files/ai/: reference files handed to a provider without an upload
     # endpoint (ai_providers/hosting.py), each behind its own random token.
     public_prefixes: tuple[str, ...] = Field(
@@ -671,6 +676,15 @@ class AigenSettings(BaseSettings):
         validation_alias=AliasChoices(
             "OFM_AIGEN_RESUME_MAX_AGE_S", "OFM_KIEAI_RESUME_MAX_AGE_S"
         ),
+    )
+    # A raw provider file (the download before its export) in `out_dir` that
+    # no job names is deleted once older than this (owner 2026-11-08: 14
+    # days; prod's disk at 93%), by a sweep every `raw_sweep_s`.
+    raw_keep_s: int = Field(
+        default=14 * 86400, ge=3600, validation_alias="OFM_AIGEN_RAW_KEEP_S"
+    )
+    raw_sweep_s: int = Field(
+        default=86400, ge=60, validation_alias="OFM_AIGEN_RAW_SWEEP_S"
     )
     # The fake provider's placeholder video length.
     fake_video_duration_s: int = Field(

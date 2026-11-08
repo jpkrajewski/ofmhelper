@@ -11,7 +11,12 @@ Redis holds:
 - a mark per wait already told (`OpenWait.id`): a fan writing three times in a
   row is told once, and a wait the look named is not named again by its recheck.
 - one lock while a list is made (`one_teller`): a look and a recheck at once
-  would both read, both find the fan untold and both send.
+  would both read, both find the fan untold and both send. Renewed while the
+  list is made, however long Stacked's 429s make it (one took over 120 s, the
+  lock's life then, and two lists went out a second apart: prod 2026-11-07
+  18:07); a process killed mid-list leaves it at most `_TELL_LOCK_S`. A caller
+  that cannot take it within a few seconds makes no list: a recheck is due
+  again at the next poll, a look leaves it to the next look.
 
 Redis down: logged, nothing planned or marked, the list made unlocked; the
 10-minute look still tells. A message older than the 5 minutes plus a look is
@@ -20,6 +25,7 @@ plan thousands)."""
 
 from __future__ import annotations
 
+import threading
 import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
@@ -34,6 +40,8 @@ from ofmhelpers.log import get_logger
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
+    from redis.lock import Lock
+
     from ofmhelpers.schemas.chatting import ChatPlatform, ChatRead, OpenWait
 
 logger = get_logger(__name__)
@@ -43,8 +51,12 @@ _TOLD = "chatting:wait-told:"
 _TELLING = "lock:chatting:telling"
 # Outlives any wait someone still acts on.
 _TOLD_TTL_S = 2 * 24 * 60 * 60
-# A list is a read of each model with fans waiting (seconds each) and one emit.
+# A list is a read of each model with fans waiting (seconds each, minutes when
+# Stacked answers 429) and one emit: the lock lives this long and is renewed
+# every third of it while the list is made (a killed holder's lapses).
 _TELL_LOCK_S = 120
+# How long a second caller waits for the list being made before it skips.
+_TELL_WAIT_S = 5.0
 # Due just past the 5 minutes: the wait counts only once strictly older.
 _MARGIN_S = 1
 
@@ -128,25 +140,54 @@ def again(rechecks: Iterable[Recheck], now: float) -> None:
 
 
 @contextmanager
-def one_teller() -> Generator[None]:
-    """One list made at a time, across processes. Redis down or the wait over:
-    logged, and the list is made unlocked."""
+def one_teller() -> Generator[bool]:
+    """One list made at a time, across processes. True: this caller makes it (the
+    lock held and renewed until the list is made, or Redis down: unlocked,
+    logged). False: another list is being made, so this one is skipped."""
+    # Not thread-local: the renewing thread holds the same token.
     lock = get_redis().lock(
-        _TELLING, timeout=_TELL_LOCK_S, blocking_timeout=_TELL_LOCK_S
+        _TELLING,
+        timeout=_TELL_LOCK_S,
+        blocking_timeout=_TELL_WAIT_S,
+        thread_local=False,
     )
     try:
         held = bool(lock.acquire())
     except RedisError:
         logger.warning("chat telling lock unavailable", exc_info=True)
         held = False
+        unlocked = True
+    else:
+        unlocked = False
+    if not held:
+        if not unlocked:
+            logger.info("chat list already being made: this one skipped")
+        yield unlocked
+        return
+    done = threading.Event()
+    renewing = threading.Thread(
+        target=_renew, args=(lock, done), name="chat-telling-lock", daemon=True
+    )
+    renewing.start()
     try:
-        yield
+        yield True
     finally:
-        if held:
-            try:
-                lock.release()
-            except (RedisError, LockError):
-                logger.warning("chat telling lock not released", exc_info=True)
+        done.set()
+        renewing.join()
+        try:
+            lock.release()
+        except (RedisError, LockError):
+            logger.warning("chat telling lock not released", exc_info=True)
+
+
+def _renew(lock: Lock, done: threading.Event) -> None:
+    """`lock` back to its full life every third of it, until `done`."""
+    while not done.wait(_TELL_LOCK_S / 3):
+        try:
+            lock.reacquire()
+        except (RedisError, LockError):
+            logger.warning("chat telling lock not renewed", exc_info=True)
+            return
 
 
 def untold(waits: list[OpenWait]) -> list[OpenWait]:

@@ -15,11 +15,20 @@ previews queue), for older jobs by the startup backfill
 first. Every file is written via a temp file and renamed, so a killed or
 timed-out ffmpeg never leaves a truncated file that later requests take for a
 finished one.
+
+A preview that could not be made leaves a marker (`{job}_{index}.failed`:
+the source's size and mtime, how many tries failed). After `_FAILS_TO_BLOCK`
+failures of that same file it is not tried again for `_RETRY_FAILED_S`, its
+preview or its poster, by the backfill or a request, and the gallery shows the
+original. A 61 MB clip timed out (180 s) on every deploy's backfill, 10 times in
+4 days, each holding the only preview worker (prod 2026-11-04..08). One failure
+alone (a busy CPU) is tried again; a replaced source at once.
 """
 
 import hashlib
 import subprocess
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -43,6 +52,14 @@ def previews_dir() -> Path:
 # What a preview can fail with: a missing or broken ffmpeg, an unreadable
 # source, a timeout (`utils.ffmpeg` raises RuntimeError for the last two).
 PREVIEW_ERRORS = (OSError, ValueError, RuntimeError, subprocess.SubprocessError)
+# A preview that failed this often is tried again only after this (a full
+# disk passes).
+_FAILS_TO_BLOCK = 2
+_RETRY_FAILED_S = 7 * 24 * 60 * 60
+
+
+class FailedBeforeError(RuntimeError):
+    """This very file's preview failed too often lately: not tried again yet."""
 
 
 def write_atomic(dest: Path, write: Callable[[Path], None]) -> Path:
@@ -170,18 +187,62 @@ def poster_path(job_id: str, index: int) -> Path:
     return previews_dir() / f"{job_id}_{index}_{settings.web.poster_size}.webp"
 
 
+def failed_path(job_id: str, index: int) -> Path:
+    return previews_dir() / f"{job_id}_{index}.failed"
+
+
+def _stamp(source: Path) -> str:
+    st = source.stat()
+    return f"{st.st_size}:{st.st_mtime_ns}"
+
+
+def _failures(source: Path, job_id: str, index: int) -> int:
+    """How many tries at this file (same size and mtime) failed lately."""
+    marker = failed_path(job_id, index)
+    try:
+        if marker.stat().st_mtime <= time.time() - _RETRY_FAILED_S:
+            return 0
+        stamp, _, count = marker.read_text(encoding="utf-8").rpartition(":")
+        return int(count) if stamp == _stamp(source) else 0
+    except (OSError, ValueError):
+        return 0
+
+
+def failed_before(source: Path, job_id: str, index: int) -> bool:
+    """Whether this file failed to preview too often lately to try again."""
+    return _failures(source, job_id, index) >= _FAILS_TO_BLOCK
+
+
+def _mark_failed(source: Path, job_id: str, index: int) -> None:
+    try:
+        count = _failures(source, job_id, index) + 1
+        marker = failed_path(job_id, index)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(f"{_stamp(source)}:{count}", encoding="utf-8")
+    except OSError:
+        logger.warning("preview failure of %s not marked", source, exc_info=True)
+
+
 def make_preview(source: Path, job_id: str, index: int) -> Path:
     """A result's preview, made unless it already exists. Raises one of
-    PREVIEW_ERRORS when it can't be made."""
+    PREVIEW_ERRORS when it can't be made, at once when this file failed
+    lately (`failed_before`)."""
     kind = classify_kind(source.name)
     dest = preview_path(job_id, index, kind)
     if dest.is_file():
         return dest
-    if kind == "video":
-        write_video_preview(source, dest)
-    else:
-        size = settings.web.image_preview_px
-        write_atomic(dest, lambda tmp: write_image_thumb(source, tmp, size))
+    if failed_before(source, job_id, index):
+        msg = f"preview of {source.name} failed lately"
+        raise FailedBeforeError(msg)
+    try:
+        if kind == "video":
+            write_video_preview(source, dest)
+        else:
+            size = settings.web.image_preview_px
+            write_atomic(dest, lambda tmp: write_image_thumb(source, tmp, size))
+    except PREVIEW_ERRORS:
+        _mark_failed(source, job_id, index)
+        raise
     return dest
 
 
@@ -226,22 +287,34 @@ def _media(sources: list[str | None]) -> list[tuple[int, Path, str]]:
 
 
 def is_warm(job_id: str, sources: list[str | None]) -> bool:
-    """Whether every preview (and video poster) of a job's results exists."""
+    """Whether every preview (and video poster) of a job's results exists, a
+    file that failed too often lately counting as done (its poster too)."""
     return all(
-        preview_path(job_id, index, kind).is_file()
-        and (kind != "video" or poster_path(job_id, index).is_file())
-        for index, _path, kind in _media(sources)
+        failed_before(path, job_id, index)
+        or (
+            preview_path(job_id, index, kind).is_file()
+            and (kind != "video" or poster_path(job_id, index).is_file())
+        )
+        for index, path, kind in _media(sources)
     )
 
 
 def warm_previews(job_id: str, sources: list[str | None]) -> None:
     """Make every preview a job's results need (`Job.local_paths()`), so the
     first viewer waits for none. One result that can't be previewed is
-    logged and skipped; the route serves its original instead."""
+    logged and skipped; the route serves its original instead. One that
+    failed too often lately is not tried again, preview or poster."""
     for index, path, kind in _media(sources):
+        if failed_before(path, job_id, index):
+            continue
         try:
             make_preview(path, job_id, index)
-            if kind == "video":
-                make_poster(path, job_id, index)
         except PREVIEW_ERRORS:
             logger.warning("could not preview %s", path, exc_info=True)
+        if kind != "video":
+            continue
+        try:
+            make_poster(path, job_id, index)
+        except PREVIEW_ERRORS:
+            _mark_failed(path, job_id, index)
+            logger.warning("could not make a poster of %s", path, exc_info=True)

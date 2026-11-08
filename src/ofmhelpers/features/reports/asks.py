@@ -91,7 +91,8 @@ def answer_asks() -> None:
         found = inbox.read(TelegramClient(secret), set(ASKS), _bot_name(secret))
         for ask in found.asks:
             enqueue(answer, ask.chat_id, ask.word)
-            logger.info("telegram: %r asked in chat %s", ask.word, ask.chat_id)
+            # No chat id: the app never logs where a message goes (senders/CLAUDE.md).
+            logger.info("telegram: %r asked", ask.word)
         inbox.confirm(found)
     except (TelegramError, RedisError):
         state.failed = True

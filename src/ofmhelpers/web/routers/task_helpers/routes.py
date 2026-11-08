@@ -80,7 +80,7 @@ def add_job_routes(
 
     @router.get("/files/{job_id}/{index}/preview")
     def preview_file(job_id: str, index: int, actor: Actor) -> Response:
-        return serve_job_preview(get_job(job_id, actor), index)
+        return serve_job_preview(get_job(job_id, actor), index, files_prefix)
 
     @router.get("/files/{job_id}/{index}/poster")
     def poster_file(job_id: str, index: int, actor: Actor) -> Response:

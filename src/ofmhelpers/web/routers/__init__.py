@@ -45,6 +45,7 @@ from ofmhelpers.web.routers import (
     cookies,
     home,
     jobs,
+    legal,
     refs,
     webhooks,
 )
@@ -78,6 +79,7 @@ ROUTERS = [
     ai_files.router,
     jobs.router,
     apply.router,
+    legal.router,
     refs.router,
     # generation/
     generation_index.router,

@@ -141,10 +141,12 @@ def _tell(now: float, key: str | None, chats_due: set[tuple[str, str]] | None) -
     """The list of every model with fans still waiting after a fresh read, one list
     at a time (`rechecks.one_teller`). `chats_due` (a recheck): only when one of
     those chats still waits untold, its key then named after those waits; else (a
-    look) `key`."""
+    look) `key`. Another list being made: none, a recheck's chats due again."""
     if not listening():
         return _Told()
-    with rechecks.one_teller():
+    with rechecks.one_teller() as mine:
+        if not mine:
+            return _Told(unread=frozenset(chats_due or ()))
         waiting = _waiting(now)
         due = _untold(waiting, chats_due) if chats_due is not None else []
         if not waiting or (chats_due is not None and not due):

@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
+from ofmhelpers.features.jobs import recovery
 from ofmhelpers.gdrive import DriveError, DriveFile
 from ofmhelpers.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
 from ofmhelpers.trials import media, tasks
@@ -31,7 +32,7 @@ from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.video_tools import trials as trials_router
 from ofmhelpers.web.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.stores import devices, users
-from ofmhelpers.web.stores.jobs import create_job
+from ofmhelpers.web.stores.jobs import create_job, get_job
 
 AGENCY = "agency@example.com"
 MY_DRIVE = f"mydrive-{AGENCY}"
@@ -1131,3 +1132,80 @@ def test_a_new_generate_takes_the_failed_reels_again(
     (pending,) = _state(login).reels
     live = client.get(f"/trials/{login}/live").json()
     assert live["cards"] == [{"key": f"pending-{pending.key}", "stamp": "queued"}]
+
+
+# --- a Generate cut off by a deploy ------------------------------------------
+
+
+@pytest.fixture
+def nobody_holds(monkeypatch):
+    """Recovery's view: no worker or queue holds any job, no grace."""
+    monkeypatch.setattr(recovery, "active_job_ids", set)
+    monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
+
+
+def _cut_off(login: int, label: str = "Making trials", **params) -> str:
+    """A Generate a deploy killed: its row still running, nobody on it."""
+    job_id = create_job(
+        "trials",
+        {"label": label, "login": login, **params},
+        actor=str(users.agency_id()),
+    )
+    trial_state.change(users.agency_id(), login, lambda s: setattr(s, "job_id", job_id))
+    return job_id
+
+
+@pytest.mark.usefixtures("nobody_holds")
+def test_a_generate_cut_off_by_a_deploy_goes_on_where_it_stopped(drive, made):
+    """Prod 2026-11-07: a deploy cut a Generate at 52 min (workers get 120 s,
+    one runs for hours) and it failed "Interrupted by a restart". Recovery
+    now queues it again; copies already made are left alone."""
+    login = _login(drive, "a.mp4")
+    _client().post(f"/trials/{login}/generate")
+    drive.add_file(_posted(drive), "b.mp4", "video/mp4")
+    job_id = _cut_off(login)
+
+    assert recovery.run_recovery_once() == {job_id: "restarted"}
+
+    assert made == ["caption 0", "caption 1"]  # a.mp4 not made again
+    job = get_job(job_id)
+    assert job.status == "done"
+    assert job.params["restarts"] == 1
+    assert len(_state(login).ready) == 2
+
+
+@pytest.mark.usefixtures("nobody_holds")
+def test_a_restarted_generate_waits_on_the_media_queue_with_its_time_limit(
+    drive, made, real_queue
+):
+    login = _login(drive, "a.mp4", "b.mp4")
+    _client().get(f"/trials/{login}")  # the page knows both reels
+    job_id = _cut_off(login)
+    real_queue()
+
+    assert recovery.run_recovery_once() == {job_id: "restarted"}
+
+    (queued,) = get_queue(QueueName.MEDIA).get_jobs()
+    assert queued.args[0] == job_id
+    assert queued.timeout >= 2 * _PROD_COPY_S
+    assert made == []
+
+
+@pytest.mark.usefixtures("nobody_holds")
+@pytest.mark.parametrize(
+    ("label", "params"),
+    [("Making trials", {"restarts": 2}), ("Making one trial", {})],
+    ids=["cut off twice already", "one reel's remake"],
+)
+def test_a_job_that_cannot_start_over_still_fails_as_interrupted(
+    drive, made, label, params
+):
+    login = _login(drive, "a.mp4")
+    job_id = _cut_off(login, label, **params)
+
+    assert recovery.run_recovery_once() == {job_id: "interrupted"}
+
+    job = get_job(job_id)
+    assert job.status == "failed"
+    assert job.error == recovery.INTERRUPTED
+    assert made == []

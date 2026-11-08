@@ -168,6 +168,37 @@ def test_the_events_tab_extras_are_answered_and_do_nothing(client, side, kind):
     assert _popups() == []
 
 
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        (
+            {"eventId": "e1", "message": {"text": "my secret words"}},
+            "2 fields (id: missing; type: missing) of type -, keys eventId,message",
+        ),
+        (
+            {
+                "id": "e2",
+                "type": "creator.message.received",
+                "data": {"uuid": "m1", "text": "my secret words"},
+            },
+            "of type creator.message.received, keys data,id,type",
+        ),
+    ],
+    ids=["flat event", "message without its parties"],
+)
+def test_a_delivery_not_understood_is_named_by_type_and_fields_never_values(
+    client, side, caplog, body, said
+):
+    """Prod 2026-11-05..08: `fanvue delivery not understood: 2 fields`, 19 times,
+    and nothing more to tell which event it was."""
+    with caplog.at_level(logging.WARNING):
+        assert _post(client, side, body).status_code == HTTPStatus.OK
+
+    assert said in caplog.text
+    assert "my secret words" not in caplog.text
+    assert _popups() == []
+
+
 # --- the app-wide secret ----------------------------------------------------
 
 

@@ -5,10 +5,11 @@ in our own origin -- see `media_response`'s content-type handling.
 """
 
 import mimetypes
+from http import HTTPStatus
 from pathlib import Path
 
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.previews import render as previews
@@ -102,24 +103,29 @@ def _result_media(job: Job | None, index: int, kinds: set[str]) -> tuple[Job, Pa
     return job, path
 
 
-def serve_job_preview(job: Job | None, index: int) -> FileResponse:
+def serve_job_preview(
+    job: Job | None, index: int, files_prefix: str
+) -> FileResponse | RedirectResponse:
     """'/files/{job_id}/{index}/preview': a result image or video small
     enough for a slow connection (see features/previews/render.py) -- made by the
     preview worker when the job finished. A video's not made yet, or one that
-    cannot be made: the original instead (a slow picture beats none); an
-    image's is made now (milliseconds)."""
+    cannot be made: sent on to the original's own URL (a slow picture beats
+    none), never the original's bytes here: once the small copy is made this
+    URL serves it, and a player still holding the original's length asks
+    for ranges it has not got (416s, prod 2026-11-07). An image's is made now
+    (milliseconds)."""
     job, path = _result_media(job, index, {"image", "video"})
     kind = classify_kind(path.name)
     if kind == "video" and not previews.preview_path(job.id, index, kind).is_file():
-        # Still being made by the preview worker (a 75 s 4K download takes
-        # about a minute): the original plays now instead of a blank card
-        # for that minute, and of a second encode here (2026-10-23). Not
-        # cached, so the next load gets the small copy.
-        response = media_response(path)
-        response.headers["Cache-Control"] = "no-store"
-        return response
+        return RedirectResponse(
+            f"{files_prefix}/{job.id}/{index}",
+            status_code=HTTPStatus.TEMPORARY_REDIRECT,
+            headers={"Cache-Control": "no-store"},
+        )
     try:
         dest = previews.make_preview(path, job.id, index)
+    except previews.FailedBeforeError:
+        return media_response(path)
     except previews.PREVIEW_ERRORS:
         logger.warning("could not preview %s", path, exc_info=True)
         return media_response(path)

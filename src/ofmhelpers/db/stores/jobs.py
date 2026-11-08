@@ -207,6 +207,12 @@ def params_naming(fragment: str, while_running: set[str]) -> list[dict[str, Any]
     return _repository().params_naming(fragment, while_running)
 
 
+def files_naming(fragment: str) -> list[Any]:
+    """The params and results of every job naming `fragment` (the raw-file
+    sweep: a file a job names is kept)."""
+    return _repository().files_naming(fragment)
+
+
 def reopen_job(job_id: str) -> None:
     """Back to running, error cleared, for a job about to be run again."""
     _repository().update_status(job_id, "running", error=None)

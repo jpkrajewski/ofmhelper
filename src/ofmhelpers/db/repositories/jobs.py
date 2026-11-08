@@ -176,6 +176,21 @@ class JobRepository(CachedRepository):
             )
             return [_job_to_dict(r) for r in rows]
 
+    def files_naming(self, fragment: str) -> list[Any]:
+        """The params and result of every job (any status) whose params or
+        result hold `fragment` anywhere. Uncached: the raw-file sweep keeps
+        what they name."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(JobRow.params, JobRow.result).where(
+                    or_(
+                        cast(JobRow.params, Text).contains(fragment, autoescape=True),
+                        cast(JobRow.result, Text).contains(fragment, autoescape=True),
+                    )
+                )
+            ).all()
+            return [value for row in rows for value in row if value]
+
     def params_naming(self, fragment: str, while_running: set[str]) -> list[dict]:
         """The params of every job whose params hold `fragment` anywhere:
         whatever its status, but a job of `while_running` only while it is

@@ -11,6 +11,7 @@ from urllib.parse import quote
 from fastapi import HTTPException
 
 from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.features.previews import render as previews
 from ofmhelpers.schemas import (
     AssetCard,
     FailedSource,
@@ -51,10 +52,20 @@ def asset_card(
 
     An image or video with a local copy also gets `preview_url` (what a
     gallery shows) and a video `poster_url` (shown until played); see
-    features/previews/render.py."""
+    features/previews/render.py. A video's is its own URL until the preview
+    worker made the small copy: one URL never serves two files (a player that
+    held the original's length asked `/preview` for ranges the small copy has
+    not got: 4,637 answers 416 in 48 h, prod 2026-11-07)."""
     local_url = f"{files_prefix}/{index}"
     kind = classify_kind(name)
     previewed = local and kind in ("image", "video")
+    preview_url = f"{local_url}/preview" if previewed else None
+    if (
+        previewed
+        and kind == "video"
+        and not previews.preview_path(job_id, index, kind).is_file()
+    ):
+        preview_url = local_url
     return AssetCard(
         name=name,
         index=index,
@@ -63,7 +74,7 @@ def asset_card(
         download_url=remote_url or f"{local_url}?dl=1",
         download_name=download_name(name, job_id),
         local_fallback_url=local_url if remote_url else None,
-        preview_url=f"{local_url}/preview" if previewed else None,
+        preview_url=preview_url,
         poster_url=f"{local_url}/poster" if previewed and kind == "video" else None,
         source=source,
     )

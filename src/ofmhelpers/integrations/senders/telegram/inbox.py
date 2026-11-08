@@ -75,7 +75,7 @@ def _ask(
         )
         return None
     if message.date < time.time() - settings.telegram.ask_max_age_s:
-        logger.info("telegram: %r in chat %s is too old to answer", word, chat)
+        logger.info("telegram: %r is too old to answer", word)
         return None
     return Ask(chat_id=chat, word=word)
 

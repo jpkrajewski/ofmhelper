@@ -14,9 +14,9 @@ proves nothing, so a model counts as delivering only while its replies actually 
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from pydantic import ValidationError
+from pydantic import RootModel, ValidationError
 from sqlalchemy.exc import DataError
 
 from ofmhelpers.cache import get_text, set_text
@@ -46,6 +46,9 @@ logger = get_logger(__name__)
 _SHARED_DESTINATION = "shared"
 # A bulk send noticed by its size, not told of by the platform.
 _BULK_SEND = "bulk:"
+# A delivery not understood is named by at most this many keys / characters each.
+_KEYS_MAX = 12
+_NAME_MAX = 60
 
 
 def _public_base() -> str:
@@ -280,6 +283,32 @@ def _shows_replies(delivery: ChatDelivery) -> bool:
     )
 
 
+class _Top(RootModel[dict[str, Any]]):
+    """A delivery's top level, read only to name it in a log line."""
+
+
+def _named(raw: bytes) -> str:
+    """What a delivery not understood was: its `type` and top-level keys, names
+    only (the values may be a fan's words)."""
+    try:
+        top = _Top.model_validate_json(raw).root
+    except ValidationError:
+        return "not a JSON object"
+    kind = top.get("type")
+    kind = kind[:_NAME_MAX] if isinstance(kind, str) else "-"
+    keys = ",".join(sorted(k[:_NAME_MAX] for k in top)[:_KEYS_MAX])
+    return f"type {kind}, keys {keys}"
+
+
+def _failed_fields(exc: ValidationError) -> str:
+    """Where and how it failed (`data.fan: missing`), never the input."""
+    errors = exc.errors(include_input=False, include_url=False, include_context=False)
+    return "; ".join(
+        f"{'.'.join(str(part) for part in e['loc']) or '-'}: {e['type']}"
+        for e in errors[:_KEYS_MAX]
+    )
+
+
 def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
     """One delivery. False when no destination signed it: nothing is believed. An
     event kept once is kept again harmlessly: platforms repeat until answered, and an
@@ -325,9 +354,11 @@ def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
     except ValidationError as exc:
         # No exc_info: the error text quotes the input, which may be a fan's words.
         logger.warning(
-            "%s delivery not understood: %d fields",
+            "%s delivery not understood: %d fields (%s) of %s",
             platform.value,
             exc.error_count(),
+            _failed_fields(exc),
+            _named(raw),
         )
     except DataError:
         # Retries would not change it, and a failing address gets disabled.
