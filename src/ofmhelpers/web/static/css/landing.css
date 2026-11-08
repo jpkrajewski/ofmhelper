@@ -506,6 +506,24 @@ body {
 .rm-footer-link { color: var(--rm-subtle); text-decoration: none; }
 .rm-footer-legal { color: var(--rm-legal); font-size: 12px; }
 
+/* ---------- Legal pages (/privacy, /terms) ---------- */
+.rm-brand-link { color: inherit; text-decoration: none; }
+.rm-legal {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 60px var(--rm-gutter) 80px;
+  color: var(--rm-text-body);
+  font-size: 16px;
+  line-height: 1.7;
+}
+.rm-legal-title { color: var(--rm-text); font-size: 40px; line-height: 1.2; margin: 0 0 8px; }
+.rm-legal-updated { color: var(--rm-faint); font-size: 14px; margin: 0 0 40px; }
+.rm-legal-h2 { color: var(--rm-text); font-size: 22px; margin: 40px 0 12px; }
+.rm-legal-list { padding-left: 22px; margin: 0 0 16px; }
+.rm-legal-list li { margin-bottom: 8px; }
+.rm-legal-link { color: var(--rm-accent-soft); }
+.rm-legal code { color: var(--rm-text-soft); font-size: 14px; overflow-wrap: anywhere; }
+
 /* ---------- Responsive (kept last: same-specificity overrides) ---------- */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -514,6 +532,7 @@ body {
 
 @media (max-width: 768px) {
   .rm-nav-links { display: none; }
+  .rm-legal-title { font-size: 30px; }
   .rm-nav-actions .rm-nav-contact { display: none; }
   .rm-hero-stats { gap: 32px; }
   .rm-grid-2 { grid-template-columns: 1fr; }

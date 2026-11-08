@@ -22,7 +22,8 @@ on its task's own queue (`registry.QUEUES`). A running job neither holds
 (a deploy killed its worker mid-job; prod, 2026-10-22: a clone's CapCut
 export) is cut off, judged against a view of the queues read after the
 slow part of the sweep: with a remembered request
-it is settled like a failed one (resumed, never paid twice); without one it
+it is settled like a failed one (resumed, never paid twice); one whose task
+can start over (`RESTARTS`: a /trials Generate) is queued again; any other
 fails with "Interrupted by a restart", so no card spins forever. A done or
 deleted job is forgotten, and nothing older than `resume_max_age_s` is
 checked again. Provider-agnostic: a new provider is recovered without a
@@ -30,6 +31,7 @@ line here.
 """
 
 import time
+from collections.abc import Callable
 
 from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.cache.queue import active_job_ids
@@ -42,6 +44,7 @@ from ofmhelpers.db.stores.jobs import (
     running_jobs,
 )
 from ofmhelpers.features.clone_links.review import resume_reviews
+from ofmhelpers.features.trials import folder as trials_folder
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
@@ -53,6 +56,10 @@ from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
 logger = get_logger(__name__)
 
 INTERRUPTED = "Interrupted by a restart: run it again."
+# Cut off with nothing to resume, these start over (True: queued again).
+RESTARTS: dict[str, Callable[[Job], bool]] = {
+    trials_folder.TASK: trials_folder.restart,
+}
 
 
 def _cut_off(job: Job, active: set[str] | None) -> bool:
@@ -123,14 +130,33 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
     return "rerun"
 
 
+def _restarted(job: Job) -> bool:
+    restart = RESTARTS.get(job.task)
+    if restart is None:
+        return False
+    try:
+        return restart(job)
+    except Exception:
+        logger.exception("recovery could not start job %s again", job.id)
+        return False
+
+
 def fail_cut_off(active: set[str] | None, remembered: set[str]) -> dict[str, str]:
-    """Fail every cut-off running job with no request to resume."""
+    """Every cut-off running job with no request to resume started over
+    (`RESTARTS`) or failed."""
     outcomes = {}
     for job in running_jobs():
-        if job.id not in remembered and _cut_off(job, active):
-            fail_job(job.id, INTERRUPTED)
-            logger.warning("recovery: job %s was cut off by a restart", job.id)
-            outcomes[job.id] = "interrupted"
+        if job.id in remembered or not _cut_off(job, active):
+            continue
+        if _restarted(job):
+            logger.warning(
+                "recovery: job %s was cut off by a restart: started again", job.id
+            )
+            outcomes[job.id] = "restarted"
+            continue
+        fail_job(job.id, INTERRUPTED)
+        logger.warning("recovery: job %s was cut off by a restart", job.id)
+        outcomes[job.id] = "interrupted"
     return outcomes
 
 

@@ -521,3 +521,35 @@ def test_a_recheck_during_a_look_waits_for_it_and_sends_nothing_more(monkeypatch
     recheck.join(10)
 
     assert len(_sent()) == 1
+
+
+def test_a_recheck_that_cannot_wait_out_a_slow_list_skips_and_comes_back(
+    monkeypatch,
+):
+    """Prod 2026-11-07 18:07: Stacked's 429s kept a list over the lock's 120 s,
+    the recheck waiting on it made its own unlocked and two lists went out a
+    second apart. Now the lock is renewed while the list is made, and a caller
+    that cannot take it in time makes none: its recheck is due again at the
+    next poll."""
+    monkeypatch.setattr(rechecks, "_TELL_LOCK_S", 0.6)  # renewed every 0.2 s
+    monkeypatch.setattr(rechecks, "_TELL_WAIT_S", 0.2)
+    reading, go = threading.Event(), threading.Event()
+
+    def slow_read(_platform, usernames):
+        reading.set()
+        go.wait(10)
+        return usernames
+
+    monkeypatch.setattr(wait_events, "_fresh", slow_read)
+    _carl_planned(NOW - 400)
+    look = threading.Thread(target=emit_waiting, args=(NOW,))
+    look.start()
+    assert reading.wait(10)
+    time.sleep(1.5)  # the list outlives the lock's own life
+
+    assert recheck_due(NOW) == 0
+    assert len(rechecks.take_due(NOW + 15)) == 1  # due again at the next poll
+
+    go.set()
+    look.join(10)
+    assert len(_sent()) == 1

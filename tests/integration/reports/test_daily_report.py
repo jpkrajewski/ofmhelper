@@ -3,6 +3,7 @@ model's clicks, CTR, subscribers, conversion and sales (Stacked's API at the wir
 Fanvue's stored webhooks), each account's views, who sent a mass message -- as
 the Telegram messages the group gets (both fakes at the wire)."""
 
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -369,6 +370,17 @@ def test_money_typed_in_the_group_is_answered_with_the_last_24_hours(typed):
 
     assert [(m.chat_id, m.text) for m in fake_telegram().sent] == [("111", _MONEY)]
     assert report_runs.last_run(daily.NAME) is None
+
+
+def test_an_answered_ask_is_logged_without_its_chat(agency, caplog):
+    """Where a message goes is never logged (senders/CLAUDE.md); prod's first
+    asks wrote the group's id to Logfire."""
+    fake_telegram().wrote(111, text="money")
+    with caplog.at_level(logging.INFO, logger=asks.__name__):
+        asks.answer_asks()
+
+    lines = [r.getMessage() for r in caplog.records if r.name == asks.__name__]
+    assert lines == ["telegram: 'money' asked"]
 
 
 def test_money_from_a_chat_not_listed_or_typed_long_ago_is_not_answered(agency):

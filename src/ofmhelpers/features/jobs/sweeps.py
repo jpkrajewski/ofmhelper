@@ -25,7 +25,7 @@ from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
-from ofmhelpers.features.jobs import recovery
+from ofmhelpers.features.jobs import raw_files, recovery
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
@@ -150,6 +150,12 @@ def sweeps() -> list[Sweep]:
             name="edit cleanup",
             run=edit_cleanup.remove_old,
             interval_s=lambda: settings.web.edit_sweep_s,
+        ),
+        # Raw provider downloads no job names, after 14 days -- raw_files.py.
+        Sweep(
+            name="raw files",
+            run=raw_files.remove_old,
+            interval_s=lambda: settings.aigen.raw_sweep_s,
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),

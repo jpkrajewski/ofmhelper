@@ -1,0 +1,35 @@
+{# The public legal pages (routers/legal.py): the landing page's look
+   (landing.css), a header back to /, one column of text, its footer.
+   Pages fill `title` and `text`. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}{% endblock %} — Ascend Global</title>
+{% include "_favicon.html" %}
+<link rel="stylesheet" href="{{ static_url('css/landing.css') }}">
+</head>
+<body>
+
+<header class="rm-header">
+  <a href="/" class="rm-brand rm-brand-header rm-brand-link">
+    <div class="rm-logo">A</div>
+    Ascend Global
+  </a>
+  <div class="rm-nav-actions">
+    <a href="/privacy" class="rm-nav-link">Privacy</a>
+    <a href="/terms" class="rm-nav-link">Terms</a>
+  </div>
+</header>
+
+<main class="rm-legal">
+  <h1 class="rm-legal-title">{{ self.title() }}</h1>
+  <p class="rm-legal-updated">Last updated: {{ updated }}</p>
+  {% block text %}{% endblock %}
+</main>
+
+{% include "_landing_footer.html" %}
+
+</body>
+</html>

@@ -14,7 +14,14 @@ from pydantic import BaseModel
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import drive_folders as drive_store
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job, running_jobs
+from ofmhelpers.db.stores.jobs import (
+    create_job,
+    get_job,
+    merge_params,
+    reopen_job,
+    run_job,
+    running_jobs,
+)
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
@@ -30,11 +37,15 @@ from ofmhelpers.features.trials.state import (
     load,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas import Job
 from ofmhelpers.schemas.drive import DriveBoard, DriveCard
 
 logger = get_logger(__name__)
 
 TASK = "trials"
+GENERATE = "Making trials"
+# A Generate cut off by restarts this often is failed: something kills it.
+_RESTARTS_MAX = 2
 
 NO_FOLDER = "No such account folder"
 NO_REEL = "No such reel"
@@ -336,7 +347,7 @@ def generate(
     """POSTED read for new reels: those downloaded and made, a copy already
     made left alone; a second click while it runs does nothing."""
     _sync_state(scope, uid, login_id)
-    claim = _Claim(uid, login_id, "Making trials")
+    claim = _Claim(uid, login_id, GENERATE)
 
     def take(state: FolderState) -> None:
         if not _at_work(uid, state.job_id):
@@ -354,6 +365,35 @@ def generate(
             refresh_token=refresh_token(uid) or "",
         )
     return Started(started=bool(claim.job_id))
+
+
+def restart(job: Job) -> bool:
+    """A Generate cut off by a restart, queued again (recovery,
+    features/jobs/recovery.py): a deploy gives workers 120 s and a Generate
+    runs for hours (prod 2026-11-07: one cut at 52 min, "Interrupted by a
+    restart"). Copies already made are left alone, so it goes on where it
+    stopped. False (failed as interrupted): not a Generate (one reel's
+    remake or captions: it does not know its keys), or cut off too often."""
+    restarts = int(job.params.get("restarts", 0))
+    if (
+        job.params.get("label") != GENERATE
+        or job.actor is None
+        or restarts >= _RESTARTS_MAX
+    ):
+        return False
+    uid, login_id = int(job.actor), int(job.params["login"])
+    # Counted first: a restart that dies on the way still counts.
+    merge_params(job.id, {"restarts": restarts + 1})
+    reopen_job(job.id)
+    claim = _Claim(uid, login_id, GENERATE)
+    claim.job_id = job.id
+    claim.launch(
+        JobQueue(QueueName.MEDIA).put,
+        tasks.make_trials,
+        len(load(uid, login_id).reels),
+        refresh_token=refresh_token(uid) or "",
+    )
+    return True
 
 
 def remake(

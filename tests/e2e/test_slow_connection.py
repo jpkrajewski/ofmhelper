@@ -110,11 +110,17 @@ def test_a_heavy_gallery_loads_only_previews(admin: Session, heavy_gallery):
     )
 
 
-def test_a_played_video_streams_its_preview(admin: Session, heavy_gallery):
+def test_a_video_with_no_preview_yet_plays_its_original_url(
+    admin: Session, heavy_gallery
+):
+    """Its own URL, never `/preview`: that URL serves the small copy once it is
+    made, and a player holding the original's length then got 416s (prod
+    2026-11-07)."""
     admin.goto("/generate")
     video = admin.page.locator("video.result-video").first
     src = video.get_attribute("src")
-    assert src.endswith("/preview")
+    assert "/files/" in src
+    assert not src.endswith("/preview")
 
     with admin.page.expect_response(lambda r: r.url.endswith(src)) as played:
         video.evaluate("v => { v.muted = true; return v.play(); }")
