@@ -30,7 +30,7 @@ dependencies = [
     # (downloaders/generic.py); imported by yt-dlp, never by us.
     "yt-dlp-ejs>=0.8.0",
     # <2.1: Logfire's OpenTelemetry instrumentation supports SQLAlchemy below 2.1.
-    "sqlalchemy>=2.0.52,<2.1",
+    "sqlalchemy>=2.1.6,<2.2",
     "alembic>=1.18.5",
     "psycopg[binary]>=3.3.6",
     "redis>=8.0.1",
