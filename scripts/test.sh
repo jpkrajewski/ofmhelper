@@ -31,7 +31,9 @@ cd "$(dirname "$0")/.." || exit 1
 compose=(docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile test)
 # Parallel, one test database per xdist worker; every e2e test goes to one
 # worker (xdist_group "e2e", tests/conftest.py), which starts the one app.
-parallel=(-n auto --maxprocesses=8 --dist loadgroup)
+# At most 4: 6 logical cores on the dev PC, and it has to stay usable (2026-11-09:
+# 6 workers + ffmpeg + another project's tests: 24 min instead of 7, PC hanging).
+parallel=(-n auto --maxprocesses=4 --dist loadgroup)
 
 case "${1:-}" in
     "") args=("${parallel[@]}") ;;
@@ -75,6 +77,8 @@ echo "test.sh: pytest exit $status in $(( $(date +%s) - start ))s" | tee -a "$ru
 # A plain copy, not a symlink: Windows hosts do not follow WSL symlinks.
 rm -rf reports/latest
 cp -r "$run_dir" reports/latest
+# The last 10 runs: 1030 folders had piled up, in the way of every file watcher.
+find reports -maxdepth 1 -type d -name '20*' | sort -r | tail -n +11 | xargs -r rm -rf
 
 if [[ -n "${store_durations:-}" && "$status" -eq 0 ]]; then
     "${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/test_durations.py \

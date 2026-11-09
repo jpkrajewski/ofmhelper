@@ -127,6 +127,8 @@ services:
       target: test
     profiles:
       - test
+    # Leaves the dev PC (6 logical cores) 2 for itself, ffmpeg and Chromium included.
+    cpus: 4.0
     working_dir: /app
     command: ["uv", "run", "--frozen", "pytest", "-n", "auto", "--maxprocesses=8", "--dist", "loadgroup"]
     dns: *public-dns
@@ -252,7 +254,7 @@ services:
   # /links, and open it on the phone. The tunnel sets CF-Connecting-IP and the
   # visitor-location headers, so dev logs clicks with geo just like prod.
   cloudflared:
-    image: cloudflare/cloudflared:2024.12.1
+    image: cloudflare/cloudflared:2024.12.2
     container_name: ofmhelpers-cloudflared
     profiles:
       - dev
