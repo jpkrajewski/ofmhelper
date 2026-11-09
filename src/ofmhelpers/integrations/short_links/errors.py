@@ -1,14 +1,8 @@
 """The only exceptions a link provider client raises. Each message is
 written for the person on /links: it is shown as is."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from ofmhelpers.errors import AppError
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.short_links.models import RemoteLink
+lazy from ofmhelpers.integrations.short_links.models import RemoteLink
 
 
 class LinkError(AppError):

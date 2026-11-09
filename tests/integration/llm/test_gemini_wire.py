@@ -1,4 +1,4 @@
-"""Gemini through `ofmhelpers.llm` with Google's API faked at the wire
+"""Gemini through `ofmhelpers.integrations.llm` with Google's API faked at the wire
 (llm/gemini/fake.py under the real SDK): media inline or uploaded, what is
 retried and how long it waits, and every failure as the error the caller
 gets -- never a raw SDK exception."""
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from ofmhelpers.llm import (
+from ofmhelpers.integrations.llm import (
     LLMAuthError,
     LLMConfigError,
     LLMInputError,
@@ -21,11 +21,11 @@ from ofmhelpers.llm import (
     Prompt,
     get_llm,
 )
-from ofmhelpers.llm import base as llm_base
-from ofmhelpers.llm.gemini import provider as gemini_provider
-from ofmhelpers.llm.gemini.fake import FAKE_KEY, USAGE, fake_gemini, field
-from ofmhelpers.llm.gemini.provider import GeminiLLM
-from ofmhelpers.utils import fake_media
+from ofmhelpers.integrations.llm import base as llm_base
+from ofmhelpers.integrations.llm.gemini import provider as gemini_provider
+from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY, USAGE, fake_gemini, field
+from ofmhelpers.integrations.llm.gemini.provider import GeminiLLM
+from ofmhelpers.media import fake_media
 
 
 class Verdict(BaseModel):

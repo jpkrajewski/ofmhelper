@@ -6,16 +6,11 @@ and 10 MiB a request, strict JSON Schema. Free Trial tier: 5 requests/min,
 1M tokens/day. Key: https://cloud.cerebras.ai (`CEREBRAS_API_KEY`).
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+lazy import httpx
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.base import register_llm
 from ofmhelpers.integrations.llm.chat_completions import ChatCompletionsLLM
-
-if TYPE_CHECKING:
-    import httpx
 
 
 @register_llm

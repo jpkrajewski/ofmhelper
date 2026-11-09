@@ -23,7 +23,7 @@ from ofmhelpers.features.phones.catalog.models import (
     ServiceKind,
     SizeClass,
 )
-from ofmhelpers.integrations.downloaders.models import CookieSite
+lazy from ofmhelpers.integrations.downloaders.models import CookieSite
 
 __all__ = [
     "CameraLayout",

@@ -11,25 +11,19 @@ status reads, then "completed" with one output on the fake result host
 (also served to `requests`: the provider's `_live` check and the download).
 """
 
-from __future__ import annotations
-
 import itertools
 import threading
 from functools import lru_cache
-from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+lazy from collections.abc import Mapping
 
 import httpx
+lazy import requests
+lazy from higgsfield_client import SyncClient
 
 from ofmhelpers.config import settings
 from ofmhelpers.media import fake_media
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
-    from higgsfield_client import SyncClient
 
 FAKE_KEY = "fake-hf-id:fake-hf-secret"
 FILES_HOST = "fake-files.higgsfield.ai"

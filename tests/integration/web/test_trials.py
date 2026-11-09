@@ -21,18 +21,18 @@ from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
+from ofmhelpers.db.stores import devices, users
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs import recovery
-from ofmhelpers.gdrive import DriveError, DriveFile
-from ofmhelpers.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
-from ofmhelpers.trials import media, tasks
-from ofmhelpers.trials import state as trial_state
-from ofmhelpers.trials.captions import ReelNotes
-from ofmhelpers.web import drive_folders
+from ofmhelpers.features.trials import media, tasks
+from ofmhelpers.features.trials import state as trial_state
+from ofmhelpers.features.trials.captions import ReelNotes
+from ofmhelpers.integrations.gdrive import DriveError, DriveFile
+from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive, fake_drive
+from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.video_tools import trials as trials_router
-from ofmhelpers.web.schemas import DeviceFields, LoginFields
-from ofmhelpers.web.stores import devices, users
-from ofmhelpers.web.stores.jobs import create_job, get_job
 
 AGENCY = "agency@example.com"
 MY_DRIVE = f"mydrive-{AGENCY}"

@@ -27,7 +27,7 @@ UPLOAD_ROOT = UPLOADS_ROOT / "clean-images"
 def _run_clean(job_dir: str, assets_root: str) -> list[ResultFile]:
     directory = Path(job_dir)
     clean_metadata(directory)
-    files = sorted(p for p in directory.iterdir() if p.is_file())
+    files = sorted(p for p in directory.iterdir() if p.info.is_file())
     # Adopt the stripped copies into the requester's part of the asset store
     # so they're directly reusable in the generation pickers -- cleaning an
     # image is usually the step right before generating with it.

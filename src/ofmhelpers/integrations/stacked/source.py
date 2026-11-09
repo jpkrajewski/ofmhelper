@@ -1,8 +1,6 @@
 """Stacked as a chat source (`integrations/chat_source.py`): API keys in `.env`."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator, Mapping
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.stacked import history, webhooks
@@ -17,9 +15,6 @@ from ofmhelpers.schemas.chatting import (
     ReadScope,
     Subscription,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
 
 
 class StackedSource:

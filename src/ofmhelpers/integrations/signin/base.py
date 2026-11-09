@@ -9,8 +9,6 @@ check when the token comes straight from the token endpoint). The `nonce`
 in it must be the one this sign-in started with.
 """
 
-from __future__ import annotations
-
 import base64
 import json
 from typing import Protocol

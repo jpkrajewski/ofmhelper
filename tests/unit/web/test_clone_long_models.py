@@ -4,7 +4,7 @@ import itertools
 
 import pytest
 
-from ofmhelpers.web.clone_long import Plan, Quote, Rate, Shape
+from ofmhelpers.features.clone_long import Plan, Quote, Rate, Shape
 
 
 def _lengths(seconds: float) -> list[float]:

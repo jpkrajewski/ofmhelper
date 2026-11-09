@@ -12,13 +12,14 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin, sign_in_agency
 
-from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.web import drive_folders, reel_watch
+from ofmhelpers.db.stores import devices, users
+from ofmhelpers.db.stores.tracked_accounts import list_accounts
+from ofmhelpers.db.stores.watched_profiles import list_watched
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.reels import watch as reel_watch
+from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.schemas import DeviceFields
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas import DeviceFields
-from ofmhelpers.web.stores import devices, users
-from ofmhelpers.web.stores.tracked_accounts import list_accounts
-from ofmhelpers.web.stores.watched_profiles import list_watched
 
 PHONE = {
     "label": "Phone 01",
@@ -48,7 +49,7 @@ def bob() -> TestClient:
 def _no_scans(monkeypatch):
     """Adding accounts or profiles queues scans: none reach Instagram."""
     monkeypatch.setattr(reel_watch, "queue_due_scans", list)
-    from ofmhelpers.web import account_tracker
+    from ofmhelpers.features.accounts import tracker as account_tracker
     from ofmhelpers.web.routers.tracking import accounts
 
     monkeypatch.setattr(account_tracker, "queue_due_scans", list)

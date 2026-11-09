@@ -4,12 +4,11 @@ and the plan's quota. A new provider is one subclass in its own file plus
 its class in `providers/__init__.py`'s `_PROVIDER_TYPES` and its
 `providers.json` entry; nothing else changes."""
 
-from __future__ import annotations
-
 import hashlib
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
+lazy from datetime import date
 
 import requests
 from redis import RedisError
@@ -25,18 +24,14 @@ from ofmhelpers.integrations.short_links.errors import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
-
-if TYPE_CHECKING:
-    from datetime import date
-
-    from ofmhelpers.integrations.short_links.models import (
-        DayStat,
-        HourStat,
-        NewLink,
-        ProviderInfo,
-        RemoteLink,
-        Usage,
-    )
+lazy from ofmhelpers.integrations.short_links.models import (
+    DayStat,
+    HourStat,
+    NewLink,
+    ProviderInfo,
+    RemoteLink,
+    Usage,
+)
 
 logger = get_logger(__name__)
 

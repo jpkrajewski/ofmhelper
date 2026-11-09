@@ -3,20 +3,14 @@ picture added, Generate -- the card resolves on the page (kie.ai faked) --
 and Recreate puts the run's picture back (static/js/pictures.js,
 generation.js)."""
 
-from __future__ import annotations
-
 import re
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 import pytest
 from playwright.sync_api import expect
+lazy from e2e_session import Session
 
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from e2e_session import Session
+from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY
 
 pytestmark = pytest.mark.e2e
 

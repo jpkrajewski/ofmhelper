@@ -18,7 +18,7 @@ from ofmhelpers.integrations.ai_providers.runninghub.models import (
     SUCCESS,
     is_no_credits,
 )
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 # Our schema keyword: a field the form takes as a number that RunningHub
 # wants as a string (`duration`: "5").

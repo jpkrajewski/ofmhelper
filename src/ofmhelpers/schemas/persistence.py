@@ -16,8 +16,6 @@ job's `result` payload (a list of `ResultFile` dumps, a grouped list of
 `Job.download_results()` read them back as models.
 """
 
-from __future__ import annotations
-
 from enum import StrEnum
 from typing import Any
 

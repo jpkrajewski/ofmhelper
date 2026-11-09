@@ -7,10 +7,8 @@ on purpose: the self provider imports this module, and those two import the
 provider registry, so depending on them here would close an import cycle.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
+lazy from datetime import date
 
 from ofmhelpers.db.repositories import SelfLinkRepository, ShortLinkRepository
 from ofmhelpers.integrations.short_links import DayStat, HourStat, RemoteLink
@@ -22,11 +20,7 @@ from ofmhelpers.schemas.self_links import (
     SelfSeriesPoint,
     SelfStats,
 )
-
-if TYPE_CHECKING:
-    from datetime import date
-
-    from ofmhelpers.schemas.self_links import SelfClick, SelfRange
+lazy from ofmhelpers.schemas.self_links import SelfClick, SelfRange
 
 # Statuses of a self link that exists (is serveable / counts in the plan).
 _LIVE = ("active", "inactive")

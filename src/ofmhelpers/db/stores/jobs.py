@@ -17,12 +17,11 @@ list of {"name","path"} dicts, a grouped {"url","success","output_paths"}
 list, or a bare id string) -- there is no separate file-reference table.
 """
 
-from __future__ import annotations
-
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from collections.abc import Callable
 
 import logfire
 from pydantic import BaseModel
@@ -37,9 +36,6 @@ from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobPreview, ResultFile
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -128,10 +124,6 @@ def run_job(job_id: str, fn, kwargs: dict):
             logger.exception("job %s failed", job_id)
             return
     _queue_previews(job_id)
-
-
-# RQ shows this path on every job; it resolves through `ofmhelpers._moved`.
-run_job.__module__ = "ofmhelpers.web.stores.jobs"
 
 
 def start_job(

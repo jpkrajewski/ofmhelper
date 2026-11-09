@@ -79,7 +79,7 @@ def stale(now: float) -> list[Path]:
             st = path.stat()
         except OSError:
             continue
-        if path.is_file() and now - st.st_mtime > keep_s:
+        if path.info.is_file() and now - st.st_mtime > keep_s:
             old.append(path)
     if not old:
         return []

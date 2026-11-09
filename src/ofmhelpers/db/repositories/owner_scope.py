@@ -1,7 +1,5 @@
 """The per-user row filter every owned table's repository shares."""
 
-from __future__ import annotations
-
 from typing import Any
 
 

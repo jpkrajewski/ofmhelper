@@ -9,14 +9,14 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.media.ffmpeg import binary
-from ofmhelpers.media.repurpose.devices import Device
-from ofmhelpers.media.repurpose.probe import Source
 from ofmhelpers.media.repurpose.transformations.audio import (
     AudioTransformer,
     room_tone_input,
 )
-from ofmhelpers.media.repurpose.transformations.video import VideoTransformer
 from ofmhelpers.media.repurpose.values import draw, draw_int, pick
+lazy from ofmhelpers.media.repurpose.devices import Device
+lazy from ofmhelpers.media.repurpose.probe import Source
+lazy from ofmhelpers.media.repurpose.transformations.video import VideoTransformer
 
 _SEI_STRIP = "filter_units=remove_types=6"
 _ISO = "%Y-%m-%dT%H:%M:%S.000000Z"

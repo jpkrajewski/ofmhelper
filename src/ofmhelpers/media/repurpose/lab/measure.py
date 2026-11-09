@@ -28,12 +28,12 @@ from ofmhelpers.media.repurpose import Repurpose
 from ofmhelpers.media.repurpose.checker import check
 from ofmhelpers.media.repurpose.command import input_args
 from ofmhelpers.media.repurpose.lab.space import Part, preset
-from ofmhelpers.media.repurpose.repurpose import EncodeStep, RunResult
 from ofmhelpers.media.repurpose.transformations.video import (
     VideoDraws,
     VideoSettings,
     VideoTransformer,
 )
+lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep, RunResult
 
 DEVICE = "strip"
 _TIMEOUT_S = 900

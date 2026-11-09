@@ -18,7 +18,7 @@ class ProviderChoice(BaseModel):
     needs_key: bool
 
     @classmethod
-    def all(cls, names: list[str] | None = None) -> list["ProviderChoice"]:
+    def all(cls, names: list[str] | None = None) -> list[ProviderChoice]:
         """Every provider, or just `names` in that order."""
         classes = provider_classes()
         return [
@@ -40,7 +40,7 @@ class ModelChoice(BaseModel):
     default_prompt: str | None = None
 
     @classmethod
-    def all(cls) -> list["ModelChoice"]:
+    def all(cls) -> list[ModelChoice]:
         return [
             cls(
                 key=spec.key,

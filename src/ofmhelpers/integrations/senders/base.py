@@ -10,14 +10,10 @@ refused. A message an event `replaces` is deleted with `delete(target, ref)`, `r
 being what `send` returned for it.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from ofmhelpers.errors import AppError
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas.events import Event
+lazy from ofmhelpers.schemas.events import Event
 
 
 class SendError(AppError):

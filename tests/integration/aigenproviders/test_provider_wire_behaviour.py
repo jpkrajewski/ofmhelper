@@ -16,9 +16,10 @@ import responses
 from repo_paths import FIXTURES
 from responses import matchers, registries
 
-from ofmhelpers.aigenproviders import tasks
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.errors import (
+from ofmhelpers.config import settings
+from ofmhelpers.integrations.ai_providers import self_heal, tasks
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
     ProviderGenerationError,
     ProviderInputError,
@@ -26,11 +27,9 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
-from ofmhelpers.aigenproviders.runner import generate
-from ofmhelpers.config import settings
-from ofmhelpers.integrations.ai_providers import self_heal
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
+from ofmhelpers.integrations.ai_providers.runner import generate
 
 PROVIDER_FIXTURES = FIXTURES / "providers"
 KIE_SPEC = get_spec("kie:seedream/5-lite-text-to-image")

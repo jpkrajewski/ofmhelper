@@ -6,20 +6,15 @@ cookie the app writes after a sign-in (`AuthMiddleware.sign_in`), for a
 Apple, password, links) are covered in tests/integration/web/test_signin.py.
 """
 
-from __future__ import annotations
-
 import json
 from base64 import b64encode
-from typing import TYPE_CHECKING
 
 from itsdangerous import TimestampSigner
+lazy from fastapi.testclient import TestClient
 
 from ofmhelpers.config import settings
-from ofmhelpers.web.schemas import Role, User, UserForm
-from ofmhelpers.web.stores import users
-
-if TYPE_CHECKING:
-    from fastapi.testclient import TestClient
+from ofmhelpers.db.stores import users
+from ofmhelpers.schemas import Role, User, UserForm
 
 SESSION_COOKIE = "ofm_session"
 USER_EMAIL = "user@example.com"
@@ -41,8 +36,8 @@ def make_user_with_password(
     role: Role = Role.USER,
 ) -> User:
     """A user who signs in with email + password (the real flow)."""
-    from ofmhelpers.signin.passwords import hash_password
-    from ofmhelpers.web.stores.users import _repository
+    from ofmhelpers.db.stores.users import _repository
+    from ofmhelpers.integrations.signin.passwords import hash_password
 
     user = make_user(email, role)
     _repository().set_password_hash(user.id, hash_password(password))

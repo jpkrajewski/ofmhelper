@@ -7,8 +7,6 @@ starts and runs them; the page shows each card's), each with its check
 what it writes lands only while its claim holds (repository docstring).
 """
 
-from __future__ import annotations
-
 import time
 from functools import lru_cache
 

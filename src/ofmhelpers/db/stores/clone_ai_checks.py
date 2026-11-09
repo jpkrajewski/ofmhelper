@@ -7,16 +7,11 @@ verdict, the model's reasoning, the tokens it used, why a check has none
 Every `CloneAiCheck` field is a column: `save` writes the whole model.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.db.repositories import CloneAiCheckRepository
 from ofmhelpers.schemas.clone_ai_checks import StoredCloneAiCheck
-
-if TYPE_CHECKING:
-    from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
+lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
 
 
 @lru_cache(maxsize=1)

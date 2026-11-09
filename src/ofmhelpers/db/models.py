@@ -16,9 +16,7 @@ The empty tables of removed features were dropped in alembic 7a8b9c0d1e2f.
 `drive_day_folders` is still there, unmapped: it holds rows (alembic/env.py).
 """
 
-from __future__ import annotations
-
-from datetime import date  # noqa: TC003 -- SQLAlchemy reads Mapped[] at runtime
+from datetime import date
 from typing import Any
 
 from sqlalchemy import (

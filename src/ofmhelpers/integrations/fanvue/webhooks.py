@@ -7,13 +7,11 @@ header carries a second bare MAC: `t=..,v0=<old>,<new>`. Before making a destina
 Fanvue checks the address with an unsigned `fanvue.webhook.verification`, which must
 get a 2xx, or the destination is not made."""
 
-from __future__ import annotations
-
 import hashlib
 import hmac
 import json
 import time
-from typing import TYPE_CHECKING
+lazy from collections.abc import Mapping
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.fanvue.models import (
@@ -31,9 +29,6 @@ from ofmhelpers.schemas.chatting import (
     ChatRead,
     DeliveryKind,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 logger = get_logger(__name__)
 
@@ -70,7 +65,7 @@ def is_probe(raw: bytes, headers: Mapping[str, str]) -> bool:
         return False
     try:
         return json.loads(raw).get("type") == _PROBE
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return False
 
 
@@ -95,7 +90,7 @@ def _signature_parts(header: str) -> tuple[str, list[str]]:
 def _fresh(timestamp: str) -> bool:
     try:
         age_s = abs(time.time() - int(timestamp))
-    except (ValueError, OverflowError):
+    except ValueError, OverflowError:
         return False
     return age_s <= settings.chatting.webhook_tolerance_s
 

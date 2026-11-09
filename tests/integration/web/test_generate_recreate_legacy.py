@@ -19,9 +19,9 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.aigenproviders.catalog import get_spec
+from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.web.main import app
-from ofmhelpers.web.stores.jobs import create_job, run_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

@@ -4,8 +4,7 @@ link named."""
 
 import pytest
 
-from ofmhelpers.downloaders.generic import site_of
-from ofmhelpers.web.clone_links.links import (
+from ofmhelpers.features.clone_links.links import (
     NOT_A_VIDEO_SITE,
     NOT_ONE_POST,
     SHARE_LINK,
@@ -14,6 +13,7 @@ from ofmhelpers.web.clone_links.links import (
     read_pasted,
     site_name,
 )
+from ofmhelpers.integrations.downloaders.generic import site_of
 
 REEL = "https://www.instagram.com/reel/ABC_12-3/"
 

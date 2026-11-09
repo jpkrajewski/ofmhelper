@@ -16,8 +16,8 @@ from logfire.testing import CaptureLogfire
 from signin import sign_in
 
 from ofmhelpers import log, telemetry
+from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 
 def _spans(capfire: CaptureLogfire) -> list[dict]:
@@ -175,7 +175,7 @@ def test_the_apps_own_engine_traces_its_queries(capfire: CaptureLogfire, monkeyp
     import sqlalchemy
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
-    from ofmhelpers.web.db import session
+    from ofmhelpers.db import session
 
     telemetry.logfire.instrument_sqlalchemy()
     telemetry._drop_connect_spans()

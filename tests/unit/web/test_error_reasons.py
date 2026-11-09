@@ -4,9 +4,9 @@ The messages below are the real ones jobs have failed with (prod data,
 
 import pytest
 
-from ofmhelpers.web.clone_links import run as clone_link_run
-from ofmhelpers.web.schemas import JobStatusPayload
-from ofmhelpers.web.schemas.errors import FALLBACK, error_reason
+from ofmhelpers.features.clone_links import run as clone_link_run
+from ofmhelpers.schemas import JobStatusPayload
+from ofmhelpers.schemas.errors import FALLBACK, error_reason
 
 
 @pytest.mark.parametrize(

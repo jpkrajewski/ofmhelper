@@ -4,10 +4,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
+lazy from fastapi import Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.drive.posting import window as posting_window

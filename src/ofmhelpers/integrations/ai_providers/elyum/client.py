@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from typing import Any, NoReturn
 
-import requests
+lazy import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.elyum.models import (

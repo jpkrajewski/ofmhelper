@@ -276,7 +276,7 @@ def register_generated_asset(
         except OSError:
             # cross-device or a filesystem without hardlinks -- copy instead.
             # A failure here still falls through to the outer handler.
-            shutil.copy2(path, dest)
+            path.copy(dest, preserve_metadata=True)
     except OSError:
         logger.warning("could not register generated asset %s", path, exc_info=True)
         return None

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import WebSettings, settings
 from ofmhelpers.features.clone.targets import CloneTarget, PriceRate, clone_targets
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 
 class UnpricedError(ValueError):

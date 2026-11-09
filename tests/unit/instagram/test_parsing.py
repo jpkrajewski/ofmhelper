@@ -5,8 +5,8 @@ noise and all."""
 import pytest
 from repo_paths import FIXTURES
 
-from ofmhelpers.instagram import pages
-from ofmhelpers.instagram.models import (
+from ofmhelpers.integrations.instagram import pages
+from ofmhelpers.integrations.instagram.models import (
     GLOBAL_CDN_HOST,
     ClipsPage,
     MediaInfo,

@@ -19,8 +19,6 @@ killed mid-batch). A job that cannot be queued, and any error uploading one
 file, marks the upload failed with a reason: nothing stays `queued` silently.
 """
 
-from __future__ import annotations
-
 import mimetypes
 from pathlib import Path
 
@@ -60,7 +58,7 @@ def _creators(owner: int | None) -> dict[str, str]:
 def _handle(username: str) -> str:
     try:
         return get_platform(_PLATFORM).handle(username)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         return username
 
 

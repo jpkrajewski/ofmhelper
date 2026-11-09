@@ -1,7 +1,7 @@
 """clone_ai_checks + clone_from_links: is a generated video too glitchy to post, and
 where did it go?
 
-clone_ai_checks: one row per check (ofmhelpers.clone_ai_check): the verdict
+clone_ai_checks: one row per check (ofmhelpers.features.clone_links.ai_check): the verdict
 (GOOD/GLITCHY, NULL when the check itself failed -- `error`), the model's
 glitch percent, glitches and reasoning, and everything needed to debug it:
 prompt, raw answer, provider/model, the stills' times, attempts and

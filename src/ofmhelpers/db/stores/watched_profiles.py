@@ -8,17 +8,12 @@ has their own list and groups (`owner`; None: everyone's, for the sweeper,
 a profile two users watch listed once; a session always passes its own id); a username is scanned once.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.db.repositories import WatchedProfileRepository
 from ofmhelpers.db.stores.users import agency_id
 from ofmhelpers.schemas import WatchedProfile
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.instagram import ProfileReels
+lazy from ofmhelpers.integrations.instagram import ProfileReels
 
 
 @lru_cache(maxsize=1)

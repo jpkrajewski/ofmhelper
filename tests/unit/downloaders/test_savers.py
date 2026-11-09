@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.downloaders import savers
-from ofmhelpers.downloaders.sites import saver_supported
+from ofmhelpers.integrations.downloaders import savers
+from ofmhelpers.integrations.downloaders.sites import saver_supported
 
 _PACKED = (
     Path(__file__).parents[2] / "fixtures" / "downloads" / "saveinta_ajax_packed.json"

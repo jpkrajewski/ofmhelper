@@ -31,19 +31,10 @@ from clone_links_helpers import (
 )
 from redis.exceptions import RedisError
 
-from ofmhelpers.aigenproviders import tasks
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.cache import QueueName
 from ofmhelpers.config import settings
-from ofmhelpers.web.clone_links.links import NOT_A_VIDEO_SITE
-from ofmhelpers.web.clone_links.models import LinkPreview
-from ofmhelpers.web.clone_links.review import NOT_CONNECTED
-from ofmhelpers.web.clone_links.stop import stopped
-from ofmhelpers.web.routers.generation import clone_links
-from ofmhelpers.web.routers.registry import RESUMABLE, TOOLS
-from ofmhelpers.web.schemas import Job
-from ofmhelpers.web.stores import clone_from_links, users
-from ofmhelpers.web.stores.jobs import (
+from ofmhelpers.db.stores import clone_from_links, users
+from ofmhelpers.db.stores.jobs import (
     create_job,
     fail_job,
     get_job,
@@ -51,6 +42,15 @@ from ofmhelpers.web.stores.jobs import (
     list_jobs_page,
     run_job,
 )
+from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
+from ofmhelpers.features.clone_links.models import LinkPreview
+from ofmhelpers.features.clone_links.review import NOT_CONNECTED
+from ofmhelpers.features.clone_links.stop import stopped
+from ofmhelpers.integrations.ai_providers import tasks
+from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
+from ofmhelpers.schemas import Job
+from ofmhelpers.web.routers.generation import clone_links
+from ofmhelpers.web.routers.registry import RESUMABLE, TOOLS
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
 

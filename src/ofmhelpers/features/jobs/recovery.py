@@ -57,9 +57,11 @@ logger = get_logger(__name__)
 
 INTERRUPTED = "Interrupted by a restart: run it again."
 # Cut off with nothing to resume, these start over (True: queued again).
-RESTARTS: dict[str, Callable[[Job], bool]] = {
-    trials_folder.TASK: trials_folder.restart,
-}
+RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(
+    {
+        trials_folder.TASK: trials_folder.restart,
+    }
+)
 
 
 def _cut_off(job: Job, active: set[str] | None) -> bool:

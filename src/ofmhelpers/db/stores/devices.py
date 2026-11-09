@@ -11,10 +11,7 @@ login, on Show / Copy / Edit) and `export_devices` (the Excel file) decrypt
 `VaultError` there.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.db.repositories import DeviceRepository
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
@@ -22,9 +19,7 @@ from ofmhelpers.db.stores.users import agency_id
 from ofmhelpers.features.phones.catalog import services
 from ofmhelpers.integrations.socials import get_platform
 from ofmhelpers.schemas import ArchivedLogin, Device, LoginSecrets
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas import DeviceFields, LoginFields, TrackedAccount
+lazy from ofmhelpers.schemas import DeviceFields, LoginFields, TrackedAccount
 
 
 @lru_cache(maxsize=1)
@@ -46,7 +41,7 @@ def _handle(platform: str, username: str) -> str:
     as typed when it takes no such form."""
     try:
         return get_platform(platform).handle(username)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         return username
 
 

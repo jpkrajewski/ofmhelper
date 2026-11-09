@@ -12,21 +12,15 @@ the list does not show it and no webhook announces it, so a chat with a fan wait
 has its newest message read every round too.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+lazy from collections.abc import Collection, Iterator, Mapping
+lazy from datetime import datetime
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.stacked.errors import StackedError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import ChatEvent, ChatRead
-
-if TYPE_CHECKING:
-    from collections.abc import Collection, Iterator, Mapping
-    from datetime import datetime
-
-    from ofmhelpers.integrations.stacked.client import StackedClient
-    from ofmhelpers.integrations.stacked.models import Message
+lazy from ofmhelpers.integrations.stacked.client import StackedClient
+lazy from ofmhelpers.integrations.stacked.models import Message
 
 logger = get_logger(__name__)
 

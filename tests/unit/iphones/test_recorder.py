@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-from ofmhelpers.iphones import load_profile
-from ofmhelpers.iphones.models import Recording
-from ofmhelpers.iphones.recorder import record
-from ofmhelpers.repurpose import Repurpose
+from ofmhelpers.media.recorder import load_profile
+from ofmhelpers.media.recorder.models import Recording
+from ofmhelpers.media.recorder.recorder import record
+from ofmhelpers.media.repurpose import Repurpose
 
 
 class ExifRead(BaseModel):

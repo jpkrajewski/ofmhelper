@@ -1,7 +1,7 @@
 """phones, the logins signed in on them, and which phone has which (/phones)
 
 `devices`: the agency's physical phones (catalog model/color ids
-from `ofmhelpers.phones.catalog()`). `logins`: each account once --
+from `ofmhelpers.features.phones.catalog.catalog()`). `logins`: each account once --
 `password` and `backup_codes` hold Fernet tokens (web/db/encrypted.py, key
 `OFM_VAULT_KEY`) or "" for none, never plaintext. `device_logins`: which
 phone a login is signed in on (one login, any number of phones). New tables

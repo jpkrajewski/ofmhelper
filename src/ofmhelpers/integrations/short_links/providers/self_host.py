@@ -9,20 +9,14 @@ Identity rides in on the key: `local_key` hands the owner's id in as the
 link is always 18+ gated, so `create` returns it gated and `enable_adult` is a
 no-op)."""
 
-from __future__ import annotations
-
 import time
-from typing import TYPE_CHECKING
+lazy from datetime import date
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import self_links as store
 from ofmhelpers.integrations.short_links import RemoteLink, Usage
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
-
-if TYPE_CHECKING:
-    from datetime import date
-
-    from ofmhelpers.integrations.short_links import DayStat, HourStat, NewLink
+lazy from ofmhelpers.integrations.short_links import DayStat, HourStat, NewLink
 
 
 class SelfProvider(LinkProvider):

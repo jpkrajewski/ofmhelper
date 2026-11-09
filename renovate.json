@@ -63,9 +63,9 @@
       "enabled": false
     },
     {
-      "description": "Python stays on 3.12 (prod image, mypy python_version, .python-version) until moved on purpose.",
+      "description": "Python stays on 3.15 (prod image, mypy python_version, .python-version) until moved on purpose.",
       "matchPackageNames": ["python"],
-      "allowedVersions": "<3.13"
+      "allowedVersions": "<3.16"
     }
   ]
 }

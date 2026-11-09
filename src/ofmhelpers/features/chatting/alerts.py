@@ -2,8 +2,6 @@
 platform: one per model with fans left waiting, and one per mass message finished, new
 subscriber and big sale. Read from the store, so no page and no extra round waits on a platform."""
 
-from __future__ import annotations
-
 import time
 
 from ofmhelpers.config import settings

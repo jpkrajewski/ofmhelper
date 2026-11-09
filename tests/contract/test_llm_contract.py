@@ -1,4 +1,4 @@
-"""Every language-model provider behind `ofmhelpers.llm`, on its fake and
+"""Every language-model provider behind `ofmhelpers.integrations.llm`, on its fake and
 on the real API (free tiers; keys from .env under `live`): an image and a
 video are read and answered in the asked-for shape (a video goes to Groq
 and Cerebras as a contact sheet), Gemini takes a too-big file through its
@@ -17,7 +17,7 @@ import pytest
 from PIL import Image
 from pydantic import BaseModel
 
-from ofmhelpers.llm import (
+from ofmhelpers.integrations.llm import (
     LLMAuthError,
     LLMConfigError,
     LLMUnavailableError,
@@ -25,10 +25,10 @@ from ofmhelpers.llm import (
     get_llm,
     llm_class,
 )
-from ofmhelpers.llm.cerebras.fake import FAKE_KEY as CEREBRAS_KEY
-from ofmhelpers.llm.gemini.fake import FAKE_KEY as GEMINI_KEY
-from ofmhelpers.llm.groq.fake import FAKE_KEY as GROQ_KEY
-from ofmhelpers.utils import fake_media
+from ofmhelpers.integrations.llm.cerebras.fake import FAKE_KEY as CEREBRAS_KEY
+from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_KEY
+from ofmhelpers.integrations.llm.groq.fake import FAKE_KEY as GROQ_KEY
+from ofmhelpers.media import fake_media
 
 PROVIDERS = {
     "gemini": ("GEMINI_API_KEY", GEMINI_KEY, "Gemini"),

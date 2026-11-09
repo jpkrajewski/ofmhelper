@@ -72,7 +72,7 @@ class StrengthPreset(BaseModel, frozen=True):
     noise: Range
     volume: Range
 
-    def boosted(self, factor: float) -> "StrengthPreset":
+    def boosted(self, factor: float) -> StrengthPreset:
         """Every range pushed `factor` times as far from neutral."""
         return StrengthPreset.model_validate(
             {
@@ -146,7 +146,7 @@ class VariantParams(BaseModel):
         rng: random.Random,
         mirror_pct: float,
         trim_secs: float,
-    ) -> "VariantParams":
+    ) -> VariantParams:
         return cls(
             speed=round(rng.uniform(*preset.speed), 4),
             saturation=round(rng.uniform(*preset.saturation), 3),

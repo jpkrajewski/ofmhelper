@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM python:3.12-slim AS builder
+FROM python:3.15-slim-trixie AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
@@ -15,14 +15,16 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends g++ && \
     rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+# Compiled now, or every process compiles all ~1800 modules at each start (no
+# bytecode is ever written at runtime: PYTHONDONTWRITEBYTECODE below): ~2.5 s.
+RUN uv sync --frozen --no-install-project --no-dev --compile-bytecode
 
 # ---- Test stage (dev only: docker-compose.dev.yml's `tests` service) ----
 # Every check runs here, on the same Linux userland as prod, never on the
 # dev host. The repo is bind-mounted at /app; the venv lives outside it so a
 # host .venv can never leak in. Not built by a plain `docker build`: the
 # last stage (runtime) is the default target.
-FROM python:3.12-slim AS test
+FROM python:3.15-slim-trixie AS test
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
 
@@ -61,7 +63,7 @@ WORKDIR /app
 ENTRYPOINT ["allure"]
 
 # ---- Runtime stage ----
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim-trixie AS runtime
 
 RUN groupadd --gid 1000 appuser && \
     useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser
@@ -93,6 +95,7 @@ COPY --chown=appuser:appuser alembic /app/alembic
 
 # Code last: it changes every deploy, so only these few-MB layers rebuild.
 COPY --chown=appuser:appuser src /app/src
+RUN python -m compileall -q /app/src
 
 USER appuser
 

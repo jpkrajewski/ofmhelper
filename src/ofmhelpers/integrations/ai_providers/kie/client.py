@@ -27,7 +27,6 @@ from ofmhelpers.integrations.ai_providers.kie.models import (
     KieUploadResponse,
     raise_for,
 )
-from ofmhelpers.integrations.ai_providers.spec import Payload
 from ofmhelpers.integrations.ai_providers.uploads import (
     memoized,
     remote_file_exists,
@@ -36,6 +35,7 @@ from ofmhelpers.integrations.ai_providers.uploads import (
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import fitted
 from ofmhelpers.utils import outbound
+lazy from ofmhelpers.integrations.ai_providers.spec import Payload
 
 logger = get_logger(__name__)
 
@@ -62,7 +62,7 @@ def _retry_after_s(response: requests.Response) -> float | None:
     value = response.headers.get("Retry-After")
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -229,7 +229,7 @@ class KieAIClient:
         return record.data
 
     @classmethod
-    def from_env(cls, api_key: str) -> "KieAIClient":
+    def from_env(cls, api_key: str) -> KieAIClient:
         s = settings.kieai
         return cls(
             api_key=api_key,

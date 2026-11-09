@@ -9,8 +9,6 @@ The code it hands back is a signed, short-lived token of the sign-in's
 nonce (`ofm_signin` cookie): it opens nothing but that one sign-in.
 Never linkable to a user (/account): it is no one's own account."""
 
-from __future__ import annotations
-
 import hmac
 
 from itsdangerous import BadSignature, URLSafeTimedSerializer

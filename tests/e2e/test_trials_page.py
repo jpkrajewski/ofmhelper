@@ -13,10 +13,10 @@ from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 from sqlalchemy import create_engine, text
 
-from ofmhelpers.gdrive.fake import FakeDrive
-from ofmhelpers.trials.state import FolderState, ReelState
-from ofmhelpers.web.schemas import DeviceFields, LoginFields
-from ofmhelpers.web.stores import devices
+from ofmhelpers.db.stores import devices
+from ofmhelpers.features.trials.state import FolderState, ReelState
+from ofmhelpers.integrations.gdrive.fake import FakeDrive
+from ofmhelpers.schemas import DeviceFields, LoginFields
 
 pytestmark = pytest.mark.e2e
 

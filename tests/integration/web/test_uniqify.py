@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.utils.uniqify import (
+from ofmhelpers.media.uniqify import (
     PRESETS,
     MetadataMode,
     Strength,

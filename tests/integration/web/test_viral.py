@@ -16,21 +16,21 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.apify.fake import (
+from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.features.viral.media import add_audio, has_audio
+from ofmhelpers.features.viral.models import ApifyReel
+from ofmhelpers.features.viral.service import most_played
+from ofmhelpers.integrations.apify.fake import (
     BROKE_KEY,
     START_USD,
     USD_PER_REEL,
     WRONG_KEY,
     fake_apify,
 )
-from ofmhelpers.utils.ffmpeg import binary, run
-from ofmhelpers.viral.media import add_audio, has_audio
-from ofmhelpers.viral.models import ApifyReel
-from ofmhelpers.viral.service import most_played
+from ofmhelpers.media.ffmpeg import binary, run
+from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import viral
-from ofmhelpers.web.schemas.errors import error_reason
-from ofmhelpers.web.stores.jobs import get_job
 
 PROFILE = "sheep_love33"
 TOP_PLAYS = [3_000_000, 1_500_000, 900_000]

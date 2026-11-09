@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ofmhelpers.utils.image_fit import ImageLimits, fitted
+from ofmhelpers.media.image_fit import ImageLimits, fitted
 
 LIMITS = ImageLimits(max_bytes=10**9, max_side=64)
 

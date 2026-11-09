@@ -1,4 +1,4 @@
-"""The provider-neutral side of `ofmhelpers.llm`: prompts, media kinds, the
+"""The provider-neutral side of `ofmhelpers.integrations.llm`: prompts, media kinds, the
 per-use defaults, the registry, setup errors, strict schemas and contact
 sheets -- no provider is called."""
 
@@ -10,7 +10,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from ofmhelpers.config.settings import LLMSettings
-from ofmhelpers.llm import (
+from ofmhelpers.integrations.llm import (
     LLMConfigError,
     LLMInputError,
     LLMUse,
@@ -21,12 +21,12 @@ from ofmhelpers.llm import (
     get_llm,
     llm_names,
 )
-from ofmhelpers.llm.chat_completions import strict_schema
-from ofmhelpers.llm.fakes import example
-from ofmhelpers.llm.frames import contact_sheet
-from ofmhelpers.llm.gemini.fake import MODELS
-from ofmhelpers.llm.models import Usage
-from ofmhelpers.utils import fake_media
+from ofmhelpers.integrations.llm.chat_completions import strict_schema
+from ofmhelpers.integrations.llm.fakes import example
+from ofmhelpers.integrations.llm.frames import contact_sheet
+from ofmhelpers.integrations.llm.gemini.fake import MODELS
+from ofmhelpers.integrations.llm.models import Usage
+from ofmhelpers.media import fake_media
 
 
 def test_a_prompt_keeps_text_and_media_in_order():

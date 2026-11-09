@@ -43,8 +43,12 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, OutputKind, Payload
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.ai_providers.spec import (
+    ModelSpec,
+    OutputKind,
+    Payload,
+)
 
 logger = get_logger(__name__)
 

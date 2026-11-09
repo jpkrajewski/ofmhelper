@@ -3,12 +3,12 @@ generator's name: IMG_1234.png, VID_1234.mp4. Other files keep their name."""
 
 import re
 
+from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     download_name,
     serve_job_file,
 )
-from ofmhelpers.web.schemas import Job
 
 
 def test_images_and_videos_get_camera_roll_names():

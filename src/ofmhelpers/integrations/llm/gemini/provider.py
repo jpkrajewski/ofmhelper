@@ -21,17 +21,16 @@ The SDK's own retries are off: `LLMProvider.ask` retries once for every
 provider, honouring Google's `RetryInfo` delay on a 429.
 """
 
-from __future__ import annotations
-
 import re
 import time
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import httpx
-from google import genai
-from google.genai import errors as genai_errors
-from google.genai import types
+lazy from google import genai
+lazy from google.genai import errors as genai_errors
+lazy from google.genai import types
+lazy from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.base import LLMProvider, register_llm
@@ -53,11 +52,7 @@ from ofmhelpers.integrations.llm.models import (
     Usage,
 )
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from pydantic import BaseModel
-
-    from ofmhelpers.integrations.llm.models import Prompt
+lazy from ofmhelpers.integrations.llm.models import Prompt
 
 logger = get_logger(__name__)
 
@@ -191,7 +186,7 @@ class GeminiLLM(LLMProvider):
         for name in names:
             try:
                 client.files.delete(name=name)
-            except (genai_errors.APIError, httpx.HTTPError):
+            except genai_errors.APIError, httpx.HTTPError:
                 # Google deletes it after 48 h anyway.
                 logger.warning("gemini: could not delete %s", name, exc_info=True)
 

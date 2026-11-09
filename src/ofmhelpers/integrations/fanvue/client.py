@@ -3,14 +3,14 @@ Through `utils.outbound`. Nothing here can message a fan or mark a chat read: re
 messages defaults to marking them read on Fanvue, so `markAsRead=false` goes on every
 call."""
 
-from __future__ import annotations
-
 import time
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from collections.abc import Callable, Iterator
 
 import requests
 from pydantic import ValidationError
+lazy from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.fanvue.errors import (
@@ -32,11 +32,6 @@ from ofmhelpers.integrations.fanvue.models import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.utils import outbound
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
-
-    from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -203,7 +198,7 @@ def _retry_wait(r: requests.Response) -> float:
     """What a 429 or a database-timeout 503 asks for (capped), else the plain pause."""
     try:
         return min(float(r.headers["Retry-After"]), settings.fanvue.max_wait_s)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         return settings.fanvue.retry_wait_s
 
 

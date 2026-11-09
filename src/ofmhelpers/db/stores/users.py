@@ -21,12 +21,9 @@ once that way are the same user: same data, same Drive.
 A deactivated user gets in nowhere.
 """
 
-from __future__ import annotations
-
 import hmac
 import time
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.encrypted import VaultError
@@ -40,11 +37,9 @@ from ofmhelpers.integrations.signin.passwords import (
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import LinkedAccount, Role, User, UserForm
 from ofmhelpers.schemas.users import normalized_email
+lazy from ofmhelpers.integrations.signin import Identity
 
 logger = get_logger(__name__)
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.signin import Identity
 
 # The password account's email (alembic c2d3e4f5a6b7 makes it).
 PASSWORD_ADMIN = "admin"  # noqa: S105 -- an account name, not a password

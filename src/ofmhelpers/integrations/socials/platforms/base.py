@@ -5,18 +5,14 @@ subclass in its own file plus one entry in `platforms/__init__.py`'s
 `_PLATFORM_TYPES`; a scraping API for it is one `AccountSource` returned by
 `api_source`. Nothing else changes."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.socials.client_source import LoginSource, ProxySource
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.socials.models import AccountStats
-    from ofmhelpers.integrations.socials.sources import AccountSource
+lazy from ofmhelpers.integrations.socials.models import AccountStats
+lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
 logger = get_logger(__name__)
 

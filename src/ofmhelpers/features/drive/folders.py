@@ -50,15 +50,14 @@ folder in it in one batched listing and their POSTED folders in another
 are kept on disk (`thumbnail`).
 """
 
-from __future__ import annotations
-
 import datetime
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
+lazy from collections.abc import Iterator
+lazy from pathlib import Path
 
 from redis.exceptions import LockError, RedisError
 
@@ -92,10 +91,6 @@ from ofmhelpers.schemas import (
     SyncReport,
 )
 from ofmhelpers.telemetry import in_this_trace
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -269,7 +264,7 @@ def _review_lock(user_id: int) -> Iterator[None]:
         if held:
             try:
                 lock.release()
-            except (RedisError, LockError):
+            except RedisError, LockError:
                 logger.warning("drive: review lock of %s not released", user_id)
 
 
@@ -391,7 +386,7 @@ def trash_folders(user_id: int, login_ids: list[int]) -> None:
         return
     try:
         drive = _person_drive(user_id)
-    except (DriveError, SignInError):
+    except DriveError, SignInError:
         logger.warning("drive: cannot trash folders of %s", user_id, exc_info=True)
         return
     for folder in folders:

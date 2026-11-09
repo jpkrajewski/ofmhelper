@@ -23,7 +23,7 @@ PAGES = [
 
 
 def _done(task: str, out: Path) -> str:
-    from ofmhelpers.web.stores.jobs import create_job, run_job
+    from ofmhelpers.db.stores.jobs import create_job, run_job
 
     out.write_bytes(b"png")
     job_id = create_job(task, {"prompt": out.stem}, actor=str(VA_ID))
@@ -32,7 +32,7 @@ def _done(task: str, out: Path) -> str:
 
 
 def _failed(task: str) -> str:
-    from ofmhelpers.web.stores.jobs import create_job, run_job
+    from ofmhelpers.db.stores.jobs import create_job, run_job
 
     job_id = create_job(task, {"prompt": "failed"}, actor=str(VA_ID))
 

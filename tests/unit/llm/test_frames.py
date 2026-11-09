@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageStat
 
-from ofmhelpers.llm.frames import contact_sheet, video_seconds
-from ofmhelpers.utils import fake_media
-from ofmhelpers.utils.ffmpeg import binary, run
+from ofmhelpers.integrations.llm.frames import contact_sheet, video_seconds
+from ofmhelpers.media import fake_media
+from ofmhelpers.media.ffmpeg import binary, run
 
 # The iPhone export's SDR -> HDR step (iphones recorder `_video_filter`,
 # profile.json), with the transfer swapped in.

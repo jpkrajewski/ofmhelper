@@ -16,20 +16,15 @@ In a group, Telegram hands a bot only commands (`/money`) unless its privacy
 mode is off (@BotFather, /setprivacy, Disable, then add the bot again).
 """
 
-from __future__ import annotations
-
 import time
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.senders.telegram.client import TelegramClient
-    from ofmhelpers.integrations.senders.telegram.models import Message
+lazy from ofmhelpers.integrations.senders.telegram.client import TelegramClient
+lazy from ofmhelpers.integrations.senders.telegram.models import Message
 
 logger = get_logger(__name__)
 

@@ -18,7 +18,7 @@ from ofmhelpers.schemas.clone_ai_checks import CloneFromLink, ReviewReason
 from ofmhelpers.schemas.drive import DriveUpload
 from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.schemas.jobs import AssetCard, FailedSource
-from ofmhelpers.schemas.persistence import Job
+lazy from ofmhelpers.schemas.persistence import Job
 
 
 class JobCard(BaseModel):

@@ -17,20 +17,20 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from ofmhelpers.aigenproviders import base
-from ofmhelpers.aigenproviders.base import Provider, TaskState
-from ofmhelpers.aigenproviders.catalog import catalog
-from ofmhelpers.aigenproviders.errors import ProviderUnavailableError
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
-from ofmhelpers.web.db.repositories import JobRepository
+from ofmhelpers.db.repositories import JobRepository
+from ofmhelpers.db.stores.jobs import create_job, get_job, set_job_preview
+from ofmhelpers.integrations.ai_providers import base
+from ofmhelpers.integrations.ai_providers.base import Provider, TaskState
+from ofmhelpers.integrations.ai_providers.catalog import catalog
+from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
+from ofmhelpers.schemas import JobPreview
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.downloads import videos as download_videos_router
 from ofmhelpers.web.routers.generation.ai import MAX_BATCH
 from ofmhelpers.web.routers.task_helpers import job_status_payload
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.schemas import JobPreview
-from ofmhelpers.web.stores.jobs import create_job, get_job, set_job_preview
 
 NEW = json.dumps([{"kind": "new"}])
 FAKE_IMAGE = "fake:image"

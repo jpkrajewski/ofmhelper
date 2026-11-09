@@ -30,15 +30,10 @@ ffmpeg never leaves a half file under the real name and two writers never
 share one.
 """
 
-from __future__ import annotations
-
 import uuid
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run, run_bytes
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _short_side(side: int) -> str:

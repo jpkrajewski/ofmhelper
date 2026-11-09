@@ -21,8 +21,6 @@ span). A refusal for space forgets the cached answer, so the next page shows
 the pop-up; a refused token is remembered as `reconnect` at once.
 """
 
-from __future__ import annotations
-
 import hashlib
 
 from pydantic import BaseModel, ValidationError

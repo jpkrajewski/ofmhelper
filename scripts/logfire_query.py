@@ -13,8 +13,6 @@ The read token comes from `LOGFIRE_READ_TOKEN` or the file
 read_token.json, mounted at /lfhome); it is never printed. Region EU.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import sys

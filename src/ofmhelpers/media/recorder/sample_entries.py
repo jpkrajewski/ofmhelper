@@ -16,7 +16,7 @@ against the real recordings in tests/iphones:
 import struct
 
 from ofmhelpers.media.mov_atoms import Atom, parse
-from ofmhelpers.media.recorder.models import DeviceProfile
+lazy from ofmhelpers.media.recorder.models import DeviceProfile
 
 _STSD_HEADER = 8  # version/flags(4) entry_count(4)
 _DATA_REFERENCE_INDEX = 1

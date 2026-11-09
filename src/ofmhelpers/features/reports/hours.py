@@ -8,10 +8,7 @@ and the 23 before it, read from at most two days per provider: two Oopsie calls
 for up to 200 links, two Bouncy calls per link. Nothing synced or stored.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -20,9 +17,7 @@ from ofmhelpers.integrations.short_links.errors import LinkError
 from ofmhelpers.integrations.short_links.providers import get_link_provider
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.reports import DayCount
-
-if TYPE_CHECKING:
-    from ofmhelpers.schemas.links import ShortLink
+lazy from ofmhelpers.schemas.links import ShortLink
 
 logger = get_logger(__name__)
 

@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ofmhelpers.aigenproviders import runner
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.errors import (
+from ofmhelpers.integrations.ai_providers import runner
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
     ProviderGenerationError,
     ProviderInputError,
@@ -18,13 +18,16 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.aigenproviders.runninghub.fake import FAKE_KEY, fake_runninghub
-from ofmhelpers.aigenproviders.runninghub.provider import (
+from ofmhelpers.integrations.ai_providers.runninghub.fake import (
+    FAKE_KEY,
+    fake_runninghub,
+)
+from ofmhelpers.integrations.ai_providers.runninghub.provider import (
     RunningHubProvider,
     wire_body,
 )
+from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.routers.generation import clone
-from ofmhelpers.web.schemas.errors import error_reason
 
 WAN = "runninghub:alibaba/wan-3.0/reference-to-video"
 

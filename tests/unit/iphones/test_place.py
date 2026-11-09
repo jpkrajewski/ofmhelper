@@ -4,7 +4,7 @@ import random
 from zoneinfo import ZoneInfo
 
 from ofmhelpers.config import settings
-from ofmhelpers.iphones.models import GeoPoint, PerRecording, Place, Recording
+from ofmhelpers.media.recorder.models import GeoPoint, PerRecording, Place, Recording
 
 NYC = GeoPoint(latitude=40.7549, longitude=-73.9840, altitude_m=10.0)
 

@@ -15,10 +15,10 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.downloaders.models import DownloadResult
+from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, in_asset_root
-from ofmhelpers.web.stores.jobs import create_job, run_job
 
 
 @pytest.fixture

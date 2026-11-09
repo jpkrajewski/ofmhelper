@@ -1,8 +1,6 @@
 """A link on a link provider (/links) with its daily numbers, the list's
 query, and the "Generate links" form."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum

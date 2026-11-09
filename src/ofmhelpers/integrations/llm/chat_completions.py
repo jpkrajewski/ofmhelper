@@ -14,14 +14,12 @@ strict JSON Schema (`response_format: json_schema, strict: true`), the schema
 made to fit strict mode's rules (`strict_schema`).
 """
 
-from __future__ import annotations
-
 import base64
 import json
 import tempfile
 from http import HTTPStatus
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -46,9 +44,7 @@ from ofmhelpers.integrations.llm.models import (
     Usage,
 )
 from ofmhelpers.media.image_fit import ImageLimits, fitted
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.llm.models import Prompt
+lazy from ofmhelpers.integrations.llm.models import Prompt
 
 _AUTH = (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
 # Said on top of the strict schema, with the schema itself: a vendor may

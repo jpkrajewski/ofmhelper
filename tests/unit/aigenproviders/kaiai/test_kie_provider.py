@@ -7,16 +7,16 @@ import json
 import pytest
 from kie_http_fake import kie_http, response
 
-from ofmhelpers.aigenproviders.catalog import get_spec, models_for
-from ofmhelpers.aigenproviders.errors import (
+from ofmhelpers.integrations.ai_providers.catalog import get_spec, models_for
+from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
     ProviderInputError,
     ProviderNoCreditsError,
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient, _session
-from ofmhelpers.aigenproviders.kaiai.provider import KieProvider
+from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient, _session
+from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 
 
 @pytest.fixture

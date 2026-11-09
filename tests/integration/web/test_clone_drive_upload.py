@@ -17,17 +17,18 @@ import time_machine
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.gdrive import DriveError, DriveFile
-from ofmhelpers.gdrive.fake import fake_drive
-from ofmhelpers.signin import SignInError
-from ofmhelpers.socials import AccountProfile, AccountStats
-from ofmhelpers.web import drive_folders, drive_uploads
+from ofmhelpers.db.stores import drive_folders as folder_store
+from ofmhelpers.db.stores import users
+from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.tracked_accounts import list_accounts, record_scan
+from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.drive import uploads as drive_uploads
+from ofmhelpers.integrations.gdrive import DriveError, DriveFile
+from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.socials import AccountProfile, AccountStats
 from ofmhelpers.web.main import app
-from ofmhelpers.web.stores import drive_folders as folder_store
-from ofmhelpers.web.stores import users
-from ofmhelpers.web.stores.jobs import create_job, run_job
-from ofmhelpers.web.stores.tracked_accounts import list_accounts, record_scan
-from ofmhelpers.web.stores.users import _repository as user_repository
 
 ROOT = "upload-root-folder"
 PHONE = {

@@ -3,15 +3,9 @@ GOOD one into `settings.clone_links.good_folder`, anything else -- GLITCHY,
 or a check that could not answer -- into `trial_folder`, where a person
 looks first. Import-light: /drive reads `review_folders` too."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone_links.ai_check.models import Verdict
-
-if TYPE_CHECKING:
-    from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
+lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
 
 
 def folder_for(check: CloneAiCheck) -> str:

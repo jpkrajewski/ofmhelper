@@ -1,21 +1,15 @@
 """A logged-in browser tab for the e2e suite (imported by its conftest and
 tests; pytest puts this directory on sys.path, there is no tests package)."""
 
-from __future__ import annotations
-
 import re
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 import requests
+lazy from playwright.sync_api import Browser, Response, Route
 
-from ofmhelpers.aigenproviders.kaiai.fake import RESULT_HOST, FakeKie
-from ofmhelpers.instagram.fake import cdn_reply
-from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from playwright.sync_api import Browser, Response, Route
+from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST, FakeKie
+from ofmhelpers.integrations.instagram.fake import cdn_reply
+from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 
 # A person's "DEV - ALL ACCOUNTS" lives in their own fake My Drive.
 DEV_ROOT = "DEV - ALL ACCOUNTS"

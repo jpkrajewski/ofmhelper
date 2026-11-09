@@ -1,4 +1,4 @@
-"""Groq and Cerebras through `ofmhelpers.llm` (one OpenAI-style
+"""Groq and Cerebras through `ofmhelpers.integrations.llm` (one OpenAI-style
 `/chat/completions` client, llm/chat_completions.py) with each vendor faked
 at the wire: images inline and shrunk, a video as a contact sheet, the
 strict schema sent, the image cap held before sending, retries, and every
@@ -14,7 +14,7 @@ import pytest
 from PIL import Image
 from pydantic import BaseModel
 
-from ofmhelpers.llm import (
+from ofmhelpers.integrations.llm import (
     LLMAuthError,
     LLMConfigError,
     LLMInputError,
@@ -25,13 +25,13 @@ from ofmhelpers.llm import (
     Prompt,
     get_llm,
 )
-from ofmhelpers.llm import base as llm_base
-from ofmhelpers.llm.cerebras.fake import FAKE_KEY as CEREBRAS_KEY
-from ofmhelpers.llm.cerebras.fake import fake_cerebras
-from ofmhelpers.llm.chat_completions_fake import USAGE, FakeChatCompletions
-from ofmhelpers.llm.groq.fake import FAKE_KEY as GROQ_KEY
-from ofmhelpers.llm.groq.fake import fake_groq
-from ofmhelpers.utils import fake_media
+from ofmhelpers.integrations.llm import base as llm_base
+from ofmhelpers.integrations.llm.cerebras.fake import FAKE_KEY as CEREBRAS_KEY
+from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
+from ofmhelpers.integrations.llm.chat_completions_fake import USAGE, FakeChatCompletions
+from ofmhelpers.integrations.llm.groq.fake import FAKE_KEY as GROQ_KEY
+from ofmhelpers.integrations.llm.groq.fake import fake_groq
+from ofmhelpers.media import fake_media
 
 VENDORS = {
     "groq": ("GROQ_API_KEY", GROQ_KEY, fake_groq, "Groq", 3),

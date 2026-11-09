@@ -1,4 +1,4 @@
-from ofmhelpers.instagram.models import GLOBAL_CDN_HOST, Reel
+from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST, Reel
 
 
 def _reel(thumb: str, video: str | None) -> Reel:

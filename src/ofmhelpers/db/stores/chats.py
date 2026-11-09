@@ -1,11 +1,9 @@
 """/chatting's history: what webhooks and the sync have stored of each model's chats,
 the webhook destinations feeding them, and accounts connected without an API key."""
 
-from __future__ import annotations
-
 import time
 from functools import lru_cache
-from typing import TYPE_CHECKING
+lazy from collections.abc import Callable
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import ChatRepository
@@ -23,9 +21,6 @@ from ofmhelpers.schemas.chatting import (
     OpenWait,
     StoredNotification,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 @lru_cache(maxsize=1)

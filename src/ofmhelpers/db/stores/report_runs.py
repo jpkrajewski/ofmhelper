@@ -1,15 +1,10 @@
 """Each report's runs: the last one, and claiming today's (once a day)."""
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
+lazy from datetime import date
 
 from ofmhelpers.db.repositories import ReportRunRepository
 from ofmhelpers.schemas.reports import ReportMarks, ReportRun
-
-if TYPE_CHECKING:
-    from datetime import date
 
 
 @lru_cache(maxsize=1)

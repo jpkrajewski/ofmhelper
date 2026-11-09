@@ -9,15 +9,15 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_KEY
-from ofmhelpers.downloaders import media as downloader
-from ofmhelpers.gdrive.fake import fake_drive
-from ofmhelpers.llm.gemini.fake import FAKE_KEY as GEMINI_KEY
-from ofmhelpers.utils import fake_media
+from ofmhelpers.db.stores import users
+from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
+from ofmhelpers.integrations.downloaders import media as downloader
+from ofmhelpers.integrations.gdrive.fake import fake_drive
+from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_KEY
+from ofmhelpers.media import fake_media
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.stores import users
-from ofmhelpers.web.stores.users import _repository as user_repository
 
 NEW = json.dumps([{"kind": "new"}])
 REEL = "https://www.instagram.com/reel/ABC123/"

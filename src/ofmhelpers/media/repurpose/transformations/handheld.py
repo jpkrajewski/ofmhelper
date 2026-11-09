@@ -87,7 +87,7 @@ class Handheld(BaseModel, frozen=True):
         drift: Range,
         seconds: float,
         aspect: float,
-    ) -> "Handheld":
+    ) -> Handheld:
         skew = rng.uniform(*perspective)
         top, bottom, left, right = (rng.uniform(-skew, skew) for _ in range(4))
         shake_amp = rng.uniform(*shake)

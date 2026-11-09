@@ -8,21 +8,17 @@ gets 403 on webhook subscriptions, as seen. `fail_next` answers the next API cal
 an error, `token_failures` the next token calls; `calls` records (method, path, query).
 """
 
-from __future__ import annotations
-
 import threading
 from datetime import UTC, datetime
 from functools import lru_cache
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
+lazy from collections.abc import Mapping
+
+lazy import requests
 
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 API_HOST = "api.fanvue.com"
 AUTH_HOST = "auth.fanvue.com"

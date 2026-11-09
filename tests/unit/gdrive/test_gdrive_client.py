@@ -1,4 +1,4 @@
-"""ofmhelpers.gdrive: the real googleapiclient over a scripted transport --
+"""ofmhelpers.integrations.gdrive: the real googleapiclient over a scripted transport --
 queries quoted, a hand-made folder reused, a missing or trashed folder a
 `FolderGoneError`, a full Drive a `DriveFullError`, Google refusing the
 sign-in a `DriveAuthError` with a message a page may show, other failures a
@@ -13,7 +13,7 @@ from google.oauth2.credentials import Credentials as UserCredentials
 from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.http import HttpMockSequence
 
-from ofmhelpers.gdrive import (
+from ofmhelpers.integrations.gdrive import (
     RECONNECT,
     Drive,
     DriveAuthError,
@@ -21,8 +21,8 @@ from ofmhelpers.gdrive import (
     DriveFullError,
     FolderGoneError,
 )
-from ofmhelpers.gdrive import client as drive_client
-from ofmhelpers.gdrive.models import FOLDER_MIME, DriveFile
+from ofmhelpers.integrations.gdrive import client as drive_client
+from ofmhelpers.integrations.gdrive.models import FOLDER_MIME, DriveFile
 
 _OK = {"status": "200"}
 
@@ -375,7 +375,7 @@ def test_a_resumable_uploads_308_is_not_followed_as_a_redirect():
     """Drive answers each unfinished chunk with 308 Resume Incomplete;
     httplib2 following it failed every real upload ("Redirected but the
     response is missing a Location: header", dev 2026-10-22)."""
-    from ofmhelpers.gdrive.client import _transport
+    from ofmhelpers.integrations.gdrive.client import _transport
 
     http = _transport(10)
     assert 308 not in http.redirect_codes

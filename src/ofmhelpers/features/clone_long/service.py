@@ -16,8 +16,6 @@ in a way nothing will resume (`stores.jobs.resumable`); one left by a
 cut-off run nobody resumed goes after `resume_max_age_s`.
 """
 
-from __future__ import annotations
-
 import contextvars
 import math
 import shutil
@@ -370,7 +368,7 @@ class LongClone:
         # Moved, not linked: the AI output folder keeps only results. Via a
         # temp name, so a move cut short is never taken as saved.
         moving = saved.with_suffix(".part.mp4")
-        shutil.move(first, moving)
+        first.move(moving)
         moving.replace(saved)
         return saved
 

@@ -19,11 +19,10 @@ One batch at a time across every worker (`_one_at_a_time`): parallel jobs
 sizing their share from the same credit figure would spend it several times
 over. A handle two users track is read once."""
 
-from __future__ import annotations
-
 import time
 from contextlib import contextmanager, suppress
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from collections.abc import Callable, Generator
 
 import requests
 from pydantic import TypeAdapter, ValidationError
@@ -51,9 +50,6 @@ from ofmhelpers.integrations.socials.sources import (
     ScanTarget,
 )
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
 
 logger = get_logger(__name__)
 

@@ -17,14 +17,14 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY
+from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient
+from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.image_tools import pictures
 from ofmhelpers.web.routers.registry import RESUMABLE
 from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.stores.jobs import get_job
 
 PROMPT = "refer guy from first image and second image, recreate third image"
 

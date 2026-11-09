@@ -41,7 +41,7 @@ def run_log(args: list[str], timeout_s: int) -> str:
 
 
 @contextmanager
-def _failures(args: list[str], timeout_s: int) -> Generator[None, None, None]:
+def _failures(args: list[str], timeout_s: int) -> Generator[None]:
     """A failure or a timeout as a RuntimeError naming only the tool."""
     name = Path(args[0]).name
     try:

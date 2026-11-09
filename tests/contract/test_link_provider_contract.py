@@ -11,16 +11,16 @@ from datetime import timedelta
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.links import NewLink, provider_infos
-from ofmhelpers.links.fake import (
+from ofmhelpers.integrations.short_links import NewLink, provider_infos
+from ofmhelpers.integrations.short_links.fake import (
     BOUNCY_FAKE_KEY,
     OOPSIE_FAKE_KEY,
     fake_bouncy,
     fake_oopsie,
 )
-from ofmhelpers.links.providers import get_link_provider
+from ofmhelpers.integrations.short_links.providers import get_link_provider
+from ofmhelpers.schemas.links import utc_today
 from ofmhelpers.utils import outbound
-from ofmhelpers.web.schemas.links import utc_today
 
 PROVIDERS = ["oopsie", "bouncy"]
 _FAKE_KEYS = {"oopsie": OOPSIE_FAKE_KEY, "bouncy": BOUNCY_FAKE_KEY}

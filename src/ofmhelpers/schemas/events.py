@@ -2,8 +2,6 @@
 integrations/senders): any producer, any meaning. The producer words it; a sender
 only lays it out for its service."""
 
-from __future__ import annotations
-
 import time
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator

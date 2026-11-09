@@ -3,8 +3,6 @@ click. One Redis sorted set per person, like features/assets/ref_usage.py: it is
 page ordering, not a noun the app owns, and losing it only empties the row. Redis
 failing never fails a page."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 

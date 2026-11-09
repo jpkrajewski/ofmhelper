@@ -2,12 +2,10 @@
 and Generate's preview of one link: its cover, length and price, or why it
 cannot be cloned."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, Field, computed_field
 
 from ofmhelpers.features.clone_links.links import (
-    BadLine,  # noqa: TC001 -- pydantic reads it
+    BadLine,
 )
 
 

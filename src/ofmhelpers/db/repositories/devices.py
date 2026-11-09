@@ -2,27 +2,21 @@
 and login belongs to a user (`user_id`); every method taking `owner` acts
 only on that user's rows (None: everyone's, for system work)."""
 
-from __future__ import annotations
-
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator
 
 from sqlalchemy import delete, exists, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import undefer_group
+lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.models import DeviceLoginRow, DeviceRow, LoginRow
 from ofmhelpers.db.repositories.cached_repository import CachedRepository
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-
-    from sqlalchemy.orm import Session
 
 _DEVICE_FIELDS = (
     "label",

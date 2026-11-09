@@ -5,12 +5,11 @@ message with when it was answered (`chat_fan_messages`), when the model wrote
 arrive any second and the page wants what arrived, and a destination holds a
 decrypted secret, which must never reach Redis."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+lazy from collections.abc import Callable
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.models import (
     ChatAccountRow,
@@ -22,19 +21,13 @@ from ofmhelpers.db.models import (
     ChatWebhookRow,
 )
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from sqlalchemy.orm import Session
-
-    from ofmhelpers.schemas.chatting import (
-        ChatAccount,
-        ChatEvent,
-        ChatRead,
-        ChatTokens,
-        ChatWebhook,
-    )
+lazy from ofmhelpers.schemas.chatting import (
+    ChatAccount,
+    ChatEvent,
+    ChatRead,
+    ChatTokens,
+    ChatWebhook,
+)
 
 
 class ChatRepository:

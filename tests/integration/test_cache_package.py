@@ -33,7 +33,7 @@ def test_the_old_module_locations_are_gone():
     for name in (
         "ofmhelpers.web.queue",
         "ofmhelpers.web.ratelimit",
-        "ofmhelpers.web.db.cache",
+        "ofmhelpers.db.cache",
     ):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(name)

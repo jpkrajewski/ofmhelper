@@ -10,8 +10,6 @@ requests (`client.py` fetches; JSON answers are `models.py`):
 - the link-preview crawler's view: whether it shows a profile at all.
 """
 
-from __future__ import annotations
-
 import re
 
 from pydantic import BaseModel

@@ -6,14 +6,12 @@ body}`, keyed with the base64 after `whsec_` in the secret; `svix-signature` lis
 `v1,<signature>` entries, more than one while a secret rotates. The stdlib does
 all of it, so no Svix package."""
 
-from __future__ import annotations
-
 import base64
 import binascii
 import hashlib
 import hmac
 import time
-from typing import TYPE_CHECKING
+lazy from collections.abc import Mapping
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.stacked.history import chat_event
@@ -23,9 +21,6 @@ from ofmhelpers.integrations.stacked.models import (
     WebhookEnvelope,
 )
 from ofmhelpers.schemas.chatting import ChatDelivery, ChatRead, DeliveryKind
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 MESSAGE_CREATED = "message.created"
 MESSAGE_DELETED = "message.deleted"
@@ -38,7 +33,7 @@ def _fresh(timestamp: str) -> bool:
     sane number is simply not fresh."""
     try:
         age_s = abs(time.time() - int(timestamp))
-    except (ValueError, OverflowError):
+    except ValueError, OverflowError:
         return False
     return age_s <= settings.chatting.webhook_tolerance_s
 

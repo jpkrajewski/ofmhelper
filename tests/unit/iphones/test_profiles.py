@@ -1,7 +1,7 @@
 import pytest
 
-from ofmhelpers.iphones import available, load_profile
-from ofmhelpers.iphones.models import DataType, PerRecording
+from ofmhelpers.media.recorder import available, load_profile
+from ofmhelpers.media.recorder.models import DataType, PerRecording
 
 
 def test_iphone17_is_available():

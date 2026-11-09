@@ -14,8 +14,8 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import URL, make_url
 
 from alembic import command
-from ofmhelpers.web.db.encrypted import decrypt
-from ofmhelpers.web.db.models import Base
+from ofmhelpers.db.encrypted import decrypt
+from ofmhelpers.db.models import Base
 
 
 def _alembic() -> Config:

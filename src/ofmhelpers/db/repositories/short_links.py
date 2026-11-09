@@ -6,14 +6,13 @@ Link lists are not cached: they join creators and tracked accounts, whose
 writes (/accounts) would not invalidate them. Only the sync state, which
 nothing else writes, is."""
 
-from __future__ import annotations
-
 import time
 from datetime import date
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.models import (
     CreatorRow,
@@ -29,9 +28,6 @@ from ofmhelpers.db.repositories.cached_repository import (
 )
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
 
 # The statuses of a link the provider has.
 LIVE = ("active", "inactive")

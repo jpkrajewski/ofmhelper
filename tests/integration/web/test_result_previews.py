@@ -21,11 +21,12 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from ofmhelpers.cache import QueueName
-from ofmhelpers.web import preview_backfill, previews
+from ofmhelpers.db.stores import jobs as jobs_store
+from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.features.previews import backfill as preview_backfill
+from ofmhelpers.features.previews import render as previews
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import asset_card
-from ofmhelpers.web.stores import jobs as jobs_store
-from ofmhelpers.web.stores.jobs import create_job, get_job, run_job
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

@@ -60,12 +60,12 @@ class FieldSchema(BaseModel):
     format: str | None = None
     min_items: int | None = Field(default=None, alias="minItems")
     max_items: int | None = Field(default=None, alias="maxItems")
-    items: "FieldSchema | None" = None
-    any_of: list["FieldSchema"] | None = Field(default=None, alias="anyOf")
+    items: FieldSchema | None = None
+    any_of: list[FieldSchema] | None = Field(default=None, alias="anyOf")
     media: MediaKind | None = Field(default=None, alias="x-media")
 
     @property
-    def concrete(self) -> "FieldSchema":
+    def concrete(self) -> FieldSchema:
         """The field with a nullable `anyOf: [X, null]` unwrapped to X."""
         if not self.any_of:
             return self

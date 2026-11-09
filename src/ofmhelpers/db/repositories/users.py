@@ -4,8 +4,6 @@ own provider keys (`user_api_keys`). Reads of a user are cached; anything
 returning a secret (the Google refresh token, an API key, a password hash)
 never is: those must not reach Redis."""
 
-from __future__ import annotations
-
 import hashlib
 import time
 

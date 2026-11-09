@@ -14,18 +14,23 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.gdrive import RECONNECT, DriveError, DriveFolder, connect_as
-from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.signin import SignInError
-from ofmhelpers.web.drive_space import (
+from ofmhelpers.db.stores import users
+from ofmhelpers.features.drive.space import (
     DRIVE_FULL,
     FOLDER_MISSING,
     NO_ANSWER,
     drive_space,
     upload_error,
 )
+from ofmhelpers.integrations.gdrive import (
+    RECONNECT,
+    DriveError,
+    DriveFolder,
+    connect_as,
+)
+from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
+from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.web.main import app
-from ofmhelpers.web.stores import users
 
 EMAIL = "ann@example.com"
 _GB = 1_000_000_000

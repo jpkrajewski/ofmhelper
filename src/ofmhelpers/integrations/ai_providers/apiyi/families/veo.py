@@ -34,9 +34,9 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import ImageLimits
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
 

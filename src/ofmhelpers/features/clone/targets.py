@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, field_validator
 
 from ofmhelpers.config import WebSettings
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 DEFAULT_RESOLUTION = "720P"
 
@@ -91,7 +91,7 @@ def offered_resolutions(
     """What a form offers: every resolution of `targets` (default: the whole
     table), in the table's order."""
     rows = clone_targets().values() if targets is None else targets
-    return tuple(dict.fromkeys(r for row in rows for r in row.resolutions))
+    return tuple(dict.fromkeys(*row.resolutions for row in rows))
 
 
 def clone_values(

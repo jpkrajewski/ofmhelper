@@ -68,8 +68,10 @@ echo "== replacing the dev database =="
 "${psql_dev[@]}" -d ofmhelpers -q < "$snapshot" > /dev/null
 
 echo "== starting dev (migrate runs first) =="
+# Only this run's lines: the container's log keeps every earlier run too.
+started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 "${compose[@]}" up -d
-"${compose[@]}" logs --no-log-prefix migrate | tail -5
+"${compose[@]}" logs --no-log-prefix --since "$started" migrate | tail -5
 
 health=000
 for _ in $(seq 30); do

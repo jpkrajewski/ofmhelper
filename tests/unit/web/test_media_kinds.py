@@ -2,8 +2,8 @@
 
 import pytest
 
-from ofmhelpers.downloaders.generic import VIDEO_EXTENSIONS
-from ofmhelpers.web.media_kinds import classify_kind
+from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.integrations.downloaders.generic import VIDEO_EXTENSIONS
 
 
 @pytest.mark.parametrize("ext", sorted(VIDEO_EXTENSIONS))

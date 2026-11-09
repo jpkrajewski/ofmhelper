@@ -27,11 +27,10 @@ bot (`asks.py`): clicks asked of the providers by the hour (`hours.py`), nothing
 synced or saved.
 """
 
-from __future__ import annotations
-
 import time
-from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+lazy from collections.abc import Callable
+lazy from datetime import date
 
 from pydantic import BaseModel
 
@@ -57,12 +56,7 @@ from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.schemas.events import MAX_TEXT
 from ofmhelpers.schemas.links import ShortLink, ctr
 from ofmhelpers.schemas.reports import DayCount
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-    from datetime import date
-
-    from ofmhelpers.schemas.reports import ReportRun
+lazy from ofmhelpers.schemas.reports import ReportRun
 
 logger = get_logger(__name__)
 

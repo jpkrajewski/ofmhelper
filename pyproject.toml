@@ -3,7 +3,7 @@ name = "ofmhelpers"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.15"
 dependencies = [
     "bgutil-ytdlp-pot-provider>=2.0.2",
     "fastapi>=0.143.3",
@@ -29,9 +29,10 @@ dependencies = [
     # Ships the JS runtime yt-dlp's "ejs:github" remote component needs
     # (downloaders/generic.py); imported by yt-dlp, never by us.
     "yt-dlp-ejs>=0.8.0",
-    "sqlalchemy>=2.0.51",
+    # <2.1: Logfire's OpenTelemetry instrumentation supports SQLAlchemy below 2.1.
+    "sqlalchemy>=2.0.52,<2.1",
     "alembic>=1.18.5",
-    "psycopg[binary]>=3.3.4",
+    "psycopg[binary]>=3.3.6",
     "redis>=8.0.1",
     "rq>=2.10.0",
     "rq-dashboard>=0.9.0",
@@ -66,7 +67,7 @@ dev = [
     "allure-pytest>=2.16.2",
     "djlint>=1.36",
     "httpx2>=2.9.1",
-    "mypy>=2.3.0",
+    "mypy>=2.4.0",
     # Browser for tests/e2e (uv run playwright install chromium).
     "playwright>=1.64.0",
     "pre-commit>=4.6.1",
@@ -79,7 +80,7 @@ dev = [
     "pytest-split>=0.11.0",
     "pytest-xdist>=3.8.0",
     "responses>=0.26.3",
-    "ruff>=0.16.0",
+    "ruff>=0.17.2",
     # scripts/*.sh: the deploy paths' remote scripts are single-quoted
     # strings, where one apostrophe in a comment ends the script.
     "shellcheck-py>=0.11.0.1",
@@ -100,7 +101,7 @@ build-backend = "hatchling.build"
 packages = ["src/ofmhelpers"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.15"
 # The code runs only on Linux (Docker, the server); the pre-commit hook may
 # run mypy on a Windows host, where Linux-only modules (fcntl) do not exist.
 platform = "linux"
@@ -111,8 +112,14 @@ ignore_missing_imports = true
 # The pre-commit hook checks staged files only (see .pre-commit-config.yaml).
 files = ["src/ofmhelpers"]
 
+[tool.pyright]
+# The editor's language server: it reads this, not `.python-version`.
+pythonVersion = "3.15"
+venvPath = "."
+venv = ".venv"
+
 [tool.ruff]
-target-version = "py312"
+target-version = "py315"
 line-length = 88
 
 [tool.ruff.lint]
@@ -157,6 +164,23 @@ ignore = [
     # keep going rather than take the worker down. Every site does something
     # with the exception (logs it, stores it on the job, falls back).
     "BLE001",
+    # ruff 0.17's default conventions want `import datetime as dt`: churn in 15
+    # files for no gain, and the module name reads better here.
+    "ICN001",
+    # An import only annotations use: `lazy import` saves nothing for the stdlib,
+    # which is loaded anyway (TC001/TC002 stay on: first- and third-party ones
+    # really do not load until used).
+    "TC003",
+]
+
+# Annotations these classes read when the class is created: an import they use
+# is a runtime import.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+    "sqlalchemy.orm.DeclarativeBase",
+    "ofmhelpers.web.forms.FormModel",
 ]
 
 [tool.ruff.lint.flake8-unused-arguments]
@@ -167,6 +191,7 @@ ignore-variadic-names = true
 # Tests: asserts are the point, fixtures shadow names, magic values are data,
 # and the "passwords" are dummy env values.
 "tests/**" = [
+    "TC001", "TC002",    # tests load everything anyway
     "S101",              # asserts are the entire point
     "PLR2004",           # expected values are literals by nature
     "ARG001", "ARG005",  # stub/monkeypatch signatures ignore args
@@ -178,6 +203,11 @@ ignore-variadic-names = true
     "PT011", "PT019", "RUF043",
     "BLE001", "PTH123", "RUF012", "S603", "S607", "SIM117", "FBT002",
 ]
+# FastAPI reads route signatures when the route is declared: these imports are
+# used at import time, whatever the annotation looks like to ruff.
+"src/ofmhelpers/web/routers/**" = ["TC001", "TC002"]
+"src/ofmhelpers/web/dependencies.py" = ["TC001", "TC002"]
+"src/ofmhelpers/web/forms.py" = ["TC001", "TC002"]
 # Lazy singletons that rebuild when the configured URL changes -- `global`
 # is inherent to the pattern.
 "src/ofmhelpers/cache/redis.py" = ["PLW0603"]
@@ -243,5 +273,4 @@ ignore = "J018,H052,H023,H030,H031"
 per-file-ignores = { "reachmodel.html" = "H021", "_clone_batch.html" = "H021" }
 
 [tool.ruff.lint.isort]
-# Also the old paths of moved modules (ofmhelpers/_moved.py), which tests still name.
 known-first-party = ["ofmhelpers"]

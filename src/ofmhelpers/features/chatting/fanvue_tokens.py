@@ -1,8 +1,6 @@
 """Who connected Fanvue and their live tokens, for `FanvueSource`: the part of that
 platform that needs the database."""
 
-from __future__ import annotations
-
 import time
 
 from ofmhelpers.config import settings

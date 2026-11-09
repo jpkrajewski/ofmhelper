@@ -74,7 +74,7 @@ SECTIONS: dict[str, tuple[str, set[str]]] = {
     **_NAMED,
     # Not runs: the user's part of the asset store.
     "uploads": ("UPLOADS", set()),
-    "other": ("OTHER", set(TOOLS) - set().union(*(t for _, t in _NAMED.values()))),
+    "other": ("OTHER", set(TOOLS) - {*t for _, t in _NAMED.values()}),
 }
 TILES_PER_PAGE = 60
 
@@ -138,7 +138,7 @@ def _list_entries(
             st = entry.stat()
         except OSError:
             continue  # deleted while listing, or a broken symlink
-        if entry.is_dir():
+        if entry.info.is_dir():
             dirs.append(DirEntry(name=entry.name, rel_path=rel, mtime=st.st_mtime))
         else:
             files.append(
@@ -457,7 +457,7 @@ def delete_all(path: FormText = "", root: FormText = DEFAULT_ROOT) -> Response:
         raise HTTPException(status_code=404, detail="Directory not found")
 
     for entry in directory.iterdir():
-        if entry.is_dir():
+        if entry.info.is_dir():
             shutil.rmtree(entry)
         else:
             entry.unlink()

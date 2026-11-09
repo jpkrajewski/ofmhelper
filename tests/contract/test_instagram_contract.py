@@ -10,13 +10,13 @@ import pytest
 import requests
 
 from ofmhelpers.config import settings
-from ofmhelpers.instagram import (
+from ofmhelpers.integrations.instagram import (
     InstagramClient,
     InstagramRateLimitedError,
     ProfileNotFoundError,
     scan_profile,
 )
-from ofmhelpers.instagram.models import GLOBAL_CDN_HOST, Profile
+from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST, Profile
 
 # A public profile with reels that will not disappear, per backend.
 PROFILE = {"fake": "sheep_love33", "real": "instagram"}
@@ -29,7 +29,7 @@ def _open(username: str) -> tuple[InstagramClient, Profile]:
         client = InstagramClient(proxy)
         try:
             return client, client.open_profile(username)
-        except (InstagramRateLimitedError, ProfileNotFoundError):
+        except InstagramRateLimitedError, ProfileNotFoundError:
             continue
     pytest.fail(f"Instagram refused all {len(routes)} routes")
 

@@ -11,10 +11,9 @@ secret (`ChatSource.shared_secret`): then there is nothing to make. Without a pu
 HTTPS address (dev) there is none, and the sync does the work. A destination existing
 proves nothing, so a model counts as delivering only while its replies actually arrive."""
 
-from __future__ import annotations
-
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from collections.abc import Mapping
 
 from pydantic import RootModel, ValidationError
 from sqlalchemy.exc import DataError
@@ -34,12 +33,8 @@ from ofmhelpers.schemas.chatting import (
     CreatedSubscription,
     DeliveryKind,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from ofmhelpers.integrations.chat_source import ChatSource
-    from ofmhelpers.schemas.chatting import ChatModel
+lazy from ofmhelpers.integrations.chat_source import ChatSource
+lazy from ofmhelpers.schemas.chatting import ChatModel
 
 logger = get_logger(__name__)
 

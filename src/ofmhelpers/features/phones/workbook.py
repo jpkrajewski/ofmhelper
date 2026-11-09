@@ -14,22 +14,17 @@ Every cell is written as a string: openpyxl would otherwise store a value
 starting with "=" (a password can) as a formula Excel evaluates.
 """
 
-from __future__ import annotations
-
+from functools import lru_cache
 from io import BytesIO
-from typing import TYPE_CHECKING
 
-from openpyxl import Workbook
-from openpyxl.cell import WriteOnlyCell
-from openpyxl.styles import Alignment, Font
-from openpyxl.utils import get_column_letter
+lazy from openpyxl import Workbook
+lazy from openpyxl.cell import WriteOnlyCell
+lazy from openpyxl.styles import Alignment, Font
+lazy from openpyxl.utils import get_column_letter
+lazy from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
 from ofmhelpers.features.phones.catalog import ServiceKind, services
-
-if TYPE_CHECKING:
-    from openpyxl.worksheet._write_only import WriteOnlyWorksheet
-
-    from ofmhelpers.schemas import Device, DeviceLogin
+lazy from ofmhelpers.schemas import Device, DeviceLogin
 
 MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -40,8 +35,16 @@ _PHONE_HEADERS = [
     "Color",
     "Owner",
 ]
-_HEADER_FONT = Font(bold=True)
-_WRAP = Alignment(wrap_text=True, vertical="top")
+
+
+@lru_cache(maxsize=1)
+def _header_font() -> Font:
+    return Font(bold=True)
+
+
+@lru_cache(maxsize=1)
+def _wrap() -> Alignment:
+    return Alignment(wrap_text=True, vertical="top")
 
 
 def _phone_cells(device: Device) -> list[str]:
@@ -66,9 +69,9 @@ def _row(sheet: WriteOnlyWorksheet, values: list[str], header: bool = False) -> 
         cell = WriteOnlyCell(sheet, value=value)
         cell.data_type = "s"
         if header:
-            cell.font = _HEADER_FONT
+            cell.font = _header_font()
         else:
-            cell.alignment = _WRAP
+            cell.alignment = _wrap()
         cells.append(cell)
     sheet.append(cells)
 

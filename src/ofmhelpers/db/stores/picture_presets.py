@@ -7,8 +7,6 @@ in the owner's part of the asset store (saved by the router), so a run
 reads them straight from disk and an edit never breaks an earlier job.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import DuplicateError, PicturePresetRepository

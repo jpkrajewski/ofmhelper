@@ -102,7 +102,7 @@ def _download(drive: DriveApi, user_id: int, login_id: int) -> None:
             rel = f"src/{reel.key}-{Path(name).name}"
             (root / rel).parent.mkdir(parents=True, exist_ok=True)
             (root / rel).write_bytes(content)
-        except (DriveError, OSError):
+        except DriveError, OSError:
             logger.warning("trials: download of %s failed", reel.key, exc_info=True)
             failed = partial(ReelState.mark_failed, error=DOWNLOAD_FAILED)
             change_reel(user_id, login_id, reel.key, failed)
@@ -344,7 +344,7 @@ def upload_trials(
             name = _camera_name(reel.name, taken, rng)
             landed[key] = drive.upload(trials_id, path, name, "video/mp4")
             taken.add(name)
-    except (DriveError, OSError):
+    except DriveError, OSError:
         logger.warning("trials: upload to %s failed", login_id, exc_info=True)
         _trash(drive, [f.id for f in landed.values()])
         _batch_failed(user_id, login_id, keys)

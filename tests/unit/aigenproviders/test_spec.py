@@ -3,8 +3,8 @@ fields, its file pickers, typed values, validation and the request body."""
 
 import pytest
 
-from ofmhelpers.aigenproviders.errors import InvalidInputError
-from ofmhelpers.aigenproviders.spec import ModelSpec
+from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
+from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 
 def _spec(properties, required=("prompt",), fixed=None):

@@ -2,10 +2,7 @@
 rows as a LinkProvider, and reads its numbers from the click log by day and by
 hour. No HTTP, so these run straight on the database."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
 
 from signin import make_user
 
@@ -16,9 +13,7 @@ from ofmhelpers.db.stores import short_links
 from ofmhelpers.integrations.short_links import NewLink
 from ofmhelpers.integrations.short_links.providers import get_link_provider
 from ofmhelpers.schemas.links import utc_today
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.short_links.providers.base import LinkProvider
+lazy from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 
 
 def _client(user_id: int) -> LinkProvider:

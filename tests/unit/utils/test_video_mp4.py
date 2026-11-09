@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.utils import video_mp4
-from ofmhelpers.utils.ffmpeg import binary, run, run_bytes
-from ofmhelpers.utils.video_mp4 import _mp4_args, _Probe, _Stream, as_mp4
+from ofmhelpers.media import video_mp4
+from ofmhelpers.media.ffmpeg import binary, run, run_bytes
+from ofmhelpers.media.video_mp4 import _mp4_args, _Probe, _Stream, as_mp4
 
 SRC = Path("/in/clip.mov")
 DEST = Path("/out/clip.mp4")

@@ -1,8 +1,6 @@
 """The shapes /phones reads from the package's JSON: login services
 (`services.json`) and the iPhone catalog (`catalog.json`)."""
 
-from __future__ import annotations
-
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator

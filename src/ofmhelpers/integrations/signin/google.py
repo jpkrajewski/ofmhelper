@@ -12,11 +12,9 @@ https://developers.google.com/identity/protocols/oauth2/web-server
 https://developers.google.com/identity/openid-connect/openid-connect
 """
 
-from __future__ import annotations
-
 from urllib.parse import urlencode
 
-from google.oauth2.credentials import Credentials
+lazy from google.oauth2.credentials import Credentials
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.gdrive.client import SCOPES as DRIVE_SCOPES

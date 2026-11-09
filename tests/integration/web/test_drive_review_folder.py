@@ -16,10 +16,10 @@ from redis.exceptions import RedisError
 from signin import make_user
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.web import drive_folders
-from ofmhelpers.web.drive_folders import review_folder
-from ofmhelpers.web.stores import users
+from ofmhelpers.db.stores import users
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.drive.folders import review_folder
+from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
 
 EMAIL = "ann@example.com"
 TOKEN = f"fake-refresh:{EMAIL}"

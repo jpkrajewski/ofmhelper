@@ -10,17 +10,12 @@ video. Markers steer it for tests: "fake-long" = a 20 s video,
 Instagram CDN serves (`instagram/fake.py`, through `utils/outbound.py`).
 The download of a "fake-long" link is still the 2 s clip."""
 
-from __future__ import annotations
-
 import hashlib
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 from ofmhelpers.integrations.downloaders.models import DownloadResult, VideoInfo
 from ofmhelpers.integrations.downloaders.sites import images_first
 from ofmhelpers.media import fake_media
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _FAIL = "fake-fail"
 _LONG = "fake-long"

@@ -1,6 +1,6 @@
 import struct
 
-from ofmhelpers.utils.mov_atoms import Atom, parse, set_times
+from ofmhelpers.media.mov_atoms import Atom, parse, set_times
 
 
 def _atom(kind: bytes, body: bytes) -> bytes:

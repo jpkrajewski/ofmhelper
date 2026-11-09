@@ -2,8 +2,6 @@
 bridge page, the custom domains we serve them on, and the Self links page's
 statistics over any time frame."""
 
-from __future__ import annotations
-
 import re
 from datetime import date, datetime, timedelta
 from typing import Literal

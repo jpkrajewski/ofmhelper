@@ -29,15 +29,19 @@ import logfire
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers import self_heal, tasks
-from ofmhelpers.integrations.ai_providers.base import Provider, TaskState
 from ofmhelpers.integrations.ai_providers.errors import (
     ProviderError,
     ProviderGenerationError,
     ProviderNoCreditsError,
     ProviderTimeoutError,
 )
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, OutputKind, Payload
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.ai_providers.base import Provider, TaskState
+lazy from ofmhelpers.integrations.ai_providers.spec import (
+    ModelSpec,
+    OutputKind,
+    Payload,
+)
 
 logger = get_logger(__name__)
 

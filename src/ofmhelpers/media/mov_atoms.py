@@ -20,12 +20,12 @@ _EPOCH_1904 = 2082844800  # seconds from 1904-01-01 to 1970-01-01
 class Atom(BaseModel):
     type: bytes
     payload: bytes = b""
-    children: list["Atom"] | None = None
+    children: list[Atom] | None = None
 
-    def child(self, kind: bytes) -> "Atom | None":
+    def child(self, kind: bytes) -> Atom | None:
         return next((c for c in self.children or [] if c.type == kind), None)
 
-    def all(self, kind: bytes) -> list["Atom"]:
+    def all(self, kind: bytes) -> list[Atom]:
         return [c for c in self.children or [] if c.type == kind]
 
     def to_bytes(self) -> bytes:

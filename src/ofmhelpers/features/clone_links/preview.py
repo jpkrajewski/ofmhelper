@@ -10,8 +10,6 @@ then is "took too long"), and the whole process reads at most
 `preview_parallel` links at once (`_read_slots`), however many requests
 stack up (Cancel + Generate again, two VAs)."""
 
-from __future__ import annotations
-
 import hashlib
 import math
 import re
@@ -19,7 +17,8 @@ import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import lru_cache
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator
+lazy from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -35,10 +34,6 @@ from ofmhelpers.integrations.downloaders.generic import video_info
 from ofmhelpers.integrations.downloaders.models import VideoInfo
 from ofmhelpers.log import get_logger
 from ofmhelpers.telemetry import in_this_trace
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from pathlib import Path
 
 logger = get_logger(__name__)
 

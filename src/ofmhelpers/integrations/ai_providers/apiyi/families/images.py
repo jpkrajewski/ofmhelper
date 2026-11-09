@@ -21,14 +21,14 @@ from typing import Any
 from pydantic import Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
 from ofmhelpers.integrations.ai_providers.apiyi.families.dashscope import with_defaults
 from ofmhelpers.integrations.ai_providers.apiyi.families.sync import Made, SyncImages
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER, Text
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.http import Lenient, parsed
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 from ofmhelpers.media.image_fit import ImageLimits
+lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 GENERATIONS = "/v1/images/generations"
 EDITS = "/v1/images/edits"

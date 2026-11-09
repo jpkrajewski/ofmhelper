@@ -26,9 +26,9 @@ from ofmhelpers.integrations.ai_providers.base import (
 )
 from ofmhelpers.integrations.ai_providers.catalog import catalog, get_spec
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobPreview, JobsQueued, ResultFile
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 logger = get_logger(__name__)
 

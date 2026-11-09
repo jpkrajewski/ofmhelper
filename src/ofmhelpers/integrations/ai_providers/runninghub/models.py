@@ -71,7 +71,7 @@ def as_code(value: str | int | None) -> int:
     """`errorCode` comes as a string ("806"), sometimes empty."""
     try:
         return int(value or 0)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 

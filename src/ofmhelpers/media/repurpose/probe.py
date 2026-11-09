@@ -13,7 +13,7 @@ def _rate(fraction: str) -> float | None:
     num, _, den = fraction.partition("/")
     try:
         value = float(num) / float(den or 1)
-    except (ValueError, ZeroDivisionError):
+    except ValueError, ZeroDivisionError:
         return None
     return value if value > 0 else None
 
@@ -30,7 +30,7 @@ class Source(BaseModel, frozen=True):
     fps: float | None = None
 
     @classmethod
-    def from_ffprobe(cls, out: str) -> "Source":
+    def from_ffprobe(cls, out: str) -> Source:
         data = json.loads(out)
         streams = data.get("streams", [])
         video = next((s for s in streams if s["codec_type"] == "video"), None)

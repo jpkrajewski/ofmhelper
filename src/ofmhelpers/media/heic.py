@@ -5,8 +5,6 @@ models, not the metadata cleaner -- so an iPhone photo is converted once, at
 upload, and the rest of the app only ever sees a JPEG.
 """
 
-from __future__ import annotations
-
 import io
 from typing import BinaryIO
 

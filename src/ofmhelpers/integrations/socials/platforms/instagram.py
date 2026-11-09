@@ -40,8 +40,8 @@ from ofmhelpers.integrations.socials.platforms.base import Platform
 from ofmhelpers.integrations.socials.platforms.instagram_apify import (
     ApifyInstagramSource,
 )
-from ofmhelpers.integrations.socials.sources import AccountSource
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ def _reels(
     if logged_in:
         try:
             full = client.reels_logged_in(username, user_id, cap + 1)
-        except (requests.RequestException, InstagramError):
+        except requests.RequestException, InstagramError:
             logger.warning("logged-in reels of %s failed", user_id, exc_info=True)
             full = None
         if full is not None:

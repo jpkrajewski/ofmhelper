@@ -8,20 +8,15 @@ limits a call to theirs (None: everyone's, for the sweeper; a session
 always passes its own id, admins included).
 """
 
-from __future__ import annotations
-
 import time
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import TrackedAccountRepository
 from ofmhelpers.db.stores.users import agency_id
 from ofmhelpers.integrations.socials import platforms
 from ofmhelpers.schemas import AccountHistory, TrackedAccount
-
-if TYPE_CHECKING:
-    from ofmhelpers.integrations.socials import AccountStats
+lazy from ofmhelpers.integrations.socials import AccountStats
 
 
 @lru_cache(maxsize=1)

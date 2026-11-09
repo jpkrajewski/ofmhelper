@@ -11,9 +11,10 @@ import httpx
 import pytest
 from PIL import Image
 
-from ofmhelpers.aigenproviders import tasks
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.errors import (
+from ofmhelpers.cache import get_redis
+from ofmhelpers.integrations.ai_providers import self_heal, tasks
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
     ProviderInputError,
     ProviderNoCreditsError,
@@ -21,13 +22,14 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderTimeoutError,
     ProviderUnavailableError,
 )
-from ofmhelpers.aigenproviders.higgsfield.fake import FAKE_KEY, fake_higgsfield
-from ofmhelpers.aigenproviders.higgsfield.provider import HiggsfieldProvider
-from ofmhelpers.aigenproviders.runner import generate
-from ofmhelpers.cache import get_redis
-from ofmhelpers.integrations.ai_providers import self_heal
-from ofmhelpers.utils import fake_media
-from ofmhelpers.web.schemas.errors import error_reason
+from ofmhelpers.integrations.ai_providers.higgsfield.fake import (
+    FAKE_KEY,
+    fake_higgsfield,
+)
+from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
+from ofmhelpers.integrations.ai_providers.runner import generate
+from ofmhelpers.media import fake_media
+from ofmhelpers.schemas.errors import error_reason
 
 BASE = "https://api.higgsfield.ai"
 SPEC = get_spec("higgsfield:alibaba/wan-3.0/reference-to-video")
@@ -448,7 +450,8 @@ def test_a_reused_reference_is_uploaded_once(wire, provider, image):
     head = mock.Mock(status_code=200)
 
     with mock.patch(
-        "ofmhelpers.aigenproviders.higgsfield.provider.requests.head", return_value=head
+        "ofmhelpers.integrations.ai_providers.higgsfield.provider.requests.head",
+        return_value=head,
     ):
         first = provider.upload(image)
         second = HiggsfieldProvider("key-id:key-secret").upload(image)
@@ -464,7 +467,8 @@ def test_a_resumed_run_whose_subject_is_gone_still_gets_its_url(
     its subject left the store still builds its payload."""
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
     monkeypatch.setattr(
-        "ofmhelpers.aigenproviders.higgsfield.provider._live", lambda _url: True
+        "ofmhelpers.integrations.ai_providers.higgsfield.provider._live",
+        lambda _url: True,
     )
     sheet = tmp_path / "sheet.png"
     Image.new("RGB", (2000, 400)).save(sheet)
@@ -480,7 +484,7 @@ def test_another_account_never_reuses_the_upload(wire, provider, image):
     fake = wire(_upload_routes())
 
     with mock.patch(
-        "ofmhelpers.aigenproviders.higgsfield.provider.requests.head",
+        "ofmhelpers.integrations.ai_providers.higgsfield.provider.requests.head",
         return_value=mock.Mock(status_code=200),
     ):
         provider.upload(image)
@@ -570,7 +574,8 @@ def _upload_at_once(monkeypatch, path, count=3):
 
     monkeypatch.setattr(httpx.Client, "request", slow)
     monkeypatch.setattr(
-        "ofmhelpers.aigenproviders.higgsfield.provider._live", lambda _url: True
+        "ofmhelpers.integrations.ai_providers.higgsfield.provider._live",
+        lambda _url: True,
     )
     urls = []
     threads = [

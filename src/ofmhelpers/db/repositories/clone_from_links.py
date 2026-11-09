@@ -6,8 +6,6 @@ until it finishes it; `checked` and `finish` change only the row as that
 claim left it (`started_at` equal), so a run whose row was restarted or
 taken over meanwhile writes nothing."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 

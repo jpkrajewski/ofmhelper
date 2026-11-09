@@ -1,7 +1,5 @@
 """How the report writes its numbers: short, the way people say them."""
 
-from __future__ import annotations
-
 from datetime import datetime, timedelta
 
 NONE = "—"

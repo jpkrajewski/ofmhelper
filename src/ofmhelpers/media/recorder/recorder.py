@@ -30,7 +30,7 @@ from ofmhelpers.media.mov_atoms import (
     top_level,
 )
 from ofmhelpers.media.recorder import atoms, sample_entries, sample_tables
-from ofmhelpers.media.recorder.models import DeviceProfile, Recording, TimingPlan
+lazy from ofmhelpers.media.recorder.models import DeviceProfile, Recording, TimingPlan
 
 # VBV around the profile's average bitrate.
 _MAXRATE_FACTOR = 1.5

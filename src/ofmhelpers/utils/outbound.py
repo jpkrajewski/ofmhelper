@@ -19,8 +19,6 @@ A fake is a function (request, proxies) -> `FakeReply`; it may raise a
 `requests` exception to stand for a dead proxy or a timeout.
 """
 
-from __future__ import annotations
-
 import io
 import json
 from collections.abc import Callable, Mapping

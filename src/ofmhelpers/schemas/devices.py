@@ -2,8 +2,6 @@
 the page lists (no secret in it), the filters / sort, and the one login's
 secrets the page asks for on Show / Copy."""
 
-from __future__ import annotations
-
 from enum import StrEnum
 from typing import Annotated
 

@@ -11,11 +11,9 @@ not stop the others, and each platform has its own sweep, so one failing, slow o
 hanging does not hold up the next.
 """
 
-from __future__ import annotations
-
 import time
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+lazy from collections.abc import Collection
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -35,12 +33,8 @@ from ofmhelpers.features.chatting.webhooks import (
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import ReadScope
-
-if TYPE_CHECKING:
-    from collections.abc import Collection
-
-    from ofmhelpers.integrations.chat_source import ChatSource
-    from ofmhelpers.schemas.chatting import ChatModel, ChatPlatform
+lazy from ofmhelpers.integrations.chat_source import ChatSource
+lazy from ofmhelpers.schemas.chatting import ChatModel, ChatPlatform
 
 logger = get_logger(__name__)
 

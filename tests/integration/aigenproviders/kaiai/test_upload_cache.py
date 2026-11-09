@@ -25,10 +25,13 @@ from kie_http_fake import kie_http, response
 from PIL import Image
 from redis import Redis
 
-from ofmhelpers.aigenproviders.errors import ProviderAuthError, ProviderUnavailableError
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
 from ofmhelpers.cache import get_redis, get_text
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.ai_providers.errors import (
+    ProviderAuthError,
+    ProviderUnavailableError,
+)
+from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient
 
 
 @pytest.fixture
@@ -195,7 +198,9 @@ def test_an_unreachable_broker_degrades_to_re_uploading(
     name) both fail open. The lock's warning names a hash, never the key."""
     dead = Redis.from_url("unix:///nonexistent/redis.sock")
     monkeypatch.setattr("ofmhelpers.cache.redis.get_redis", lambda: dead)
-    monkeypatch.setattr("ofmhelpers.aigenproviders.base.get_redis", lambda: dead)
+    monkeypatch.setattr(
+        "ofmhelpers.integrations.ai_providers.base.get_redis", lambda: dead
+    )
 
     with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")

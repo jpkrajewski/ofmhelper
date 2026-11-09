@@ -2,8 +2,6 @@
 every read returns or derives from the decrypted cookies, which must never
 reach Redis."""
 
-from __future__ import annotations
-
 import time
 
 from sqlalchemy import delete, select

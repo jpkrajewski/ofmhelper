@@ -15,8 +15,8 @@ RESULT_TIMEOUT_MS = 30_000
 
 
 def _download(folder: Path, *names: str) -> str:
+    from ofmhelpers.db.stores.jobs import create_job, run_job
     from ofmhelpers.integrations.downloaders.models import DownloadResult
-    from ofmhelpers.web.stores.jobs import create_job, run_job
 
     paths = []
     for name in names:

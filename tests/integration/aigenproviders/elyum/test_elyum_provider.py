@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ofmhelpers.aigenproviders import runner
-from ofmhelpers.aigenproviders.catalog import get_spec
-from ofmhelpers.aigenproviders.elyum.fake import FAKE_KEY, fake_elyum
-from ofmhelpers.aigenproviders.elyum.provider import ElyumProvider, wire_body
-from ofmhelpers.aigenproviders.errors import (
+from ofmhelpers.integrations.ai_providers import runner
+from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.integrations.ai_providers.elyum.fake import FAKE_KEY, fake_elyum
+from ofmhelpers.integrations.ai_providers.elyum.provider import ElyumProvider, wire_body
+from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
     ProviderGenerationError,
     ProviderInputError,
@@ -21,9 +21,9 @@ from ofmhelpers.aigenproviders.errors import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.utils import fake_media
+from ofmhelpers.media import fake_media
+from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.routers.generation import clone
-from ofmhelpers.web.schemas.errors import error_reason
 
 WAN = "elyum:alibaba/wan-3.0/reference-to-video"
 

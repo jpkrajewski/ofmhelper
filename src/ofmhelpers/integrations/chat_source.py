@@ -4,25 +4,20 @@ this (the webhook route, the sync, the pop-ups, the stats) knows nothing about a
 platform, so a new platform is one class doing this and one entry in
 `features/chatting/sources.py`."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
+lazy from collections.abc import Iterator, Mapping
 
 from ofmhelpers.errors import AppError
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
-
-    from ofmhelpers.schemas.chatting import (
-        ChatDelivery,
-        ChatModel,
-        ChatModels,
-        ChatPlatform,
-        ChatRead,
-        CreatedSubscription,
-        ReadScope,
-        Subscription,
-    )
+lazy from ofmhelpers.schemas.chatting import (
+    ChatDelivery,
+    ChatModel,
+    ChatModels,
+    ChatPlatform,
+    ChatRead,
+    CreatedSubscription,
+    ReadScope,
+    Subscription,
+)
 
 
 class ChatSourceError(AppError):

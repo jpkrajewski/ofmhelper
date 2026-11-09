@@ -1,20 +1,15 @@
 """What every Drive (`client.Drive`, `fake.FakeDrive`) offers, and how it
 fails. Callers type against `DriveApi`, never a concrete class."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
+lazy from pathlib import Path
 
 from ofmhelpers.errors import AppError
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from ofmhelpers.integrations.gdrive.models import (
-        DriveFile,
-        DriveFolder,
-        DriveStorage,
-    )
+lazy from ofmhelpers.integrations.gdrive.models import (
+    DriveFile,
+    DriveFolder,
+    DriveStorage,
+)
 
 
 class DriveError(AppError):

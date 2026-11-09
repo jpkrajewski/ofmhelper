@@ -5,7 +5,7 @@ under e2e can never reach the internet by accident."""
 import pytest
 import requests
 
-from ofmhelpers.instagram.models import GLOBAL_CDN_HOST
+from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 from ofmhelpers.utils import outbound
 
 

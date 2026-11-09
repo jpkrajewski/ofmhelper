@@ -8,8 +8,6 @@ A username is scanned once whoever watches it -- the scan-side methods
 and a user adding a profile someone already watches gets its scan at
 once."""
 
-from __future__ import annotations
-
 import time
 from typing import Any
 

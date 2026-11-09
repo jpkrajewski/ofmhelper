@@ -1,9 +1,7 @@
 """Fanvue API shapes, the fields this app reads (official spec:
 https://api.fanvue.com/docs/openapi-v1.json). Times are ISO 8601 on the wire."""
 
-from __future__ import annotations
-
-from datetime import datetime  # noqa: TC003 -- pydantic reads it at runtime
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 

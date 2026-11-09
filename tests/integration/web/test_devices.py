@@ -19,22 +19,22 @@ from pydantic import ValidationError
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, select, table, text
 
-from ofmhelpers.phones import (
+from ofmhelpers.db.encrypted import VaultError
+from ofmhelpers.db.repositories import DuplicateError
+from ofmhelpers.db.session import session_scope
+from ofmhelpers.db.stores import devices as store
+from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.features.phones.catalog import (
     ServiceKind,
     catalog,
     find_model,
     get_service,
     services,
 )
-from ofmhelpers.phones.models import CameraLayout
-from ofmhelpers.phones.render import render
-from ofmhelpers.web.db.encrypted import VaultError
-from ofmhelpers.web.db.repositories import DuplicateError
-from ofmhelpers.web.db.session import session_scope
+from ofmhelpers.features.phones.catalog.models import CameraLayout
+from ofmhelpers.features.phones.catalog.render import render
+from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas import DeviceFields, LoginFields, PhoneQuery
-from ofmhelpers.web.stores import devices as store
-from ofmhelpers.web.stores.tracked_accounts import list_accounts, track
 
 
 def _login(password: str) -> TestClient:

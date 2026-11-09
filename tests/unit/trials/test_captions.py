@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ofmhelpers.llm import LLMUnavailableError, LLMUse, MediaKind
-from ofmhelpers.trials import captions, media
-from ofmhelpers.trials.captions import CHOICES, Captions, ReelNotes
-from ofmhelpers.trials.state import CAPTION_MAX
+from ofmhelpers.features.trials import captions, media
+from ofmhelpers.features.trials.captions import CHOICES, Captions, ReelNotes
+from ofmhelpers.features.trials.state import CAPTION_MAX
+from ofmhelpers.integrations.llm import LLMUnavailableError, LLMUse, MediaKind
 
 
 class _Model:

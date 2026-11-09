@@ -13,18 +13,12 @@ renamed, so a killed ffmpeg never leaves a short file a re-run would take
 as done.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 from ofmhelpers.features.clone_long.models import Shape
 from ofmhelpers.media.ffmpeg import binary, run, run_bytes
 from ofmhelpers.media.video_probe import duration_s
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from ofmhelpers.features.clone_long.models import Piece
+lazy from ofmhelpers.features.clone_long.models import Piece
 
 # A display rotation that turns the picture on its side (90 or 270).
 _SIDEWAYS = 90

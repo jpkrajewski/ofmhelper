@@ -22,13 +22,13 @@ from fastapi import HTTPException
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 from starlette.responses import (
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
     Response,
 )
+lazy from starlette.requests import Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.users import get_user

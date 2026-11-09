@@ -15,22 +15,22 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.links.fake import (
+from ofmhelpers.db.models import ShortLinkRow
+from ofmhelpers.db.session import session_scope
+from ofmhelpers.db.stores import short_links, users
+from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.features.links import sync as link_sync
+from ofmhelpers.integrations.short_links.fake import (
     BOUNCY_FAKE_KEY,
     OOPSIE_FAKE_KEY,
     FakeBouncy,
     fake_bouncy,
     fake_oopsie,
 )
+from ofmhelpers.schemas import Role, UserForm
+from ofmhelpers.schemas.links import utc_today
 from ofmhelpers.utils.outbound import FakeReply
-from ofmhelpers.web import link_sync
-from ofmhelpers.web.db.models import ShortLinkRow
-from ofmhelpers.web.db.session import session_scope
 from ofmhelpers.web.main import app
-from ofmhelpers.web.schemas import Role, UserForm
-from ofmhelpers.web.schemas.links import utc_today
-from ofmhelpers.web.stores import short_links, users
-from ofmhelpers.web.stores.tracked_accounts import list_accounts, track
 
 FANVUE = "https://www.fanvue.com/walker_dane"
 
@@ -527,7 +527,7 @@ def test_a_numbered_slug_never_lands_on_the_owners_own(client, admin):
 def test_an_unexpected_error_fails_one_link_and_the_rest_go_on(
     client, admin, monkeypatch
 ):
-    from ofmhelpers.links.providers.bouncy import BouncyProvider
+    from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
 
     calls = {"n": 0}
     real = BouncyProvider.create
@@ -552,7 +552,7 @@ def test_an_unexpected_error_fails_one_link_and_the_rest_go_on(
 
 
 def test_a_sync_on_an_odd_answer_is_recorded_not_lost(client, admin, monkeypatch):
-    from ofmhelpers.links.providers.bouncy import BouncyProvider
+    from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
 
     def odd(self):
         missing = "pagination"
@@ -587,7 +587,7 @@ def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
 def test_one_key_waits_its_turn_across_clients(monkeypatch):
     """Oopsie allows 60 calls a minute per key: two clients (two jobs) on
     one key share the spacing."""
-    from ofmhelpers.links.providers.oopsie import OopsieProvider
+    from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
 
     waits: list[float] = []
     monkeypatch.setattr("time.sleep", waits.append)

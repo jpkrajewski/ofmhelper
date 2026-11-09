@@ -2,11 +2,9 @@
 and the POSTED folder inside it -- and the files seen posted (/drive). Drive
 ids only; Drive itself is `ofmhelpers.integrations.gdrive`."""
 
-from __future__ import annotations
-
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator
 
 from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -18,9 +16,6 @@ from ofmhelpers.db.repositories.cached_repository import (
     invalidates_cache,
 )
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 # pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
 _SYNC_LOCK_KEY = 0x0D21_5E00

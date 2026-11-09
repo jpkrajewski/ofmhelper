@@ -197,7 +197,7 @@ class GeoPoint(_Frozen):
         """As an iPhone writes it: "+40.7549-073.9840+010.000/"."""
         return f"{self.latitude:+08.4f}{self.longitude:+09.4f}{self.altitude_m:+08.3f}/"
 
-    def moved(self, north_m: float, east_m: float) -> "GeoPoint":
+    def moved(self, north_m: float, east_m: float) -> GeoPoint:
         lon_m = _M_PER_DEGREE * math.cos(math.radians(self.latitude))
         return self.model_copy(
             update={
@@ -244,7 +244,7 @@ class Recording(_Frozen):
         tz: datetime.tzinfo,
         place: Place | None = None,
         rng: random.Random | None = None,
-    ) -> "Recording":
+    ) -> Recording:
         """A recording ending now in `tz`, filmed somewhere in `place`."""
         end = datetime.datetime.now(tz)
         if place is None:

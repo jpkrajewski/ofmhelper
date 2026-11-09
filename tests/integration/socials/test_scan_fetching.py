@@ -7,10 +7,10 @@ itself is down."""
 
 import pytest
 
-from ofmhelpers.instagram.fake import fake_instagram
+from ofmhelpers.db.stores import tracked_accounts as store
+from ofmhelpers.features.accounts import tracker as account_tracker
+from ofmhelpers.integrations.instagram.fake import fake_instagram
 from ofmhelpers.integrations.socials import client_source
-from ofmhelpers.web import account_tracker
-from ofmhelpers.web.stores import tracked_accounts as store
 
 P1, P2, P3 = (f"http://user:pw@proxy{i}.example:8000" for i in (1, 2, 3))
 

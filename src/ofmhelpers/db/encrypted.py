@@ -11,20 +11,15 @@ it reveals only that there is no password, and lets a list say which logins
 have one without decrypting any.
 """
 
-from __future__ import annotations
-
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator
+lazy from sqlalchemy.engine import Dialect
 
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from sqlalchemy.engine import Dialect
 
 logger = get_logger(__name__)
 

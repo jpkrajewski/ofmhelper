@@ -69,8 +69,8 @@ def test_a_download_run_shows_on_the_page_and_reopens_in_the_one_tool(client):
 def test_a_login_walled_reel_is_rescued_by_the_saver_fallback(client, monkeypatch):
     """Prod 2026-10-28: every downloader refused a reel Instagram hides
     from the logged-out API; the saver fallback fetches it."""
-    from ofmhelpers.downloaders import generic, images, kvs
-    from ofmhelpers.downloaders.models import DownloadResult
+    from ofmhelpers.integrations.downloaders import generic, images, kvs
+    from ofmhelpers.integrations.downloaders.models import DownloadResult
 
     walled = "content isn't available to everyone"
     monkeypatch.setattr(

@@ -4,7 +4,7 @@ for it first (a reel download pool did: two threads raced on one temp file,
 
 from concurrent.futures import ThreadPoolExecutor
 
-from ofmhelpers.utils import fake_media
+from ofmhelpers.media import fake_media
 
 
 def test_many_first_callers_get_the_same_playable_mp4(monkeypatch, tmp_path):

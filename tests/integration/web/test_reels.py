@@ -18,33 +18,33 @@ import requests
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
-from ofmhelpers.instagram import (
-    InstagramError,
-    InstagramRateLimitedError,
-    InstagramUnavailableError,
-    ProfileNotFoundError,
-    ProfilePrivateError,
-)
-from ofmhelpers.instagram.models import (
-    Profile,
-    ProfileReels,
-    Reel,
-    ReelMedia,
-    ReelStat,
-)
-from ofmhelpers.utils.proxy_pool import ProxyPool
-from ofmhelpers.web import reel_watch
-from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.downloads import reels
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.schemas import FeedItem, Leaderboard, WatchedProfile, WatchForm
-from ofmhelpers.web.stores.watched_profiles import (
+from ofmhelpers.db.stores.watched_profiles import (
     claim_due,
     get_watched,
     list_groups,
     list_watched,
     watch,
 )
+from ofmhelpers.features.reels import watch as reel_watch
+from ofmhelpers.integrations.instagram import (
+    InstagramError,
+    InstagramRateLimitedError,
+    InstagramUnavailableError,
+    ProfileNotFoundError,
+    ProfilePrivateError,
+)
+from ofmhelpers.integrations.instagram.models import (
+    Profile,
+    ProfileReels,
+    Reel,
+    ReelMedia,
+    ReelStat,
+)
+from ofmhelpers.schemas import FeedItem, Leaderboard, WatchedProfile, WatchForm
+from ofmhelpers.utils.proxy_pool import ProxyPool
+from ofmhelpers.web.main import app
+from ofmhelpers.web.routers.downloads import reels
+from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 CDN = "https://scontent.cdninstagram.com/v/{}.mp4"
 
@@ -656,8 +656,8 @@ def test_scan_stats_cover_every_reel_of_the_window():
 def test_every_scan_appends_its_numbers_to_the_history(monkeypatch):
     from sqlalchemy import select
 
-    from ofmhelpers.web.db.models import ProfileScanStatRow
-    from ofmhelpers.web.db.session import session_scope
+    from ofmhelpers.db.models import ProfileScanStatRow
+    from ofmhelpers.db.session import session_scope
 
     monkeypatch.setattr(
         reel_watch,
@@ -1005,7 +1005,7 @@ def _jpeg(width: int = 1080, height: int = 1920) -> bytes:
 def cdn(monkeypatch, tmp_path):
     """Instagram's CDN for covers: the URLs asked, answering a full-size
     JPEG (or `status`). Previews kept under this test's own uploads root."""
-    from ofmhelpers.web import reel_thumbs
+    from ofmhelpers.features.reels import thumbs as reel_thumbs
 
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads-root"))
     asked: list[str] = []

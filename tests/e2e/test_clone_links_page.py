@@ -16,11 +16,11 @@ from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import Locator, Request, Response, expect
 from sqlalchemy import create_engine, text
 
-from ofmhelpers.aigenproviders.kaiai.fake import FAKE_KEY as KIE_FAKE_KEY
-from ofmhelpers.gdrive.fake import FakeDrive
-from ofmhelpers.web.clone_links.links import NOT_A_VIDEO_SITE
-from ofmhelpers.web.clone_links.preview import CANNOT_OPEN
-from ofmhelpers.web.clone_links.review import NOT_CONNECTED
+from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
+from ofmhelpers.features.clone_links.preview import CANNOT_OPEN
+from ofmhelpers.features.clone_links.review import NOT_CONNECTED
+from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_FAKE_KEY
+from ofmhelpers.integrations.gdrive.fake import FakeDrive
 
 pytestmark = pytest.mark.e2e
 

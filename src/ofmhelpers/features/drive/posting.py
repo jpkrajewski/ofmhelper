@@ -12,8 +12,6 @@ from it (drive_folders.py). While the window is open every page shows
 window's edges on a page left open).
 """
 
-from __future__ import annotations
-
 import datetime
 
 from pydantic import BaseModel

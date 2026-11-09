@@ -19,15 +19,13 @@ it share one Drive across processes. `trash`, `delete`, `add_file`,
 `refuse_sign_in` stand in for what a person (or an outage) does in Drive.
 """
 
-from __future__ import annotations
-
 import fcntl
 import io
 import threading
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+lazy from collections.abc import Iterator
 
 from PIL import Image
 from pydantic import BaseModel, Field
@@ -45,9 +43,6 @@ from ofmhelpers.integrations.gdrive.models import (
     DriveFolder,
     DriveStorage,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 FAKE_BOT_EMAIL = "drive-bot@fake.iam.gserviceaccount.com"
 DEFAULT_OWNER = "owner@example.com"

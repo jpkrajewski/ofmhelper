@@ -1,18 +1,14 @@
 """Each report's runs (`report_runs`), one per day: the claim that it went out, when,
 and the counters it saw. Not cached: read once a minute by one sweep."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
+lazy from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.db.models import ReportRunRow
 from ofmhelpers.db.session import session_scope
-
-if TYPE_CHECKING:
-    from datetime import date
 
 
 class ReportRunRepository:

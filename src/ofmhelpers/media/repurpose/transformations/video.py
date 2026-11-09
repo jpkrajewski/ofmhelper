@@ -36,7 +36,6 @@ from typing import Annotated, Self
 from pydantic import BaseModel, StringConstraints
 
 from ofmhelpers.media.repurpose.extras.snapchat import render as render_snapchat
-from ofmhelpers.media.repurpose.probe import Source
 from ofmhelpers.media.repurpose.transformations.adjust import (
     AdjustDraws,
     AdjustSettings,
@@ -45,6 +44,7 @@ from ofmhelpers.media.repurpose.transformations.handheld import _WARP_EPS, Handh
 from ofmhelpers.media.repurpose.transformations.patterns import Pattern
 from ofmhelpers.media.repurpose.transformations.patterns import write as write_pattern
 from ofmhelpers.media.repurpose.values import Value, chance, draw, draw_int, even, pick
+lazy from ofmhelpers.media.repurpose.probe import Source
 
 # Kept after every cut, at least: the cuts never eat the clip.
 _MIN_KEPT_SHARE = 0.5
@@ -107,7 +107,7 @@ class VideoSettings(BaseModel, frozen=True):
     # CapCut's Adjust panel, in its slider units.
     adjust: AdjustSettings | None = None
 
-    def merged(self, extra: "VideoSettings | None") -> "VideoSettings":
+    def merged(self, extra: VideoSettings | None) -> VideoSettings:
         """These settings with `extra`'s set knobs on top."""
         if extra is None:
             return self

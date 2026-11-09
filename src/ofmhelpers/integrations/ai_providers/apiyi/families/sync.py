@@ -26,8 +26,8 @@ from ofmhelpers.integrations.ai_providers.apiyi.families import Family
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
 

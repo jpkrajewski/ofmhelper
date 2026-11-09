@@ -98,7 +98,7 @@ class YtDlpInfo(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     type: str | None = Field(default=None, alias="_type")
-    entries: list["YtDlpInfo | None"] | None = None
+    entries: list[YtDlpInfo | None] | None = None
     requested_downloads: list[RequestedDownload] = []
     filepath: str | None = None
     # What a look without downloading reads (`generic.video_info`). Some
@@ -117,7 +117,7 @@ class YtDlpInfo(BaseModel):
         ]
         return next((f.url for f in streams if f.url and f.vcodec != "none"), None)
 
-    def first_video(self) -> "YtDlpInfo | None":
+    def first_video(self) -> YtDlpInfo | None:
         """The entry that is a video: itself, or a playlist's first (a
         carousel post's first video)."""
         entries = self.entries if self.type == "playlist" else [self]

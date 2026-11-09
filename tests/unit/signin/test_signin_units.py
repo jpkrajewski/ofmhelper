@@ -9,10 +9,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
-from ofmhelpers.signin import SignInError
-from ofmhelpers.signin.apple import client_secret
-from ofmhelpers.signin.base import checked, claims
-from ofmhelpers.signin.passwords import (
+from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.signin.apple import client_secret
+from ofmhelpers.integrations.signin.base import checked, claims
+from ofmhelpers.integrations.signin.passwords import (
     hash_password,
     link_hash,
     new_link_token,
@@ -111,7 +111,7 @@ def test_at_most_the_configured_number_of_hashes_run_at_once(monkeypatch):
     import time
     from concurrent.futures import ThreadPoolExecutor
 
-    from ofmhelpers.signin import passwords
+    from ofmhelpers.integrations.signin import passwords
 
     monkeypatch.setenv("OFM_PASSWORD_HASH_CONCURRENCY", "2")
     passwords._slots.cache_clear()

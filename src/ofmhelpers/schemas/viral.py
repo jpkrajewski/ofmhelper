@@ -55,7 +55,7 @@ class ViralSearch(BaseModel):
         return error_reason(self.error)
 
     @classmethod
-    def of(cls, job: Job, files: list[AssetCard]) -> "ViralSearch":
+    def of(cls, job: Job, files: list[AssetCard]) -> ViralSearch:
         """`job` with `files` (its result's asset cards, in result order)."""
         reels = [
             ViralReel(file=file, **stored.model_dump(include=_COUNTS))

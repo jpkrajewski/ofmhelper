@@ -9,25 +9,20 @@ took back (a message it does not know: 400, like Telegram). A text over 4096 UTF
 units is refused like Telegram refuses it.
 """
 
-from __future__ import annotations
-
 import json
 import threading
 import time
 from functools import lru_cache
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlsplit
+lazy from collections.abc import Mapping
 
 from pydantic import BaseModel
+lazy import requests
 
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
 from ofmhelpers.utils.outbound import FakeHandler, FakeReply
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    import requests
 
 HOST = "api.telegram.org"
 TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"  # noqa: S105 -- a fake's

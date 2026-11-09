@@ -3,16 +3,11 @@ shows the profile's reels most played first, each with Download, all of
 them as one zip (Apify faked: apify/fake.py serves the Instagram fake's
 sheep_love33, 8 reels, the most played 3M)."""
 
-from __future__ import annotations
-
 import re
-from typing import TYPE_CHECKING
 
 import pytest
 from playwright.sync_api import expect
-
-if TYPE_CHECKING:
-    from e2e_session import Session
+lazy from e2e_session import Session
 
 pytestmark = pytest.mark.e2e
 

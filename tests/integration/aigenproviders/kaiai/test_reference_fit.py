@@ -10,8 +10,8 @@ import pytest
 from kie_http_fake import kie_http, response
 from PIL import Image
 
-from ofmhelpers.aigenproviders.kaiai.client import KieAIClient
-from ofmhelpers.utils.image_fit import fit_image, fits
+from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient
+from ofmhelpers.media.image_fit import fit_image, fits
 
 
 @pytest.fixture

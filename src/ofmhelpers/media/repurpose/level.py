@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run_log
 from ofmhelpers.media.repurpose.command import input_args
-from ofmhelpers.media.repurpose.transformations.video import VideoTransformer
+lazy from ofmhelpers.media.repurpose.transformations.video import VideoTransformer
 
 _MEAN_VOLUME = re.compile(r"mean_volume: (-?[\d.]+) dB")
 # The make-up gain stays under this (dB); the limiter catches the peaks.

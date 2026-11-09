@@ -51,7 +51,6 @@ from ofmhelpers.integrations.ai_providers.higgsfield.models import (
     HiggsfieldRequest,
     HiggsfieldSubmitted,
 )
-from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 from ofmhelpers.integrations.ai_providers.uploads import (
     COPYABLE_SUFFIXES,
     memoized,
@@ -61,6 +60,7 @@ from ofmhelpers.integrations.ai_providers.uploads import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.video_mp4 import CONVERTIBLE_SUFFIXES
+lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
 

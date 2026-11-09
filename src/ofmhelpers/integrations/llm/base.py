@@ -19,8 +19,6 @@ rate limits and outages are retried, never past the caller's deadline
 only `_ask`, one attempt within the timeout it is given.
 """
 
-from __future__ import annotations
-
 import importlib
 import pkgutil
 import subprocess
@@ -29,7 +27,8 @@ import time
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -52,9 +51,6 @@ from ofmhelpers.integrations.llm.models import (
     Usage,
 )
 from ofmhelpers.log import get_logger
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 logger = get_logger(__name__)
 

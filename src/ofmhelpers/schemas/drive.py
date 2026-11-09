@@ -108,7 +108,7 @@ class StoredFolder(BaseModel):
     # The root it was made in (the owner's `drive_root_id` then).
     root_folder_id: str = ""
     # The folder's last read, and when (/drive opens with it).
-    scan: "AccountScan | None" = None
+    scan: AccountScan | None = None
     scanned_at: float | None = None
 
 

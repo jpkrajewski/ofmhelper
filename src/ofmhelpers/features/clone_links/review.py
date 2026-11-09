@@ -22,12 +22,10 @@ done run whose review never started gets one -- each a bounded number of
 times (`settings.clone_links.review_attempts`).
 """
 
-from __future__ import annotations
-
 import mimetypes
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+lazy from collections.abc import Callable
 
 import logfire
 from rq.timeouts import JobTimeoutException
@@ -47,13 +45,9 @@ from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.clone_ai_checks import CHECK_FAILED, ReviewReason, ReviewStatus
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
-    from ofmhelpers.integrations.gdrive import DriveApi, DriveFile
-    from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
+lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
+lazy from ofmhelpers.integrations.gdrive import DriveApi, DriveFile
+lazy from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
 
 logger = get_logger(__name__)
 
