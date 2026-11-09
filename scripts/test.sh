@@ -77,6 +77,8 @@ echo "test.sh: pytest exit $status in $(( $(date +%s) - start ))s" | tee -a "$ru
 # A plain copy, not a symlink: Windows hosts do not follow WSL symlinks.
 rm -rf reports/latest
 cp -r "$run_dir" reports/latest
+# The last 10 runs: 1030 folders had piled up, in the way of every file watcher.
+find reports -maxdepth 1 -type d -name '20*' | sort -r | tail -n +11 | xargs -r rm -rf
 
 if [[ -n "${store_durations:-}" && "$status" -eq 0 ]]; then
     "${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/test_durations.py \
