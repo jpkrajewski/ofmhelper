@@ -127,6 +127,8 @@ services:
       target: test
     profiles:
       - test
+    # Leaves the dev PC (6 logical cores) 2 for itself, ffmpeg and Chromium included.
+    cpus: 4.0
     working_dir: /app
     command: ["uv", "run", "--frozen", "pytest", "-n", "auto", "--maxprocesses=8", "--dist", "loadgroup"]
     dns: *public-dns

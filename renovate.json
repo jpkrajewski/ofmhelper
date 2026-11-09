@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Dependency bump PRs into dev (never main: merging main deploys). One click to merge; CI on the PR is the gate.",
-  "extends": ["config:recommended", ":dependencyDashboard"],
+  "extends": ["config:recommended", ":disableDependencyDashboard"],
   "baseBranchPatterns": ["dev"],
   "timezone": "Europe/Warsaw",
   "schedule": ["* 0-5 * * 1"],
@@ -55,6 +55,11 @@
       "schedule": ["* 0-5 * * *"],
       "minimumReleaseAge": null,
       "ignoreUnstable": false
+    },
+    {
+      "description": "yt-dlp nightlies: uv's plain --upgrade-package stays on the stable release (2026-11-09: PR said 2026.11.4.232659.dev0, the lock got 2026.10.26), so the >= bound in pyproject.toml has to move.",
+      "matchPackageNames": ["yt-dlp"],
+      "rangeStrategy": "bump"
     },
     {
       "description": "Postgres/Redis majors change the on-disk format of prod data (dump/restore): never as a bump PR.",

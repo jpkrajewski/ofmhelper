@@ -1165,7 +1165,7 @@ requires-dist = [
     { name = "rq-dashboard", specifier = ">=0.9.0" },
     { name = "sqlalchemy", specifier = ">=2.0.52,<2.1" },
     { name = "uvicorn", specifier = ">=0.54.0" },
-    { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.10.21.202512.dev0" },
+    { name = "yt-dlp", extras = ["curl-cffi"], specifier = ">=2026.11.4.232659.dev0" },
     { name = "yt-dlp-ejs", specifier = ">=0.8.0" },
 ]
 
@@ -2408,11 +2408,11 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.10.26"
+version = "2026.11.4.232659.dev0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/83/31/4be3987022a6244550ab6a3afe45ad10ac10b5e5ab8874bd8eecc7f8b937/yt_dlp-2026.10.26.tar.gz", hash = "sha256:abe5c6b94c3b2f0560500add1c42e0a97641752743a5b65588ac2007a6e23eb6", size = 3048880, upload-time = "2026-10-26T22:25:26.931Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/b8/619de39deebbe9b5f711e23a2a2c774bea47b829b4cfbac4c0395834da71/yt_dlp-2026.11.4.232659.dev0.tar.gz", hash = "sha256:b3185c6c5343a072fb181ebe127459f4bef18c7865e543aeb8ff4bd245e9581b", size = 3049519, upload-time = "2026-11-04T23:31:50.252Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/3d/16ea7d5638cf585991f2c5705e8083688dde633d32d0871f2404e0f4d827/yt_dlp-2026.10.26-py3-none-any.whl", hash = "sha256:a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae", size = 3186201, upload-time = "2026-10-26T22:25:24.877Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/64/ce238169007852276d6dd965d709a974c0d0c6c4e846d70eb3dffbc5646a/yt_dlp-2026.11.4.232659.dev0-py3-none-any.whl", hash = "sha256:8623aa358f20d513dc5ae4bcf2cbeea229a7b84b59c9f4e0d10f8fb1a6feba61", size = 3186452, upload-time = "2026-11-04T23:31:47.641Z" },
 ]
 
 [package.optional-dependencies]

@@ -31,7 +31,9 @@ cd "$(dirname "$0")/.." || exit 1
 compose=(docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile test)
 # Parallel, one test database per xdist worker; every e2e test goes to one
 # worker (xdist_group "e2e", tests/conftest.py), which starts the one app.
-parallel=(-n auto --maxprocesses=8 --dist loadgroup)
+# At most 4: 6 logical cores on the dev PC, and it has to stay usable (2026-11-09:
+# 6 workers + ffmpeg + another project's tests: 24 min instead of 7, PC hanging).
+parallel=(-n auto --maxprocesses=4 --dist loadgroup)
 
 case "${1:-}" in
     "") args=("${parallel[@]}") ;;
