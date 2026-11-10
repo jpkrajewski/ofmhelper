@@ -567,8 +567,10 @@ def test_the_posting_window_follows_its_settings(monkeypatch):
 
 def test_every_page_carries_the_posting_window_hidden(fake_externals):
     client = TestClient(app)
-    sign_in_agency(client)
     with time_machine.travel(_utc("2026-12-01T20:00:00+00:00"), tick=False):
+        # Signed in at the travelled time: a session signed today is past
+        # its 5 h max age there, and /home sends a stale one to /login.
+        sign_in_agency(client)
         page = client.get("/home").text
     start = int(_utc("2026-12-01T18:45:00+00:00").timestamp())
     end = int(_utc("2026-12-02T00:45:00+00:00").timestamp())

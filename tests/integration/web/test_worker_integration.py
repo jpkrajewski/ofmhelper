@@ -14,6 +14,7 @@ it works on Windows too) and returns once the queue is drained.
 import pytest
 import worker_tasks
 from rq import SimpleWorker, Worker
+from rq.job import Job
 
 from ofmhelpers.cache import (
     QueueName,
@@ -106,8 +107,8 @@ def test_a_clone_links_run_waits_and_runs_on_its_own_queue():
 
 def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
     """Review #57: rq's dequeue BLMOVEs the job into `<queue>:intermediate`
-    and only the work horse sets `current_job` later. In between it is in
-    neither the queue nor a worker, and a sweep failed it as cut off."""
+    before any worker records it as running. In between it is in neither
+    the queue nor a worker, and a sweep failed it as cut off."""
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
     default_id, _ = _queue_run(QueueName.DEFAULT)
     links_id, _ = _queue_run(QueueName.CLONE_LINKS)
@@ -128,7 +129,9 @@ def test_a_job_a_live_worker_runs_counts():
     get_redis().lrem(queue.key, 1, rq_id)  # taken off every list
     worker = Worker([queue], connection=get_redis())
     worker.register_birth()
-    worker.set_current_job_id(rq_id)
+    # What rq 3.0's worker does before it forks the horse: the run, recorded
+    # under the worker's name, which `Worker.all()` reads back.
+    worker.prepare_execution(Job.fetch(rq_id, connection=get_redis()))
 
     assert active_job_ids() == {job_id}
 

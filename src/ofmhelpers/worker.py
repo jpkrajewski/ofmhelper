@@ -19,6 +19,7 @@ import logfire
 from rq import Worker
 from rq.worker_pool import WorkerPool
 lazy from rq import Queue
+lazy from rq.executions import Execution
 lazy from rq.job import Job
 
 from ofmhelpers.cache import QueueJob, QueueName, get_redis
@@ -49,14 +50,14 @@ class ConfiguredWorker(Worker):
         configure_logging()
         return super().work(*args, **kwargs)
 
-    def perform_job(self, job: Job, queue: Queue) -> bool:
+    def perform_job(self, job: Job, queue: Queue, execution: Execution) -> bool:
         """Runs in the forked work horse, which rq ends with `os._exit` --
         no atexit, so the job's buffered spans and logs are sent here or
-        never."""
+        never. `execution`: rq's record of this one run, passed on."""
         taken = QueueJob.taken(job, queue)
         try:
             with logfire.span("rq {func}", **taken.model_dump(mode="json")) as span:
-                performed = super().perform_job(job, queue)
+                performed = super().perform_job(job, queue, execution)
                 if not performed:
                     span.set_level("error")
                 return performed
@@ -69,7 +70,7 @@ _LAZY_HEAVY = ("google.genai", "googleapiclient.discovery", "numpy", "yt_dlp")
 
 def _preload_jobs() -> None:
     """Every job's code, imported once in the pool's parent: its workers and
-    their work horses are forks of it (rq 2.10 `ForkProcess`) and start with
+    their work horses are forks of it (rq 3.0 `ForkProcess`) and start with
     it. Without it each horse imported the whole app itself when RQ looked up
     its function (`ofmhelpers.web.routers...`): ~4 s before every job's work
     started, on every queue, prod and dev (Logfire 2026-11-07: `rq {func}`

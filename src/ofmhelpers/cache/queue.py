@@ -183,8 +183,9 @@ def active_job_ids() -> set[str] | None:
 
     Read in the order a job moves, so one queued or starting is never
     missed: each queue's list, then its intermediate list (a worker's
-    dequeue BLMOVEs the job there; its work horse later sets `current_job`
-    and takes the job off that list in one MULTI), then the workers. A job a
+    dequeue BLMOVEs the job there; the worker registers the job's execution
+    (rq 3.0 `prepare_execution`, read back by `get_current_job_id`) before
+    its work horse takes the job off that list), then the workers. A job a
     worker died holding in the intermediate list counts until rq's own
     cleanup fails it (about a minute)."""
     if not settings.infra.rq_async:

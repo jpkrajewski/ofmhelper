@@ -138,7 +138,7 @@ class WebSettings(BaseSettings):
     #                                Google OAuth consent screen links them and
     #                                its reviewers fetch them signed out
     public_paths: set[str] = Field(
-        default={"/login", "/health", "/home", "/", "/apply", "/privacy", "/terms"},
+        default={"/login", "/health", "/", "/apply", "/privacy", "/terms"},
         validation_alias="OFM_PUBLIC_PATHS",
     )
     # The contact the legal pages show (empty: Telegram only).

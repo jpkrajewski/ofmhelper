@@ -110,14 +110,14 @@ def test_a_work_horse_flushes_its_spans_before_it_exits(monkeypatch):
     )
     monkeypatch.setattr(QueueJob, "taken", lambda job, queue: taken)
 
-    def failing(self, job, queue):
+    def failing(self, job, queue, execution):
         msg = "job blew up"
         raise RuntimeError(msg)
 
     monkeypatch.setattr(Worker, "perform_job", failing)
     with pytest.raises(RuntimeError):
         worker.ConfiguredWorker.perform_job(
-            object.__new__(worker.ConfiguredWorker), None, None
+            object.__new__(worker.ConfiguredWorker), None, None, None
         )
     assert flushed == [True]
 

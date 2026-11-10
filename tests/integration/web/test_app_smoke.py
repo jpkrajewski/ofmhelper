@@ -22,6 +22,7 @@ from ofmhelpers.web.main import app
 # "/" is the public ReachModels landing page (with the application form), not
 # an internal page -- see settings.web.public_paths.
 PROTECTED_PAGES = [
+    "/home",
     "/generate",
     "/download-assets",
     "/character-sheet",
