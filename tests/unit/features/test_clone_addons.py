@@ -31,6 +31,12 @@ ASKED = [
     ("NO TATOOS, NO EARINGS", "jewelry"),
     ("remove gold chain from his neck", "jewelry"),
     ("SHOWING FACE", "face"),
+    # 2026-11-10: 10 clone runs asked for body hair.
+    ("make his body as hairy as possible", "hairy"),
+    ("NO TATTOS, remove text overlay, make him as hairy as possible", "hairy"),
+    ("no tattos, hairy chest, iphone quality", "hairy"),
+    ("very very hairy chest and stomach", "hairy"),
+    ("leave the body hair of second picture", "hairy"),
 ]
 
 # Prompts that ask for none of them ("wearing" is not "earing").
@@ -39,6 +45,8 @@ PLAIN = [
     "he is wearing cowboy hat",
     "replace the back ground with @image2",
     "Replace the GUY IN BLACK TANK TOP in @Video1 with subject from @Image1",
+    "Replace the left man with 40 years old man with gray hair handsome",
+    "Replace the main guy with dark hair in @Video1 with subject from @Image1",
 ]
 
 

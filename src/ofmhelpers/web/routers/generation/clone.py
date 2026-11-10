@@ -50,6 +50,7 @@ from ofmhelpers.features.clone.targets import (
 )
 from ofmhelpers.features.clone.targets import clone_values as _clone_values
 from ofmhelpers.features.drive.uploads import queue_uploads, remove_upload
+from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
 from ofmhelpers.integrations.gdrive import DriveError
 from ofmhelpers.media.exports import ExportOptions, exports
 from ofmhelpers.media.video_probe import duration_s
@@ -203,7 +204,7 @@ def form(
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(actor),
         providers=ProviderChoice.all(list(CLONE_TARGETS)),
-        selected_provider=settings.aigen.default_provider,
+        selected_provider=start_provider(actor, CLONE_TASKS, list(CLONE_TARGETS)),
         api_keys=api_keys,
         pricing={name: price.model_dump() for name, price in clone_pricing().items()},
         default_prompt=DEFAULT_PROMPT,

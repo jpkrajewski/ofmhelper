@@ -281,6 +281,9 @@
         const exactFrames = "requestVideoFrameCallback" in player;
         let frameCallback = 0;
         const onFrame = (_now, meta) => {
+            // Every frame, not timeupdate's ~250 ms: at 2x that ran half a
+            // second past the end.
+            if (!player.paused && meta.mediaTime >= b()) player.pause();
             showAt(meta.mediaTime);
             frameCallback = player.requestVideoFrameCallback(onFrame);
         };
@@ -636,8 +639,12 @@
             player.src = root.dataset.original;
             watchFrames();
         });
+        // A new src stops the player with no "pause" event: the button
+        // showed Pause over a still picture (prod 2026-11-10).
+        player.addEventListener("emptied", () => playing(false));
         function swapIn(prepared) {
             const at = player.currentTime;
+            const wasPlaying = !player.paused;
             player.preload = "auto";
             player.src = prepared.proxy_url;
             player.defaultPlaybackRate = speed;
@@ -646,6 +653,7 @@
                 "loadedmetadata",
                 () => {
                     player.currentTime = at;
+                    if (wasPlaying) player.play().catch(() => {});
                 },
                 { once: true }
             );

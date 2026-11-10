@@ -78,6 +78,7 @@ from ofmhelpers.features.clone_links.preview import (
 from ofmhelpers.features.clone_links.review import NOT_CONNECTED
 from ofmhelpers.features.clone_links.stop import stop_batch
 from ofmhelpers.features.drive.space import drive_space
+from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import exports
@@ -436,7 +437,7 @@ def form(
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(actor),
         providers=ProviderChoice.all(list(clone_targets())),
-        selected_provider=settings.aigen.default_provider,
+        selected_provider=start_provider(actor, CLONE_TASKS, list(clone_targets())),
         api_keys=api_keys,
         default_prompt=DEFAULT_PROMPT,
         default_resolution=DEFAULT_RESOLUTION,

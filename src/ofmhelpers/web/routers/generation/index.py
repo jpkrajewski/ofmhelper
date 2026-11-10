@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.schemas import ModelChoice, ProviderChoice
 from ofmhelpers.web.dependencies import Actor, ApiKeys
 from ofmhelpers.web.gallery import Gallery, GalleryParams
@@ -31,7 +32,9 @@ def form(request: Request, actor: Actor, api_keys: ApiKeys) -> Response:
         request,
         "generate_form.html",
         providers=providers,
-        selected_provider=settings.aigen.default_provider,
+        selected_provider=start_provider(
+            actor, frozenset({"ai"}), [p.name for p in providers]
+        ),
         models=[m.model_dump() for m in ModelChoice.all()],
         api_keys=api_keys,
         gallery=[task_card(j) for j in first.jobs],
