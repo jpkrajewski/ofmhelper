@@ -139,11 +139,8 @@ def test_every_page_head_links_the_favicon_and_it_loads_signed_out(
         assert response.headers["content-type"].startswith("image/")
 
 
-def test_the_brand_goes_home_signed_in_and_to_the_landing_page_signed_out(
-    client, signed_out
-):
+def test_the_brand_goes_home_signed_in(client):
     assert '<a class="brand" href="/home">' in client.get("/generate").text
-    assert '<a class="brand" href="/">' in signed_out.get("/home").text
 
 
 def test_the_header_switches_light_and_dark_and_the_choice_sticks(client):

@@ -7,6 +7,7 @@ parent never reaches them. ConfiguredWorker is what fixes that, and it only
 takes effect if the pool is actually given it.
 """
 
+import inspect
 import logging
 import sys
 from typing import ClassVar
@@ -22,6 +23,14 @@ from ofmhelpers.worker import ConfiguredWorker
 def test_configured_worker_is_a_real_rq_worker():
     """rq's WorkerPool runs it, so rq must accept it as a Worker."""
     assert issubclass(ConfiguredWorker, Worker)
+
+
+def test_perform_job_takes_what_rq_passes_it():
+    """rq's horse calls `perform_job` with rq's own parameters; an override
+    left on an older signature fails every job (rq 3.0 added `execution`)."""
+    ours = inspect.signature(ConfiguredWorker.perform_job).parameters
+    rqs = inspect.signature(Worker.perform_job).parameters
+    assert list(ours) == list(rqs)
 
 
 def test_work_configures_logging_in_its_own_process(monkeypatch):

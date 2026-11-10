@@ -1,18 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Dependency bump PRs into dev (never main: merging main deploys). One click to merge; CI on the PR is the gate.",
+  "description": "Dependency bump PRs into dev (never main: merging main deploys). One click to merge; CI on the PR is the gate. Monthly, exact pins: a PR installs exactly the versions it names (2026-11-09: open >= ranges let uv lock rq 3.0.0 into a PR titled rq 2.12).",
   "extends": ["config:recommended", ":disableDependencyDashboard"],
   "baseBranchPatterns": ["dev"],
   "timezone": "Europe/Warsaw",
-  "schedule": ["* 0-5 * * 1"],
+  "schedule": ["* 0-5 1 * *"],
   "semanticCommits": "enabled",
   "labels": ["deps"],
-  "rangeStrategy": "update-lockfile",
+  "rangeStrategy": "pin",
   "minimumReleaseAge": "14 days",
   "pre-commit": { "enabled": true },
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["* 0-5 * * 1"]
+    "schedule": ["* 0-5 1 * *"]
   },
   "vulnerabilityAlerts": {
     "enabled": true,
@@ -22,18 +22,18 @@
   },
   "packageRules": [
     {
-      "description": "Weekly: every non-major Python package in one PR.",
+      "description": "Monthly: every non-major Python package in one PR.",
       "matchManagers": ["pep621"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "python deps"
     },
     {
-      "description": "Weekly: GitHub Actions in one PR (tests/unit/scripts/test_workflows.py keeps the Node 24 / pinned-runner rules).",
+      "description": "Monthly: GitHub Actions in one PR (tests/unit/scripts/test_workflows.py keeps the Node 24 / pinned-runner rules).",
       "matchManagers": ["github-actions"],
       "groupName": "github actions"
     },
     {
-      "description": "Weekly: base and service images in one PR.",
+      "description": "Monthly: base and service images in one PR.",
       "matchManagers": ["dockerfile", "docker-compose"],
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "groupName": "docker images"
@@ -66,6 +66,17 @@
       "matchPackageNames": ["postgres", "redis"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "SQLAlchemy stays below 2.1 until opentelemetry-instrumentation-sqlalchemy supports it (0.66b2: sqlalchemy<2.1.0): logfire.instrument_sqlalchemy() raises at startup on 2.1 (PR #70, 2026-11-09). The <2.1 in pyproject.toml alone does not stop Renovate: it rewrites the range.",
+      "matchPackageNames": ["sqlalchemy"],
+      "allowedVersions": "<2.1"
+    },
+    {
+      "description": "requires-python stays a range (>=3.15): the pep621 manager reads it as the `python` dependency, and the global pin would make it ==3.15.x while the image tag python:3.15-slim rolls to the next patch.",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["requires-python"],
+      "rangeStrategy": "widen"
     },
     {
       "description": "Python stays on 3.15 (prod image, mypy python_version, .python-version) until moved on purpose.",
