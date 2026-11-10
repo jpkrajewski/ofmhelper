@@ -70,6 +70,21 @@ the app is published on loopback only (`127.0.0.1:8000:8000` in
 `docker-compose.yml`) and reached through nginx. Never change it to
 `8000:8000`: that exposes the app to the internet whatever ufw says.
 
+### TCP: BBR
+
+AI providers fetch our hosted references (`/files/ai/...`) from far away:
+APIYI's Wan runs are fetched from Alibaba Beijing over a lossy route (China
+Telecom backbone, 20-60% loss at Beijing evening peak). Linux's default CUBIC
+slows to ~20 KB/s on that loss and Alibaba gives up after 60 s ("Failed to
+download"); BBR sends ~1 MB/s on the same path (measured 2026-11-10).
+
+```bash
+printf 'net.core.default_qdisc = fq\nnet.ipv4.tcp_congestion_control = bbr\n' \
+  | sudo tee /etc/sysctl.d/90-ofmhelpers-bbr.conf
+echo tcp_bbr | sudo tee /etc/modules-load.d/ofmhelpers-bbr.conf
+sudo sysctl -p /etc/sysctl.d/90-ofmhelpers-bbr.conf
+```
+
 ## 5. Docker
 
 ```bash
