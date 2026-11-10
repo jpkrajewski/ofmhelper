@@ -168,8 +168,6 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
         timeout=RESULT_TIMEOUT_MS
     )
 
-    va.goto("/generate")  # the provider's default model, its own prompt box
-    _swap_fields(va, lambda: va.page.select_option("#provider-select", "kie"))
     fields_asked: list[str] = []
 
     def slow_fields(route):
@@ -178,6 +176,10 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
         route.continue_()
 
     va.page.route("**/ai/fields?*", slow_fields)
+    # Opens on the last run's provider (fake, its fields asked once), then
+    # kie's default model with its own prompt box.
+    va.goto("/generate")
+    _swap_fields(va, lambda: va.page.select_option("#provider-select", "kie"))
 
     def recreate() -> None:
         va.page.locator(f"{card} .menu summary").click()
@@ -192,7 +194,7 @@ def test_recreate_fills_the_jobs_prompt_at_once_and_survives_click_spam(va: Sess
     expect(va.page.locator('#model-fields [name="delay"]')).to_be_visible()
     expect(va.page.locator('textarea[name="prompt"]')).to_have_value(prompt)
     assert va.page.input_value("#model-select") == "fake:image"
-    assert len(fields_asked) == 1
+    assert [u for u in fields_asked if "fake%3Aimage" in u] == fields_asked[:1]
     assert va.js_errors == []
 
 

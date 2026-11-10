@@ -343,6 +343,14 @@ def redone_links(task: str, actor: str, links: list[str], after: float) -> set[s
     return _repository().redone_links(task, actor, links, after)
 
 
+def last_param(tasks: set[str], actor: str, field: str, among: list[str]) -> str | None:
+    """Param `field` of `actor`'s newest job of `tasks` with one of the
+    values `among` (a provider the page offers), else None."""
+    return _repository().last_param(
+        tuple(sorted(tasks)), actor, field, tuple(sorted(among))
+    )
+
+
 def last_used_firsts(tasks: set[str], actor: str, field: str, limit: int) -> list[str]:
     """The first file of `actor`'s jobs' list param `field` (the subject of
     `reference_images`) in their jobs of `tasks`, last used first, one path

@@ -1,7 +1,8 @@
 """/clone's prompt add-ons: one-click endings for the prompt, from what the
 clone prompts on prod added by hand (393 runs, 2026-11-06: same clothes as
 the video 58, remove text overlay 55, no tattoos 41, clothes from @Image2 19,
-reflections/screens 10, jewelry/piercings 7, face visible 7). The ones a
+reflections/screens 10, jewelry/piercings 7, face visible 7; 2026-11-10: body
+hair 10, "make his body as hairy as possible"). The ones a
 re-run of the same video and image most often added (`check`: clothes 7,
 tattoos 4, jewelry 4, text overlay 3) are asked again in the Start dialog.
 

@@ -613,7 +613,8 @@ class AigenSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # The provider every generation page (/generate, /clone) starts on.
+    # A generation page's provider when the person has no run there to
+    # start from (features/generate/providers.py).
     default_provider: str = Field(
         default="higgsfield", validation_alias="OFM_DEFAULT_PROVIDER"
     )

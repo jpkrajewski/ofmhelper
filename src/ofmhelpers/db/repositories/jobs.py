@@ -335,6 +335,21 @@ class JobRepository(CachedRepository):
             return set(found)
 
     @cached
+    def last_param(
+        self, tasks: tuple[str, ...], actor: str, field: str, among: tuple[str, ...]
+    ) -> str | None:
+        """Param `field` of `actor`'s newest job of `tasks` whose value is
+        one of `among` (sorted tuples: stable cache key), else None."""
+        value = JobRow.params[field].astext
+        with session_scope() as s:
+            return s.execute(
+                select(value)
+                .where(JobRow.task.in_(tasks), JobRow.actor == actor, value.in_(among))
+                .order_by(JobRow.created_at.desc())
+                .limit(1)
+            ).scalar()
+
+    @cached
     def last_used_firsts(
         self, tasks: tuple[str, ...], actor: str, field: str, limit: int
     ) -> list[str]:

@@ -27,6 +27,7 @@ from ofmhelpers.features.clone_long import (
     rate,
     run_long_clone,
 )
+from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
 from ofmhelpers.schemas import Job, ProviderChoice, TaskCard
 from ofmhelpers.web.dependencies import Actor, ApiKeys, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
@@ -97,7 +98,7 @@ def page(
         hidden_count=gallery.hidden_count(actor),
         prefill_video=prefill,
         providers=ProviderChoice.all(list(TARGETS)),
-        selected_provider=settings.aigen.default_provider,
+        selected_provider=start_provider(actor, CLONE_TASKS, list(TARGETS)),
         api_keys=api_keys,
         rates={name: rate(name).model_dump() for name in TARGETS},
         max_piece_s=min(t.max_reference_s for t in TARGETS.values()),

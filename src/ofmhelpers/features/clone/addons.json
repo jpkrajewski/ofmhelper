@@ -27,6 +27,12 @@
     "pattern": "(clothes|outfit|skirt|hoodie)[^,]*@image2"
   },
   {
+    "key": "hairy",
+    "label": "Hairy body",
+    "text": "make his body as hairy as possible with thick chest and stomach hair",
+    "pattern": "hairy|body ?hairs?|chest ?hair|stomach ?hair"
+  },
+  {
     "key": "reflections",
     "label": "Replace reflections",
     "text": "also replace the subject in reflections and screens",

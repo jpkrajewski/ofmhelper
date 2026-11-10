@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import picture_presets
 from ofmhelpers.db.stores.jobs import start_job
+from ofmhelpers.features.generate.providers import start_provider
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS, file_thumb
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.integrations.ai_providers.spec import ModelSpec
@@ -258,7 +259,9 @@ def page(
         presets=presets,
         selected=selected,
         providers=ProviderChoice.all(list(PICTURE_TARGETS)),
-        selected_provider=default_provider(),
+        selected_provider=start_provider(
+            actor, frozenset({TASK}), list(PICTURE_TARGETS)
+        ),
         api_keys=api_keys,
         max_images={name: t.max_images for name, t in PICTURE_TARGETS.items()},
         preset_max_images=settings.pictures.preset_max_images,
