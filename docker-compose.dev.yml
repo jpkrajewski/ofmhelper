@@ -21,6 +21,12 @@
 #   - rq-dashboard, behind the `dev` profile so it stays off unless asked for.
 #   - `migrate` reading ./src and ./alembic, so `up -d` applies the working
 #     tree's migrations before the app starts.
+#   - OFM_ENV=development on every app service: the setting has no default
+#     (the server's .env says production), and set here it wins over a .env
+#     copied from the server.
+#   - nginx in front of the app on http://localhost:8080, with the site file
+#     the server uses (nginx/ofmhelpers.conf): body limit and forwarded
+#     headers behave on dev as they do on prod.
 
 # Docker Desktop's DNS proxy intermittently answers "no address" for names
 # that also have an IPv6 record (www.instagram.com, www.tiktok.com,
@@ -31,6 +37,9 @@
 x-dns: &public-dns
   - 1.1.1.1
   - 8.8.8.8
+
+x-dev-environment: &dev-environment
+  - OFM_ENV=development
 
 services:
   ofmhelpers:
@@ -46,6 +55,11 @@ services:
       - --reload
       - --reload-dir
       - /app/src
+      # As the image's CMD: nginx (below) is trusted for X-Forwarded-*.
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - 127.0.0.1,172.16.0.0/12
+    environment: *dev-environment
     dns: *public-dns
     volumes:
       # Merged with (not replacing) the base file's volume list.
@@ -56,6 +70,7 @@ services:
     # mid-job would leave the job row stuck at "running". Restart it by hand
     # after changing worker-side code.
     environment:
+      - OFM_ENV=development
       # 2 instead of the production 10: locally the pool is 10 idle Python
       # processes competing for the same laptop, and startup/restart is the
       # slow part of the dev loop. Bump if you need real concurrency here.
@@ -68,25 +83,54 @@ services:
 
   preview-worker:
     # Same as the worker: no reloader, restart it after changing preview code.
+    environment: *dev-environment
     dns: *public-dns
     volumes:
       - ./src:/app/src
 
   media-worker:
     # Same as the worker: no reloader, restart it after changing encode code.
+    environment: *dev-environment
     dns: *public-dns
     volumes:
       - ./src:/app/src
 
   edit-worker:
     # Same as the worker: no reloader, restart it after changing /edit code.
+    environment: *dev-environment
     dns: *public-dns
     volumes:
       - ./src:/app/src
 
+  sweeps:
+    # Same as the worker: no reloader, restart it after changing a sweep.
+    environment: *dev-environment
+    dns: *public-dns
+    volumes:
+      - ./src:/app/src
+
+  # The server's nginx (README "nginx + HTTPS"), here as a container with the
+  # same site file: http://localhost:8080 goes through it, :8000 straight to
+  # the app. The image is nginx.org's stable; the server has Ubuntu's package.
+  nginx:
+    image: nginx:1.28.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./nginx/ofmhelpers.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/upstream.dev.conf:/etc/nginx/conf.d/upstream.conf:ro
+    depends_on:
+      - ofmhelpers
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+
   migrate:
     # Migrates from the working tree: revision files and models without a
     # rebuild.
+    environment: *dev-environment
     dns: *public-dns
     volumes:
       - ./src:/app/src
@@ -120,6 +164,7 @@ services:
     command: ["uv", "run", "--frozen", "pytest", "-n", "auto", "--maxprocesses=8", "--dist", "loadgroup"]
     dns: *public-dns
     environment:
+      - OFM_ENV=development
       # Their own servers (below), never the dev database or Redis.
       - OFM_TEST_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres-test:5432/ofmhelpers_test
       - OFM_TEST_REDIS_URL=redis://redis-test:6379/1

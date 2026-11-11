@@ -38,9 +38,13 @@ from ofmhelpers.integrations.gdrive.base import (
 )
 from ofmhelpers.integrations.gdrive.models import (
     FOLDER_MIME,
+    DriveDownload,
     DriveFile,
     DriveFolder,
+    DriveListing,
     DriveStorage,
+    DriveThumb,
+    FolderItems,
 )
 from ofmhelpers.log import get_logger
 
@@ -73,7 +77,7 @@ class ReadOnlyDrive:
     ) -> list[DriveFile]:
         return self._inner.children(parent_id, folders_only=folders_only)
 
-    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+    def children_of(self, parent_ids: list[str]) -> DriveListing:
         return self._inner.children_of(parent_ids)
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
@@ -82,10 +86,10 @@ class ReadOnlyDrive:
     def file(self, file_id: str) -> DriveFile:
         return self._inner.file(file_id)
 
-    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
+    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._inner.thumbnail(item, px)
 
-    def download(self, file_id: str) -> tuple[bytes, str]:
+    def download(self, file_id: str) -> DriveDownload:
         return self._inner.download(file_id)
 
     def storage(self) -> DriveStorage:
@@ -373,7 +377,7 @@ class Drive:
         rows = self._list(query, _FILE_FIELDS, f"Listing folder {parent_id}")
         return [DriveFile.model_validate(row) for row in rows]
 
-    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+    def children_of(self, parent_ids: list[str]) -> DriveListing:
         """What is in each of several folders, newest first, trash left out:
         one listing per `_PARENTS_PER_QUERY` folders instead of one each.
         Every id must be a live folder (Drive 404s the whole query
@@ -392,7 +396,9 @@ class Drive:
                 for parent in item.parents:
                     if parent in found:
                         found[parent].append(item)
-        return found
+        return DriveListing(
+            folders=[FolderItems(folder_id=p, items=found[p]) for p in found]
+        )
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
         """The oldest folder of that name in the parent, so one made by
@@ -448,8 +454,8 @@ class Drive:
             raise FolderGoneError(msg)
         return DriveFile.model_validate(found)
 
-    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
-        """`item`'s preview image (bytes, content type), `px` on its
+    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
+        """`item`'s preview image and its content type, `px` on its
         longest side; None while Drive has none (a video just uploaded)."""
         if not item.thumbnail_link:
             return None
@@ -466,10 +472,13 @@ class Drive:
                 "drive: preview of %s answered %s", item.id, response.status_code
             )
             return None
-        return response.content, response.headers.get("Content-Type", "image/jpeg")
+        return DriveThumb(
+            content=response.content,
+            media_type=response.headers.get("Content-Type", "image/jpeg"),
+        )
 
-    def download(self, file_id: str) -> tuple[bytes, str]:
-        """A file's whole content (bytes, its Drive name); reels are MBs, so
+    def download(self, file_id: str) -> DriveDownload:
+        """A file's whole content and its Drive name; reels are MBs, so
         a long timeout. `file()` first: a missing/unshared id 404s there,
         and the name comes back with it."""
         item = self.file(file_id)
@@ -485,7 +494,7 @@ class Drive:
         if response.status_code != HTTPStatus.OK:
             msg = f"Download of {file_id} answered {response.status_code}"
             raise DriveError(msg)
-        return response.content, item.name
+        return DriveDownload(content=response.content, name=item.name)
 
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str

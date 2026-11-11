@@ -13,22 +13,17 @@ Restore brings it back. Delete removes it for good, with the logins no
 other phone has.
 """
 
-import datetime
 from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
-from ofmhelpers.db.encrypted import VaultError
-from ofmhelpers.db.stores import devices as store
-from ofmhelpers.features.accounts.removal import logins_leaving
-from ofmhelpers.features.accounts.tracker import track_login
+from ofmhelpers.features.phones import service
 from ofmhelpers.features.phones import workbook as phones_workbook
-from ofmhelpers.features.phones.catalog import catalog, find_model, services
-from ofmhelpers.features.phones.catalog.render import render as draw
+from ofmhelpers.features.phones.service import LoginAdded
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery, PhoneSort
+from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
 from ofmhelpers.web.dependencies import CurrentUser, OwnerId, Scope
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.templates_config import render
@@ -43,7 +38,7 @@ def _vault_reason() -> Iterator[None]:
     list page must never answer a person with raw JSON."""
     try:
         yield
-    except VaultError as exc:
+    except service.SecretsUnreadableError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
@@ -52,60 +47,42 @@ VAULT_REASON = [Depends(_vault_reason)]
 router = APIRouter(prefix="/phones", tags=["phones"])
 
 
+def _phone(device_id: int, scope: Scope) -> service.Phone:
+    return service.Phone(scope=scope, device_id=device_id)
+
+
+def _login(login_id: int, scope: Scope) -> service.SavedLogin:
+    return service.SavedLogin(scope=scope, login_id=login_id)
+
+
+# The signed-in person's phone in the path: not theirs or gone = 404.
+Phone = Annotated[service.Phone, Depends(_phone)]
+# Their saved login in the path.
+Login = Annotated[service.SavedLogin, Depends(_login)]
+
+
 class _Created(BaseModel):
     id: int
-
-
-class _LoginAdded(BaseModel):
-    id: int
-    # The account was already saved (on another phone): linked, not copied.
-    linked: bool
 
 
 class _Done(BaseModel):
     ok: bool = True
 
 
-def _found(ok: bool, what: str) -> _Done:
-    if not ok:
-        raise HTTPException(status_code=404, detail=f"{what} not found")
-    return _Done()
-
-
 @router.get("")
 def index(
     request: Request, query: Annotated[PhoneQuery, Query()], scope: Scope
 ) -> Response:
-    devices = store.list_devices(scope)
-    active = [d for d in devices if not d.retired]
-    shown = query.ordered([d for d in active if query.matches(d)])
-    return render(
-        request,
-        "phones.html",
-        devices=shown,
-        retired=query.ordered([d for d in devices if d.retired]),
-        archived=store.archived_logins(scope),
-        total=len(active),
-        logins=sum(len(d.logins) for d in active),
-        # The add/edit dialog suggests the people already holding a phone.
-        owners=sorted({d.owner for d in active if d.owner}, key=str.lower),
-        query=query,
-        sorts=PhoneSort,
-        default_sort=PhoneQuery().sort,
-        services=services(),
-        catalog=catalog(),
-    )
+    view = service.page_view(query, scope)
+    return render(request, "phones.html", query=query, **dict(view))
 
 
 @router.get("/drawing.svg")
 def drawing(model: str = "", color: str = "") -> Response:
     """The phone's back in its color, drawn from the catalog; a plain phone
     for an unknown model. Cached a day: it only changes with a deploy."""
-    found = find_model(model)
-    phone = found[1] if found else None
-    finish = catalog().color(phone, color) if phone else None
     return Response(
-        content=draw(phone, finish),
+        content=service.drawing(model, color),
         media_type="image/svg+xml",
         headers={"Cache-Control": "public, max-age=86400"},
     )
@@ -115,30 +92,26 @@ def drawing(model: str = "", color: str = "") -> Response:
 def export(scope: Scope, user: CurrentUser) -> Response:
     """Every active phone and its logins, in plaintext (see
     features/phones/workbook.py). Logged: who, and how many -- never a value."""
-    active = [d for d in store.export_devices(scope) if not d.retired]
-    logins = sum(len(d.logins) for d in active)
+    book = service.export(scope)
     logger.info(
         "Phones export by %s: %s phones, %s logins",
         user.email,
-        len(active),
-        logins,
+        book.phones,
+        book.logins,
     )
-    today = datetime.datetime.now(tz=datetime.UTC).date()
-    name = f"phones-{today.isoformat()}.xlsx"
+    disposition = f'attachment; filename="{book.name}"'
     return Response(
-        content=phones_workbook.build(active),
+        content=book.content,
         media_type=phones_workbook.MEDIA_TYPE,
-        headers={"Content-Disposition": f'attachment; filename="{name}"', **NO_STORE},
+        headers={"Content-Disposition": disposition, **NO_STORE},
     )
 
 
 @router.get("/logins/{login_id}/secret", dependencies=VAULT_REASON)
-def secret(login_id: int, scope: Scope, user: CurrentUser) -> Response:
+def secret(login_id: int, login: Login, user: CurrentUser) -> Response:
     """One login's password and backup codes, for Show / Copy / Edit.
     Logged: who and which login -- never the value."""
-    found = store.secrets(login_id, scope)
-    if found is None:
-        raise HTTPException(status_code=404, detail="Login not found")
+    found = login.secret()
     logger.info("Login %s revealed by %s", login_id, user.email)
     return Response(
         content=found.model_dump_json(),
@@ -147,80 +120,56 @@ def secret(login_id: int, scope: Scope, user: CurrentUser) -> Response:
     )
 
 
-@router.post("/add", dependencies=VAULT_REASON)
+@router.post("/add", status_code=201, dependencies=VAULT_REASON)
 def add(body: DeviceFields, owner_id: OwnerId) -> _Created:
-    return _Created(id=store.add_device(body, owner_id))
+    return _Created(id=service.add(body, owner_id))
 
 
 @router.post("/{device_id}", dependencies=VAULT_REASON)
-def edit(device_id: int, body: DeviceFields, scope: Scope) -> _Done:
-    return _found(store.update_device(device_id, body, scope), "Phone")
+def edit(body: DeviceFields, phone: Phone) -> _Done:
+    phone.edit(body)
+    return _Done()
 
 
 @router.post("/{device_id}/retire")
-def retire(device_id: int, scope: Scope) -> _Done:
-    return _found(store.retire_device(device_id, scope), "Phone")
+def retire(phone: Phone) -> _Done:
+    phone.retire()
+    return _Done()
 
 
 @router.post("/{device_id}/restore")
-def restore(device_id: int, scope: Scope) -> _Done:
-    return _found(store.restore_device(device_id, scope), "Phone")
+def restore(phone: Phone) -> _Done:
+    phone.restore()
+    return _Done()
 
 
 @router.post("/{device_id}/delete")
-def delete(device_id: int, scope: Scope) -> _Done:
+def delete(phone: Phone) -> _Done:
     """Its logins no other phone has leave /accounts and Drive too."""
-    logins_leaving(scope, device_id)
-    return _found(store.delete_device(device_id, scope), "Phone")
+    phone.delete()
+    return _Done()
 
 
-def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
-    """An Instagram (any tracked service's) login shows on its phone owner's
-    /accounts."""
-    owner = store.owner_of_login(login_id)
-    if owner is not None:
-        track_login(body.service, body.username, user_id=owner, revive=revive)
-
-
-@router.post("/{device_id}/logins", dependencies=VAULT_REASON)
-def add_login(device_id: int, body: LoginFields, scope: Scope) -> _LoginAdded:
-    added = store.add_login(device_id, body, scope)
-    if added is None:
-        raise HTTPException(status_code=404, detail="Phone not found")
-    _track(added[0], body, revive=True)
-    return _LoginAdded(id=added[0], linked=added[1])
+@router.post("/{device_id}/logins", status_code=201, dependencies=VAULT_REASON)
+def add_login(body: LoginFields, phone: Phone) -> LoginAdded:
+    return phone.add_login(body)
 
 
 @router.post("/logins/{login_id}", dependencies=VAULT_REASON)
-def edit_login(login_id: int, body: LoginFields, scope: Scope) -> _Done:
-    done = _found(store.update_login(login_id, body, scope), "Login")
-    # A renamed handle is tracked; an account removed by hand stays removed
-    # (editing a password is no reason to bring it back).
-    _track(login_id, body, revive=False)
-    return done
+def edit_login(body: LoginFields, login: Login) -> _Done:
+    login.edit(body)
+    return _Done()
 
 
 @router.post("/{device_id}/logins/{login_id}/delete")
-def remove_login(device_id: int, login_id: int, scope: Scope) -> _Done:
+def remove_login(login_id: int, phone: Phone) -> _Done:
     """Off its last phone, the account leaves /accounts and Drive too."""
-    logins_leaving(scope, device_id, login_id)
-    return _found(store.remove_login(device_id, login_id, scope), "Login")
+    phone.remove_login(login_id)
+    return _Done()
 
 
 @router.post("/logins/{login_id}/restore")
-def restore_login(login_id: int, scope: Scope) -> _Done:
-    """An archived account back on its phones, tracked again (its Drive
-    folder is made at the next sweep). Not one whose phones were all
-    deleted meanwhile: restored, it would sit on no phone and the next
-    phone change would delete it, password included."""
-    archived = {x.id: x for x in store.archived_logins(scope)}
-    if login_id in archived and not archived[login_id].on:
-        msg = "No phone has this account any more: add it to a phone instead"
-        raise HTTPException(status_code=409, detail=msg)
-    found = store.restore_login(login_id, scope)
-    if found is None:
-        raise HTTPException(status_code=404, detail="Archived login not found")
-    owner = store.owner_of_login(login_id)
-    if owner is not None:
-        track_login(found.service, found.username, user_id=owner, revive=True)
+def restore_login(login: Login) -> _Done:
+    """An archived account back on its phones, tracked again."""
+    login.restore()
     return _Done()

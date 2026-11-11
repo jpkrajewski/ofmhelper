@@ -25,11 +25,13 @@ from pathlib import Path
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores import drive_folders
 from ofmhelpers.db.stores import drive_uploads as store
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.drive.folders import root_name, usable_root
+from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.refusals import UnavailableError
 from ofmhelpers.integrations.gdrive import DriveError, FolderGoneError, connect_as
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import get_platform
@@ -40,6 +42,8 @@ logger = get_logger(__name__)
 
 # The platform an account folder's login is on (its model comes from there).
 _PLATFORM = "instagram"
+# The job row of one click on Upload.
+TASK = "drive_upload"
 
 
 class UploadRefusedError(ValueError):
@@ -132,17 +136,20 @@ def queue_uploads(
         is not None
     ]
     if ids:
-        _enqueue(ids)
+        _enqueue(ids, actor)
     return store.for_jobs([j for j in job_ids if get_job(j, actor) is not None])
 
 
-def _enqueue(upload_ids: list[int]) -> None:
-    """The worker job; when it cannot be queued (Redis down), the uploads
-    fail with that reason, so Upload may retry them."""
+def _enqueue(upload_ids: list[int], actor: str) -> None:
+    """The worker job, with its row (`actor`'s: which uploads); when it
+    cannot be queued (Redis down), the uploads fail with that reason, so
+    Upload may retry them."""
+    job_id = create_job(TASK, {"upload_ids": upload_ids}, actor=actor)
     try:
-        enqueue(upload_files, upload_ids)
+        enqueue(run_job, job_id, upload_files, {"upload_ids": upload_ids})
     except Exception as exc:
         logger.warning("drive uploads %s not queued", upload_ids, exc_info=True)
+        fail_job(job_id, "Could not queue the upload")
         for upload_id in upload_ids:
             store.finish(upload_id, error=f"Could not queue the upload: {exc}")
 
@@ -192,7 +199,8 @@ def remove_upload(user: SessionUser, upload_id: int) -> DriveUpload:
     """Takes one uploaded video back out of its account folder: into the
     uploader's Drive trash (restorable there), then off the card. Only the
     run's owner may; already gone in Drive counts as removed. Raises
-    `UploadRefusedError` (not theirs, not uploaded) or `DriveError`."""
+    `UploadRefusedError` (not theirs, not uploaded) or `UnavailableError`
+    (Drive failed)."""
     found = store.get(upload_id)
     if found is None or get_job(found.job_id, user.actor) is None:
         msg = "No such upload"
@@ -214,6 +222,10 @@ def remove_upload(user: SessionUser, upload_id: int) -> DriveUpload:
         logger.warning("drive upload %s: sign-in refused: %s", upload_id, exc)
         msg = "Connect Google Drive on your Account page first"
         raise UploadRefusedError(msg) from exc
+    except DriveError as exc:
+        logger.warning("drive upload %s: not removed", upload_id, exc_info=True)
+        msg = "Google Drive did not remove it. Try again."
+        raise UnavailableError(msg) from exc
     store.remove(upload_id)
     logger.info("drive upload %s removed from %s", upload_id, found.folder_name)
     return found.model_copy(update={"status": "removed"})

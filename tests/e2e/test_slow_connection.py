@@ -13,8 +13,9 @@ from PIL import Image
 lazy from e2e_session import Session
 lazy from playwright.sync_api import Response
 
-from ofmhelpers.db.stores import jobs as jobs_store
-from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.features.jobs import runner as jobs_store
+from ofmhelpers.features.jobs.runner import run_job
 
 pytestmark = pytest.mark.e2e
 

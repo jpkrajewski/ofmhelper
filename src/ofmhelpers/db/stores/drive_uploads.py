@@ -10,7 +10,7 @@ from functools import lru_cache
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import DriveUploadRepository
-from ofmhelpers.schemas import DriveUpload
+lazy from ofmhelpers.schemas import DriveUpload
 
 
 @lru_cache(maxsize=1)
@@ -31,24 +31,21 @@ def queue(
 
 
 def get(upload_id: int) -> DriveUpload | None:
-    found = _repository().get(upload_id)
-    return DriveUpload.model_validate(found) if found else None
+    return _repository().get(upload_id)
 
 
 def uploader(upload_id: int) -> int | None:
     """Whose Google account it goes up as."""
-    found = _repository().get(upload_id)
-    return found["user_id"] if found else None
+    return _repository().uploader(upload_id)
 
 
 def for_jobs(job_ids: list[str]) -> list[DriveUpload]:
-    return [DriveUpload.model_validate(r) for r in _repository().for_jobs(job_ids)]
+    return _repository().for_jobs(job_ids)
 
 
 def file_id(upload_id: int) -> str | None:
     """The uploaded file's Drive id (done uploads only)."""
-    found = _repository().get(upload_id)
-    return found["drive_file_id"] if found else None
+    return _repository().file_id(upload_id)
 
 
 def remove(upload_id: int, reason: str = "Removed from Drive") -> None:

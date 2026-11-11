@@ -13,8 +13,8 @@ same packed script the live site sends; snapreels' as plain HTML.
 import urllib.parse
 from urllib.parse import parse_qs, urlsplit
 
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 _K_EXP = "1893456000"  # far future; the real ones live ~a day
 _K_EXPIRY_CHECK = "1893542400"  # the `if (epoch < ...)` guard in the payload
@@ -169,9 +169,9 @@ def _snapcdn(request, _proxies) -> FakeReply:
     )
 
 
-def routes() -> dict[str, FakeHandler]:
-    return {
-        "saveinta.com": _saver_host("saveinta.com"),
-        "snapreels.net": _saver_host("snapreels.net"),
-        "dl.snapcdn.app": _snapcdn,
-    }
+def routes() -> list[FakeRoute]:
+    return [
+        FakeRoute(host="saveinta.com", handler=_saver_host("saveinta.com")),
+        FakeRoute(host="snapreels.net", handler=_saver_host("snapreels.net")),
+        FakeRoute(host="dl.snapcdn.app", handler=_snapcdn),
+    ]

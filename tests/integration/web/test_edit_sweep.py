@@ -11,10 +11,11 @@ from pathlib import Path
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
+from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.edit import cleanup
 from ofmhelpers.features.edit import service as edit_service
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
+from ofmhelpers.features.jobs.runner import run_job
 
 DAY = 86400
 
@@ -22,7 +23,7 @@ DAY = 86400
 @pytest.fixture(autouse=True)
 def store(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "assets"
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", root)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: root)
     # Light copies, strips and work folders of this test only.
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     return root

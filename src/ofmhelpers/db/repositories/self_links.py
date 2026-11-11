@@ -24,6 +24,16 @@ from ofmhelpers.db.repositories.cached_repository import (
 )
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.link_catalog import DayStat, HourStat
+from ofmhelpers.schemas.self_links import (
+    SelfBreakdownRow,
+    SelfDomain,
+    SelfLinkCount,
+    SelfLinkDays,
+    SelfLinkHours,
+    SelfSeriesPoint,
+    SelfTotals,
+)
 
 VIEW = "view"
 CLICK = "click"
@@ -54,7 +64,7 @@ class SelfLinkRepository(CachedRepository):
             return list(s.execute(select(dom.host).where(*where)).scalars())
 
     @cached
-    def list_domains(self, owner: int | None = None) -> list[dict]:
+    def list_domains(self, owner: int | None = None) -> list[SelfDomain]:
         """Every domain `owner` manages (their own plus the shared ones),
         newest first."""
         dom = SelfLinkDomainRow
@@ -64,13 +74,13 @@ class SelfLinkRepository(CachedRepository):
                 select(dom).where(*where).order_by(dom.added_at.desc(), dom.id.desc())
             ).scalars()
             return [
-                {
-                    "id": r.id,
-                    "host": r.host,
-                    "owner_id": r.owner_id,
-                    "status": r.status,
-                    "added_at": r.added_at,
-                }
+                SelfDomain(
+                    id=r.id,
+                    host=r.host,
+                    owner_id=r.owner_id,
+                    status=r.status,
+                    added_at=r.added_at,
+                )
                 for r in rows
             ]
 
@@ -114,16 +124,14 @@ class SelfLinkRepository(CachedRepository):
         with session_scope() as s:
             s.execute(insert(SelfLinkClickRow).values(ts=time.time(), **click))
 
-    def daily(
-        self, link_ids: list[int], start: date, end: date
-    ) -> dict[int, list[dict]]:
-        """Per link id, each UTC day in [start, end] that had any hit: views
+    def daily(self, link_ids: list[int], start: date, end: date) -> list[SelfLinkDays]:
+        """Per link, each UTC day in [start, end] that had any hit: views
         (landings) and clicks (continue-throughs)."""
         if not link_ids:
-            return {}
+            return []
         click = SelfLinkClickRow
         day = cast(func.to_timestamp(click.ts).op("AT TIME ZONE")("UTC"), Date)
-        found: dict[int, list[dict]] = {}
+        found: dict[int, SelfLinkDays] = {}
         with session_scope() as s:
             rows = s.execute(
                 select(click.link_id, day.label("d"), _VIEWS, _CLICKS)
@@ -136,20 +144,20 @@ class SelfLinkRepository(CachedRepository):
                 .order_by(day)
             ).all()
         for link_id, d, views, clicks in rows:
-            found.setdefault(link_id, []).append(
-                {"day": d.isoformat(), "views": int(views), "clicks": int(clicks)}
-            )
-        return found
+            found.setdefault(
+                link_id, SelfLinkDays(link_id=link_id, days=[])
+            ).days.append(DayStat(day=d, views=int(views), clicks=int(clicks)))
+        return list(found.values())
 
-    def hourly(self, link_ids: list[int], day: date) -> dict[int, list[dict]]:
-        """Per link id, each UTC hour of `day` that had any hit."""
+    def hourly(self, link_ids: list[int], day: date) -> list[SelfLinkHours]:
+        """Per link, each UTC hour of `day` that had any hit."""
         if not link_ids:
-            return {}
+            return []
         click = SelfLinkClickRow
         hour = func.date_trunc(
             "hour", func.to_timestamp(click.ts).op("AT TIME ZONE")("UTC")
         )
-        found: dict[int, list[dict]] = {}
+        found: dict[int, SelfLinkHours] = {}
         with session_scope() as s:
             rows = s.execute(
                 select(click.link_id, hour.label("h"), _VIEWS, _CLICKS)
@@ -163,21 +171,17 @@ class SelfLinkRepository(CachedRepository):
             ).all()
         for link_id, h, views, clicks in rows:
             when = h.replace(tzinfo=UTC) if h.tzinfo is None else h
-            found.setdefault(link_id, []).append(
-                {
-                    "hour": when.isoformat(),
-                    "views": int(views),
-                    "clicks": int(clicks),
-                }
-            )
-        return found
+            found.setdefault(
+                link_id, SelfLinkHours(link_id=link_id, hours=[])
+            ).hours.append(HourStat(hour=when, views=int(views), clicks=int(clicks)))
+        return list(found.values())
 
     # --- stats for the Self links page ------------------------------------
 
-    def totals(self, link_ids: list[int], start: date, end: date) -> dict[str, int]:
+    def totals(self, link_ids: list[int], start: date, end: date) -> SelfTotals:
         """Views, clicks and unique visitors (distinct IP) over [start, end]."""
         if not link_ids:
-            return {"views": 0, "clicks": 0, "visitors": 0}
+            return SelfTotals()
         click = SelfLinkClickRow
         with session_scope() as s:
             row = s.execute(
@@ -191,11 +195,11 @@ class SelfLinkRepository(CachedRepository):
                     click.ts < _epoch(end) + 86400,
                 )
             ).one()
-        return {"views": int(row.v), "clicks": int(row.c), "visitors": int(row.u)}
+        return SelfTotals(views=int(row.v), clicks=int(row.c), visitors=int(row.u))
 
     def series(
         self, link_ids: list[int], start: date, end: date, *, by_hour: bool
-    ) -> list[dict]:
+    ) -> list[SelfSeriesPoint]:
         """Views and clicks per bucket (UTC hour when `by_hour`, else UTC day)
         summed across the links, oldest first."""
         if not link_ids:
@@ -215,13 +219,13 @@ class SelfLinkRepository(CachedRepository):
                 .order_by(bucket)
             ).all()
         return [
-            {"bucket": b.isoformat(), "views": int(views), "clicks": int(clicks)}
+            SelfSeriesPoint(bucket=b.isoformat(), views=int(views), clicks=int(clicks))
             for b, views, clicks in rows
         ]
 
     def breakdown(
         self, link_ids: list[int], start: date, end: date, column: str, limit: int = 8
-    ) -> list[dict]:
+    ) -> list[SelfBreakdownRow]:
         """The top `column` values by clicks (continue-throughs) over the
         range: [{value, clicks}], most first. `column` is one of country,
         region, city, platform, device, referrer."""
@@ -243,14 +247,17 @@ class SelfLinkRepository(CachedRepository):
                 .order_by(func.count().desc())
                 .limit(limit)
             ).all()
-        return [{"value": value, "clicks": int(clicks)} for value, clicks in rows]
+        return [
+            SelfBreakdownRow(value=value, clicks=int(clicks)) for value, clicks in rows
+        ]
 
     def per_link(
         self, link_ids: list[int], start: date, end: date
-    ) -> dict[int, dict[str, int]]:
-        """Views and clicks per link over the range."""
+    ) -> list[SelfLinkCount]:
+        """Views and clicks per link over the range (links without a hit are
+        left out)."""
         if not link_ids:
-            return {}
+            return []
         click = SelfLinkClickRow
         with session_scope() as s:
             rows = s.execute(
@@ -262,7 +269,7 @@ class SelfLinkRepository(CachedRepository):
                 )
                 .group_by(click.link_id)
             ).all()
-        return {
-            link_id: {"views": int(views), "clicks": int(clicks)}
+        return [
+            SelfLinkCount(link_id=link_id, views=int(views), clicks=int(clicks))
             for link_id, views, clicks in rows
-        }
+        ]

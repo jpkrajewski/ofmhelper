@@ -25,10 +25,12 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, model_serializer
 from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import resumable, set_job_preview
+from ofmhelpers.db.stores.jobs import set_job_preview
+from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.clone.pricing import clone_price
 from ofmhelpers.features.clone.targets import (
     CloneTarget,
@@ -43,6 +45,7 @@ from ofmhelpers.features.clone_long.models import (
     Shape,
 )
 from ofmhelpers.features.clone_long.video import VideoTools
+from ofmhelpers.features.jobs.runner import resumable
 from ofmhelpers.integrations.ai_providers import runner, tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider, uploader
 from ofmhelpers.integrations.ai_providers.errors import ProviderGenerationError
@@ -87,30 +90,57 @@ class Target(CloneTarget):
         seconds: float,
         video: str,
         chain_image: str | None = None,
-    ) -> dict[str, Any]:
-        """One piece's request, in this model's own field names. `chain_image`
-        (the previous piece's last frame) is added as a second reference image
-        with a 'start from it' prompt (`params.chain`)."""
+    ) -> PieceValues:
+        """One piece's request. `chain_image` (the previous piece's last
+        frame) is added as a second reference image with a 'start from it'
+        prompt (`params.chain`)."""
         images = [params.image]
         prompt = params.prompt
         if chain_image is not None:
             images.append(chain_image)
             prompt = f"{prompt} Start video from @Image2"
+        return PieceValues(
+            target=self,
+            prompt=prompt,
+            resolution=self.resolution_value(params.resolution),
+            aspect_ratio=self.aspect_ratio(params.shape),
+            duration=self.duration(seconds),
+            audio=params.audio,
+            images=images,
+            video=video,
+        )
+
+
+class PieceValues(BaseModel):
+    """One piece's inputs. Its dump (`model_dump()`) is what the provider's
+    model takes: the same values under the target model's own field names."""
+
+    target: Target
+    prompt: str
+    resolution: str
+    aspect_ratio: str
+    duration: int
+    audio: bool
+    images: list[str]
+    video: str
+
+    @model_serializer
+    def _in_the_models_names(self) -> dict[str, Any]:
         return {
-            "prompt": prompt,
-            "resolution": self.resolution_value(params.resolution),
-            "aspect_ratio": self.aspect_ratio(params.shape),
-            "duration": self.duration(seconds),
-            self.audio: params.audio,
-            self.images: images,
-            self.video: [video],
+            "prompt": self.prompt,
+            "resolution": self.resolution,
+            "aspect_ratio": self.aspect_ratio,
+            "duration": self.duration,
+            self.target.audio: self.audio,
+            self.target.images: self.images,
+            self.target.video: [self.video],
         }
 
 
 # A provider joins by `long_clone` on its row of the table.
 TARGETS = {
     name: Target(**row.model_dump())
-    for name, row in clone_targets().items()
+    for name, row in clone_targets().entries.items()
     if row.long_clone
 }
 
@@ -200,7 +230,9 @@ class LongClone:
             )
         )
         for piece in plan.pieces:
-            target.spec.check(target.values(clone.params, piece.length, video))
+            target.spec.check(
+                target.values(clone.params, piece.length, video).model_dump()
+            )
         return clone
 
     @property
@@ -231,10 +263,6 @@ class LongClone:
         would re-run the job and pay for the refused one again. A piece
         still generating (timeout) stays remembered for recovery, and so do
         the saved pieces."""
-        # Imported here: the routers package (which registers this tool)
-        # imports this module.
-        from ofmhelpers.web.routers.task_helpers import register_generated_asset
-
         prune_work(keep=job_id)
         work = work_dir() / job_id
         out = Path(settings.aigen.out_dir) / f"clone_long_{job_id}.mp4"
@@ -352,9 +380,9 @@ class LongClone:
         client = get_provider(p.provider, api_key)
         chain = str(chain_image) if chain_image is not None else None
         payload = spec.request(
-            self.target.values(p, piece.length, str(cut), chain),
+            self.target.values(p, piece.length, str(cut), chain).model_dump(),
             uploader(client, spec),
-        )
+        ).model_dump()
 
         def preview(urls: list[str]) -> None:
             if hosted := _hosted(urls):

@@ -1,5 +1,5 @@
 """Apify's REST API (v2), the calls this app makes: run an actor to the
-end, read its dataset, read an account's credit. Through `utils.outbound`,
+end, read its dataset, read an account's credit. Through `integrations.outbound`,
 so OFM_FAKE_EXTERNALS answers it from `apify/fake.py`.
 
 Starting a run is a paid POST: it is sent once, never retried (a lost answer
@@ -10,17 +10,18 @@ import time
 from typing import Any
 
 import requests
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from ofmhelpers.errors import AppError
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.apify.models import (
     ActorRun,
+    DatasetItem,
     ErrorEnvelope,
     LimitsEnvelope,
     RunEnvelope,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
@@ -49,6 +50,9 @@ class ApifyCreditError(ApifyError):
     """The account has no credit left for this run."""
 
 
+_ITEMS: TypeAdapter[list[DatasetItem]] = TypeAdapter(list[DatasetItem])
+
+
 class ApifyClient:
     """One Apify account (its API token)."""
 
@@ -67,9 +71,14 @@ class ApifyClient:
         r = self._session.get(f"{API}/users/me/limits", timeout=_READ_TIMEOUT_S)
         return LimitsEnvelope.model_validate(self._ok(r)).data.remaining_usd
 
-    def run(self, actor: str, run_input: dict[str, Any], timeout_s: int) -> ActorRun:
-        """Runs `actor` (`owner~name`) on `run_input` and waits for it to
-        end, at most `timeout_s` (Apify stops it then too)."""
+    def run(
+        self, actor: str, run_input: BaseModel | dict[str, Any], timeout_s: int
+    ) -> ActorRun:
+        """Runs `actor` (`owner~name`) on `run_input` (a model is sent under
+        its aliases, unset options left out) and waits for it to end, at
+        most `timeout_s` (Apify stops it then too)."""
+        if isinstance(run_input, BaseModel):
+            run_input = run_input.model_dump(by_alias=True, exclude_none=True)
         r = self._session.post(
             f"{API}/acts/{actor}/runs",
             params={"timeout": timeout_s},
@@ -92,7 +101,7 @@ class ApifyClient:
         logger.info("apify run %s %s, $%.4f", run.id, run.status, run.cost_usd)
         return run
 
-    def items(self, run: ActorRun) -> list[dict[str, Any]]:
+    def items(self, run: ActorRun) -> list[DatasetItem]:
         """Every item `run` stored in its dataset."""
         r = self._read(
             f"{API}/datasets/{run.default_dataset_id}/items",
@@ -103,7 +112,11 @@ class ApifyClient:
         if not isinstance(found, list):
             msg = "Apify answered a dataset that is not a list"
             raise ApifyError(msg)
-        return found
+        try:
+            return _ITEMS.validate_python(found)
+        except ValidationError as exc:
+            msg = "Apify answered a dataset whose items are not objects"
+            raise ApifyError(msg) from exc
 
     def _read(self, url: str, **kwargs: Any) -> requests.Response:
         """One GET of a paid run's state or results, tried again when the
@@ -150,10 +163,19 @@ class ApifyClient:
         raise ApifyError(msg)
 
 
-def by_credit(tokens: list[str]) -> list[tuple[ApifyClient, float]]:
+class Funded(BaseModel):
+    """An account and its credit left this month."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    client: ApifyClient
+    credit_usd: float
+
+
+def by_credit(tokens: list[str]) -> list[Funded]:
     """Every account with its credit left this month, most first; one that
     cannot be read is skipped (logged)."""
-    found: list[tuple[ApifyClient, float]] = []
+    found: list[Funded] = []
     for token in tokens:
         client = ApifyClient(token)
         try:
@@ -162,8 +184,8 @@ def by_credit(tokens: list[str]) -> list[tuple[ApifyClient, float]]:
             logger.warning("apify key %s unusable", client.key_hint, exc_info=True)
             continue
         logger.info("apify key %s: $%.2f left", client.key_hint, remaining)
-        found.append((client, remaining))
-    return sorted(found, key=lambda pair: pair[1], reverse=True)
+        found.append(Funded(client=client, credit_usd=remaining))
+    return sorted(found, key=lambda funded: funded.credit_usd, reverse=True)
 
 
 def richest(tokens: list[str]) -> ApifyClient:
@@ -172,4 +194,4 @@ def richest(tokens: list[str]) -> ApifyClient:
     if not found:
         msg = "No usable Apify API key (APIFY_API_KEYS)"
         raise ApifyAuthError(msg)
-    return found[0][0]
+    return found[0].client

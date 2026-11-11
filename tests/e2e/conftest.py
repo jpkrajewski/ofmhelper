@@ -83,8 +83,6 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "OFM_UPLOADS_ROOT": str(workdir / "uploads"),
         "OFM_AIGEN_OUT_DIR": str(workdir / "out"),
         "OFM_KIEAI_OUT_DIR": str(workdir / "kieai_out"),
-        "OFM_KIEAI_TASK_LOG": str(workdir / "kieai_out" / "tasks.jsonl"),
-        "OFM_KIEAI_COMPLETIONS_LOG": str(workdir / "kieai_out" / "completions.jsonl"),
         "OFM_COOKIES_FILE": str(workdir / "cookies.txt"),
         "APP_PASSWORD_ADMIN": ACCOUNTS["ADMIN"][1],
         "SESSION_SECRET": "e2e-session-secret",
@@ -190,8 +188,8 @@ def e2e_backend(_test_environment) -> E2EBackend:
 def base_url(
     e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
 ) -> Iterator[str]:
-    """The app and its workers (jobs, /clone-links runs, previews), up for
-    the whole session."""
+    """The app, its sweeps and its workers (jobs, /clone-links runs,
+    previews), up for the whole session."""
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
     env = _app_env(app_dir, fakes_dir, e2e_backend)
@@ -206,6 +204,8 @@ def base_url(
             "--port",
             str(port),
         ],
+        # Their own process, as in compose (`sweeps`): the web app runs none.
+        [sys.executable, "-m", "ofmhelpers.sweeps"],
         [sys.executable, "-m", "ofmhelpers.worker"],
         [sys.executable, "-m", "ofmhelpers.worker", "clone-links"],
         [sys.executable, "-m", "ofmhelpers.worker", "previews"],

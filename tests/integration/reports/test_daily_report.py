@@ -372,6 +372,18 @@ def test_money_typed_in_the_group_is_answered_with_the_last_24_hours(typed):
     assert report_runs.last_run(daily.NAME) is None
 
 
+@pytest.mark.usefixtures("live")
+def test_an_ask_leaves_a_job_row_with_the_word_and_never_the_chat():
+    from ofmhelpers.db.stores.jobs import history
+
+    fake_telegram().wrote(111, text="money")
+
+    asks.answer_asks()
+
+    [row] = [job for job in history() if job.task == "report_ask"]
+    assert (row.status, row.params) == ("done", {"word": "money"})
+
+
 def test_an_answered_ask_is_logged_without_its_chat(agency, caplog):
     """Where a message goes is never logged (senders/CLAUDE.md); prod's first
     asks wrote the group's id to Logfire."""

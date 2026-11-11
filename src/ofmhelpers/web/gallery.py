@@ -11,12 +11,12 @@ from collections.abc import Callable, Collection
 from typing import Annotated
 
 from fastapi import Query
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import count_hidden_jobs, gallery_page
-from ofmhelpers.schemas import Job
 from ofmhelpers.web.forms import LoggedFields
+lazy from ofmhelpers.schemas.persistence import GalleryJobs
 
 
 class GalleryQuery(LoggedFields):
@@ -25,13 +25,6 @@ class GalleryQuery(LoggedFields):
 
 
 GalleryParams = Annotated[GalleryQuery, Query()]
-
-
-class GalleryJobs(BaseModel):
-    """One page of jobs. No `next_offset` is what ends the infinite scroll."""
-
-    jobs: list[Job]
-    next_offset: int | None
 
 
 def _default_limit() -> int:
@@ -47,10 +40,7 @@ class Gallery:
 
     def page(self, actor: str, query: GalleryQuery | None = None) -> GalleryJobs:
         asked = query or GalleryQuery()
-        jobs, next_offset = gallery_page(
-            self.tasks, asked.offset, self.limit(), actor, asked.hidden
-        )
-        return GalleryJobs(jobs=jobs, next_offset=next_offset)
+        return gallery_page(self.tasks, asked.offset, self.limit(), actor, asked.hidden)
 
     def hidden_count(self, actor: str) -> int:
         return count_hidden_jobs(self.tasks, actor)

@@ -13,16 +13,17 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 @pytest.fixture
 def assets(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "assets"
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", root)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: root)
     return root
 
 

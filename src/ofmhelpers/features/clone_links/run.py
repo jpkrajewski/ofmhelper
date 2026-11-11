@@ -16,7 +16,8 @@ re-run through `registry.RESUMABLE`), in order:
    the paid request stays remembered for recovery's next sweep instead of
    being forgotten. The card gets a short fixed reason, the downloader's
    own text goes to the log.
-3. The /clone run (`clone._run_clone`: provider, export, mirror). A result
+3. The /clone run (`run_clone`, handed in by the router: its
+   `clone._run_clone`: provider, export, mirror). A result
    only hosted (its download failed after the generation was paid) is
    fetched again here, registered and exported like any; still not saved:
    resumable failure, recovery fetches it.
@@ -26,6 +27,7 @@ import math
 import re
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -36,6 +38,8 @@ from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import cookies as login_cookies
 from ofmhelpers.db.stores.jobs import get_job, merge_params
+from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
     export_choice,
@@ -67,8 +71,6 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.schemas import Job, ResultFile
-from ofmhelpers.web.routers.generation.clone import _run_clone
-from ofmhelpers.web.routers.task_helpers import classify_kind, register_generated_asset
 
 logger = get_logger(__name__)
 
@@ -371,9 +373,12 @@ def run_clone_link(
     resolution: str,
     reference_images: list[str],
     audio: bool = False,
+    *,
+    run_clone: Callable[..., list[ResultFile]],
     **params: Any,
 ) -> list[ResultFile]:
-    """One run (worker, and recovery's re-run). See the module docstring."""
+    """One run (worker, and recovery's re-run). See the module docstring.
+    `run_clone`: the /clone run it is made with."""
     # Runs queued while Check still downloaded carried their video.
     params.pop("reference_videos", None)
     params.pop("duration", None)
@@ -390,11 +395,11 @@ def run_clone_link(
     target.spec.check(
         clone_values(
             target, prompt, resolution, duration, audio, reference_images, video
-        )
+        ).model_dump()
     )
     _refuse_if_stopped(job_id, batch)
     try:
-        results = _run_clone(
+        results = run_clone(
             job_id,
             api_key,
             assets_root,

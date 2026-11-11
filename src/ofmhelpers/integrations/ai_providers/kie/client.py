@@ -6,9 +6,7 @@ response is parsed into `models.py`, which also maps kie.ai's in-body error
 codes onto the shared error types.
 """
 
-import json
 import pathlib
-import time
 from typing import Any, NoReturn
 
 import requests
@@ -16,6 +14,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.http import call, parsed
 from ofmhelpers.integrations.ai_providers.kie.models import (
@@ -34,7 +33,6 @@ from ofmhelpers.integrations.ai_providers.uploads import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import fitted
-from ofmhelpers.utils import outbound
 lazy from ofmhelpers.integrations.ai_providers.spec import Payload
 
 logger = get_logger(__name__)
@@ -82,8 +80,6 @@ class KieAIClient:
         jobs_base: str | None = None,
         upload_base: str | None = None,
         out_dir: str | pathlib.Path = "./out",
-        task_log: str | pathlib.Path = "./tasks.jsonl",
-        completions_log: str | pathlib.Path = "./completions.jsonl",
     ) -> None:
         self.api_key = api_key
         # Read here rather than as a default expression: a default is bound at
@@ -93,10 +89,7 @@ class KieAIClient:
         self.HEADERS = {"Authorization": f"Bearer {self.api_key}"}
 
         self.OUT_DIR = pathlib.Path(out_dir)
-        self.TASK_LOG = pathlib.Path(task_log)
-        self.COMPLETIONS_LOG = pathlib.Path(completions_log)
-        for path in (self.OUT_DIR, self.TASK_LOG.parent, self.COMPLETIONS_LOG.parent):
-            path.mkdir(parents=True, exist_ok=True)
+        self.OUT_DIR.mkdir(parents=True, exist_ok=True)
         self._http = _session()
 
     def _call(self, method: str, url: str, **kwargs) -> requests.Response:
@@ -105,36 +98,26 @@ class KieAIClient:
         )
 
     # ------------------------------------------------------------------
-    # Audit logs: every task created and every credit spent, one JSON line
-    # each, next to the results.
+    # The audit trail: every task created and every credit spent, as log
+    # events (stdout, Logfire). Until 2026-11-11 two files, tasks.jsonl and
+    # completions.jsonl, appended for ever and read by nothing.
     # ------------------------------------------------------------------
     def _log_task(self, task_id: str, model: str, prompt: str, job_id: str) -> None:
-        record = {
-            "taskId": task_id,
-            "model": model,
-            "prompt": prompt,
-            "createdAt": time.time(),
-            "jobId": job_id,
-        }
-        self._append(self.TASK_LOG, record)
+        logger.info(
+            "kie.ai task created: taskId=%s model=%s jobId=%s prompt=%r",
+            task_id,
+            model,
+            job_id,
+            prompt,
+        )
 
     def _log_completion(self, record: KieRecord) -> None:
-        line = {
-            "taskId": record.task_id,
-            "credits": record.credits,
-            "costTimeMs": record.cost_time_ms,
-        }
-        self._append(self.COMPLETIONS_LOG, line)
-
-    @staticmethod
-    def _append(path: pathlib.Path, line: dict[str, Any]) -> None:
-        """One line of an audit log. Never raises: it runs right after the
-        request is paid for, and a full disk must not lose the task id."""
-        try:
-            with path.open("a") as f:
-                f.write(json.dumps(line) + "\n")
-        except OSError:
-            logger.warning("could not write %s", path, exc_info=True)
+        logger.info(
+            "kie.ai task completed: taskId=%s credits=%s costTimeMs=%s",
+            record.task_id,
+            record.credits,
+            record.cost_time_ms,
+        )
 
     # ------------------------------------------------------------------
     # File upload. kie.ai's input fields take hosted URLs, so a local
@@ -230,10 +213,4 @@ class KieAIClient:
 
     @classmethod
     def from_env(cls, api_key: str) -> KieAIClient:
-        s = settings.kieai
-        return cls(
-            api_key=api_key,
-            out_dir=settings.aigen.out_dir,
-            task_log=s.task_log,
-            completions_log=s.completions_log,
-        )
+        return cls(api_key=api_key, out_dir=settings.aigen.out_dir)

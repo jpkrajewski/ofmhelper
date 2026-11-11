@@ -13,8 +13,8 @@ import requests
 from pydantic import BaseModel, ConfigDict
 from urllib3.exceptions import NewConnectionError
 
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
-from ofmhelpers.utils import outbound
 
 _HTTP_ERROR = 400
 
@@ -26,7 +26,7 @@ class Lenient(BaseModel):
 
 
 def bearer_session(api_key: str) -> requests.Session:
-    """A session for one account, through `utils.outbound` (OFM_FAKE_EXTERNALS
+    """A session for one account, through `integrations.outbound` (OFM_FAKE_EXTERNALS
     answers it from the provider's fake), with no retrying adapter."""
     session = outbound.mount(requests.Session())
     session.headers["Authorization"] = f"Bearer {api_key}"

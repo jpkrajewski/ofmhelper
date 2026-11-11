@@ -123,7 +123,7 @@ def serve_job_preview(
             headers={"Cache-Control": "no-store"},
         )
     try:
-        dest = previews.make_preview(path, job.id, index)
+        dest = previews.ResultPreview(path, job.id, index).make()
     except previews.FailedBeforeError:
         return media_response(path)
     except previews.PREVIEW_ERRORS:
@@ -140,7 +140,7 @@ def serve_job_poster(job: Job | None, index: int) -> FileResponse:
     gallery shows every card without loading any video."""
     job, path = _result_media(job, index, {"video"})
     try:
-        dest = previews.make_poster(path, job.id, index)
+        dest = previews.ResultPreview(path, job.id, index).poster()
     except previews.PREVIEW_ERRORS:
         logger.warning("could not make a poster of %s", path, exc_info=True)
         raise HTTPException(status_code=404, detail="No poster") from None

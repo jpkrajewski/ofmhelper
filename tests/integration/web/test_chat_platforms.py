@@ -69,10 +69,10 @@ def _popups():
 
 
 def _scope(side):
-    return ReadScope(
-        seen=chats.last_read(side.platform),
-        oldest=_long_ago(),
-        open_channels=chats.open_channels(side.platform),
+    return ReadScope.since(
+        chats.last_read(side.platform),
+        _long_ago(),
+        chats.open_channels(side.platform),
         thorough=True,
     )
 

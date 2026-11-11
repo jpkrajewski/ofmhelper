@@ -17,6 +17,13 @@ from ofmhelpers.db.models import DeviceLoginRow, DeviceRow, LoginRow
 from ofmhelpers.db.repositories.cached_repository import CachedRepository
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.devices import (
+    AddedLogin,
+    ArchivedLogin,
+    Device,
+    DeviceLogin,
+    LoginSecrets,
+)
 
 _DEVICE_FIELDS = (
     "label",
@@ -60,16 +67,16 @@ def _writing(fields: dict) -> Iterator[None]:
         raise
 
 
-def _device_dict(row: DeviceRow, logins: list[dict]) -> dict:
-    return {
-        "id": row.id,
-        "user_id": row.user_id,
+def _device(row: DeviceRow, logins: list[DeviceLogin]) -> Device:
+    return Device(
+        id=row.id,
+        user_id=row.user_id,
         **{f: getattr(row, f) for f in _DEVICE_FIELDS},
-        "added_at": row.added_at,
-        "updated_at": row.updated_at,
-        "retired_at": row.retired_at,
-        "logins": logins,
-    }
+        added_at=row.added_at,
+        updated_at=row.updated_at,
+        retired_at=row.retired_at,
+        logins=logins,
+    )
 
 
 def _login_columns() -> tuple:
@@ -89,7 +96,9 @@ def _login_columns() -> tuple:
     )
 
 
-def _devices(s: Session, logins: dict[int, dict], owner: int | None) -> list[dict]:
+def _devices(
+    s: Session, logins: dict[int, DeviceLogin], owner: int | None
+) -> list[Device]:
     """`owner`'s phones (everyone's for None) by label, each with its logins
     in the order they were linked; a login lists every phone it is on
     (`on`). A login is only ever on its owner's phones."""
@@ -113,12 +122,13 @@ def _devices(s: Session, logins: dict[int, dict], owner: int | None) -> list[dic
     on: dict[int, list[str]] = {}
     for device_id, login_id in links:
         on.setdefault(login_id, []).append(labels[device_id])
-    per_device: dict[int, list[dict]] = {}
+    per_device: dict[int, list[DeviceLogin]] = {}
     for device_id, login_id in links:
+        # Its own copy per phone: the store sorts and links each one's.
         per_device.setdefault(device_id, []).append(
-            {**logins[login_id], "on": on[login_id]}
+            logins[login_id].model_copy(update={"on": list(on[login_id])})
         )
-    return [_device_dict(d, per_device.get(d.id, [])) for d in devices]
+    return [_device(d, per_device.get(d.id, [])) for d in devices]
 
 
 def _touch(s: Session, device_ids: list[int], now: float) -> None:
@@ -151,7 +161,7 @@ class DeviceRepository(CachedRepository):
 
     cache_namespace = "device"
 
-    def list_all(self, owner: int | None = None) -> list[dict]:
+    def list_all(self, owner: int | None = None) -> list[Device]:
         """`owner`'s phones (retired too) with their logins -- no secret
         read or decrypted, only `has_password` / `has_codes`."""
         with session_scope() as s:
@@ -160,19 +170,19 @@ class DeviceRepository(CachedRepository):
                     *mine(LoginRow.user_id, owner), LoginRow.archived_at.is_(None)
                 )
             ).mappings()
-            return _devices(s, {r["id"]: dict(r) for r in rows}, owner)
+            return _devices(s, {r["id"]: DeviceLogin(**r) for r in rows}, owner)
 
-    def export(self, owner: int | None = None) -> list[dict]:
+    def export(self, owner: int | None = None) -> list[Device]:
         """`list_all` with every password and backup code decrypted."""
         with session_scope() as s:
             logins = {
-                r.id: {
-                    "id": r.id,
+                r.id: DeviceLogin(
+                    id=r.id,
                     **{f: getattr(r, f) for f in (*_LOGIN_FIELDS, *_SECRETS)},
-                    "updated_at": r.updated_at,
-                    "has_password": bool(r.password),
-                    "has_codes": bool(r.backup_codes),
-                }
+                    updated_at=r.updated_at,
+                    has_password=bool(r.password),
+                    has_codes=bool(r.backup_codes),
+                )
                 for r in s.execute(
                     select(LoginRow)
                     .options(undefer_group("secret"))
@@ -183,12 +193,12 @@ class DeviceRepository(CachedRepository):
             }
             return _devices(s, logins, owner)
 
-    def secrets(self, login_id: int, owner: int | None = None) -> dict | None:
+    def secrets(self, login_id: int, owner: int | None = None) -> LoginSecrets | None:
         with session_scope() as s:
             row = s.get(LoginRow, login_id)
             if row is None or (owner is not None and row.user_id != owner):
                 return None
-            return {"password": row.password, "backup_codes": row.backup_codes}
+            return LoginSecrets(password=row.password, backup_codes=row.backup_codes)
 
     def owner_of_login(self, login_id: int) -> int | None:
         with session_scope() as s:
@@ -242,8 +252,8 @@ class DeviceRepository(CachedRepository):
 
     def add_login(
         self, device_id: int, fields: dict, owner: int | None = None
-    ) -> tuple[int, bool] | None:
-        """(login id, whether it was already saved): an account the phone's
+    ) -> AddedLogin | None:
+        """The login and whether it was already saved: an account the phone's
         owner already saved (same service, provider, username) is linked to
         this phone too, never stored twice; a password or codes typed for it
         must match the saved ones (or fill them when it has none). Another
@@ -288,7 +298,7 @@ class DeviceRepository(CachedRepository):
                 msg = f"{row.username} is already on this phone"
                 raise DuplicateError(msg)
             _touch(s, [device_id], now)
-            return row.id, existed
+            return AddedLogin(id=row.id, existed=existed)
 
     def archive_logins(self, login_ids: list[int], owner: int | None = None) -> int:
         """Hides the logins from every phone, password kept (see
@@ -312,7 +322,9 @@ class DeviceRepository(CachedRepository):
                 _touch(s, _phones_of(s, login_id), now)
             return len(ids)
 
-    def restore_login(self, login_id: int, owner: int | None = None) -> dict | None:
+    def restore_login(
+        self, login_id: int, owner: int | None = None
+    ) -> ArchivedLogin | None:
         """Back on its phones; the login (service, username), or None when
         it is not an archived one of `owner`'s."""
         now = time.time()
@@ -326,9 +338,11 @@ class DeviceRepository(CachedRepository):
                 return None
             row.archived_at = None
             _touch(s, _phones_of(s, login_id), now)
-            return {"service": row.service, "username": row.username}
+            return ArchivedLogin(
+                id=login_id, service=row.service, username=row.username
+            )
 
-    def archived(self, owner: int | None = None) -> list[dict]:
+    def archived(self, owner: int | None = None) -> list[ArchivedLogin]:
         """`owner`'s archived logins, newest first, with the phones they
         come back on."""
         with session_scope() as s:
@@ -348,13 +362,14 @@ class DeviceRepository(CachedRepository):
                     .order_by(DeviceRow.label)
                 ).scalars()
                 found.append(
-                    {
-                        "id": row.id,
-                        "service": row.service,
-                        "username": row.username,
-                        "archived_at": row.archived_at,
-                        "on": list(labels),
-                    }
+                    ArchivedLogin(
+                        id=row.id,
+                        service=row.service,
+                        username=row.username,
+                        # Never None here: the query keeps archived ones only.
+                        archived_at=row.archived_at or 0,
+                        on=list(labels),
+                    )
                 )
             return found
 

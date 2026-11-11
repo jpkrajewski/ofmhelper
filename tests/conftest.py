@@ -6,6 +6,9 @@ from pathlib import Path
 # write token, and the test process (the e2e harness included) must never
 # send. An env var outranks .env; blank is off (TelemetrySettings).
 os.environ["LOGFIRE_TOKEN"] = ""
+# OFM_ENV has no default (config/settings.py InfraSettings): the suite is
+# never production, whatever the shell that started it says.
+os.environ["OFM_ENV"] = "development"
 
 import pytest
 from cryptography.fernet import Fernet
@@ -213,6 +216,7 @@ def pytest_collection_modifyitems(config, items):
 def fake_externals(monkeypatch, tmp_path):
     """OFM_FAKE_EXTERNALS on, every fake fresh (state in `tmp_path`): the
     app's outside services answered in-process, as under e2e."""
+    from ofmhelpers.integrations import outbound
     from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
     from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
     from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
@@ -229,7 +233,6 @@ def fake_externals(monkeypatch, tmp_path):
     from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
     from ofmhelpers.integrations.stacked.fake import fake_stacked
     from ofmhelpers.media import fake_media
-    from ofmhelpers.utils import outbound
 
     caches = (
         outbound._routes,
@@ -295,17 +298,13 @@ def _no_real_dotenv_in_tests(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _provider_files_in_tmp(monkeypatch, tmp_path):
-    """Provider output and kie.ai's audit logs default to /app/... (the
-    container's paths). Anything that builds a provider -- even with its
-    calls stubbed -- creates those directories, which a Linux CI runner
+    """Provider output defaults to /app/... (the container's path).
+    Anything that builds a provider -- even with its calls stubbed --
+    creates that directory, which a Linux CI runner
     refuses (`Permission denied: '/app'`); Windows quietly made C:\\app.
     Every test gets its own instead. A test that sets one itself wins."""
     root = tmp_path / "provider-files"
-    defaults = {
-        "OFM_AIGEN_OUT_DIR": root / "out",
-        "OFM_KIEAI_TASK_LOG": root / "tasks.jsonl",
-        "OFM_KIEAI_COMPLETIONS_LOG": root / "completions.jsonl",
-    }
+    defaults = {"OFM_AIGEN_OUT_DIR": root / "out"}
     for name, path in defaults.items():
         if name not in os.environ:
             monkeypatch.setenv(name, str(path))

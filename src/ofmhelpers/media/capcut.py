@@ -33,6 +33,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from ofmhelpers.media.ffmpeg import binary, run
+from ofmhelpers.media.size import Size
 
 Range = tuple[float, float]
 
@@ -103,11 +104,17 @@ class SourceInfo(BaseModel, frozen=True):
             has_audio=any(s["codec_type"] == "audio" for s in streams),
         )
 
-    def size_4k(self) -> tuple[int, int]:
+    def size_4k(self) -> Size:
         """Output size: short side 2160, long side keeps the aspect."""
         if self.width > self.height:
-            return _even(_SHORT_SIDE_4K * self.width / self.height), _SHORT_SIDE_4K
-        return _SHORT_SIDE_4K, _even(_SHORT_SIDE_4K * self.height / self.width)
+            return Size(
+                width=_even(_SHORT_SIDE_4K * self.width / self.height),
+                height=_SHORT_SIDE_4K,
+            )
+        return Size(
+            width=_SHORT_SIDE_4K,
+            height=_even(_SHORT_SIDE_4K * self.height / self.width),
+        )
 
 
 class Jitter(BaseModel, frozen=True):
@@ -165,7 +172,7 @@ class CapcutPreset(BaseModel, frozen=True):
         """Crop, colour, exposure and the jitter's grain at source size (cheap,
         and the grain size uniqify uses), then the exact 4K upscale, then
         sharpen and particles at 4K as CapCut renders them."""
-        out_w, out_h = src.size_4k()
+        out = src.size_4k()
         gamma = 1.0 + self.contrast * _CONTRAST_GAMMA_PER_UNIT
         saturation = (
             1.0 + self.contrast * _CONTRAST_SATURATION_PER_UNIT
@@ -183,7 +190,7 @@ class CapcutPreset(BaseModel, frozen=True):
         if self.exposure:
             stops = self.exposure * _EXPOSURE_STOPS_PER_UNIT
             vf.append(f"exposure=exposure={stops:.4f}")
-        vf.append(f"scale={out_w}:{out_h}:flags=lanczos")
+        vf.append(f"scale={out.width}:{out.height}:flags=lanczos")
         if self.sharpen:
             vf.append(f"unsharp=5:5:{self.sharpen * _SHARPEN_PER_UNIT:.4f}")
         if self.particles:

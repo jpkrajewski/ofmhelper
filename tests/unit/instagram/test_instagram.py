@@ -25,6 +25,7 @@ from ofmhelpers.integrations.instagram.models import (
     Reel,
     ReelMedia,
     ReelSummary,
+    TimelinePost,
 )
 
 CDN = "https://scontent-waw2-2.cdninstagram.com/v/x.mp4"
@@ -340,11 +341,15 @@ class FakeClient:
         for summary in self._summaries:
             self.timeline_reads += 1
             code, length = self._lengths[summary.pk]
+            media = None
             if code in self._on_timeline and length is not None:
                 media = ReelMedia(video_url=CDN, duration_s=length, taken_at=0)
-                yield code, media, summary.posted_at, summary.pinned
-            else:
-                yield code, None, summary.posted_at, summary.pinned
+            yield TimelinePost(
+                code=code,
+                media=media,
+                posted_at=summary.posted_at,
+                pinned=summary.pinned,
+            )
 
     def media(self, pk):
         """A length of None: a reel nothing could resolve (gated, no login)."""

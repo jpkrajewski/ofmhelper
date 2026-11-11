@@ -15,6 +15,8 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, Field
 
+from ofmhelpers.media.size import Size as Ratio
+
 
 class Aspect(StrEnum):
     """The shapes the page offers, in its order."""
@@ -27,12 +29,12 @@ class Aspect(StrEnum):
     LANDSCAPE = "16:9"
 
     @property
-    def ratio(self) -> tuple[int, int] | None:
-        """(width, height), None for the source's own shape."""
+    def ratio(self) -> Ratio | None:
+        """Width to height, None for the source's own shape."""
         if self is Aspect.ORIGINAL:
             return None
         w, h = self.value.split(":")
-        return int(w), int(h)
+        return Ratio(width=int(w), height=int(h))
 
     @property
     def label(self) -> str:

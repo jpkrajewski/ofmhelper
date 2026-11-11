@@ -40,17 +40,21 @@ from ofmhelpers.db.stores.jobs import (
     get_job,
     hide_job,
     list_jobs_page,
-    run_job,
 )
+from ofmhelpers.features.clone_links import job as clone_links_job
+from ofmhelpers.features.clone_links import page as clone_links_page
+from ofmhelpers.features.clone_links import service as clone_links_service
 from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
 from ofmhelpers.features.clone_links.models import LinkPreview
 from ofmhelpers.features.clone_links.review import NOT_CONNECTED
 from ofmhelpers.features.clone_links.stop import stopped
+from ofmhelpers.features.jobs.registry import RESUMABLE
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.generation import clone_links
-from ofmhelpers.web.routers.registry import RESUMABLE, TOOLS
+from ofmhelpers.web.routers.registry import TOOLS
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
 
@@ -68,8 +72,7 @@ def _actor(email: str = ANN) -> str:
 
 
 def _runs(email: str = ANN) -> list[Job]:
-    jobs, _ = list_jobs_page({clone_links.TASK}, 0, 500, _actor(email))
-    return jobs
+    return list_jobs_page({clone_links.TASK}, 0, 500, _actor(email)).jobs
 
 
 def _card(job_id: str) -> str:
@@ -83,7 +86,7 @@ def queued(monkeypatch) -> list[tuple]:
     paid."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        clone_links,
+        clone_links_service,
         "enqueue_to",
         lambda queue, fn, *args, **_kw: calls.append((queue, fn, args)),
     )
@@ -190,7 +193,9 @@ def test_too_many_links_are_refused(monkeypatch):
 def test_previews_without_google_drive_read_nothing(monkeypatch):
     read: list[list[str]] = []
     monkeypatch.setattr(
-        clone_links, "preview_all", lambda urls, *_a: read.append(urls) or iter(())
+        clone_links_service,
+        "preview_all",
+        lambda urls, *_a: read.append(urls) or iter(()),
     )
 
     r = client(google=False).post("/clone-links/previews", json={"urls": [REEL]})
@@ -213,7 +218,7 @@ def test_previews_stream_a_line_per_link_unbuffered(monkeypatch):
     """`X-Accel-Buffering: no`: the host's nginx passes each line on as it
     comes, so the dialog's tiles fill one by one."""
     monkeypatch.setattr(
-        clone_links,
+        clone_links_service,
         "preview_all",
         lambda urls, _user, price, _thumbs: (
             LinkPreview(url=u, seconds=2.0, max_s=price.max_s) for u in urls
@@ -261,7 +266,7 @@ def test_the_same_generate_sent_twice_queues_its_runs_once(queued, monkeypatch):
 
     first = run(ann, [REEL, OTHER], batch=batch)
     again = run(ann, [REEL, OTHER], batch=batch)
-    monkeypatch.setattr(clone_links, "_first_send", lambda _actor, _batch: True)
+    monkeypatch.setattr(clone_links_service, "_first_send", lambda _actor, _batch: True)
     later = run(ann, [REEL, OTHER], batch=batch)
 
     assert first["batch"] == again["batch"] == later["batch"] == batch
@@ -273,7 +278,9 @@ def test_the_same_generate_sent_twice_queues_its_runs_once(queued, monkeypatch):
 
 
 def test_a_send_racing_the_first_of_its_generate_queues_nothing(queued, monkeypatch):
-    monkeypatch.setattr(clone_links, "_first_send", lambda _actor, _batch: False)
+    monkeypatch.setattr(
+        clone_links_service, "_first_send", lambda _actor, _batch: False
+    )
 
     answer = run(client(), [REEL], batch="abcdef0123456789")
 
@@ -310,7 +317,7 @@ def test_a_run_the_queue_refuses_is_failed_at_once(monkeypatch):
         msg = "Connection refused"
         raise RedisError(msg)
 
-    monkeypatch.setattr(clone_links, "enqueue_to", refuse)
+    monkeypatch.setattr(clone_links_service, "enqueue_to", refuse)
 
     with pytest.raises(RedisError):
         post_run(client(), [REEL, OTHER])
@@ -417,7 +424,7 @@ def test_the_page_never_waits_on_google_for_the_drive_space(monkeypatch):
         return real_render(request, name, **context)
 
     monkeypatch.setattr(
-        clone_links, "drive_space", lambda _user, **kw: asked.append(kw) or None
+        clone_links_page, "drive_space", lambda _user, **kw: asked.append(kw) or None
     )
     monkeypatch.setattr(clone_links, "render", spy)
 
@@ -468,7 +475,7 @@ def test_a_queued_run_loads_in_a_fresh_worker_process(queued):
     )
 
     assert loaded.returncode == 0, loaded.stderr.decode()
-    assert loaded.stdout.decode().splitlines()[-1] == clone_links.__name__
+    assert loaded.stdout.decode().splitlines()[-1] == clone_links_job.__name__
 
 
 # --- Nobody else's -------------------------------------------------------------

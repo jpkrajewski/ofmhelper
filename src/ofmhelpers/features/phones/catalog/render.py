@@ -5,9 +5,12 @@ card and the phone dialog's preview use it, so no photo is stored or
 fetched anywhere. A new layout = one drawing function in `_LAYOUTS`."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import lru_cache
 
-from ofmhelpers.features.phones.catalog.models import (
+from pydantic import BaseModel
+
+from ofmhelpers.schemas.phone_catalog.models import (
     CameraLayout,
     Finish,
     PhoneModel,
@@ -87,113 +90,129 @@ class _Pen:
         self.add(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" fill="#16161b"/>')
 
 
-# Each layout draws inside the body whose top-left corner is (x, y) and
-# width w; coordinates are millimetres.
-_Draw = Callable[[_Pen, float, float, float, bool], None]
+class _Corner(BaseModel, frozen=True):
+    x: float
+    y: float
 
 
-def _single_bare(pen: _Pen, x: float, y: float, _w: float, _lidar: bool) -> None:
-    pen.lens(x + 9.0, y + 9.5, 4.2)
-    pen.flash(x + 17.5, y + 9.5, 1.6)
+@dataclass(frozen=True)
+class _Camera:
+    """One phone's camera, drawn with `pen` inside the body whose top-left
+    corner is (x, y) and width `w`; coordinates are millimetres. Each layout
+    is a method."""
+
+    pen: _Pen
+    x: float
+    y: float
+    w: float
+    lidar: bool
+
+    def single_bare(self) -> None:
+        pen, x, y = self.pen, self.x, self.y
+        pen.lens(x + 9.0, y + 9.5, 4.2)
+        pen.flash(x + 17.5, y + 9.5, 1.6)
+
+    def single_bump(self) -> None:
+        pen, x, y, w = self.pen, self.x, self.y, self.w
+        s = w * 0.36
+        pen.plate(x + 4.5, y + 4.5, s, s, s * 0.24)
+        pen.lens(x + 4.5 + s * 0.38, y + 4.5 + s * 0.38, s * 0.24)
+        pen.flash(x + 4.5 + s * 0.76, y + 4.5 + s * 0.3, 1.6)
+
+    def pill_x(self) -> None:
+        pen, x, y, w = self.pen, self.x, self.y, self.w
+        pw, ph = w * 0.17, w * 0.42
+        px, py = x + 6.0, y + 5.0
+        pen.plate(px, py, pw, ph, pw / 2)
+        cx = px + pw / 2
+        pen.lens(cx, py + pw / 2, pw * 0.38)
+        pen.flash(cx, py + ph / 2, 1.4)
+        pen.lens(cx, py + ph - pw / 2, pw * 0.38)
+
+    def _square(self, s: float) -> _Corner:
+        """The square bump of side `s`; its top-left corner."""
+        bx, by = self.x + 4.5, self.y + 4.5
+        self.pen.plate(bx, by, s, s, s * 0.24)
+        return _Corner(x=bx, y=by)
+
+    def dual_square(self) -> None:
+        pen, w = self.pen, self.w
+        s = w * 0.42
+        corner = self._square(s)
+        bx, by = corner.x, corner.y
+        pen.lens(bx + s * 0.3, by + s * 0.28, s * 0.19)
+        pen.lens(bx + s * 0.3, by + s * 0.72, s * 0.19)
+        pen.flash(bx + s * 0.74, by + s * 0.26, 1.7)
+        pen.dot(bx + s * 0.74, by + s * 0.5, 0.5)
+
+    def dual_diagonal(self) -> None:
+        pen, w = self.pen, self.w
+        s = w * 0.44
+        corner = self._square(s)
+        bx, by = corner.x, corner.y
+        pen.lens(bx + s * 0.29, by + s * 0.29, s * 0.2)
+        pen.lens(bx + s * 0.71, by + s * 0.71, s * 0.2)
+        pen.flash(bx + s * 0.74, by + s * 0.27, 1.7)
+        pen.dot(bx + s * 0.27, by + s * 0.74, 0.5)
+
+    def dual_pill(self) -> None:
+        pen, x, y, w = self.pen, self.x, self.y, self.w
+        pw, ph = w * 0.22, w * 0.5
+        px, py = x + 5.0, y + 5.0
+        pen.plate(px, py, pw, ph, pw / 2)
+        cx = px + pw / 2
+        pen.lens(cx, py + pw / 2, pw * 0.38)
+        pen.lens(cx, py + ph - pw / 2, pw * 0.38)
+        pen.flash(px + pw + 3.6, py + ph * 0.3, 1.6)
+        pen.dot(px + pw + 3.6, py + ph * 0.55, 0.5)
+
+    def _triangle(self, bx: float, by: float, s: float) -> None:
+        pen = self.pen
+        r = s * 0.2
+        pen.lens(bx + s * 0.28, by + s * 0.26, r)
+        pen.lens(bx + s * 0.28, by + s * 0.74, r)
+        pen.lens(bx + s * 0.72, by + s * 0.5, r)
+
+    def triple(self) -> None:
+        pen, w, lidar = self.pen, self.w, self.lidar
+        s = w * 0.5
+        corner = self._square(s)
+        bx, by = corner.x, corner.y
+        self._triangle(bx, by, s)
+        pen.flash(bx + s * 0.74, by + s * 0.17, 1.6)
+        if lidar:
+            pen.dot(bx + s * 0.74, by + s * 0.84, 1.6)
+
+    def plateau_triple(self) -> None:
+        pen, x, y, w, lidar = self.pen, self.x, self.y, self.w, self.lidar
+        h = w * 0.5
+        pen.plate(x + 2.5, y + 3.0, w - 5.0, h, 8.0)
+        self._triangle(x + 4.0, y + 3.0, h)
+        fx = x + w - 13.0
+        pen.flash(fx, y + 3.0 + h * 0.32, 1.7)
+        if lidar:
+            pen.dot(fx, y + 3.0 + h * 0.68, 1.7)
+
+    def plateau_single(self) -> None:
+        pen, x, y, w = self.pen, self.x, self.y, self.w
+        h = w * 0.26
+        pen.plate(x + 2.5, y + 3.0, w - 5.0, h, h / 2)
+        cy = y + 3.0 + h / 2
+        pen.lens(x + 3.0 + h / 2, cy, h * 0.33)
+        pen.dot(x + 3.0 + h * 1.25, cy, h * 0.13)
+        pen.flash(x + w - 3.0 - h / 2, cy, 1.5)
 
 
-def _single_bump(pen: _Pen, x: float, y: float, w: float, _lidar: bool) -> None:
-    s = w * 0.36
-    pen.plate(x + 4.5, y + 4.5, s, s, s * 0.24)
-    pen.lens(x + 4.5 + s * 0.38, y + 4.5 + s * 0.38, s * 0.24)
-    pen.flash(x + 4.5 + s * 0.76, y + 4.5 + s * 0.3, 1.6)
-
-
-def _pill_x(pen: _Pen, x: float, y: float, w: float, _lidar: bool) -> None:
-    pw, ph = w * 0.17, w * 0.42
-    px, py = x + 6.0, y + 5.0
-    pen.plate(px, py, pw, ph, pw / 2)
-    cx = px + pw / 2
-    pen.lens(cx, py + pw / 2, pw * 0.38)
-    pen.flash(cx, py + ph / 2, 1.4)
-    pen.lens(cx, py + ph - pw / 2, pw * 0.38)
-
-
-def _square(pen: _Pen, x: float, y: float, s: float) -> tuple[float, float]:
-    bx, by = x + 4.5, y + 4.5
-    pen.plate(bx, by, s, s, s * 0.24)
-    return bx, by
-
-
-def _dual_square(pen: _Pen, x: float, y: float, w: float, _lidar: bool) -> None:
-    s = w * 0.42
-    bx, by = _square(pen, x, y, s)
-    pen.lens(bx + s * 0.3, by + s * 0.28, s * 0.19)
-    pen.lens(bx + s * 0.3, by + s * 0.72, s * 0.19)
-    pen.flash(bx + s * 0.74, by + s * 0.26, 1.7)
-    pen.dot(bx + s * 0.74, by + s * 0.5, 0.5)
-
-
-def _dual_diagonal(pen: _Pen, x: float, y: float, w: float, _lidar: bool) -> None:
-    s = w * 0.44
-    bx, by = _square(pen, x, y, s)
-    pen.lens(bx + s * 0.29, by + s * 0.29, s * 0.2)
-    pen.lens(bx + s * 0.71, by + s * 0.71, s * 0.2)
-    pen.flash(bx + s * 0.74, by + s * 0.27, 1.7)
-    pen.dot(bx + s * 0.27, by + s * 0.74, 0.5)
-
-
-def _dual_pill(pen: _Pen, x: float, y: float, w: float, _lidar: bool) -> None:
-    pw, ph = w * 0.22, w * 0.5
-    px, py = x + 5.0, y + 5.0
-    pen.plate(px, py, pw, ph, pw / 2)
-    cx = px + pw / 2
-    pen.lens(cx, py + pw / 2, pw * 0.38)
-    pen.lens(cx, py + ph - pw / 2, pw * 0.38)
-    pen.flash(px + pw + 3.6, py + ph * 0.3, 1.6)
-    pen.dot(px + pw + 3.6, py + ph * 0.55, 0.5)
-
-
-def _triangle(pen: _Pen, bx: float, by: float, s: float) -> None:
-    r = s * 0.2
-    pen.lens(bx + s * 0.28, by + s * 0.26, r)
-    pen.lens(bx + s * 0.28, by + s * 0.74, r)
-    pen.lens(bx + s * 0.72, by + s * 0.5, r)
-
-
-def _triple(pen: _Pen, x: float, y: float, w: float, lidar: bool) -> None:
-    s = w * 0.5
-    bx, by = _square(pen, x, y, s)
-    _triangle(pen, bx, by, s)
-    pen.flash(bx + s * 0.74, by + s * 0.17, 1.6)
-    if lidar:
-        pen.dot(bx + s * 0.74, by + s * 0.84, 1.6)
-
-
-def _plateau_triple(pen: _Pen, x: float, y: float, w: float, lidar: bool) -> None:
-    h = w * 0.5
-    pen.plate(x + 2.5, y + 3.0, w - 5.0, h, 8.0)
-    _triangle(pen, x + 4.0, y + 3.0, h)
-    fx = x + w - 13.0
-    pen.flash(fx, y + 3.0 + h * 0.32, 1.7)
-    if lidar:
-        pen.dot(fx, y + 3.0 + h * 0.68, 1.7)
-
-
-def _plateau_single(pen: _Pen, x: float, y: float, w: float, _lidar: bool) -> None:
-    h = w * 0.26
-    pen.plate(x + 2.5, y + 3.0, w - 5.0, h, h / 2)
-    cy = y + 3.0 + h / 2
-    pen.lens(x + 3.0 + h / 2, cy, h * 0.33)
-    pen.dot(x + 3.0 + h * 1.25, cy, h * 0.13)
-    pen.flash(x + w - 3.0 - h / 2, cy, 1.5)
-
-
-_LAYOUTS: dict[CameraLayout, _Draw] = {
-    CameraLayout.SINGLE_BARE: _single_bare,
-    CameraLayout.SINGLE_BUMP: _single_bump,
-    CameraLayout.PILL_X: _pill_x,
-    CameraLayout.DUAL_SQUARE: _dual_square,
-    CameraLayout.DUAL_DIAGONAL: _dual_diagonal,
-    CameraLayout.DUAL_PILL: _dual_pill,
-    CameraLayout.TRIPLE: _triple,
-    CameraLayout.PLATEAU_TRIPLE: _plateau_triple,
-    CameraLayout.PLATEAU_SINGLE: _plateau_single,
+_LAYOUTS: dict[CameraLayout, Callable[[_Camera], None]] = {
+    CameraLayout.SINGLE_BARE: _Camera.single_bare,
+    CameraLayout.SINGLE_BUMP: _Camera.single_bump,
+    CameraLayout.PILL_X: _Camera.pill_x,
+    CameraLayout.DUAL_SQUARE: _Camera.dual_square,
+    CameraLayout.DUAL_DIAGONAL: _Camera.dual_diagonal,
+    CameraLayout.DUAL_PILL: _Camera.dual_pill,
+    CameraLayout.TRIPLE: _Camera.triple,
+    CameraLayout.PLATEAU_TRIPLE: _Camera.plateau_triple,
+    CameraLayout.PLATEAU_SINGLE: _Camera.plateau_single,
 }
 
 
@@ -219,7 +238,7 @@ def render(model: PhoneModel | None, finish: Finish | None) -> str:
         f'fill="url(#g)" stroke="{pen.edge}" stroke-width="1.1"/>'
     )
     if model is not None:
-        _LAYOUTS[model.camera](pen, x, y, w, model.lidar)
+        _LAYOUTS[model.camera](_Camera(pen, x, y, w, model.lidar))
     label = f"{model.label} back" if model else "Phone back"
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {cw:g} {ch:g}" '

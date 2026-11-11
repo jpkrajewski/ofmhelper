@@ -1,12 +1,12 @@
-"""utils/outbound.py: with OFM_FAKE_EXTERNALS every outside request is
+"""integrations/outbound.py: with OFM_FAKE_EXTERNALS every outside request is
 answered by its host's fake, and a host without one is refused -- the app
 under e2e can never reach the internet by accident."""
 
 import pytest
 import requests
 
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
-from ofmhelpers.utils import outbound
 
 
 @pytest.fixture

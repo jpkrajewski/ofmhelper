@@ -6,10 +6,11 @@ from ofmhelpers.integrations.apify.client import (
     ApifyClient,
     ApifyCreditError,
     ApifyError,
+    Funded,
     by_credit,
     richest,
 )
-from ofmhelpers.integrations.apify.models import ActorRun, RunStatus
+from ofmhelpers.integrations.apify.models import ActorRun, DatasetItem, RunStatus
 
 __all__ = [
     "ActorRun",
@@ -17,6 +18,8 @@ __all__ = [
     "ApifyClient",
     "ApifyCreditError",
     "ApifyError",
+    "DatasetItem",
+    "Funded",
     "RunStatus",
     "by_credit",
     "richest",

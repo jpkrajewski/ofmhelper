@@ -12,6 +12,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar
 
+from pydantic import BaseModel, ConfigDict
+
 lazy from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
 lazy from ofmhelpers.integrations.ai_providers.base import TaskState
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
@@ -50,7 +52,7 @@ class Family(ABC):
 
 
 @lru_cache(maxsize=1)
-def families() -> tuple[Family, ...]:
+def families() -> list[Family]:
     """Every family, the first serving a model id wins (a singleton)."""
     from ofmhelpers.integrations.ai_providers.apiyi.families import (
         dashscope,
@@ -60,7 +62,7 @@ def families() -> tuple[Family, ...]:
         veo,
     )
 
-    return (
+    return [
         dashscope.DashScope(),
         seedance.Seedance(),
         veo.Veo(),
@@ -68,7 +70,7 @@ def families() -> tuple[Family, ...]:
         images.GptImage(),
         images.Seedream(),
         images.Flux(),
-    )
+    ]
 
 
 def family_for(model_id: str) -> Family:
@@ -79,12 +81,20 @@ def family_for(model_id: str) -> Family:
     return found
 
 
-def split(task_id: str) -> tuple[Family, str]:
-    """The family a task id belongs to, and that family's own id."""
+class FamilyTask(BaseModel):
+    """A task id read back: the family it belongs to and that family's own id."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    family: Family
+    own_id: str
+
+
+def split(task_id: str) -> FamilyTask:
     tag, sep, own = task_id.partition(_SEP)
     if sep:
         found = next((f for f in families() if f.tag and f.tag == tag), None)
         if found is not None:
-            return found, own
+            return FamilyTask(family=found, own_id=own)
     bare = next(f for f in families() if not f.tag)
-    return bare, task_id
+    return FamilyTask(family=bare, own_id=task_id)

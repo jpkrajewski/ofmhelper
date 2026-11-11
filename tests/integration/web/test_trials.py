@@ -19,7 +19,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 import worker_tasks
 from fastapi.testclient import TestClient
-from signin import sign_in_agency
+from signin import sign_in, sign_in_agency
 
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.db.stores import devices, users
@@ -106,7 +106,7 @@ def _login(drive: FakeDrive, *videos: str) -> int:
     for name in videos:
         drive.add_file(_posted(drive), name, "video/mp4")
     drive_folders.sync()
-    return added[0]
+    return added.id
 
 
 def _state(login_id: int) -> trial_state.FolderState:
@@ -393,6 +393,54 @@ def test_select_is_kept_at_once_and_upload_takes_it(drive, made):
     client.post(f"/trials/{login}/reel/{first.key}/select", data={"selected": "false"})
     assert not _state(login).reels[0].approved
     assert client.post(f"/trials/{login}/reel/nope/select").status_code == 404
+
+
+def test_a_reel_the_folder_does_not_have_is_a_404_on_every_reel_route(drive, made):
+    """The reel in the path (`Reel`, one dependency for the six routes)."""
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    reel = f"/trials/{login}/reel/nope"
+
+    answers = {
+        "regenerate": client.post(f"{reel}/regenerate"),
+        "caption": client.post(f"{reel}/caption", data={"caption": "mine"}),
+        "captions": client.post(f"{reel}/captions"),
+        "select": client.post(f"{reel}/select", data={"selected": "true"}),
+        "video": client.get(f"/trials/files/{login}/nope"),
+        "poster": client.get(f"/trials/files/{login}/nope/poster"),
+    }
+
+    assert {name: r.status_code for name, r in answers.items()} == dict.fromkeys(
+        answers, 404
+    )
+    assert {name: r.json()["detail"] for name, r in answers.items()} == {
+        "regenerate": "No such reel",
+        "caption": "No such reel",
+        "captions": "No such reel",
+        "select": "No such reel",
+        "video": "Not generated yet",
+        "poster": "Not generated yet",
+    }
+    assert made == ["caption 0"]  # nothing was made for it
+
+
+def test_a_reel_of_a_login_that_is_not_theirs_is_a_404(drive, made):
+    login = _login(drive, "a.mp4")
+    _client().post(f"/trials/{login}/generate")
+    (reel,) = _state(login).reels
+    stranger = TestClient(app)
+    sign_in(stranger)
+
+    answers = [
+        stranger.post(f"/trials/{login}/reel/{reel.key}/regenerate"),
+        stranger.post(f"/trials/{login}/reel/{reel.key}/select"),
+        stranger.get(f"/trials/files/{login}/{reel.key}"),
+        stranger.get(f"/trials/files/{login}/{reel.key}/poster"),
+    ]
+
+    assert [r.status_code for r in answers] == [404, 404, 404, 404]
+    assert len(made) == 1
 
 
 _CAMERA_NAME = re.compile(r"VID_\d{4}\.mp4")
@@ -1185,7 +1233,7 @@ def test_a_generate_cut_off_by_a_deploy_goes_on_where_it_stopped(drive, made):
     drive.add_file(_posted(drive), "b.mp4", "video/mp4")
     job_id = _cut_off(login)
 
-    assert recovery.run_recovery_once() == {job_id: "restarted"}
+    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
 
     assert made == ["caption 0", "caption 1"]  # a.mp4 not made again
     job = get_job(job_id)
@@ -1203,7 +1251,7 @@ def test_a_restarted_generate_waits_on_the_media_queue_with_its_time_limit(
     job_id = _cut_off(login)
     real_queue()
 
-    assert recovery.run_recovery_once() == {job_id: "restarted"}
+    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
 
     (queued,) = get_queue(QueueName.MEDIA).get_jobs()
     assert queued.args[0] == job_id
@@ -1223,7 +1271,7 @@ def test_a_job_that_cannot_start_over_still_fails_as_interrupted(
     login = _login(drive, "a.mp4")
     job_id = _cut_off(login, label, **params)
 
-    assert recovery.run_recovery_once() == {job_id: "interrupted"}
+    assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
 
     job = get_job(job_id)
     assert job.status == "failed"

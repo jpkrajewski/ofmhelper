@@ -51,7 +51,7 @@ def test_a_generation_runs_end_to_end_and_saves_its_video(provider, image, tmp_p
     body = spec.request(
         {"prompt": "Image 1 dances", "imageUrls": [str(image)], "duration": 5},
         provider.upload,
-    )
+    ).model_dump()
 
     [saved] = runner.generate(provider, spec, body, "rh-job-1")
 
@@ -64,7 +64,7 @@ def test_a_generation_runs_end_to_end_and_saves_its_video(provider, image, tmp_p
 
 def test_the_body_fills_required_defaults_and_sends_seconds_as_a_string():
     spec = get_spec(WAN)
-    body = wire_body(spec, {"prompt": "p", "duration": 15})
+    body = wire_body(spec, {"prompt": "p", "duration": 15}).model_dump()
 
     assert body["duration"] == "15"
     # Required by RunningHub, left out by a form that kept the default.
@@ -84,12 +84,11 @@ def test_a_clone_run_is_valid_for_wan_3_on_runninghub():
         audio=True,
         images=["/s.png"],
         video="/v.mp4",
-    )
+    ).model_dump()
 
     target.spec.check(values)
-    body = wire_body(
-        target.spec, target.spec.request(values, lambda p: f"https://u/{p.name}")
-    )
+    sent = target.spec.request(values, lambda p: f"https://u/{p.name}").model_dump()
+    body = wire_body(target.spec, sent).model_dump()
 
     assert body["aspectRatio"] == "adaptive"
     assert body["resolution"] == "720P"

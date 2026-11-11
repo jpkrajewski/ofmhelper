@@ -13,6 +13,7 @@ from rq import SimpleWorker, Worker
 from ofmhelpers.cache import (
     JOB_QUEUES,
     JobQueue,
+    Line,
     QueueName,
     active_job_ids,
     get_queue,
@@ -20,7 +21,8 @@ from ofmhelpers.cache import (
 )
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import QueuePriority
-from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.worker import ConfiguredWorker
 
 
@@ -90,7 +92,17 @@ def test_the_line_says_how_many_are_ahead_of_each_job():
     media.put(run_job, first, worker_tasks.make_result, {"name": "a.mp4"})
     media.put(run_job, second, worker_tasks.make_result, {"name": "b.mp4"})
 
-    assert media.line() == {first: 0, second: 1}
+    line = media.line()
+    assert (line.ahead(first), line.ahead(second)) == (0, 1)
+
+
+def test_a_line_counts_the_running_jobs_and_knows_who_does_not_wait():
+    line = Line(running=2, waiting=["a", "b"])
+
+    assert (line.ahead("a"), line.ahead("b")) == (2, 3)
+    assert line.ahead("gone") is None
+    assert "a" in line
+    assert "gone" not in line
 
 
 def test_the_job_being_run_counts_as_ahead():
@@ -101,7 +113,9 @@ def test_the_job_being_run_counts_as_ahead():
 
     _drain_media()
 
-    assert json.loads(get_redis().get("line_seen")) == {waiting: 1}
+    seen = Line.model_validate_json(get_redis().get("line_seen"))
+    assert seen.waiting == [waiting]
+    assert seen.ahead(waiting) == 1
 
 
 def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
@@ -116,8 +130,8 @@ def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
 
 def test_default_is_on_top_and_media_at_the_bottom_one_at_a_time():
     queues = settings.infra.queues
-    assert list(queues) == list(QueueName)
-    priorities = [queue.priority for queue in queues.values()]
+    assert queues.names() == list(QueueName)
+    priorities = [queue.priority for queue in queues.all()]
     assert priorities == sorted(priorities)
     assert queues[QueueName.DEFAULT].priority == QueuePriority.HIGHEST
     assert queues[QueueName.MEDIA].priority == QueuePriority.LOWEST

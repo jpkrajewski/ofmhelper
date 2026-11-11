@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from ofmhelpers.db.stores.jobs import create_job, fail_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, fail_job
 from ofmhelpers.features.jobs import raw_files
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
 
 DAY = 86400

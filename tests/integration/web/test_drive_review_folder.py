@@ -68,7 +68,7 @@ def _two_reviews(user_id: int) -> list[str]:
     def review() -> None:
         start.wait()
         try:
-            found.append(review_folder(TOKEN, user_id, GOOD)[1])
+            found.append(review_folder(TOKEN, user_id, GOOD).folder_id)
         except Exception as exc:
             errors.append(exc)
 
@@ -106,10 +106,10 @@ def test_without_the_lock_the_same_two_reviews_duplicate(drive, monkeypatch):
 
 def test_the_folder_is_remembered_and_checked_with_one_read(drive):
     user_id = _owner()
-    _, first = review_folder(TOKEN, user_id, GOOD)
+    first = review_folder(TOKEN, user_id, GOOD).folder_id
     drive.clear_calls()
 
-    _, again = review_folder(TOKEN, user_id, GOOD)
+    again = review_folder(TOKEN, user_id, GOOD).folder_id
 
     assert again == first
     # The root (usable_root) and the remembered folder: one read each.
@@ -118,10 +118,10 @@ def test_the_folder_is_remembered_and_checked_with_one_read(drive):
 
 def test_a_remembered_folder_deleted_by_hand_is_made_again(drive):
     user_id = _owner()
-    _, first = review_folder(TOKEN, user_id, GOOD)
+    first = review_folder(TOKEN, user_id, GOOD).folder_id
     drive.trash(first)
 
-    _, again = review_folder(TOKEN, user_id, GOOD)
+    again = review_folder(TOKEN, user_id, GOOD).folder_id
 
     root = users.get_user(user_id).drive_root_id
     assert again != first
@@ -130,10 +130,10 @@ def test_a_remembered_folder_deleted_by_hand_is_made_again(drive):
 
 def test_a_remembered_folder_renamed_by_hand_is_not_used(drive):
     user_id = _owner()
-    _, first = review_folder(TOKEN, user_id, GOOD)
+    first = review_folder(TOKEN, user_id, GOOD).folder_id
     drive.rename_by_hand(first, "GOOD REELS (sorted)")
 
-    _, again = review_folder(TOKEN, user_id, GOOD)
+    again = review_folder(TOKEN, user_id, GOOD).folder_id
 
     root = users.get_user(user_id).drive_root_id
     assert drive.named(GOOD, root) == [again]
@@ -146,7 +146,7 @@ def test_a_folder_made_by_hand_is_adopted(drive):
     root = drive.seed_folder(ROOT_NAME, MY_DRIVE, owner=EMAIL)
     by_hand = drive.seed_folder(GOOD, root, owner=EMAIL)
 
-    _, found = review_folder(TOKEN, user_id, GOOD)
+    found = review_folder(TOKEN, user_id, GOOD).folder_id
 
     assert found == by_hand
     assert drive.writes == []
@@ -163,9 +163,11 @@ def test_dev_reading_the_live_folders_files_reviews_in_its_own_root(
     video = tmp_path / "clone.mp4"
     video.write_bytes(b"mp4")
 
-    first_drive, first = review_folder(TOKEN, user_id, GOOD)
+    first_place = review_folder(TOKEN, user_id, GOOD)
+    first_drive, first = first_place.drive, first_place.folder_id
     first_drive.upload(first, video, "a.mp4", "video/mp4")
-    later_drive, again = review_folder(TOKEN, user_id, GOOD)
+    later_place = review_folder(TOKEN, user_id, GOOD)
+    later_drive, again = later_place.drive, later_place.folder_id
     later_drive.upload(again, video, "b.mp4", "video/mp4")
 
     (root,) = drive.named(ROOT_NAME, MY_DRIVE)
@@ -188,7 +190,7 @@ def test_redis_down_the_review_goes_ahead_unlocked(drive, monkeypatch):
     user_id = _owner()
     monkeypatch.setattr(drive_folders, "get_redis", _NoRedis)
 
-    _, found = review_folder(TOKEN, user_id, GOOD)
+    found = review_folder(TOKEN, user_id, GOOD).folder_id
 
     (root,) = drive.named(ROOT_NAME, MY_DRIVE)
     assert drive.named(GOOD, root) == [found]
@@ -200,7 +202,7 @@ def test_a_lock_held_too_long_is_waited_for_then_gone_past(drive, monkeypatch):
     held = get_redis().lock(f"lock:drive-review:{user_id}", timeout=30)
     assert held.acquire(blocking=False)
 
-    _, found = review_folder(TOKEN, user_id, GOOD)
+    found = review_folder(TOKEN, user_id, GOOD).folder_id
 
     (root,) = drive.named(ROOT_NAME, MY_DRIVE)
     assert drive.named(GOOD, root) == [found]

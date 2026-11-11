@@ -17,12 +17,22 @@ from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from pydantic import BaseModel
 
 from ofmhelpers.db.repositories import DuplicateError
+from ofmhelpers.features.assets.store import AssetRefusedError
 from ofmhelpers.features.clone.service import CloneRefusedError
 from ofmhelpers.features.drive.uploads import UploadRefusedError
 from ofmhelpers.features.edit.service import EditRefusedError
 from ofmhelpers.features.generate.service import GenerateRefusedError
+from ofmhelpers.features.refusals import (
+    ConflictError,
+    ForbiddenError,
+    RefusedError,
+    TryAgainError,
+    UnavailableError,
+)
+from ofmhelpers.features.refusals import NotFoundError as MissingError
 from ofmhelpers.features.trials.folder import NotFoundError
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.integrations.downloaders.urls import NotALinkError
@@ -35,14 +45,21 @@ MESSAGE = "Something went wrong. Try again."
 
 REFUSALS: frozendict[type[Exception], int] = frozendict(
     {
+        AssetRefusedError: 400,
         CloneRefusedError: 400,
         EditRefusedError: 400,
         GenerateRefusedError: 400,
         InvalidInputError: 400,
         NotALinkError: 400,
+        RefusedError: 400,
         UploadRefusedError: 400,
+        ForbiddenError: 403,
+        MissingError: 404,
         NotFoundError: 404,
+        ConflictError: 409,
         DuplicateError: 409,
+        UnavailableError: 502,
+        TryAgainError: 503,
     }
 )
 
@@ -69,7 +86,15 @@ Handler = Callable[[Request, Any], Coroutine[Any, Any, Response]]
 
 def _refusal(status_code: int) -> Handler:
     async def answer(_request: Request, exc: Exception) -> Response:
-        return JSONResponse({"detail": str(exc)}, status_code=status_code)
+        detail = getattr(exc, "detail", None)
+        return JSONResponse(
+            {
+                "detail": detail.model_dump()
+                if isinstance(detail, BaseModel)
+                else str(exc)
+            },
+            status_code=status_code,
+        )
 
     return answer
 

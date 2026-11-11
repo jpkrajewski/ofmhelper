@@ -4,6 +4,7 @@ drawn with Pillow at the copy's exact output size. Laid over the video at a
 few percent opacity (`video.VideoTransformer._overlay`)."""
 
 import random
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
@@ -33,63 +34,71 @@ _PARTICLE_COLOURS = ("#4DA3FF", "#FE1648", "#FFB020", "#42A6FE", "#F13BDE", "#88
 _PSYCHE_COLOURS = ("#FE1648", "#F13BDE", "#880DFB", "#42A6FE", "#FFB020")
 
 
-def _stripes(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
-    for offset in range(-h, w + h, _STRIPE_PERIOD):
-        draw.line([(offset, 0), (offset + h, h)], fill="white", width=_STRIPE_WIDTH)
+@dataclass(frozen=True)
+class _Canvas:
+    """One pattern image being drawn: Pillow's pen and the frame's size."""
 
+    pen: ImageDraw.ImageDraw
+    w: int
+    h: int
 
-def _grid(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
-    for x in range(0, w + 1, _GRID_SPACING):
-        draw.line([(x, 0), (x, h)], fill=_GRID_GREY)
-    for y in range(0, h + 1, _GRID_SPACING):
-        draw.line([(0, y), (w, y)], fill=_GRID_GREY)
+    def stripes(self) -> None:
+        w, h = self.w, self.h
+        for offset in range(-h, w + h, _STRIPE_PERIOD):
+            self.pen.line(
+                [(offset, 0), (offset + h, h)], fill="white", width=_STRIPE_WIDTH
+            )
 
+    def grid(self) -> None:
+        for x in range(0, self.w + 1, _GRID_SPACING):
+            self.pen.line([(x, 0), (x, self.h)], fill=_GRID_GREY)
+        for y in range(0, self.h + 1, _GRID_SPACING):
+            self.pen.line([(0, y), (self.w, y)], fill=_GRID_GREY)
 
-def _check(draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
-    for y in range(0, h, _CHECK_SIZE):
-        for x in range(0, w, _CHECK_SIZE):
-            if (x // _CHECK_SIZE + y // _CHECK_SIZE) % 2 == 0:
-                draw.rectangle(
-                    [x, y, x + _CHECK_SIZE - 1, y + _CHECK_SIZE - 1], fill="white"
-                )
+    def check(self) -> None:
+        for y in range(0, self.h, _CHECK_SIZE):
+            for x in range(0, self.w, _CHECK_SIZE):
+                if (x // _CHECK_SIZE + y // _CHECK_SIZE) % 2 == 0:
+                    self.pen.rectangle(
+                        [x, y, x + _CHECK_SIZE - 1, y + _CHECK_SIZE - 1], fill="white"
+                    )
 
+    def sectors(self, fills: list[str | None]) -> None:
+        """Pie sectors from the centre past the corners, one per fill (None: skip)."""
+        w, h = self.w, self.h
+        r = max(w, h)
+        box = [w / 2 - r, h / 2 - r, w / 2 + r, h / 2 + r]
+        step = 360 / len(fills)
+        for i, fill in enumerate(fills):
+            if fill is not None:
+                self.pen.pieslice(box, i * step, (i + 1) * step, fill=fill)
 
-def _sectors(
-    draw: ImageDraw.ImageDraw, w: int, h: int, fills: list[str | None]
-) -> None:
-    """Pie sectors from the centre past the corners, one per fill (None: skip)."""
-    r = max(w, h)
-    box = [w / 2 - r, h / 2 - r, w / 2 + r, h / 2 + r]
-    step = 360 / len(fills)
-    for i, fill in enumerate(fills):
-        if fill is not None:
-            draw.pieslice(box, i * step, (i + 1) * step, fill=fill)
-
-
-def _particles(draw: ImageDraw.ImageDraw, w: int, h: int, rng: random.Random) -> None:
-    for _ in range(_PARTICLE_COUNT):
-        x, y = rng.uniform(0, w), rng.uniform(0, h)
-        r = rng.uniform(*_PARTICLE_RADIUS)
-        draw.ellipse([x - r, y - r, x + r, y + r], fill=rng.choice(_PARTICLE_COLOURS))
+    def particles(self, rng: random.Random) -> None:
+        for _ in range(_PARTICLE_COUNT):
+            x, y = rng.uniform(0, self.w), rng.uniform(0, self.h)
+            r = rng.uniform(*_PARTICLE_RADIUS)
+            self.pen.ellipse(
+                [x - r, y - r, x + r, y + r], fill=rng.choice(_PARTICLE_COLOURS)
+            )
 
 
 def draw(pattern: Pattern, size: tuple[int, int], rng: random.Random) -> Image.Image:
     w, h = size
     background = _PARTICLE_BACKGROUND if pattern is Pattern.PARTICLES else "black"
     image = Image.new("RGB", size, background)
-    canvas = ImageDraw.Draw(image)
+    canvas = _Canvas(ImageDraw.Draw(image), w, h)
     if pattern is Pattern.STRIPES:
-        _stripes(canvas, w, h)
+        canvas.stripes()
     elif pattern is Pattern.GRID:
-        _grid(canvas, w, h)
+        canvas.grid()
     elif pattern is Pattern.CHECK:
-        _check(canvas, w, h)
+        canvas.check()
     elif pattern is Pattern.SPIRAL:
-        _sectors(canvas, w, h, ["white", None] * (_SPIRAL_SECTORS // 2))
+        canvas.sectors(["white", None] * (_SPIRAL_SECTORS // 2))
     elif pattern is Pattern.PARTICLES:
-        _particles(canvas, w, h, rng)
+        canvas.particles(rng)
     else:
-        _sectors(canvas, w, h, list(_PSYCHE_COLOURS))
+        canvas.sectors(list(_PSYCHE_COLOURS))
     return image
 
 

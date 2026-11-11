@@ -20,25 +20,20 @@ Redis): a job carries the user id and reads the cookies when it runs.
 
 from functools import lru_cache
 
-from ofmhelpers.config import settings
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.repositories import CookieRepository
 from ofmhelpers.db.stores.watched_profiles import watchers
-from ofmhelpers.features.phones.catalog import cookie_sites
-from ofmhelpers.integrations.downloaders.cookies import CookieFileError, summarize
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import SavedCookies
+lazy from ofmhelpers.schemas.cookies import StoredCookies
 
 logger = get_logger(__name__)
 
 __all__ = [
-    "CookieFileError",
-    "check_size",
     "for_user",
     "for_watched",
     "remove",
-    "save",
-    "saved",
+    "stored",
+    "write",
 ]
 
 
@@ -47,7 +42,7 @@ def _repository() -> CookieRepository:
     return CookieRepository()
 
 
-def _readable(user_id: int) -> dict | None:
+def _readable(user_id: int) -> StoredCookies | None:
     """The stored row; None when the vault key cannot read it: a download runs
     logged out, /cookies offers an upload, never a crash."""
     try:
@@ -62,7 +57,7 @@ def for_user(user_id: int | None) -> str | None:
     if user_id is None:
         return None
     row = _readable(user_id)
-    return row["cookies"] if row else None
+    return row.cookies if row else None
 
 
 def for_watched(username: str) -> str | None:
@@ -72,55 +67,15 @@ def for_watched(username: str) -> str | None:
     return for_user(holder)
 
 
-def saved(user_id: int) -> SavedCookies | None:
-    """What /cookies shows of `user_id`'s cookies (no value), or None."""
-    row = _readable(user_id)
-    if row is None:
-        return None
-    try:
-        summary = summarize(row["cookies"], cookie_sites())
-    except CookieFileError:
-        # Only a file stored before uploads were checked (the old shared
-        # one, moved by alembic) can get here.
-        logger.warning("stored cookies of user %s are not readable", user_id)
-        return None
-    return SavedCookies(
-        file_name=row["file_name"], uploaded_at=row["uploaded_at"], summary=summary
-    )
+def stored(user_id: int) -> StoredCookies | None:
+    """`user_id`'s stored file, value included (`features/cookies/jar.py`
+    shows what it covers); None when there is none or it cannot be read."""
+    return _readable(user_id)
 
 
-def check_size(size: int) -> None:
-    """Raises CookieFileError, worded for the uploader, when a cookies.txt of
-    `size` bytes is over `cookies_max_bytes`."""
-    limit = settings.downloaders.cookies_max_bytes
-    if size > limit:
-        mb = 1024 * 1024
-        msg = (
-            f"That file is {size / mb:.1f} MB; "
-            f"a cookies.txt may be up to {limit / mb:.0f} MB"
-        )
-        raise CookieFileError(msg)
-
-
-def save(user_id: int, payload: bytes, file_name: str) -> SavedCookies:
-    """Stores (or replaces) `user_id`'s cookies. Raises CookieFileError,
-    with a message for the uploader, when `payload` is not a cookies.txt
-    holding at least one cookie, or is too big."""
-    check_size(len(payload))
-    try:
-        text = payload.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        msg = "Not a cookies.txt file: it is not text"
-        raise CookieFileError(msg) from exc
-    summary = summarize(text, cookie_sites())
-    uploaded_at = _repository().save(user_id, text, file_name)
-    logger.info(
-        "user %s uploaded cookies (%d cookies, Instagram login: %s)",
-        user_id,
-        summary.cookies,
-        summary.instagram_login,
-    )
-    return SavedCookies(file_name=file_name, uploaded_at=uploaded_at, summary=summary)
+def write(user_id: int, text: str, file_name: str) -> float:
+    """Stores (or replaces) `user_id`'s cookies; when it was uploaded."""
+    return _repository().save(user_id, text, file_name)
 
 
 def remove(user_id: int) -> bool:

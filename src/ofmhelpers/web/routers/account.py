@@ -4,22 +4,17 @@ Apple, a password), whether Drive uploads can go up as them (a Google
 account linked with Drive), and their own API keys per generation
 provider, which their forms pre-fill so their runs bill their account, and
 per link provider (/links runs on them; an admin with none on the .env
-one).
+one). The work: `features/account/service.py`.
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 
-from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
+from ofmhelpers.features.account import service
+from ofmhelpers.features.account.service import Notice
 from ofmhelpers.features.drive.space import DriveSpace, drive_space
-from ofmhelpers.features.links.sync import sync_now
-from ofmhelpers.integrations.ai_providers.base import provider_classes
-from ofmhelpers.integrations.short_links.providers import link_providers
-from ofmhelpers.integrations.signin import linkable, providers
 from ofmhelpers.schemas import ApiKeysForm
 from ofmhelpers.web.dependencies import CurrentUser
 from ofmhelpers.web.middleware import AuthMiddleware
@@ -28,43 +23,12 @@ from ofmhelpers.web.templates_config import render
 
 router = APIRouter(prefix="/account", tags=["account"])
 
-# How much of a saved key the page shows.
-_KEY_TAIL = 4
 
-
-def _keyed_providers() -> dict[str, str]:
-    """name -> label of the providers a run needs a key for: generation,
-    then link providers."""
-    generation = {
-        name: cls.label for name, cls in provider_classes().items() if cls.needs_key
-    }
-    return generation | {key: cls.label() for key, cls in link_providers().items()}
-
-
-def _page(
-    request: Request,
-    user_id: int,
-    *,
-    message: str | None = None,
-    error: str | None = None,
-    status_code: int = 200,
-) -> Response:
-    user = users.get_user(user_id)
-    saved = users.api_keys(user_id)
+def _page(request: Request, user_id: int, notice: Notice) -> Response:
+    view = service.page_view(user_id, notice)
+    # `iter`: the view has a field named `keys`, which `dict(view)` would call.
     response = render(
-        request,
-        "account.html",
-        user=user,
-        linked={a.provider: a for a in users.linked_accounts(user_id)},
-        providers=linkable(),
-        keys={
-            name: (label, saved.get(name, "")[-_KEY_TAIL:])
-            for name, label in _keyed_providers().items()
-        },
-        min_length=settings.signin.password_min_length,
-        message=message,
-        error=error,
-        status_code=status_code,
+        request, "account.html", **dict(iter(view)), status_code=notice.status_code
     )
     response.headers.update(NO_STORE)
     return response
@@ -74,23 +38,7 @@ def _page(
 def account_page(
     request: Request, me: CurrentUser, google: str = "", apple: str = ""
 ) -> Response:
-    notes = {
-        "linked": "{} account linked.",
-        "taken": "That {} account is already linked to someone else.",
-        "failed": "Connecting your {} account failed: try again.",
-    }
-    for label, outcome in (("Google", google), ("Apple", apple)):
-        if outcome == "taken":
-            return _page(
-                request, me.id, error=notes["taken"].format(label), status_code=409
-            )
-        if outcome == "failed":
-            return _page(
-                request, me.id, error=notes["failed"].format(label), status_code=400
-            )
-        if outcome == "linked":
-            return _page(request, me.id, message=notes["linked"].format(label))
-    return _page(request, me.id)
+    return _page(request, me.id, service.link_notice(google, apple))
 
 
 @router.get("/drive-space")
@@ -111,71 +59,33 @@ def change_password(
     confirm: Annotated[str, Form()],
     current: Annotated[str, Form()] = "",
 ) -> Response:
-    try:
-        users.change_password(me.id, current, password, confirm)
-    except users.PasswordRejectedError as exc:
-        return _page(request, me.id, error=str(exc), status_code=400)
+    changed = service.change_password(me.id, current, password, confirm)
     # Every other session of theirs is out now; this one stays in.
-    user = users.get_user(me.id)
-    if user is not None:
-        AuthMiddleware.remember(request, user)
-    return _page(request, me.id, message="Password saved.")
+    if changed.user is not None:
+        AuthMiddleware.remember(request, changed.user)
+    return _page(request, me.id, changed.notice)
+
+
+async def _keys_form(request: Request) -> ApiKeysForm:
+    """The keys form: its fields come from data (`key_<provider>` per keyed
+    provider; a Remove button posts `remove=<provider>`), so it is read here
+    and not as a form model."""
+    return service.keys_form(await request.form())
 
 
 @router.post("/keys")
-async def save_keys(request: Request, me: CurrentUser) -> Response:
-    """One form, one Save for every provider's key (fields `key_<provider>`;
-    a Remove button posts `remove=<provider>`)."""
-    data = await request.form()
-    known = _keyed_providers()
-    form = ApiKeysForm(
-        keys={name: str(data.get(f"key_{name}", "")) for name in known},
-        remove=str(data.get("remove") or "") or None,
-    )
-    if form.remove is not None and form.remove not in known:
-        raise HTTPException(status_code=404, detail="Unknown provider")
-    return await run_in_threadpool(_save_keys, request, me.id, form, known)
-
-
-def _save_keys(
-    request: Request, user_id: int, form: ApiKeysForm, known: dict[str, str]
+def save_keys(
+    request: Request, me: CurrentUser, form: Annotated[ApiKeysForm, Depends(_keys_form)]
 ) -> Response:
-    if form.remove is not None:
-        users.set_api_key(user_id, form.remove, "")
-        return _page(request, user_id, message=f"{known[form.remove]} key removed.")
-    if not form.keys:
-        return _page(
-            request,
-            user_id,
-            error="Nothing to save: paste a key first.",
-            status_code=400,
-        )
-    for name, key in form.keys.items():
-        users.set_api_key(user_id, name, key)
-    if set(form.keys) & set(link_providers()):
-        sync_now(user_id)
-    saved = " and ".join(known[name] for name in form.keys)
-    return _page(
-        request,
-        user_id,
-        message=f"{saved} {'key' if len(form.keys) == 1 else 'keys'} saved.",
-    )
+    """One form, one Save for every provider's key."""
+    return _page(request, me.id, service.save_keys(me.id, form))
 
 
 @router.post("/unlink/{provider}")
 def unlink(request: Request, me: CurrentUser, provider: str) -> Response:
     """Stops signing in with that account (and, for Google, Drive uploads
     as it). Refused when it is the only way left to sign in."""
-    if provider not in providers() or not providers()[provider].linkable:
-        raise HTTPException(status_code=404, detail="Unknown provider")
-    user = users.get_user(me.id)
-    others = [a for a in users.linked_accounts(me.id) if a.provider != provider]
-    if user is not None and not user.has_password and not others:
-        return _page(
-            request,
-            me.id,
-            error="Set a password or link another account first: this is your only way in.",
-            status_code=400,
-        )
-    users.unlink_identity(me.id, provider)
+    refused = service.unlink(me.id, provider)
+    if refused is not None:
+        return _page(request, me.id, refused)
     return see_other("/account")

@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 import pytest
 
 from ofmhelpers.config import settings
+from ofmhelpers.config.types import StackedKey
+from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.stacked import (
     AccountType,
     StackedAuthError,
@@ -23,7 +25,6 @@ from ofmhelpers.integrations.stacked.fake import (
     OTHER_CREATOR,
     fake_stacked,
 )
-from ofmhelpers.utils.outbound import FakeReply
 
 pytestmark = pytest.mark.usefixtures("fake_externals")
 
@@ -81,15 +82,15 @@ def test_a_wrong_key_is_refused_and_never_shown():
 def test_reachable_gives_a_creator_two_keys_reach_once():
     pairs = reachable([CREATOR_KEY, AGENCY_KEY])
 
-    assert [creator.user_id for _, creator in pairs] == [CREATOR, OTHER_CREATOR]
-    assert pairs[0][0].key_hint == StackedClient(CREATOR_KEY).key_hint
-    assert pairs[1][0].key_hint == StackedClient(AGENCY_KEY).key_hint
+    assert [r.creator.user_id for r in pairs] == [CREATOR, OTHER_CREATOR]
+    assert pairs[0].client.key_hint == StackedClient(CREATOR_KEY).key_hint
+    assert pairs[1].client.key_hint == StackedClient(AGENCY_KEY).key_hint
 
 
 def test_reachable_skips_a_dead_key_and_keeps_the_others():
     pairs = reachable([_WRONG_KEY, CREATOR_KEY])
 
-    assert [creator.user_id for _, creator in pairs] == [CREATOR]
+    assert [r.creator.user_id for r in pairs] == [CREATOR]
 
 
 def test_chats_page_to_the_end_with_the_latest_message_first():
@@ -146,16 +147,16 @@ def test_messages_come_newest_first_and_page_backwards():
     client = StackedClient(CREATOR_KEY)
 
     assert [m.message_id for m in client.messages(CREATOR, "channel")] == [
-        newest["messageId"],
-        middle["messageId"],
-        oldest["messageId"],
+        newest.message_id,
+        middle.message_id,
+        oldest.message_id,
     ]
     assert [
         m.message_id
         for m in client.messages(
-            CREATOR, "channel", before_message_id=newest["messageId"]
+            CREATOR, "channel", before_message_id=newest.message_id
         )
-    ] == [middle["messageId"], oldest["messageId"]]
+    ] == [middle.message_id, oldest.message_id]
 
 
 def test_the_providers_own_events_have_no_sender():
@@ -215,4 +216,7 @@ def test_a_new_env_line_adds_a_key_of_either_kind(monkeypatch):
     monkeypatch.setenv("STACKED_API_KEY_MY_AGENCY", AGENCY_KEY)
     monkeypatch.setenv("STACKED_API_KEY_EMPTY", "")
 
-    assert settings.stacked.api_keys == {"first": CREATOR_KEY, "my_agency": AGENCY_KEY}
+    assert settings.stacked.api_keys == [
+        StackedKey(name="first", key=CREATOR_KEY),
+        StackedKey(name="my_agency", key=AGENCY_KEY),
+    ]

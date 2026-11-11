@@ -12,6 +12,40 @@ class _Item(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
 
+class ProfileScraperInput(_Item):
+    """The profile scraper's input, sent under the actor's names."""
+
+    usernames: list[str]
+    include_about_section: bool = Field(
+        default=False, serialization_alias="includeAboutSection"
+    )
+
+
+class ReelScraperInput(_Item):
+    """The reel scraper's input, sent under the actor's names: each
+    account's newest `results_limit` reels (always set: without it the actor
+    reads the whole profile), every paid add-on off."""
+
+    username: list[str]
+    results_limit: int = Field(serialization_alias="resultsLimit")
+    # "N days"; None = not sent, no age filter.
+    only_posts_newer_than: str | None = Field(
+        default=None, serialization_alias="onlyPostsNewerThan"
+    )
+    skip_pinned_posts: bool = Field(
+        default=False, serialization_alias="skipPinnedPosts"
+    )
+    include_shares_count: bool = Field(
+        default=False, serialization_alias="includeSharesCount"
+    )
+    include_transcript: bool = Field(
+        default=False, serialization_alias="includeTranscript"
+    )
+    include_downloaded_video: bool = Field(
+        default=False, serialization_alias="includeDownloadedVideo"
+    )
+
+
 class ApifyReel(_Item):
     """One reel of a profile (the reel scraper)."""
 

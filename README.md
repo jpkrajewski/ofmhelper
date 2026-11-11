@@ -116,6 +116,7 @@ cookies live in named Docker volumes (`postgres_data`, `redis_data`,
 
 | Key | Required | What |
 |---|---|---|
+| `OFM_ENV` | yes | `production` on the server. No default: without it nothing starts (dev's compose overlay says `development`) |
 | `SESSION_SECRET` | yes | Signs the login cookie. `openssl rand -hex 32` |
 | `APP_PASSWORD_ADMIN` | yes | Admin login |
 | `OFM_VAULT_KEY` | yes, for /phones | Encrypts the stored phone logins and backup codes. See below |
@@ -128,6 +129,7 @@ cookies live in named Docker volumes (`postgres_data`, `redis_data`,
 | `OFM_GDRIVE_SERVICE_ACCOUNT` / `OFM_GDRIVE_ROOT_FOLDER` | for /drive | Google service account key (JSON on one line, in single quotes) and the shared folder's id. See below |
 | `OFM_GDRIVE_POSTED_FOLDER` | no | Name of the folder inside each account folder for posted videos (default `POSTED`) |
 | `OFM_GDRIVE_TIMEZONE` | no | Where /drive's "posted today" starts (default `Europe/Warsaw`) |
+| `POSTGRES_PASSWORD` | no | The database password, for the `postgres` service and the app's `OFM_DATABASE_URL` alike (default `ofmhelpers`; the port is never published). On a **new** server set it before the first start. On a server that already has data, Postgres keeps the password its volume was made with: change it there first (`docker compose -f docker-compose.yml exec postgres psql -U ofmhelpers -c "ALTER USER ofmhelpers PASSWORD '...'"`), then put the same value here and `up -d` |
 
 Every other knob has a default; `src/ofmhelpers/config/settings.py` lists them
 all with their env names.
@@ -163,45 +165,23 @@ sudo apt install -y nginx certbot python3-certbot-nginx
 sudo rm -f /etc/nginx/sites-enabled/default
 ```
 
-`/etc/nginx/sites-available/ofmhelpers`, HTTP only. Certbot adds the TLS part:
+The site is in the repo, the same file dev runs behind
+(`docker-compose.dev.yml` `nginx`, http://localhost:8080): `nginx/ofmhelpers.conf`
+(HTTP only; Certbot adds the TLS part) and `nginx/upstream.conf` (where the
+app listens: `127.0.0.1:8000`). Copy both and put your domain in:
 
-```nginx
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name example.com www.example.com;
-
-    # Reel/video uploads go through this proxy; the default 1m would reject
-    # anything real.
-    client_max_body_size 2048m;
-    # Generation jobs are enqueued, not served synchronously, but a slow
-    # upstream should not be cut off mid-response either.
-    proxy_read_timeout 600s;
-    proxy_send_timeout 600s;
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        # Upgrade headers kept so a future websocket route works unchanged.
-        proxy_set_header Upgrade    $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_buffering off;
-    }
-
-    # CSS/JS links carry ?v=<content hash> (templates_config.static_url), so
-    # browsers may keep them.
-    location /static/ {
-        proxy_pass http://127.0.0.1:8000/static/;
-        proxy_set_header Host $host;
-        expires 7d;
-        add_header Cache-Control "public";
-    }
-}
+```bash
+cd ~/ofmhelper
+sudo cp nginx/ofmhelpers.conf /etc/nginx/sites-available/ofmhelpers
+sudo cp nginx/upstream.conf /etc/nginx/conf.d/ofmhelpers-upstream.conf
+sudo sed -i 's/server_name example.com www.example.com;/server_name YOUR.DOMAIN www.YOUR.DOMAIN;/' \
+  /etc/nginx/sites-available/ofmhelpers
 ```
+
+A change to the site (body limit, timeouts, headers) is made in
+`nginx/ofmhelpers.conf`, checked on dev, then copied to the server the same
+way; Certbot's lines are added again by `sudo certbot --nginx` (it keeps the
+certificate).
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/ofmhelpers /etc/nginx/sites-enabled/
@@ -214,8 +194,9 @@ It also adds a port-80 block that 301-redirects both names to HTTPS.
 `systemctl list-timers certbot.timer` shows the automatic renewal.
 `sudo certbot renew --dry-run` tests it.
 
-The app trusts the `X-Forwarded-*` headers: the image starts uvicorn with
-`--proxy-headers --forwarded-allow-ips "*"`. Without them, pages would build
+The app trusts the `X-Forwarded-*` headers from nginx only: the image starts
+uvicorn with `--proxy-headers --forwarded-allow-ips "127.0.0.1,172.16.0.0/12"`
+(loopback and Docker's private range). Without them, pages would build
 `http://` links on an `https://` page, and the rate limiter would see every
 client as nginx.
 
@@ -247,15 +228,32 @@ merge → CI on `main` → `deploy.yml` deploys.
 |---|---|---|
 | `ci.yml` | push/PR to `dev` or `main` | ruff, djlint, biome; pytest in the Dockerfile `test` stage against compose Postgres/Redis; Docker build |
 | `promote.yml` | CI green on `dev` | Opens (or comments on) the `dev` → `main` PR. Never merges |
-| `deploy.yml` | CI green on `main`, or manual | Deploys that commit over SSH, then polls `/health` |
+| `deploy.yml` | CI green on `main`, or manual (optionally with a `sha`) | Deploys that commit over SSH, then polls `/health` |
 
 Deploy sequence on the server (both paths):
-1. `git reset --hard <sha>`
-2. `build ofmhelpers worker migrate`
+1. `git reset --hard <sha>` (a commit of `origin/main`, nothing else)
+2. `build` every app service (`ofmhelpers worker sweeps preview-worker
+   media-worker edit-worker migrate`) as one image, `ofmhelpers-app:<short
+   sha>`; skipped when the server still has that commit's image
 3. `up -d postgres redis pot-provider`
-4. `stop ofmhelpers worker`
-5. `up -d --no-deps --force-recreate migrate ofmhelpers worker`
-6. `/health` poll
+4. `stop sweeps` and the workers (they finish their job, up to 120 s), then
+   `stop ofmhelpers`
+5. `up -d --no-deps --force-recreate migrate ofmhelpers worker sweeps ...`
+6. images older than this release and the one it replaced are removed
+7. `/health` poll
+
+**Going back.** The image of the release before the current one stays on the
+server. Deploy that commit again: Actions > Deploy > Run workflow with its
+`sha`, or `./scripts/deploy.sh <sha>`. Its image runs as it was built, no
+rebuild. Nothing rolls back by itself. It also runs `alembic upgrade head`
+from that image: if a migration was deployed since, the older code does not
+know the database's revision, `migrate` fails and the app stays down, so
+going back across a migration needs the database taken back first (a
+downgrade from the newer image, or a restore).
+
+A manual `docker compose -f docker-compose.yml up -d` on the server needs the
+release named, or it builds and runs `ofmhelpers-app:dev`:
+`OFM_RELEASE=$(git rev-parse --short HEAD) docker compose -f docker-compose.yml up -d`.
 
 Old code is stopped before the migration runs, so it never sees the new
 schema. Data is never touched: only `stop`, `build` and `up -d` run, never
@@ -274,9 +272,11 @@ environment `production`):
 
 New server = update `OFM_DEPLOY_HOST` (and `OFM_DEPLOY_KNOWN_HOSTS`).
 
-**Manual escape hatch:** `./scripts/deploy.sh "commit message"` from a checkout
-on `main`. It commits, pushes, then runs the same sequence. It reads
-`deploy.local.env` (gitignored; copy `deploy.local.env.example`).
+**Manual escape hatch:** `./scripts/deploy.sh [sha]` from a clean checkout of
+`main`. It never commits or pushes: it deploys a commit that is already on
+`origin/main` (the newest, or the `sha` given) and refuses a dirty tree or a
+`HEAD` that is not `origin/main`. Same sequence. It reads `deploy.local.env`
+(gitignored; copy `deploy.local.env.example`).
 
 ## 11. Backups
 
@@ -329,10 +329,10 @@ $C --profile test run --rm tests uv run --frozen pytest -m e2e   # browser suite
 | Domain does not load at all | DNS not pointing here yet, or ufw missing 80/443 | `dig +short example.com`; `sudo ufw status` |
 | `502 Bad Gateway` | App container down | `docker compose -f docker-compose.yml ps`; `curl -I http://127.0.0.1:8000/health`; logs |
 | App and worker never start after a deploy | `migrate` failed | `docker compose -f docker-compose.yml logs migrate` |
-| Container restarts at boot | Required `.env` key missing (`SESSION_SECRET`, `APP_PASSWORD_*`) | `docker compose -f docker-compose.yml logs ofmhelpers` |
+| Container restarts at boot | Required `.env` key missing (`OFM_ENV`, `SESSION_SECRET`, `APP_PASSWORD_*`) | `docker compose -f docker-compose.yml logs ofmhelpers` |
 | /phones shows "OFM_VAULT_KEY is not set" or "do not decrypt" | Key missing, or not the key the logins were saved with | Put the original key back in `.env` (first in the list), `up -d` |
 | /drive says the bot cannot open the folder | Folder not shared with the service account, or wrong `OFM_GDRIVE_ROOT_FOLDER` | Share it with the email /drive names, as Editor |
 | `PermissionError: [Errno 13]` on uploads/downloads | Host folder not owned by uid 1000 | `sudo chown -R 1000:1000 uploads downloads kieai_out` |
-| Uploads fail with `413` | nginx body limit | `client_max_body_size` in the site file, `sudo systemctl reload nginx` |
+| Uploads fail with `413` | nginx body limit | `client_max_body_size` in the site file (`nginx/ofmhelpers.conf`), `sudo systemctl reload nginx` |
 | Mixed-content warnings / `http://` links on the HTTPS site | Forwarded headers not reaching the app | nginx `X-Forwarded-Proto`; image CMD keeps `--proxy-headers` |
 | Locked out of SSH | sshd change | Provider web console / KVM, fix `/etc/ssh/sshd_config.d/` |

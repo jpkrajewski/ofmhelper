@@ -16,10 +16,18 @@ from functools import lru_cache
 from ofmhelpers.db.repositories import DeviceRepository
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
 from ofmhelpers.db.stores.users import agency_id
-from ofmhelpers.features.phones.catalog import services
-from ofmhelpers.integrations.socials import get_platform
-from ofmhelpers.schemas import ArchivedLogin, Device, LoginSecrets
-lazy from ofmhelpers.schemas import DeviceFields, LoginFields, TrackedAccount
+from ofmhelpers.schemas.devices import AccountPhones, PhonesByAccount
+from ofmhelpers.schemas.phone_catalog import services
+from ofmhelpers.schemas.socials import names_of
+lazy from ofmhelpers.schemas import (
+    ArchivedLogin,
+    Device,
+    DeviceFields,
+    LoginFields,
+    LoginSecrets,
+    TrackedAccount,
+)
+lazy from ofmhelpers.schemas.devices import AddedLogin
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +40,7 @@ def _repository() -> DeviceRepository:
 def _service_rank(service: str) -> int:
     """Position in `services.json` (iCloud, Instagram, Gmail first); a
     service no longer listed goes last."""
-    order = list(services())
+    order = services().names()
     return order.index(service) if service in order else len(order)
 
 
@@ -40,18 +48,17 @@ def _handle(platform: str, username: str) -> str:
     """The username as that platform stores handles ("@Name" -> "name"),
     as typed when it takes no such form."""
     try:
-        return get_platform(platform).handle(username)
+        return names_of(platform).handle(username)
     except KeyError, ValueError:
         return username
 
 
 def _linked(
-    rows: list[dict], accounts: list[TrackedAccount] | None = None
+    devices: list[Device], accounts: list[TrackedAccount] | None = None
 ) -> list[Device]:
-    """The rows as `Device`s, logins in service order (ties keep link
+    """The phones, logins in service order (ties keep link
     order), each linked to its /accounts row (of `accounts`, default every
     tracked one) when that platform tracks the handle."""
-    devices = [Device.model_validate(row) for row in rows]
     if accounts is None:
         accounts = list_accounts()
     # A phone links to its own owner's /accounts row of the handle.
@@ -82,9 +89,9 @@ def list_devices(owner: int | None = None) -> list[Device]:
 
 def phones_by_account(
     accounts: list[TrackedAccount], owner: int | None = None
-) -> dict[int, list[Device]]:
-    """`owner`'s active phones signed in to each of `accounts`, by account
-    id (/accounts shows them in place of a typed note)."""
+) -> PhonesByAccount:
+    """`owner`'s active phones signed in to each of `accounts` (/accounts
+    shows them in place of a typed note)."""
     found: dict[int, list[Device]] = {}
     for device in _linked(_repository().list_all(owner), accounts):
         if device.retired:
@@ -92,7 +99,9 @@ def phones_by_account(
         ids = {x.tracked_account_id for x in device.logins}
         for account_id in sorted(i for i in ids if i is not None):
             found.setdefault(account_id, []).append(device)
-    return found
+    return PhonesByAccount(
+        rows=[AccountPhones(account_id=k, phones=v) for k, v in found.items()]
+    )
 
 
 def export_devices(owner: int | None = None) -> list[Device]:
@@ -101,8 +110,7 @@ def export_devices(owner: int | None = None) -> list[Device]:
 
 
 def secrets(login_id: int, owner: int | None = None) -> LoginSecrets | None:
-    found = _repository().secrets(login_id, owner)
-    return LoginSecrets.model_validate(found) if found else None
+    return _repository().secrets(login_id, owner)
 
 
 def owner_of_login(login_id: int) -> int | None:
@@ -149,9 +157,9 @@ def delete_device(device_id: int, owner: int | None = None) -> bool:
 
 def add_login(
     device_id: int, fields: LoginFields, owner: int | None = None
-) -> tuple[int, bool] | None:
-    """(login id, whether the account was already saved on another of the
-    owner's phones); None when the phone does not exist (or is not
+) -> AddedLogin | None:
+    """The login and whether the account was already saved on another of the
+    owner's phones; None when the phone does not exist (or is not
     `owner`'s). Raises `DuplicateError` when it is already on this phone,
     or saved with another password."""
     return _repository().add_login(device_id, fields.model_dump(), owner)
@@ -176,11 +184,11 @@ def restore_login(login_id: int, owner: int | None = None) -> ArchivedLogin | No
     if found is None:
         return None
     _logins_gone()
-    return ArchivedLogin(id=login_id, **found)
+    return found
 
 
 def archived_logins(owner: int | None = None) -> list[ArchivedLogin]:
-    return [ArchivedLogin.model_validate(r) for r in _repository().archived(owner)]
+    return _repository().archived(owner)
 
 
 def remove_login(device_id: int, login_id: int, owner: int | None = None) -> bool:

@@ -57,9 +57,24 @@ def parse(data: bytes) -> list[Atom]:
     return atoms
 
 
-def top_level(path: Path) -> list[tuple[bytes, int, int]]:
-    """(type, offset, size) of each top-level atom, without reading mdat."""
-    found: list[tuple[bytes, int, int]] = []
+class AtomSpan(BaseModel, frozen=True):
+    """Where one top-level atom sits in its file."""
+
+    kind: bytes
+    offset: int
+    size: int
+
+
+class Moov(BaseModel):
+    """A file's parsed moov atom and where it starts."""
+
+    atom: Atom
+    offset: int
+
+
+def top_level(path: Path) -> list[AtomSpan]:
+    """Each top-level atom's type, offset and size, without reading mdat."""
+    found: list[AtomSpan] = []
     with path.open("rb") as f:
         offset = 0
         while header := f.read(_HEADER):
@@ -70,20 +85,20 @@ def top_level(path: Path) -> list[tuple[bytes, int, int]]:
                 size = struct.unpack(">Q", f.read(8))[0]
             elif size == 0:
                 size = path.stat().st_size - offset
-            found.append((kind, offset, size))
+            found.append(AtomSpan(kind=kind, offset=offset, size=size))
             offset += size
             f.seek(offset)
     return found
 
 
-def read_moov(path: Path) -> tuple[Atom, int]:
+def read_moov(path: Path) -> Moov:
     """The moov atom of `path` and its offset."""
-    for kind, offset, size in top_level(path):
-        if kind == b"moov":
+    for span in top_level(path):
+        if span.kind == b"moov":
             with path.open("rb") as f:
-                f.seek(offset)
-                [moov] = parse(f.read(size))
-            return moov, offset
+                f.seek(span.offset)
+                [moov] = parse(f.read(span.size))
+            return Moov(atom=moov, offset=span.offset)
     msg = f"{path.name} has no moov atom"
     raise ValueError(msg)
 

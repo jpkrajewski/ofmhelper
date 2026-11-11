@@ -13,6 +13,7 @@ from signin import sign_in
 
 from ofmhelpers.db.stores import self_links, short_links
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.web.main import app
 
 ONLYFANS = "https://onlyfans.com/danywalking"
@@ -47,7 +48,7 @@ def _generate(client, account_ids, **changes):
 
 def test_self_is_always_available_without_an_api_key():
     user = sign_in(TestClient(app))
-    states = {s.key: s for s in short_links.provider_states(user.id)}
+    states = {s.key: s for s in link_keys.provider_states(user.id)}
     assert states["self"].has_key is True
 
 
@@ -65,7 +66,7 @@ def test_generate_makes_a_live_bridge_link(client):
     ids = _accounts(user.id, "Dane", "danywalking")
 
     response = _generate(client, ids)
-    assert response.status_code == 200, response.text
+    assert response.status_code == 202, response.text
     assert response.json()["count"] == 1
 
     links = short_links.list_links(user.id)

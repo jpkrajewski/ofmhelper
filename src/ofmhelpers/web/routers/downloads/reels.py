@@ -17,54 +17,21 @@ embedding); their covers come shrunk and kept from `GET /reels/thumb/{code}`
 selected.
 """
 
-import shutil
-import zipfile
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlencode
 
-import requests
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from ofmhelpers.config import settings
-from ofmhelpers.db.stores.watched_profiles import (
-    create_group,
-    list_groups,
-    list_watched,
-    set_group,
-    unwatch,
-    watch,
-)
-from ofmhelpers.features.reels.thumbs import reel_thumb, thumb_path
-from ofmhelpers.features.reels.watch import queue_due_scans
-from ofmhelpers.integrations.instagram import (
-    VIEW_TIERS,
-    InstagramClient,
-    ProfileHandle,
-    ReelDownload,
-)
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import FeedItem, GroupForm, Leaderboard, WatchForm
-from ofmhelpers.telemetry import in_this_trace
+from ofmhelpers.features.downloads.service import Redirect
+from ofmhelpers.features.reels import page
+from ofmhelpers.features.reels.page import ProfileMoved, WatchAdded
 from ofmhelpers.web.dependencies import AssetsRoot, OwnerId, Scope
-from ofmhelpers.web.routers.downloads.shared import Redirect
-from ofmhelpers.web.routers.task_helpers import (
-    UPLOADS_ROOT,
-    make_job_dir,
-    register_generated_asset,
-)
 from ofmhelpers.web.templates_config import render
 
-logger = get_logger(__name__)
-
 router = APIRouter(prefix="/reels", tags=["reels"])
-
-_DOWNLOADS = TypeAdapter(list[ReelDownload])
 
 GroupQuery = Annotated[str | None, Query(max_length=64)]
 # A rank (VIEW_TIERS name): the feed narrowed to exactly that rank.
@@ -78,12 +45,9 @@ ReelCode = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9_-]{5,64}$")]
 # A kept thumbnail never changes.
 _THUMB_CACHE = {"Cache-Control": "private, max-age=2592000, immutable"}
 
-# The follower multiples offered as chips.
-_RATIO_STEPS = (2, 3, 5, 10)
-
 # A group as a form sends it; "" = no group.
 GroupField = Annotated[str, Form()]
-# The page's picks, as JSON (`_DOWNLOADS`).
+# The page's picks, as JSON.
 PickedReels = Annotated[str, Form()]
 
 
@@ -91,104 +55,8 @@ class GroupCreated(BaseModel):
     group: str
 
 
-class WatchAdded(BaseModel):
-    added: list[str]
-    already_watched: int
-
-
-class ProfileMoved(BaseModel):
-    username: str
-    group: str
-
-
 class ProfileRemoved(BaseModel):
     removed: str
-
-
-class _Filters(BaseModel):
-    """The feed's filters. Every chip link keeps the other two."""
-
-    group: str | None = None
-    rank: str | None = None
-    ratio: int | None = None
-
-    def includes(self, item: FeedItem) -> bool:
-        """Whether the feed shows `item` under these filters; never a reel
-        past `max_duration_s`, even one stored by an older scan."""
-        length = item.reel.duration_s
-        return (
-            (length is None or length <= settings.instagram.max_duration_s)
-            and (not self.rank or item.reel.tier == self.rank)
-            and (not self.ratio or item.reel.ratio >= self.ratio)
-        )
-
-    def url(self, path: str, **changes: str | int | None) -> str:
-        """`path` with these filters, `changes` applied, as its query."""
-        query = {
-            k: v for k, v in self.model_copy(update=changes).model_dump().items() if v
-        }
-        return path + (f"?{urlencode(query)}" if query else "")
-
-
-def _feed_page(
-    filters: _Filters, offset: int, owner: int | None
-) -> tuple[list[FeedItem], int | None]:
-    """One page of the feed plus the next page's offset, None on the last --
-    the absence of a next offset is what ends the scroll. The filters apply
-    before paging, so every page holds only reels they keep."""
-    size = settings.instagram.feed_page_size
-    feed = [
-        item
-        for item in FeedItem.of(list_watched(filters.group, owner))
-        if filters.includes(item)
-    ]
-    next_offset = offset + size
-    return feed[offset:next_offset], next_offset if next_offset < len(feed) else None
-
-
-def _group_links(filters: _Filters, owner: int | None) -> list[tuple[str, str, bool]]:
-    """The feed's group chips (label, href, current)."""
-    return [("All", filters.url("/reels", group=None), not filters.group)] + [
-        (g, filters.url("/reels", group=g), g == filters.group)
-        for g in list_groups(owner)
-    ]
-
-
-def _rank_links(filters: _Filters) -> list[tuple[str, str | None, str, bool]]:
-    """The feed's rank chips (label, tier, href, current), best rank first,
-    each labelled with its view range top-down ("1M-500k")."""
-    ceilings = [None] + [floor for floor, _ in VIEW_TIERS[:-1]]
-    return [("All", None, filters.url("/reels", rank=None), not filters.rank)] + [
-        (
-            f"{name} {_short(floor)}+"
-            if ceiling is None
-            else f"{name} {_short(ceiling)}\N{EN DASH}{_short(floor)}",
-            name,
-            filters.url("/reels", rank=name),
-            name == filters.rank,
-        )
-        for (floor, name), ceiling in zip(VIEW_TIERS, ceilings, strict=True)
-    ]
-
-
-def _ratio_links(filters: _Filters) -> list[tuple[str, str, bool]]:
-    """The feed's follower-multiple chips (label, href, current)."""
-    return [("Any", filters.url("/reels", ratio=None), not filters.ratio)] + [
-        (
-            f"\N{MULTIPLICATION SIGN}{n}+",
-            filters.url("/reels", ratio=n),
-            n == filters.ratio,
-        )
-        for n in _RATIO_STEPS
-    ]
-
-
-_MILLION = 1_000_000
-
-
-def _short(views: int) -> str:
-    """1_000_000 -> "1M", 200_000 -> "200k"."""
-    return f"{views // _MILLION}M" if views >= _MILLION else f"{views // 1000}k"
 
 
 @router.get("")
@@ -199,24 +67,8 @@ def form(
     rank: RankQuery = None,
     ratio: RatioQuery = None,
 ) -> Response:
-    filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
-    feed, next_offset = _feed_page(filters, 0, scope)
-    return render(
-        request,
-        "reels.html",
-        board=Leaderboard.of(list_watched(filters.group, scope)),
-        feed=feed,
-        next_offset=next_offset,
-        feed_endpoint=filters.url("/reels/feed"),
-        group_links=_group_links(filters, scope),
-        rank_links=_rank_links(filters),
-        ratio_links=_ratio_links(filters),
-        groups=list_groups(scope),
-        group=group or "",
-        rank=rank or "",
-        ratio=ratio,
-        max_videos=settings.web.clone_max_videos,
-    )
+    view = page.page_view(scope, group, rank, ratio)
+    return render(request, "reels.html", **dict(view))
 
 
 @router.get("/feed")
@@ -229,47 +81,32 @@ def feed_page(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Response:
     """The next page of cards, as the fragment gallery-scroll.js appends."""
-    filters = _Filters(group=group or None, rank=rank or None, ratio=ratio)
-    feed, next_offset = _feed_page(filters, offset, scope)
-    return render(request, "_reels_feed_page.html", feed=feed, next_offset=next_offset)
+    found = page.feed_page(scope, group, rank, ratio, offset)
+    return render(request, "_reels_feed_page.html", **dict(found))
 
 
 @router.get("/thumb/{code}")
-def thumb(code: ReelCode) -> FileResponse:
-    """A feed card's cover, small and kept (features/reels/thumbs.py). Only reels
-    of the watch list: the source URL comes from the stored scan, never
-    from the request."""
-    path: Path | None = thumb_path(code)
-    if path is None or not path.is_file():
-        found = next(
-            (i.reel for i in FeedItem.of(list_watched()) if i.reel.code == code), None
-        )
-        path = reel_thumb(code, str(found.thumbnail_url)) if found else None
-    if path is None:
-        raise HTTPException(status_code=404, detail="No thumbnail")
-    return FileResponse(path, media_type="image/webp", headers=_THUMB_CACHE)
+def thumb(code: ReelCode, scope: Scope) -> FileResponse:
+    """A feed card's cover, small and kept (features/reels/thumbs.py): of a
+    profile the person watches."""
+    return FileResponse(
+        page.cover(code, scope), media_type="image/webp", headers=_THUMB_CACHE
+    )
 
 
 @router.get("/watchlist")
 def watchlist(request: Request, scope: Scope, group: GroupQuery = None) -> Response:
     """The watch list rows, as the page polls them while scans run."""
     return render(
-        request,
-        "_reels_watch_rows.html",
-        board=Leaderboard.of(list_watched(group or None, scope)),
-        groups=list_groups(scope),
+        request, "_reels_watch_rows.html", **dict(page.watch_rows(scope, group))
     )
 
 
-@router.post("/groups")
+@router.post("/groups", status_code=201)
 def new_group(owner_id: OwnerId, name: Annotated[str, Form()] = "") -> GroupCreated:
     """ "+ New group": a group every dropdown offers before any profile is in
     it. Answers the stored name (trimmed, lower case)."""
-    group = GroupForm(group=name).group
-    if not group:
-        raise HTTPException(status_code=400, detail="Name the group")
-    create_group(group, owner_id)
-    return GroupCreated(group=group)
+    return GroupCreated(group=page.new_group(name, owner_id))
 
 
 @router.post("/watch")
@@ -279,115 +116,37 @@ def add(
     group: GroupField = "",
 ) -> WatchAdded:
     """Adds every profile on its own line to `group` and queues the first
-    scan of the new ones. A profile already watched is only moved to
-    `group` (when one is given) and left to its rescan, if rescans are on
-    (`reel_watch`). One bad line
-    rejects the lot, before anything is added."""
-    form = WatchForm(profiles=profiles, group=group)
-    try:
-        usernames = form.usernames
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not usernames:
-        raise HTTPException(status_code=400, detail="Add at least one profile")
-    added = [u for u in usernames if watch(u, form.group or None, user_id=owner_id)]
-    queue_due_scans()
-    return WatchAdded(added=added, already_watched=len(usernames) - len(added))
-
-
-def _handle(username: str) -> str:
-    try:
-        return ProfileHandle(username=username).username
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail="Not an Instagram profile") from exc
+    scan of the new ones. One bad line rejects the lot, before anything is
+    added."""
+    return page.add(profiles, group, owner_id)
 
 
 @router.post("/group/{username}")
 def move(username: str, owner_id: OwnerId, group: GroupField = "") -> ProfileMoved:
     """A watch-list row's group dropdown: moves the profile ("" = no group)."""
-    handle = _handle(username)
-    target = GroupForm(group=group).group
-    if not set_group(handle, target or None, owner_id):
-        raise HTTPException(status_code=404, detail=f"@{handle} is not watched")
-    return ProfileMoved(username=handle, group=target)
+    return page.move(username, group, owner_id)
 
 
 @router.post("/unwatch/{username}")
 def remove(username: str, owner_id: OwnerId) -> ProfileRemoved:
-    handle = _handle(username)
-    if not unwatch(handle, owner_id):
-        raise HTTPException(status_code=404, detail=f"@{handle} is not watched")
-    return ProfileRemoved(removed=handle)
-
-
-def _download(client: InstagramClient, reel: ReelDownload, job_dir: Path) -> Path:
-    return client.download_video(str(reel.video_url), job_dir / f"{reel.code}.mp4")
-
-
-def _download_picked(reels: str) -> list[Path]:
-    """The picked reels (the page's JSON) saved as mp4s in a fresh job dir."""
-    try:
-        picked = _DOWNLOADS.validate_json(reels)
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail="Invalid reel selection") from exc
-    max_videos = settings.web.clone_max_videos
-    if not 1 <= len(picked) <= max_videos:
-        raise HTTPException(
-            status_code=400, detail=f"Pick between 1 and {max_videos} reels"
-        )
-
-    client = InstagramClient()
-    job_dir = make_job_dir(UPLOADS_ROOT / "reels")
-    try:
-        with ThreadPoolExecutor(settings.instagram.download_workers) as pool:
-            download = in_this_trace(lambda r: _download(client, r, job_dir))
-            return list(pool.map(download, picked))
-    except (OSError, requests.RequestException) as exc:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        logger.warning("reel download failed", exc_info=True)
-        raise HTTPException(
-            status_code=502,
-            detail="Could not download a reel — rescan the profile and retry",
-        ) from exc
-    except Exception:
-        # Any other failure is still a crash, but leaves no folder behind.
-        shutil.rmtree(job_dir, ignore_errors=True)
-        raise
+    return ProfileRemoved(removed=page.remove(username, owner_id))
 
 
 @router.post("/download")
 def download(reels: PickedReels) -> Response:
-    """The picked reels as a file: the mp4 itself for one, a zip for more
-    (stored, not deflated: H.264 does not compress further). Nothing is
-    kept: the job dir goes once the response is sent."""
-    files = _download_picked(reels)
-    job_dir = files[0].parent
-    cleanup = BackgroundTask(shutil.rmtree, job_dir, ignore_errors=True)
-    if len(files) == 1:
-        return FileResponse(
-            files[0], media_type="video/mp4", filename=files[0].name, background=cleanup
-        )
-    archive = job_dir / "reels.zip"
-    with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as zf:
-        for file in files:
-            zf.write(file, file.name)
+    """The picked reels as a file: the mp4 itself for one, a zip for more.
+    Nothing is kept: the job dir goes once the response is sent."""
+    picked = page.picked_file(reels)
     return FileResponse(
-        archive, media_type="application/zip", filename=archive.name, background=cleanup
+        picked.path,
+        media_type=picked.media_type,
+        filename=picked.path.name,
+        background=BackgroundTask(picked.forget),
     )
 
 
 @router.post("/clone")
 def clone(reels: PickedReels, assets_root: AssetsRoot) -> Redirect:
     """Downloads the picked reels into the asset store and answers with the
-    /clone URL that opens with them picked. The store keeps its own link to
-    each file, so the job dir goes."""
-    files = _download_picked(reels)
-    try:
-        paths = [
-            str(path)
-            for file in files
-            if (path := register_generated_asset(file, assets_root)) is not None
-        ]
-    finally:
-        shutil.rmtree(files[0].parent, ignore_errors=True)
-    return Redirect(redirect="/clone?" + urlencode([("video", p) for p in paths]))
+    /clone URL that opens with them picked."""
+    return page.clone(reels, assets_root)

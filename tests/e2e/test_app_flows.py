@@ -936,7 +936,8 @@ def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     Instagram login (its folder made by Sync), a finished clone run:
     the card's ⋯ menu -> "Upload to Drive" -> the picker puts the video in
     that folder, and the card says where it went."""
-    from ofmhelpers.db.stores.jobs import create_job, run_job
+    from ofmhelpers.db.stores.jobs import create_job
+    from ofmhelpers.features.jobs.runner import run_job
 
     connect_google(va, "va.google@example.com")
     expect(va.page.locator(".card").nth(1)).to_contain_text("Connected")

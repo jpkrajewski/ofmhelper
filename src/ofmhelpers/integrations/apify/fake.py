@@ -21,10 +21,11 @@ from typing import Any
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
+from pydantic import BaseModel, ConfigDict, Field
 lazy import requests
 
 from ofmhelpers.integrations.instagram.fake import CDN, fake_instagram
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 
 HOST = "api.apify.com"
 REEL_SCRAPER = "apify~instagram-reel-scraper"
@@ -35,6 +36,61 @@ WRONG_KEY = "fake-apify-wrong"
 USD_PER_REEL = 0.0026
 START_USD = 0.001
 CREDIT_USD = 5.0
+
+
+class _Stored(BaseModel):
+    """A dataset item as the actor stores it (its names as aliases)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class FakeItemError(_Stored):
+    """What an actor stores for a profile it could not read."""
+
+    url: str
+    request_error_messages: list[str] | None = Field(
+        default=None, serialization_alias="requestErrorMessages"
+    )
+    error: str
+    error_description: str = Field(serialization_alias="errorDescription")
+
+
+class FakeProfileItem(_Stored):
+    input_url: str = Field(serialization_alias="inputUrl")
+    id: str
+    username: str
+    full_name: str = Field(serialization_alias="fullName")
+    followers: int = Field(serialization_alias="followersCount")
+    following: int = Field(serialization_alias="followsCount")
+    private: bool
+    verified: bool
+    avatar_url: str = Field(serialization_alias="profilePicUrl")
+    avatar_url_hd: str = Field(serialization_alias="profilePicUrlHD")
+
+
+class FakeReelItem(_Stored):
+    id: str
+    type: str = "Video"
+    product_type: str = Field(default="clips", serialization_alias="productType")
+    code: str = Field(serialization_alias="shortCode")
+    url: str
+    video_url: str = Field(serialization_alias="videoUrl")
+    thumbnail_url: str = Field(serialization_alias="displayUrl")
+    play_count: int = Field(serialization_alias="videoPlayCount")
+    view_count: int = Field(serialization_alias="videoViewCount")
+    likes: int = Field(serialization_alias="likesCount")
+    comments: int = Field(serialization_alias="commentsCount")
+    seconds: float = Field(serialization_alias="videoDuration")
+    timestamp: str
+    owner: str = Field(serialization_alias="ownerUsername")
+
+
+def _not_found(username: str) -> FakeItemError:
+    return FakeItemError(
+        url=f"https://www.instagram.com/{username}",
+        error="not_found",
+        error_description="Profile does not exist",
+    )
 
 
 class FakeApify:
@@ -52,55 +108,43 @@ class FakeApify:
     # --- the reel scraper --------------------------------------------------
 
     @staticmethod
-    def profile_items(username: str) -> list[dict[str, Any]]:
+    def profile_items(username: str) -> list[FakeProfileItem | FakeItemError]:
         """What the profile scraper stores for `username`."""
         profile = fake_instagram().profiles.get(username)
         if profile is None:
-            return [
-                {
-                    "url": f"https://www.instagram.com/{username}",
-                    "error": "not_found",
-                    "errorDescription": "Profile does not exist",
-                }
-            ]
+            return [_not_found(username)]
         return [
-            {
-                "inputUrl": f"https://www.instagram.com/{username}",
-                "id": profile.pk,
-                "username": profile.username,
-                "fullName": profile.full_name,
-                "followersCount": profile.followers,
-                "followsCount": profile.following,
-                "private": profile.is_private,
-                "verified": profile.is_verified,
-                "profilePicUrl": f"{CDN}/avatar-{profile.username}.jpg",
-                "profilePicUrlHD": f"{CDN}/avatar-{profile.username}.jpg",
-            }
+            FakeProfileItem(
+                input_url=f"https://www.instagram.com/{username}",
+                id=profile.pk,
+                username=profile.username,
+                full_name=profile.full_name,
+                followers=profile.followers,
+                following=profile.following,
+                private=profile.is_private,
+                verified=profile.is_verified,
+                avatar_url=f"{CDN}/avatar-{profile.username}.jpg",
+                avatar_url_hd=f"{CDN}/avatar-{profile.username}.jpg",
+            )
         ]
 
     @staticmethod
     def reel_items(
         username: str, limit: int, newer_than_s: float | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[FakeReelItem | FakeItemError]:
         """What the reel scraper stores for `username`'s newest `limit`
         (only those posted after `newer_than_s` when given)."""
         profile = fake_instagram().profiles.get(username)
         if profile is None:
-            return [
-                {
-                    "url": f"https://www.instagram.com/{username}",
-                    "error": "not_found",
-                    "errorDescription": "Profile does not exist",
-                }
-            ]
+            return [_not_found(username)]
         if profile.is_private:
             return [
-                {
-                    "url": f"https://www.instagram.com/{username}",
-                    "requestErrorMessages": [],
-                    "error": "no_items",
-                    "errorDescription": "Empty or private data for provided input",
-                }
+                FakeItemError(
+                    url=f"https://www.instagram.com/{username}",
+                    request_error_messages=[],
+                    error="no_items",
+                    error_description="Empty or private data for provided input",
+                )
             ]
         rows = [
             row
@@ -108,22 +152,20 @@ class FakeApify:
             if newer_than_s is None or row.taken_at >= newer_than_s
         ][:limit]
         return [
-            {
-                "id": row.pk,
-                "type": "Video",
-                "productType": "clips",
-                "shortCode": row.code,
-                "url": f"https://www.instagram.com/reel/{row.code}/",
-                "videoUrl": row.video,
-                "displayUrl": row.thumb,
-                "videoPlayCount": row.reel.views,
-                "videoViewCount": row.reel.views // 2,
-                "likesCount": row.reel.views // 20,
-                "commentsCount": row.reel.views // 500,
-                "videoDuration": row.reel.duration_s,
-                "timestamp": datetime.fromtimestamp(row.taken_at, UTC).isoformat(),
-                "ownerUsername": username,
-            }
+            FakeReelItem(
+                id=row.pk,
+                code=row.code,
+                url=f"https://www.instagram.com/reel/{row.code}/",
+                video_url=row.video,
+                thumbnail_url=row.thumb,
+                play_count=row.reel.views,
+                view_count=row.reel.views // 2,
+                likes=row.reel.views // 20,
+                comments=row.reel.views // 500,
+                seconds=row.reel.duration_s,
+                timestamp=datetime.fromtimestamp(row.taken_at, UTC).isoformat(),
+                owner=username,
+            )
             for row in rows
         ]
 
@@ -174,20 +216,22 @@ class FakeApify:
         with self._lock:
             self.inputs.append({"actor": actor, **run_input})
         if actor == PROFILE_SCRAPER:
-            items = [
+            stored: list[_Stored] = [
                 item
                 for username in run_input.get("usernames", [])
                 for item in self.profile_items(username)
             ]
         else:
             newer = _newer_than(run_input.get("onlyPostsNewerThan"))
-            items = [
+            stored = [
                 item
                 for username in run_input.get("username", [])
                 for item in self.reel_items(
                     username, int(run_input.get("resultsLimit", 10)), newer
                 )
             ]
+        # As the actor stores them: its names, an error item's unset key absent.
+        items = [i.model_dump(by_alias=True, exclude_none=True) for i in stored]
         cut = actor in self.cut_short
         if cut:
             items = items[: len(items) // 2]
@@ -247,8 +291,8 @@ def fake_apify() -> FakeApify:
     return FakeApify()
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def apify(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_apify().handle(request)
 
-    return {HOST: apify}
+    return [FakeRoute(host=HOST, handler=apify)]

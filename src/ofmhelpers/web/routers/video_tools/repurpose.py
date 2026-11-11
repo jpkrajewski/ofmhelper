@@ -6,225 +6,73 @@ JSON; a card's only button, Recreate, puts its video, preset and knobs
 back. Both roles; a user only ever sees their own runs.
 """
 
-import secrets
-from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import Response
-from pydantic import Field, ValidationError
+from pydantic import Field, field_validator
 
-from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page, run_job
-from ofmhelpers.media.repurpose import Repurpose
-from ofmhelpers.media.repurpose.devices import device_names, load_device
-from ofmhelpers.media.repurpose.presets import Preset, load_preset, preset_names
-from ofmhelpers.schemas import Job, JobQueued
-from ofmhelpers.schemas.repurpose import (
-    CopyScore,
-    Medium,
-    MethodScore,
-    RepurposeCard,
-    RepurposeResult,
-    knob_groups,
+from ofmhelpers.features.repurpose import service
+from ofmhelpers.features.repurpose.service import (
+    DEFAULT_COPIES,
+    DEFAULT_DEVICE,
+    FILES_PREFIX,
+    PREFIX,
+    TASK,
 )
+
+# Jobs queued before 2026-11-11 name the run function by this module's path.
+from ofmhelpers.features.repurpose.service import run_repurpose as _run_repurpose
+from ofmhelpers.media.repurpose.presets import Preset
+from ofmhelpers.schemas import JobQueued
 from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
-from ofmhelpers.web.forms import Files, FormModel
-from ofmhelpers.web.routers.task_helpers import (
-    UPLOADS_ROOT,
-    add_job_routes,
-    build_ordered_paths,
-    job_assets,
-    make_job_dir,
-)
+from ofmhelpers.web.forms import Files, FormModel, at_most
+from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
-lazy from ofmhelpers.media.repurpose.checker import CheckReport, check
 
-router = APIRouter(prefix="/repurpose", tags=["repurpose"])
+__all__ = [
+    "DEFAULT_COPIES",
+    "DEFAULT_DEVICE",
+    "FILES_PREFIX",
+    "TASK",
+    "_run_repurpose",
+    "router",
+]
 
-UPLOAD_ROOT = UPLOADS_ROOT / "repurpose"
-
-TASK = "repurpose"
-
-FILES_PREFIX = f"{router.prefix}/files"
-
-MAX_COPIES = settings.web.uniqify_max_copies
-
-DEFAULT_COPIES = 3
-
-DEFAULT_DEVICE = "strip"
-
-DEFAULT_PRESET = "medium"
-
-# An intermediate the iphone17 device makes itself: not a choice.
-_HIDDEN_DEVICES = {"master"}
-
-# What a preset in the page (and in a job's params) leaves out: the special
-# parts are merged in when picked, the device has its own select.
-_PAGE_ONLY = {"label", "video_special", "audio_special", "device", "device_special"}
-
-# checker.HashKind values as a card names them (strings: the checker's
-# imagehash/pdqhash load only in the job).
-_HASH_NAMES = {
-    "pdq": "PDQ",
-    "phash": "pHash",
-    "dhash": "dHash",
-    "whash": "wHash",
-    "sscd": "SSCD",
-}
+router = APIRouter(prefix=PREFIX, tags=["repurpose"])
 
 
 class RepurposeForm(FormModel):
     video: Files
     video_manifest: str = "[]"
-    # A string the route parses: a knob it cannot take is a worded 400, which a
-    # validator here would turn into a 422 the page does not show.
+    # A string the feature parses: a knob it cannot take is a worded 400, which
+    # a validator here would turn into a 422 the page does not show.
     preset: str = "{}"
     preset_name: str = ""
     special: bool = False
     device: str = DEFAULT_DEVICE
-    copies: int = Field(DEFAULT_COPIES, ge=1, le=MAX_COPIES)
+    copies: int = Field(DEFAULT_COPIES, ge=1)
 
-
-def _devices() -> list[tuple[str, str]]:
-    return [
-        (name, load_device(name).label)
-        for name in device_names()
-        if name not in _HIDDEN_DEVICES
-    ]
-
-
-def _presets() -> dict[str, dict[str, Any]]:
-    """Ready-made presets as their files hold them (only what each sets:
-    repurpose.js lays the special parts over the plain ones)."""
-    return {
-        name: load_preset(name).model_dump(mode="json", exclude_unset=True)
-        for name in preset_names()
-    }
-
-
-def _score(report: CheckReport) -> CopyScore:
-    """Every method as the share of the copy it finds in the source."""
-    shares = [(str(h.kind), h.sequence.share) for h in report.hashes] + [
-        (d.kind, d.sequence.share) for d in report.descriptors
-    ]
-    methods = [
-        MethodScore(
-            method=_HASH_NAMES[kind], medium=Medium.VIDEO, percent=round(share * 100)
-        )
-        for kind, share in shares
-    ]
-    if report.tmk:
-        methods.append(
-            MethodScore(
-                method="TMK+PDQF",
-                medium=Medium.VIDEO,
-                percent=round(report.tmk.level2 * 100),
-            )
-        )
-    if report.audio:
-        methods.append(
-            MethodScore(
-                method="Chromaprint",
-                medium=Medium.AUDIO,
-                percent=round(report.audio.matched_share * 100),
-            )
-        )
-    return CopyScore(
-        methods=methods,
-        looks_like_source=report.looks_like_source,
-        sounds_like_source=report.sounds_like_source,
-    )
-
-
-def _run_repurpose(
-    job_dir: str,
-    source: str,
-    preset: dict[str, Any],
-    device: str,
-    copies: int,
-    preset_name: str = "",
-    special: bool = False,
-) -> list[RepurposeResult]:
-    """Every copy with its own seed, then scored against the source."""
-    del preset_name, special  # the page's, kept on the job for Recreate
-    directory = Path(job_dir)
-    preset_file = directory / "preset.json"
-    preset_file.write_text(
-        Preset.model_validate({**preset, "device": device}).model_dump_json(
-            exclude_none=True, indent=2
-        ),
-        encoding="utf-8",
-    )
-    ext = ".mov" if load_device(device).recorder else ".mp4"
-    timeout = settings.web.uniqify_encode_timeout_s
-    results = []
-    for i in range(1, copies + 1):
-        dst = directory / f"copy_{i:02d}{ext}"
-        Repurpose(
-            source, dst, seed=secrets.randbits(32), timeout_s=timeout
-        ).apply_json_preset(str(preset_file)).run()
-        report = check(source, dst, timeout_s=timeout)
-        results.append(
-            RepurposeResult(name=dst.name, path=str(dst), score=_score(report))
-        )
-    return results
-
-
-def _cards(job: Job) -> list[RepurposeCard]:
-    """A done job as one card per copy; any other as its one card."""
-    base: dict[str, Any] = {
-        "task_label": "Repurpose",
-        "poll_prefix": router.prefix,
-        "result_kind": "video",
-    }
-    if job.status != "done":
-        return [RepurposeCard.from_job(job, [], [], **base)]
-    assets, failed = job_assets(job, FILES_PREFIX)
-    entries = job.result if isinstance(job.result, list) else []
-    scores = [RepurposeResult.model_validate(e).score for e in entries]
-    if not assets:
-        return [RepurposeCard.from_job(job, [], failed, **base)]
-    return [
-        RepurposeCard.from_job(
-            job,
-            [asset],
-            failed,
-            copy_number=i + 1,
-            copies=len(assets),
-            score=scores[i] if i < len(scores) else None,
-            **base,
-        )
-        for i, asset in enumerate(assets)
-    ]
+    @field_validator("copies")
+    @classmethod
+    def _at_most_max_copies(cls, copies: int) -> int:
+        """The limit is a setting, read when a form is checked."""
+        return at_most(copies, settings.web.uniqify_max_copies)
 
 
 @router.get("")
 def form(request: Request, actor: Actor) -> Response:
-    recent, _total = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor)
-    return render(
-        request,
-        "repurpose.html",
-        cards=[card for job in recent for card in _cards(job)],
-        knob_groups=knob_groups(),
-        presets=_presets(),
-        devices=_devices(),
-        default_device=DEFAULT_DEVICE,
-        default_preset=DEFAULT_PRESET,
-        default_copies=DEFAULT_COPIES,
-        max_copies=MAX_COPIES,
-    )
+    return render(request, "repurpose.html", **dict(service.page_view(actor)))
 
 
 @router.get("/cards/{job_id}")
 def cards(request: Request, job_id: str, actor: Actor) -> Response:
     """A finished job's cards as the gallery draws them (repurpose.js swaps
     them in for the ones generation.js built)."""
-    job = get_job(job_id, actor)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return render(request, "_repurpose_cards.html", cards=_cards(job))
+    return render(
+        request, "_repurpose_cards.html", cards=service.cards_of(job_id, actor)
+    )
 
 
 @router.post("/preset.json")
@@ -237,44 +85,14 @@ def preset_json(preset: Preset) -> Response:
     )
 
 
-@router.post("/run")
+@router.post("/run", status_code=202)
 def run(
     form: Annotated[RepurposeForm, Form()],
     actor: Actor,
     owner_id: OwnerId,
     assets_root: AssetsRoot,
 ) -> JobQueued:
-    if form.device not in dict(_devices()):
-        raise HTTPException(status_code=400, detail="Unknown device")
-    try:
-        knobs = Preset.model_validate_json(form.preset)
-    except ValidationError:
-        raise HTTPException(
-            status_code=400, detail="A knob has a value it cannot take"
-        ) from None
-    paths = build_ordered_paths(
-        form.video_manifest, form.video, assets_root, user_id=owner_id
-    )
-    if len(paths) != 1:
-        raise HTTPException(status_code=400, detail="Pick one video")
-    job_dir = make_job_dir(UPLOAD_ROOT)
-    params = {
-        "source": paths[0],
-        "preset": knobs.model_dump(mode="json", exclude_none=True, exclude=_PAGE_ONLY),
-        "preset_name": form.preset_name,
-        "special": form.special,
-        "device": form.device,
-        "copies": form.copies,
-    }
-    job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
-    enqueue(
-        run_job,
-        job_id,
-        _run_repurpose,
-        {"job_dir": str(job_dir), **params},
-        job_timeout=form.copies * settings.web.uniqify_encode_timeout_s,
-    )
-    return JobQueued(job_id=job_id)
+    return service.start(form, actor, owner_id, assets_root)
 
 
 add_job_routes(

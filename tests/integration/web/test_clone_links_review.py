@@ -75,7 +75,9 @@ def _done_run(video: Path | None, email: str = ANN, *, mirror: bool = False) -> 
         if video
         else ResultFile(name="clone.mp4", path=None, remote_url="https://kie.example/c")
     )
-    jobs_repository().update_status(job_id, "done", result=[entry.to_result()])
+    jobs_repository().update_status(
+        job_id, "done", result=[entry.model_dump(exclude_unset=True)]
+    )
     return job_id
 
 
@@ -133,6 +135,20 @@ def test_a_good_video_lands_in_good_reels_with_its_check_kept(tmp_path):
     assert state["settled"] is True
     assert "In Drive:" in state["html"]
     assert "AI decision: good" in state["html"]
+
+
+def test_a_review_leaves_a_job_row_naming_the_clone_it_checked(tmp_path):
+    from ofmhelpers.db.stores.jobs import history
+
+    client(ANN)
+    fake_gemini().answer_next(GOOD)
+
+    job_id, _video = _reviewed(tmp_path)
+
+    [row] = [job for job in history() if job.task == "clone_links_review"]
+    assert row.status == "done"
+    assert (row.params["clone_job"], row.params["file_index"]) == (job_id, 0)
+    assert row.params["review_id"] == _row(job_id).id
 
 
 def test_a_glitchy_video_lands_in_trial_reels_with_its_glitches(tmp_path):
@@ -556,9 +572,9 @@ def test_an_upload_cut_off_after_it_reached_drive_is_adopted_not_doubled(tmp_pat
     review_id = store.start(job_id, 0, _owner(), str(video))
     claimed = store.claim(review_id)
     assert store.checked(claimed, None, GOOD_REELS)
-    _, folder_id = drive_folders.review_folder(
+    folder_id = drive_folders.review_folder(
         users.refresh_token(_owner()), _owner(), GOOD_REELS
-    )
+    ).folder_id
     made = drive.add_file(folder_id, download_name(video.name), "video/mp4")
     _set(review_id, started_at=_long_ago())
     drive.clear_calls()
@@ -626,7 +642,7 @@ def test_a_done_run_kept_only_by_the_provider_is_marked_once(tmp_path):
     assert row.status == "failed"
     assert row.error == ReviewReason.NOT_SAVED
     assert "upload" not in drive.calls
-    assert review.resume_reviews() == {}
+    assert review.resume_reviews().entries == {}
 
 
 def test_recovery_never_starts_another_users_review_on_a_run(tmp_path):

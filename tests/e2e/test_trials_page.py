@@ -53,7 +53,7 @@ def _folder_with_copies(va: Session, app_dir: Path, jobs_idle, count: int) -> in
         phone, LoginFields(service="instagram", username="vee.ig")
     )
     assert added is not None
-    login = added[0]
+    login = added.id
     va.goto("/drive")
     with va.page.expect_navigation():
         va.page.click("#dr-sync")

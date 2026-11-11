@@ -19,8 +19,8 @@ lazy from collections.abc import Mapping
 lazy import requests
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 FAKE_KEY = "fake-kie-key"
 RESULT_HOST = "fake-results.kie.ai"
@@ -127,11 +127,11 @@ def fake_kie() -> FakeKie:
     return FakeKie()
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     s = settings.kieai
     api = lambda request, proxies: fake_kie().handle_api(request, proxies)  # noqa: E731
     hosts = {urlsplit(s.jobs_base).hostname, urlsplit(s.upload_base).hostname}
-    return {
-        **{host: api for host in hosts if host},
-        RESULT_HOST: FakeKie.handle_files,
-    }
+    return [
+        *(FakeRoute(host=host, handler=api) for host in hosts if host),
+        FakeRoute(host=RESULT_HOST, handler=FakeKie.handle_files),
+    ]

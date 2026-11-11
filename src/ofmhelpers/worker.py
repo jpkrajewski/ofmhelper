@@ -87,6 +87,8 @@ def _preload_jobs() -> None:
     `_LAZY_HEAVY` are `lazy import`s the web process never pays for; a job would
     (Gemini 0.6 s, Drive 0.2 s), in every horse. Loaded here they cost once."""
     importlib.import_module("ofmhelpers.web.routers")
+    # The runner jobs queued under `db.stores.jobs.run_job` are handed to.
+    importlib.import_module("ofmhelpers.features.jobs.runner")
     for module in _LAZY_HEAVY:
         importlib.import_module(module)
     # The registries fill on the first lookup, which was in every horse too

@@ -17,6 +17,7 @@ from app_pages import ADMIN_HEADER, ADMIN_ONLY_PAGES, VA_PAGES
 from fastapi.testclient import TestClient
 from signin import sign_in
 
+from ofmhelpers.features.jobs import sweeps
 from ofmhelpers.web.main import app
 
 # "/" is the public ReachModels landing page (with the application form), not
@@ -80,13 +81,28 @@ def test_removed_pages_are_gone(path):
 
 def test_app_starts_and_stops_cleanly():
     """`with TestClient(...)` is what actually drives the ASGI lifespan
-    (startup/shutdown events) -- a bare TestClient(app) never runs it, so
-    this is the only thing that would have caught a broken startup (e.g.
-    the recovery sweeper failing to launch)."""
+    (startup/shutdown events) -- a bare TestClient(app) never runs it."""
     with TestClient(app) as client:
         r = client.get("/health")
         assert r.status_code == 200
         assert r.json() == {"status": "ok"}
+
+
+def test_the_web_process_runs_no_sweep(monkeypatch):
+    """The sweeps are a process of their own (`ofmhelpers/sweeps.py`, the
+    `sweeps` compose service): started by the app as well, a second web
+    process would run every one of them twice."""
+    started = []
+
+    async def loop(sweep: sweeps.Sweep) -> None:
+        started.append(sweep.name)
+
+    monkeypatch.setattr(sweeps, "_loop", loop)
+
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+
+    assert started == []
 
 
 def test_health_login_and_landing_page_are_public():

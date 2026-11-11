@@ -25,6 +25,8 @@ from ofmhelpers.db.stores.watched_profiles import (
     list_watched,
     watch,
 )
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.reels import page as reels
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.integrations.instagram import (
     InstagramError,
@@ -43,8 +45,6 @@ from ofmhelpers.integrations.instagram.models import (
 from ofmhelpers.schemas import FeedItem, Leaderboard, WatchedProfile, WatchForm
 from ofmhelpers.utils.proxy_pool import ProxyPool
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.downloads import reels
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 CDN = "https://scontent.cdninstagram.com/v/{}.mp4"
 
@@ -56,8 +56,8 @@ def _no_retry_pause(monkeypatch):
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
-    monkeypatch.setattr(reels, "UPLOADS_ROOT", tmp_path / "uploads")
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
+    monkeypatch.setattr(reels, "uploads_root", lambda: tmp_path / "uploads")
     c = TestClient(app)
     sign_in_agency(c)
     return c
@@ -246,6 +246,20 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(client, monkeypatch):
     assert watched.result.reels[0].video_url == CDN.format("u")
     assert watched.scanned_at == scanned_at
     assert "login only" not in client.get("/reels").text
+
+
+def test_a_cookies_upload_leaves_a_job_row_for_the_unlock(client):
+    """Work a person starts has a row: theirs, done once the worker ran it."""
+    from ofmhelpers.db.stores.jobs import history
+    from ofmhelpers.db.stores.users import agency_id
+
+    jar = (
+        b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tx\n"
+    )
+    client.post("/cookies", files={"file": ("cookies.txt", jar)})
+
+    [row] = [job for job in history() if job.task == "reels_unlock"]
+    assert (row.actor, row.status, row.params) == (str(agency_id()), "done", {})
 
 
 def test_feed_is_every_profiles_reels_most_viewed_first():
@@ -1067,6 +1081,25 @@ def test_thumbnail_of_a_reel_not_watched_is_404_and_fetches_nothing(
     _one_profile(monkeypatch)
     assert client.get("/reels/thumb/NotWatched1").status_code == 404
     assert asked == []
+
+
+def test_thumbnail_of_a_profile_someone_else_watches_is_404_like_a_missing_one(
+    client, scans, cdn
+):
+    """The scan and the kept cover are shared; fetching it is only for who
+    watches the profile."""
+    from signin import sign_in
+
+    client.post("/reels/watch", data={"profiles": "user1", "group": "asian"})
+    assert client.get("/reels/thumb/r_user1").status_code == 200
+    stranger = TestClient(app)
+    sign_in(stranger)
+
+    theirs = stranger.get("/reels/thumb/r_user1")
+    missing = stranger.get("/reels/thumb/NotWatched1")
+
+    assert (theirs.status_code, theirs.json()) == (404, missing.json())
+    assert missing.status_code == 404
 
 
 def test_thumbnail_instagram_refuses_is_404_and_retried_later(client, monkeypatch, cdn):

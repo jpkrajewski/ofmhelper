@@ -28,9 +28,10 @@ from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
+from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
@@ -161,15 +162,15 @@ def _import_providers() -> None:
                     raise
 
 
-def provider_classes() -> dict[str, type[Provider]]:
+def provider_classes() -> Registry[type[Provider]]:
     """Every provider by name, in the order the provider select lists them."""
     _import_providers()
     ordered = sorted(_registry().values(), key=lambda c: (c.rank, c.name))
-    return {cls.name: cls for cls in ordered}
+    return Registry[type[Provider]](entries={cls.name: cls for cls in ordered})
 
 
 def provider_names() -> list[str]:
-    return list(provider_classes())
+    return provider_classes().names()
 
 
 def provider_class(name: str) -> type[Provider]:

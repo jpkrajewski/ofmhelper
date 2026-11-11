@@ -6,6 +6,7 @@ group in .env (`ApiyiSettings`); a user saves one key of their own and it is
 used as is."""
 
 from ofmhelpers.config import settings
+from ofmhelpers.utils.registry import Registry
 
 WAN = "wan"
 SEEDANCE = "seedance"
@@ -26,7 +27,7 @@ def group_of(model_id: str) -> str:
     )
 
 
-def admin_keys() -> dict[str, str]:
+def admin_keys() -> Registry[str]:
     """Group -> the admin's key for it, the ones set."""
     s = settings.apiyi
     keys = {
@@ -34,7 +35,7 @@ def admin_keys() -> dict[str, str]:
         SEEDANCE: s.api_key_seedance,
         DEFAULT: s.api_key_default,
     }
-    return {group: key for group, key in keys.items() if key}
+    return Registry[str](entries={group: key for group, key in keys.items() if key})
 
 
 def key_for(model_id: str, given: str) -> str:
@@ -42,6 +43,6 @@ def key_for(model_id: str, given: str) -> str:
     one of the admin's keys (the form pre-filled it) and that group has one;
     a key of the user's own is never swapped."""
     keys = admin_keys()
-    if given not in keys.values():
+    if given not in keys.all():
         return given
-    return keys.get(group_of(model_id), given)
+    return keys.get(group_of(model_id)) or given

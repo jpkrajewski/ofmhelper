@@ -25,6 +25,7 @@ import time
 from typing import Any
 lazy from pathlib import Path
 
+from pydantic import BaseModel
 from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
@@ -34,9 +35,6 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 _KEY_PREFIX = "refs:used:"
-# Bounded so a long-lived deployment doesn't grow one key forever. The picker
-# asks for a handful; anything past this is older than "recently used" means.
-_MAX_TRACKED = settings.web.ref_usage_max_tracked
 
 
 def _key(user_id: int) -> str:
@@ -49,13 +47,22 @@ def record_use(user_id: int, path: Path) -> None:
     try:
         redis = get_redis()
         redis.zadd(key, {str(path): time.time()})
-        # Trim to the newest _MAX_TRACKED by rank (0 = oldest).
-        redis.zremrangebyrank(key, 0, -(_MAX_TRACKED + 1))
+        # Bounded (`ref_usage_max_tracked`) so a long-lived deployment doesn't
+        # grow one key forever: the picker asks for a handful, anything past
+        # it is older than "recently used" means. By rank, 0 = oldest.
+        redis.zremrangebyrank(key, 0, -(settings.web.ref_usage_max_tracked + 1))
     except RedisError:
         logger.warning("could not record use of %s", path, exc_info=True)
 
 
-def recent(user_id: int, limit: int) -> list[tuple[str, float]]:
+class UsedRef(BaseModel, frozen=True):
+    """A reference file's path and when it was last used."""
+
+    path: str
+    used_at: float
+
+
+def recent(user_id: int, limit: int) -> list[UsedRef]:
     """`user_id`'s `limit` most recently used paths, newest first, each with
     the timestamp it was used at. Empty when Redis is unreachable."""
     try:
@@ -65,6 +72,9 @@ def recent(user_id: int, limit: int) -> list[tuple[str, float]]:
         logger.warning("could not read recently-used refs", exc_info=True)
         return []
     return [
-        (raw.decode() if isinstance(raw, bytes) else str(raw), float(score))
+        UsedRef(
+            path=raw.decode() if isinstance(raw, bytes) else str(raw),
+            used_at=float(score),
+        )
         for raw, score in rows
     ]

@@ -59,6 +59,7 @@ from zoneinfo import ZoneInfo
 lazy from collections.abc import Iterator
 lazy from pathlib import Path
 
+from pydantic import BaseModel, SkipValidation
 from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache import get_redis, get_text, set_text
@@ -80,6 +81,11 @@ from ofmhelpers.integrations.gdrive import (
     read_live_mode,
     service_account_email,
 )
+from ofmhelpers.integrations.gdrive.models import (
+    DriveListing,
+    DriveThumb,
+    FolderItems,
+)
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import (
@@ -91,6 +97,7 @@ from ofmhelpers.schemas import (
     SyncReport,
 )
 from ofmhelpers.telemetry import in_this_trace
+lazy from ofmhelpers.schemas.drive import StoredFolders
 
 logger = get_logger(__name__)
 
@@ -212,7 +219,16 @@ def ensure_root(drive: DriveApi, user_id: int) -> str:
     return found
 
 
-def review_target(refresh_token: str, user_id: int) -> tuple[DriveApi, str]:
+class ReviewPlace(BaseModel, frozen=True, arbitrary_types_allowed=True):
+    """Where a reviewed video is written: the Drive it goes through and the
+    folder's id in it."""
+
+    # A Protocol: nothing for Pydantic to check it against.
+    drive: SkipValidation[DriveApi]
+    folder_id: str
+
+
+def review_target(refresh_token: str, user_id: int) -> ReviewPlace:
     """The Drive a reviewed /clone-links video is written through, and the
     root it is filed in: the owner's root (`ensure_root`). In live-read mode
     -- dev reading the live folders, every write blocked -- dev's own
@@ -222,7 +238,7 @@ def review_target(refresh_token: str, user_id: int) -> tuple[DriveApi, str]:
     Raises `DriveError`."""
     if not read_live_mode():
         drive = connect_as(refresh_token)
-        return drive, ensure_root(drive, user_id)
+        return ReviewPlace(drive=drive, folder_id=ensure_root(drive, user_id))
     raw = connect_as(refresh_token, guard=False)
     name = f"{_DEV_PREFIX}{_ROOT_NAME}"
     named = [
@@ -232,7 +248,7 @@ def review_target(refresh_token: str, user_id: int) -> tuple[DriveApi, str]:
     ]
     # Drive lists newest first: the oldest is the one people have been using.
     root = named[-1].id if named else raw.create_folder("root", name).id
-    return ScopedDrive(raw, root), root
+    return ReviewPlace(drive=ScopedDrive(raw, root), folder_id=root)
 
 
 @contextmanager
@@ -310,15 +326,18 @@ def _review_folder_id(drive: DriveApi, user_id: int, root: str, name: str) -> st
     return found.id
 
 
-def review_folder(refresh_token: str, user_id: int, name: str) -> tuple[DriveApi, str]:
+def review_folder(refresh_token: str, user_id: int, name: str) -> ReviewPlace:
     """The Drive a reviewed /clone-links video is uploaded through and the
     id of folder `name` (GOOD REELS / TRIAL REELS) in its root
     (`review_target`), found or made -- one review of a person at a time
     (`_review_lock`); the upload itself stays outside, in parallel. Raises
     `DriveError`."""
     with _review_lock(user_id):
-        drive, root = review_target(refresh_token, user_id)
-        return drive, _review_folder_id(drive, user_id, root, name)
+        root = review_target(refresh_token, user_id)
+        return ReviewPlace(
+            drive=root.drive,
+            folder_id=_review_folder_id(root.drive, user_id, root.folder_id, name),
+        )
 
 
 def _by_owner(targets: list[DriveTarget]) -> dict[int, list[DriveTarget]]:
@@ -349,9 +368,7 @@ def _is_posted(name: str) -> bool:
     return name.strip().casefold() == wanted
 
 
-def _missing(
-    targets: list[DriveTarget], folders: dict[int, StoredFolder]
-) -> list[DriveTarget]:
+def _missing(targets: list[DriveTarget], folders: StoredFolders) -> list[DriveTarget]:
     """The logins with no folder, a folder under an old name, or no POSTED
     folder."""
     return [
@@ -381,7 +398,7 @@ def trash_folders(user_id: int, login_ids: list[int]) -> None:
     (restorable there), forgotten. A Drive failure is logged, never raised:
     the folder then stays, listed on /drive under folders no login owns."""
     stored = store.account_folders()
-    folders = [stored[i] for i in login_ids if i in stored]
+    folders = [f for i in login_ids if (f := stored.get(i)) is not None]
     if not folders:
         return
     try:
@@ -524,7 +541,7 @@ def _build_scan(
     name: str,
     items: list[DriveFile],
     posted_id: str | None,
-    posted_items: dict[str, list[DriveFile]],
+    posted_items: DriveListing,
 ) -> AccountScan:
     """An account folder from its listing and its POSTED folders' ones.
     Other folders in it (the old day folders, hand-made ones) are neither
@@ -535,7 +552,7 @@ def _build_scan(
         waiting=_files(items),
         posted_folders=posted_dirs,
         extra_posted_folders=[d for d in posted_dirs if d.id != posted_id],
-        posted=[f for d in posted_dirs for f in _files(posted_items.get(d.id, []))],
+        posted=[f for d in posted_dirs for f in _files(posted_items.of(d.id))],
     )
 
 
@@ -544,10 +561,12 @@ def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountSca
     gone (a trashed folder still lists, so it is asked first)."""
     current = drive.folder(account_id)
     items = drive.children(account_id)
-    posted_items: dict[str, list[DriveFile]] = {}
+    posted_items = DriveListing()
     for d in _posted_dirs(items, posted_id):
         try:
-            posted_items[d.id] = drive.children(d.id)
+            posted_items.folders.append(
+                FolderItems(folder_id=d.id, items=drive.children(d.id))
+            )
         except FolderGoneError:
             # Only that POSTED folder went since the listing, not the
             # account: never taken as the account deleted by hand.
@@ -738,13 +757,13 @@ def _list_batched(
     posted_ids = [
         d.id
         for c in cards
-        for d in _posted_dirs(inside[c.account_folder_id or ""], c.posted_folder_id)
+        for d in _posted_dirs(inside.of(c.account_folder_id or ""), c.posted_folder_id)
     ]
     posted_items = drive.children_of(posted_ids)
     for card in cards:
         folder_id = card.account_folder_id or ""
         card.scan = _build_scan(
-            names[folder_id], inside[folder_id], card.posted_folder_id, posted_items
+            names[folder_id], inside.of(folder_id), card.posted_folder_id, posted_items
         )
         store.record_posted(card.target.login_id, folder_id, card.scan.posted, seen_at)
     store.save_scans({c.target.login_id: c.scan for c in cards}, seen_at)
@@ -861,7 +880,7 @@ def _list_owner(
     )
 
 
-def _saved_board(result: DriveBoard, folders: dict[int, StoredFolder]) -> None:
+def _saved_board(result: DriveBoard, folders: StoredFolders) -> None:
     """Fills the cards from each folder's last read: no Drive call."""
     result.live = False
     reads: list[float] = []
@@ -923,7 +942,7 @@ def board(
         _saved_board(result, folders)
         _count_posted(result, at)
         return result
-    known = {f.folder_id for f in folders.values()}
+    known = {f.folder_id for f in folders.folders}
     seen_at = at.timestamp()
     grouped: dict[int, list[DriveCard]] = defaultdict(list)
     for card in result.cards:
@@ -935,7 +954,7 @@ def board(
 
 
 def _count_posted(result: DriveBoard, at: datetime.datetime) -> None:
-    counts = store.posted_counts(_period_starts(at))
+    counts = {c.login_id: c.counts for c in store.posted_counts(_period_starts(at))}
     for card in result.cards:
         card.posted_today, card.posted_week = counts.get(card.target.login_id, [0, 0])
 
@@ -944,13 +963,15 @@ def _thumb_cache(file_id: str, px: int) -> Path:
     return previews_dir() / "drive" / f"{file_id}_{px}"
 
 
-def _cached_thumb(file_id: str, px: int) -> tuple[bytes, str] | None:
-    """A preview fetched before: (bytes, type), kept as `<id>_<px>.<subtype>`."""
+def _cached_thumb(file_id: str, px: int) -> DriveThumb | None:
+    """A preview fetched before, kept as `<id>_<px>.<subtype>`."""
     base = _thumb_cache(file_id, px)
     if not base.parent.is_dir():
         return None
     for path in base.parent.glob(f"{base.name}.*"):
-        return path.read_bytes(), f"image/{path.suffix.lstrip('.')}"
+        return DriveThumb(
+            content=path.read_bytes(), media_type=f"image/{path.suffix.lstrip('.')}"
+        )
     return None
 
 
@@ -969,7 +990,7 @@ def _keep_thumb(file_id: str, px: int, content: bytes, media_type: str) -> None:
 
 def thumbnail(
     login_id: int, file_id: str, owner: int | None = None
-) -> tuple[bytes, str] | None:
+) -> DriveThumb | None:
     """The preview of a file in `login_id`'s account or POSTED folder, read
     through the folder owner's Drive; None for anything else (another
     folder, gone, no preview, a login `owner` may not see), so the proxy
@@ -995,6 +1016,7 @@ def thumbnail(
     if cached is not None:
         return cached
     found = drive.thumbnail(item, px)
-    if found is not None:
-        _keep_thumb(file_id, px, *found)
+    if found is None:
+        return None
+    _keep_thumb(file_id, px, found.content, found.media_type)
     return found

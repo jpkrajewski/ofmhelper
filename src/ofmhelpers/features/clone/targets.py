@@ -11,10 +11,17 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    TypeAdapter,
+    field_validator,
+    model_serializer,
+)
 
 from ofmhelpers.config import WebSettings
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 DEFAULT_RESOLUTION = "720P"
@@ -79,19 +86,48 @@ class CloneTarget(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def clone_targets() -> dict[str, CloneTarget]:
-    """The table, provider -> row: one dict for the whole process."""
+def clone_targets() -> Registry[CloneTarget]:
+    """The table, provider -> row: one for the whole process."""
     raw = Path(__file__).with_name("targets.json").read_text(encoding="utf-8")
-    return TypeAdapter(dict[str, CloneTarget]).validate_json(raw)
+    rows = TypeAdapter(dict[str, CloneTarget]).validate_json(raw)
+    return Registry[CloneTarget](entries=rows)
 
 
 def offered_resolutions(
     targets: Iterable[CloneTarget] | None = None,
-) -> tuple[str, ...]:
+) -> list[str]:
     """What a form offers: every resolution of `targets` (default: the whole
     table), in the table's order."""
-    rows = clone_targets().values() if targets is None else targets
-    return tuple(dict.fromkeys(*row.resolutions for row in rows))
+    rows = clone_targets().all() if targets is None else targets
+    return list(dict.fromkeys(*row.resolutions for row in rows))
+
+
+class CloneValues(BaseModel):
+    """One run's inputs. Its dump (`model_dump()`) is what the provider's
+    model takes: the same values under the target model's own field names."""
+
+    target: CloneTarget
+    prompt: str
+    resolution: str
+    duration: int
+    audio: bool
+    images: list[str]
+    video: str
+
+    @model_serializer
+    def _in_the_models_names(self) -> dict[str, Any]:
+        target = self.target
+        values: dict[str, Any] = {
+            "prompt": self.prompt,
+            "resolution": target.resolution_value(self.resolution),
+            "duration": self.duration,
+            target.audio: self.audio,
+            target.images: self.images,
+            target.video: [self.video],
+        }
+        if target.aspect:
+            values[target.aspect] = "adaptive"
+        return values
 
 
 def clone_values(
@@ -102,16 +138,14 @@ def clone_values(
     audio: bool,
     images: list[str],
     video: str,
-) -> dict[str, Any]:
-    """One run's inputs, in the target model's own field names."""
-    values: dict[str, Any] = {
-        "prompt": prompt,
-        "resolution": target.resolution_value(resolution),
-        "duration": duration,
-        target.audio: audio,
-        target.images: images,
-        target.video: [video],
-    }
-    if target.aspect:
-        values[target.aspect] = "adaptive"
-    return values
+) -> CloneValues:
+    """One run's inputs for `target`'s model."""
+    return CloneValues(
+        target=target,
+        prompt=prompt,
+        resolution=resolution,
+        duration=duration,
+        audio=audio,
+        images=images,
+        video=video,
+    )

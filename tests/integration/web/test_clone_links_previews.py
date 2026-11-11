@@ -24,10 +24,10 @@ from clone_links_helpers import (
     clone_links_env,  # noqa: F401 -- the fixture, used by `pytestmark`
 )
 
-from ofmhelpers.db.stores import cookies as login_cookies
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.clone_links import preview as preview_module
 from ofmhelpers.features.clone_links.preview import CANNOT_OPEN, TOO_SLOW, Price
+from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.integrations.downloaders.models import VideoInfo
 from ofmhelpers.integrations.instagram.fake import CDN
 
@@ -91,7 +91,7 @@ def _one(c, url: str) -> dict:
 def _with_cookies(email: str) -> None:
     user = users.by_email(email)
     assert user is not None
-    login_cookies.save(user.id, COOKIES_TXT, "cookies.txt")
+    cookie_jar.save(user.id, COOKIES_TXT, "cookies.txt")
 
 
 def test_one_line_per_link_each_ready_and_priced():

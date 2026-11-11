@@ -6,15 +6,16 @@ from functools import lru_cache
 
 from ofmhelpers.integrations.socials.platforms.base import Platform
 from ofmhelpers.integrations.socials.platforms.instagram import InstagramPlatform
+from ofmhelpers.utils.registry import Registry
 
 # Display order of the platform pickers.
 _PLATFORM_TYPES: tuple[type[Platform], ...] = (InstagramPlatform,)
 
 
 @lru_cache(maxsize=1)
-def platforms() -> dict[str, Platform]:
+def platforms() -> Registry[Platform]:
     """Every registered platform by its stored key."""
-    return {cls.key: cls() for cls in _PLATFORM_TYPES}
+    return Registry[Platform](entries={cls.key: cls() for cls in _PLATFORM_TYPES})
 
 
 def get_platform(key: str) -> Platform:

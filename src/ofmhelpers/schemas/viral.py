@@ -1,7 +1,6 @@
 """/viral: a search's stored reels and the page's view of a search."""
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -21,9 +20,6 @@ class ViralFile(ResultFile):
     comments: int | None = None
     posted_at: datetime | None = None
     seconds: float | None = None
-
-    def to_result(self) -> dict[str, Any]:
-        return self.model_dump(mode="json", exclude_unset=True)
 
 
 class ViralReel(BaseModel):

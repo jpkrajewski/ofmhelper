@@ -19,7 +19,7 @@ seedance2 pages, 2026-11-06), on a SeeDance2-group key.
 import re
 from typing import Any
 
-from pydantic import Field
+from pydantic import BaseModel, Field, model_serializer
 
 from ofmhelpers.integrations.ai_providers.apiyi.client import (
     ApiyiClient,
@@ -90,14 +90,41 @@ class SeedanceTask(Lenient):
         return f"{PROVIDER}: {reason}" + (f" ({error.code})" if error.code else "")
 
 
-def wire_body(spec: ModelSpec, payload: Payload, link: Any) -> dict[str, Any]:
+class Link(BaseModel):
+    url: str
+
+
+class Item(BaseModel):
+    """One `content` entry: the text, or a reference under its kind's key."""
+
+    type: str
+    text: str | None = None
+    image_url: Link | None = None
+    video_url: Link | None = None
+    audio_url: Link | None = None
+    role: str | None = None
+
+
+class Body(BaseModel):
+    """Ark's task body: `settings` go beside `model` and `content`, by the
+    names and in the order the catalog's schema gives them."""
+
+    model: str
+    content: list[Item]
+    settings: dict[str, Any]
+
+    @model_serializer
+    def _wire(self) -> dict[str, Any]:
+        content = [item.model_dump(exclude_none=True) for item in self.content]
+        return {"model": self.model, "content": content, **self.settings}
+
+
+def wire_body(spec: ModelSpec, payload: Payload, link: Any) -> Body:
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     media_fields = {f.name for f in spec.media_fields}
-    values = with_defaults(spec, payload)
-    content: list[dict[str, Any]] = [
-        {"type": "text", "text": _cited(str(values.pop("prompt", "")))}
-    ]
+    values = dict(with_defaults(spec, payload).values)
+    content = [Item(type="text", text=_cited(str(values.pop("prompt", ""))))]
     first_frame = False
     for name in list(values):
         if name not in media_fields:
@@ -111,16 +138,17 @@ def wire_body(spec: ModelSpec, payload: Payload, link: Any) -> dict[str, Any]:
         first_frame |= role == "first_frame"
         refs = value if isinstance(value, list) else [value]
         content.extend(
-            {"type": kind, kind: {"url": link(str(ref))}, "role": role}
+            Item.model_validate(
+                {"type": kind, kind: {"url": link(str(ref))}, "role": role}
+            )
             for ref in refs
             if ref
         )
-    body: dict[str, Any] = {"model": spec.model_id, "content": content, **values}
-    if "aspect_ratio" in body:
-        body["ratio"] = body.pop("aspect_ratio")
+    if "aspect_ratio" in values:
+        values["ratio"] = values.pop("aspect_ratio")
     if first_frame and spec.model_id.startswith("doubao-seedance-2-5"):
-        body["ratio"] = "adaptive"
-    return body
+        values["ratio"] = "adaptive"
+    return Body(model=spec.model_id, content=content, settings=values)
 
 
 class Seedance(Family):
@@ -132,7 +160,7 @@ class Seedance(Family):
     ) -> str:
         body = wire_body(spec, payload, client.link)
         response = client.submit(
-            TASKS, json=body, headers=HEADERS, refuse=refused_moderated
+            TASKS, json=body.model_dump(), headers=HEADERS, refuse=refused_moderated
         )
         task_id = parsed(response, SeedanceSubmit, PROVIDER).id
         if not task_id:

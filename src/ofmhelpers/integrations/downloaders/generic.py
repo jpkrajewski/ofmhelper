@@ -1,5 +1,6 @@
 import random
 import subprocess
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
@@ -282,12 +283,12 @@ def download(
         )
 
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    opts = config.ydl_opts(cookiefile)
+    reading = _Reading(yt_dlp, url, config.ydl_opts(cookiefile))
     attempts: list[str | None] = [*_proxies_for(url), None]
     errors: list[str] = []
     for proxy in attempts:
         try:
-            info = _fetch(yt_dlp, url, opts, proxy)
+            info = reading.fetch(proxy)
             break
         except Exception as exc:
             # Never the proxy URL: it carries the proxy's credentials.
@@ -339,15 +340,15 @@ def video_info(
     import yt_dlp
 
     config = DownloadConfig.single_post(socket_timeout=socket_timeout)
-    opts = config.ydl_opts(cookiefile)
+    reading = _Reading(yt_dlp, url, config.ydl_opts(cookiefile))
     errors: list[str] = []
     info = None
     for proxy in _proxies_for(url):
-        info = _try_peek(yt_dlp, url, opts, proxy, errors)
+        info = reading.try_peek(proxy, errors)
         if info is not None or _hidden_logged_out(errors[-1]):
             break
     if info is None:
-        info = _try_peek(yt_dlp, url, opts, None, errors)
+        info = reading.try_peek(None, errors)
     if info is None:
         return VideoInfo(
             url=url,
@@ -382,44 +383,57 @@ def _hidden_logged_out(error: str) -> bool:
     return any(sign in lowered for sign in _LOGGED_OUT_HIDDEN)
 
 
-def _try_peek(
-    yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None, errors: list[str]
-) -> Any | None:
-    """`_peek`, its failure logged and added to `errors` (None then)."""
-    try:
-        return _peek(yt_dlp, url, opts, proxy)
-    except Exception as exc:
-        logger.warning(
-            "video info %s failed (%s)",
-            url,
-            "via proxy" if proxy else "direct",
-            exc_info=True,
+@dataclass(frozen=True)
+class _Reading:
+    """One URL read by yt-dlp (the imported module) with `opts`; each call
+    names the proxy it goes through (None: direct, logged in)."""
+
+    yt_dlp: Any
+    url: str
+    opts: YtDlpOptions
+
+    def _ydl(self, opts: YtDlpOptions) -> Any:
+        """A `YoutubeDL` on `opts`, dumped here: yt-dlp only takes a dict."""
+        return self.yt_dlp.YoutubeDL(opts.model_dump(exclude_none=True))
+
+    def try_peek(self, proxy: str | None, errors: list[str]) -> Any | None:
+        """`peek`, its failure logged and added to `errors` (None then)."""
+        try:
+            return self.peek(proxy)
+        except Exception as exc:
+            logger.warning(
+                "video info %s failed (%s)",
+                self.url,
+                "via proxy" if proxy else "direct",
+                exc_info=True,
+            )
+            errors.append(str(exc))
+            return None
+
+    def peek(self, proxy: str | None) -> Any:
+        """yt-dlp's info for the URL, nothing written; through `proxy`
+        logged out."""
+        opts = self.opts
+        if proxy is not None:
+            opts = opts.model_copy(
+                update={"cookiefile": None, "cookiesfrombrowser": None, "proxy": proxy}
+            )
+        with self._ydl(opts) as ydl:
+            return ydl.extract_info(self.url, download=False)
+
+    def fetch(self, proxy: str | None) -> Any:
+        """yt-dlp's info for the URL, files written. Through `proxy`: metadata
+        logged out via the proxy, then the files direct (see _PROXIED_SITES)."""
+        if proxy is None:
+            with self._ydl(self.opts) as ydl:
+                return ydl.extract_info(self.url, download=True)
+        anon = self.opts.model_copy(
+            update={"cookiefile": None, "cookiesfrombrowser": None}
         )
-        errors.append(str(exc))
-        return None
-
-
-def _peek(yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None) -> Any:
-    """yt-dlp's info for `url`, nothing written; through `proxy` logged out."""
-    if proxy is not None:
-        opts = opts.model_copy(
-            update={"cookiefile": None, "cookiesfrombrowser": None, "proxy": proxy}
-        )
-    with yt_dlp.YoutubeDL(opts.to_ydl()) as ydl:
-        return ydl.extract_info(url, download=False)
-
-
-def _fetch(yt_dlp: Any, url: str, opts: YtDlpOptions, proxy: str | None) -> Any:
-    """yt-dlp's info for `url`, files written. Through `proxy`: metadata
-    logged out via the proxy, then the files direct (see _PROXIED_SITES)."""
-    if proxy is None:
-        with yt_dlp.YoutubeDL(opts.to_ydl()) as ydl:
-            return ydl.extract_info(url, download=True)
-    anon = opts.model_copy(update={"cookiefile": None, "cookiesfrombrowser": None})
-    with yt_dlp.YoutubeDL(anon.model_copy(update={"proxy": proxy}).to_ydl()) as ydl:
-        info = ydl.sanitize_info(ydl.extract_info(url, download=False))
-    with yt_dlp.YoutubeDL(anon.to_ydl()) as ydl:
-        return ydl.process_ie_result(info, download=True)
+        with self._ydl(anon.model_copy(update={"proxy": proxy})) as ydl:
+            info = ydl.sanitize_info(ydl.extract_info(self.url, download=False))
+        with self._ydl(anon) as ydl:
+            return ydl.process_ie_result(info, download=True)
 
 
 def download_all(

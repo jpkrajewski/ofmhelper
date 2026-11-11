@@ -10,14 +10,15 @@ from ofmhelpers.db.models import SelfLinkClickRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import self_links as self_store
 from ofmhelpers.db.stores import short_links
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links import NewLink
 from ofmhelpers.integrations.short_links.providers import get_link_provider
-from ofmhelpers.schemas.links import utc_today
+from ofmhelpers.schemas.links import PlannedLink, utc_today
 lazy from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 
 
 def _client(user_id: int) -> LinkProvider:
-    provider = short_links.client(user_id, "self")
+    provider = link_keys.client(user_id, "self")
     assert provider is not None
     return provider
 
@@ -28,14 +29,14 @@ def _make_live_link(user_id: int, slug: str, host: str, destination: str) -> str
         user_id,
         "self",
         [
-            {
-                "slug": slug,
-                "domain": host,
-                "destination": destination,
-                "target": "onlyfans",
-                "account_id": None,
-                "creator": "",
-            }
+            PlannedLink(
+                slug=slug,
+                domain=host,
+                destination=destination,
+                target="onlyfans",
+                account_id=None,
+                creator="",
+            )
         ],
     )
     made = _client(user_id).create(
@@ -52,7 +53,7 @@ def _click(link_id: int, kind: str, when: datetime, **geo: str) -> None:
 
 def test_self_is_always_keyed_for_every_user():
     user = make_user()
-    assert short_links.api_key(user.id, "self") == str(user.id)
+    assert link_keys.api_key(user.id, "self") == str(user.id)
     assert get_link_provider("self").local_key(user.id) == str(user.id)
     provider = _client(user.id)
     assert type(provider).__name__ == "SelfProvider"
@@ -97,10 +98,14 @@ def test_daily_and_hourly_come_from_the_click_log():
 
     today = utc_today()
     provider = _client(user.id)
-    days = provider.daily([rid], today - timedelta(days=30), today)[rid]
+    [daily] = provider.daily([rid], today - timedelta(days=30), today)
+    assert daily.remote_id == rid
+    days = daily.days
     assert [(d.views, d.clicks) for d in days] == [(3, 2), (2, 1)]
 
-    hours = provider.hourly([rid], today)[rid]
+    [hourly] = provider.hourly([rid], today)
+    assert hourly.remote_id == rid
+    hours = hourly.hours
     assert len(hours) == 1
     assert (hours[0].views, hours[0].clicks) == (2, 1)
     assert hours[0].hour.hour == 12

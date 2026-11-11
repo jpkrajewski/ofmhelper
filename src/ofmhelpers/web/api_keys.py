@@ -19,8 +19,10 @@ def get_api_keys(request: Request) -> dict[str, str]:
     user = AuthMiddleware.user(request)
     saved = api_keys(user.id)
     return {
-        name: saved.get(name) or (cls.default_key() if user.is_admin else None) or ""
-        for name, cls in provider_classes().items()
+        cls.name: saved.get(cls.name)
+        or (cls.default_key() if user.is_admin else None)
+        or ""
+        for cls in provider_classes().all()
     }
 
 

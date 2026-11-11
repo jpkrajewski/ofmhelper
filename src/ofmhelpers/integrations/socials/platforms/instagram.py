@@ -22,7 +22,6 @@ from ofmhelpers.integrations.instagram import (
     InstagramError,
     InstagramRateLimitedError,
     InstagramUnavailableError,
-    ProfileHandle,
     ProfileNotFoundError,
 )
 from ofmhelpers.integrations.instagram.models import MediaUrl, ReelSummary
@@ -41,6 +40,7 @@ from ofmhelpers.integrations.socials.platforms.instagram_apify import (
     ApifyInstagramSource,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.socials import InstagramNames
 lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
 logger = get_logger(__name__)
@@ -75,16 +75,7 @@ def _reels(
     return list(islice(client.reels(user_id), cap + 1)), True
 
 
-class InstagramPlatform(Platform):
-    key = "instagram"
-    label = "Instagram"
-
-    def handle(self, text: str) -> str:
-        return ProfileHandle(username=text).username
-
-    def profile_url(self, handle: str) -> str:
-        return f"https://www.instagram.com/{handle}/"
-
+class InstagramPlatform(InstagramNames, Platform):
     def proxies(self) -> list[str]:
         return settings.instagram.proxy_urls
 

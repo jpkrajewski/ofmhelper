@@ -19,6 +19,8 @@ from signin import sign_in
 
 import ofmhelpers.media.exports as exports_module
 from ofmhelpers.db.stores.jobs import get_job, list_jobs
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.clone import run as clone_run
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
@@ -27,7 +29,6 @@ from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.schemas import Job, ResultFile
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 from ofmhelpers.web.templates_config import render_partial
 
 NEW = json.dumps([{"kind": "new"}])
@@ -39,7 +40,7 @@ def _new(n: int) -> str:
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path)
     c = TestClient(app)
     sign_in(c)
     return c
@@ -53,7 +54,7 @@ def fake_runs(monkeypatch):
         "duration_s",
         lambda path, _t: "abcdefghijklmnopqrstuvwxyz".index(Path(path).name[-5]) + 2.6,
     )
-    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: [])
+    monkeypatch.setattr(clone_run, "run_ai", lambda *_a, **_k: [])
 
 
 def _post(client, videos, data=None):
@@ -73,13 +74,13 @@ def _post(client, videos, data=None):
     ("seconds", "expected"), [(0.4, 2), (7.4, 7), (7.6, 8), (45.0, 30)]
 )
 def test_duration_is_the_video_length_clamped_to_wan3(seconds, expected):
-    for target in clone.CLONE_TARGETS.values():
+    for target in clone.CLONE_TARGETS.all():
         assert clone.clip_duration(target.spec, seconds) == expected
 
 
 def test_page_defaults(client):
     html = client.get("/clone").text
-    assert clone.DEFAULT_PROMPT in html
+    assert clone.default_prompt() in html
     assert '<option value="720P" selected>' in html
     assert 'data-field="image" data-kind="image" data-max="10"' in html
     assert 'class="file-add-input" multiple' in html
@@ -89,7 +90,7 @@ def test_page_defaults(client):
 def test_run_queues_one_card_per_video_newest_first(client):
     r = _post(client, ["b.mp4", "a.mp4"])
 
-    assert r.status_code == 200
+    assert r.status_code == 202
     jobs = [get_job(j) for j in r.json()["job_ids"]]
     assert {j.task for j in jobs} == {"clone"}
     assert [j.params["duration"] for j in jobs] == [4, 3]
@@ -153,7 +154,7 @@ def test_recreate_resubmits_the_same_files_without_uploading(client):
         },
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 202
     [job_id] = r.json()["job_ids"]
     params = get_job(job_id).params
     assert params["reference_images"] == image
@@ -187,7 +188,7 @@ def test_every_run_gets_all_the_subject_images(client):
         files=files,
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 202
     jobs = [get_job(j) for j in r.json()["job_ids"]]
     images = jobs[0].params["reference_images"]
     assert [Path(p).name.split("__", 1)[1] for p in images] == ["front.png", "side.png"]
@@ -216,7 +217,7 @@ def test_run_caps_videos_per_submit(client, monkeypatch):
 
 
 @pytest.mark.usefixtures("fake_runs")
-@pytest.mark.parametrize("provider", list(clone.CLONE_TARGETS))
+@pytest.mark.parametrize("provider", clone.CLONE_TARGETS.names())
 def test_a_video_over_15_s_queues_nothing_on_any_provider(client, provider):
     before = len(list_jobs())
 
@@ -351,10 +352,10 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
 
     r = _post_clips(client, clips, {"provider": "kie"})
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     assert [model for model, _ in sent] == ["wan/3-0-video", "wan/3-0-video"]
     for (_model, payload), name, seconds in zip(sent, "ab", [3, 5], strict=True):
-        assert payload["prompt"] == clone.DEFAULT_PROMPT
+        assert payload["prompt"] == clone.default_prompt()
         assert payload["duration"] == seconds
         assert payload["resolution"] == "720P"
         assert payload["nsfw_checker"] is False
@@ -398,7 +399,7 @@ def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
         client, [_clip(tmp_path / "a.mp4", 3)], {"provider": "apiyi", "audio": "true"}
     )
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     [body] = sent
     assert body["model"] == "wan3.0-video"
     parameters = body["parameters"]
@@ -410,7 +411,9 @@ def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
     assert video["type"] == "reference_video"
     assert video["url"].endswith("a.mp4")
     assert body["input"]["prompt"] == (
-        clone.DEFAULT_PROMPT.replace("@Video1", "Video 1").replace("@Image1", "Image 1")
+        clone.default_prompt()
+        .replace("@Video1", "Video 1")
+        .replace("@Image1", "Image 1")
     )
     assert get_job(r.json()["job_ids"][0]).status == "done"
 
@@ -425,7 +428,7 @@ def test_run_on_higgsfield_sends_its_own_field_names(client, tmp_path, monkeypat
         {"provider": "higgsfield", "audio": "true"},
     )
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     [(model, payload)] = sent
     assert model == "alibaba/wan-3.0/reference-to-video"
     assert payload["resolution"] == "720p", "Higgsfield spells it lower-case"
@@ -446,7 +449,7 @@ def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
     """A batch over the picked model's own limits (its schema) fails the
     submit up front, nothing paid. Seedance 2.0 takes at most 9 images."""
     monkeypatch.setitem(
-        clone.CLONE_TARGETS,
+        clone.CLONE_TARGETS.entries,
         "higgsfield",
         clone.CloneTarget(
             model="higgsfield:bytedance/seedance-2.0/reference-to-video",
@@ -499,7 +502,7 @@ def _run_clone(assets_root, **choice):
 
 
 def _generated(monkeypatch, result):
-    monkeypatch.setattr(clone, "run_ai", lambda *_a, **_k: result)
+    monkeypatch.setattr(clone_run, "run_ai", lambda *_a, **_k: result)
 
 
 def test_export_is_one_dropdown_with_capcut_selected(client):
@@ -629,7 +632,9 @@ def test_jobs_from_before_export_keep_their_capcut_choice(monkeypatch):
     _generated(monkeypatch, result)
     seen = []
     monkeypatch.setattr(
-        clone, "_exported", lambda r, export, _o, _root: seen.append(export) or r
+        clone_run,
+        "exported_file",
+        lambda r, export, _o, _root: seen.append(export) or r,
     )
 
     _run_clone("/x", capcut=True)
@@ -653,7 +658,9 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
 
     pricing = _pricing(client)
 
-    assert set(pricing) == set(clone.CLONE_TARGETS), "every clone provider is priced"
+    assert set(pricing) == set(clone.CLONE_TARGETS.names()), (
+        "every clone provider is priced"
+    )
     assert pricing["kie"]["credits_per_video_s"] == {"720P": 40.0}
     assert pricing["kie"]["usd_per_credit"] == 0.004
     assert pricing["kie"]["max_reference_s"] == 15

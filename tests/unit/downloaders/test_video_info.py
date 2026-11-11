@@ -183,7 +183,7 @@ def test_a_proxy_that_reads_it_ends_the_tries(monkeypatch):
 def _real_ydl(config: DownloadConfig):
     import yt_dlp
 
-    return yt_dlp.YoutubeDL(config.ydl_opts().to_ydl())
+    return yt_dlp.YoutubeDL(config.ydl_opts().model_dump(exclude_none=True))
 
 
 def test_yt_dlp_takes_the_one_post_options_and_drops_generic():
@@ -216,7 +216,7 @@ def test_download_media_keeps_every_extractor():
     config = DownloadConfig()
     with _real_ydl(config) as ydl:
         assert "Generic" in ydl._ies
-    opts = config.ydl_opts().to_ydl()
+    opts = config.ydl_opts().model_dump(exclude_none=True)
     assert opts["noplaylist"] is False
     assert "playlist_items" not in opts
     assert "allowed_extractors" not in opts

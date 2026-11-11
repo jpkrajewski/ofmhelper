@@ -532,7 +532,7 @@ class AccountSnapshotRow(Base):
 
 class DeviceRow(Base):
     """A physical phone of the agency (/phones). `model_id`/`color_id` are
-    `ofmhelpers.features.phones.catalog.catalog()` ids (`custom_model` for a phone the
+    `ofmhelpers.schemas.phone_catalog.catalog()` ids (`custom_model` for a phone the
     catalog does not list). Its logins are linked through
     `DeviceLoginRow`. "Retire" sets `retired_at`: off the list and the
     export, every login kept."""
@@ -563,7 +563,7 @@ class DeviceRow(Base):
 
 class LoginRow(Base):
     """One account: an iCloud, a Gmail, an Instagram, a website... `service`
-    is an `ofmhelpers.features.phones.catalog.services()` key; `provider` names it for a
+    is an `ofmhelpers.schemas.phone_catalog.services()` key; `provider` names it for a
     custom service ("Acme Corp"), "" otherwise. Stored once, signed in on
     any number of phones (`DeviceLoginRow`). Password and backup codes are
     encrypted at rest (`EncryptedText`); "" stays "", so a list can tell

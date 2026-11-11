@@ -10,8 +10,7 @@ Every `CloneAiCheck` field is a column: `save` writes the whole model.
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import CloneAiCheckRepository
-from ofmhelpers.schemas.clone_ai_checks import StoredCloneAiCheck
-lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
+lazy from ofmhelpers.schemas.clone_ai_checks import CloneAiCheck, StoredCloneAiCheck
 
 
 @lru_cache(maxsize=1)
@@ -26,7 +25,7 @@ def save(
     job_id: str | None = None,
     file_index: int | None = None,
 ) -> StoredCloneAiCheck:
-    row = _repository().add(
+    return _repository().add(
         {
             **check.model_dump(mode="json"),
             "user_id": user_id,
@@ -34,16 +33,12 @@ def save(
             "file_index": file_index,
         }
     )
-    return StoredCloneAiCheck.model_validate(row)
 
 
 def get(check_id: int) -> StoredCloneAiCheck | None:
-    found = _repository().get(check_id)
-    return StoredCloneAiCheck.model_validate(found) if found else None
+    return _repository().get(check_id)
 
 
 def for_jobs(job_ids: list[str]) -> list[StoredCloneAiCheck]:
     """Every check of these jobs' results, oldest first."""
-    return [
-        StoredCloneAiCheck.model_validate(r) for r in _repository().for_jobs(job_ids)
-    ]
+    return _repository().for_jobs(job_ids)

@@ -137,7 +137,7 @@ def test_device_metadata_writes_a_recent_creation_time(tmp_path):
 
 @pytest.mark.heavy
 def test_run_end_to_end_serves_every_copy(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(uniqify, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(uniqify, "_upload_root", lambda: tmp_path)
     clip = _write_clip(tmp_path / "in.mp4", 320, 240).read_bytes()
 
     r = client.post(
@@ -146,7 +146,7 @@ def test_run_end_to_end_serves_every_copy(client, tmp_path, monkeypatch):
         files={"file": ("in.mp4", clip, "video/mp4")},
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 202
     status = client.get(f"/uniqify/jobs/{r.json()['job_id']}/status").json()
     assert status["status"] == "done"
     [archive] = status["result"]

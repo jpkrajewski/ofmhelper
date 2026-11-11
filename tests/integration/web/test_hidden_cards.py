@@ -21,9 +21,9 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from signin import sign_in
 
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.generation import index as generate_index
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -268,7 +268,7 @@ def test_live_polling_leaves_hidden_cards_out(ann, tmp_path):
 def test_each_view_pages_over_its_own_cards(ann, tmp_path, monkeypatch):
     """The normal view pages over the shown jobs, the hidden view over the
     hidden ones: no sentinel pointing at a page of the other view's cards."""
-    monkeypatch.setattr(generate_index, "GALLERY_LIMIT", 3)
+    monkeypatch.setenv("OFM_GALLERY_LIMIT", str(3))
     client, actor = ann
     jobs = [_done("fake_ai", actor, tmp_path / f"{i}.png") for i in range(8)]
     for job in jobs[4:]:

@@ -2,7 +2,6 @@
 play counts, the top ones are downloaded from Instagram's CDN."""
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 lazy from pathlib import Path
 
 import requests
@@ -17,10 +16,16 @@ from ofmhelpers.features.viral.models import (
     SavedReel,
     ViralFind,
 )
-from ofmhelpers.integrations.apify import ApifyError, RunStatus, richest
+from ofmhelpers.integrations import outbound
+from ofmhelpers.integrations.apify import (
+    ApifyError,
+    DatasetItem,
+    RunStatus,
+    richest,
+)
+from ofmhelpers.integrations.apify.instagram import ReelScraperInput
 from ofmhelpers.log import get_logger
 from ofmhelpers.telemetry import in_this_trace
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
@@ -37,18 +42,11 @@ class ViralError(AppError):
     (`schemas/errors.py` matches its start)."""
 
 
-def reel_input(username: str, scan: int) -> dict[str, Any]:
+def reel_input(username: str, scan: int) -> ReelScraperInput:
     """The reel scraper's input: `username`'s newest `scan` reels (pinned
     ones too: often the most played), every paid add-on off. Always with a
     limit: without one the actor reads the whole profile."""
-    return {
-        "username": [username],
-        "resultsLimit": scan,
-        "skipPinnedPosts": False,
-        "includeSharesCount": False,
-        "includeTranscript": False,
-        "includeDownloadedVideo": False,
-    }
+    return ReelScraperInput(username=[username], results_limit=scan)
 
 
 def most_played(reels: list[ApifyReel], top: int) -> list[ApifyReel]:
@@ -62,17 +60,17 @@ def most_played(reels: list[ApifyReel], top: int) -> list[ApifyReel]:
     return sorted(unique, key=lambda r: r.plays, reverse=True)[:top]
 
 
-def parse(username: str, items: list[dict[str, Any]]) -> list[ApifyReel]:
+def parse(username: str, items: list[DatasetItem]) -> list[ApifyReel]:
     """The dataset's reels; a profile the actor could not read is a
     `ViralError` naming why."""
     reels: list[ApifyReel] = []
     errors: list[ApifyItemError] = []
     for item in items:
         try:
-            if "error" in item:
-                errors.append(ApifyItemError.model_validate(item))
+            if item.failed:
+                errors.append(item.read(ApifyItemError))
             else:
-                reels.append(ApifyReel.model_validate(item))
+                reels.append(item.read(ApifyReel))
         except ValidationError:
             logger.warning(
                 "viral @%s: unreadable item %s", username, item, exc_info=True

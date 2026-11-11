@@ -6,11 +6,11 @@ import io
 import pytest
 from PIL import Image
 
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.downloaders import generic, images, media
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 from ofmhelpers.integrations.downloaders.images import ImageDownloadConfig
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils import outbound
 
 
 @pytest.fixture(autouse=True)

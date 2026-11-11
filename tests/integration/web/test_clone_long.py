@@ -22,6 +22,7 @@ from signin import sign_in
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import fail_job, get_job, list_jobs
+from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.clone_long import (
     TARGETS,
     LongClone,
@@ -30,6 +31,7 @@ from ofmhelpers.features.clone_long import (
     service,
 )
 from ofmhelpers.features.jobs import recovery
+from ofmhelpers.features.jobs.registry import JOB_TIMEOUTS, RESUMABLE
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
 from ofmhelpers.integrations.ai_providers.base import TaskState
@@ -41,8 +43,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.registry import JOB_TIMEOUTS, RESUMABLE
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 NEW = json.dumps([{"kind": "new"}])
 PROVIDERS = {
@@ -54,7 +54,7 @@ PROVIDERS = {
 
 @pytest.fixture(autouse=True)
 def roots(tmp_path, monkeypatch):
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     monkeypatch.setenv("OFM_CLONE_CREDITS_PER_VIDEO_S", '{"720P": 32.78}')
@@ -191,7 +191,7 @@ def test_a_16_9_video_is_generated_in_pieces_and_comes_out_16_9(
         client, _clip(tmp_path / "long.mp4", 32, "1280x720"), {"provider": provider}
     )
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     job = get_job(r.json()["job_id"])
     assert job.status == "done", job.error
     # 3 pieces (11 + 11 + 10 s), each its own request, same image and prompt.
@@ -442,7 +442,7 @@ def test_a_pieces_request_follows_the_audio_switch(
     monkeypatch.setenv("OFM_CLONE_LONG_AUDIO", "1" if audio else "0")
     target = TARGETS[provider]
 
-    values = target.values(_params(tmp_path, 10), 10, "piece.mp4")
+    values = target.values(_params(tmp_path, 10), 10, "piece.mp4").model_dump()
 
     assert values[target.audio_field] is audio
 
@@ -452,7 +452,7 @@ def test_a_chained_pieces_request_starts_from_the_frame_given(tmp_path, provider
     target = TARGETS[provider]
     params = _params(tmp_path, 10)
 
-    values = target.values(params, 10, "piece.mp4", "chain_0.png")
+    values = target.values(params, 10, "piece.mp4", "chain_0.png").model_dump()
 
     assert values[target.image_field] == [params.image, "chain_0.png"]
     assert values["prompt"] == "p Start video from @Image2"
@@ -543,7 +543,8 @@ def test_a_run_keeps_the_switches_it_was_queued_with(tmp_path, monkeypatch):
 
     assert (stored.chain, stored.colour_match, stored.audio) == (True, True, True)
     target = TARGETS["kie"]
-    assert target.values(stored, 10, "piece.mp4")[target.audio_field] is True
+    values = target.values(stored, 10, "piece.mp4").model_dump()
+    assert values[target.audio_field] is True
 
 
 @pytest.mark.slow

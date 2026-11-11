@@ -12,23 +12,34 @@ from http import HTTPStatus
 from urllib.parse import urlencode
 
 import requests
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.fanvue.errors import FanvueError
 from ofmhelpers.integrations.fanvue.models import TokenReply
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import ChatTokens
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
 
-def pkce_pair() -> tuple[str, str]:
-    """(verifier, challenge): the challenge is the verifier's SHA-256."""
+class Pkce(BaseModel):
+    """A PKCE pair: the challenge is the verifier's SHA-256."""
+
+    model_config = ConfigDict(frozen=True)
+
+    verifier: str
+    challenge: str
+
+
+def pkce_pair() -> Pkce:
     verifier = secrets.token_urlsafe(64)
     digest = hashlib.sha256(verifier.encode()).digest()
-    return verifier, base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return Pkce(
+        verifier=verifier,
+        challenge=base64.urlsafe_b64encode(digest).rstrip(b"=").decode(),
+    )
 
 
 def authorize_url(redirect_uri: str, state: str, challenge: str) -> str:

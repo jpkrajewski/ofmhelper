@@ -14,9 +14,9 @@ from functools import lru_cache
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import TrackedAccountRepository
 from ofmhelpers.db.stores.users import agency_id
-from ofmhelpers.integrations.socials import platforms
 from ofmhelpers.schemas import AccountHistory, TrackedAccount
-lazy from ofmhelpers.integrations.socials import AccountStats
+from ofmhelpers.schemas.socials import platform_names
+lazy from ofmhelpers.schemas.socials import AccountStats
 
 
 @lru_cache(maxsize=1)
@@ -26,26 +26,24 @@ def _repository() -> TrackedAccountRepository:
     return TrackedAccountRepository()
 
 
-def _account(row: dict) -> TrackedAccount:
+def _account(row: TrackedAccount) -> TrackedAccount:
     """`syncing`: its scan is queued or running (claimed, claim not expired)."""
-    claimed = row.get("claimed_at")
+    claimed = row.claimed_at
     since = time.time() - settings.accounts.claim_ttl_s
-    return TrackedAccount.model_validate(
-        {**row, "syncing": claimed is not None and claimed > since}
-    )
+    return row.model_copy(update={"syncing": claimed is not None and claimed > since})
 
 
 def list_accounts(owner: int | None = None) -> list[TrackedAccount]:
     """`owner`'s tracked accounts of a registered platform, newest first."""
     rows = _repository().list_all(settings.accounts.periods_days, owner)
-    return [_account(row) for row in rows if row["platform"] in platforms()]
+    return [_account(row) for row in rows if row.platform in platform_names()]
 
 
 def get_account(account_id: int, owner: int | None = None) -> TrackedAccount | None:
     row = _repository().get(account_id, settings.accounts.periods_days)
-    if row is None or row["platform"] not in platforms():
+    if row is None or row.platform not in platform_names():
         return None
-    if owner is not None and row["user_id"] != owner:
+    if owner is not None and row.user_id != owner:
         return None
     return _account(row)
 
@@ -55,7 +53,7 @@ def get_history(account_id: int) -> AccountHistory:
     hour, so the read stays cacheable."""
     since = time.time() - settings.accounts.history_days * 86400
     rows = _repository().history(account_id, since - since % 3600)
-    return AccountHistory.model_validate({"snapshots": rows})
+    return AccountHistory(snapshots=rows)
 
 
 def list_creators(owner: int | None = None) -> list[str]:

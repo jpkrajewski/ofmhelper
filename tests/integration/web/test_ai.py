@@ -17,8 +17,11 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import JobRepository
 from ofmhelpers.db.stores.jobs import create_job, get_job, set_job_preview
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.downloads import videos as download_videos_router
 from ofmhelpers.integrations.ai_providers import base
 from ofmhelpers.integrations.ai_providers.base import Provider, TaskState
 from ofmhelpers.integrations.ai_providers.catalog import catalog
@@ -27,10 +30,7 @@ from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldP
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.schemas import JobPreview
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.downloads import videos as download_videos_router
-from ofmhelpers.web.routers.generation.ai import MAX_BATCH
 from ofmhelpers.web.routers.task_helpers import job_status_payload
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 NEW = json.dumps([{"kind": "new"}])
 FAKE_IMAGE = "fake:image"
@@ -48,7 +48,7 @@ def _isolated(monkeypatch, tmp_path):
     monkeypatch.setenv("OFM_AIGEN_POLL_INTERVAL_S", "0")
     assets = tmp_path / "assets"
     assets.mkdir()
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", assets)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: assets)
     return assets
 
 
@@ -85,7 +85,7 @@ def test_page_offers_every_provider_and_every_model(client):
             re.DOTALL,
         ).group(1)
     )
-    assert {m["key"] for m in models} == set(catalog())
+    assert {m["key"] for m in models} == set(catalog().names())
     assert 'action="/ai/run"' in html
 
 
@@ -151,7 +151,7 @@ def test_a_single_file_field_is_a_one_item_picker(client):
     )
 
 
-@pytest.mark.parametrize("key", list(catalog()), ids=str)
+@pytest.mark.parametrize("key", catalog().names(), ids=str)
 def test_every_model_renders_its_fields(client, key):
     """Every catalog entry (all of kie.ai's image/video models) gets a form: each
     setting an input, each media field a picker of its kind."""
@@ -214,7 +214,8 @@ def test_batch_defaults_to_one(client):
 
 
 def test_batch_is_capped_at_the_max(client):
-    assert len(_fake(client, batch=str(MAX_BATCH + 40)).json()["job_ids"]) == MAX_BATCH
+    most = settings.aigen.max_batch
+    assert len(_fake(client, batch=str(most + 40)).json()["job_ids"]) == most
 
 
 def test_batch_is_ignored_for_a_video_model(client):
@@ -457,7 +458,7 @@ def test_a_higgsfield_run_uses_its_own_field_names(client, monkeypatch):
         files=files,
     )
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     [(model_id, payload)] = sent
     assert model_id == "kling-video/v3.0/pro/image-to-video"
     assert payload["image_url"].startswith("https://hf/"), "one file, sent as one URL"
@@ -481,7 +482,7 @@ def test_job_page_shows_the_model_settings_and_reference_preview(client):
 
 
 def test_a_plain_download_job_page_has_no_inputs_section(client, monkeypatch):
-    monkeypatch.setattr(download_videos_router, "_run_downloads", lambda urls: [])
+    monkeypatch.setattr(download_videos_router, "run_downloads", lambda urls: [])
     job_id = client.post(
         "/download-videos/run", data={"urls": "https://a.example/1"}
     ).json()["job_id"]

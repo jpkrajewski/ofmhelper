@@ -48,3 +48,6 @@ backlog.txt
 
 # Local ops notes (server IP, domain setup): never in this public repo.
 /ops.local/
+
+# AWS guide text for the aws-devops-guidance skill: all rights reserved, rebuilt by its build_cache.py
+.claude/skills/aws-devops-guidance/cache/

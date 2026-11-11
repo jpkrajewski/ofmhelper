@@ -24,22 +24,29 @@ from ofmhelpers.db.session import session_scope
 lazy from ofmhelpers.schemas.chatting import (
     ChatAccount,
     ChatEvent,
+    ChatPosition,
     ChatRead,
     ChatTokens,
     ChatWebhook,
+    FanMessage,
+    ModelReach,
+    ModelTotal,
+    OpenWait,
+    StoredNotification,
+    WebhookTarget,
 )
 
 
 class ChatRepository:
-    def last_read(self, platform: str) -> dict[str, str]:
-        """{channel id: the newest message id the sync has read in it}."""
+    def last_read(self, platform: str) -> list[ChatPosition]:
+        """Each chat's newest message id the sync has read in it."""
         with session_scope() as s:
             rows = s.execute(
                 select(ChatThreadRow.channel_id, ChatThreadRow.last_message_id).where(
                     ChatThreadRow.platform == platform
                 )
             )
-            return dict(rows.tuples().all())
+            return [ChatPosition.model_validate(dict(row)) for row in rows.mappings()]
 
     def record_events(self, platform: str, read: ChatRead) -> None:
         """A chat's messages. Whatever order they come in, in however many
@@ -172,7 +179,9 @@ class ChatRepository:
                 ).scalars()
             )
 
-    def fan_messages(self, platform: str, username: str, since: float) -> list[dict]:
+    def fan_messages(
+        self, platform: str, username: str, since: float
+    ) -> list[FanMessage]:
         """A model's fan messages sent or answered after `since`, and any still
         waiting however old, newest first."""
         with session_scope() as s:
@@ -195,9 +204,9 @@ class ChatRepository:
                 )
                 .order_by(ChatFanMessageRow.sent_at.desc())
             )
-            return [dict(row) for row in rows.mappings()]
+            return [FanMessage.model_validate(dict(row)) for row in rows.mappings()]
 
-    def open_waits(self, before: float) -> list[dict]:
+    def open_waits(self, before: float) -> list[OpenWait]:
         """Every platform's chats whose fan has waited since before `before`, however
         long ago. A chat's unanswered messages are one wait, from the first; the fan's
         name as their messages carry it."""
@@ -219,7 +228,7 @@ class ChatRepository:
                 )
                 .having(started_at < before)
             )
-            return [dict(row) for row in rows.mappings()]
+            return [OpenWait.model_validate(dict(row)) for row in rows.mappings()]
 
     def save_notification(
         self,
@@ -275,7 +284,7 @@ class ChatRepository:
                 .on_conflict_do_nothing()
             )
 
-    def sales_between(self, since: float, until: float) -> list[dict]:
+    def sales_between(self, since: float, until: float) -> list[ModelTotal]:
         """Each model's sales in [since, until): how many, and their gross."""
         with session_scope() as s:
             rows = s.execute(
@@ -288,9 +297,9 @@ class ChatRepository:
                 .where(ChatSaleRow.at >= since, ChatSaleRow.at < until)
                 .group_by(ChatSaleRow.platform, ChatSaleRow.model_username)
             )
-            return [dict(row) for row in rows.mappings()]
+            return [ModelTotal.model_validate(dict(row)) for row in rows.mappings()]
 
-    def counts_between(self, kind: str, since: float, until: float) -> list[dict]:
+    def counts_between(self, kind: str, since: float, until: float) -> list[ModelTotal]:
         """Each model's notifications of `kind` in [since, until)."""
         with session_scope() as s:
             rows = s.execute(
@@ -308,11 +317,11 @@ class ChatRepository:
                     ChatNotificationRow.platform, ChatNotificationRow.model_username
                 )
             )
-            return [dict(row) for row in rows.mappings()]
+            return [ModelTotal.model_validate(dict(row)) for row in rows.mappings()]
 
     def models_reaching_chats(
         self, platform: str, since: float, min_chats: int
-    ) -> list[dict]:
+    ) -> list[ModelReach]:
         """Who wrote in at least `min_chats` chats since `since`, and from when."""
         reached = func.count(ChatModelMessageRow.channel_id.distinct())
         with session_scope() as s:
@@ -335,7 +344,7 @@ class ChatRepository:
                 .group_by(ChatThreadRow.model_username)
                 .having(reached >= min_chats)
             )
-            return [dict(row) for row in rows.mappings()]
+            return [ModelReach.model_validate(dict(row)) for row in rows.mappings()]
 
     def recent_events(
         self, platform: str, username: str, kind: str, since: float
@@ -353,7 +362,7 @@ class ChatRepository:
                 ).scalars()
             )
 
-    def notifications(self, since: float) -> list[dict]:
+    def notifications(self, since: float) -> list[StoredNotification]:
         """Every platform's since `since`, newest first."""
         with session_scope() as s:
             rows = s.execute(
@@ -369,7 +378,9 @@ class ChatRepository:
                 .where(ChatNotificationRow.at >= since)
                 .order_by(ChatNotificationRow.at.desc())
             )
-            return [dict(row) for row in rows.mappings()]
+            return [
+                StoredNotification.model_validate(dict(row)) for row in rows.mappings()
+            ]
 
     def open_channels(self, platform: str) -> set[str]:
         """Chats with a fan waiting, however briefly."""
@@ -385,7 +396,7 @@ class ChatRepository:
                 ).scalars()
             )
 
-    def accounts(self, platform: str, connected_from: str) -> list[dict]:
+    def accounts(self, platform: str, connected_from: str) -> list[ChatAccount]:
         """Who connected on this server, no token read."""
         with session_scope() as s:
             rows = s.execute(
@@ -401,7 +412,7 @@ class ChatRepository:
                 )
                 .order_by(ChatAccountRow.username)
             )
-            return [dict(row) for row in rows.mappings()]
+            return [ChatAccount.model_validate(dict(row)) for row in rows.mappings()]
 
     def save_account(
         self,
@@ -467,7 +478,7 @@ class ChatRepository:
             row.expires_at = tokens.expires_at
             return tokens.access_token
 
-    def webhooks(self, platform: str) -> list[dict]:
+    def webhooks(self, platform: str) -> list[ChatWebhook]:
         """Every destination on `platform`, secrets decrypted."""
         with session_scope() as s:
             rows = s.execute(
@@ -479,17 +490,17 @@ class ChatRepository:
                     ChatWebhookRow.secret,
                 ).where(ChatWebhookRow.platform == platform)
             )
-            return [dict(row) for row in rows.mappings()]
+            return [ChatWebhook.model_validate(dict(row)) for row in rows.mappings()]
 
-    def webhook_targets(self, platform: str) -> list[tuple[str, str]]:
-        """Each destination's (model, url), no secret read."""
+    def webhook_targets(self, platform: str) -> list[WebhookTarget]:
+        """Each destination's model and url, no secret read."""
         with session_scope() as s:
             rows = s.execute(
                 select(ChatWebhookRow.model_username, ChatWebhookRow.url).where(
                     ChatWebhookRow.platform == platform
                 )
             )
-            return list(rows.tuples().all())
+            return [WebhookTarget.model_validate(dict(row)) for row in rows.mappings()]
 
     def save_webhook(self, platform: str, webhook: ChatWebhook) -> None:
         values = webhook.model_dump(exclude={"model_id"})

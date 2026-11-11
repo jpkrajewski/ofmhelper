@@ -24,16 +24,17 @@ from ofmhelpers.db.repositories import DuplicateError
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import devices as store
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
-from ofmhelpers.features.phones.catalog import (
+from ofmhelpers.features.phones.catalog.render import render
+from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
+from ofmhelpers.schemas.devices import AddedLogin
+from ofmhelpers.schemas.phone_catalog import (
     ServiceKind,
     catalog,
     find_model,
     get_service,
     services,
 )
-from ofmhelpers.features.phones.catalog.models import CameraLayout
-from ofmhelpers.features.phones.catalog.render import render
-from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
+from ofmhelpers.schemas.phone_catalog.models import CameraLayout
 from ofmhelpers.web.main import app
 
 
@@ -71,7 +72,7 @@ def _add_login(device_id: int, service: str, username: str, **extra: str) -> int
         device_id, LoginFields(service=service, username=username, **extra)
     )
     assert added is not None
-    return added[0]
+    return added.id
 
 
 def _raw_login(login_id: int) -> tuple[str, str]:
@@ -100,26 +101,26 @@ def test_catalog_has_every_family_and_tells_minis_apart():
     regular = find_model("iphone-12")
     assert mini is not None
     assert regular is not None
-    assert mini[1].label == "iPhone 12 mini"
-    assert regular[1].label == "iPhone 12"
-    assert mini[0].id == regular[0].id == "iphone-12"
+    assert mini.model.label == "iPhone 12 mini"
+    assert regular.model.label == "iPhone 12"
+    assert mini.family.id == regular.family.id == "iphone-12"
     assert find_model("iphone-99") is None
 
 
 def test_colors_are_per_model():
     model = find_model("iphone-11")
     assert model is not None
-    names = [c.label for c in catalog().colors(model[1])]
+    names = [c.label for c in catalog().colors(model.model)]
     assert names == ["Black", "White", "Green", "Yellow", "Purple", "(PRODUCT)RED"]
     pro = find_model("iphone-11-pro")
     assert pro is not None
-    assert "Midnight Green" in [c.label for c in catalog().colors(pro[1])]
+    assert "Midnight Green" in [c.label for c in catalog().colors(pro.model)]
 
 
 def _model(model_id: str):
     found = find_model(model_id)
     assert found is not None
-    return found[1]
+    return found.model
 
 
 def test_every_model_has_the_camera_its_generation_had():
@@ -193,7 +194,7 @@ def test_drawing_route_serves_a_cached_svg(va):
 
 
 def test_every_service_has_a_hosted_icon():
-    for service in services().values():
+    for service in services().all():
         assert service.icon_url.startswith("https://api.iconify.design/")
     assert get_service("gmail").icon_url == (
         "https://api.iconify.design/logos/google-gmail.svg"
@@ -218,7 +219,7 @@ def test_phone_form_only_takes_what_the_model_came_in():
 
 
 def test_services_include_mail_providers_socials_and_custom():
-    keys = list(services())
+    keys = services().names()
     for key in (
         "icloud",
         "gmail",
@@ -393,7 +394,7 @@ def test_one_account_on_two_phones_is_stored_once():
     added = store.add_login(
         second, LoginFields(service="gmail", username="Team@Gmail.com")
     )
-    assert added == (login_id, True)
+    assert added == AddedLogin(id=login_id, existed=True)
     assert _count("logins") == 1
     devices = store.list_devices()
     assert [x.on for d in devices for x in d.logins] == [
@@ -625,7 +626,7 @@ def test_a_user_changes_nothing_of_anothers_phone(path, body):
     sign_in(user)
     r = user.post(path.format(d=device, l=login_id), json=body)
     if path == "/phones/add":
-        assert r.status_code == 200  # their own new phone
+        assert r.status_code == 201  # their own new phone
     else:
         assert r.status_code == 404
     d = next(d for d in store.list_devices() if d.label == "Phone 01")
@@ -641,7 +642,7 @@ def test_admin_flow(admin):
             "color_id": "purple",
         },
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     device = r.json()["id"]
     assert admin.post("/phones/add", json={"label": "Phone 05"}).status_code == 409
     bad = admin.post(
@@ -779,8 +780,8 @@ def test_phones_by_account_maps_active_phones_signed_in(va):
     accounts = list_accounts()
     by_handle = {a.handle: a.id for a in accounts}
     found = store.phones_by_account(accounts)
-    assert [d.label for d in found[by_handle["yuki"]]] == ["Phone 01", "Phone 02"]
-    assert by_handle["nobody"] not in found
+    assert [d.label for d in found.of(by_handle["yuki"])] == ["Phone 01", "Phone 02"]
+    assert found.of(by_handle["nobody"]) == []
 
 
 def test_accounts_page_shows_the_phone_in_place_of_notes(va):

@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.media.recorder.models import Place
 from ofmhelpers.media.repurpose.values import Value, even
+from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.repurpose.probe import Source
 
 _HERE = Path(__file__).parent
@@ -146,18 +147,18 @@ class Device(BaseModel, frozen=True):
     patches: Patches = Patches()
     recorder: Recorder | None = None
 
-    def output_size(self, src: Source) -> tuple[int, int]:
+    def output_size(self, src: Source) -> Size:
         """The source as played, fitted to the device's size rule, even."""
-        w, h = src.display_size
+        w, h = src.display_size.width, src.display_size.height
         v = self.video
         if v.short_side:
             if w < h:
-                return even(v.short_side), even(v.short_side * h / w)
-            return even(v.short_side * w / h), even(v.short_side)
+                return Size(width=even(v.short_side), height=even(v.short_side * h / w))
+            return Size(width=even(v.short_side * w / h), height=even(v.short_side))
         if v.max_width:
             out_w = min(v.max_width, w) // 2 * 2
-            return out_w, even(h * out_w / w)
-        return even(w), even(h)
+            return Size(width=out_w, height=even(h * out_w / w))
+        return Size(width=even(w), height=even(h))
 
 
 def _near_source(source_fps: float | None, rng: random.Random) -> str:

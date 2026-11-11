@@ -7,9 +7,12 @@ Each router should only need to define its own processing function and
 wire it through these helpers -- everything else lives here once, split by
 what it does:
 
-- `uploads.py`    where files land, and what is allowed to land there
-- `manifests.py`  reconciling a picker's new + reused entries into paths
-- `responses.py`  the status/polling payloads every tool renders
+- `uploads.py`    the asset store as routes use it (the store itself:
+                  `features/assets/store.py`; its refusals become 400s here)
+- `manifests.py`  a picker's new + reused entries into paths
+                  (`features/assets/manifests.py`), refusals as 400s
+- `responses.py`  the status/polling payloads every tool renders (the
+                  result cards: `features/assets/cards.py`)
 - `serving.py`    handing a stored file back to the browser
 - `routes.py`     the status page / polling / download endpoints of a job
 - `features/assets/names.py` (re-exported)  what a downloaded result is saved as
@@ -35,14 +38,13 @@ from ofmhelpers.web.routers.task_helpers.responses import (
 from ofmhelpers.web.routers.task_helpers.routes import add_job_routes
 from ofmhelpers.web.routers.task_helpers.serving import media_response, serve_job_file
 from ofmhelpers.web.routers.task_helpers.uploads import (
-    ASSETS_ROOT,
     AUDIO_EXTS,
     IMAGE_EXTS,
     IMAGE_KINDS,
     MEDIA_KINDS,
-    UPLOADS_ROOT,
     VIDEO_EXTS,
     VIDEO_KINDS,
+    assets_root,
     assets_root_for,
     assets_root_for_actor,
     assets_root_for_user,
@@ -57,19 +59,19 @@ from ofmhelpers.web.routers.task_helpers.uploads import (
     save_asset,
     save_upload,
     strip_asset_hash_prefix,
+    uploads_root,
 )
 
 __all__ = [
-    "ASSETS_ROOT",
     "AUDIO_EXTS",
     "IMAGE_EXTS",
     "IMAGE_KINDS",
     "MEDIA_KINDS",
-    "UPLOADS_ROOT",
     "VIDEO_EXTS",
     "VIDEO_KINDS",
     "add_job_routes",
     "asset_card",
+    "assets_root",
     "assets_root_for",
     "assets_root_for_actor",
     "assets_root_for_user",
@@ -95,4 +97,5 @@ __all__ = [
     "save_upload",
     "serve_job_file",
     "strip_asset_hash_prefix",
+    "uploads_root",
 ]

@@ -379,7 +379,9 @@ def test_a_chats_history_plans_no_recheck_the_look_covers_it(stacked):
 
     due = rechecks.take_due(now + LIMIT)
 
-    assert [r.chat for r in due] == [("stacked", stacked.channel("bob"))]
+    assert [(r.platform, r.channel_id) for r in due] == [
+        ("stacked", stacked.channel("bob"))
+    ]
 
 
 def test_a_recheck_is_taken_by_one_caller_only(stacked):
@@ -390,7 +392,9 @@ def test_a_recheck_is_taken_by_one_caller_only(stacked):
     first = rechecks.take_due(now + LIMIT)
     second = rechecks.take_due(now + LIMIT)
 
-    assert [r.chat for r in first] == [("stacked", stacked.channel("ann"))]
+    assert [(r.platform, r.channel_id) for r in first] == [
+        ("stacked", stacked.channel("ann"))
+    ]
     assert second == []
 
 
@@ -406,7 +410,9 @@ def test_fanvue_messages_plan_no_recheck_while_it_is_off():
     rechecks.plan(ChatPlatform.FANVUE, read, NOW)
     assert rechecks.take_due(NOW + LIMIT + 2) == []
     rechecks.plan(ChatPlatform.STACKED, read, NOW)
-    assert [r.chat for r in rechecks.take_due(NOW + LIMIT + 2)] == [("stacked", "c1")]
+    assert [(r.platform, r.channel_id) for r in rechecks.take_due(NOW + LIMIT + 2)] == [
+        ("stacked", "c1")
+    ]
 
 
 @pytest.mark.usefixtures("every_platform_read")

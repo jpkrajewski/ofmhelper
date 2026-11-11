@@ -60,10 +60,11 @@ def _bulk_media(
     found: dict[str, ReelMedia] = {}
     old_in_a_row = 0
     try:
-        for code, media, posted_at, pinned in client.timeline(username):
-            if code in codes and media is not None:
-                found[code] = media
-            old_in_a_row = old_in_a_row + 1 if posted_at < since and not pinned else 0
+        for post in client.timeline(username):
+            if post.code in codes and post.media is not None:
+                found[post.code] = post.media
+            old = post.posted_at < since and not post.pinned
+            old_in_a_row = old_in_a_row + 1 if old else 0
             if found.keys() == codes or old_in_a_row >= _OLD_IN_A_ROW:
                 break
     except InstagramRateLimitedError:

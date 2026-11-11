@@ -49,8 +49,8 @@
       "groupName": "uv"
     },
     {
-      "description": "Downloaders: site extractors break and get fixed between releases, so daily, no wait, nightlies allowed (yt-dlp is pinned to nightlies on purpose, pyproject.toml).",
-      "matchPackageNames": ["yt-dlp", "yt-dlp-ejs", "gallery-dl", "bgutil-ytdlp-pot-provider"],
+      "description": "Downloaders: site extractors break and get fixed between releases, so daily, no wait, nightlies allowed (yt-dlp is pinned to nightlies on purpose, pyproject.toml). The POT provider's server image (docker-compose.yml, pinned `latest@sha256:...`: Renovate proposes each new digest) moves with its yt-dlp plugin.",
+      "matchPackageNames": ["yt-dlp", "yt-dlp-ejs", "gallery-dl", "bgutil-ytdlp-pot-provider", "brainicism/bgutil-ytdlp-pot-provider"],
       "groupName": "downloaders",
       "schedule": ["* 0-5 * * *"],
       "minimumReleaseAge": null,

@@ -19,13 +19,13 @@ lazy from google.oauth2.credentials import Credentials
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.gdrive.client import SCOPES as DRIVE_SCOPES
 from ofmhelpers.integrations.signin.base import (
-    Identity,
     SignInError,
     TokenReply,
     checked,
     claims,
     token_request,
 )
+from ofmhelpers.schemas.users import Identity
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 -- a URL

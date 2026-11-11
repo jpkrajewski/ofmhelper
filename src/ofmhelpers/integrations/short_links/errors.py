@@ -2,7 +2,7 @@
 written for the person on /links: it is shown as is."""
 
 from ofmhelpers.errors import AppError
-lazy from ofmhelpers.integrations.short_links.models import RemoteLink
+lazy from ofmhelpers.schemas.link_catalog.models import RemoteLink
 
 
 class LinkError(AppError):

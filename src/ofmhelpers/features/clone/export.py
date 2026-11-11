@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfoNotFoundError
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import merge_params
+from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import ExportOptions, get_export
 from ofmhelpers.schemas import ResultFile
@@ -51,10 +52,6 @@ def exported_file(
     failed) has nothing to export and is kept as it is. The export is tried
     `settings.exports.attempts` times; every try failing raises
     `ExportFailedError` -- the provider's raw file is never the result."""
-    # Imported here, not at the top: the asset store still lives in the routers
-    # package, whose __init__ imports every router -- and /clone imports this.
-    from ofmhelpers.web.routers.task_helpers import register_generated_asset
-
     if result.path is None:
         return result
     src = Path(result.path)

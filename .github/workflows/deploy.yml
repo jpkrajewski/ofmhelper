@@ -14,8 +14,16 @@ on: # zizmor: ignore[dangerous-triggers]
     workflows: [CI]
     branches: [main]
     types: [completed]
-  # Manual re-deploy (e.g. after fixing something on the server itself).
+  # Manual re-deploy (e.g. after fixing something on the server itself), or a
+  # rollback: an earlier commit of main, run from its kept image when the
+  # server still has it (README "Deploying").
   workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit of main to deploy (7-40 hex). Empty: origin/main."
+        required: false
+        type: string
+        default: ""
 
 # Never two deploys at once: they'd race on `git pull` and `docker compose
 # up` in the same directory. Queue instead of cancelling -- cancelling
@@ -110,11 +118,16 @@ jobs:
           DIR: ${{ secrets.OFM_DEPLOY_DIR }}
           # Deploy the exact commit CI went green on, not whatever origin/main
           # points at by the time this job runs -- a push landing mid-run would
-          # otherwise ship an untested commit. Empty on workflow_dispatch, where
-          # the remote falls back to origin/main.
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          # otherwise ship an untested commit. On workflow_dispatch: the sha
+          # typed in, or empty, where the remote falls back to origin/main.
+          SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
         run: |
           set -euo pipefail
+          # It goes into the ssh command line below: nothing but a sha.
+          if [ -n "$SHA" ] && ! [[ "$SHA" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "::error::Not a commit sha (7-40 hex characters): $SHA"
+            exit 1
+          fi
           # Same sequence as scripts/deploy.sh. `set -e` inside the remote
           # shell too, so a failed migration fails the job instead of being
           # masked by the next command's exit code.
@@ -134,19 +147,32 @@ jobs:
             echo "== fetching =="
             git fetch origin main
             [ -n "$target" ] || target=$(git rev-parse origin/main)
+            # Never a commit that is not on main (it did not go through CI).
+            if ! git merge-base --is-ancestor "$target" origin/main; then
+              echo "$target is not a commit of origin/main: not deployed" >&2
+              exit 1
+            fi
             echo "deploying $target"
+            # The release running now: its image is the one kept for a rollback.
+            running=$($compose ps -q ofmhelpers | head -n 1)
+            previous=""
+            [ -z "$running" ] || previous=$(docker inspect --format "{{.Config.Image}}" "$running")
 
             # Safe now that production runs the code baked into the image: the
             # checkout changes nothing until the swap at the end, so the old
             # container keeps serving old code against the old schema.
             echo "== checking out =="
             git reset --hard "$target"
-            # Tags every trace with the commit (compose passes it to the app).
+            # Names the image (ofmhelpers-app:<sha>, docker-compose.yml) and
+            # tags every trace with the commit (compose passes it to the app).
             OFM_RELEASE=$(git rev-parse --short HEAD)
             export OFM_RELEASE
+            release="ofmhelpers-app:$OFM_RELEASE"
 
-            echo "== building =="
-            $compose build ofmhelpers worker preview-worker media-worker edit-worker migrate
+            # A commit whose image is still here (a rollback, a re-deploy) is
+            # not built again: the same artifact runs, not a rebuild of it.
+            echo "== building $release =="
+            docker image inspect "$release" >/dev/null 2>&1 || $compose build ofmhelpers worker sweeps preview-worker media-worker edit-worker migrate
 
             echo "== swapping in the new containers =="
             # --remove-orphans: a service taken out of the compose file (clone-links-worker,
@@ -164,16 +190,26 @@ jobs:
             # Workers first, while the app still serves: each finishes the job
             # it runs (stop_grace_period, up to 120 s) and takes no new one;
             # jobs queued meanwhile wait in Redis for the new workers.
+            # The sweeps with them: nothing queues new work or judges a
+            # draining job cut off while the workers stop.
             echo "== stopping the workers =="
-            $compose stop worker preview-worker media-worker edit-worker
+            $compose stop sweeps worker preview-worker media-worker edit-worker
             echo "== stopping the app =="
             $compose stop ofmhelpers
             echo "== migrating, then starting the app =="
-            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker preview-worker media-worker edit-worker
+            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker sweeps preview-worker media-worker edit-worker
             $compose logs migrate
 
-            # Every deploy leaves the previous image dangling; unreaped they
-            # fill the server disk.
+            # Two releases stay on the disk: this one and the one it replaced
+            # (what a rollback runs: this workflow with a sha, or
+            # `scripts/deploy.sh <sha>`). Older ones go. A re-deploy of the
+            # running release replaces nothing, so nothing is removed then.
+            # `image prune` takes untagged images only.
+            if [ "$previous" != "$release" ]; then
+              for image in $(docker image ls ofmhelpers-app --format "{{.Repository}}:{{.Tag}}"); do
+                [ "$image" = "$release" ] || [ "$image" = "$previous" ] || docker image rm "$image" >/dev/null || true
+              done
+            fi
             docker image prune -f >/dev/null
             # Each build also strands ~1GB of build cache (new .venv layer).
             # Only layers used in the last day are kept (the layers of this build, so
@@ -184,6 +220,22 @@ jobs:
 
             echo "== deployed =="
             $compose ps
+            # The health check step asks the web app only. The sweeps and the
+            # workers must be up too: a crash at their start (restart:
+            # unless-stopped) would otherwise be a green deploy with recovery,
+            # scans and every queue dead.
+            sleep 20
+            for service in sweeps worker preview-worker media-worker edit-worker; do
+              id=$($compose ps -q "$service" | head -n 1)
+              state=""
+              [ -z "$id" ] || state=$(docker inspect --format "{{.State.Status}} {{.RestartCount}}" "$id")
+              if [ "$state" != "running 0" ]; then
+                echo "::error::$service is not up after the deploy: ${state:-no container}"
+                $compose logs --tail 40 "$service" >&2 || true
+                exit 1
+              fi
+            done
+            echo "== sweeps and workers up =="
           '
           # The script is delivered as a FILE, not piped into `bash -s`. Piping
           # it makes bash read the script from stdin as it goes, so the first
@@ -230,7 +282,7 @@ jobs:
             echo "== docker compose ps =="
             $compose ps -a
             echo "== last 100 log lines =="
-            $compose logs --tail=100 migrate ofmhelpers worker preview-worker media-worker edit-worker
+            $compose logs --tail=100 migrate ofmhelpers worker sweeps preview-worker media-worker edit-worker
           '
           # Delivered as a file for the same reason as the deploy step: piping
           # into `bash -s` lets the first stdin-reading command swallow the

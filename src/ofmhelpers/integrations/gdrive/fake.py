@@ -39,9 +39,13 @@ from ofmhelpers.integrations.gdrive.base import (
 )
 from ofmhelpers.integrations.gdrive.models import (
     FOLDER_MIME,
+    DriveDownload,
     DriveFile,
     DriveFolder,
+    DriveListing,
     DriveStorage,
+    DriveThumb,
+    FolderItems,
 )
 
 FAKE_BOT_EMAIL = "drive-bot@fake.iam.gserviceaccount.com"
@@ -217,12 +221,13 @@ class FakeDrive:
             found.sort(key=lambda i: i.created, reverse=True)
             return [self._as_file(i) for i in found]
 
-    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
-        found: dict[str, list[DriveFile]] = {}
+    def children_of(self, parent_ids: list[str]) -> DriveListing:
         if not parent_ids:
-            return found
-        for parent_id in parent_ids:
-            found[parent_id] = self.children(parent_id)
+            return DriveListing()
+        listed = {parent_id: self.children(parent_id) for parent_id in parent_ids}
+        found = DriveListing(
+            folders=[FolderItems(folder_id=p, items=listed[p]) for p in listed]
+        )
         with self._state() as state:
             # One query, as the real one: the per-parent listings above are
             # an implementation detail, not calls a test should count.
@@ -280,16 +285,16 @@ class FakeDrive:
             state.storage_limit = limit
             state.storage_used = used
 
-    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:  # noqa: ARG002 -- one size fits every px
+    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:  # noqa: ARG002 -- one size fits every px
         with self._state("thumbnail"):
             if not item.thumbnail_link:
                 return None
-            return _thumb_jpeg(), "image/jpeg"
+            return DriveThumb(content=_thumb_jpeg(), media_type="image/jpeg")
 
-    def download(self, file_id: str) -> tuple[bytes, str]:
+    def download(self, file_id: str) -> DriveDownload:
         """Fake files carry no content: the bytes are empty, the name real."""
         item = self.file(file_id)
-        return b"", item.name
+        return DriveDownload(content=b"", name=item.name)
 
     def upload(
         self,
@@ -516,7 +521,7 @@ class FakePersonDrive:
     ) -> list[DriveFile]:
         return self._me().children(self._id(parent_id), folders_only=folders_only)
 
-    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]:
+    def children_of(self, parent_ids: list[str]) -> DriveListing:
         return self._me().children_of([self._id(p) for p in parent_ids])
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
@@ -534,10 +539,10 @@ class FakePersonDrive:
     def file(self, file_id: str) -> DriveFile:
         return self._me().file(file_id)
 
-    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None:
+    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._me().thumbnail(item, px)
 
-    def download(self, file_id: str) -> tuple[bytes, str]:
+    def download(self, file_id: str) -> DriveDownload:
         return self._me().download(self._id(file_id))
 
     def storage(self) -> DriveStorage:

@@ -34,17 +34,19 @@ from ofmhelpers.cache import enqueue, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import clone_ai_checks
 from ofmhelpers.db.stores import clone_from_links as store
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links.ai_check import check_clone, unanswered
 from ofmhelpers.features.clone_links.folders import folder_for
 from ofmhelpers.features.drive.folders import review_folder
 from ofmhelpers.features.drive.space import DRIVE_FULL, drive_space, upload_error
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.clone_ai_checks import CHECK_FAILED, ReviewReason, ReviewStatus
+from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.features.clone_links.ai_check import CloneAiCheck
 lazy from ofmhelpers.integrations.gdrive import DriveApi, DriveFile
 lazy from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
@@ -54,6 +56,8 @@ logger = get_logger(__name__)
 NOT_CONNECTED: str = ReviewReason.NOT_CONNECTED.value
 # The run whose results these are (routers/generation/clone_links.py TASK).
 RUN_TASK = "clone_links"
+# One try at checking and uploading one result: its own job row.
+TASK = "clone_links_review"
 # A failed review is tried again unless it failed for one of these: nothing
 # a retry changes (the file is gone, Drive is not connected, it was given
 # up on already).
@@ -100,13 +104,36 @@ def _start(job_id: str, index: int, user_id: int, path: str | None) -> int | Non
 def _queue(review_id: int) -> None:
     """`review_file` queued; a queue that refuses it fails the row (recovery
     tries again)."""
+    job_id = None
     try:
+        job_id = _job(review_id)
         enqueue(
-            review_file, review_id, job_timeout=settings.clone_links.review_timeout_s
+            run_job,
+            job_id,
+            review_file,
+            {"review_id": review_id},
+            job_timeout=settings.clone_links.review_timeout_s,
         )
     except Exception:
         logger.warning("AI check %s not queued", review_id, exc_info=True)
         store.finish(review_id, claimed=None, error=ReviewReason.QUEUE_FAILED)
+        if job_id is not None:
+            fail_job(job_id, "Could not queue the AI check")
+
+
+def _job(review_id: int) -> str:
+    """This try's job row: the person's, naming the clone and which of its
+    videos is checked."""
+    review = store.get(review_id)
+    return create_job(
+        TASK,
+        {
+            "review_id": review_id,
+            "clone_job": review.job_id if review else None,
+            "file_index": review.file_index if review else None,
+        },
+        actor=str(review.user_id) if review else None,
+    )
 
 
 def review_file(review_id: int, path: str | None = None) -> None:
@@ -263,7 +290,8 @@ def _upload(
     name = download_name(video.name)
     mime = mimetypes.guess_type(video.name)[0] or "application/octet-stream"
     try:
-        drive, target = review_folder(token, review.user_id, folder)
+        place = review_folder(token, review.user_id, folder)
+        drive, target = place.drive, place.folder_id
         # A run before this one may have uploaded it before it was killed.
         made = (
             _already_there(drive, target, name, video.stat().st_size)
@@ -321,7 +349,7 @@ def _finish(
 # --- recovery ------------------------------------------------------------------
 
 
-def resume_reviews() -> dict[str, str]:
+def resume_reviews() -> Registry[str]:
     """Recovery's step for reviews (`features/jobs/recovery.py`, every sweep): every
     review a deploy, OOM or crash cut off, or whose upload failed for a
     reason that may pass, queued again; a done run that has no review
@@ -350,7 +378,7 @@ def resume_reviews() -> dict[str, str]:
         if started:
             logger.warning("recovery: job %s had no review: started", job.id)
             outcomes[f"job {job.id}"] = "review started"
-    return outcomes
+    return Registry[str](entries=outcomes)
 
 
 def _guarded(step: Callable[[CloneFromLink], str], review: CloneFromLink) -> str:

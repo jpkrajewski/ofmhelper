@@ -21,11 +21,10 @@ over. A handle two users track is read once."""
 
 import time
 from contextlib import contextmanager, suppress
-from typing import Any
-lazy from collections.abc import Callable, Generator
+lazy from collections.abc import Generator
 
 import requests
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from redis.exceptions import LockError, RedisError
 
 from ofmhelpers.cache.redis import get_redis
@@ -33,10 +32,16 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations.apify import (
     ApifyClient,
     ApifyError,
+    DatasetItem,
     RunStatus,
     by_credit,
 )
-from ofmhelpers.integrations.apify.instagram import ApifyProfile, ApifyReel
+from ofmhelpers.integrations.apify.instagram import (
+    ApifyProfile,
+    ApifyReel,
+    ProfileScraperInput,
+    ReelScraperInput,
+)
 from ofmhelpers.integrations.instagram import ProfileHandle
 from ofmhelpers.integrations.instagram.models import MediaUrl
 from ofmhelpers.integrations.socials.models import (
@@ -58,35 +63,29 @@ DAY_S = 86400
 _LOCK = "lock:accounts-apify"
 
 
-def profile_input(handles: list[str]) -> dict[str, Any]:
-    return {"usernames": handles, "includeAboutSection": False}
+def profile_input(handles: list[str]) -> ProfileScraperInput:
+    return ProfileScraperInput(usernames=handles)
 
 
-def reel_input(handles: list[str], limit: int, days: int) -> dict[str, Any]:
+def reel_input(handles: list[str], limit: int, days: int) -> ReelScraperInput:
     """Each account's reels of the last `days`, at most `limit` (always set:
     without it the actor reads the whole profile), every paid add-on off."""
-    return {
-        "username": handles,
-        "resultsLimit": limit,
-        "onlyPostsNewerThan": f"{days} days",
-        "skipPinnedPosts": False,
-        "includeSharesCount": False,
-        "includeTranscript": False,
-        "includeDownloadedVideo": False,
-    }
+    return ReelScraperInput(
+        username=handles, results_limit=limit, only_posts_newer_than=f"{days} days"
+    )
 
 
-def _parsed[T](
-    items: list[dict[str, Any]], model: Callable[[dict[str, Any]], T], what: str
+def _parsed[T: BaseModel](
+    items: list[DatasetItem], model: type[T], what: str
 ) -> list[T]:
     """The items `model` reads; error items and unreadable ones logged."""
     found: list[T] = []
     for item in items:
-        if "error" in item:
-            logger.info("apify %s: %s %s", what, item.get("error"), item.get("url", ""))
+        if item.failed:
+            logger.info("apify %s: %s %s", what, item.error, item.url)
             continue
         try:
-            found.append(model(item))
+            found.append(item.read(model))
         except ValidationError:
             logger.warning("apify %s: unreadable item", what, exc_info=True)
     return found
@@ -201,7 +200,8 @@ class ApifyInstagramSource(AccountSource):
         each = s.apify_usd_per_item * (1 + s.apify_est_reels)
         read: dict[str, AccountStats] = {}
         left = list(handles)
-        for client, credit in by_credit(keys):
+        for funded in by_credit(keys):
+            client, credit = funded.client, funded.credit_usd
             if not left:
                 break
             room = int((credit - 2 * s.apify_usd_per_run) // each)
@@ -239,9 +239,7 @@ class ApifyInstagramSource(AccountSource):
             s.apify_profile_actor, profile_input(handles), s.apify_run_timeout_s
         )
         profiles: dict[str, ApifyProfile] = {}
-        for profile in _parsed(
-            client.items(run), ApifyProfile.model_validate, "profile"
-        ):
+        for profile in _parsed(client.items(run), ApifyProfile, "profile"):
             handle = _handle_of(profile, asked)
             if handle is not None:
                 profiles[handle] = profile
@@ -305,7 +303,7 @@ class ApifyInstagramSource(AccountSource):
             )
             return None, 0.0
         reels: dict[str, list[ApifyReel]] = {h: [] for h in public}
-        for reel in _parsed(items, ApifyReel.model_validate, "reel"):
+        for reel in _parsed(items, ApifyReel, "reel"):
             handle = handle_of.get(reel.owner.lower())
             if handle is not None:
                 reels[handle].append(reel)

@@ -13,9 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.repurpose import service as repurpose
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
-from ofmhelpers.web.routers.video_tools import repurpose
 
 CLIP = ("video", ("clip.mp4", b"not really a video"))
 NEW = json.dumps([{"kind": "new"}])
@@ -23,8 +23,8 @@ NEW = json.dumps([{"kind": "new"}])
 
 @pytest.fixture(autouse=True)
 def roots(tmp_path, monkeypatch):
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
-    monkeypatch.setattr(repurpose, "UPLOAD_ROOT", tmp_path / "repurpose")
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
+    monkeypatch.setattr(repurpose, "upload_root", lambda: tmp_path / "repurpose")
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ def test_knobs_that_are_not_json_are_refused(client, queued):
 def test_a_video_with_blank_settings_queues_one_job_on_the_defaults(client, queued):
     r = _run(client, preset="", preset_name="", device="", copies="", special="")
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     assert len(queued) == 1
     assert queued[0]["device"] == repurpose.DEFAULT_DEVICE
     assert queued[0]["copies"] == repurpose.DEFAULT_COPIES

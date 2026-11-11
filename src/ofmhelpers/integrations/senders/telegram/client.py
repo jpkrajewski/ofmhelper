@@ -1,5 +1,5 @@
 """The Bot API calls this app makes: who the bot is, the chats that wrote to it,
-a message to a chat. Through `utils.outbound`, so OFM_FAKE_EXTERNALS answers it
+a message to a chat. Through `integrations.outbound`, so OFM_FAKE_EXTERNALS answers it
 from `telegram/fake.py`.
 
 The token is part of every URL (`/bot<token>/<method>`): an error here never
@@ -18,6 +18,7 @@ import requests
 from pydantic import ValidationError
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.senders.base import SendError
 from ofmhelpers.integrations.senders.telegram.models import (
     Bot,
@@ -27,7 +28,6 @@ from ofmhelpers.integrations.senders.telegram.models import (
     Update,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 

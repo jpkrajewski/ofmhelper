@@ -39,6 +39,7 @@ from ofmhelpers.db.stores import report_runs, users
 from ofmhelpers.db.stores import short_links as link_store
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
 from ofmhelpers.features.events import Event, emit, listening
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.features.links.sync import sync_links
 from ofmhelpers.features.reports import clicks, hours, mass
 from ofmhelpers.features.reports.fan_sites import fan_sites
@@ -54,7 +55,7 @@ from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.schemas.events import MAX_TEXT
-from ofmhelpers.schemas.links import ShortLink, ctr
+from ofmhelpers.schemas.links import LinkSyncKey, ShortLink, ctr
 from ofmhelpers.schemas.reports import DayCount
 lazy from ofmhelpers.schemas.reports import ReportRun
 
@@ -152,7 +153,7 @@ def _model_rows(
             fan = _fan(platform, profile)
             if fan not in owner or (name in named and owner[fan] not in named):
                 owner[fan] = name
-    sites = fan_sites(since, until)
+    sites = {site.platform: site for site in fan_sites(since, until)}
     usernames: dict[_Fan, str] = {}
     for site in sites.values():
         for username in site.models():
@@ -307,10 +308,14 @@ def _fresh_links(owner: int) -> list[ShortLink]:
     """The owner's links, synced first so the counters are the providers' now.
     `mark_due` clears every claim, so this may run beside a sync a worker is
     running (once a day)."""
-    keyed = [(owner, p) for p in link_providers() if link_store.api_key(owner, p)]
+    keyed = [
+        LinkSyncKey(user_id=owner, provider=p)
+        for p in link_providers().names()
+        if link_keys.api_key(owner, p)
+    ]
     link_store.mark_due(owner)
-    for user_id, provider in link_store.claim_due(keyed):
-        sync_links(user_id, provider)
+    for key in link_store.claim_due(keyed):
+        sync_links(key.user_id, key.provider)
     return link_store.list_links(owner)
 
 
@@ -322,11 +327,11 @@ def run(now: float | None = None) -> Due:
     if not listening() or get_text(_FAILED_KEY):
         return Due.NOTHING
     last = report_runs.last_run(NAME)
-    action, day = due(now, last)
-    if action == Due.NOTHING:
-        return action
+    planned = due(now, last)
+    if planned.action == Due.NOTHING:
+        return planned.action
     try:
-        return _run(now, last, action, day)
+        return _run(now, last, planned.action, planned.day)
     except Exception:
         set_text(_FAILED_KEY, "1", _FAILED_S)
         raise

@@ -18,6 +18,11 @@ class Outcome(BaseModel):
     status_code: int = 200
 
 
+def signed_out(actor: str) -> None:
+    """`actor` signed out: audited here; the session is the route's to clear."""
+    log_event("logout", actor=actor)
+
+
 def signed_in(user: User, next_url: str, how: str) -> Outcome:
     """`user` got in: audited here; the session is the route's to write."""
     log_event("login", actor=str(user.id), params={"email": user.email, "with": how})

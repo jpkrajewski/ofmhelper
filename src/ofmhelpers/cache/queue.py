@@ -84,6 +84,23 @@ _IN_LINE = frozenset(
 _ONCE_FAILURE_TTL_S = 3600
 
 
+class Line(BaseModel, frozen=True):
+    """A queue's line: the app job ids waiting, first in line first, and how
+    many jobs are being run ahead of them all."""
+
+    running: int = 0
+    waiting: list[str] = []
+
+    def __contains__(self, job_id: object) -> bool:
+        return job_id in self.waiting
+
+    def ahead(self, job_id: str) -> int | None:
+        """How many jobs are ahead of it, the ones being run included; None
+        when it does not wait here. Queued twice: its last place."""
+        places = [i for i, waiting in enumerate(self.waiting) if waiting == job_id]
+        return self.running + places[-1] if places else None
+
+
 @dataclass(frozen=True)
 class JobQueue:
     """One first-in first-out line of background work: `put` joins the back,
@@ -185,13 +202,12 @@ class JobQueue:
             )
         return False
 
-    def line(self) -> dict[str, int]:
-        """Who waits, first in line first: app job id (`run_job`'s first
-        argument) -> how many jobs are ahead of it, the ones being run included.
-        Empty when nothing waits or it cannot tell (the synchronous test mode,
-        Redis down)."""
+    def line(self) -> Line:
+        """Who waits, first in line first, by app job id (`run_job`'s first
+        argument), and how many jobs are being run. Empty when nothing waits
+        or it cannot tell (the synchronous test mode, Redis down)."""
         if not settings.infra.rq_async:
-            return {}
+            return Line()
         try:
             queue = get_queue(self.name)
             running = queue.started_job_registry.count
@@ -199,8 +215,8 @@ class JobQueue:
             ids = [str(j.args[0]) for j in waiting if j is not None and j.args]
         except Exception:
             logger.warning("could not read queue %s", self.name, exc_info=True)
-            return {}
-        return {job_id: running + place for place, job_id in enumerate(ids)}
+            return Line()
+        return Line(running=running, waiting=ids)
 
 
 def active_job_ids() -> set[str] | None:

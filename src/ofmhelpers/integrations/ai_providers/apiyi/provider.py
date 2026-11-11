@@ -64,8 +64,8 @@ class ApiyiProvider(Provider):
             self.client = ApiyiClient(key)
 
     def status(self, task_id: str) -> TaskState:
-        family, own = split(task_id)
-        return family.status(self.client, own)
+        task = split(task_id)
+        return task.family.status(self.client, task.own_id)
 
     def download(self, url: str, dest: Path) -> Path:
         for family in families():

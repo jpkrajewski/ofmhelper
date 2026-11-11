@@ -72,7 +72,7 @@ def test_text_to_video_sends_dashscopes_body_and_saves_the_video(provider):
     body = spec.request(
         {"prompt": "a lighthouse at dusk", "resolution": "480P", "duration": 5},
         provider.upload,
-    )
+    ).model_dump()
 
     [saved] = runner.generate(provider, spec, body, "apiyi-t2v")
 
@@ -95,7 +95,8 @@ def test_text_to_video_sends_dashscopes_body_and_saves_the_video(provider):
 
 def test_resolution_is_always_sent_even_when_the_form_leaves_it_out(provider):
     spec = get_spec(WAN)
-    runner.generate(provider, spec, spec.request({"prompt": "p"}, provider.upload), "j")
+    sent = spec.request({"prompt": "p"}, provider.upload).model_dump()
+    runner.generate(provider, spec, sent, "j")
 
     [sent] = fake_apiyi().created
     assert sent["parameters"]["resolution"] == "1080P"
@@ -107,7 +108,7 @@ def test_image_to_video_hands_apiyi_a_link_to_the_first_frame(provider, image):
     body = spec.request(
         {"prompt": "she waves", "first_frame_url": str(image), "resolution": "480P"},
         provider.upload,
-    )
+    ).model_dump()
 
     runner.generate(provider, spec, body, "apiyi-i2v")
 
@@ -135,7 +136,7 @@ def test_a_clone_sends_its_references_in_order_cited_the_wan_way(
             "audio": True,
         },
         provider.upload,
-    )
+    ).model_dump()
 
     [saved] = runner.generate(provider, spec, body, "apiyi-clone")
 
@@ -180,7 +181,8 @@ def test_without_a_public_https_address_a_reference_is_refused_before_paying(
     address the run stops at submit, before anything is sent."""
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
     spec = get_spec(WAN)
-    body = spec.request({"prompt": "p", "first_frame_url": str(image)}, provider.upload)
+    values = {"prompt": "p", "first_frame_url": str(image)}
+    body = spec.request(values, provider.upload).model_dump()
 
     with pytest.raises(ProviderInputError, match="no public https address"):
         runner.generate(provider, spec, body, "apiyi-no-address")

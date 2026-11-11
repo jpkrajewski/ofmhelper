@@ -69,10 +69,10 @@ class VideoTools:
         src: Path,
         piece: Piece,
         dest: Path,
-        size: tuple[int, int] | None = None,
+        size: Shape | None = None,
     ) -> Path:
-        """`piece` of `src`, scaled to `size` (width, height) when given."""
-        scale = ["-vf", f"scale={size[0]}:{size[1]},setsar=1"] if size else []
+        """`piece` of `src`, scaled to `size` when given."""
+        scale = ["-vf", f"scale={size.width}:{size.height},setsar=1"] if size else []
         return self._write(
             [
                 "-ss",
@@ -173,7 +173,8 @@ class VideoTools:
         `work`: the run's own folder for the listing and the colour-matched
         copies, removed again whatever happens -- `dest`'s folder (shared by
         every job) only ever gets `dest`."""
-        width, height = shape.size_at(self.shape(parts[0]).height)
+        size = shape.size_at(self.shape(parts[0]).height)
+        width, height = size.width, size.height
         fit = (
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1"

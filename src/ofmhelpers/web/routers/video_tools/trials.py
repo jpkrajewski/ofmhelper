@@ -42,16 +42,24 @@ def _trials(login_id: int, user: CurrentUser, scope: Scope) -> folder.Trials:
 Trials = Annotated[folder.Trials, Depends(_trials)]
 
 
+def _reel(key: str, trials: Trials) -> folder.Reel:
+    return folder.Reel(trials=trials, key=key)
+
+
+# One reel of them, the `key` in the path: not in the folder = 404.
+Reel = Annotated[folder.Reel, Depends(_reel)]
+
+
 @router.get("")
 def trials_page(request: Request, user: CurrentUser, scope: Scope) -> Response:
-    board, progress = folder.phone_cards(user.id, scope)
-    return render(request, "trials.html", board=board, progress=progress)
+    cards = folder.phone_cards(user.id, scope)
+    return render(request, "trials.html", board=cards.board, progress=cards.progress)
 
 
 @router.get("/{login_id}")
 def folder_page(request: Request, trials: Trials) -> Response:
-    card, view = trials.open()
-    return render(request, "trials_folder.html", card=card, view=view)
+    opened = trials.open()
+    return render(request, "trials_folder.html", card=opened.card, view=opened.view)
 
 
 @router.get("/{login_id}/live")
@@ -83,31 +91,27 @@ def generate(trials: Trials) -> folder.Started:
 
 
 @router.post("/{login_id}/reel/{key}/regenerate")
-def regenerate(key: str, trials: Trials) -> folder.Started:
+def regenerate(reel: Reel) -> folder.Started:
     """The pipeline again on one reel, a new variant with its caption as it
     is: no AI call (its daily quota is small)."""
-    return trials.remake(key)
+    return reel.remake()
 
 
 @router.post("/{login_id}/reel/{key}/caption")
-def set_caption(
-    key: str, caption: Annotated[str, Form()], trials: Trials
-) -> folder.Started:
-    return trials.apply_caption(key, caption)
+def set_caption(caption: Annotated[str, Form()], reel: Reel) -> folder.Started:
+    return reel.apply_caption(caption)
 
 
 @router.post("/{login_id}/reel/{key}/captions")
-def write_captions(key: str, trials: Trials) -> folder.Started:
+def write_captions(reel: Reel) -> folder.Started:
     """Captions to choose from, for a reel made before there were any."""
-    return trials.ask_captions(key)
+    return reel.ask_captions()
 
 
 @router.post("/{login_id}/reel/{key}/select")
-def select(
-    key: str, trials: Trials, selected: Annotated[bool, Form()] = False
-) -> folder.Selected:
+def select(reel: Reel, selected: Annotated[bool, Form()] = False) -> folder.Selected:
     """Select / unselect, kept at once."""
-    return trials.select(key, selected)
+    return reel.select(selected)
 
 
 @router.post("/{login_id}/upload")
@@ -118,10 +122,10 @@ def upload(
 
 
 @router.get("/files/{login_id}/{key}")
-def video(key: str, trials: Trials) -> Response:
-    return FileResponse(trials.playable(key), media_type="video/mp4")
+def video(reel: Reel) -> Response:
+    return FileResponse(reel.playable(), media_type="video/mp4")
 
 
 @router.get("/files/{login_id}/{key}/poster")
-def poster(key: str, trials: Trials) -> Response:
-    return FileResponse(trials.poster(key), media_type="image/webp")
+def poster(reel: Reel) -> Response:
+    return FileResponse(reel.poster(), media_type="image/webp")

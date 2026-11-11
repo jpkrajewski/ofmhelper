@@ -9,21 +9,20 @@ from sqlalchemy.dialects.postgresql import insert
 from ofmhelpers.db.models import DriveUploadRow
 from ofmhelpers.db.repositories.cached_repository import CachedRepository
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.drive import DriveUpload
 
 
-def _to_dict(row: DriveUploadRow) -> dict:
-    return {
-        "id": row.id,
-        "job_id": row.job_id,
-        "file_index": row.file_index,
-        "login_id": row.login_id,
-        "user_id": row.user_id,
-        "folder_name": row.folder_name,
-        "status": row.status,
-        "drive_file_id": row.drive_file_id,
-        "drive_url": row.drive_url,
-        "error": row.error,
-    }
+def _upload(row: DriveUploadRow) -> DriveUpload:
+    return DriveUpload(
+        id=row.id,
+        job_id=row.job_id,
+        file_index=row.file_index,
+        login_id=row.login_id,
+        folder_name=row.folder_name,
+        status=row.status,
+        drive_url=row.drive_url,
+        error=row.error,
+    )
 
 
 class DriveUploadRepository(CachedRepository):
@@ -72,12 +71,24 @@ class DriveUploadRepository(CachedRepository):
             )
             return found.scalar_one_or_none()
 
-    def get(self, upload_id: int) -> dict | None:
+    def get(self, upload_id: int) -> DriveUpload | None:
         with session_scope() as s:
             row = s.get(DriveUploadRow, upload_id)
-            return _to_dict(row) if row else None
+            return _upload(row) if row else None
 
-    def for_jobs(self, job_ids: list[str]) -> list[dict]:
+    def uploader(self, upload_id: int) -> int | None:
+        """Whose Google account it goes up as; None when the row is gone."""
+        with session_scope() as s:
+            row = s.get(DriveUploadRow, upload_id)
+            return row.user_id if row else None
+
+    def file_id(self, upload_id: int) -> str | None:
+        """The uploaded file's Drive id (done uploads only)."""
+        with session_scope() as s:
+            row = s.get(DriveUploadRow, upload_id)
+            return row.drive_file_id if row else None
+
+    def for_jobs(self, job_ids: list[str]) -> list[DriveUpload]:
         """Every upload of these jobs, oldest first."""
         if not job_ids:
             return []
@@ -87,7 +98,7 @@ class DriveUploadRepository(CachedRepository):
                 .where(DriveUploadRow.job_id.in_(job_ids))
                 .order_by(DriveUploadRow.id)
             ).scalars()
-            return [_to_dict(r) for r in rows]
+            return [_upload(r) for r in rows]
 
     def remove(self, upload_id: int, reason: str) -> None:
         """No longer in its folder (trashed from /clone, or gone in Drive)."""

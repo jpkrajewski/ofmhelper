@@ -23,6 +23,7 @@ from typing import Any
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import params_naming
+from ofmhelpers.features.assets.store import assets_root_for_actor
 from ofmhelpers.features.edit.service import (
     PREPARE_TASK,
     STAGING,
@@ -51,8 +52,8 @@ def _in_use() -> set[Path]:
     they run or wait (a cut or a light copy done names the video it was made
     from: that one still goes after its day)."""
     found: set[Path] = set()
-    for params in params_naming(f"/{STAGING}/", {TASK, PREPARE_TASK}):
-        for text in _strings(params):
+    for named in params_naming(f"/{STAGING}/", {TASK, PREPARE_TASK}):
+        for text in _strings(named.params):
             if STAGING in text:
                 found.add(Path(text).resolve())
     return found
@@ -66,8 +67,6 @@ def _old(path: Path, now: float, age_s: float) -> bool:
 
 
 def _staging_folders() -> list[Path]:
-    from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
-
     root = assets_root_for_actor(None)  # the store root, read at call time
     return [root / STAGING, *root.glob(f"users/*/{STAGING}")]
 

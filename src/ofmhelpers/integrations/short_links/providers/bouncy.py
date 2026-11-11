@@ -16,15 +16,17 @@ from ofmhelpers.integrations.short_links.errors import (
     SlugTakenError,
     UngatedError,
 )
-from ofmhelpers.integrations.short_links.models import (
+from ofmhelpers.integrations.short_links.providers.base import LinkProvider
+from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.link_catalog.models import (
     DayStat,
     HourStat,
+    LinkDays,
+    LinkHours,
     RemoteLink,
     Usage,
 )
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider
-from ofmhelpers.log import get_logger
-lazy from ofmhelpers.integrations.short_links.models import NewLink
+lazy from ofmhelpers.schemas.link_catalog.models import NewLink
 
 logger = get_logger(__name__)
 
@@ -165,22 +167,20 @@ class BouncyProvider(LinkProvider):
         if not response.ok and response.status_code != _NOT_FOUND:
             raise self._failed(response, f"delete {remote_id}")
 
-    def daily(
-        self, remote_ids: list[str], start: date, end: date
-    ) -> dict[str, list[DayStat]]:
-        found: dict[str, list[DayStat]] = {}
-        for remote_id in remote_ids:
+    def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
+        found: list[LinkDays] = []
+        for remote_id in dict.fromkeys(remote_ids):
             days = self._days(remote_id, start, end)
             if days is not None:
-                found[remote_id] = days
+                found.append(LinkDays(remote_id=remote_id, days=days))
         return found
 
-    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
-        found: dict[str, list[HourStat]] = {}
-        for remote_id in remote_ids:
+    def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
+        found: list[LinkHours] = []
+        for remote_id in dict.fromkeys(remote_ids):
             buckets = self._buckets(remote_id, day, day)
             if buckets is not None:
-                found[remote_id] = [
+                hours = [
                     HourStat(
                         hour=_hour_of(bucket["date"]),
                         views=bucket.get("views", 0),
@@ -189,6 +189,7 @@ class BouncyProvider(LinkProvider):
                     for bucket in buckets
                     if bucket.get("views") or bucket.get("clicks")
                 ]
+                found.append(LinkHours(remote_id=remote_id, hours=hours))
         return found
 
     def _days(self, remote_id: str, start: date, end: date) -> list[DayStat] | None:

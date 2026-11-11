@@ -10,7 +10,7 @@ refused. A message an event `replaces` is deleted with `delete(target, ref)`, `r
 being what `send` returned for it.
 """
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from ofmhelpers.errors import AppError
 lazy from ofmhelpers.schemas.events import Event
@@ -30,6 +30,7 @@ class SendError(AppError):
         self.permanent = permanent
 
 
+@runtime_checkable
 class Sender(Protocol):
     """One service events go out through. `name` is what `OFM_EVENTS_SENDERS_OFF`
     and the spans call it."""

@@ -14,7 +14,8 @@ import hmac
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from ofmhelpers.config import settings
-from ofmhelpers.integrations.signin.base import Identity, SignInError, TokenReply
+from ofmhelpers.integrations.signin.base import SignInError, TokenReply
+from ofmhelpers.schemas.users import Identity
 
 # How long the password page's code may take to reach the callback.
 _CODE_TTL_S = 60

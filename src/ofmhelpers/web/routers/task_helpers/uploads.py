@@ -1,46 +1,61 @@
-"""Where user files land, and what is allowed to land there.
+"""The asset store (`features/assets/store.py`) as routes use it: whose part
+of it a request reads, and its refusals as 400s."""
 
-The shared asset store is content-addressed (sha256), so the same file
-uploaded twice -- under a different name, through a different tool's form --
-is only ever stored once.
-"""
-
-import hashlib
-import os
-import shutil
-import tempfile
-import uuid
+from collections.abc import Callable
+from functools import wraps
 from pathlib import Path
 
 from fastapi import HTTPException, Request
-from starlette.datastructures import UploadFile
 
-from ofmhelpers.config import settings
+from ofmhelpers.features.assets import store
 from ofmhelpers.features.assets.kinds import (
     AUDIO_EXTS,
     IMAGE_EXTS,
     VIDEO_EXTS,
     classify_kind,
 )
-from ofmhelpers.integrations.downloaders.models import DownloadResult
-from ofmhelpers.log import get_logger
-from ofmhelpers.media.heic import HEIC_EXTENSIONS, heic_to_jpeg
+from ofmhelpers.features.assets.store import (
+    IMAGE_KINDS,
+    MEDIA_KINDS,
+    VIDEO_KINDS,
+    AssetRefusedError,
+    assets_root,
+    assets_root_for_actor,
+    assets_root_for_user,
+    in_asset_root,
+    make_job_dir,
+    register_generated_asset,
+    register_grouped_results,
+    strip_asset_hash_prefix,
+    uploads_root,
+)
 from ofmhelpers.web.middleware import AuthMiddleware
 
-logger = get_logger(__name__)
-
-
-# Everything the app writes on behalf of a user lives under this one root, one
-# subdir per tool -- it is bind-mounted, so a container swap keeps it. Every
-# router derives its own dir from here rather than repeating the literal.
-UPLOADS_ROOT = Path(settings.infra.uploads_root)
-
-
-# Single shared store for reference-asset uploads (Seedance/Kling/Nano Banana
-# Pro reference images/videos/audio) -- content-addressed so the same file
-# uploaded twice (even under a different name, even through a different
-# tool's form) is only ever stored once. See save_asset().
-ASSETS_ROOT = UPLOADS_ROOT / "assets"
+__all__ = [
+    "AUDIO_EXTS",
+    "IMAGE_EXTS",
+    "IMAGE_KINDS",
+    "MEDIA_KINDS",
+    "VIDEO_EXTS",
+    "VIDEO_KINDS",
+    "assets_root",
+    "assets_root_for",
+    "assets_root_for_actor",
+    "assets_root_for_user",
+    "classify_kind",
+    "convert_heic_upload",
+    "in_asset_root",
+    "make_job_dir",
+    "refused_as_400",
+    "register_generated_asset",
+    "register_grouped_results",
+    "require_upload_kind",
+    "safe_filename",
+    "save_asset",
+    "save_upload",
+    "strip_asset_hash_prefix",
+    "uploads_root",
+]
 
 
 def assets_root_for(request: Request) -> Path:
@@ -50,249 +65,22 @@ def assets_root_for(request: Request) -> Path:
     return assets_root_for_user(AuthMiddleware.user(request).id)
 
 
-def assets_root_for_user(user_id: int) -> Path:
-    """A person's part of the asset store: their own `users/<id>/` folder,
-    admins included, so nobody's reuse picker shows anyone else's files.
-    The agency (the password account) keeps the store root, where its files
-    lived before per-user folders -- minus `users/` (`in_asset_root`).
-    Reads ASSETS_ROOT at call time: it is the seam tests move."""
-    from ofmhelpers.db.stores.users import get_user
+def refused_as_400[**P, T](fn: Callable[P, T]) -> Callable[P, T]:
+    """`fn` with the store's refusal (`AssetRefusedError`) as an
+    HTTPException(400) carrying its message."""
 
-    user = get_user(user_id)
-    if user is not None and user.is_password_account:
-        return ASSETS_ROOT
-    return _user_root(user_id)
-
-
-def _user_root(user_id: int | str) -> Path:
-    return _users_dir() / str(user_id)
-
-
-def _users_dir() -> Path:
-    return ASSETS_ROOT / "users"
-
-
-def in_asset_root(root: Path, path: Path) -> bool:
-    """Whether `path` is inside `root`, a part of the asset store from
-    `assets_root_for*`. The store root (the agency's) excludes `users/`:
-    the agency does not read anyone else's files either."""
-    resolved = path.resolve()
-    resolved_root = root.resolve()
-    if resolved_root not in resolved.parents:
-        return False
-    users = _users_dir().resolve()
-    return resolved_root != ASSETS_ROOT.resolve() or users not in resolved.parents
-
-
-def assets_root_for_actor(actor: str | None) -> Path:
-    """`assets_root_for` from a job's actor (a user id): what a job re-run
-    without its session (recovery) resolves. A job with no actor (system
-    work) gets the store root."""
-    if actor is None:
-        return ASSETS_ROOT
-    if actor.isdigit():
-        return assets_root_for_user(int(actor))
-    return _user_root(actor)
-
-
-IMAGE_KINDS = frozenset({"image"})
-
-
-VIDEO_KINDS = frozenset({"video"})
-
-
-MEDIA_KINDS = frozenset({"image", "video", "audio"})
-
-
-def require_upload_kind(name: str | None, allowed: frozenset[str]) -> str:
-    """safe_filename() plus an extension allowlist. Returns the safe name.
-
-    Extension, not the declared Content-Type: the client controls both, but
-    the extension is what later decides how the file is served back (see
-    media_response), so that is the thing worth constraining. Keeps
-    executable-in-a-browser uploads (.html, .svg, .xhtml) out of the store
-    entirely rather than relying on the serving side alone.
-    """
-    safe = safe_filename(name)
-    if classify_kind(safe) not in allowed:
-        allowed_exts = sorted(
-            ext
-            for kind, exts in (
-                ("image", IMAGE_EXTS),
-                ("video", VIDEO_EXTS),
-                ("audio", AUDIO_EXTS),
-            )
-            if kind in allowed
-            for ext in exts
-        )
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type. Allowed: {', '.join(allowed_exts)}",
-        )
-    return safe
-
-
-def convert_heic_upload(upload: UploadFile) -> UploadFile:
-    """An iPhone HEIC/HEIF upload, swapped for its JPEG conversion; any other
-    upload unchanged. Runs before require_upload_kind, so HEIC is accepted
-    without ever reaching disk or the extension allowlist as HEIC."""
-    name = upload.filename or ""
-    path = Path(name.replace("\\", "/"))
-    if path.suffix.lower() not in HEIC_EXTENSIONS:
-        return upload
-    try:
-        jpeg = heic_to_jpeg(upload.file)
-    except ValueError:
-        logger.warning("could not decode HEIC upload %s", name, exc_info=True)
-        raise HTTPException(status_code=400, detail="Unreadable HEIC image") from None
-    return UploadFile(file=jpeg, filename=path.with_suffix(".jpg").name)
-
-
-def strip_asset_hash_prefix(filename: str) -> str:
-    """Strip the "{sha256}__" content-hash prefix save_asset() stores files
-    under -- the hash is only there to dedupe/avoid collisions on disk;
-    anywhere a file gets shown to a human should show the original name."""
-    _, _, rest = filename.partition("__")
-    return rest or filename
-
-
-def safe_filename(name: str | None) -> str:
-    """The basename of a client-supplied upload name, and nothing else.
-
-    `UploadFile.filename` is whatever the client put in the multipart part --
-    "../../cookies/cookies.txt" is a legal value, and joining that onto an
-    upload directory writes outside it. Every path built from an upload name
-    goes through here first. Backslashes are folded to "/" so a Windows-style
-    path is stripped the same way on Linux, where "\\" is an ordinary
-    filename character.
-    """
-    base = Path((name or "").replace("\\", "/")).name
-    if not base or base in {".", ".."}:
-        raise HTTPException(status_code=400, detail="Invalid file name")
-    return base
-
-
-def make_job_dir(upload_root: Path) -> Path:
-    """A fresh, unique directory for one job's uploads to live in."""
-    job_dir = upload_root / uuid.uuid4().hex[:8]
-    job_dir.mkdir(parents=True, exist_ok=True)
-    return job_dir
-
-
-def _free_name(job_dir: Path, name: str) -> Path:
-    """`name` in `job_dir`, numbered when taken: iOS names every shared photo
-    "image.jpg", and the second must not overwrite the first."""
-    dest = job_dir / name
-    number = 1
-    while dest.exists():
-        number += 1
-        dest = job_dir / f"{Path(name).stem}_{number}{Path(name).suffix}"
-    return dest
-
-
-def save_upload(job_dir: Path, upload: UploadFile) -> str:
-    dest = _free_name(job_dir, safe_filename(upload.filename))
-    with dest.open("wb") as out:
-        shutil.copyfileobj(upload.file, out)
-    return str(dest)
-
-
-def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
-    """Save a reference-asset upload into the shared, content-addressed
-    store, deduping by content hash. Streams + hashes in chunks (these can be
-    videos) rather than reading the whole upload into memory.
-
-    The stored filename is "{sha256}__{original name}" -- the hash prefix
-    guarantees no collisions and makes "does this already exist" an O(1)
-    glob instead of hashing every file already on disk; the original name is
-    kept after the prefix purely for display (see refs.py)."""
-    # Before the temp file, so a rejected name doesn't leave one behind.
-    # Audio is allowed here: this store backs the reference-audio inputs of
-    # the generation tools.
-    upload = convert_heic_upload(upload)
-    stored_name = require_upload_kind(upload.filename, MEDIA_KINDS)
-    # Resolved here, not as a parameter default: a default binds at import,
-    # which would pin the store to whatever OFM_UPLOADS_ROOT said then.
-    assets_root = assets_root or ASSETS_ROOT
-    assets_root.mkdir(parents=True, exist_ok=True)
-
-    hasher = hashlib.sha256()
-    with tempfile.NamedTemporaryFile(dir=assets_root, delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        for chunk in iter(lambda: upload.file.read(1 << 20), b""):
-            hasher.update(chunk)
-            tmp.write(chunk)
-    digest = hasher.hexdigest()
-
-    existing = next(assets_root.glob(f"{digest}__*"), None)
-    if existing is not None:
-        tmp_path.unlink()
-        return str(existing)
-
-    final_path = assets_root / f"{digest}__{stored_name}"
-    try:
-        tmp_path.rename(final_path)
-    except FileExistsError:
-        # Lost a race with a concurrent upload of the same content -- fine,
-        # that copy is just as good.
-        tmp_path.unlink()
-    return str(final_path)
-
-
-def register_generated_asset(
-    path: Path, assets_root: Path | None = None
-) -> Path | None:
-    """Link a freshly-generated output file into the shared, content-addressed
-    asset store so it shows up in the "reuse an uploaded ..." picker right
-    away, exactly like a manual upload -- generated output used to live only
-    in OUT_DIR (kieai_out/), a tree /refs never looks at. Same naming scheme
-    as save_asset() (content-hash prefix), so a generated file that happens
-    to match an already-uploaded one dedupes for free.
-
-    Hardlinks rather than copying (falls back to a copy across filesystems)
-    -- cheap, and the link's mtime matches the source's, so a fresh
-    generation naturally sorts to the top of /refs alongside real uploads.
-
-    Best-effort: the job already finished generating by the time this runs,
-    so a bookkeeping failure here (e.g. a test double pointing at a path that
-    was never really written) must never turn a successful job into a failed
-    one -- just skip registering it."""
-    assets_root = assets_root or ASSETS_ROOT
-    try:
-        assets_root.mkdir(parents=True, exist_ok=True)
-        hasher = hashlib.sha256()
-        with path.open("rb") as fh:
-            for chunk in iter(lambda: fh.read(1 << 20), b""):
-                hasher.update(chunk)
-        digest = hasher.hexdigest()
-
-        existing = next(assets_root.glob(f"{digest}__*"), None)
-        if existing is not None:
-            return existing
-
-        dest = assets_root / f"{digest}__{path.name}"
+    @wraps(fn)
+    def call(*args: P.args, **kwargs: P.kwargs) -> T:
         try:
-            os.link(path, dest)
-        except OSError:
-            # cross-device or a filesystem without hardlinks -- copy instead.
-            # A failure here still falls through to the outer handler.
-            path.copy(dest, preserve_metadata=True)
-    except OSError:
-        logger.warning("could not register generated asset %s", path, exc_info=True)
-        return None
-    else:
-        return dest
+            return fn(*args, **kwargs)
+        except AssetRefusedError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    return call
 
 
-def register_grouped_results(results: list[DownloadResult], assets_root: Path) -> None:
-    """Adopt every output file of a grouped download job into `assets_root`
-    (the requester's part of the store, see `assets_root_for`), so downloaded
-    reels/images show up in the "reuse an uploaded ..." picker instead of
-    forcing a download-then-reupload round trip.
-
-    Mutates nothing the caller depends on: register_generated_asset() dedupes
-    by content hash and is already best-effort, so a file that fails to link
-    just doesn't appear in the picker."""
-    for result in results:
-        for path in result.output_paths:
-            register_generated_asset(path, assets_root)
+require_upload_kind = refused_as_400(store.require_upload_kind)
+convert_heic_upload = refused_as_400(store.convert_heic_upload)
+safe_filename = refused_as_400(store.safe_filename)
+save_asset = refused_as_400(store.save_asset)
+save_upload = refused_as_400(store.save_upload)

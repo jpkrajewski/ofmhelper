@@ -14,7 +14,9 @@ from ofmhelpers.db.repositories import DriveFolderRepository
 from ofmhelpers.db.stores.devices import list_devices
 from ofmhelpers.db.stores.users import list_users
 from ofmhelpers.schemas import AccountScan, DriveTarget, StoredFolder
-lazy from ofmhelpers.integrations.gdrive import DriveFile
+from ofmhelpers.schemas.drive import StoredFolders
+lazy from ofmhelpers.schemas.drive import PostedCount
+lazy from ofmhelpers.schemas.gdrive import DriveFile
 
 _SERVICE = "instagram"
 
@@ -54,7 +56,7 @@ def _roots() -> dict[int, str]:
     return {u.id: u.drive_root_id for u in list_users() if u.drive_root_id}
 
 
-def account_folders() -> dict[int, StoredFolder]:
+def account_folders() -> StoredFolders:
     """Each active login's folder in its phone owner's current root; a row
     of any other root (an old one, or prod's in a dev copy of its database)
     is left out, so the next sweep finds or makes the folder there."""
@@ -63,10 +65,10 @@ def account_folders() -> dict[int, StoredFolder]:
     rows = _repository().account_folders(sorted(set(roots.values())))
     found: dict[int, StoredFolder] = {}
     for row in rows:
-        owner = owners.get(row["login_id"])
-        if owner is not None and roots.get(owner) == row["root_folder_id"]:
-            found[row["login_id"]] = StoredFolder.model_validate(row)
-    return found
+        owner = owners.get(row.login_id)
+        if owner is not None and roots.get(owner) == row.root_folder_id:
+            found[row.login_id] = row
+    return StoredFolders(folders=list(found.values()))
 
 
 def save_account_folder(login_id: int, folder_id: str, name: str, root: str) -> None:
@@ -96,10 +98,9 @@ def record_posted(
     return _repository().record_posted(login_id, folder_id, rows, seen_at)
 
 
-def posted_counts(since: list[float]) -> dict[int, list[int]]:
-    """{login id: [files first seen posted since each of `since`]}."""
-    rows = _repository().posted_counts(sorted(set(_roots().values())), since)
-    return {int(login_id): counts for login_id, counts in rows.items()}
+def posted_counts(since: list[float]) -> list[PostedCount]:
+    """Per login, the files first seen posted since each of `since`."""
+    return _repository().posted_counts(sorted(set(_roots().values())), since)
 
 
 def save_scans(scans: dict[int, AccountScan], at: float) -> None:

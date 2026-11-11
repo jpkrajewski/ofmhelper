@@ -1,28 +1,33 @@
 """The downloaders' data: what one source URL's download comes back as, and
 the two shapes yt-dlp speaks -- the options it takes and the info it returns.
 yt-dlp itself only takes and gives dicts; these models are converted at that
-boundary (`YtDlpOptions.to_ydl()`, `YtDlpInfo.model_validate(info)`)."""
+boundary (`YtDlpOptions.model_dump(exclude_none=True)`,
+`YtDlpInfo.model_validate(info)`)."""
 
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
+lazy from pydantic import SerializerFunctionWrapHandler
+
+from ofmhelpers.schemas.cookies import CookieJarSummary, CookieSite, SiteCookies
+from ofmhelpers.schemas.downloads import DownloadResult
+
+__all__ = [
+    "CookieJarSummary",
+    "CookieSite",
+    "DownloadResult",
+    "ExtractorArgs",
+    "RequestedDownload",
+    "SiteCookies",
+    "VideoInfo",
+    "YtDlpFormat",
+    "YtDlpInfo",
+    "YtDlpOptions",
+]
 
 # yt-dlp's per-extractor arguments: extractor -> argument -> values.
 ExtractorArgs = dict[str, dict[str, list[str]]]
-
-
-class DownloadResult(BaseModel):
-    """One source URL: whether it downloaded, and the files it produced (a
-    post can hold several), or why it failed. A grouped download job stores a
-    list of these, dumped with `mode="json"` so the paths become strings."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    url: str
-    success: bool
-    output_paths: list[Path] = []
-    error: str | None = None
 
 
 class VideoInfo(BaseModel):
@@ -41,7 +46,9 @@ class VideoInfo(BaseModel):
 
 
 class YtDlpOptions(BaseModel):
-    """The yt-dlp options a `DownloadConfig` resolves to."""
+    """The yt-dlp options a `DownloadConfig` resolves to. What
+    `yt_dlp.YoutubeDL` takes is `model_dump(exclude_none=True)`: unset
+    options are left out so yt-dlp's own defaults apply."""
 
     format: str
     merge_output_format: str
@@ -64,12 +71,14 @@ class YtDlpOptions(BaseModel):
     proxy: str | None = None
     extractor_args: ExtractorArgs = {}
 
-    def to_ydl(self) -> dict[str, Any]:
-        """The dict `yt_dlp.YoutubeDL` takes; unset options are left out so
-        yt-dlp's own defaults apply."""
-        opts = self.model_dump(exclude_none=True)
+    @model_serializer(mode="wrap")
+    def _without_empty_args(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        """No extractor arguments = the option left out, like an unset one."""
+        opts: dict[str, Any] = handler(self)
         if not self.extractor_args:
-            del opts["extractor_args"]
+            opts.pop("extractor_args", None)
         return opts
 
 
@@ -149,59 +158,3 @@ class YtDlpInfo(BaseModel):
             for rd in self.requested_downloads
             if (fp := rd.filepath or rd.filename)
         ]
-
-
-class CookieSite(BaseModel):
-    """A site whose login a cookies.txt may carry: its cookie domains (and
-    their subdomains) and the cookie that means "logged in". From
-    phones/services.json (`LoginService.cookies`)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    key: str
-    label: str
-    icon_url: str = ""
-    domains: list[str]
-    login: str
-
-    def owns(self, domain: str) -> bool:
-        host = domain.lstrip(".").lower()
-        return any(host == d or host.endswith(f".{d}") for d in self.domains)
-
-
-class SiteCookies(BaseModel):
-    """One `CookieSite` in an uploaded cookies.txt: its cookies' names
-    (never a value) and whether, and until when, it is logged in."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    key: str
-    label: str
-    icon_url: str = ""
-    names: list[str] = []
-    logged_in: bool = False
-    # When the login cookie expires (epoch s); None without one, or a
-    # session cookie.
-    expires_at: float | None = None
-
-
-class CookieJarSummary(BaseModel):
-    """What /cookies shows about an uploaded cookies.txt: never a value,
-    only which sites it covers and whether it holds an Instagram login."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    # Per known site (services.json), in its order: logged in or not.
-    sites: list[SiteCookies] = []
-    # Cookies of every other site, only counted.
-    other: int = 0
-
-    cookies: int
-    # Registrable-ish hosts, leading dot dropped, sorted.
-    domains: list[str]
-    # A `sessionid` cookie for instagram.com: what every logged-in
-    # Instagram call needs.
-    instagram_login: bool
-    # When that login cookie expires (epoch s); None without one, or a
-    # session cookie.
-    instagram_expires_at: float | None = None

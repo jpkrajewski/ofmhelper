@@ -1,5 +1,5 @@
 """Fanvue's public API, the read calls this app makes plus webhook destinations.
-Through `utils.outbound`. Nothing here can message a fan or mark a chat read: reading
+Through `integrations.outbound`. Nothing here can message a fan or mark a chat read: reading
 messages defaults to marking them read on Fanvue, so `markAsRead=false` goes on every
 call."""
 
@@ -13,6 +13,7 @@ from pydantic import ValidationError
 lazy from pydantic import BaseModel
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.fanvue.errors import (
     FanvueAuthError,
     FanvueError,
@@ -31,7 +32,6 @@ from ofmhelpers.integrations.fanvue.models import (
     SubscriptionsPage,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 

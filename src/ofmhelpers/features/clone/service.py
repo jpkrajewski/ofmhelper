@@ -16,19 +16,23 @@ import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import get_job, last_used_firsts, most_used_firsts
+from ofmhelpers.db.stores.jobs import ParamHistory, get_job
 from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_files
 from ofmhelpers.features.clone.export import export_choice
 from ofmhelpers.features.clone.pricing import clip_duration
 from ofmhelpers.features.clone.targets import CloneTarget, clone_targets, clone_values
 from ofmhelpers.features.drive.uploads import targets as drive_targets
+from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.media.exports import exports
 from ofmhelpers.schemas import CloneCard, DriveUpload, Job, UploadTarget
@@ -174,7 +178,7 @@ def plan_runs(
             target.spec.check(
                 clone_values(
                     target, prompt, choices.resolution, duration, audio, images, video
-                )
+                ).model_dump()
             )
     except InvalidInputError as exc:
         raise CloneRefusedError(str(exc)) from None
@@ -195,6 +199,68 @@ def plan_runs(
     ]
 
 
+class Submitted(Protocol):
+    """The /clone form as its route read it (`CloneForm`)."""
+
+    provider: str
+    api_key: str
+    export: str
+    resolution: str
+    prompt: str
+    audio: bool
+    mirror: bool
+    image: list[UploadFile]
+    image_manifest: str
+    videos: list[UploadFile]
+    videos_manifest: str
+
+
+class Submit(BaseModel):
+    """One /clone submit: whose it is, and the two things its router owns
+    (`run`: the function RQ stores by path; `probe`: a video's length)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    actor: str
+    owner: int
+    assets_root: Path
+    run: Callable[..., Any]
+    probe: Callable[[str], float]
+
+    def _picked(self, manifest: str, files: list[UploadFile]) -> list[str]:
+        return build_ordered_paths(
+            manifest, files, self.assets_root, user_id=self.owner
+        )
+
+    def _queue(self, run: CloneRun, api_key: str) -> str:
+        """One run's job. The key goes to the worker only, never into the
+        params its page shows."""
+        params = run.model_dump()
+        return start_job(
+            TASK,
+            params,
+            self.run,
+            {"api_key": api_key, "assets_root": str(self.assets_root), **params},
+            actor=self.actor,
+        )
+
+    def start(self, form: Submitted) -> list[str]:
+        """One queued run per video: their job ids, in picked order."""
+        choices = check_choices(
+            form.provider, form.api_key, form.export, form.resolution
+        )
+        runs = plan_runs(
+            choices,
+            form.prompt,
+            form.audio,
+            form.mirror,
+            self._picked(form.image_manifest, form.image),
+            self._picked(form.videos_manifest, form.videos),
+            self.probe,
+        )
+        return [self._queue(run, choices.api_key) for run in runs]
+
+
 def export_label(params: dict[str, Any]) -> str:
     """What the run was exported as (Original, CapCut, a phone), by its
     label; runs from before `export` stored only the `capcut` bool."""
@@ -204,13 +270,11 @@ def export_label(params: dict[str, Any]) -> str:
 
 
 def card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
-    # Imported here, not at the top: the asset store still lives in the routers
-    # package, whose __init__ imports every router -- and /clone imports this.
-    from ofmhelpers.web.routers.task_helpers import job_assets
-
+    found = job_assets(job, FILES_PREFIX)
     return CloneCard.from_job(
         job,
-        *job_assets(job, FILES_PREFIX),
+        found.assets,
+        found.failed_sources,
         task_label=export_label(job.params),
         poll_prefix=PREFIX,
         result_kind="video",
@@ -223,6 +287,13 @@ def cards(jobs: list[Job]) -> list[CloneCard]:
     for upload in upload_store.for_jobs([j.id for j in jobs]):
         uploads.setdefault(upload.job_id, []).append(upload)
     return [card(j, uploads.get(j.id, [])) for j in jobs]
+
+
+def cards_of(job_ids: list[str], actor: str) -> list[CloneCard]:
+    """These jobs' cards, newest first like the gallery; only the asker's."""
+    return cards(
+        [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
+    )
 
 
 def drive_picker(user_id: int) -> DrivePicker:
@@ -252,11 +323,14 @@ def subject_picks(actor: str, assets_root: Path) -> SubjectPicks:
     and /clone-links runs, `clone_last_subjects` last used then
     `clone_top_subjects` most used."""
     web = settings.web
+    subjects = ParamHistory(frozenset(SUBJECT_TASKS), actor, "reference_images")
     return SubjectPicks(
         last_used=_stored(
-            last_used_firsts, actor, assets_root, web.clone_last_subjects
+            subjects.last_used_firsts, assets_root, web.clone_last_subjects
         ),
-        most_used=_stored(most_used_firsts, actor, assets_root, web.clone_top_subjects),
+        most_used=_stored(
+            subjects.most_used_firsts, assets_root, web.clone_top_subjects
+        ),
     )
 
 
@@ -265,15 +339,14 @@ def _digest(path: str) -> str:
 
 
 def _stored(
-    query: Callable[[set[str], str, str, int], list[str]],
-    actor: str,
+    query: Callable[[int], list[str]],
     assets_root: Path,
     limit: int,
 ) -> list[str]:
     """Up to `limit` of `query`'s subjects still in the store. Asks for
     more than it keeps: some may be gone."""
     found: list[str] = []
-    for path in query(SUBJECT_TASKS, actor, "reference_images", limit * 3):
+    for path in query(limit * 3):
         if len(found) == limit:
             break
         if copy := _stored_copy(path, assets_root):
@@ -286,8 +359,6 @@ def _stored_copy(path: str, assets_root: Path) -> str | None:
     at the top of the store (a job stored under another root); else another
     stored name of the same picture (`<sha256>__<name>`, looked for only
     when the name starts with a real hash); else None."""
-    from ofmhelpers.web.routers.task_helpers import keep_files
-
     if kept := keep_files(
         [path, str(assets_root / Path(path).name)], assets_root, "image"
     ):

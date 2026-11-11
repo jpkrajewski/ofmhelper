@@ -9,25 +9,22 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.generate.choices import model_choices, provider_choices
 from ofmhelpers.features.generate.providers import start_provider
-from ofmhelpers.schemas import ModelChoice, ProviderChoice
 from ofmhelpers.web.dependencies import Actor, ApiKeys
 from ofmhelpers.web.gallery import Gallery, GalleryParams
-from ofmhelpers.web.routers.generation.ai import MAX_BATCH
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
 from ofmhelpers.web.templates_config import render, render_polled
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
-GALLERY_LIMIT = settings.web.gallery_limit
-
-gallery = Gallery(GENERATE_TOOLS, limit=lambda: GALLERY_LIMIT)
+gallery = Gallery(GENERATE_TOOLS, limit=lambda: settings.web.gallery_limit)
 
 
 @router.get("")
 def form(request: Request, actor: Actor, api_keys: ApiKeys) -> Response:
     first = gallery.page(actor)
-    providers = ProviderChoice.all()
+    providers = provider_choices()
     return render(
         request,
         "generate_form.html",
@@ -35,13 +32,14 @@ def form(request: Request, actor: Actor, api_keys: ApiKeys) -> Response:
         selected_provider=start_provider(
             actor, frozenset({"ai"}), [p.name for p in providers]
         ),
-        models=[m.model_dump() for m in ModelChoice.all()],
+        models=[m.model_dump() for m in model_choices()],
         api_keys=api_keys,
         gallery=[task_card(j) for j in first.jobs],
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(actor),
         live_poll_s=settings.web.gallery_live_poll_s,
-        max_batch=MAX_BATCH,
+        # The most images one submit may queue (each its own job and card).
+        max_batch=settings.aigen.max_batch,
     )
 
 

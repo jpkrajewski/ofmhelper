@@ -1,11 +1,11 @@
 """
-The FastAPI application: logging, middleware, static files, lifespan, and
-the router registration loop. Nothing feature-specific lives here -- a new
-page is added to `routers/__init__.py`'s ROUTERS list and a new background
-sweep to `features/jobs/sweeps.py`, not to this file.
+The FastAPI application: logging, middleware, static files and the router
+registration loop. Nothing feature-specific lives here -- a new page is
+added to `routers/__init__.py`'s ROUTERS list. HTTP only: the background
+sweeps are a process of their own (`ofmhelpers/sweeps.py`, the `sweeps`
+compose service), so any number of web processes can serve.
 """
 
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,7 +13,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.jobs.sweeps import running, sweeps
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, instrument_app
 from ofmhelpers.web.exceptions import exception_handlers
@@ -34,19 +33,8 @@ configure_logging()
 logger = get_logger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # The background sweeps (features/jobs/sweeps.py) run while the app does: on
-    # shutdown each is cancelled and awaited.
-    async with running(sweeps()):
-        logger.info("startup complete: sweeps running")
-        yield
-    logger.info("shutdown: sweeps stopped")
-
-
 app = FastAPI(
     title="Ascend Global LLC — Content Ops",
-    lifespan=lifespan,
     exception_handlers=exception_handlers(),
 )
 instrument_app(app)

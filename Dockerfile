@@ -68,13 +68,20 @@ FROM python:3.15-slim-trixie AS runtime
 RUN groupadd --gid 1000 appuser && \
     useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser
 
-# ffmpeg for yt-dlp post-processing, curl+unzip for the deno installer
+# ffmpeg for yt-dlp post-processing, unzip for the Deno archive
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg curl unzip ca-certificates && \
+    apt-get install -y --no-install-recommends ffmpeg unzip ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Deno system-wide (not into root's home) so appuser can execute it
-RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
+# Deno (yt-dlp's JavaScript runtime), system-wide so appuser can execute it.
+# Pinned and checksummed like Biome above (the release's own .sha256sum), not
+# piped from deno.land/install.sh: that installed whatever was newest on the
+# day of the build. 2.9.8 is what the image ran on 2026-11-11.
+ADD --checksum=sha256:e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609 \
+    https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-unknown-linux-gnu.zip \
+    /tmp/deno.zip
+RUN unzip -q /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip && \
+    chmod 755 /usr/local/bin/deno && deno --version
 
 WORKDIR /app
 

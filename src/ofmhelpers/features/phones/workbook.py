@@ -23,7 +23,7 @@ lazy from openpyxl.styles import Alignment, Font
 lazy from openpyxl.utils import get_column_letter
 lazy from openpyxl.worksheet._write_only import WriteOnlyWorksheet
 
-from ofmhelpers.features.phones.catalog import ServiceKind, services
+from ofmhelpers.schemas.phone_catalog import ServiceKind, services
 lazy from ofmhelpers.schemas import Device, DeviceLogin
 
 MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -84,7 +84,7 @@ def _widths(sheet: WriteOnlyWorksheet, count: int, width: int = 22) -> None:
 
 def _phones_sheet(book: Workbook, devices: list[Device]) -> None:
     used = {x.service for d in devices for x in d.logins}
-    listed = [s for key, s in services().items() if key in used]
+    listed = [s for s in services().all() if s.key in used]
     headers = [*_PHONE_HEADERS]
     for service in listed:
         headers += [service.label, f"{service.label} password"]

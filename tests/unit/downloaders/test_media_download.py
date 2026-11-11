@@ -296,7 +296,7 @@ def test_a_single_download_asks_both_tools_for_the_linked_post_only(
 
     video, pictures = configs["video"], configs["images"]
     assert isinstance(video, generic.DownloadConfig)
-    opts = video.ydl_opts().to_ydl()
+    opts = video.ydl_opts().model_dump(exclude_none=True)
     assert opts["noplaylist"] is True
     assert opts["playlist_items"] == "1:10"
     assert opts["allowed_extractors"] == ["default", "-generic"]
@@ -310,7 +310,7 @@ def test_the_download_tool_keeps_playlists_and_every_extractor(configs):
 
     video, pictures = configs["video"], configs["images"]
     assert isinstance(video, generic.DownloadConfig)
-    opts = video.ydl_opts().to_ydl()
+    opts = video.ydl_opts().model_dump(exclude_none=True)
     assert opts["noplaylist"] is False
     assert "playlist_items" not in opts
     assert "allowed_extractors" not in opts

@@ -18,9 +18,11 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in, sign_in_agency
 
+from ofmhelpers.config import settings
+from ofmhelpers.features.assets import refs as refs_router
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.assets.ref_usage import UsedRef
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers import refs as refs_router
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 def _png_bytes(size=(300, 300)) -> bytes:
@@ -62,8 +64,7 @@ def client():
 def assets_dir(tmp_path, monkeypatch):
     d = tmp_path / "assets"
     d.mkdir()
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", d)
-    monkeypatch.setattr(refs_router, "THUMBS_DIR", d / ".thumbs")
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: d)
     return d
 
 
@@ -190,7 +191,10 @@ def test_list_refs_opens_on_last_used_then_last_uploaded(
     monkeypatch.setattr(
         refs_router.ref_usage,
         "recent",
-        lambda _user, _limit: [(used[0], 20.0), (used[1], 10.0)],
+        lambda _user, _limit: [
+            UsedRef(path=used[0], used_at=20.0),
+            UsedRef(path=used[1], used_at=10.0),
+        ],
     )
 
     entries = client.get("/refs?kind=image").json()
@@ -245,8 +249,8 @@ def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
         refs_router.ref_usage,
         "recent",
         lambda _user, _limit: [
-            (str(assets_dir / "gone.png"), 30.0),
-            (str(assets_dir / "hashaud__voice.mp3"), 20.0),
+            UsedRef(path=str(assets_dir / "gone.png"), used_at=30.0),
+            UsedRef(path=str(assets_dir / "hashaud__voice.mp3"), used_at=20.0),
         ],
     )
 
@@ -261,7 +265,7 @@ def test_list_refs_limit_reaches_the_older_ones(client, assets_dir):
     no usage grouping."""
     _write_refs(assets_dir, 12)
 
-    entries = client.get(f"/refs?kind=image&limit={refs_router.MAX_REF_LIMIT}").json()
+    entries = client.get(f"/refs?kind=image&limit={settings.web.max_ref_limit}").json()
     assert len(entries) == 12
     assert [e["name"] for e in entries] == [f"file{i}.png" for i in range(11, -1, -1)]
 

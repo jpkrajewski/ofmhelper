@@ -22,7 +22,7 @@ _FAN = "fan-uuid"
 def client(backend) -> FanvueClient:
     if backend == "real":
         pytest.skip("Fanvue needs an account connected in a browser")
-    token = fake_fanvue().new_tokens()["access_token"]
+    token = fake_fanvue().new_tokens().access_token
     return FanvueClient(lambda: token)
 
 
@@ -75,7 +75,7 @@ def test_a_refresh_token_works_once(backend, monkeypatch):
         pytest.skip("Fanvue needs an account connected in a browser")
     monkeypatch.setenv("FANVUE_CLIENT_ID", "fake-client")
     monkeypatch.setenv("FANVUE_CLIENT_SECRET", "fake-secret")
-    spent = fake_fanvue().new_tokens()["refresh_token"]
+    spent = fake_fanvue().new_tokens().refresh_token
 
     fresh = refresh(spent)
     assert fresh is not None

@@ -9,10 +9,11 @@ from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.db.models import ReportRunRow
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.reports import ReportMarks, ReportRun
 
 
 class ReportRunRepository:
-    def last(self, name: str) -> dict | None:
+    def last(self, name: str) -> ReportRun | None:
         """The newest run of `name`."""
         with session_scope() as s:
             row = s.execute(
@@ -23,13 +24,13 @@ class ReportRunRepository:
             ).scalar_one_or_none()
             if row is None:
                 return None
-            return {
-                "name": row.name,
-                "day": row.day,
-                "ran_at": row.ran_at,
-                "sent": row.sent,
-                "marks": row.marks,
-            }
+            return ReportRun(
+                name=row.name,
+                day=row.day,
+                ran_at=row.ran_at,
+                sent=row.sent,
+                marks=ReportMarks.model_validate(row.marks),
+            )
 
     def claim(
         self, name: str, day: date, ran_at: float, sent: bool, marks: dict[str, Any]

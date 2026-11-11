@@ -5,7 +5,8 @@ import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
-from pydantic import BaseModel, ConfigDict, Field
+
+lazy from ofmhelpers.config.types import ImageLimits
 
 # Below this, a still-too-big image is downscaled instead of compressed further.
 MIN_QUALITY = 80
@@ -17,21 +18,6 @@ DOWNSCALE_STEP = 0.8
 # Images `fitted` may re-encode (GIF is left alone: a JPEG copy would drop
 # its animation).
 FITTABLE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"})
-
-
-class ImageLimits(BaseModel):
-    """The largest reference image a provider takes."""
-
-    model_config = ConfigDict(frozen=True)
-
-    max_bytes: int = Field(gt=0)
-    max_side: int = Field(gt=0)
-
-    def with_max_bytes(self, max_bytes: int | None) -> ImageLimits:
-        """These limits with a model's own byte limit, when it has one."""
-        if not max_bytes:
-            return self
-        return self.model_copy(update={"max_bytes": max_bytes})
 
 
 def fits(src: Path, max_bytes: int, max_side: int) -> bool:

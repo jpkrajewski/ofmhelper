@@ -4,33 +4,27 @@ ofmhelpers/web/stores/short_links.py
 Links on link providers (/links, routers/tracking/links.py; made, synced
 and deleted by features/links/sync.py). Each belongs to a user: `owner` limits a
 call to theirs (None: everyone's, for the sweeper). Every provider call
-runs on the owner's own key (/account); the agency admin (the password
-account) with none on the .env one (`LinkProvider.default_key`); nobody
-else ever gets the .env key.
+runs on the owner's own key (`features/links/keys.py`).
 """
 
 from datetime import date, timedelta
 from functools import lru_cache
+lazy from collections.abc import Collection
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import ShortLinkRepository
-from ofmhelpers.db.stores import users
-from ofmhelpers.integrations.short_links import (
+from ofmhelpers.schemas import ProviderState, ShortLink
+from ofmhelpers.schemas.link_catalog import (
     RemoteLink,
     Usage,
     detect_target,
     provider_infos,
 )
-from ofmhelpers.integrations.short_links.providers import (
-    get_link_provider,
-    link_providers,
-)
-from ofmhelpers.integrations.socials import get_platform
-from ofmhelpers.schemas import ProviderState, ShortLink
-from ofmhelpers.schemas.links import utc_today
-lazy from ofmhelpers.integrations.short_links import DayStat
-lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
+from ofmhelpers.schemas.links import AccountLinks, PlannedLink, utc_today
+from ofmhelpers.schemas.socials import names_of
 lazy from ofmhelpers.schemas import GenerateLinks, TrackedAccount
+lazy from ofmhelpers.schemas.link_catalog import LinkDays
+lazy from ofmhelpers.schemas.links import LinkSyncKey
 
 # The platform links bridge from (Generate links: one per account).
 SOURCE_PLATFORM = "instagram"
@@ -41,44 +35,6 @@ def _repository() -> ShortLinkRepository:
     """Built on first use rather than at import (constructing it binds a Redis
     connection for its cache)."""
     return ShortLinkRepository()
-
-
-# --- keys -------------------------------------------------------------------
-
-
-def api_key(user_id: int, provider: str) -> str | None:
-    """The key `user_id`'s calls to `provider` run on, if any."""
-    # A local provider (self) is served from our own data: it needs no saved
-    # key and is always available, its "key" carrying the owner's id.
-    local = get_link_provider(provider).local_key(user_id)
-    if local is not None:
-        return local
-    saved = users.api_keys(user_id).get(provider)
-    if saved:
-        return saved
-    user = users.get_user(user_id)
-    # The agency admin only: another admin (added on /users) has data of
-    # their own and would otherwise sync, see and delete the agency's links.
-    if user is not None and user.is_password_account and user.active:
-        return get_link_provider(provider).default_key()
-    return None
-
-
-def client(user_id: int, provider: str) -> LinkProvider | None:
-    """`provider` on `user_id`'s key; None without one."""
-    key = api_key(user_id, provider)
-    return get_link_provider(provider)(key) if key else None
-
-
-def keyed() -> list[tuple[int, str]]:
-    """(user, provider) of every active user with a key for it."""
-    return [
-        (user.id, provider)
-        for user in users.list_users()
-        if user.active
-        for provider in link_providers()
-        if api_key(user.id, provider)
-    ]
 
 
 # --- reads ------------------------------------------------------------------
@@ -92,28 +48,30 @@ def list_links(owner: int | None = None) -> list[ShortLink]:
     """`owner`'s links of a registered provider, newest first, with their
     days of the longest period."""
     return [
-        ShortLink.model_validate(row)
-        for row in _repository().list_all(owner, _since())
-        if row["provider"] in link_providers()
+        link
+        for link in _repository().list_all(owner, _since())
+        if link.provider in provider_infos()
     ]
 
 
 def get_links(ids: list[int], owner: int | None = None) -> list[ShortLink]:
     return [
-        ShortLink.model_validate(row)
-        for row in _repository().by_ids(ids, owner)
-        if row["provider"] in link_providers()
+        link
+        for link in _repository().by_ids(ids, owner)
+        if link.provider in provider_infos()
     ]
 
 
-def links_by_account(owner: int | None = None) -> dict[int, list[ShortLink]]:
+def links_by_account(owner: int | None = None) -> list[AccountLinks]:
     """`owner`'s links that exist on their provider, by the account they
     bridge from (/accounts shows them like its phones)."""
-    found: dict[int, list[ShortLink]] = {}
+    found: dict[int, AccountLinks] = {}
     for link in list_links(owner):
         if link.account_id is not None and link.status in ("active", "inactive"):
-            found.setdefault(link.account_id, []).append(link)
-    return found
+            found.setdefault(
+                link.account_id, AccountLinks(account_id=link.account_id, links=[])
+            ).links.append(link)
+    return list(found.values())
 
 
 # Links that take a place in the provider's plan: live, or on their way.
@@ -138,30 +96,28 @@ def _local_usage(usage: Usage | None, links: list[ShortLink]) -> Usage | None:
     )
 
 
-def provider_states(user_id: int) -> list[ProviderState]:
-    syncs = {s["provider"]: s for s in _repository().syncs(user_id)}
+def provider_states(user_id: int, keyed: Collection[str]) -> list[ProviderState]:
+    """Every provider as /links shows it for `user_id`; `keyed`: the ones
+    they have a key for (`features/links/keys.py`)."""
+    syncs = {s.provider: s for s in _repository().syncs(user_id)}
     links = list_links(user_id)
     states = []
-    for key, info in provider_infos().items():
-        if key not in link_providers():
-            continue
-        sync = syncs.get(key, {})
-        usage = sync.get("usage")
-        has_key = api_key(user_id, key) is not None
+    for info in provider_infos().all():
+        key = info.key
+        sync = syncs.get(key)
+        has_key = key in keyed
         states.append(
             ProviderState(
                 key=key,
                 label=info.label,
                 has_key=has_key,
-                synced_at=sync.get("synced_at"),
+                synced_at=sync.synced_at if sync else None,
                 syncing=has_key
-                and bool(sync)
-                and (
-                    sync.get("synced_at") is None or sync.get("claimed_at") is not None
-                ),
-                error=sync.get("error"),
+                and sync is not None
+                and (sync.synced_at is None or sync.claimed_at is not None),
+                error=sync.error if sync else None,
                 usage=_local_usage(
-                    Usage.model_validate(usage) if usage else None,
+                    sync.usage if sync else None,
                     [x for x in links if x.provider == key],
                 ),
             )
@@ -178,17 +134,12 @@ def account_slug(provider: str, handle: str) -> str:
 
 def plan(
     user_id: int, form: GenerateLinks, accounts: list[TrackedAccount]
-) -> list[dict]:
+) -> list[PlannedLink]:
     """One new link per account: its slug from the handle, numbered past
     the ones `user_id` has on the provider (per domain or provider-wide,
     as its slugs are unique)."""
     rules = provider_infos()[form.provider].slug
-    per_domain = rules.unique_per == "domain"
-    taken = {
-        slug
-        for domain, slug in _repository().taken(user_id, form.provider)
-        if not per_domain or domain == form.domain
-    }
+    taken = taken_slugs(user_id, form.provider, form.domain)
     planned = []
     for account in accounts:
         base = rules.make(account.handle)
@@ -198,19 +149,19 @@ def plan(
             slug = rules.numbered(base, n)
         taken.add(slug)
         planned.append(
-            {
-                "slug": slug,
-                "domain": form.domain,
-                "destination": str(form.destination),
-                "target": form.target,
-                "account_id": account.id,
-                "creator": form.creator,
-            }
+            PlannedLink(
+                slug=slug,
+                domain=form.domain,
+                destination=str(form.destination),
+                target=form.target,
+                account_id=account.id,
+                creator=form.creator,
+            )
         )
     return planned
 
 
-def add_creating(user_id: int, provider: str, links: list[dict]) -> list[int]:
+def add_creating(user_id: int, provider: str, links: list[PlannedLink]) -> list[int]:
     return _repository().add_creating(user_id, provider, links)
 
 
@@ -231,9 +182,9 @@ def taken_slugs(user_id: int, provider: str, domain: str) -> set[str]:
     that domain, or anywhere on a provider whose slugs are provider-wide."""
     per_domain = provider_infos()[provider].slug.unique_per == "domain"
     return {
-        slug
-        for d, slug in _repository().taken(user_id, provider)
-        if not per_domain or d == domain
+        taken.slug
+        for taken in _repository().taken(user_id, provider)
+        if not per_domain or taken.domain == domain
     }
 
 
@@ -262,7 +213,7 @@ def record_sync(
     user_id: int,
     provider: str,
     remotes: list[RemoteLink],
-    days: dict[str, list[DayStat]],
+    days: list[LinkDays],
     accounts: list[TrackedAccount],
 ) -> None:
     """What `provider` lists for `user_id` now (see the repository): a new
@@ -272,13 +223,13 @@ def record_sync(
         user_id,
         provider,
         [{**r.model_dump(), "target": detect_target(r.destination)} for r in remotes],
-        {k: [d.model_dump(mode="json") for d in v] for k, v in days.items()},
+        {d.remote_id: [x.model_dump(mode="json") for x in d.days] for d in days},
         by_slug,
         settings.links.create_ttl_s,
     )
 
 
-def claim_due(pairs: list[tuple[int, str]]) -> list[tuple[int, str]]:
+def claim_due(pairs: list[LinkSyncKey]) -> list[LinkSyncKey]:
     s = settings.links
     return _repository().claim_due(pairs, s.sync_interval_s, s.claim_ttl_s)
 
@@ -301,4 +252,4 @@ def source_accounts(accounts: list[TrackedAccount]) -> list[TrackedAccount]:
 
 
 def source_label() -> str:
-    return get_platform(SOURCE_PLATFORM).label
+    return names_of(SOURCE_PLATFORM).label

@@ -11,13 +11,13 @@ from signin import sign_in
 
 from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.integrations.downloaders import media as downloader
 from ofmhelpers.integrations.gdrive.fake import fake_drive
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_KEY
 from ofmhelpers.media import fake_media
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 NEW = json.dumps([{"kind": "new"}])
 REEL = "https://www.instagram.com/reel/ABC123/"
@@ -39,7 +39,7 @@ def clone_links_env(fake_externals, monkeypatch, tmp_path):
     monkeypatch.setenv("GEMINI_API_KEY", GEMINI_KEY)
     monkeypatch.setenv("OFM_LLM_RETRIES", "0")
     monkeypatch.setenv("LLM_FALLBACK_VIDEO", "")
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
     monkeypatch.setattr(downloader, "_OUTPUT_ROOT", tmp_path / "downloads")
     return fake_drive()
 
@@ -70,7 +70,7 @@ def post_run(c: TestClient, links: list[str], **data):
 
 def run(c: TestClient, links: list[str], **data) -> dict:
     r = post_run(c, links, **data)
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     return r.json()
 
 

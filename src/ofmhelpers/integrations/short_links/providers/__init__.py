@@ -5,6 +5,7 @@ from ofmhelpers.integrations.short_links.providers.base import LinkProvider
 from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
 from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
 from ofmhelpers.integrations.short_links.providers.self_host import SelfProvider
+from ofmhelpers.utils.registry import Registry
 
 # Display order of the provider pickers.
 _PROVIDER_TYPES: tuple[type[LinkProvider], ...] = (
@@ -14,9 +15,11 @@ _PROVIDER_TYPES: tuple[type[LinkProvider], ...] = (
 )
 
 
-def link_providers() -> dict[str, type[LinkProvider]]:
+def link_providers() -> Registry[type[LinkProvider]]:
     """Every registered provider by its stored key."""
-    return {cls.key: cls for cls in _PROVIDER_TYPES}
+    return Registry[type[LinkProvider]](
+        entries={cls.key: cls for cls in _PROVIDER_TYPES}
+    )
 
 
 def get_link_provider(key: str) -> type[LinkProvider]:

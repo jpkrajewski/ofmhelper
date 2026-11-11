@@ -74,7 +74,7 @@ def test_form_fields_are_the_scalars_only():
 def test_parse_form_types_the_strings_and_drops_blanks():
     parsed = SPEC.parse_form(
         {"prompt": "hi", "duration": "7", "cfg": "0.5", "sound": "false", "seed": ""}
-    )
+    ).model_dump()
 
     assert parsed == {"prompt": "hi", "duration": 7, "cfg": 0.5, "sound": False}
 
@@ -119,7 +119,7 @@ def test_request_uploads_media_and_sends_fixed_values():
             "not_in_schema": "dropped",
         },
         upload,
-    )
+    ).model_dump()
 
     assert body == {
         "nsfw_checker": False,

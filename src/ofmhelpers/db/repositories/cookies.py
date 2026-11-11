@@ -9,20 +9,21 @@ from sqlalchemy.dialects.postgresql import insert
 
 from ofmhelpers.db.models import UserCookiesRow
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.cookies import StoredCookies
 
 
 class CookieRepository:
-    def get(self, user_id: int) -> dict | None:
-        """{"cookies" (decrypted), "file_name", "uploaded_at"}, or None."""
+    def get(self, user_id: int) -> StoredCookies | None:
+        """The stored file, its cookies decrypted, or None."""
         with session_scope() as s:
             row = s.get(UserCookiesRow, user_id)
             if row is None:
                 return None
-            return {
-                "cookies": row.cookies,
-                "file_name": row.file_name,
-                "uploaded_at": row.uploaded_at,
-            }
+            return StoredCookies(
+                cookies=row.cookies,
+                file_name=row.file_name,
+                uploaded_at=row.uploaded_at,
+            )
 
     def first_holder(self, user_ids: list[int]) -> int | None:
         """The first of `user_ids`, in that order, who has cookies."""

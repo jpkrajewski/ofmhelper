@@ -9,8 +9,8 @@ from urllib.parse import urlencode
 
 from pydantic import BaseModel, Field, HttpUrl, model_validator
 
-from ofmhelpers.integrations.short_links import DayStat, Usage, provider_infos, targets
 from ofmhelpers.schemas.accounts import NO_CREATOR, CreatorName, SortOrder
+from ofmhelpers.schemas.link_catalog import DayStat, Usage, provider_infos, targets
 
 LinkStatus = Literal["creating", "active", "inactive", "failed", "deleting"]
 
@@ -92,6 +92,51 @@ class ShortLink(BaseModel):
 
     def ctr(self, days: int, today: date | None = None) -> float | None:
         return ctr(self.views(days, today), self.clicks(days, today))
+
+
+class AccountLinks(BaseModel):
+    """The links that bridge from one account."""
+
+    account_id: int
+    links: list[ShortLink]
+
+
+class PlannedLink(BaseModel):
+    """A link about to be made ("creating"): where it will sit, where it
+    sends, the account it bridges from and the creator it is for."""
+
+    slug: str
+    domain: str
+    destination: str
+    target: str | None = None
+    account_id: int | None = None
+    creator: str = ""
+
+
+class LinkAddress(BaseModel, frozen=True):
+    """Where a link sits on its provider."""
+
+    domain: str
+    slug: str
+
+
+class LinkSyncKey(BaseModel, frozen=True):
+    """One sync: a user's links on one provider."""
+
+    user_id: int
+    provider: str
+
+
+class LinkSync(BaseModel):
+    """A sync's state: when it last ran, whether one is claimed now, its last
+    error and the plan's quota then."""
+
+    user_id: int
+    provider: str
+    synced_at: float | None = None
+    claimed_at: float | None = None
+    error: str | None = None
+    usage: Usage | None = None
 
 
 class LinkSort(StrEnum):

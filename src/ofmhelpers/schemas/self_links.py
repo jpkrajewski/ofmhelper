@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from ofmhelpers.schemas.link_catalog import DayStat, HourStat, RemoteLink
 from ofmhelpers.schemas.links import ctr, utc_today
 
 
@@ -41,6 +42,72 @@ class SelfDomain(BaseModel):
     added_at: float
 
     model_config = {"from_attributes": True}
+
+
+class BridgeTarget(BaseModel):
+    """The live self link a bridge address serves: what the public bridge
+    page looks up on every hit."""
+
+    id: int
+    destination: str
+    slug: str
+    domain: str
+
+
+class SelfLink(BaseModel):
+    """One of our own link rows as a local provider (self) lists it: the
+    fields of a RemoteLink plus its row id. `remote_id` is None while it is
+    being made."""
+
+    id: int
+    remote_id: str | None = None
+    slug: str
+    domain: str
+    url: str
+    destination: str
+    active: bool
+    adult: bool | None = None
+    created_at: float | None = None
+
+    def as_remote(self) -> RemoteLink:
+        return RemoteLink.model_validate(self.model_dump(exclude={"id"}))
+
+
+class SelfLinkDays(BaseModel):
+    """One self link's UTC days that had any hit."""
+
+    link_id: int
+    days: list[DayStat]
+
+
+class SelfLinkHours(BaseModel):
+    """One self link's UTC hours that had any hit."""
+
+    link_id: int
+    hours: list[HourStat]
+
+
+class SelfTotals(BaseModel):
+    """Views, clicks and unique visitors (distinct IP) over a window."""
+
+    views: int = 0
+    clicks: int = 0
+    visitors: int = 0
+
+
+class SelfLinkCount(BaseModel):
+    """One self link's views and clicks over a window."""
+
+    link_id: int
+    views: int
+    clicks: int
+
+
+class DateSpan(BaseModel, frozen=True):
+    """UTC days from `start` to `end`, both included."""
+
+    start: date
+    end: date
 
 
 class SelfDomainForm(BaseModel):
@@ -79,18 +146,18 @@ class SelfRange(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    def resolved(self, today: date | None = None) -> tuple[date, date]:
+    def resolved(self, today: date | None = None) -> DateSpan:
         today = today or utc_today()
         if self.start and self.end:
             lo, hi = sorted((self.start, self.end))
             lo = max(lo, today - timedelta(days=MAX_STAT_DAYS - 1))
-            return lo, min(hi, today)
+            return DateSpan(start=lo, end=min(hi, today))
         days = self.days or 7
-        return today - timedelta(days=days - 1), today
+        return DateSpan(start=today - timedelta(days=days - 1), end=today)
 
     def by_hour(self, today: date | None = None) -> bool:
-        lo, hi = self.resolved(today)
-        return lo == hi
+        span = self.resolved(today)
+        return span.start == span.end
 
 
 class SelfSeriesPoint(BaseModel):

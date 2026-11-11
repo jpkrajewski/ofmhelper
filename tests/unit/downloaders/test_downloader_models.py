@@ -31,7 +31,7 @@ def test_options_dict_keeps_yt_dlp_defaults_for_unset_options():
         cookies_from_browser=None, youtube_player_clients=["ios"], extractor_args={}
     )
 
-    opts = config.ydl_opts().to_ydl()
+    opts = config.ydl_opts().model_dump(exclude_none=True)
 
     assert opts["noplaylist"] is False
     assert opts["extractor_args"] == {"youtube": {"player_client": ["ios"]}}
@@ -47,7 +47,7 @@ def test_options_merge_pot_provider_args_over_player_clients():
         extractor_args=pot,
     )
 
-    opts = config.ydl_opts("/c/cookies.txt").to_ydl()
+    opts = config.ydl_opts("/c/cookies.txt").model_dump(exclude_none=True)
 
     assert opts["extractor_args"] == {"youtube": {"player_client": ["ios"]}, **pot}
     assert opts["cookiefile"] == "/c/cookies.txt"  # the file wins over a browser

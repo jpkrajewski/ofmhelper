@@ -26,6 +26,7 @@ from ofmhelpers.config.settings import (
     TelegramSettings,
     ViralSettings,
 )
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
 from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
 from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
@@ -43,7 +44,6 @@ from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
 from ofmhelpers.integrations.stacked.fake import fake_stacked
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils import outbound
 
 FAKE = "fake"
 REAL = "real"

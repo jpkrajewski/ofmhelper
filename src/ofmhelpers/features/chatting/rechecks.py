@@ -55,6 +55,13 @@ _TELL_WAIT_S = 5.0
 _MARGIN_S = 1
 
 
+class ChatKey(BaseModel, frozen=True):
+    """Which chat: the platform and its channel there."""
+
+    platform: str
+    channel_id: str
+
+
 class Recheck(BaseModel):
     """One fan message's recheck; its JSON is the sorted set's member."""
 
@@ -66,8 +73,8 @@ class Recheck(BaseModel):
     at: float
 
     @property
-    def chat(self) -> tuple[str, str]:
-        return (self.platform, self.channel_id)
+    def chat(self) -> ChatKey:
+        return ChatKey(platform=self.platform, channel_id=self.channel_id)
 
 
 def _oldest(now: float) -> float:

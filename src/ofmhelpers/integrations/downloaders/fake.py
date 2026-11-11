@@ -7,7 +7,7 @@ The look at a link (`info`, `generic.video_info`) agrees with the download:
 a photo-post link (`sites.IMAGES_FIRST`, gallery-dl first: two jpgs) has no
 video. Markers steer it for tests: "fake-long" = a 20 s video,
 "fake-login" = the site wants a login, "fake-thumb" = a cover URL the fake
-Instagram CDN serves (`instagram/fake.py`, through `utils/outbound.py`).
+Instagram CDN serves (`instagram/fake.py`, through `integrations/outbound.py`).
 The download of a "fake-long" link is still the 2 s clip."""
 
 import hashlib

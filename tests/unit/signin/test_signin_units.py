@@ -38,9 +38,9 @@ def test_an_unusable_stored_hash_never_verifies(stored):
 
 
 def test_a_link_token_is_stored_only_as_its_hash():
-    token, stored = new_link_token()
-    assert len(token) >= 40
-    assert stored == link_hash(token) != token
+    link = new_link_token()
+    assert len(link.token) >= 40
+    assert link.token_hash == link_hash(link.token) != link.token
 
 
 def _b64d(part: str) -> bytes:

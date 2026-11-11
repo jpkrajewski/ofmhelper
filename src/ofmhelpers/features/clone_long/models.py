@@ -95,13 +95,13 @@ class Shape(BaseModel):
 
         return min(ratios, key=distance)
 
-    def size_at(self, height: int) -> tuple[int, int]:
+    def size_at(self, height: int) -> Shape:
         """This shape `height` pixels tall, both sides even (H.264 needs it)."""
         even_height = height - height % 2
         width = round(even_height * self.ratio)
-        return width - width % 2, even_height
+        return Shape(width=width - width % 2, height=even_height)
 
-    def within(self, side: int) -> tuple[int, int] | None:
+    def within(self, side: int) -> Shape | None:
         """This shape with its short side at most `side` (`size_at`); None
         when it already is."""
         if min(self.width, self.height) <= side:

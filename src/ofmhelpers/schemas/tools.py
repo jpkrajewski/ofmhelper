@@ -1,5 +1,5 @@
 """A background-job tool as the app's task registry (`routers/registry.py`)
-knows it."""
+knows it. What recovery does with its jobs: `features/jobs/registry.py`."""
 
 from collections.abc import Callable
 from typing import Any
@@ -16,20 +16,12 @@ class Tool(BaseModel):
 
     label: str
     router: APIRouter
-    # The worker function its jobs run, for an AI tool: what recovery
-    # re-runs a job with once its provider request finishes after the job
-    # gave up.
-    run: Callable[..., Any] | None = None
     # A card label read off the job itself, for a tool whose jobs differ
     # (/ai: the model and provider); `label` otherwise.
     describe: Callable[[Any], str] | None = None
     # The job's params as the /generate form's fields, for Recreate, when
     # they are stored under other names (an old per-model tool's).
     form_params: Callable[[Any], dict[str, Any]] | None = None
-    # The RQ time limit for a job with these params, when it may run longer
-    # than the queue's default (a long /clone video): what its first run and
-    # recovery's re-run are queued with.
-    job_timeout: Callable[[dict[str, Any]], int] | None = None
 
     @property
     def prefix(self) -> str:

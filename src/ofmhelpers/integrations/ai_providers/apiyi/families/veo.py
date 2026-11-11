@@ -16,9 +16,8 @@ a video on Fast, $1.20 standard, whatever the length or resolution.
 
 import time
 from pathlib import Path
-from typing import Any
 
-from pydantic import Field
+from pydantic import BaseModel, Field, JsonValue
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.apiyi.client import (
@@ -87,23 +86,42 @@ class VeoTask(Lenient):
         return f"{PROVIDER}: {reason}"
 
 
-def fields(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
+class Metadata(BaseModel):
+    """`metadata`: a seed or negative prompt not given is left out."""
+
+    resolution: str
+    aspect_ratio: str = Field(serialization_alias="aspectRatio")
+    seed: JsonValue = None
+    negative_prompt: JsonValue = Field(None, serialization_alias="negativePrompt")
+
+
+class Body(BaseModel):
+    """`POST /v1/videos`, dumped by alias without the Nones."""
+
+    model: str
+    prompt: str
+    seconds: str
+    size: str
+    metadata: Metadata
+
+
+def fields(spec: ModelSpec, payload: Payload) -> Body:
     """Our form's values as the official channel's fields."""
-    values = with_defaults(spec, payload)
+    values = with_defaults(spec, payload).values
     resolution = str(values.get("resolution", "720p"))
     ratio = str(values.get("aspect_ratio", "16:9"))
-    metadata: dict[str, Any] = {"resolution": resolution, "aspectRatio": ratio}
-    if values.get("seed") is not None:
-        metadata["seed"] = values["seed"]
-    if values.get("negative_prompt"):
-        metadata["negativePrompt"] = values["negative_prompt"]
-    return {
-        "model": spec.model_id,
-        "prompt": str(values.get("prompt", "")),
-        "seconds": str(values.get("duration", 8)),
-        "size": _SIZES.get((resolution, ratio), "1280x720"),
-        "metadata": metadata,
-    }
+    return Body(
+        model=spec.model_id,
+        prompt=str(values.get("prompt", "")),
+        seconds=str(values.get("duration", 8)),
+        size=_SIZES.get((resolution, ratio), "1280x720"),
+        metadata=Metadata(
+            resolution=resolution,
+            aspect_ratio=ratio,
+            seed=values.get("seed"),
+            negative_prompt=values.get("negative_prompt") or None,
+        ),
+    )
 
 
 class Veo(Family):
@@ -113,7 +131,7 @@ class Veo(Family):
     def submit(
         self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
     ) -> str:
-        body = fields(spec, payload)
+        body = fields(spec, payload).model_dump(by_alias=True, exclude_none=True)
         frame = payload.get("first_frame_url")
         if frame:
             image = client.image_file(str(frame), _IMAGE)

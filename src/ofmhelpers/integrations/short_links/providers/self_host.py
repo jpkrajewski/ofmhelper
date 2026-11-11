@@ -16,7 +16,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.stores import self_links as store
 from ofmhelpers.integrations.short_links import RemoteLink, Usage
 from ofmhelpers.integrations.short_links.providers.base import LinkProvider
-lazy from ofmhelpers.integrations.short_links import DayStat, HourStat, NewLink
+lazy from ofmhelpers.integrations.short_links import LinkDays, LinkHours, NewLink
 
 
 class SelfProvider(LinkProvider):
@@ -53,12 +53,10 @@ class SelfProvider(LinkProvider):
     def list_links(self) -> list[RemoteLink]:
         return store.live_links(self.user_id)
 
-    def daily(
-        self, remote_ids: list[str], start: date, end: date
-    ) -> dict[str, list[DayStat]]:
+    def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
         return store.daily(self.user_id, remote_ids, start, end)
 
-    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+    def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
         return store.hourly(self.user_id, remote_ids, day)
 
     def enable_adult(self, remote_id: str) -> None:

@@ -1,10 +1,10 @@
 # config
 
-Every env var is read here and nowhere else.
+Every env var is read here and nowhere else, and read at the call: no module keeps a `settings.<group>.<field>` from import (`tests/unit/config/test_settings_read_at_call_time.py`; the one exception is `web/main.py`'s session middleware).
 
 - `settings.py` — one `BaseSettings` group per module (Session, Web, Infra, KieAI, Downloaders, Instagram, Accounts, Aigen, Higgsfield, Vault, GDrive, Logging).
 - `VaultSettings.keys` (`OFM_VAULT_KEY`): comma-separated Fernet keys, first encrypts (db/encrypted.py). Lose them = lose every /phones login.
-- `InfraSettings`: `OFM_ENV` (production|development; only the server says production), `OFM_FAKE_EXTERNALS` (every outside service faked: e2e), `OFM_FAKES_DIR` (fakes' cross-process state), `OFM_RQ_WORKERS` / `OFM_CLONE_LINKS_WORKERS` (5: the clone-links queue's own pool).
+- `InfraSettings`: `OFM_ENV` (production|development, required: no default, so a deployment that does not say which it is does not start; the server's `.env` says production, `docker-compose.dev.yml` and `tests/conftest.py` say development), `POSTGRES_PASSWORD` (the default `database_url`'s password and compose's; fallback `ofmhelpers`), `OFM_FAKE_EXTERNALS` (every outside service faked: e2e), `OFM_FAKES_DIR` (fakes' cross-process state), `OFM_RQ_WORKERS` / `OFM_CLONE_LINKS_WORKERS` (5: the clone-links queue's own pool).
 - `GDriveSettings` (`OFM_GDRIVE_*`): no folder id for the app: each owner's own Drive (Google sign-in), root found by name (`features/drive/folders.root_name()`, "DEV - " prefix outside production); POSTED folder name, day timezone, sweep interval, retries/timeouts. Service account key JSON (`SecretStr`, one line) + root folder id are only for the live Drive contract tests.
 - `LinksSettings` (`OOPSIE_API_KEY_ADMIN`, `BOUNCY_API_KEY_ADMIN`, `OFM_LINKS_*`): admin fallback keys for /links, sync interval 3 h, claim/create TTLs, periods 1/7/30/90 d (default 7), page sizes, max links per Generate (100). See links/CLAUDE.md.
 - `LLMSettings` (`LLM_DEFAULT_VIDEO` gemini, `LLM_DEFAULT_CHAT` groq, each `<provider>[:<model>]`; `GEMINI_API_KEY`/`GROQ_API_KEY`/`CEREBRAS_API_KEY` + `OFM_<PROVIDER>_MODEL`; `OFM_LLM_*` retries, timeouts, inline/image/contact-sheet limits): see llm/CLAUDE.md.

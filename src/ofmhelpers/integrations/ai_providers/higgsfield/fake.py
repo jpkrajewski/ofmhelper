@@ -22,8 +22,8 @@ lazy import requests
 lazy from higgsfield_client import SyncClient
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 FAKE_KEY = "fake-hf-id:fake-hf-secret"
 FILES_HOST = "fake-files.higgsfield.ai"
@@ -146,5 +146,5 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
     )
 
 
-def routes() -> dict[str, FakeHandler]:
-    return {FILES_HOST: _files}
+def routes() -> list[FakeRoute]:
+    return [FakeRoute(host=FILES_HOST, handler=_files)]

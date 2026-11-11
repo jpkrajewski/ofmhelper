@@ -17,9 +17,10 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 lazy from collections.abc import Mapping
 
+from pydantic import BaseModel, ConfigDict, Field
 lazy import requests
 
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 
 HOST = "api.stacked.com"
 _PREFIX = "/external-service/v1/"
@@ -36,6 +37,19 @@ _DEFAULT_PAGE = 50
 def _creator(user_id: str, access: str) -> dict[str, Any]:
     username = user_id.removeprefix("user_")
     return {"userId": user_id, "username": username, "accessTypes": [access]}
+
+
+class FakeMessage(BaseModel):
+    """A chat message as Stacked answers it (its names as aliases)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message_id: int = Field(serialization_alias="messageId")
+    user_id: str = Field(serialization_alias="userId")
+    created_at: int = Field(serialization_alias="createdAt")
+    type: str
+    custom_type: str = Field(serialization_alias="customType")
+    text: str
 
 
 class FakeStacked:
@@ -82,18 +96,19 @@ class FakeStacked:
 
     def add_message(
         self, channel_url: str, user_id: str, text: str, at_ms: int | None = None
-    ) -> dict[str, Any]:
+    ) -> FakeMessage:
         """`user_id` writes in the chat; the provider's own events have an
         empty `user_id`, like the real ones."""
         self._last_id += 1
-        message = {
-            "messageId": self._last_id,
-            "userId": user_id,
-            "createdAt": at_ms or _START_MS + self._last_id,
-            "type": "MESG" if user_id else "ADMM",
-            "customType": "" if user_id else "SENDBIRD:AUTO_EVENT_MESSAGE",
-            "text": text,
-        }
+        made = FakeMessage(
+            message_id=self._last_id,
+            user_id=user_id,
+            created_at=at_ms or _START_MS + self._last_id,
+            type="MESG" if user_id else "ADMM",
+            custom_type="" if user_id else "SENDBIRD:AUTO_EVENT_MESSAGE",
+            text=text,
+        )
+        message = made.model_dump(by_alias=True)
         self._messages[channel_url].insert(0, message)
         chat = next(
             c
@@ -103,7 +118,7 @@ class FakeStacked:
         )
         chat["messageCount"] += 1
         chat["lastMessage"] = dict(message)
-        return message
+        return made
 
     def add_reaction(
         self, channel_url: str, message_id: int, user_id: str, at_ms: int
@@ -282,8 +297,8 @@ def fake_stacked() -> FakeStacked:
     return FakeStacked()
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def stacked(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_stacked().handle(request)
 
-    return {HOST: stacked}
+    return [FakeRoute(host=HOST, handler=stacked)]

@@ -26,8 +26,8 @@ from PIL import Image, UnidentifiedImageError
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.previews.render import previews_dir, write_atomic
+from ofmhelpers.integrations import outbound
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 

@@ -12,7 +12,7 @@ from ofmhelpers.media.recorder import available
 
 
 def test_registry_lists_original_capcut_then_every_device_profile():
-    names = list(exports())
+    names = exports().names()
 
     assert names[:2] == ["original", "capcut"]
     assert names[2:] == available()

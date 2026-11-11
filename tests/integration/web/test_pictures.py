@@ -18,20 +18,21 @@ from PIL import Image
 from signin import sign_in, sign_in_agency
 
 from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.jobs.registry import RESUMABLE
+from ofmhelpers.features.pictures import targets as picture_targets
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.image_tools import pictures
-from ofmhelpers.web.routers.registry import RESUMABLE
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 PROMPT = "refer guy from first image and second image, recreate third image"
 
 
 @pytest.fixture
 def agency(fake_externals, tmp_path, monkeypatch):
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
     monkeypatch.setenv("OFM_AIGEN_POLL_INTERVAL_S", "0.01")
     monkeypatch.setenv("OFM_AIGEN_POLL_MAX_INTERVAL_S", "0.02")
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
@@ -64,7 +65,7 @@ def _preset(
         data={"name": name, "prompt": PROMPT, "aspect_ratio": aspect},
         files=files,
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     return r.json()
 
 
@@ -189,7 +190,7 @@ def test_each_picture_is_its_own_run_with_the_preset_first(va, agency, monkeypat
         _png("wide.png", (1600, 900)),
     )
 
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     jobs = [get_job(j) for j in r.json()["job_ids"]]
     assert all(j is not None and j.status == "done" for j in jobs), [
         j.error for j in jobs
@@ -308,7 +309,7 @@ def test_editing_sets_and_clears_the_shape(agency):
 def test_kie_is_asked_for_jpeg_at_2k():
     """User rule 2026-11-01: JPEG, 2K."""
     target = pictures.PICTURE_TARGETS["kie"]
-    values = pictures._values(
+    values = picture_targets.values(
         target,
         {
             "prompt": "p",
@@ -316,7 +317,7 @@ def test_kie_is_asked_for_jpeg_at_2k():
             "aspect_ratio": "3:4",
             "resolution": pictures._resolution(target.spec, target.resolution),
         },
-    )
+    ).model_dump()
 
     target.spec.check(values)
     assert (values["output_format"], values["resolution"]) == ("jpg", "2K")

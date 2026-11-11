@@ -6,9 +6,12 @@ lazy from pathlib import Path
 
 from ofmhelpers.errors import AppError
 lazy from ofmhelpers.integrations.gdrive.models import (
+    DriveDownload,
     DriveFile,
     DriveFolder,
+    DriveListing,
     DriveStorage,
+    DriveThumb,
 )
 
 
@@ -46,7 +49,7 @@ class DriveApi(Protocol):
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]: ...
 
-    def children_of(self, parent_ids: list[str]) -> dict[str, list[DriveFile]]: ...
+    def children_of(self, parent_ids: list[str]) -> DriveListing: ...
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None: ...
 
@@ -58,9 +61,9 @@ class DriveApi(Protocol):
 
     def file(self, file_id: str) -> DriveFile: ...
 
-    def thumbnail(self, item: DriveFile, px: int) -> tuple[bytes, str] | None: ...
+    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None: ...
 
-    def download(self, file_id: str) -> tuple[bytes, str]:
+    def download(self, file_id: str) -> DriveDownload:
         """A file's content and name; `FolderGoneError` when missing."""
         ...
 

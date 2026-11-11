@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ChatPlatform(StrEnum):
@@ -50,6 +50,15 @@ class ChatModels(BaseModel):
     failed: bool = False
 
 
+class ChatPosition(BaseModel):
+    """How far the sync has read one chat: its newest message read."""
+
+    model_config = ConfigDict(frozen=True)
+
+    channel_id: str
+    last_message_id: str
+
+
 class ReadScope(BaseModel):
     """What one sync round needs to know. `seen`: {channel: last message read}.
     `oldest`: how far back a chat's first read goes. `open_channels`: chats with a
@@ -59,6 +68,23 @@ class ReadScope(BaseModel):
     oldest: datetime
     open_channels: set[str]
     thorough: bool
+
+    @classmethod
+    def since(
+        cls,
+        read: list[ChatPosition],
+        oldest: datetime,
+        open_channels: set[str],
+        *,
+        thorough: bool,
+    ) -> ReadScope:
+        """A round's scope from how far the store says each chat was read."""
+        return cls(
+            seen={p.channel_id: p.last_message_id for p in read},
+            oldest=oldest,
+            open_channels=open_channels,
+            thorough=thorough,
+        )
 
 
 class ChatEvent(BaseModel):
@@ -193,6 +219,15 @@ class ChatWebhook(BaseModel):
     webhook_id: str
     url: str
     secret: str = Field(repr=False)
+
+
+class WebhookTarget(BaseModel):
+    """Where a model's deliveries go, without the secret."""
+
+    model_config = ConfigDict(frozen=True)
+
+    model_username: str
+    url: str
 
 
 class ChatAccount(BaseModel):

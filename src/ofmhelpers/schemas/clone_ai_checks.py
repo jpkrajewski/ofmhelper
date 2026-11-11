@@ -2,10 +2,64 @@
 result's way to Drive (`clone_from_links`)."""
 
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ofmhelpers.features.clone_links.ai_check import CloneAiCheck, Verdict
+# Why a check has no verdict: every model out of quota or down ("quota"),
+# none set up -- no key, unknown model ("setup"), anything else ("failed").
+ErrorKind = Literal["quota", "setup", "failed"]
+
+
+class Verdict(StrEnum):
+    GOOD = "GOOD"
+    GLITCHY = "GLITCHY"
+
+
+class Glitch(BaseModel):
+    at_s: float = Field(
+        description="When it shows: the time label of the still, in seconds."
+    )
+    what: str = Field(description="What is wrong, a few words, e.g. 'no belly button'.")
+    severity: Literal["minor", "blocking"] = Field(
+        description="blocking: stops the reel from being posted; minor: noticeable"
+        " but postable."
+    )
+
+
+class CloneAiCheck(BaseModel):
+    """One check, kept whole. `verdict` is None when the check itself
+    failed: `error` says why in a few words (safe to show), `error_kind`
+    what kind of failure, `error_detail` the provider's own text (logs and
+    the row only, never a page). `*_tokens`: what the answer used, when the
+    provider says."""
+
+    video: str
+    video_seconds: float | None = None
+    stills_at: list[float] = []
+    frame_px: int
+    verdict: Verdict | None = None
+    glitch_percent: int | None = None
+    glitches: list[Glitch] = []
+    reasoning: str = ""
+    provider: str = ""
+    model: str = ""
+    prompt_system: str
+    prompt_text: str
+    raw_answer: str = ""
+    attempts: int = 0
+    sheet_s: float = 0.0
+    llm_s: float = 0.0
+    error: str | None = None
+    error_kind: ErrorKind | None = None
+    error_detail: str | None = None
+    input_tokens: int | None = None
+    thinking_tokens: int | None = None
+    output_tokens: int | None = None
+
+    @property
+    def glitchy(self) -> bool:
+        return self.verdict is Verdict.GLITCHY
 
 
 class ReviewReason(StrEnum):

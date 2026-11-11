@@ -11,9 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from ofmhelpers.features.character_sheet import service as character_sheet
 from ofmhelpers.media.character_sheet import combine_side_by_side
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.image_tools import character_sheet
 
 
 def png(path, size, color):
@@ -60,7 +60,7 @@ def test_smaller_panels_scale_up_to_the_tallest(tmp_path):
 def test_run_keeps_upload_order_and_same_named_files(client, tmp_path, monkeypatch):
     """iOS names every shared photo image.jpg -- two of them must not
     overwrite each other."""
-    monkeypatch.setattr(character_sheet, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(character_sheet, "upload_root", lambda: tmp_path)
     monkeypatch.setattr(character_sheet, "enqueue", lambda *a, **k: None)
 
     r = client.post(
@@ -68,7 +68,7 @@ def test_run_keeps_upload_order_and_same_named_files(client, tmp_path, monkeypat
         files=[("files", ("image.png", png_bytes(), "image/png")) for _ in range(3)],
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 202
     (job_dir,) = tmp_path.iterdir()
     assert sorted(p.name for p in job_dir.iterdir()) == [
         "00_image.png",

@@ -27,8 +27,8 @@ import requests
 from pydantic import BaseModel, Field
 
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 HOST = "www.instagram.com"
 CDN = f"https://{GLOBAL_CDN_HOST}/fake"
@@ -62,6 +62,18 @@ class _Dataset(BaseModel):
     profiles: list[FakeProfile]
 
 
+class FakeVideoVersion(BaseModel):
+    url: str
+
+
+class FakeVideoNode(BaseModel):
+    """A reel's video fields as Instagram's GraphQL answers them."""
+
+    video_versions: list[FakeVideoVersion]
+    video_dash_manifest: str
+    taken_at: int
+
+
 class FakeRow(BaseModel):
     """One reel as every query sees it."""
 
@@ -83,14 +95,14 @@ class FakeRow(BaseModel):
     def pinned_by(self) -> list[str] | None:
         return [self.owner_pk] if self.reel.pinned else None
 
-    def video_node(self) -> dict[str, Any]:
-        return {
-            "video_versions": [{"url": self.video}],
-            "video_dash_manifest": (
+    def video_node(self) -> FakeVideoNode:
+        return FakeVideoNode(
+            video_versions=[FakeVideoVersion(url=self.video)],
+            video_dash_manifest=(
                 f'<MPD mediaPresentationDuration="PT{self.reel.duration_s}S"></MPD>'
             ),
-            "taken_at": self.taken_at,
-        }
+            taken_at=self.taken_at,
+        )
 
 
 def reel_code(username: str, index: int) -> str:
@@ -252,7 +264,7 @@ class FakeInstagram:
         edges = [
             {
                 "node": {
-                    **r.video_node(),
+                    **r.video_node().model_dump(),
                     "code": r.code,
                     "timeline_pinned_user_ids": r.pinned_by,
                 }
@@ -269,7 +281,7 @@ class FakeInstagram:
 
     def _media(self, pk: str) -> dict[str, Any]:
         row = self._find(pk)
-        info = row.video_node() if row else None
+        info = row.video_node().model_dump() if row else None
         return {"data": {"xig_polaris_media": {"if_not_gated_logged_out": info}}}
 
     def _media_info(self, pk: str) -> FakeReply:
@@ -353,8 +365,14 @@ def fake_instagram() -> FakeInstagram:
     return FakeInstagram()
 
 
-def routes() -> dict[str, FakeHandler]:
-    return {
-        HOST: lambda request, proxies: fake_instagram().handle(request, proxies),
-        GLOBAL_CDN_HOST: lambda request, _proxies: cdn_reply(request.url or ""),
-    }
+def routes() -> list[FakeRoute]:
+    return [
+        FakeRoute(
+            host=HOST,
+            handler=lambda request, proxies: fake_instagram().handle(request, proxies),
+        ),
+        FakeRoute(
+            host=GLOBAL_CDN_HOST,
+            handler=lambda request, _proxies: cdn_reply(request.url or ""),
+        ),
+    ]

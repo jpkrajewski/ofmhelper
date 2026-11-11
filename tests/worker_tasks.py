@@ -5,8 +5,6 @@ importing its function by module path, so these must live at real module level
 without a `test_` prefix so pytest doesn't try to collect it as a test module.
 """
 
-import json
-
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
 
 
@@ -28,4 +26,4 @@ def note_down(name):
 
 def note_the_line():
     """Leaves the media queue's line as it looks while this job runs."""
-    get_redis().set("line_seen", json.dumps(JobQueue(QueueName.MEDIA).line()))
+    get_redis().set("line_seen", JobQueue(QueueName.MEDIA).line().model_dump_json())

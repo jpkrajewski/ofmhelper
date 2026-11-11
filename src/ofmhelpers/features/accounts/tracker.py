@@ -26,6 +26,8 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from pydantic import BaseModel
+
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import cookies as login_cookies
@@ -38,7 +40,6 @@ from ofmhelpers.db.stores.tracked_accounts import (
     record_scan,
     track,
 )
-from ofmhelpers.features.phones.catalog import services
 from ofmhelpers.integrations.socials import (
     AccountStats,
     ScanTarget,
@@ -46,6 +47,7 @@ from ofmhelpers.integrations.socials import (
     scan_through,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.phone_catalog import services
 lazy from ofmhelpers.schemas import TrackedAccount
 
 logger = get_logger(__name__)
@@ -55,8 +57,15 @@ logger = get_logger(__name__)
 UNREACHED = "No source could read it now -- retried at the next scan"
 
 
-def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
-    """(platform, handle) a phone login of `service` is tracked as on
+class TrackedHandle(BaseModel, frozen=True):
+    """What a phone login is tracked as on /accounts."""
+
+    platform: str
+    handle: str
+
+
+def tracked_handle(service: str, username: str) -> TrackedHandle | None:
+    """What a phone login of `service` is tracked as on
     /accounts -- any service whose services.json entry names a
     `tracked_platform` -- or None (not a tracked service, or a username that
     platform does not take)."""
@@ -64,8 +73,9 @@ def tracked_handle(service: str, username: str) -> tuple[str, str] | None:
     if found is None or not found.tracked_platform:
         return None
     try:
-        return found.tracked_platform, get_platform(found.tracked_platform).handle(
-            username
+        return TrackedHandle(
+            platform=found.tracked_platform,
+            handle=get_platform(found.tracked_platform).handle(username),
         )
     except KeyError, ValueError:
         logger.warning("%s login %r is not a trackable handle", service, username)
@@ -81,7 +91,9 @@ def track_login(service: str, username: str, *, user_id: int, revive: bool) -> b
     side effect that must not fail that save -- a failure is logged."""
     try:
         key = tracked_handle(service, username)
-        if key is None or not track(*key, user_id=user_id, revive=revive):
+        if key is None or not track(
+            key.platform, key.handle, user_id=user_id, revive=revive
+        ):
             return False
         queue_due_scans()
     except Exception:
