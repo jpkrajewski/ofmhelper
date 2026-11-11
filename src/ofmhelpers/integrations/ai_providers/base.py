@@ -31,6 +31,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.generation import KeySlot
 from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
@@ -103,6 +104,28 @@ class Provider(ABC):
     def default_key(cls) -> str | None:
         """The key an admin's form pre-fills when they saved none of their
         own (.env), if configured. Users only ever get their own."""
+
+    @classmethod
+    def env_keys(cls) -> list[str]:
+        """Every .env key of this provider: never saved as a person's own."""
+        key = cls.default_key()
+        return [key] if key else []
+
+    @classmethod
+    def key_slots(cls) -> list[KeySlot]:
+        """The keys a person keeps for it, the default one first."""
+        return [KeySlot(id=cls.name, label=cls.label)]
+
+    @classmethod
+    def key_slot(cls, model_id: str) -> str:  # noqa: ARG003 -- one key by default
+        """The slot whose key `model_id` runs on."""
+        return cls.name
+
+    @classmethod
+    def slot_of_key(cls, api_key: str) -> str | None:  # noqa: ARG003 -- not told
+        """The slot `api_key` really belongs to, where the provider can say
+        (APIYI: the key's token group); None when it cannot, or did not."""
+        return None
 
     @abstractmethod
     def upload(self, path: Path, max_bytes: int | None = None) -> str:

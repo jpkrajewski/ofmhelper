@@ -1,0 +1,38 @@
+{% import "components/ui.html" as ui -%}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Virtual Assistant login — Ascend Global LLC</title>
+    {% include "_favicon.html" %}
+    {% include "_styles.html" %}
+</head>
+<body>
+    {# A VA signs in with their employer's email and the password the
+       employer's VA was given on /users (features/signin/credentials.py). #}
+    <main class="login-screen">
+        <div class="login-card">
+            <h1 class="login-logo">ASCEND GLOBAL</h1>
+            <p class="login-sub">Virtual Assistant login</p>
+            {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+            <form method="post" action="/login/va">
+                <input type="hidden" name="next" value="{{ next }}">
+                <div class="field">
+                    <label for="va-employer">Employer email</label>
+                    <input type="text" name="employer" id="va-employer" required autofocus
+                           autocomplete="username" inputmode="email" placeholder="boss@gmail.com">
+                </div>
+                <div class="field">
+                    <label for="va-password">Password</label>
+                    <input type="password" name="password" id="va-password" required
+                           autocomplete="current-password" placeholder="••••••••••">
+                </div>
+                {{ ui.button("Sign in", "primary", type="submit", block=true) }}
+            </form>
+            <p class="login-help"><a href="/login">Not a Virtual Assistant? Sign in here.</a></p>
+        </div>
+    </main>
+</body>
+</html>

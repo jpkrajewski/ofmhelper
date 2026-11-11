@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, SkipValidation
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import users
+from ofmhelpers.features.account.keys import KEY_TAIL
 from ofmhelpers.features.links.sync import sync_now
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.features.signin import credentials
@@ -18,8 +19,6 @@ from ofmhelpers.integrations.signin import Provider, linkable, providers
 from ofmhelpers.schemas import ApiKeysForm, User
 from ofmhelpers.schemas.users import LinkedAccount
 
-# How much of a saved key the page shows.
-_KEY_TAIL = 4
 UNKNOWN_PROVIDER = "Unknown provider"
 # What /account says after a provider's consent: the outcome in the query
 # string -> its sentence and the page's status.
@@ -69,10 +68,14 @@ class KeyedProvider(BaseModel):
 
 
 def keyed_providers() -> list[KeyedProvider]:
-    """Generation providers, then link providers (one sharing a name comes
-    once, as the link provider)."""
+    """Each generation provider's key slots (`Provider.key_slots`: one, or
+    APIYI's one per token group), then link providers (one sharing a name
+    comes once, as the link provider)."""
     labels = {
-        cls.name: cls.label for cls in provider_classes().all() if cls.needs_key
+        slot.id: slot.label
+        for cls in provider_classes().all()
+        if cls.needs_key
+        for slot in cls.key_slots()
     } | {cls.key: cls.label() for cls in link_providers().all()}
     return [KeyedProvider(name=name, label=label) for name, label in labels.items()]
 
@@ -84,7 +87,7 @@ def page_view(user_id: int, notice: Notice) -> PageView:
         linked={a.provider: a for a in users.linked_accounts(user_id)},
         providers=linkable(),
         keys={
-            p.name: (p.label, saved.get(p.name)[-_KEY_TAIL:]) for p in keyed_providers()
+            p.name: (p.label, saved.get(p.name)[-KEY_TAIL:]) for p in keyed_providers()
         },
         min_length=settings.signin.password_min_length,
         message=notice.message,

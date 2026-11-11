@@ -16,8 +16,9 @@ job's `result` payload (a list of `ResultFile` dumps, a grouped list of
 `Job.download_results()` read them back as models.
 """
 
+from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Self
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -70,22 +71,27 @@ class GenerationRecord(BaseModel):
     state: str | None = None
     cost_usd: float | None = None
     seconds: float | None = None
+    # The end of the key it ran on, as /account shows a saved one: which of
+    # a person's keys paid, never the key.
+    key_tail: str | None = None
 
 
 class JobMeta(BaseModel):
-    """What a job's run cost (`jobs.meta`): its provider requests and their
-    sum, for "what did the clones cost this month" asked of the database."""
+    """What happened on a job's way (`jobs.meta`): its provider requests.
+    What they cost together is the job's own `cost_usd` column."""
 
     generations: list[GenerationRecord] = []
-    cost_usd: float | None = None
 
-    @classmethod
-    def of(cls, generations: list[GenerationRecord]) -> Self:
-        costs = [g.cost_usd for g in generations if g.cost_usd is not None]
-        return cls(
-            generations=generations,
-            cost_usd=round(sum(costs), 6) if costs else None,
-        )
+
+class JobCost(BaseModel):
+    """What a run cost in dollars (`jobs.cost_usd`): None = no known price,
+    never 0. `estimated`: the provider reported none, the amount is the
+    app's own price for the run."""
+
+    model_config = ConfigDict(frozen=True)
+
+    usd: Decimal | None = None
+    estimated: bool = False
 
 
 class Job(BaseModel):
@@ -98,7 +104,8 @@ class Job(BaseModel):
     id: str
     task: str
     params: dict[str, Any] = {}
-    actor: str | None = None
+    # Whose job it is; None = nobody's (a system event, a removed user's).
+    user_id: int | None = None
     status: JobStatus = JobStatus.running
     result: list[Any] | dict[str, Any] | str | None = None
     error: str | None = None
@@ -108,6 +115,19 @@ class Job(BaseModel):
     # When its owner hid it from the galleries; None = shown.
     hidden_at: float | None = None
     meta: JobMeta = JobMeta()
+    # What the run cost; None = no known price. `cost_estimated`: from the
+    # app's own prices, the provider reported none.
+    cost_usd: Decimal | None = None
+    cost_estimated: bool = False
+    # Who made it, for a reader it is not their own (a VA's job on its
+    # owner's gallery); set by the read, never stored.
+    made_by: str | None = None
+
+    @property
+    def actor(self) -> str | None:
+        """`user_id` as worker kwargs, Redis keys and the audit log name
+        the person."""
+        return None if self.user_id is None else str(self.user_id)
 
     @property
     def _entries(self) -> list[dict[str, Any]]:
@@ -165,7 +185,7 @@ class GalleryJobs(BaseModel):
 
 
 class JobCount(BaseModel):
-    """How many done jobs of `task` `actor` has."""
+    """How many done jobs of `task` `actor` (a user's id, as text) has."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -174,9 +194,49 @@ class JobCount(BaseModel):
     count: int
 
 
+class SpendPeriod(BaseModel):
+    """One period of `user_id`'s runs to sum (`from_ts` <= created_at <
+    `to_ts`, epoch seconds), under the name the page gives it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    from_ts: float
+    to_ts: float
+
+
+class Spend(BaseModel):
+    """What `user_id`'s runs of one period cost: how many ran, the dollars
+    known (`usd`), how much of that is the app's estimate (`estimated_usd`)
+    and how many runs had no price at all."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: int
+    period: str
+    runs: int
+    usd: Decimal
+    estimated_usd: Decimal
+    unpriced: int
+
+
 class JobParams(BaseModel):
     """One job's stored `params`, exactly as stored."""
 
     model_config = ConfigDict(frozen=True)
 
     params: dict[str, Any] = {}
+
+
+class Named(BaseModel):
+    """A text (`fragment`: a file's digest, a name) some job names: `used_at`
+    = when the newest job whose params hold it was started (None: only a
+    result holds it), `running` = one of those still runs or waits,
+    `in_result` = a job's result holds it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    fragment: str
+    used_at: float | None = None
+    running: bool = False
+    in_result: bool = False

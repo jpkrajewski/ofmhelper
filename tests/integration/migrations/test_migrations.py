@@ -3,6 +3,7 @@ head, downgrade to base, upgrade again, through `alembic.command` exactly as
 the `migrate` service runs it; head matches the models. (The same round trip
 on a copy of production's data is `-m snapshot`, test_prod_snapshot.py.)"""
 
+import json
 import logging
 from collections.abc import Iterator
 
@@ -101,6 +102,132 @@ def test_migrating_in_process_leaves_the_apps_loggers_on(db):
     finally:
         app_logger.removeHandler(records)
     assert records.messages == ["still heard"]
+
+
+def test_downloads_are_read_from_the_jobs_that_made_them(db):
+    """f4b5c6d7e8a1: one `downloads` row per output file of a done download
+    job, numbered across the job's links (the `{i}` of `/files/{job}/{i}`);
+    a failed link, a job still running, a job that is nobody's, another
+    tool's job and an old one-entry-per-file result give none. Seeded in
+    SQL: today's stores speak today's schema, not that revision's."""
+    cfg = _alembic()
+    command.upgrade(cfg, "e3f4a5b6c7d9")
+
+    with db.begin() as conn:
+        user = conn.execute(
+            text(
+                "INSERT INTO users (email, name, role, active, created_at,"
+                " google_refresh_token, password_hash) VALUES"
+                " ('a@example.com', '', 'user', true, 0, '', '') RETURNING id"
+            )
+        ).scalar_one()
+
+        def job(job_id, task, status, result, *, owner=user, at=1000.5):
+            conn.execute(
+                text(
+                    "INSERT INTO jobs (id, task, user_id, status, created_at, params,"
+                    " result) VALUES (:id, :task, :owner, :status, :at, '{}',"
+                    " CAST(:result AS jsonb))"
+                ),
+                {
+                    "id": job_id,
+                    "task": task,
+                    "owner": owner,
+                    "status": status,
+                    "at": at,
+                    "result": json.dumps(result),
+                },
+            )
+
+        def link(url, *paths, ok=True):
+            return {
+                "url": url,
+                "success": ok,
+                "output_paths": list(paths),
+                "error": None,
+            }
+
+        two = [
+            link("https://a/1", "downloads/x/1.mp4", "downloads/x/2.jpg"),
+            link("https://a/gone", ok=False),
+            link("https://a/2", "downloads/y/3.mp4"),
+        ]
+        job("media", "download_media", "done", two)
+        job("old", "download_videos", "done", [link("https://b/1", "downloads/b.mp4")])
+        job("running", "download_media", "running", None)
+        job("failed", "download_media", "failed", None)
+        job("nobody", "download_media", "done", two, owner=None)
+        job("clone", "clone", "done", [{"name": "c.mp4", "path": "out/c.mp4"}])
+        job("flat", "download_images", "done", [{"name": "i.png", "path": "d/i.png"}])
+        job("text", "download_images", "done", "an id")
+
+    command.upgrade(cfg, "f4b5c6d7e8a1")
+
+    with db.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT job_id, position, url, file_path, user_id, stored, asset_path,"
+                " extract(epoch FROM created_at)::float,"
+                " extract(epoch FROM last_used_at)::float, removed_at"
+                " FROM downloads ORDER BY job_id, position"
+            )
+        ).all()
+    assert [tuple(r) for r in rows] == [
+        (
+            "media",
+            0,
+            "https://a/1",
+            "downloads/x/1.mp4",
+            user,
+            True,
+            None,
+            1000.5,
+            1000.5,
+            None,
+        ),
+        (
+            "media",
+            1,
+            "https://a/1",
+            "downloads/x/2.jpg",
+            user,
+            True,
+            None,
+            1000.5,
+            1000.5,
+            None,
+        ),
+        (
+            "media",
+            2,
+            "https://a/2",
+            "downloads/y/3.mp4",
+            user,
+            True,
+            None,
+            1000.5,
+            1000.5,
+            None,
+        ),
+        (
+            "old",
+            0,
+            "https://b/1",
+            "downloads/b.mp4",
+            user,
+            True,
+            None,
+            1000.5,
+            1000.5,
+            None,
+        ),
+    ]
+
+    command.downgrade(cfg, "e3f4a5b6c7d9")
+
+    assert "downloads" not in _tables(db)
+    with db.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM jobs")).scalar_one() == 8
 
 
 def test_phone_logins_already_saved_are_tracked_once(db):

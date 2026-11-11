@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, computed_field
 
-from ofmhelpers.schemas.errors import error_reason
+from ofmhelpers.schemas.errors import error_line, error_reason
 from ofmhelpers.schemas.persistence import JobPreview
 
 
@@ -26,6 +26,10 @@ class AssetCard(BaseModel):
     preview_url: str | None = None
     poster_url: str | None = None
     source: str | None = None
+    # A download whose video the retention sweep removed: the card shows
+    # what was kept of it (`poster_url`, an image's `preview_url`; neither:
+    # its name) and its Download fetches it again.
+    removed: bool = False
 
 
 class FailedSource(BaseModel):
@@ -53,6 +57,12 @@ class JobStatusPayload(BaseModel):
     def error_reason(self) -> str:
         """The failure as one short reason, as a gallery card shows it."""
         return error_reason(self.error)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_line(self) -> str:
+        """The failure as the card shows it: who, the reason, what they said."""
+        return error_line(self.error)
 
 
 class JobQueued(BaseModel):

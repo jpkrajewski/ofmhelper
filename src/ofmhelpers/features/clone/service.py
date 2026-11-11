@@ -23,8 +23,9 @@ lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import ParamHistory, get_job
+from ofmhelpers.db.stores.jobs import ParamHistory, Readers, get_job
 from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_files
@@ -90,15 +91,17 @@ def _shown_name(path: str) -> str:
 
 
 def check_choices(
-    provider: str, api_key: str, export: str, resolution: str
+    provider: str, api_key: str, export: str, resolution: str, owner: int
 ) -> RunChoices:
-    """The form's picks with their defaults, before any upload is saved."""
+    """The form's picks with their defaults, before any upload is saved.
+    The key is `owner`'s for the target's model (`Keys.for_run`)."""
     provider = provider or settings.aigen.default_provider
     target = clone_targets().get(provider)
     if target is None:
         msg = "That provider cannot clone"
         raise CloneRefusedError(msg)
-    if not api_key.strip():
+    api_key = Keys.of(owner).for_run(provider, target.model, api_key)
+    if not api_key:
         msg = "API key is required"
         raise CloneRefusedError(msg)
     export = export or settings.exports.default
@@ -111,7 +114,7 @@ def check_choices(
     return RunChoices(
         provider=provider,
         target=target,
-        api_key=api_key.strip(),
+        api_key=api_key,
         export=export,
         resolution=resolution.upper(),
     )
@@ -247,7 +250,7 @@ class Submit(BaseModel):
     def start(self, form: Submitted) -> list[str]:
         """One queued run per video: their job ids, in picked order."""
         choices = check_choices(
-            form.provider, form.api_key, form.export, form.resolution
+            form.provider, form.api_key, form.export, form.resolution, self.owner
         )
         runs = plan_runs(
             choices,
@@ -370,6 +373,7 @@ def _stored_copy(path: str, assets_root: Path) -> str | None:
     return next(iter(keep_files(others, assets_root, "image")), None)
 
 
-def upload_states(job_ids: list[str], actor: str) -> list[DriveUpload]:
-    """Where these runs' videos are in Drive; only `actor`'s own runs."""
-    return upload_store.for_jobs([j for j in job_ids if get_job(j, actor) is not None])
+def upload_states(job_ids: list[str], actors: Readers) -> list[DriveUpload]:
+    """Where these runs' videos are in Drive; only the runs `actors` made
+    (the reader's own and their VAs')."""
+    return upload_store.for_jobs([j for j in job_ids if get_job(j, actors) is not None])

@@ -13,7 +13,7 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 from logfire.testing import CaptureLogfire
-from signin import sign_in
+from signin import make_user, sign_in
 
 from ofmhelpers import log, telemetry
 from ofmhelpers.db.stores.jobs import create_job, get_job
@@ -26,7 +26,8 @@ def _spans(capfire: CaptureLogfire) -> list[dict]:
 
 
 def test_a_job_is_one_span_with_its_task_id_and_who(capfire: CaptureLogfire):
-    job_id = create_job("download_images", {"urls": ["https://x/1"]}, actor="7")
+    who = str(make_user().id)
+    job_id = create_job("download_images", {"urls": ["https://x/1"]}, actor=who)
 
     run_job(job_id, list, {})
 
@@ -34,13 +35,13 @@ def test_a_job_is_one_span_with_its_task_id_and_who(capfire: CaptureLogfire):
     attrs = span["attributes"]
     assert attrs["job_id"] == job_id
     assert attrs["task"] == "download_images"
-    assert attrs["actor"] == "7"
+    assert attrs["actor"] == who
     assert "logfire.level_num" not in attrs  # info, the default: not an error
     assert get_job(job_id).status == "done"
 
 
 def test_a_failed_job_is_an_error_span_with_its_exception(capfire: CaptureLogfire):
-    job_id = create_job("download_images", {}, actor="7")
+    job_id = create_job("download_images", {}, actor=str(make_user().id))
 
     def boom() -> None:
         msg = "Wrong API Key"

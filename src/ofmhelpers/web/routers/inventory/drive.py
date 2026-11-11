@@ -17,13 +17,14 @@ from fastapi import APIRouter, Path, Request, Response
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import page
 from ofmhelpers.schemas import SyncReport
-from ofmhelpers.web.dependencies import Actor, CurrentUser, Scope
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, CurrentUser, Scope
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import FILES_PREFIX as CLONE_FILES
 from ofmhelpers.web.routers.generation.clone import TASK as CLONE_TASK
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/drive", tags=["drive"])
+router = APIRouter(prefix="/drive", tags=["drive"], dependencies=[Access(Area.DRIVE)])
 
 # Drive ids: letters, digits, - and _.
 FileId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{10,128}$")]

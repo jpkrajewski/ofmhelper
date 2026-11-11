@@ -311,7 +311,10 @@ def _download(client: InstagramClient, reel: ReelDownload, job_dir: Path) -> Pat
     return client.download_video(str(reel.video_url), job_dir / f"{reel.code}.mp4")
 
 
-def _picked(reels: str) -> list[ReelDownload]:
+def _picked(reels: str, scope: int) -> list[ReelDownload]:
+    """The page's picks, each a reel of a profile `scope` watches: one of
+    somebody else's (or of no scan) answers like one that is not there, as
+    its cover does (`cover`)."""
     try:
         picked = _DOWNLOADS.validate_json(reels)
     except ValidationError as exc:
@@ -321,12 +324,16 @@ def _picked(reels: str) -> list[ReelDownload]:
     if not 1 <= len(picked) <= max_videos:
         msg = f"Pick between 1 and {max_videos} reels"
         raise RefusedError(msg)
+    own = {item.reel.code for item in FeedItem.of(list_watched(None, scope))}
+    if any(reel.code not in own for reel in picked):
+        msg = "No such reel"
+        raise NotFoundError(msg)
     return picked
 
 
-def _download_picked(reels: str) -> list[Path]:
+def _download_picked(reels: str, scope: int) -> list[Path]:
     """The picked reels (the page's JSON) saved as mp4s in a fresh job dir."""
-    picked = _picked(reels)
+    picked = _picked(reels, scope)
     client = InstagramClient()
     job_dir = make_job_dir(uploads_root() / "reels")
     try:
@@ -344,10 +351,10 @@ def _download_picked(reels: str) -> list[Path]:
         raise
 
 
-def picked_file(reels: str) -> PickedFile:
+def picked_file(reels: str, scope: int) -> PickedFile:
     """The picked reels as a file: the mp4 itself for one, a zip for more
     (stored, not deflated: H.264 does not compress further)."""
-    files = _download_picked(reels)
+    files = _download_picked(reels, scope)
     job_dir = files[0].parent
     if len(files) == 1:
         return PickedFile(path=files[0], media_type="video/mp4", folder=job_dir)
@@ -358,11 +365,11 @@ def picked_file(reels: str) -> PickedFile:
     return PickedFile(path=archive, media_type="application/zip", folder=job_dir)
 
 
-def clone(reels: str, assets_root: Path) -> Redirect:
+def clone(reels: str, scope: int, assets_root: Path) -> Redirect:
     """Downloads the picked reels into the asset store and answers with the
     /clone URL that opens with them picked. The store keeps its own link to
     each file, so the job dir goes."""
-    files = _download_picked(reels)
+    files = _download_picked(reels, scope)
     try:
         paths = [
             str(path)

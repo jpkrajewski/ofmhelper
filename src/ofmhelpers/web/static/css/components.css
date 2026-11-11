@@ -557,8 +557,8 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
 .fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
 .fail-list li { margin-bottom: var(--s-2); }
-/* A failure: its short reason (schemas/errors.py) in red, full message on
-   hover. */
+/* A failure: who refused, the reason and what they said (schemas/errors.py
+   `error_line`), in red, on the card itself. */
 .result-failed { color: var(--fail); background: var(--fail-wash); font-weight: 500; }
 .fail-note { min-height: 0; }
 .drive-states:empty { display: none; }

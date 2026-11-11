@@ -49,6 +49,29 @@ def login(request: Request, email: str, password: str, next_url: str) -> Outcome
     return signed_in(user, next_url, "password")
 
 
+def va_login(request: Request, employer: str, password: str, next_url: str) -> Outcome:
+    """ "Login as Virtual Assistant": the employer's email and the password
+    the employer's VA was given on /users. Counted and braked like /login."""
+    if login_blocked(request):
+        logger.warning("login rate limit hit from %s", client_id(request))
+        return Outcome(next_url=next_url, error=_TOO_MANY, status_code=429)
+    user = credentials.va_sign_in(employer, password)
+    if user is None:
+        record_failed_login(request)
+        logger.warning(
+            "failed VA login for employer %r from %s",
+            employer.strip()[:320],
+            client_id(request),
+        )
+        return Outcome(
+            next_url=next_url,
+            error="Wrong employer email or password",
+            status_code=401,
+        )
+    clear_failed_logins(request)
+    return signed_in(user, next_url, "va")
+
+
 def owner_consent(request: Request, state: str, password: str) -> Outcome:
     """The right admin password goes on to the callback with a code for this
     one sign-in; a wrong one is counted like a failed /login."""

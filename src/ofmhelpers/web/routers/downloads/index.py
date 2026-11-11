@@ -14,14 +14,24 @@ from fastapi.responses import Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.schemas import Job, TaskCard
-from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, task_card
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/download-assets", tags=["download-assets"])
+router = APIRouter(
+    prefix="/download-assets",
+    tags=["download-assets"],
+    dependencies=[Access(Area.DOWNLOAD)],
+)
 
-gallery = Gallery(set(DOWNLOAD_TOOLS), limit=lambda: settings.web.download_gallery_page)
+# The download asked for last first: a link pasted again moves its card up.
+gallery = Gallery(
+    set(DOWNLOAD_TOOLS),
+    limit=lambda: settings.web.download_gallery_page,
+    by_use=True,
+)
 
 
 def _cards(jobs: list[Job]) -> list[TaskCard]:
@@ -30,22 +40,22 @@ def _cards(jobs: list[Job]) -> list[TaskCard]:
 
 
 @router.get("")
-def form(request: Request, actor: Actor) -> Response:
-    first = gallery.page(actor)
+def form(request: Request, viewer: Viewing) -> Response:
+    first = gallery.page(viewer)
     return render(
         request,
         "download_assets_form.html",
         gallery=_cards(first.jobs),
         next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(actor),
+        hidden_count=gallery.hidden_count(viewer),
     )
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
+def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
     """The next page of cards as a fragment gallery-scroll.js appends: the
     same partial the page renders. `hidden`: only the hidden cards."""
-    found = gallery.page(actor, query)
+    found = gallery.page(viewer, query)
     return render(
         request,
         "download_gallery_fragment.html",

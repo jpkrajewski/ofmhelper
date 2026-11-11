@@ -11,14 +11,15 @@ from fastapi.responses import HTMLResponse, Response
 
 from ofmhelpers.features.jobs import audit
 from ofmhelpers.schemas import Job
-from ofmhelpers.web.dependencies import Actor, AdminOnly
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor
 from ofmhelpers.web.routers.registry import TOOLS
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/action-log",
     tags=["action-log"],
-    dependencies=[AdminOnly],
+    dependencies=[Access(Area.ACTION_LOG)],
 )
 
 

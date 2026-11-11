@@ -74,7 +74,7 @@
 </div>
 
 <div class="generate-gallery-col">
-{% if not drive_ready %}
+{% if not drive_ready and can(request, "drive-upload") %}
 {% call ui.notice(hook="drive-connect") %}
     <span>Google Drive not connected</span>
     {{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/clone") }}

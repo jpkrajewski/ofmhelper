@@ -62,6 +62,10 @@ def assets_root_for_user(user_id: int) -> Path:
     The agency (the password account) keeps the store root, where its files
     lived before per-user folders -- minus `users/` (`in_asset_root`)."""
     user = get_user(user_id)
+    if user is not None and user.owner_id is not None:
+        # A VA works in their owner's part: the owner opens and reuses what
+        # the VA made with no cross-folder exception.
+        return assets_root_for_user(user.owner_id)
     if user is not None and user.is_password_account:
         return assets_root()
     return _user_root(user_id)

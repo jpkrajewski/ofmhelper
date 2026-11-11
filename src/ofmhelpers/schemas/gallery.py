@@ -16,7 +16,7 @@ from pydantic import BaseModel, computed_field
 
 from ofmhelpers.schemas.clone_ai_checks import CloneFromLink, ReviewReason
 from ofmhelpers.schemas.drive import DriveUpload
-from ofmhelpers.schemas.errors import error_reason
+from ofmhelpers.schemas.errors import error_line, error_reason
 from ofmhelpers.schemas.jobs import AssetCard, FailedSource
 lazy from ofmhelpers.schemas.persistence import Job
 
@@ -32,6 +32,10 @@ class JobCard(BaseModel):
     failed_sources: list[FailedSource] = []
     # Hidden from its gallery by its owner: shown only under "Show hidden".
     hidden: bool = False
+    # Who made it, when that is not the reader (a VA's job on its owner's
+    # gallery): the meta line names them, and the card offers no Hide (the
+    # maker's own choice).
+    made_by: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -43,6 +47,12 @@ class JobCard(BaseModel):
     def error_reason(self) -> str:
         """The failure as one short reason ("No credits", ...)."""
         return error_reason(self.error)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_line(self) -> str:
+        """The failure as the card shows it: who, the reason, what they said."""
+        return error_line(self.error)
 
     @classmethod
     def from_job(
@@ -62,6 +72,7 @@ class JobCard(BaseModel):
             assets=assets,
             failed_sources=failed_sources,
             hidden=job.hidden_at is not None,
+            made_by=job.made_by,
             **extra,
         )
 

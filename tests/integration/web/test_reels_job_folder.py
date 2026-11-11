@@ -17,6 +17,8 @@ from signin import sign_in_agency
 
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.reels import page as reels
+from ofmhelpers.integrations.instagram.models import Profile, ProfileReels, Reel
+from ofmhelpers.schemas import WatchedProfile
 from ofmhelpers.web.main import app
 
 CDN = "https://scontent.cdninstagram.com/{}.mp4"
@@ -33,6 +35,27 @@ def uploads(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "uploads"
     monkeypatch.setattr(reels, "uploads_root", lambda: root)
     monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
+    # The picked reels are of a profile the person watches.
+    found = ProfileReels(
+        profile=Profile(user_id="1", username="u", followers=1000, is_private=False),
+        scanned=2,
+        reels=[
+            Reel(
+                code=code,
+                taken_at=0,
+                duration_s=13.0,
+                views=60_000,
+                followers=1000,
+                thumbnail_url="https://scontent.cdninstagram.com/t.jpg",
+                video_url=CDN.format(name),
+            )
+            for code, name in (("A1", "a"), ("B2", "b"))
+        ],
+    )
+    profiles = [WatchedProfile(user_id=1, username="u", added_at=0, result=found)]
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
     return root
 
 

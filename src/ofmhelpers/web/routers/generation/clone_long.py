@@ -23,7 +23,15 @@ from ofmhelpers.features.clone_long.page import (
     TASK,
     card,
 )
-from ofmhelpers.web.dependencies import Actor, ApiKeys, AssetsRoot, OwnerId
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import (
+    Access,
+    Actor,
+    ApiKeys,
+    AssetsRoot,
+    OwnerId,
+    Viewing,
+)
 from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
@@ -32,7 +40,9 @@ from ofmhelpers.web.templates_config import render
 # What other modules read here (same objects as the feature's).
 __all__ = ["FILES_PREFIX", "LABEL", "TASK", "card", "router"]
 
-router = APIRouter(prefix=PREFIX, tags=["clone-long"])
+router = APIRouter(
+    prefix=PREFIX, tags=["clone-long"], dependencies=[Access(Area.CLONE_LONG)]
+)
 
 gallery = Gallery({TASK})
 
@@ -54,27 +64,28 @@ class LongCloneQueued(BaseModel):
 def page(
     request: Request,
     actor: Actor,
+    viewer: Viewing,
     api_keys: ApiKeys,
     assets_root: AssetsRoot,
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
-    first = gallery.page(actor)
+    first = gallery.page(viewer)
     return render(
         request,
         "clone_long.html",
         gallery=clone_long.cards(first.jobs),
         next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(actor),
+        hidden_count=gallery.hidden_count(viewer),
         api_keys=api_keys,
         **dict(clone_long.form_view(actor, assets_root, video or [])),
     )
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
+def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
     """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    found = gallery.page(actor, query)
+    found = gallery.page(viewer, query)
     return render(
         request,
         "clone_long_gallery_fragment.html",

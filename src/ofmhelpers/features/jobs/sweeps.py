@@ -30,6 +30,7 @@ from ofmhelpers.features.chatting import sources as chat_sources
 from ofmhelpers.features.chatting import sync as chat_history
 from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
+from ofmhelpers.features.downloads import cleanup as downloads_cleanup
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
 from ofmhelpers.features.jobs import raw_files, recovery
@@ -174,6 +175,17 @@ def sweeps() -> list[Sweep]:
             name="trials cleanup",
             run=trials_cleanup.remove_old,
             interval_s=lambda: settings.trials.sweep_s,
+            queue=QueueName.PREVIEWS,
+        ),
+        # Downloaded videos: a day unused, 14 days after a clone, 30 at most;
+        # poster and card stay -- features/downloads/cleanup.py. Production
+        # only unless OFM_DOWNLOADS_SWEEP: dev has prod's rows next to the
+        # developer's own files.
+        Sweep(
+            name="downloads cleanup",
+            run=downloads_cleanup.remove_old,
+            interval_s=lambda: settings.downloaders.sweep_s,
+            enabled=lambda: settings.downloaders.sweeping(settings.infra.production),
             queue=QueueName.PREVIEWS,
         ),
         # Raw provider downloads no job names, after 14 days -- raw_files.py.

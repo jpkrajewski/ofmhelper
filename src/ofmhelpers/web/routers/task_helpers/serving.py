@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.features.downloads import again as downloads
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job
@@ -48,10 +49,13 @@ def media_response(path: Path, filename: str | None = None) -> FileResponse:
     )
 
 
-def job_file_path(job: Job | None, index: int) -> Path:
-    """The local file behind '/files/{job_id}/{index}'. The URL only ever
-    carries a job id + integer index -- never a raw path -- and this only
-    ever resolves a file that job's own result already points to."""
+# A video the downloads sweep removed (features/downloads/cleanup.py): 410,
+# which download.js turns into the card's poster and its Download button.
+REMOVED = "Removed to save space: download it again"
+
+
+def _result_path(job: Job | None, index: int) -> Path:
+    """Where the job's result says file `index` is; it may be gone."""
     if job is None or job.status != "done":
         raise HTTPException(status_code=404, detail="Job not found or not finished")
 
@@ -67,10 +71,44 @@ def job_file_path(job: Job | None, index: int) -> Path:
         # nothing local for this route to serve.
         raise HTTPException(status_code=404, detail="File was never downloaded locally")
 
-    path = Path(raw_path)
+    return Path(raw_path)
+
+
+def job_file_path(job: Job | None, index: int) -> Path:
+    """The local file behind '/files/{job_id}/{index}'. The URL only ever
+    carries a job id + integer index -- never a raw path -- and this only
+    ever resolves a file that job's own result already points to."""
+    path = _result_path(job, index)
     if not path.is_file():
+        if job is not None and downloads.removed(job.id, index):
+            raise HTTPException(status_code=HTTPStatus.GONE, detail=REMOVED)
         raise HTTPException(status_code=404, detail="File no longer exists on server")
     return path
+
+
+def _kept_thumbnail(job: Job | None, index: int, kind: str) -> FileResponse | None:
+    """What stays of a result whose file is gone (a removed download keeps
+    its poster, an image its small preview): served as it is, no source
+    needed. None while the file is there, or nothing was kept."""
+    if job is None or job.status != "done":
+        return None
+    paths = job.local_paths()
+    raw_path = paths[index] if 0 <= index < len(paths) else None
+    if raw_path is None:
+        return None
+    source = Path(raw_path)
+    if source.is_file() or classify_kind(source.name) != kind:
+        return None
+    kept = (
+        previews.poster_path(job.id, index)
+        if kind == "video"
+        else previews.preview_path(job.id, index, kind)
+    )
+    if not kept.is_file():
+        return None
+    return FileResponse(
+        kept, media_type="image/webp", headers={"Cache-Control": _IMMUTABLE}
+    )
 
 
 def serve_job_file(
@@ -114,6 +152,9 @@ def serve_job_preview(
     URL serves it, and a player still holding the original's length asks
     for ranges it has not got (416s, prod 2026-11-07). An image's is made now
     (milliseconds)."""
+    kept = _kept_thumbnail(job, index, "image")
+    if kept is not None:
+        return kept
     job, path = _result_media(job, index, {"image", "video"})
     kind = classify_kind(path.name)
     if kind == "video" and not previews.preview_path(job.id, index, kind).is_file():
@@ -138,6 +179,9 @@ def serve_job_preview(
 def serve_job_poster(job: Job | None, index: int) -> FileResponse:
     """'/files/{job_id}/{index}/poster': a result video's first frame, so a
     gallery shows every card without loading any video."""
+    kept = _kept_thumbnail(job, index, "video")
+    if kept is not None:
+        return kept
     job, path = _result_media(job, index, {"video"})
     try:
         dest = previews.ResultPreview(path, job.id, index).poster()

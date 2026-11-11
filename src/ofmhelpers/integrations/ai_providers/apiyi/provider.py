@@ -18,14 +18,25 @@ from ofmhelpers.integrations.ai_providers.apiyi.families import (
     family_for,
     split,
 )
-from ofmhelpers.integrations.ai_providers.apiyi.keys import key_for
+from ofmhelpers.integrations.ai_providers.apiyi.keys import (
+    SLOTS,
+    admin_keys,
+    key_for,
+    slot_listing,
+    slot_of,
+)
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER
 from ofmhelpers.integrations.ai_providers.base import (
     Provider,
     TaskState,
     register_provider,
 )
+from ofmhelpers.integrations.ai_providers.errors import ProviderError
+from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
+lazy from ofmhelpers.schemas.generation import KeySlot
+
+logger = get_logger(__name__)
 
 
 @register_provider
@@ -41,6 +52,31 @@ class ApiyiProvider(Provider):
     @classmethod
     def default_key(cls) -> str | None:
         return settings.apiyi.api_key_admin
+
+    @classmethod
+    def env_keys(cls) -> list[str]:
+        return admin_keys().all()
+
+    @classmethod
+    def key_slots(cls) -> list[KeySlot]:
+        return list(SLOTS)
+
+    @classmethod
+    def key_slot(cls, model_id: str) -> str:
+        return slot_of(model_id)
+
+    @classmethod
+    def slot_of_key(cls, api_key: str) -> str | None:
+        """The slot of the token group `api_key` is in, read from the models
+        it lists (free, once per key per `OFM_APIYI_KEY_CHECK_TTL_S`). A key
+        saved under another group's slot is found out here (prod 2026-11-11:
+        a Wan-group key saved as the default one failed every image run with
+        "wrong API key"). APIYI not answering or refusing the key: None."""
+        try:
+            return slot_listing(ApiyiClient(api_key).model_ids())
+        except ProviderError:
+            logger.warning("apiyi: a key's models could not be listed", exc_info=True)
+            return None
 
     def upload(self, path: Path, max_bytes: int | None = None) -> str:
         return self.client.upload(path, max_bytes)

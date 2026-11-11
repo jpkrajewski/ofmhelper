@@ -12,6 +12,7 @@ from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import HOME, SignInState, safe_next, unseal
 from ofmhelpers.integrations.signin import Identity, Provider, SignInError
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.users import Role
 
 logger = get_logger(__name__)
 
@@ -50,7 +51,11 @@ def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
 def _link(
     provider: Provider, carried: SignInState, user_id: int, identity: Identity
 ) -> Outcome:
-    linked = users.link_identity(user_id, identity)
+    owner = users.get_user(user_id)
+    # A VA signs in on the password page only: no Google or Apple account
+    # is ever linked to one.
+    may_link = owner is not None and owner.role != Role.VA
+    linked = may_link and users.link_identity(user_id, identity)
     note = "linked" if linked else "taken"
     if linked:
         _sync_new_drive(user_id, identity.refresh_token)

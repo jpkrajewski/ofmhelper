@@ -312,7 +312,6 @@ def test_adding_an_existing_or_bad_email_says_so(client):
 def test_an_admin_cannot_lock_themselves_out(client):
     me = sign_in_admin(client)
     for action, data in (
-        ("role", {"role": "user"}),
         ("active", {"active": "false"}),
         ("delete", {}),
     ):
@@ -326,11 +325,15 @@ def test_users_page_is_admins_only(client):
     assert client.post("/users", data={"email": "x@example.com"}).status_code == 403
 
 
-def test_an_admin_changes_role_deactivates_and_removes(client):
+def test_an_admin_deactivates_and_removes_and_never_changes_a_role(client):
+    """A role is picked when the user is added and stays (owner's rule
+    2026-11-12): the page has no role control and no route takes one."""
     sign_in_admin(client)
     user = make_user("someone@example.com")
-    client.post(f"/users/{user.id}/role", data={"role": "admin"})
-    assert users.get_user(user.id).is_admin
+    r = client.post(f"/users/{user.id}/role", data={"role": "admin"})
+    assert r.status_code in (404, 405)
+    assert users.get_user(user.id).role == Role.USER
+    assert f'action="/users/{user.id}/role"' not in client.get("/users").text
     client.post(f"/users/{user.id}/active", data={"active": "false"})
     assert not users.get_user(user.id).active
     client.post(f"/users/{user.id}/delete")

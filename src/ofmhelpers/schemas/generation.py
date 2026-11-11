@@ -16,6 +16,16 @@ class ProviderChoice(BaseModel):
     needs_key: bool
 
 
+class KeySlot(BaseModel):
+    """One API key a person keeps for a provider (/account): most providers
+    have one, named like the provider; a provider whose key reaches only some
+    of its models (APIYI's token groups) has one per group, the first its
+    default. `id` is what `user_api_keys.provider` stores."""
+
+    id: str
+    label: str
+
+
 class ModelChoice(BaseModel):
     """A model as the picker lists it. `prompt` says whether the shared
     prompt box applies: required, optional, or not taken at all."""

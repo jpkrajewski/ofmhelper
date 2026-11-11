@@ -11,9 +11,11 @@ lazy from fastapi import Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.drive.posting import window as posting_window
+from ofmhelpers.schemas.access import Action, Area, allowed
 from ofmhelpers.schemas.accounts import ago
 from ofmhelpers.schemas.nav import nav
 from ofmhelpers.schemas.time_zones import TIME_ZONES, time_zone
+lazy from ofmhelpers.schemas.users import Viewer
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -67,6 +69,23 @@ def utc(ts: float, fmt: str = "%Y-%m-%d %H:%M") -> str:
     return time.strftime(fmt, time.gmtime(ts))
 
 
+def _viewer_of(request: Request) -> Viewer | None:
+    """The request's viewer (`middleware/auth.py`); None on a public page."""
+    return getattr(request.state, "viewer", None)
+
+
+def _can(request: Request, what: str) -> bool:
+    """Whether the page's reader may do an `Action` or open an `Area`, by
+    its value (`can(request, "drive-upload")`). While an admin views as
+    someone nothing can be changed, so no action is offered."""
+    viewer = _viewer_of(request)
+    if viewer is None:
+        return False
+    if what in Action:
+        return not viewer.read_only and allowed(viewer.user.role, Action(what))
+    return allowed(viewer.user.role, Area(what))
+
+
 @lru_cache(maxsize=1)
 def get_templates() -> Jinja2Templates:
     """The one Jinja2Templates instance every router renders through.
@@ -93,6 +112,10 @@ def get_templates() -> Jinja2Templates:
     templates.env.globals["static_url"] = static_url
     # The header, its More menu and the home cards all read schemas.nav.NAV.
     templates.env.globals["nav"] = nav
+    # Who the page is rendered for (None on a public page) and what they may
+    # do: templates never read the session themselves.
+    templates.env.globals["viewer_of"] = _viewer_of
+    templates.env.globals["can"] = _can
     templates.env.globals["time_zones"] = TIME_ZONES
     templates.env.globals["time_zone"] = time_zone
     # The daily posting window: base.html's "Start posting content".

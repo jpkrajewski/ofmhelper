@@ -9,13 +9,14 @@ before it lands on every other. Admin only; no data.
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
-from ofmhelpers.web.dependencies import AdminOnly
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/styleguide",
     tags=["styleguide"],
-    dependencies=[AdminOnly],
+    dependencies=[Access(Area.STYLEGUIDE)],
 )
 
 

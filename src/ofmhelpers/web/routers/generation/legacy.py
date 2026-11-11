@@ -18,6 +18,8 @@ from fastapi import APIRouter
 
 from ofmhelpers.features.generate.legacy import legacy_tools
 from ofmhelpers.schemas import Job
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 
 
@@ -31,7 +33,9 @@ def as_ai_params(job: Job) -> dict[str, Any]:
 
 
 def _router(prefix: str, label: str) -> APIRouter:
-    router = APIRouter(prefix=prefix, tags=["legacy"])
+    router = APIRouter(
+        prefix=prefix, tags=["legacy"], dependencies=[Access(Area.LEGACY)]
+    )
     add_job_routes(
         router,
         label,

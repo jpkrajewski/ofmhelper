@@ -30,10 +30,13 @@ from ofmhelpers.schemas import (
     Notes,
     SelectedAccounts,
 )
-from ofmhelpers.web.dependencies import OwnerId, Scope
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/accounts", tags=["accounts"])
+router = APIRouter(
+    prefix="/accounts", tags=["accounts"], dependencies=[Access(Area.ACCOUNTS)]
+)
 
 ListQuery = Annotated[AccountQuery, Query()]
 

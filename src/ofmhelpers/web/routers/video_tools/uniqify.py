@@ -16,12 +16,15 @@ from ofmhelpers.features.uniqify import service
 from ofmhelpers.features.uniqify.service import run_uniqify as _run_uniqify
 from ofmhelpers.media.uniqify import MetadataMode, Strength
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor
 from ofmhelpers.web.forms import FormModel, Stripped, at_most
 from ofmhelpers.web.routers.task_helpers import add_job_routes, uploads_root
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/uniqify", tags=["uniqify"])
+router = APIRouter(
+    prefix="/uniqify", tags=["uniqify"], dependencies=[Access(Area.UNIQIFY)]
+)
 
 
 def _upload_root() -> Path:

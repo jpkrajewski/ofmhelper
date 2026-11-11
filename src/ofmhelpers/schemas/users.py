@@ -11,10 +11,13 @@ _EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 class Role(StrEnum):
     """Everyone sees only what is theirs; an admin also manages /users and
-    the admin-only tools."""
+    the admin-only tools; a VA works in a few tools for their owner
+    (`User.owner_id`), who sees what the VA makes. What each role may open:
+    `schemas/access.py`."""
 
     ADMIN = "admin"
     USER = "user"
+    VA = "va"
 
 
 class User(BaseModel):
@@ -32,6 +35,9 @@ class User(BaseModel):
     has_password: bool = False
     drive_root_id: str | None = None
     is_password_account: bool = False
+    # A VA's owner: whose keys the VA runs on, whose store the VA's files
+    # land in, and who sees the VA's work. None for everyone else.
+    owner_id: int | None = None
     # Changes with the password: a session signed in under another one is
     # out (middleware/auth.py).
     credential_stamp: str = ""
@@ -64,6 +70,44 @@ class SessionUser(BaseModel):
         return str(self.id)
 
 
+class Viewer(BaseModel):
+    """Who a request acts as, built once per request by the auth middleware
+    (`features/users/viewing.py` `viewer_for`) and read by every dependency
+    in `web/dependencies.py`. Normally the person signed in. An admin
+    viewing as someone (`by` set) is that person for every read, and may
+    change nothing (`read_only`)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    # The person the pages are shown for: whose rows, jobs and role.
+    user: SessionUser
+    # Whose jobs they see: their own, and their VAs'.
+    user_ids: frozenset[int]
+    # Whose saved keys their runs go out on (a VA: the owner's; a VA with
+    # no owner: nobody's).
+    keys_of: int | None
+    # The admin looking through their eyes, when "view as" is on.
+    by: SessionUser | None = None
+    # The name the "Viewing as" banner shows.
+    label: str = ""
+
+    @property
+    def read_only(self) -> bool:
+        return self.by is not None
+
+    @property
+    def actors(self) -> frozenset[str]:
+        """`user_ids` as the job reads take them (`db/stores/jobs.py`
+        `Readers`): text, like the `actor` a job is started under."""
+        return frozenset(str(user_id) for user_id in self.user_ids)
+
+    @property
+    def types_key(self) -> bool:
+        """Whether their forms show the API key field: not a VA's (the
+        owner's key is used and never shown), not while viewing as."""
+        return self.keys_of == self.user.id and not self.read_only
+
+
 def _email(value: str) -> str:
     return value.strip().lower()
 
@@ -74,6 +118,7 @@ class UserForm(BaseModel):
     email: str = Field(pattern=_EMAIL, max_length=320)
     role: Role = Role.USER
     name: str = Field(default="", max_length=255)
+    owner_id: int | None = None
 
     @field_validator("email", mode="before")
     @classmethod

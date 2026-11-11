@@ -1,7 +1,7 @@
 """Cross-cutting request handling, one concern per file.
 
 Everything here runs on *every* request, before routing. `auth.py` owns the
-whole auth story (the allowlist check, the password check, `require_admin`) on
+whole auth story (the allowlist check, the password check, `require`) on
 `AuthMiddleware` itself; `ratelimit.py` holds the Redis counters (failed
 logins, writes per IP) and the middleware that applies them.
 

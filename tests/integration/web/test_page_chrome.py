@@ -77,6 +77,7 @@ def test_bar_links_then_the_rest_under_more(client):
         "/repurpose",
         "/account",
         "/cookies",
+        "/spending",
         "/users",
         "/character-sheet",
         "/applications",
@@ -103,6 +104,7 @@ def test_a_users_more_has_no_admin_pages():
         "/repurpose",
         "/account",
         "/cookies",
+        "/spending",
     ]
 
 

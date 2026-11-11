@@ -7,7 +7,12 @@
    With a local copy, an image shows its small preview and a video plays its
    preview behind a poster frame (see web/previews.py): a grid of 4K results
    must not load every original. Download links stay on the original. #}
-{% if a.kind == 'video' %}
+{% if a.removed %}
+{# A download whose video the retention sweep removed: what was kept of it,
+   a still picture (as /trials shows a deleted copy), else its name. #}
+{% if a.poster_url or a.preview_url %}<img src="{{ a.poster_url or a.preview_url }}" loading="lazy" decoding="async" class="result-video" alt="{{ a.name }}">
+{% else %}<div class="result-file">{{ ic.icon("file") }} {{ a.name }}</div>{% endif %}
+{% elif a.kind == 'video' %}
 <video src="{{ a.preview_url or a.view_url }}"{% if a.poster_url %} poster="{{ a.poster_url }}" preload="none"{% else %} preload="metadata"{% endif %} controls playsinline class="result-video"{% if a.local_fallback_url %} onerror="this.onerror=null;this.src='{{ a.local_fallback_url }}'"{% endif %}></video>
 {% elif a.kind == 'image' %}
 <img src="{{ a.preview_url or a.view_url }}" loading="lazy" decoding="async" class="result-image" alt="{{ a.name }}"{% if a.local_fallback_url %} onerror="this.onerror=null;this.src='{{ a.local_fallback_url }}'"{% endif %}>

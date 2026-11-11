@@ -27,10 +27,11 @@ from ofmhelpers.schemas import (
     LinksQueued,
     SelectedLinks,
 )
-from ofmhelpers.web.dependencies import OwnerId, Scope
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/links", tags=["links"])
+router = APIRouter(prefix="/links", tags=["links"], dependencies=[Access(Area.LINKS)])
 
 
 class _Count(BaseModel):

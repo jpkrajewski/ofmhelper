@@ -15,13 +15,16 @@ from ofmhelpers.features.chatting.fanvue_connect import can_connect, connect_url
 from ofmhelpers.features.chatting.recent import recent_models
 from ofmhelpers.features.chatting.service import accounts_to_reconnect, open_model
 from ofmhelpers.features.chatting.service import platform_models as models_of
+from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.chatting import ChatAlerts, ChatPlatform
 from ofmhelpers.schemas.time_zones import time_zone
-from ofmhelpers.web.dependencies import AdminOnly, OwnerId
+from ofmhelpers.web.dependencies import Access, OwnerId
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/chatting", tags=["chatting"], dependencies=[AdminOnly])
+router = APIRouter(
+    prefix="/chatting", tags=["chatting"], dependencies=[Access(Area.CHATTING)]
+)
 
 _NOTES = {
     "connected": ("Fanvue connected.", "ok"),

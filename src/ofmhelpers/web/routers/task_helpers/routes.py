@@ -13,7 +13,7 @@ from fastapi.responses import Response
 
 from ofmhelpers.features.jobs import own
 from ofmhelpers.schemas import Job, JobStatusPayload
-from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.web.dependencies import Actors
 from ofmhelpers.web.routers.task_helpers.responses import (
     job_assets,
     job_inputs,
@@ -50,8 +50,8 @@ def add_job_routes(
     files_prefix = f"{router.prefix}/files"
 
     @router.get("/jobs/{job_id}")
-    def job_status(request: Request, job_id: str, actor: Actor) -> Response:
-        job = own.own(job_id, actor)
+    def job_status(request: Request, job_id: str, actors: Actors) -> Response:
+        job = own.own(job_id, actors)
         assets, failed_sources = job_assets(job, files_prefix)
         return render(
             request,
@@ -67,19 +67,19 @@ def add_job_routes(
         )
 
     @router.get("/jobs/{job_id}/status")
-    def job_status_json(job_id: str, actor: Actor) -> JobStatusPayload:
-        return job_status_payload(own.find(job_id, actor), files_prefix)
+    def job_status_json(job_id: str, actors: Actors) -> JobStatusPayload:
+        return job_status_payload(own.find(job_id, actors), files_prefix)
 
     @router.get("/files/{job_id}/{index}")
     def download_file(
-        job_id: str, index: int, actor: Actor, dl: Annotated[int, Query()] = 0
+        job_id: str, index: int, actors: Actors, dl: Annotated[int, Query()] = 0
     ) -> Response:
-        return serve_job_file(own.find(job_id, actor), index, as_attachment=bool(dl))
+        return serve_job_file(own.find(job_id, actors), index, as_attachment=bool(dl))
 
     @router.get("/files/{job_id}/{index}/preview")
-    def preview_file(job_id: str, index: int, actor: Actor) -> Response:
-        return serve_job_preview(own.find(job_id, actor), index, files_prefix)
+    def preview_file(job_id: str, index: int, actors: Actors) -> Response:
+        return serve_job_preview(own.find(job_id, actors), index, files_prefix)
 
     @router.get("/files/{job_id}/{index}/poster")
-    def poster_file(job_id: str, index: int, actor: Actor) -> Response:
-        return serve_job_poster(own.find(job_id, actor), index)
+    def poster_file(job_id: str, index: int, actors: Actors) -> Response:
+        return serve_job_poster(own.find(job_id, actors), index)

@@ -28,10 +28,11 @@ from starlette.background import BackgroundTask
 from ofmhelpers.features.downloads.service import Redirect
 from ofmhelpers.features.reels import page
 from ofmhelpers.features.reels.page import ProfileMoved, WatchAdded
-from ofmhelpers.web.dependencies import AssetsRoot, OwnerId, Scope
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, AssetsRoot, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/reels", tags=["reels"])
+router = APIRouter(prefix="/reels", tags=["reels"], dependencies=[Access(Area.REELS)])
 
 GroupQuery = Annotated[str | None, Query(max_length=64)]
 # A rank (VIEW_TIERS name): the feed narrowed to exactly that rank.
@@ -133,10 +134,10 @@ def remove(username: str, owner_id: OwnerId) -> ProfileRemoved:
 
 
 @router.post("/download")
-def download(reels: PickedReels) -> Response:
+def download(reels: PickedReels, scope: Scope) -> Response:
     """The picked reels as a file: the mp4 itself for one, a zip for more.
     Nothing is kept: the job dir goes once the response is sent."""
-    picked = page.picked_file(reels)
+    picked = page.picked_file(reels, scope)
     return FileResponse(
         picked.path,
         media_type=picked.media_type,
@@ -146,7 +147,7 @@ def download(reels: PickedReels) -> Response:
 
 
 @router.post("/clone")
-def clone(reels: PickedReels, assets_root: AssetsRoot) -> Redirect:
+def clone(reels: PickedReels, scope: Scope, assets_root: AssetsRoot) -> Redirect:
     """Downloads the picked reels into the asset store and answers with the
     /clone URL that opens with them picked."""
-    return page.clone(reels, assets_root)
+    return page.clone(reels, scope, assets_root)

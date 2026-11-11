@@ -337,9 +337,42 @@ def test_missing_names_exactly_the_files_a_restore_can_no_longer_use(
     )
 
     assert r.status_code == 200
-    assert r.json() == {"missing": [str(deleted), str(someone_elses), str(outside)]}
+    # None of them was a download of theirs: nothing to fetch again.
+    assert r.json() == {
+        "missing": [str(deleted), str(someone_elses), str(outside)],
+        "restorable": [],
+    }
 
 
 def test_missing_takes_a_bounded_list(client, assets_dir):
     r = client.get("/refs/missing", params={"path": ["x"] * 51})
+    assert r.status_code == 422
+
+
+def test_stored_names_the_picked_files_that_need_no_upload(client, assets_dir):
+    """A file picked from the computer again went up whole on every Generate
+    (prod 2026-11-11); the page asks by sha256 first. Only the asker's own."""
+    mine, theirs, new = "a" * 64, "b" * 64, "c" * 64
+    kept = assets_dir / f"{mine}__face.png"
+    kept.write_bytes(_png_bytes())
+    someone_elses = assets_dir / "users" / "99" / f"{theirs}__theirs.png"
+    someone_elses.parent.mkdir(parents=True)
+    someone_elses.write_bytes(_png_bytes())
+
+    r = client.get("/refs/stored", params={"digest": [mine, theirs, new]})
+
+    assert r.status_code == 200
+    assert r.json() == {"stored": [{"digest": mine, "path": str(kept)}]}
+
+
+@pytest.mark.parametrize(
+    "digests",
+    [["a" * 63], ["A" * 64], ["*" * 64], ["../" + "a" * 61], ["a" * 64] * 51],
+    ids=["short", "upper case", "glob", "path", "too many"],
+)
+def test_stored_takes_only_a_bounded_list_of_sha256(client, assets_dir, digests):
+    (assets_dir / f"{'a' * 64}__face.png").write_bytes(_png_bytes())
+
+    r = client.get("/refs/stored", params={"digest": digests})
+
     assert r.status_code == 422

@@ -14,11 +14,14 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ofmhelpers.features.links import self_page
+from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.self_links import SelfDomainForm, SelfRange
-from ofmhelpers.web.dependencies import OwnerId, Scope
+from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/self-links", tags=["self-links"])
+router = APIRouter(
+    prefix="/self-links", tags=["self-links"], dependencies=[Access(Area.SELF_LINKS)]
+)
 
 
 @router.get("")

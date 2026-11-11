@@ -5,6 +5,7 @@ Nothing here touches disk beyond a stat.
 
 from pydantic import BaseModel
 
+from ofmhelpers.db.stores import downloads
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.previews import render as previews
@@ -26,6 +27,7 @@ def asset_card(
     remote_url: str | None = None,
     local: bool = True,
     job_id: str = "",
+    removed: bool = False,
 ) -> AssetCard:
     """One entry for the generic asset grid / status page: what kind of
     preview to render, and the two URLs a client can already reach (never
@@ -45,9 +47,14 @@ def asset_card(
     features/previews/render.py. A video's is its own URL until the preview
     worker made the small copy: one URL never serves two files (a player that
     held the original's length asked `/preview` for ranges the small copy has
-    not got: 4,637 answers 416 in 48 h, prod 2026-11-07)."""
+    not got: 4,637 answers 416 in 48 h, prod 2026-11-07).
+
+    `removed`: a download whose video the retention sweep removed -- only
+    what was kept of it has a URL (a video's poster, an image's preview)."""
     local_url = f"{files_prefix}/{index}"
     kind = classify_kind(name)
+    if removed:
+        return _removed_card(name, index, local_url, job_id, source)
     previewed = local and kind in ("image", "video")
     preview_url = f"{local_url}/preview" if previewed else None
     if (
@@ -68,6 +75,36 @@ def asset_card(
         poster_url=f"{local_url}/poster" if previewed and kind == "video" else None,
         source=source,
     )
+
+
+def _removed_card(
+    name: str, index: int, local_url: str, job_id: str, source: str | None
+) -> AssetCard:
+    kind = classify_kind(name)
+    poster = kind == "video" and previews.poster_path(job_id, index).is_file()
+    preview = kind == "image" and previews.preview_path(job_id, index, kind).is_file()
+    return AssetCard(
+        name=name,
+        index=index,
+        kind=kind,
+        view_url=local_url,
+        download_url=f"{local_url}?dl=1",
+        download_name=download_name(name, job_id),
+        preview_url=f"{local_url}/preview" if preview else None,
+        poster_url=f"{local_url}/poster" if poster else None,
+        source=source,
+        removed=True,
+    )
+
+
+def _removed_positions(job: Job) -> list[int]:
+    """The files of a grouped download the sweep removed on purpose, by
+    their place in the result. Asked of the database only when a file is
+    not on disk."""
+    paths = [path for r in job.download_results() for path in r.output_paths]
+    if all(path.is_file() for path in paths):
+        return []
+    return [file.position for file in downloads.removed_in([job.id])]
 
 
 def job_assets(job: Job, files_prefix: str) -> JobAssets:
@@ -92,12 +129,20 @@ def job_assets(job: Job, files_prefix: str) -> JobAssets:
         return JobAssets(assets=assets)
 
     assets, failed_sources = [], []
+    removed = _removed_positions(job)
     for r in job.download_results():
         if not r.success:
             failed_sources.append(FailedSource(source=r.url, error=r.error or ""))
             continue
         for path in r.output_paths:
             assets.append(
-                asset_card(path.name, len(assets), prefix, r.url, job_id=job.id)
+                asset_card(
+                    path.name,
+                    len(assets),
+                    prefix,
+                    r.url,
+                    job_id=job.id,
+                    removed=len(assets) in removed,
+                )
             )
     return JobAssets(assets=assets, failed_sources=failed_sources)

@@ -67,6 +67,8 @@ from ofmhelpers.schemas.files import (
     FileTile,
     MissingRefs,
     RefEntry,
+    StoredRef,
+    StoredRefs,
     UserFiles,
 )
 from ofmhelpers.schemas.gallery import CloneCard, CloneLinksCard, JobCard, TaskCard
@@ -196,6 +198,8 @@ __all__ = [
     "SessionUser",
     "ShortLink",
     "StoredFolder",
+    "StoredRef",
+    "StoredRefs",
     "SyncReport",
     "TaskCard",
     "Tool",

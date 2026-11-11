@@ -17,6 +17,8 @@ from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.db.stores import jobs as store
+from ofmhelpers.features.account.keys import keep_used, key_tail
+from ofmhelpers.features.jobs.cost import cost_of
 from ofmhelpers.features.previews.render import warm_previews
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
@@ -67,6 +69,7 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
             _record_outcome(span, job_id, result)
             # Saved: its provider request (if any) needs no resuming.
             _keep_cost(job_id)
+            _keep_key(job_id, header.actor)
             tasks.forget(job_id)
         except Exception as exc:
             # The status pages show this directly to whoever is running the
@@ -147,18 +150,41 @@ def _queue_previews(job_id: str) -> None:
 
 
 def _keep_cost(job_id: str) -> None:
-    """The job's provider requests into its row (`jobs.meta`) before they are
-    forgotten: Logfire keeps their cost 30 days, the job keeps it for good.
-    Never the key they ran on. Best effort: the job is already saved."""
+    """The job's provider requests into its row (`jobs.meta`) and what they
+    cost (`jobs.cost_usd`: reported, or the app's estimate, `cost.py`)
+    before they are forgotten: Logfire keeps their cost 30 days, the job
+    keeps it for good.
+    Never the key they ran on, only its last characters (`key_tail`). Best
+    effort: the job is already saved."""
     try:
         made = [
-            GenerationRecord.model_validate(task.model_dump(exclude={"api_key"}))
+            GenerationRecord.model_validate(
+                {
+                    **task.model_dump(exclude={"api_key"}),
+                    "key_tail": key_tail(task.api_key),
+                }
+            )
             for task in tasks.of_job(job_id)
         ]
-        if made:
-            store.set_job_meta(job_id, JobMeta.of(made))
+        job = store.get_job(job_id)
+        if made and job is not None:
+            store.keep_cost(
+                job_id, JobMeta(generations=made), cost_of(job.params, made)
+            )
     except Exception:
         logger.warning("could not keep the cost of job %s", job_id, exc_info=True)
+
+
+def _keep_key(job_id: str, actor: str | None) -> None:
+    """A run that succeeded on a key its person has not saved keeps it as
+    theirs (`keys.keep_used`): the next form opens with it. Best effort: the
+    job is already saved."""
+    if actor is None or not actor.isdecimal():
+        return
+    try:
+        keep_used(int(actor), tasks.of_job(job_id))
+    except Exception:
+        logger.warning("could not keep the key of job %s", job_id, exc_info=True)
 
 
 store.register_runner(run_job)

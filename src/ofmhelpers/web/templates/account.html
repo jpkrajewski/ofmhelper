@@ -8,6 +8,9 @@
 {% if error %}{{ ui.notice(error, "warn") }}{% endif %}
 
 <div class="account-grid">
+    {# A VA signs in with "Login as Virtual Assistant" (employer's email +
+       the password an admin set on /users): nothing here to link or change. #}
+    {% if viewer_of(request).user.role != "va" %}
     {% call ui.card("Sign-in") %}
         <ul class="account-list">
             {% for p in providers %}
@@ -43,6 +46,7 @@
             {{ ui.button(("Change" if user.has_password else "Set") ~ " password", "primary", type="submit") }}
         </form>
     {% endcall %}
+    {% endif %}
 
     {% call ui.card("Google Drive uploads") %}
         <p>{{ "Connected" if user.drive_connected else "Not connected" }}</p>
@@ -51,6 +55,7 @@
         {% endif %}
     {% endcall %}
 
+    {% if can(request, "save-keys") or viewer_of(request).read_only %}
     {% call ui.card("API keys") %}
         <form method="post" action="/account/keys" class="account-key">
             {% for name, (label, tail) in keys.items() %}
@@ -66,5 +71,6 @@
             {{ ui.button("Save keys", type="submit") }}
         </form>
     {% endcall %}
+    {% endif %}
 </div>
 {% endblock %}

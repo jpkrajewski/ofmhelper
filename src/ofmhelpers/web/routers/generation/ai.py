@@ -19,14 +19,15 @@ from ofmhelpers.features.generate.service import (
     start_runs,
 )
 from ofmhelpers.schemas import JobsQueued
-from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render_polled
 
 # What other modules and the tests read here (same objects as the package's).
 __all__ = ["TASK", "describe", "router", "run_ai"]
 
-router = APIRouter(prefix="/ai", tags=["ai"])
+router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Access(Area.GENERATE)])
 
 
 async def _form(request: Request) -> FormData:

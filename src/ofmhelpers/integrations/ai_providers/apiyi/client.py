@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import requests
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
@@ -38,7 +38,12 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
-from ofmhelpers.integrations.ai_providers.http import bearer_session, call
+from ofmhelpers.integrations.ai_providers.http import (
+    Lenient,
+    bearer_session,
+    call,
+    parsed,
+)
 from ofmhelpers.integrations.ai_providers.uploads import (
     memoized,
     reference_copy,
@@ -50,6 +55,18 @@ from ofmhelpers.media.image_fit import ImageLimits, fitted
 logger = get_logger(__name__)
 
 MODELS_PATH = "/v1/models"
+
+
+class ListedModel(Lenient):
+    id: str = ""
+
+
+class ModelList(Lenient):
+    """`GET /v1/models`: the models the asking key's token group reaches."""
+
+    data: list[ListedModel] = Field(default_factory=list)
+
+
 LOCAL = "file://"
 # What APIYI's models take between them (each family checks its own).
 IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp"})
@@ -158,15 +175,24 @@ class ApiyiClient:
     def check_key(self) -> None:
         """`GET /v1/models` once per key per `key_check_ttl_s`: a wrong key is
         `ProviderAuthError` here, before a reference is shared or paid for."""
-        memoized(
-            upload_cache_key("apiyi-key", self.api_key, "models"),
-            settings.apiyi.key_check_ttl_s,
-            self._models,
-        )
+        self.model_ids()
 
-    def _models(self) -> str:
-        self.call("GET", MODELS_PATH)
-        return "ok"
+    def model_ids(self) -> list[str]:
+        """The models this key reaches (its token group's), asked once per key
+        per `key_check_ttl_s`; a wrong key is `ProviderAuthError`."""
+        listed = memoized(
+            upload_cache_key("apiyi-key", self.api_key, "model-ids"),
+            settings.apiyi.key_check_ttl_s,
+            self._model_ids,
+        )
+        return listed.split()
+
+    def _model_ids(self) -> str:
+        """Its model ids as one line (what `memoized` keeps); "" for none."""
+        answer = parsed(
+            self.call("GET", MODELS_PATH), ModelList, PROVIDER, "model list"
+        )
+        return " ".join(model.id for model in answer.data if model.id)
 
     @staticmethod
     def _sendable(path: Path, max_bytes: int | None) -> Path:

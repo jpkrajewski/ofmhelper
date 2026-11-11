@@ -82,9 +82,18 @@
     // data-required: an empty list stops the form as a required input does. The
     // input itself is always empty (each pick moves into the list), so its
     // validity is set by hand. A disabled fieldset's input is never checked.
+    // A file being downloaded again (`restore`) has no path to send yet: it
+    // stops the form too, until it is back.
     function checkRequired(picker) {
-        if (!("required" in picker.dataset)) return;
-        const message = picker._items.length ? "" : `Pick at least one ${picker.dataset.kind}`;
+        const waiting = picker._items.some((item) => item.restoring);
+        const required = "required" in picker.dataset;
+        if (!required && !waiting && !picker._waited) return;
+        picker._waited = waiting;
+        let message = "";
+        if (waiting) message = "Wait: a video is downloading again";
+        else if (required && !picker._items.length) {
+            message = `Pick at least one ${picker.dataset.kind}`;
+        }
         picker.querySelector(".file-add-input").setCustomValidity(message);
     }
 
@@ -107,7 +116,7 @@
             li.dataset.kind = kind;
             const name = item.kind === "new" ? item.file.name : item.name;
 
-            const preview = buildPreview(kind, item);
+            const preview = item.restoring ? null : buildPreview(kind, item);
             if (preview) li.appendChild(preview);
 
             // Name truncates with an ellipsis (long filenames must never
@@ -121,7 +130,7 @@
             if (item.kind === "existing") {
                 badge = document.createElement("span");
                 badge.className = "reused-badge";
-                badge.textContent = "reused";
+                badge.textContent = item.restoring ? "Downloading again…" : "reused";
             }
             const up = document.createElement("button");
             up.type = "button";
@@ -336,6 +345,58 @@
         e.preventDefault();
         matched.forEach((file) => picker._items.push({ kind: "new", file }));
         renderList(picker);
+        reuseStored(picker);
+    });
+
+    // Bigger files are not hashed (the browser reads the whole file into
+    // memory for it): they upload as before.
+    const HASH_MAX_BYTES = 256 * 1024 * 1024;
+    // As many digests as one /refs/stored takes.
+    const STORED_MAX = 50;
+
+    async function digestOf(file) {
+        const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+        return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    // A file picked from the computer that the server already has (uploaded
+    // before, here or on another page) becomes a reused one: its sha256 is
+    // what the store names files by, so one small request answers it and
+    // Generate sends a path, not the bytes again (prod 2026-11-11: the same
+    // picture went up whole on every Generate). Any failure here leaves the
+    // file as it was: it uploads, as before.
+    async function reuseStored(picker) {
+        if (!window.crypto?.subtle) return;
+        const fresh = (picker._items || [])
+            .filter((item) => item.kind === "new" && item.file.size <= HASH_MAX_BYTES)
+            .slice(0, STORED_MAX);
+        if (!fresh.length) return;
+        try {
+            for (const item of fresh) item.digest ??= await digestOf(item.file);
+            const query = fresh.map((item) => `digest=${item.digest}`).join("&");
+            const r = await fetch(`/refs/stored?${query}`);
+            if (!r.ok) return;
+            const paths = new Map((await r.json()).stored.map((s) => [s.digest, s.path]));
+            let swapped = false;
+            for (const item of fresh) {
+                const path = paths.get(item.digest);
+                if (!path || item.kind !== "new") continue;
+                item.name = item.file.name;
+                item.path = path;
+                item.kind = "existing";
+                item.file = undefined;
+                swapped = true;
+            }
+            if (swapped) renderList(picker);
+        } catch {
+            // Unreadable file or no connection: nothing swapped.
+        }
+    }
+
+    // What just went up is in the store now: the same files still in a
+    // picker are reused by the next Generate.
+    document.addEventListener("uploads:done", () => {
+        document.querySelectorAll(".file-picker").forEach(reuseStored);
     });
 
     function initPicker(picker) {
@@ -348,6 +409,7 @@
             }
             addInput.value = "";
             renderList(picker);
+            reuseStored(picker);
         });
 
         checkRequired(picker);
@@ -391,7 +453,8 @@
                 if (item.kind === "new") {
                     formData.append(field, item.file, item.file.name);
                     manifest.push({ kind: "new" });
-                } else {
+                } else if (!item.restoring) {
+                    // (one being downloaded again has no path to send yet)
                     manifest.push({ kind: "existing", path: item.path });
                 }
             }
@@ -443,24 +506,46 @@
     // filled the boxes with files that 404ed, found out only at Start).
     // One request for all of them (/refs/missing), before anything is drawn:
     // no broken preview flashes up. A network blip keeps them all.
+    //
+    // A gone file that was the person's own download, removed to save space
+    // (`restorable`), is not dropped: it is downloaded again (`restore`) and
+    // stays in the list, marked "Downloading again…", until it is back.
     async function dropMissing(picker) {
         const restored = picker._items.filter((item) => item.kind === "existing");
         let missing = [];
+        let restorable = [];
         if (restored.length) {
             const query = restored
                 .map((item) => `path=${encodeURIComponent(item.path)}`)
                 .join("&");
             try {
                 const r = await fetch(`/refs/missing?${query}`);
-                if (r.ok) missing = (await r.json()).missing;
+                if (r.ok) {
+                    const body = await r.json();
+                    missing = body.missing;
+                    restorable = body.restorable || [];
+                }
             } catch {
                 missing = [];
             }
         }
-        const gone = restored.filter((item) => missing.includes(item.path));
+        const back = new Map(restorable.map((ref) => [ref.path, ref]));
+        const gone = restored.filter(
+            (item) => missing.includes(item.path) && !back.has(item.path)
+        );
+        const fetching = restored.filter((item) => back.has(item.path));
+        fetching.forEach((item) => {
+            item.restoring = true;
+        });
         picker._items = picker._items.filter((item) => !gone.includes(item));
         renderList(picker);
-        if (!gone.length) return [];
+        fetching.forEach((item) => restore(picker, item, back.get(item.path)));
+        noteMissing(picker, gone);
+        return gone.map((item) => item.name);
+    }
+
+    function noteMissing(picker, gone) {
+        if (!gone.length) return;
         const note = document.createElement("p");
         note.className = "generation-error file-picker-missing";
         const names = gone.map((item) => item.name).join(", ");
@@ -469,7 +554,52 @@
                 ? `${names} is not on this server: pick it again`
                 : `${gone.length} files are not on this server (${names}): pick them again`;
         picker.querySelector(".file-order-list").after(note);
-        return gone.map((item) => item.name);
+    }
+
+    const RESTORE_POLL_MS = 2000;
+
+    // Resolves when the download job is done; rejects when it failed or is
+    // gone. A failed poll (offline, a deploy) is tried again.
+    async function downloaded(jobId) {
+        for (;;) {
+            await new Promise((resolve) => setTimeout(resolve, RESTORE_POLL_MS));
+            let r;
+            try {
+                r = await fetch(`/download-media/jobs/${encodeURIComponent(jobId)}/status`);
+            } catch {
+                continue;
+            }
+            if (r.status === 404) throw new Error("download gone");
+            if (!r.ok) continue;
+            const job = await r.json();
+            if (job.status === "failed") throw new Error(job.error || "download failed");
+            if (job.status === "done") return;
+        }
+    }
+
+    // A removed download fetched again into its own job, then put in the list
+    // under the path it is stored at NOW (a video fetched again may differ by
+    // a byte, and the store names files by content). Not back: it leaves the
+    // list with the usual "pick it again".
+    async function restore(picker, item, ref) {
+        const job = encodeURIComponent(ref.job_id);
+        try {
+            const start = await fetch(`/download-media/${job}/replays`, { method: "POST" });
+            if (!start.ok) throw new Error(`replay refused (${start.status})`);
+            await downloaded(ref.job_id);
+            const r = await fetch(`/download-media/${job}/files/${ref.index}/stored`);
+            if (!r.ok) throw new Error(`not stored (${r.status})`);
+            item.path = (await r.json()).path;
+            item.name = displayName(item.path);
+            item.restoring = false;
+            if (picker._items.includes(item)) renderList(picker);
+        } catch (err) {
+            console.error("could not download it again", err);
+            if (!picker._items.includes(item)) return;
+            picker._items = picker._items.filter((other) => other !== item);
+            renderList(picker);
+            noteMissing(picker, [item]);
+        }
     }
 
     // Hand one tool's queued files to the tool being switched to, by kind:
@@ -491,18 +621,30 @@
     });
 
     // What one picker holds, in order: a new item's File, or a reused one's
-    // server path.
+    // server path. Not a file still being downloaded again: it has no file
+    // to read yet (the list changes once more when it is back).
     function items(picker) {
-        return (picker._items || []).map((item) =>
-            item.kind === "new"
-                ? { name: item.file.name, file: item.file }
-                : { name: item.name, path: item.path }
+        return (picker._items || [])
+            .filter((item) => !item.restoring)
+            .map((item) =>
+                item.kind === "new"
+                    ? { name: item.file.name, file: item.file }
+                    : { name: item.name, path: item.path }
+            );
+    }
+
+    // Whether a file of the page is still being downloaded again (`restore`):
+    // a form that checks itself (/clone) waits for it.
+    function restoring() {
+        return [...document.querySelectorAll(".file-picker")].some(
+            (picker) => isActive(picker) && picker._items?.some((item) => item.restoring)
         );
     }
 
     // init: wire pickers a page inserts after load (/generate's model fields).
     window.FilePicker = {
         init: initPicker,
+        restoring,
         collectFormData,
         clearPicker,
         setExisting,

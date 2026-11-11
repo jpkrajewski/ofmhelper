@@ -41,7 +41,10 @@
             if (ended) return;
             ended = true;
             running -= 1;
-            if (!running) showNotice(false);
+            if (running) return;
+            showNotice(false);
+            // file-picker.js: what went up can be reused from now on.
+            document.dispatchEvent(new CustomEvent("uploads:done"));
         };
     }
 

@@ -81,6 +81,7 @@ def _download(job: Job) -> dict[str, Any]:
         "urls": job.params["urls"],
         "assets_root": str(assets_root_for_actor(actor)),
         "user_id": int(actor) if actor and actor.isdigit() else None,
+        "job_id": job.id,
     }
 
 

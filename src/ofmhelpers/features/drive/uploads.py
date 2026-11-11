@@ -25,7 +25,7 @@ from pathlib import Path
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores import drive_folders
 from ofmhelpers.db.stores import drive_uploads as store
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
+from ofmhelpers.db.stores.jobs import Readers, create_job, fail_job, get_job
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.assets.names import download_name
@@ -96,10 +96,10 @@ def _folder_owner(login_id: int) -> int | None:
     return found.device.user_id if found else None
 
 
-def _files(job_id: str, actor: str | None) -> list[tuple[int, Path]]:
+def _files(job_id: str, readers: Readers) -> list[tuple[int, Path]]:
     """(index, path) of every result video still on disk of a finished job
-    the session may see."""
-    job = get_job(job_id, actor)
+    the session may see (their own, or a VA's of theirs)."""
+    job = get_job(job_id, readers)
     if job is None or job.status != "done":
         return []
     return [
@@ -110,10 +110,16 @@ def _files(job_id: str, actor: str | None) -> list[tuple[int, Path]]:
 
 
 def queue_uploads(
-    user: SessionUser, job_ids: list[str], login_ids: list[int]
+    user: SessionUser,
+    job_ids: list[str],
+    login_ids: list[int],
+    readers: Readers = None,
 ) -> list[DriveUpload]:
     """Queues every result of `job_ids` into each of `login_ids`' folders,
-    all or nothing. Raises `UploadRefusedError`."""
+    all or nothing. Raises `UploadRefusedError`. `readers`: whose runs the
+    clicker may take videos from -- their own and their VAs' (a VA makes
+    the clone, the owner posts it); default: their own."""
+    readers = readers if readers is not None else user.actor
     mine = {t.login_id for t in drive_folders.targets(user.id)}
     if mine & set(login_ids) and not refresh_token(user.id):
         msg = "Connect Google Drive on your Account page first"
@@ -127,7 +133,7 @@ def queue_uploads(
         upload_id
         for login_id in dict.fromkeys(login_ids)
         for job_id in job_ids
-        for index, _path in _files(job_id, actor)
+        for index, _path in _files(job_id, readers)
         if (
             upload_id := store.queue(
                 job_id, index, login_id, user.id, usable[login_id].folder_name
@@ -137,7 +143,7 @@ def queue_uploads(
     ]
     if ids:
         _enqueue(ids, actor)
-    return store.for_jobs([j for j in job_ids if get_job(j, actor) is not None])
+    return store.for_jobs([j for j in job_ids if get_job(j, readers) is not None])
 
 
 def _enqueue(upload_ids: list[int], actor: str) -> None:

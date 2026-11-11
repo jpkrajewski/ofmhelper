@@ -18,7 +18,8 @@ from starlette.background import BackgroundTask
 from ofmhelpers.features.viral import page as viral_page
 from ofmhelpers.features.viral.page import run_viral
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,
     uploads_root,
@@ -28,7 +29,7 @@ from ofmhelpers.web.templates_config import render
 TASK = viral_page.TASK
 LABEL = "Viral"
 
-router = APIRouter(prefix="/viral", tags=["viral"])
+router = APIRouter(prefix="/viral", tags=["viral"], dependencies=[Access(Area.VIRAL)])
 
 _FILES = f"{router.prefix}/files"
 

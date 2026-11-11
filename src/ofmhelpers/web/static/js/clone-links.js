@@ -345,7 +345,10 @@
         } catch {
             images = 0;
         }
-        if (!String(formData.get("api_key") || "").trim()) return "Enter the API key.";
+        // No key field to fill (a VA runs on the owner's saved key): the
+        // server picks it.
+        const keyField = form.querySelector('[name="api_key"]');
+        if (keyField && !keyField.disabled && !String(formData.get("api_key") || "").trim()) return "Enter the API key.";
         if (images < 1) return "Pick at least one subject image.";
         if (images > maxImages) return `Pick at most ${maxImages} subject images.`;
         if (!String(formData.get("prompt") || "").trim()) return "Enter a prompt.";

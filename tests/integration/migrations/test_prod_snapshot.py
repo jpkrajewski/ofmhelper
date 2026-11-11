@@ -576,3 +576,140 @@ def test_bridge_index_and_browser_column_change_no_row(db):
     assert _row_counts(db) == before
     command.downgrade(_alembic(), SELF_LINKS)
     assert "browser" not in _columns(db, "self_link_clicks")
+
+
+JOB_OWNERS = "e3f4a5b6c7d9"
+_BEFORE_JOB_OWNERS = "d2e3f4a5b6c8"
+
+# A job's owner as the old schema says it: its actor when that is the id of
+# a user who exists, else nobody.
+_OWNERS_BY_ACTOR = (
+    "SELECT j.id, u.id FROM jobs AS j LEFT JOIN users AS u"
+    " ON j.actor ~ '^[0-9]+$' AND u.id::text = j.actor"
+)
+
+
+def test_job_owners_keep_every_job_with_its_owner_and_its_cost(db):
+    """jobs.user_id: every job whose actor was an existing user's id keeps
+    that owner, anything else is nobody's, no job is lost; a cost kept in
+    meta is the cost_usd column and leaves meta, its generations stay."""
+    needs(JOB_OWNERS)(db)
+    command.upgrade(_alembic(), _BEFORE_JOB_OWNERS)
+    jobs = _count(db, "jobs")
+    owners = dict(_rows(db, _OWNERS_BY_ACTOR))
+    costs = dict(
+        _rows(
+            db,
+            "SELECT id, (meta ->> 'cost_usd')::numeric FROM jobs"
+            " WHERE meta ->> 'cost_usd' IS NOT NULL",
+        )
+    )
+    generations = dict(_rows(db, "SELECT id, meta -> 'generations' FROM jobs"))
+
+    command.upgrade(_alembic(), JOB_OWNERS)
+
+    assert _count(db, "jobs") == jobs
+    assert "actor" not in _columns(db, "jobs")
+    assert dict(_rows(db, "SELECT id, user_id FROM jobs")) == owners
+    assert (
+        dict(_rows(db, "SELECT id, cost_usd FROM jobs WHERE cost_usd IS NOT NULL"))
+        == costs
+    )
+    assert _scalar(db, "SELECT count(*) FROM jobs WHERE meta ? 'cost_usd'") == 0
+    assert _scalar(db, "SELECT count(*) FROM jobs WHERE cost_estimated") == 0
+    assert dict(_rows(db, "SELECT id, meta -> 'generations' FROM jobs")) == generations
+    indexes = {i["name"] for i in inspect(db).get_indexes("jobs")}
+    assert "ix_jobs_user_id_created_at" in indexes
+    (fk,) = [
+        f
+        for f in inspect(db).get_foreign_keys("jobs")
+        if f["constrained_columns"] == ["user_id"]
+    ]
+    assert (fk["referred_table"], fk["options"].get("ondelete")) == (
+        "users",
+        "RESTRICT",
+    )
+
+
+DOWNLOADS = "f4b5c6d7e8a1"
+
+# Every file of every done download job that is somebody's, as the job's
+# JSONB result lists them: (job, the file's place among the job's files,
+# link, path).
+_DOWNLOADED_FILES = """
+    SELECT j.id,
+           (row_number() OVER (PARTITION BY j.id ORDER BY e.n, p.n) - 1)::int,
+           e.entry ->> 'url',
+           p.path
+    FROM jobs AS j,
+         jsonb_array_elements(j.result) WITH ORDINALITY AS e(entry, n),
+         jsonb_array_elements_text(e.entry -> 'output_paths')
+             WITH ORDINALITY AS p(path, n)
+    WHERE j.task IN ('download_media', 'download_videos', 'download_images')
+      AND j.status = 'done' AND j.user_id IS NOT NULL
+      AND jsonb_typeof(j.result) = 'array'
+      AND jsonb_typeof(j.result -> 0 -> 'output_paths') = 'array'
+"""
+
+
+def test_downloads_gets_one_row_per_file_of_every_download_job(db):
+    """downloads: every output file of every done download job that has an
+    owner is one row, at its place in the job, stored, last used when the
+    job started, its store copy not known yet; no other table changes, and
+    a downgrade drops only the new table."""
+    needs(DOWNLOADS)(db)
+    command.upgrade(_alembic(), JOB_OWNERS)
+    before = _row_counts(db)
+    files = set(_rows(db, _DOWNLOADED_FILES))
+
+    command.upgrade(_alembic(), DOWNLOADS)
+
+    assert set(_rows(db, "SELECT job_id, position, url, file_path FROM downloads")) == (
+        files
+    )
+    assert _count(db, "downloads") == len(files)
+    assert (
+        _scalar(
+            db,
+            "SELECT count(*) FROM downloads AS d JOIN jobs AS j ON j.id = d.job_id"
+            " WHERE d.user_id IS DISTINCT FROM j.user_id OR NOT d.stored"
+            " OR d.asset_path IS NOT NULL OR d.removed_at IS NOT NULL"
+            " OR d.created_at <> to_timestamp(j.created_at)"
+            " OR d.last_used_at <> d.created_at",
+        )
+        == 0
+    )
+    assert {i["name"] for i in inspect(db).get_indexes("downloads")} >= {
+        "ix_downloads_user_id_url",
+        "ix_downloads_stored_last_used_at",
+    }
+    deletes = {
+        f["referred_table"]: f["options"].get("ondelete")
+        for f in inspect(db).get_foreign_keys("downloads")
+    }
+    assert deletes == {"users": "RESTRICT", "jobs": "CASCADE"}
+    assert {t: n for t, n in _row_counts(db).items() if t != "downloads"} == before
+
+    command.downgrade(_alembic(), JOB_OWNERS)
+
+    assert "downloads" not in inspect(db).get_table_names()
+    assert _row_counts(db) == before
+
+
+def test_job_owners_downgrade_puts_actor_and_the_meta_cost_back(db):
+    """Back on the old schema every job has the actor its owner was (a
+    non-user actor became nobody's for good) and its meta as it was."""
+    needs(JOB_OWNERS)(db)
+    command.upgrade(_alembic(), _BEFORE_JOB_OWNERS)
+    owners = {
+        job_id: None if user_id is None else str(user_id)
+        for job_id, user_id in _rows(db, _OWNERS_BY_ACTOR)
+    }
+    metas = dict(_rows(db, "SELECT id, meta FROM jobs"))
+
+    command.upgrade(_alembic(), JOB_OWNERS)
+    command.downgrade(_alembic(), _BEFORE_JOB_OWNERS)
+
+    assert dict(_rows(db, "SELECT id, actor FROM jobs")) == owners
+    assert dict(_rows(db, "SELECT id, meta FROM jobs")) == metas
+    assert not {"user_id", "cost_usd", "cost_estimated"} & _columns(db, "jobs")

@@ -1301,6 +1301,9 @@ a.ph-login-user:hover { text-decoration: underline; }
 .users-table tr[data-inactive] td:not(:last-child) { opacity: 0.55; }
 .users-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: var(--gap-inline); }
 .users-actions form { margin: 0; }
+/* A VA's row: the new password and its button, side by side. */
+.users-set-password { display: flex; gap: var(--gap-inline); }
+.users-set-password input { width: 11rem; min-height: var(--control-h-sm); }
 .users-actions button { min-height: 32px; padding: var(--s-1) var(--s-3); }
 .account-grid {
     display: grid;

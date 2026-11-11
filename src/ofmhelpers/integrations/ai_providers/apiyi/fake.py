@@ -82,22 +82,24 @@ class FakeApiyi:
         # The next submit is made, then its answer never arrives (a timeout).
         self.lose_next = False
         self.model_lists = 0
+        # A key of another token group -> the models it lists (`GET
+        # /v1/models`); `FAKE_KEY` is a Wan&HappyHorse key.
+        self.key_models: dict[str, list[str]] = {}
         self.families = FakeFamilies(polls_until_done)
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
-        if request.headers.get("Authorization") != f"Bearer {FAKE_KEY}":
+        key = str(request.headers.get("Authorization", "")).removeprefix("Bearer ")
+        if key != FAKE_KEY and key not in self.key_models:
             return error(401, "invalid_api_key", "无效的令牌 (invalid token)")
         path = urlsplit(request.url or "").path
         if request.method == "GET" and path == _MODELS:
             with self._lock:
                 self.model_lists += 1
+            listed = self.key_models.get(key, ["wan3.0-video", "wan3.0-video-prime"])
             return FakeReply.json_body(
-                {
-                    "object": "list",
-                    "data": [{"id": "wan3.0-video"}, {"id": "wan3.0-video-prime"}],
-                }
+                {"object": "list", "data": [{"id": model} for model in listed]}
             )
         other = self.families.handle(request, path)
         if other is not None:
