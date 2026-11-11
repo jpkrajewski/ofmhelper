@@ -44,6 +44,7 @@ def _job_to_dict(row: JobRow) -> dict:
         "finished_at": row.finished_at,
         "preview": row.preview,
         "hidden_at": row.hidden_at,
+        "meta": row.meta or {},
     }
 
 
@@ -313,6 +314,12 @@ class JobRepository(CachedRepository):
                 .where(JobRow.id == job_id)
                 .values(params=JobRow.params.op("||")(type_coerce(values, JSONB)))
             )
+
+    @invalidates_cache
+    def set_meta(self, job_id: str, meta: dict[str, Any]) -> None:
+        """What the job's run cost. A missing job: nothing happens."""
+        with session_scope() as s:
+            s.execute(update(JobRow).where(JobRow.id == job_id).values(meta=meta))
 
     def redone_links(
         self, task: str, actor: str, links: list[str], after: float

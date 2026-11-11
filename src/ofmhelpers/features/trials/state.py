@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from redis.exceptions import LockError, RedisError
@@ -41,6 +42,19 @@ class ReelStatus(StrEnum):
     UPLOADED = "uploaded"
 
 
+class Recipe(BaseModel):
+    """What made a copy: the same again makes the same edit again (every
+    choice of the pipeline is drawn from the seed), so the copy itself need
+    not be kept (`cleanup`)."""
+
+    seed: int
+    caption: str
+    pipeline: str = ""
+    # What the seed drew that time (speed, crop, colour, sound...), as the
+    # pipeline reported it: to look at, never an input -- the seed is.
+    draws: dict[str, Any] | None = None
+
+
 class ReelState(BaseModel):
     """One POSTED reel and its trial copy."""
 
@@ -65,6 +79,15 @@ class ReelState(BaseModel):
     job_id: str | None = None
     # Its file name in TRIALS once uploaded.
     uploaded_as: str | None = None
+    # What made the copy (None: one made before recipes were kept).
+    recipe: Recipe | None = None
+    # Whether POSTED still had its source at the last read (None: not read
+    # since this was kept). Only then may `cleanup` delete the copy: one whose
+    # source left Drive could never be made again.
+    posted: bool | None = None
+    # The copy's video is on disk. False: a day old, only its poster is left
+    # (`cleanup`); Upload makes it again from `recipe`.
+    stored: bool = True
 
     def posted_or_never(self) -> datetime:
         return self.posted_at or _NEVER
@@ -88,12 +111,31 @@ class ReelState(BaseModel):
     def mark_downloaded(self, local: str) -> None:
         self.local, self.status, self.error = local, ReelStatus.DOWNLOADED, None
 
-    def mark_made(self, caption: str, out: str, captions: list[str]) -> None:
+    def source_back(self, local: str) -> None:
+        """Its source downloaded again, for a copy made again."""
+        self.local = local
+
+    def mark_made(self, out: str, captions: list[str], recipe: Recipe) -> None:
         """Its new copy is not the one in Drive, if one is."""
-        self.caption, self.out, self.made = caption, out, self.made + 1
-        self.captions = captions
+        self.caption, self.out, self.made = recipe.caption, out, self.made + 1
+        self.captions, self.recipe, self.stored = captions, recipe, True
         self.status, self.error = ReelStatus.GENERATED, None
         self.approved, self.job_id, self.uploaded_as = False, None, None
+
+    def restored(self) -> None:
+        """The same copy on disk again (an upload of a cleaned-up one)."""
+        self.stored = True
+
+    def cleaned(self) -> None:
+        """Its video and source deleted; the poster and the recipe stay."""
+        self.stored, self.local = False, None
+
+    def source_dropped(self) -> None:
+        """Its source deleted before any copy was made: Generate downloads it
+        again."""
+        self.local = None
+        if self.status == ReelStatus.DOWNLOADED:
+            self.status = ReelStatus.PENDING
 
     def mark_failed(self, error: str) -> None:
         self.status, self.error, self.job_id = ReelStatus.FAILED, error, None

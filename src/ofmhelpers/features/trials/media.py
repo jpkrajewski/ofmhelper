@@ -21,6 +21,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 from ofmhelpers.media.recorder import load_profile
 from ofmhelpers.media.repurpose.devices import load_device
+from ofmhelpers.media.video_probe import duration_s
 
 logger = get_logger(__name__)
 
@@ -55,7 +56,7 @@ def _fresh(dest: Path, copy: Path) -> bool:
 
 
 def preview(copy: Path) -> Path:
-    dest = copy.with_suffix(f".preview{_PREVIEW_HEIGHT}.mp4")
+    dest = preview_path(copy)
     if not _fresh(dest, copy):
         write_video_preview(
             copy,
@@ -67,10 +68,24 @@ def preview(copy: Path) -> Path:
     return dest
 
 
-def poster(copy: Path) -> Path:
-    dest = copy.with_suffix(".poster.webp")
-    if not _fresh(dest, copy):
-        write_video_thumb(copy, dest, settings.web.poster_size, pre_filter=_to_sdr())
+def preview_path(copy: Path) -> Path:
+    return copy.with_suffix(f".preview{_PREVIEW_HEIGHT}.mp4")
+
+
+def poster_path(copy: Path) -> Path:
+    return copy.with_suffix(".poster.webp")
+
+
+def poster(copy: Path, *, again: bool = False) -> Path:
+    """A frame from the middle (the first is often black or a title): it is
+    all that is kept of a copy after a day (`cleanup`). `again`: made even
+    when one is there (one from before it was the middle)."""
+    dest = poster_path(copy)
+    if again or not _fresh(dest, copy):
+        middle = duration_s(copy, settings.web.ffmpeg_timeout_s) / 2
+        write_video_thumb(
+            copy, dest, settings.web.poster_size, pre_filter=_to_sdr(), at_s=middle
+        )
     return dest
 
 

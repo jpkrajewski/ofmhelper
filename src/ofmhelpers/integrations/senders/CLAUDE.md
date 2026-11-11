@@ -4,7 +4,7 @@ Where events go out (Telegram, later Discord, email, ...). Any part of the app e
 
 ```
 emit(Event) | @emits(build)          features/events/bus.py     returns at once, never raises
-  -> `events` queue                   compose events-worker, 1 process, HIGHEST priority
+  -> `events` queue                   compose worker (its own pool), 1 process, HIGHEST priority
   -> dispatch                         features/events/dispatch.py: the aggregator
        each sender in senders(), not in OFM_EVENTS_SENDERS_OFF, each of its targets()
   -> deliver(sender, target, event)   one RQ job each: 180 s limit, failed kept 14 d

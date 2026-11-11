@@ -305,6 +305,10 @@ class JobRow(Base):
     # When its owner hid its card from the galleries; NULL = shown. A view
     # choice only: the job and its files stay.
     hidden_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # What the run cost (`schemas.JobMeta`): never an input, so not `params`.
+    meta: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
     __table_args__ = (
         # Every read (list_jobs, pruning) sorts/filters by created_at.

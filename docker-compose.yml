@@ -23,7 +23,11 @@
 x-app-environment: &app-environment
   - BGUTIL_POT_PROVIDER_URL=http://pot-provider:4416
   - OFM_COOKIES_FILE=/app/cookies/cookies.txt
-  - OFM_KIEAI_OUT_DIR=/app/kieai_out
+  # Inside the uploads mount: the asset store's copy of each result is then
+  # a hard link, not a second file (two mounts cannot link: prod
+  # 2026-11-11, 17.5 GB of the 72 GB disk was every result twice). The old
+  # ./kieai_out mount stays: earlier jobs name files there, and the logs.
+  - OFM_KIEAI_OUT_DIR=/app/uploads/kieai_out
   - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
   - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
   # Postgres (durable job/application store) and Redis (RQ broker). The code
@@ -96,7 +100,14 @@ services:
     # configured (see ofmhelpers/log.py); it reads OFM_RQ_WORKERS/OFM_REDIS_URL
     # from settings itself, so no shell is needed to expand them -- exec form
     # also keeps signals going straight to the process.
-    command: ["python", "-m", "ofmhelpers.worker"]
+    # Three queues, each its own pool in here (`worker.QueueGroup`), so none
+    # waits behind another: `default` (OFM_RQ_WORKERS 10), `clone-links`
+    # (OFM_CLONE_LINKS_WORKERS 5: a 30-120 link Generate held every other job
+    # back for hours on the default queue) and `events` (OFM_EVENTS_WORKERS 1:
+    # a Telegram message never waits behind a 45-min generation). One
+    # container, not three: all of it is network work, and each container
+    # held the app's code again (~210 MB idle each, prod 2026-11-11).
+    command: ["python", "-m", "ofmhelpers.worker", "default", "clone-links", "events"]
     # `compose stop` (every deploy) is a warm shutdown: the pool takes no new
     # job and each worker finishes the one it runs. Docker's default 10 s
     # SIGKILLed /clone-links reviews mid-LLM-call or mid-upload; 120 s lets
@@ -114,41 +125,6 @@ services:
     volumes: *app-volumes
     depends_on:
       # Never against an un-migrated database: `migrate` must have exited 0.
-      migrate:
-        condition: service_completed_successfully
-      pot-provider:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - internal
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - DAC_OVERRIDE
-
-  # /clone-links runs (features/clone_links/run.py) on their own
-  # `clone-links` queue and pool (OFM_CLONE_LINKS_WORKERS, default 5): a
-  # 30-120 link Generate holds a worker per run for minutes each, and on the
-  # shared default queue it held every other job back for hours. Otherwise
-  # the same as `worker` (image, env, mounts, shutdown).
-  clone-links-worker:
-    build: .
-    container_name: ofmhelpers-clone-links-worker
-    restart: unless-stopped
-    command: ["python", "-m", "ofmhelpers.worker", "clone-links"]
-    stop_grace_period: 120s
-    healthcheck:
-      disable: true
-    environment: *app-environment
-    env_file:
-      - .env
-    volumes: *app-volumes
-    depends_on:
       migrate:
         condition: service_completed_successfully
       pot-provider:
@@ -211,37 +187,6 @@ services:
     command: ["python", "-m", "ofmhelpers.worker", "edit"]
     cpus: 3.0
     mem_limit: 2g
-    stop_grace_period: 120s
-    healthcheck:
-      disable: true
-    environment: *app-environment
-    env_file:
-      - .env
-    volumes: *app-volumes
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - internal
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - DAC_OVERRIDE
-
-  # Events going out to the senders (features/events: Telegram, ...), seconds each.
-  # Its own queue at the top priority, one process (`OFM_EVENTS_WORKERS`): they go
-  # out in order, and never wait behind a 45-min generation on the default queue.
-  events-worker:
-    build: .
-    container_name: ofmhelpers-events-worker
-    restart: unless-stopped
-    command: ["python", "-m", "ofmhelpers.worker", "events"]
     stop_grace_period: 120s
     healthcheck:
       disable: true

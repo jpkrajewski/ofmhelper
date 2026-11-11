@@ -1,6 +1,10 @@
 """
-Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker [queue]`,
-a `QueueName` (the default queue if none is named). One compose service per queue.
+Entrypoint for the RQ worker containers: `python -m ofmhelpers.worker
+[queue ...]`, `QueueName`s (the default queue if none is named). A queue whose
+work needs its own CPU or memory limit has its own compose service (media,
+edit, previews); the light ones (default, clone-links, events: network work)
+share one container, `QueueGroup`: each still its own pool, so none waits
+behind another.
 
 `QueueWorkers` runs RQ's own `WorkerPool` (its signal handling and graceful
 shutdown, no pool of ours) with the processes and priority
@@ -13,7 +17,11 @@ WARNING) not at all.
 
 import argparse
 import importlib
+import multiprocessing
 import os
+import signal
+import sys
+from multiprocessing.connection import wait
 
 import logfire
 from rq import Worker
@@ -113,18 +121,63 @@ class QueueWorkers:
         ).start()
 
 
+class QueueGroup:
+    """Several queues served from one container. Each keeps its own pool --
+    its own processes and priority, so a Telegram message never waits behind a
+    45-min generation, nor a generation behind a 120-link /clone-links run --
+    but they are forks of one parent that imported the app once: a container
+    per queue held that import again each (~210 MB idle, prod 2026-11-11)."""
+
+    def __init__(self, queues: list[QueueName]) -> None:
+        self.queues = queues
+
+    def run(self) -> None:
+        """Until a shutdown signal, passed on to every pool (each lets its
+        workers finish their job). A pool that ends by itself takes the others
+        down with it and the exit says so: Docker starts the container again
+        whole, never half of it."""
+        _preload_jobs()
+        fork = multiprocessing.get_context("fork")
+        pools = [
+            fork.Process(target=QueueWorkers(queue).run, name=f"pool {queue.value}")
+            for queue in self.queues
+        ]
+        for pool in pools:
+            pool.start()
+        asked = False
+
+        def stop(signum: int, _frame: object) -> None:
+            nonlocal asked
+            asked = True
+            _signal_all(pools, signum)
+
+        signal.signal(signal.SIGTERM, stop)
+        signal.signal(signal.SIGINT, stop)
+        wait([pool.sentinel for pool in pools])
+        if not asked:
+            logger.error("a worker pool ended by itself: stopping the others")
+            _signal_all(pools, signal.SIGTERM)
+        for pool in pools:
+            pool.join()
+        sys.exit(0 if asked else 1)
+
+
+def _signal_all(pools: list, signum: int) -> None:
+    for pool in pools:
+        if pool.pid is not None and pool.is_alive():
+            os.kill(pool.pid, signum)
+
+
 def main() -> None:
     configure_telemetry("ascend-worker")
     configure_logging()
     parser = argparse.ArgumentParser(prog="ofmhelpers.worker")
-    parser.add_argument(
-        "queue",
-        nargs="?",
-        type=QueueName,
-        choices=list(QueueName),
-        default=QueueName.DEFAULT,
-    )
-    QueueWorkers(parser.parse_args().queue).run()
+    parser.add_argument("queue", nargs="*", type=QueueName, choices=list(QueueName))
+    queues = parser.parse_args().queue or [QueueName.DEFAULT]
+    if len(queues) == 1:
+        QueueWorkers(queues[0]).run()
+    else:
+        QueueGroup(queues).run()
 
 
 if __name__ == "__main__":

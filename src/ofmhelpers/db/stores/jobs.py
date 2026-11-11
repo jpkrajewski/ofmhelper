@@ -36,6 +36,7 @@ from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobPreview, ResultFile
+from ofmhelpers.schemas.persistence import GenerationRecord, JobMeta
 
 logger = get_logger(__name__)
 
@@ -108,6 +109,7 @@ def run_job(job_id: str, fn, kwargs: dict):
             _repository().update_status(job_id, "done", result=_stored(result))
             _record_outcome(span, job_id, result)
             # Saved: its provider request (if any) needs no resuming.
+            _keep_cost(job_id)
             tasks.forget(job_id)
         except Exception as exc:
             # The status pages show this directly to whoever is running the
@@ -118,6 +120,8 @@ def run_job(job_id: str, fn, kwargs: dict):
                 job_id, "failed", error=str(exc) or exc.__class__.__name__
             )
             if not resumable(exc):
+                # Paid for and then failed (its export, its upload): still a cost.
+                _keep_cost(job_id)
                 tasks.forget(job_id)
             span.record_exception(exc)
             span.set_level("error")
@@ -222,9 +226,28 @@ def fail_job(job_id: str, error: str) -> None:
     _repository().update_status(job_id, "failed", error=error)
 
 
+def _keep_cost(job_id: str) -> None:
+    """The job's provider requests into its row (`jobs.meta`) before they are
+    forgotten: Logfire keeps their cost 30 days, the job keeps it for good.
+    Never the key they ran on. Best effort: the job is already saved."""
+    try:
+        made = [
+            GenerationRecord.model_validate(task.model_dump(exclude={"api_key"}))
+            for task in tasks.of_job(job_id)
+        ]
+        if made:
+            meta = JobMeta.of(made).model_dump(mode="json")
+            _repository().set_meta(job_id, meta)
+    except Exception:
+        logger.warning("could not keep the cost of job %s", job_id, exc_info=True)
+
+
 def _stored(result: Any) -> Any:
     """A run function's return value as the JSON the result column holds:
-    its models (`ResultFile`, `DownloadResult`) dumped, anything else as is."""
+    its models (`ResultFile`, `DownloadResult`, a job's own summary) dumped,
+    anything else as is."""
+    if isinstance(result, BaseModel):
+        return result.model_dump(mode="json")
     if not isinstance(result, list):
         return result
     return [_stored_entry(item) for item in result]

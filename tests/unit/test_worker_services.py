@@ -18,13 +18,7 @@ DEPLOYS = [
     REPO / "scripts" / "deploy.sh",
     REPO / ".github" / "workflows" / "deploy.yml",
 ]
-WORKERS = {
-    "worker",
-    "clone-links-worker",
-    "media-worker",
-    "edit-worker",
-    "events-worker",
-}
+WORKERS = {"worker", "media-worker", "edit-worker"}
 
 
 class Service(BaseModel):
@@ -50,14 +44,15 @@ def _app_services() -> set[str]:
     return {name for name, s in _compose().services.items() if s.build == "."}
 
 
-def _worker_queues() -> dict[str, str]:
-    """service -> the queue its `python -m ofmhelpers.worker [queue]` serves."""
+def _worker_queues() -> dict[str, set[str]]:
+    """service -> the queues its `python -m ofmhelpers.worker [queue ...]`
+    serves."""
     found = {}
     for name, service in _compose().services.items():
         cmd = service.command
         if "ofmhelpers.worker" in cmd:
             rest = cmd[cmd.index("ofmhelpers.worker") + 1 :]
-            found[name] = rest[0] if rest else QueueName.DEFAULT
+            found[name] = set(rest) or {QueueName.DEFAULT.value}
     return found
 
 
@@ -73,25 +68,18 @@ def _compose_calls(path: Path, verb: str) -> list[set[str]]:
     return calls
 
 
-def test_every_queue_has_its_own_worker_service():
+def test_every_queue_is_served_by_one_worker_service():
+    """The network queues share `worker` (a pool each, `worker.QueueGroup`);
+    what encodes has a service of its own, for its CPU and memory limits. A
+    queue no service names would fill up with nobody taking from it."""
     assert _worker_queues() == {
-        "worker": QueueName.DEFAULT,
-        "clone-links-worker": QueueName.CLONE_LINKS,
-        "preview-worker": QueueName.PREVIEWS,
-        "media-worker": QueueName.MEDIA,
-        "edit-worker": QueueName.EDIT,
-        "events-worker": QueueName.EVENTS,
+        "worker": {"default", "clone-links", "events"},
+        "preview-worker": {"previews"},
+        "media-worker": {"media"},
+        "edit-worker": {"edit"},
     }
-
-
-def test_the_clone_links_worker_is_the_worker_on_its_own_queue():
-    """Same image, env, mounts, network, restart and shutdown as `worker`:
-    only its name and queue differ."""
-    services = _compose().services
-    differ = {"container_name", "command"}
-    assert services["clone-links-worker"].model_dump(exclude=differ) == services[
-        "worker"
-    ].model_dump(exclude=differ)
+    served = [q for queues in _worker_queues().values() for q in queues]
+    assert sorted(served) == sorted(q.value for q in QueueName)
 
 
 def test_the_edit_worker_has_three_cpus_and_two_gb():
@@ -136,3 +124,22 @@ def test_both_deploys_keep_only_a_days_build_cache(path: Path):
         if "builder prune" in line and not line.strip().startswith("#")
     ]
     assert prunes == ["docker builder prune -af --filter until=24h >/dev/null"]
+
+
+def _mount_of(path: str, volumes: list[str]) -> str:
+    """The container path of the mount `path` is in: the longest one."""
+    targets = [volume.split(":")[1] for volume in volumes]
+    return max((t for t in targets if path.startswith(f"{t}/")), key=len)
+
+
+@pytest.mark.parametrize("name", ["ofmhelpers", *sorted(WORKERS)])
+def test_results_land_in_the_asset_stores_mount(name: str):
+    """The asset store hard-links each result (`register_generated_asset`);
+    across two mounts the link fails and it copied: every result twice,
+    17.5 GB of prod's 72 GB disk (2026-11-11)."""
+    service = _compose().services[name].model_dump()
+    env = dict(line.split("=", 1) for line in service["environment"])
+
+    out = _mount_of(f"{env['OFM_KIEAI_OUT_DIR']}/x", service["volumes"])
+
+    assert out == _mount_of("/app/uploads/assets/x", service["volumes"])

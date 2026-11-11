@@ -12,7 +12,7 @@
 #
 # What this adds on top of the production stack:
 #   - ./src bind-mounted into the API and workers, so edits are visible without
-#     a rebuild (`docker compose ... restart worker clone-links-worker` picks
+#     a rebuild (`docker compose ... restart worker` picks
 #     them up; the API reloads itself).
 #   - uvicorn --reload for the API.
 #   - 2-process RQ pools instead of the production 10 (default queue) and 5
@@ -60,14 +60,7 @@ services:
       # processes competing for the same laptop, and startup/restart is the
       # slow part of the dev loop. Bump if you need real concurrency here.
       - OFM_RQ_WORKERS=2
-    dns: *public-dns
-    volumes:
-      - ./src:/app/src
-
-  clone-links-worker:
-    # Same as the worker: no reloader, restart it after changing run code.
-    environment:
-      # 2 instead of the production 5, for the same reason as the worker.
+      # 2 instead of the production 5, for the same reason.
       - OFM_CLONE_LINKS_WORKERS=2
     dns: *public-dns
     volumes:
@@ -87,12 +80,6 @@ services:
 
   edit-worker:
     # Same as the worker: no reloader, restart it after changing /edit code.
-    dns: *public-dns
-    volumes:
-      - ./src:/app/src
-
-  events-worker:
-    # Same as the worker: no reloader, restart it after changing event or sender code.
     dns: *public-dns
     volumes:
       - ./src:/app/src

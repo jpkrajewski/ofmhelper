@@ -146,10 +146,12 @@ jobs:
             export OFM_RELEASE
 
             echo "== building =="
-            $compose build ofmhelpers worker clone-links-worker preview-worker media-worker edit-worker events-worker migrate
+            $compose build ofmhelpers worker preview-worker media-worker edit-worker migrate
 
             echo "== swapping in the new containers =="
-            $compose up -d postgres redis pot-provider
+            # --remove-orphans: a service taken out of the compose file (clone-links-worker,
+            # events-worker, 2026-11-11) would run on with the old code, next to the new.
+            $compose up -d --remove-orphans postgres redis pot-provider
             # Old code never runs against the new schema: the app and workers
             # stop before `migrate` touches it (seconds of downtime; the build
             # is already done). Compose then runs `migrate` (alembic upgrade
@@ -163,11 +165,11 @@ jobs:
             # it runs (stop_grace_period, up to 120 s) and takes no new one;
             # jobs queued meanwhile wait in Redis for the new workers.
             echo "== stopping the workers =="
-            $compose stop worker clone-links-worker preview-worker media-worker edit-worker events-worker
+            $compose stop worker preview-worker media-worker edit-worker
             echo "== stopping the app =="
             $compose stop ofmhelpers
             echo "== migrating, then starting the app =="
-            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker clone-links-worker preview-worker media-worker edit-worker events-worker
+            $compose up -d --no-deps --force-recreate migrate ofmhelpers worker preview-worker media-worker edit-worker
             $compose logs migrate
 
             # Every deploy leaves the previous image dangling; unreaped they
@@ -228,7 +230,7 @@ jobs:
             echo "== docker compose ps =="
             $compose ps -a
             echo "== last 100 log lines =="
-            $compose logs --tail=100 migrate ofmhelpers worker clone-links-worker preview-worker media-worker edit-worker events-worker
+            $compose logs --tail=100 migrate ofmhelpers worker preview-worker media-worker edit-worker
           '
           # Delivered as a file for the same reason as the deploy step: piping
           # into `bash -s` lets the first stdin-reading command swallow the

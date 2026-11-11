@@ -17,7 +17,7 @@ job's `result` payload (a list of `ResultFile` dumps, a grouped list of
 """
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict
 
@@ -56,6 +56,34 @@ class JobPreview(BaseModel):
     kind: str | None = None
 
 
+class GenerationRecord(BaseModel):
+    """One provider request of a job, as it ended."""
+
+    part: int = 0
+    provider: str
+    model: str
+    task_id: str
+    state: str | None = None
+    cost_usd: float | None = None
+    seconds: float | None = None
+
+
+class JobMeta(BaseModel):
+    """What a job's run cost (`jobs.meta`): its provider requests and their
+    sum, for "what did the clones cost this month" asked of the database."""
+
+    generations: list[GenerationRecord] = []
+    cost_usd: float | None = None
+
+    @classmethod
+    def of(cls, generations: list[GenerationRecord]) -> Self:
+        costs = [g.cost_usd for g in generations if g.cost_usd is not None]
+        return cls(
+            generations=generations,
+            cost_usd=round(sum(costs), 6) if costs else None,
+        )
+
+
 class Job(BaseModel):
     """A background-job record. `params` and `result` are free-form JSON
     (JSONB) because their shape varies per task type -- `result` is read back
@@ -75,6 +103,7 @@ class Job(BaseModel):
     preview: JobPreview | None = None
     # When its owner hid it from the galleries; None = shown.
     hidden_at: float | None = None
+    meta: JobMeta = JobMeta()
 
     @property
     def _entries(self) -> list[dict[str, Any]]:

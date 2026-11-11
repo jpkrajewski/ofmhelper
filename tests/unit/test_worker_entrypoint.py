@@ -9,7 +9,11 @@ takes effect if the pool is actually given it.
 
 import inspect
 import logging
+import multiprocessing
+import os
+import signal
 import sys
+import time
 from typing import ClassVar
 
 import pytest
@@ -17,7 +21,7 @@ from rq import Worker
 
 from ofmhelpers import worker as worker_module
 from ofmhelpers.cache import QueueName
-from ofmhelpers.worker import ConfiguredWorker
+from ofmhelpers.worker import ConfiguredWorker, QueueGroup
 
 
 def test_configured_worker_is_a_real_rq_worker():
@@ -113,7 +117,7 @@ def test_the_pool_runs_our_worker_class_on_the_configured_redis(monkeypatch):
 
 def test_the_clone_links_queue_has_its_own_pool(monkeypatch):
     """A 120-link /clone-links Generate runs on its own queue and pool
-    (compose clone-links-worker), never on the default workers."""
+    (next to the default one in compose `worker`), never on the default workers."""
     monkeypatch.setenv("OFM_RQ_WORKERS", "10")
     monkeypatch.setenv("OFM_CLONE_LINKS_WORKERS", "4")
 
@@ -160,3 +164,83 @@ def test_worker_logger_is_named_for_the_module_not_main():
     useless name to see in a log line."""
     assert worker_module.logger.name == "ofmhelpers.worker"
     assert isinstance(worker_module.logger, logging.Logger)
+
+
+# --- several queues in one container: a pool each, one parent -------------------
+
+
+def _group(monkeypatch, tmp_path, pool) -> multiprocessing.Process:
+    """`python -m ofmhelpers.worker default clone-links events` in a process of
+    its own, each queue's pool replaced by `pool(queue, tmp_path)`."""
+    monkeypatch.setattr(worker_module, "_preload_jobs", lambda: None)
+    monkeypatch.setattr(
+        worker_module.QueueWorkers, "run", lambda self: pool(self.queue, tmp_path)
+    )
+    queues = [QueueName.DEFAULT, QueueName.CLONE_LINKS, QueueName.EVENTS]
+    group = multiprocessing.get_context("fork").Process(target=QueueGroup(queues).run)
+    group.start()
+    return group
+
+
+def _serving(queue: QueueName, folder) -> None:
+    """A pool at work until told to stop, which it does cleanly (rq's does)."""
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
+    (folder / f"{queue.value}.pid").write_text(str(os.getpid()))
+    time.sleep(30)
+
+
+def _pools(folder, count: int) -> dict[str, int]:
+    """queue -> its pool's pid, once `count` pools are up."""
+    deadline = time.monotonic() + 10
+    while len(found := list(folder.glob("*.pid"))) < count:
+        assert time.monotonic() < deadline, "the pools did not start"
+        time.sleep(0.01)
+    return {p.stem: int(p.read_text()) for p in found}
+
+
+def _gone(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    return False
+
+
+def test_each_queue_of_a_group_has_its_own_pool_and_a_stop_reaches_them_all(
+    monkeypatch, tmp_path
+):
+    """`compose stop` signals the container's first process: every pool must
+    hear it (a warm shutdown each), or its jobs are killed at the grace
+    period's end."""
+    group = _group(monkeypatch, tmp_path, _serving)
+    pools = _pools(tmp_path, 3)
+    assert set(pools) == {"default", "clone-links", "events"}
+    assert len(set(pools.values())) == 3
+
+    assert group.pid is not None
+    os.kill(group.pid, signal.SIGTERM)
+    group.join(10)
+
+    assert group.exitcode == 0
+    assert all(_gone(pid) for pid in pools.values())
+
+
+def _events_dies(queue: QueueName, folder) -> None:
+    if queue is QueueName.EVENTS:
+        (folder / "events.pid").write_text(str(os.getpid()))
+        os._exit(3)
+    _serving(queue, folder)
+
+
+def test_a_pool_that_dies_takes_the_container_down_to_be_started_again(
+    monkeypatch, tmp_path
+):
+    """Half a container would look healthy to Docker while one queue fills up
+    with nobody taking from it."""
+    group = _group(monkeypatch, tmp_path, _events_dies)
+    pools = _pools(tmp_path, 3)
+
+    group.join(10)
+
+    assert group.exitcode == 1
+    assert all(_gone(pid) for pid in pools.values())

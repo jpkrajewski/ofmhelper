@@ -206,6 +206,9 @@ ignore-variadic-names = true
 # FastAPI reads route signatures when the route is declared: these imports are
 # used at import time, whatever the annotation looks like to ruff.
 "src/ofmhelpers/web/routers/**" = ["TC001", "TC002"]
+# Every route of a /trials folder gets `{login_id}` through one dependency
+# (`Trials`): the rule does not look behind the alias.
+"src/ofmhelpers/web/routers/video_tools/trials.py" = ["FAST003"]
 "src/ofmhelpers/web/dependencies.py" = ["TC001", "TC002"]
 "src/ofmhelpers/web/forms.py" = ["TC001", "TC002"]
 # Lazy singletons that rebuild when the configured URL changes -- `global`

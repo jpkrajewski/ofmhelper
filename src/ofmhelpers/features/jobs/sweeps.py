@@ -7,6 +7,12 @@ applies at the next one; a sweep without an interval runs once, at startup.
 A failed run is logged and the next one still comes: a broken sweep (Redis
 down, Drive refusing) never takes its loop down. A new sweep is one entry in
 `sweeps()`.
+
+A thread is for a sweep that only looks and queues, or waits on the network.
+One that does the work itself (walks the disk, runs ffmpeg) names a `queue`:
+its round only puts the function in that line, and a worker container -- its
+own CPU and memory limits -- runs it, never the process serving the pages. A
+round whose last one still waits or runs puts nothing.
 """
 
 import asyncio
@@ -17,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.features.chatting import sources as chat_sources
@@ -31,6 +38,7 @@ from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
+from ofmhelpers.features.trials import cleanup as trials_cleanup
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
@@ -50,6 +58,15 @@ class Sweep(BaseModel):
     run: Callable[[], Any]
     interval_s: Callable[[], float] | None = None
     enabled: Callable[[], bool] = _always
+    # The workers' line the work runs in (None: here, in a thread).
+    queue: QueueName | None = None
+
+    def round(self) -> None:
+        if self.queue is None:
+            self.run()
+        else:
+            key = "sweep-" + "-".join(self.name.split())
+            JobQueue(self.queue).put_once(key, self.run)
 
 
 def _drive_enabled() -> bool:
@@ -150,12 +167,21 @@ def sweeps() -> list[Sweep]:
             name="edit cleanup",
             run=edit_cleanup.remove_old,
             interval_s=lambda: settings.web.edit_sweep_s,
+            queue=QueueName.PREVIEWS,
+        ),
+        # /trials copies a day old: video and source go, poster and recipe stay.
+        Sweep(
+            name="trials cleanup",
+            run=trials_cleanup.remove_old,
+            interval_s=lambda: settings.trials.sweep_s,
+            queue=QueueName.PREVIEWS,
         ),
         # Raw provider downloads no job names, after 14 days -- raw_files.py.
         Sweep(
             name="raw files",
             run=raw_files.remove_old,
             interval_s=lambda: settings.aigen.raw_sweep_s,
+            queue=QueueName.PREVIEWS,
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),
@@ -166,7 +192,7 @@ async def _loop(sweep: Sweep) -> None:
     while True:
         try:
             if sweep.enabled():
-                await asyncio.to_thread(sweep.run)
+                await asyncio.to_thread(sweep.round)
         except Exception:
             logger.exception("%s sweep failed", sweep.name)
         if sweep.interval_s is None:
