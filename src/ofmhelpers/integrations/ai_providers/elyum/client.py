@@ -4,7 +4,7 @@ downloading are `runner.py`'s.
 
 Every submit carries our idempotency key as `Idempotency-Key`: a retry of
 the same body returns the generation already made (`Idempotent-Replayed`),
-never a second paid one. Through `utils.outbound`, so OFM_FAKE_EXTERNALS
+never a second paid one. Through `integrations.outbound`, so OFM_FAKE_EXTERNALS
 answers it from `fake.py`.
 """
 

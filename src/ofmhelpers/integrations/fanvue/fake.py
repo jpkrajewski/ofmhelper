@@ -16,9 +16,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 lazy from collections.abc import Mapping
 
+from pydantic import BaseModel, Field
 lazy import requests
 
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 
 API_HOST = "api.fanvue.com"
 AUTH_HOST = "auth.fanvue.com"
@@ -38,6 +39,15 @@ _START_S = 1_790_000_000
 
 def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, UTC).isoformat()
+
+
+class FakeTokens(BaseModel):
+    """The token endpoint's answer."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    token_type: str = Field(default="bearer")
 
 
 class FakeFanvue:
@@ -84,19 +94,16 @@ class FakeFanvue:
         )
         return uuid
 
-    def new_tokens(self) -> dict[str, Any]:
+    def new_tokens(self) -> FakeTokens:
         """A fresh pair; the previous refresh token is spent."""
         self._tokens_made += 1
         access = f"fake-access-{self._tokens_made}"
         refresh = f"fake-refresh-{self._tokens_made}"
         self._access.add(access)
         self._refresh = refresh
-        return {
-            "access_token": access,
-            "refresh_token": refresh,
-            "expires_in": _EXPIRES_IN_S,
-            "token_type": "bearer",
-        }
+        return FakeTokens(
+            access_token=access, refresh_token=refresh, expires_in=_EXPIRES_IN_S
+        )
 
     # --- the token endpoint -------------------------------------------------
 
@@ -114,13 +121,13 @@ class FakeFanvue:
             if form.get("grant_type") == "authorization_code":
                 if form.get("code") != GOOD_CODE or not form.get("code_verifier"):
                     return _invalid_grant("The authorization code is invalid")
-                return FakeReply.json_body(self.new_tokens())
+                return FakeReply.json_body(self.new_tokens().model_dump())
             self.refreshes += 1
             if self.authorisation_dead or form.get("refresh_token") != self._refresh:
                 self.authorisation_dead = True
                 self._access.clear()
                 return _invalid_grant("The refresh chain is broken")
-            return FakeReply.json_body(self.new_tokens())
+            return FakeReply.json_body(self.new_tokens().model_dump())
 
     # --- the API ------------------------------------------------------------
 
@@ -217,11 +224,14 @@ def fake_fanvue() -> FakeFanvue:
     return FakeFanvue()
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def api(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_fanvue().handle(request)
 
     def auth(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_fanvue().handle_auth(request)
 
-    return {API_HOST: api, AUTH_HOST: auth}
+    return [
+        FakeRoute(host=API_HOST, handler=api),
+        FakeRoute(host=AUTH_HOST, handler=auth),
+    ]

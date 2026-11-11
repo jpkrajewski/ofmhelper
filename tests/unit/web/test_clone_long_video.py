@@ -368,7 +368,9 @@ def test_cut_scales_a_piece_to_the_size_given(tmp_path):
     small): the piece is that size, the same length."""
     src = _clip(tmp_path / "src.mp4", 4, size="128x72")
 
-    piece = TOOLS.cut(src, Piece(start=1, length=2), tmp_path / "p.mp4", (64, 36))
+    piece = TOOLS.cut(
+        src, Piece(start=1, length=2), tmp_path / "p.mp4", Shape(width=64, height=36)
+    )
 
     assert _probe(piece)["size"] == (64, 36)
     assert TOOLS.length(piece) == pytest.approx(2, abs=0.15)

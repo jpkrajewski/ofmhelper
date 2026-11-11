@@ -5,18 +5,22 @@ it, never paying twice), failed with the provider's reason, or left for the
 next sweep. Every provider call is stubbed.
 """
 
+import inspect
+
 import pytest
 from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.cache import QueueName
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
 from ofmhelpers.features.jobs import recovery
+from ofmhelpers.features.jobs import restart as restart_module
+from ofmhelpers.features.jobs.registry import RESTARTS, RESUMABLE
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
-from ofmhelpers.web.routers.registry import RESUMABLE
 
 MODEL = "kie:wan/3-0-video"
 
@@ -89,7 +93,7 @@ def test_a_finished_request_reruns_its_failed_job_with_its_key(status, reruns):
     _remember(job_id)
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
 
-    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    assert recovery.run_recovery_once().entries == {job_id: "rerun"}
 
     assert get_job(job_id).status == "running"
     [(_run_job, rerun_id, _fn, kwargs)] = reruns
@@ -128,7 +132,7 @@ def test_a_failed_request_fails_the_job_with_the_providers_reason(status, reruns
     _remember(job_id)
     status["answer"] = TaskState(state="failed", error="content flagged")
 
-    assert recovery.run_recovery_once() == {job_id: "failed"}
+    assert recovery.run_recovery_once().entries == {job_id: "failed"}
 
     job = get_job(job_id)
     assert job.status == "failed"
@@ -141,7 +145,7 @@ def test_a_still_generating_request_waits_for_the_next_sweep(status, reruns):
     job_id = _job()
     _remember(job_id)
 
-    assert recovery.run_recovery_once() == {job_id: "pending"}
+    assert recovery.run_recovery_once().entries == {job_id: "pending"}
     assert tasks.recall(job_id) is not None
 
 
@@ -149,7 +153,7 @@ def test_a_running_job_is_left_alone(status, reruns):
     job_id = _job(status="running")
     _remember(job_id)
 
-    assert recovery.run_recovery_once() == {job_id: "running"}
+    assert recovery.run_recovery_once().entries == {job_id: "running"}
     assert status["seen"] == []
 
 
@@ -160,7 +164,7 @@ def test_a_done_or_deleted_job_is_forgotten(status, reruns):
 
     outcomes = recovery.run_recovery_once()
 
-    assert outcomes == {done: "forgotten", "gone-job": "forgotten"}
+    assert outcomes.entries == {done: "forgotten", "gone-job": "forgotten"}
     assert tasks.remembered() == []
 
 
@@ -168,7 +172,7 @@ def test_an_ancient_request_expires_instead_of_being_checked_forever(status, rer
     job_id = _job()
     _remember(job_id, age_s=10**7)
 
-    assert recovery.run_recovery_once() == {job_id: "expired"}
+    assert recovery.run_recovery_once().entries == {job_id: "expired"}
     assert status["seen"] == []
 
 
@@ -181,7 +185,7 @@ def test_any_provider_is_recovered_the_same_way(status, reruns):
     )
     status["answer"] = TaskState(state="done", urls=["https://hf/x.mp4"])
 
-    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    assert recovery.run_recovery_once().entries == {job_id: "rerun"}
     assert status["seen"] == [("higgsfield", "key-1", "t1")]
 
 
@@ -206,7 +210,7 @@ def test_a_clone_links_job_is_rerun_on_its_own_queue(status, reruns):
     _remember(job_id)
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
 
-    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    assert recovery.run_recovery_once().entries == {job_id: "rerun"}
 
     [(_run_job, rerun_id, fn, _kwargs)] = reruns
     assert (rerun_id, fn) == (job_id, RESUMABLE["clone_links"])
@@ -219,7 +223,7 @@ def test_one_unreachable_provider_never_stops_the_sweep(status, reruns, monkeypa
     _remember(second)
     status["answer"] = ProviderUnavailableError("down")
 
-    assert recovery.run_recovery_once() == {}
+    assert recovery.run_recovery_once().entries == {}
     assert {t.job_id for t in tasks.remembered()} == {first, second}
 
 
@@ -242,7 +246,7 @@ def test_a_job_cut_off_after_its_request_finished_is_resumed(status, reruns, act
     _remember(job_id, provider="higgsfield")
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
 
-    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    assert recovery.run_recovery_once().entries == {job_id: "rerun"}
     [(_run_job, rerun_id, _fn, kwargs)] = reruns
     assert rerun_id == job_id
     assert kwargs["api_key"] == "key-1"
@@ -251,37 +255,223 @@ def test_a_job_cut_off_after_its_request_finished_is_resumed(status, reruns, act
 def test_a_cut_off_job_with_nothing_to_resume_fails_instead_of_spinning(
     status, reruns, active
 ):
-    job_id = _job(status="running", task="download_media")
+    """A /viral search pays Apify for every run and keeps no run id: it is
+    never started over."""
+    job_id = _job(status="running", task="viral_reels")
 
-    assert recovery.run_recovery_once() == {job_id: "interrupted"}
+    assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
     job = get_job(job_id)
     assert job.status == "failed"
     assert job.error == recovery.INTERRUPTED
     assert reruns == []
 
 
+# What each task's route stores as the job's params, and what it queues its
+# run with (user 7's job: their part of the store, their cookies).
+_LOCAL_JOBS = {
+    "uniqify": (
+        {
+            "dir": "/u/uniqify/ab12",
+            "source": "source_in.mp4",
+            "stem": "out",
+            "copies": 3,
+            "strength": "hard",
+            "mirror_pct": 0.0,
+            "trim_secs": 0.1,
+            "metadata": "strip",
+        },
+        {
+            "job_dir": "/u/uniqify/ab12",
+            "source": "source_in.mp4",
+            "stem": "out",
+            "copies": 3,
+            "strength": "hard",
+            "mirror_pct": 0.0,
+            "trim_secs": 0.1,
+            "metadata": "strip",
+        },
+    ),
+    "repurpose": (
+        {
+            "dir": "/u/repurpose/cd34",
+            "source": "/a/in.mp4",
+            "preset": {},
+            "preset_name": "",
+            "special": False,
+            "device": "iphone",
+            "copies": 4,
+        },
+        {
+            "job_dir": "/u/repurpose/cd34",
+            "source": "/a/in.mp4",
+            "preset": {},
+            "preset_name": "",
+            "special": False,
+            "device": "iphone",
+            "copies": 4,
+        },
+    ),
+    "character_sheet": (
+        {"dir": "/u/character-sheet/ef56", "files": ["00_a.png", "01_b.png"]},
+        {
+            "job_dir": "/u/character-sheet/ef56",
+            "files": ["00_a.png", "01_b.png"],
+            "assets_root": "ASSETS",
+        },
+    ),
+    "edit_cut": (
+        {"video": "/a/in.mp4", "start": 1.0, "end": 4.0, "speed": 1.0},
+        {
+            "video": "/a/in.mp4",
+            "start": 1.0,
+            "end": 4.0,
+            "speed": 1.0,
+            "assets_root": "ASSETS",
+        },
+    ),
+    "edit_prepare": (
+        {"video": "/a/in.mp4"},
+        {"video": "/a/in.mp4", "assets_root": "ASSETS"},
+    ),
+    "download_media": (
+        {"urls": ["https://example.com/v/1"]},
+        {"urls": ["https://example.com/v/1"], "assets_root": "ASSETS", "user_id": 7},
+    ),
+    "download_videos": (
+        {"urls": ["https://example.com/v/1"]},
+        {"urls": ["https://example.com/v/1"], "assets_root": "ASSETS", "user_id": 7},
+    ),
+    "download_images": (
+        {"urls": ["https://example.com/p/1"]},
+        {"urls": ["https://example.com/p/1"], "assets_root": "ASSETS", "user_id": 7},
+    ),
+}
+
+
+@pytest.fixture
+def restarts(monkeypatch, reruns):
+    """What `Restart.again` queues, recorded like recovery's re-runs."""
+    monkeypatch.setattr(restart_module, "enqueue_to", recovery.enqueue_to)
+    return reruns
+
+
+def test_every_local_task_has_its_case_here():
+    assert set(_LOCAL_JOBS) == set(RESTARTS)
+
+
+def test_no_task_that_pays_a_provider_is_ever_started_over():
+    """A paid task continues from its stored provider task id (`RESUMABLE`)
+    or fails as interrupted: started over, it would pay again. /viral pays
+    Apify per run."""
+    paid = {*RESUMABLE, "viral_reels"}
+    assert paid & set(recovery.RESTARTS) == set()
+
+
+@pytest.mark.parametrize("task", sorted(_LOCAL_JOBS))
+def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
+    task, status, restarts, active
+):
+    """A deploy gives workers 120 s; an encode or a download cut off then
+    used to fail "Interrupted by a restart". Local work, free to repeat."""
+    params, kwargs = _LOCAL_JOBS[task]
+    job_id = create_job(task, params, actor="7")
+
+    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+
+    [(_run_job, rerun_id, fn, queued)] = restarts
+    assert (rerun_id, fn) == (job_id, RESTARTS[task].run)
+    inspect.signature(fn).bind(**queued)  # the run takes exactly these
+    root = queued.get("assets_root")
+    assert queued == {
+        name: (root if value == "ASSETS" else value) for name, value in kwargs.items()
+    }
+    assert root is None or root.endswith("/users/7")
+    job = get_job(job_id)
+    assert (job.status, job.error, job.params["restarts"]) == ("running", None, 1)
+
+
+def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
+    status, restarts, active, monkeypatch
+):
+    monkeypatch.setenv("OFM_UNIQIFY_ENCODE_TIMEOUT_S", "600")
+    monkeypatch.setenv("OFM_EDIT_CUT_TIMEOUT_S", "300")
+    create_job("repurpose", _LOCAL_JOBS["repurpose"][0], actor="7")
+    create_job("edit_cut", _LOCAL_JOBS["edit_cut"][0], actor="7")
+    create_job("uniqify", _LOCAL_JOBS["uniqify"][0], actor="7")
+
+    recovery.run_recovery_once()
+
+    by_function = dict(
+        zip(
+            [args[2].__name__ for args in restarts],
+            zip(restarts.queues, restarts.timeouts, strict=True),
+            strict=True,
+        )
+    )
+    assert by_function == {
+        "run_repurpose": (QueueName.DEFAULT, 4 * 600),
+        "run_cut": (QueueName.EDIT, 360),
+        "run_uniqify": (QueueName.DEFAULT, None),
+    }
+
+
+def test_a_local_job_cut_off_again_and_again_fails(status, restarts, active):
+    """Something kills it (memory, a file ffmpeg cannot get through): it must
+    not start over for ever."""
+    params = {**_LOCAL_JOBS["uniqify"][0], "restarts": restart_module.RESTARTS_MAX}
+    job_id = create_job("uniqify", params, actor="7")
+
+    assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
+
+    assert restarts == []
+    assert get_job(job_id).error == recovery.INTERRUPTED
+
+
+def test_a_second_restart_runs_with_the_same_arguments(status, restarts, active):
+    """The count is the job's own param, never an argument of its run."""
+    params = {**_LOCAL_JOBS["uniqify"][0], "restarts": 1}
+    job_id = create_job("uniqify", params, actor="7")
+
+    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+
+    [(_run_job, _id, _fn, queued)] = restarts
+    assert queued == _LOCAL_JOBS["uniqify"][1]
+    assert get_job(job_id).params["restarts"] == 2
+
+
+def test_a_local_job_whose_params_cannot_be_read_fails_as_interrupted(
+    status, restarts, active
+):
+    job_id = create_job("download_media", {"links": "an old shape"}, actor="7")
+
+    assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
+
+    assert restarts == []
+    assert "restarts" not in get_job(job_id).params
+
+
 def test_a_job_a_worker_holds_or_the_queue_has_is_left_running(status, reruns, active):
     held = _job(status="running", task="clone", provider="higgsfield")
     _remember(held, provider="higgsfield")
-    queued = _job(status="running", task="download_media")
+    queued = _job(status="running", task="viral_reels")
     active.update({held, queued})
 
-    assert recovery.run_recovery_once() == {held: "running"}
+    assert recovery.run_recovery_once().entries == {held: "running"}
     assert get_job(queued).status == "running"
     assert status["seen"] == []
 
 
 def test_a_just_created_job_is_not_cut_off(status, reruns, active, monkeypatch):
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "120")
-    job_id = _job(status="running", task="download_media")
-    assert recovery.run_recovery_once() == {}
+    job_id = _job(status="running", task="viral_reels")
+    assert recovery.run_recovery_once().entries == {}
     assert get_job(job_id).status == "running"
 
 
 def test_without_a_view_of_the_queue_nothing_is_cut_off(status, reruns, monkeypatch):
     monkeypatch.setattr(recovery, "active_job_ids", lambda: None)
-    job_id = _job(status="running", task="download_media")
-    assert recovery.run_recovery_once() == {}
+    job_id = _job(status="running", task="viral_reels")
+    assert recovery.run_recovery_once().entries == {}
     assert get_job(job_id).status == "running"
 
 
@@ -298,7 +488,7 @@ def test_a_job_queued_while_a_slow_sweep_settles_is_not_cut_off(
         recovery, "active_job_ids", lambda: views.pop(0) if views else {queued}
     )
 
-    assert recovery.run_recovery_once() == {}
+    assert recovery.run_recovery_once().entries == {}
 
     assert get_job(queued).status == "running"
     assert views == []
@@ -312,7 +502,7 @@ def test_a_failed_job_a_worker_still_holds_is_never_rerun(status, reruns, active
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
     active.add(job_id)
 
-    assert recovery.run_recovery_once() == {job_id: "running"}
+    assert recovery.run_recovery_once().entries == {job_id: "running"}
 
     assert reruns == []
     assert status["seen"] == []
@@ -344,7 +534,7 @@ def test_a_job_failing_after_its_result_forgets_its_request(status, reruns):
     run_job(job_id, _fails_after_the_result, {})
     assert get_job(job_id).status == "failed"
     assert tasks.recall(job_id) is None
-    assert recovery.run_recovery_once() == {}
+    assert recovery.run_recovery_once().entries == {}
     assert reruns == []
 
 
@@ -381,7 +571,7 @@ def test_a_job_whose_pieces_are_all_done_is_rerun_once(status, reruns):
 
     outcomes = recovery.run_recovery_once()
 
-    assert outcomes == {job_id: "rerun"}
+    assert outcomes.entries == {job_id: "rerun"}
     assert len(reruns) == 1
     assert {seen[2] for seen in status["seen"]} == {"t1", "t2", "t3"}
 
@@ -394,7 +584,7 @@ def test_a_job_with_a_piece_still_generating_waits(status, reruns, monkeypatch):
     answers = {"t1": done, "t2": TaskState(state="pending"), "t3": done}
     monkeypatch.setattr(KieProvider, "status", lambda _self, task_id: answers[task_id])
 
-    assert recovery.run_recovery_once() == {job_id: "pending"}
+    assert recovery.run_recovery_once().entries == {job_id: "pending"}
     assert reruns == []
     assert len([t for t in tasks.remembered() if t.job_id == job_id]) == 3
 
@@ -413,7 +603,7 @@ def test_a_job_with_a_refused_piece_fails_and_forgets_every_piece(
     }
     monkeypatch.setattr(KieProvider, "status", lambda _self, task_id: answers[task_id])
 
-    assert recovery.run_recovery_once() == {job_id: "failed"}
+    assert recovery.run_recovery_once().entries == {job_id: "failed"}
     assert reruns == []
     assert "flagged as sensitive" in get_job(job_id).error
     assert [t for t in tasks.remembered() if t.job_id == job_id] == []
@@ -464,10 +654,10 @@ def test_a_job_with_a_piece_whose_answer_was_lost_is_not_run_again_yet(status, r
     )
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
 
-    assert recovery.run_recovery_once() == {job_id: "waiting"}
+    assert recovery.run_recovery_once().entries == {job_id: "waiting"}
     assert reruns == []
 
     tasks.found(job_id, 1, "t2")
 
-    assert recovery.run_recovery_once() == {job_id: "rerun"}
+    assert recovery.run_recovery_once().entries == {job_id: "rerun"}
     assert len(reruns) == 1

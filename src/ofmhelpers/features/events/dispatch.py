@@ -31,6 +31,7 @@ lose the job's arguments (log.py `_HideJobArguments`). Lost messages:
 
 import hashlib
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import logfire
@@ -54,7 +55,7 @@ _SLOT_S = 48 * 3600
 
 def _off() -> set[str]:
     off = set(settings.events.senders_off_list())
-    unknown = off - set(senders())
+    unknown = off - set(senders().names())
     if unknown:
         logger.warning("OFM_EVENTS_SENDERS_OFF names no sender: %s", sorted(unknown))
     return off
@@ -65,28 +66,16 @@ def _retry() -> Retry | None:
     return Retry(max=len(waits), interval=waits) if waits else None
 
 
-def _queue_delivery(sender_name: str, target: str, event: dict[str, Any]) -> None:
-    JobQueue(QueueName.EVENTS).put(
-        deliver,
-        sender_name,
-        target,
-        event,
-        job_timeout=settings.events.send_timeout_s,
-        retry=_retry(),
-        failure_ttl=settings.events.failed_keep_s,
-    )
-
-
 def dispatch(event: dict[str, Any]) -> None:
     """RQ job: `event` (an `Event` as JSON) to each sender's targets."""
     found = Event.model_validate(event)
     off = _off()
-    for sender in senders().values():
+    for sender in senders().all():
         if sender.name in off:
             continue
         for target in sender.targets():
             try:
-                _queue_delivery(sender.name, target, event)
+                deliver_to(sender.name, target, found)
             except Exception:
                 logger.exception(
                     "event %s: %s delivery failed or not queued",
@@ -99,7 +88,15 @@ def deliver_to(sender_name: str, target: str, event: Event) -> None:
     """`event` to that one target only (an answer to the chat that asked), the
     way every delivery goes: paced, retried, skipped while its sender is off.
     Raises when it could not be queued."""
-    _queue_delivery(sender_name, target, event.model_dump(mode="json"))
+    JobQueue(QueueName.EVENTS).put(
+        deliver,
+        sender_name,
+        target,
+        event.model_dump(mode="json"),
+        job_timeout=settings.events.send_timeout_s,
+        retry=_retry(),
+        failure_ttl=settings.events.failed_keep_s,
+    )
 
 
 def _digest(target: str) -> str:
@@ -107,72 +104,116 @@ def _digest(target: str) -> str:
     return hashlib.sha256(target.encode()).hexdigest()[:16]
 
 
-def _sent_key(found: Event, sender: Sender, target: str) -> str | None:
-    if found.key is None:
-        return None
-    return f"events:sent:{found.key}:{sender.name}:{_digest(target)}"
+@dataclass(frozen=True)
+class Delivery:
+    """One event (`found`) on its way to one `target` of one `sender`."""
 
+    sender: Sender
+    target: str
+    found: Event
 
-def _wait_pace(sender: Sender, target: str) -> str:
-    """Sleeps until `target` may get the next send; the key that remembers it."""
-    key = f"events:pace:{sender.name}:{_digest(target)}"
-    last = get_redis().get(key)
-    if last is not None:
-        wait = float(last) + sender.pace_s(target) - time.time()
-        if wait > 0:
+    def _sent_key(self) -> str | None:
+        if self.found.key is None:
+            return None
+        return f"events:sent:{self.found.key}:{self.sender.name}:{_digest(self.target)}"
+
+    def _wait_pace(self) -> str:
+        """Sleeps until the target may get the next send; the key that
+        remembers it."""
+        key = f"events:pace:{self.sender.name}:{_digest(self.target)}"
+        last = get_redis().get(key)
+        if last is not None:
+            wait = float(last) + self.sender.pace_s(self.target) - time.time()
+            if wait > 0:
+                _sleep(wait)
+        return key
+
+    def _send(self) -> str | None:
+        """One send; a short "retry after" is waited out and tried once more."""
+        try:
+            return self.sender.send(self.target, self.found)
+        except SendError as exc:
+            wait = exc.retry_after
+            if wait is None or wait > settings.events.max_wait_s:
+                raise
             _sleep(wait)
-    return key
+            return self.sender.send(self.target, self.found)
 
+    def _delete(self, ref: str) -> None:
+        try:
+            self.sender.delete(self.target, ref)
+        except SendError:
+            logger.warning(
+                "event %s: %s could not delete the one before",
+                self.found.name,
+                self.sender.name,
+                exc_info=True,
+            )
 
-def _send(sender: Sender, target: str, found: Event) -> str | None:
-    """One send; a short "retry after" is waited out and tried once more."""
-    try:
-        return sender.send(target, found)
-    except SendError as exc:
-        wait = exc.retry_after
-        if wait is None or wait > settings.events.max_wait_s:
-            raise
-        _sleep(wait)
-        return sender.send(target, found)
+    def _replace(self, ref: str | None) -> None:
+        """The message sent before under `found.replaces` deleted, this one
+        remembered in its place (`<made at>|<ref>`). One made before what is
+        there already (a late retry, a requeue) is deleted itself instead: the
+        chat keeps the newest. One that cannot be deleted (too old, deleted by
+        hand) stays."""
+        found = self.found
+        if found.replaces is None or ref is None:
+            return
+        slot = f"events:slot:{found.replaces}:{self.sender.name}:{_digest(self.target)}"
+        redis = get_redis()
+        held = redis.get(slot)
+        text = held.decode() if isinstance(held, bytes) else ""
+        held_at, _, held_ref = text.rpartition("|")
+        if held_ref and held_at and float(held_at) > found.at:
+            self._delete(ref)
+            return
+        redis.set(slot, f"{found.at}|{ref}", ex=_SLOT_S)
+        if held_ref and held_ref != ref:
+            self._delete(held_ref)
 
-
-def _delete(sender: Sender, target: str, found: Event, ref: str) -> None:
-    try:
-        sender.delete(target, ref)
-    except SendError:
-        logger.warning(
-            "event %s: %s could not delete the one before",
-            found.name,
-            sender.name,
-            exc_info=True,
-        )
-
-
-def _replace(sender: Sender, target: str, found: Event, ref: str | None) -> None:
-    """The message sent before under `found.replaces` deleted, this one remembered
-    in its place (`<made at>|<ref>`). One made before what is there already (a late
-    retry, a requeue) is deleted itself instead: the chat keeps the newest. One
-    that cannot be deleted (too old, deleted by hand) stays."""
-    if found.replaces is None or ref is None:
-        return
-    slot = f"events:slot:{found.replaces}:{sender.name}:{_digest(target)}"
-    redis = get_redis()
-    held = redis.get(slot)
-    text = held.decode() if isinstance(held, bytes) else ""
-    held_at, _, held_ref = text.rpartition("|")
-    if held_ref and held_at and float(held_at) > found.at:
-        _delete(sender, target, found, ref)
-        return
-    redis.set(slot, f"{found.at}|{ref}", ex=_SLOT_S)
-    if held_ref and held_ref != ref:
-        _delete(sender, target, found, held_ref)
+    def run(self) -> None:
+        """The send itself. Raises the sender's `SendError` so RQ tries again."""
+        found, sender, target = self.found, self.sender, self.target
+        with logfire.span(
+            "event {event} to {sender}", event=found.name, sender=sender.name
+        ) as span:
+            sent_key = self._sent_key()
+            if sender.name in _off() or (sent_key and get_redis().exists(sent_key)):
+                span.set_attribute("outcome", "skipped")
+                return
+            pace_key = self._wait_pace()
+            try:
+                ref = self._send()
+            except SendError as exc:
+                gave_up = exc.permanent or _last_try()
+                span.set_attribute("outcome", "gave_up" if gave_up else "retry")
+                if exc.permanent:
+                    # The reason in the line itself: what Logfire's message
+                    # column shows.
+                    logger.exception(
+                        "event %s: %s gave up: %s",
+                        found.name,
+                        sender.name,
+                        exc,  # noqa: TRY401
+                    )
+                    return
+                log = logger.error if gave_up else logger.warning
+                log("event %s: %s failed: %s", found.name, sender.name, exc)
+                raise
+            redis = get_redis()
+            redis.set(pace_key, str(time.time()), ex=int(sender.pace_s(target)) + 1)
+            if sent_key:
+                redis.set(sent_key, "1", ex=settings.events.key_ttl_s)
+            span.set_attribute("outcome", "sent")
+            self._replace(ref)
+        logger.info("event %s sent by %s", found.name, sender.name)
 
 
 def listening() -> bool:
     """Whether any sender that is on has somewhere to send: none, and a producer
     with costly reads (the daily report, the unanswered list) does nothing."""
     off = set(settings.events.senders_off_list())
-    return any(s.targets() for s in senders().values() if s.name not in off)
+    return any(s.targets() for s in senders().all() if s.name not in off)
 
 
 def _last_try() -> bool:
@@ -187,35 +228,4 @@ def deliver(sender_name: str, target: str, event: dict[str, Any]) -> None:
     if sender is None:
         logger.warning("event %s: no sender %r", found.name, sender_name)
         return
-    with logfire.span(
-        "event {event} to {sender}", event=found.name, sender=sender_name
-    ) as span:
-        sent_key = _sent_key(found, sender, target)
-        if sender_name in _off() or (sent_key and get_redis().exists(sent_key)):
-            span.set_attribute("outcome", "skipped")
-            return
-        pace_key = _wait_pace(sender, target)
-        try:
-            ref = _send(sender, target, found)
-        except SendError as exc:
-            gave_up = exc.permanent or _last_try()
-            span.set_attribute("outcome", "gave_up" if gave_up else "retry")
-            if exc.permanent:
-                # The reason in the line itself: what Logfire's message column shows.
-                logger.exception(
-                    "event %s: %s gave up: %s",
-                    found.name,
-                    sender_name,
-                    exc,  # noqa: TRY401
-                )
-                return
-            log = logger.error if gave_up else logger.warning
-            log("event %s: %s failed: %s", found.name, sender_name, exc)
-            raise
-        redis = get_redis()
-        redis.set(pace_key, str(time.time()), ex=int(sender.pace_s(target)) + 1)
-        if sent_key:
-            redis.set(sent_key, "1", ex=settings.events.key_ttl_s)
-        span.set_attribute("outcome", "sent")
-        _replace(sender, target, found, ref)
-    logger.info("event %s sent by %s", found.name, sender_name)
+    Delivery(sender=sender, target=target, found=found).run()

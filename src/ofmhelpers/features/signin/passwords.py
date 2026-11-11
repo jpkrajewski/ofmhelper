@@ -1,34 +1,37 @@
 """The password tries: /login and the app owner's consent page. Failures count
-against the per-client brake in `web/middleware/ratelimit.py`, which keys on
+against the per-client brake in `cache/rate_limit.py`, which keys on
 the request: the only reason these take one."""
 
 from urllib.parse import urlencode
 
 lazy from fastapi import Request
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.features.signin.outcome import Outcome, signed_in
-from ofmhelpers.features.signin.state import STATE_COOKIE, unseal
-from ofmhelpers.integrations.signin import SignInError
-from ofmhelpers.integrations.signin.owner import owner_code, password_ok
-from ofmhelpers.log import get_logger
-from ofmhelpers.web.middleware.ratelimit import (
+from ofmhelpers.cache.rate_limit import (
     clear_failed_logins,
     client_id,
     login_blocked,
     record_failed_login,
 )
+from ofmhelpers.db.stores import users
+from ofmhelpers.features.signin import credentials
+from ofmhelpers.features.signin.outcome import Outcome, signed_in
+from ofmhelpers.features.signin.state import STATE_COOKIE, unseal
+from ofmhelpers.integrations.signin import SignInError
+from ofmhelpers.integrations.signin.owner import owner_code, password_ok
+from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
 
 _TOO_MANY = "Too many failed attempts. Try again later."
+# The account the login form signs into when no email is typed.
+PASSWORD_ADMIN = users.PASSWORD_ADMIN
 
 
 def login(request: Request, email: str, password: str, next_url: str) -> Outcome:
     if login_blocked(request):
         logger.warning("login rate limit hit from %s", client_id(request))
         return Outcome(next_url=next_url, error=_TOO_MANY, status_code=429)
-    user = users.password_sign_in(email, password)
+    user = credentials.password_sign_in(email, password)
     if user is None:
         # Every failure is logged and counted: the only signal that someone is
         # guessing, and the only brake on how fast they can.

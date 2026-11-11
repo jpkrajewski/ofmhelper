@@ -30,6 +30,7 @@ from ofmhelpers.features.drive import posting
 from ofmhelpers.integrations.gdrive import FolderGoneError
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.schemas import DeviceFields, LoginFields, UserForm
+from ofmhelpers.schemas.devices import AddedLogin
 from ofmhelpers.web.main import app
 
 # The agency's Google account (the password admin's, who owns the phones
@@ -75,7 +76,7 @@ def _login(device_id: int, service: str, username: str) -> int:
         device_id, LoginFields(service=service, username=username)
     )
     assert added is not None
-    return added[0]
+    return added.id
 
 
 def _account(drive: FakeDrive, handle: str, owner: str = "Anna") -> str:
@@ -293,7 +294,7 @@ def test_an_account_folder_deleted_in_drive_removes_the_account_everywhere(drive
         phone, LoginFields(service="instagram", username="ann.ig", password="pw")
     )
     assert added is not None
-    login = added[0]
+    login = added.id
     track("instagram", "ann.ig", user_id=users.agency_id())
     drive_folders.sync()
     account = _account(drive, "ann.ig")
@@ -331,7 +332,7 @@ def test_state_before_posted_folders_heals_on_the_first_sweep(drive):
     day = drive.seed_folder("2026-10-21", account, owner=AGENCY)
     upload = drive.add_file(day, "reel.mp4", "video/mp4")
     store.save_account_folder(login, account, "ann.ig - Anna", ROOT)
-    assert store.account_folders()[login].posted_folder_id is None
+    assert store.account_folders().get(login).posted_folder_id is None
 
     report = drive_folders.sync()
 
@@ -347,11 +348,11 @@ def test_a_new_account_folder_drops_the_old_posted_id(drive):
     store.save_account_folder(login, "folder-a", "ann.ig - Anna", ROOT)
     store.save_posted_folder(login, "posted-a")
     store.save_account_folder(login, "folder-a", "ann.ig - Kate", ROOT)
-    assert store.account_folders()[login].posted_folder_id == "posted-a"
+    assert store.account_folders().get(login).posted_folder_id == "posted-a"
 
     store.save_account_folder(login, "folder-b", "ann.ig - Anna", ROOT)
 
-    assert store.account_folders()[login].posted_folder_id is None
+    assert store.account_folders().get(login).posted_folder_id is None
 
 
 def test_one_failing_login_does_not_stop_the_others(drive):
@@ -385,8 +386,8 @@ def test_deleting_the_login_forgets_its_folders_and_history(drive):
     drive.add_file(_posted(drive, "ann.ig"), "reel.mp4", "video/mp4")
     drive_folders.sync()
     devices.remove_login(phone, login)
-    assert store.account_folders() == {}
-    assert store.posted_counts([0.0]) == {}
+    assert store.account_folders().folders == []
+    assert store.posted_counts([0.0]) == []
     # Drive keeps the folder and what is in it.
     assert drive.named("ann.ig - Anna", ROOT)
 
@@ -749,7 +750,7 @@ def test_page_sees_a_trashed_account_folder_that_still_lists(drive):
     html = _client().get("/drive/live").text
 
     assert "The account&#39;s folder was deleted" in html
-    assert store.account_folders() == {}
+    assert store.account_folders().folders == []
     assert drive_folders.sync().created == []
 
 
@@ -1129,7 +1130,7 @@ def test_the_page_forgets_a_stored_live_root_in_dev(drive):
 
     assert "live.mp4" not in html
     assert users.get_user(users.agency_id()).drive_root_id is None
-    assert store.account_folders() == {}
+    assert store.account_folders().folders == []
 
 
 def test_a_404_in_the_batch_keeps_the_root_and_lists_one_by_one(drive, monkeypatch):
@@ -1235,7 +1236,7 @@ def _tracked_login(phone: int, handle: str = "ann.ig") -> tuple[int, int]:
     assert added is not None
     track("instagram", handle, user_id=users.agency_id())
     (account,) = [a.id for a in list_accounts() if a.handle == handle]
-    return added[0], account
+    return added.id, account
 
 
 def test_removed_on_accounts_it_leaves_the_phones_and_drive_password_kept(drive):
@@ -1307,7 +1308,7 @@ def test_adding_an_archived_account_again_brings_it_back(drive):
         phone, LoginFields(service="instagram", username="ann.ig")
     )
 
-    assert again == (login, True)
+    assert again == AddedLogin(id=login, existed=True)
     assert devices.archived_logins() == []
     assert devices.secrets(login).password == "pw"
 

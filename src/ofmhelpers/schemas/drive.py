@@ -6,8 +6,8 @@ import datetime
 
 from pydantic import BaseModel, Field
 
-from ofmhelpers.integrations.gdrive import DriveFile, folder_url
 from ofmhelpers.schemas.devices import Device, _compact
+from ofmhelpers.schemas.gdrive import DriveFile, folder_url
 
 
 class DriveTarget(BaseModel):
@@ -110,6 +110,24 @@ class StoredFolder(BaseModel):
     # The folder's last read, and when (/drive opens with it).
     scan: AccountScan | None = None
     scanned_at: float | None = None
+
+
+class StoredFolders(BaseModel):
+    """The active logins' folders, each in its phone owner's current root."""
+
+    folders: list[StoredFolder] = Field(default_factory=list)
+
+    def get(self, login_id: int) -> StoredFolder | None:
+        """The login's folder; None when none was made (or found) yet."""
+        return next((f for f in self.folders if f.login_id == login_id), None)
+
+
+class PostedCount(BaseModel):
+    """How many of a login's files were first seen posted since each of the
+    moments asked for, in their order."""
+
+    login_id: int
+    counts: list[int]
 
 
 class SyncReport(BaseModel):

@@ -29,16 +29,16 @@ class StackedSource:
         return bool(settings.stacked.api_keys)
 
     def models(self) -> ChatModels:
-        reached = reach(settings.stacked.api_keys.values())
+        reached = reach(k.key for k in settings.stacked.api_keys)
         return ChatModels(
             found=[
                 ChatModel(
-                    model_id=creator.user_id,
-                    username=creator.username,
-                    client=client,
-                    owner=creator.user_id,
+                    model_id=r.creator.user_id,
+                    username=r.creator.username,
+                    client=r.client,
+                    owner=r.creator.user_id,
                 )
-                for client, creator in reached.found
+                for r in reached.found
             ],
             failed=reached.failed,
         )

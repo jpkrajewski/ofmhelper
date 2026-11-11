@@ -1,113 +1,36 @@
-import heapq
-import os
-import threading
-from functools import lru_cache
-from operator import itemgetter
-from pathlib import Path
+"""/refs: the reuse picker's files -- its list, the files themselves and
+their small thumbnails, only ever from the session's own part of the asset
+store (`features.assets.refs`)."""
+
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.assets import ref_usage
-from ofmhelpers.features.edit.service import STAGING as EDIT_STAGING
-from ofmhelpers.features.previews.render import (
-    PREVIEW_ERRORS,
-    write_atomic,
-    write_image_thumb,
-    write_video_thumb,
-)
-from ofmhelpers.log import get_logger
+from ofmhelpers.features.assets import refs
+from ofmhelpers.features.assets.store import strip_asset_hash_prefix
 from ofmhelpers.schemas import MissingRefs, RefEntry
 from ofmhelpers.web.dependencies import AssetsRoot, OwnerId
-from ofmhelpers.web.routers.task_helpers import (
-    ASSETS_ROOT,
-    classify_kind,
-    in_asset_root,
-    media_response,
-    strip_asset_hash_prefix,
-)
-
-logger = get_logger(__name__)
+from ofmhelpers.web.routers.task_helpers import media_response
 
 router = APIRouter(prefix="/refs", tags=["refs"])
 
-# Reuse-picker/inputs previews only ever need a small box (see .ref-tile /
-# .thumb-small CSS) -- serving the full original (multi-MB) just to paint
-# ~100px is what made the picker slow to open. Cached on disk keyed by the
-# same content hash already in the filename, so repeat views (or the same
-# file shown in multiple pickers) never re-decode the original.
-THUMBS_DIR = ASSETS_ROOT / ".thumbs"
+# Restored files one Recreate checks at once (a run holds a handful).
+MAX_CHECKED = 50
 
 
-# What the reuse picker opens on: the handful you actually just worked with,
-# then the handful you most recently added. Two short lists beat one long one
-# -- the file you want is nearly always in one of them. The picker's "show
-# older" button asks for an explicit ?limit= instead.
-RECENT_USED_LIMIT = settings.web.recent_used_limit
-RECENT_UPLOAD_LIMIT = settings.web.recent_upload_limit
-MAX_REF_LIMIT = settings.web.max_ref_limit
+def _limit(limit: Annotated[int | None, Query(ge=1)] = None) -> int | None:
+    """`?limit=`, at most `max_ref_limit`: a setting, read at each request
+    (a `le=` on the query would keep what it said at import)."""
+    if limit is not None and limit > settings.web.max_ref_limit:
+        raise HTTPException(
+            status_code=422, detail=f"limit: at most {settings.web.max_ref_limit}"
+        )
+    return limit
+
 
 RefPath = Annotated[str, Query()]
-
-
-@lru_cache(maxsize=1024)
-def _making(thumb: Path) -> threading.Lock:  # noqa: ARG001 -- the cache key
-    """One lock per thumbnail being made: a burst of requests for the same
-    new file (Recreate clicked over and over) decodes the original once,
-    the rest wait for that file instead of each decoding it again."""
-    return threading.Lock()
-
-
-def _entry(path: str, mtime: float, used_at: float | None = None) -> RefEntry:
-    name = Path(path).name
-    return RefEntry(
-        path=path,
-        name=strip_asset_hash_prefix(name),
-        kind=classify_kind(name),
-        mtime=mtime,
-        used_at=used_at,
-    )
-
-
-def stored_files(root: Path, kind: str | None) -> dict[str, float]:
-    """Every file under `root` (the session's part of the asset store,
-    `in_asset_root`), optionally of one kind, minus the thumbnail cache and
-    /edit's `.edit/` (kept a day, never offered for reuse), as
-    path -> mtime. No separate metadata store, this is the real files: one
-    walk, one stat per file; the thumbnail cache (one file per source per
-    size) and other people's folders are never descended into."""
-    found: dict[str, float] = {}
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [
-            d
-            for d in dirnames
-            if Path(dirpath, d) != THUMBS_DIR
-            and d != EDIT_STAGING
-            and in_asset_root(root, Path(dirpath, d, "_"))
-        ]
-        for name in filenames:
-            if kind and classify_kind(name) != kind:
-                continue
-            path = Path(dirpath, name)
-            try:
-                found[str(path)] = path.stat().st_mtime
-            except OSError:
-                continue  # deleted mid-walk, or a dangling link
-    return found
-
-
-def _require_visible(assets_root: Path, path: str) -> Path:
-    """A client-supplied path, refused unless it is a file inside the
-    session's part of the asset store -- nobody, admins included, fetches
-    another person's file by guessing its path."""
-    file_path = Path(path)
-    if not in_asset_root(assets_root, file_path):
-        raise HTTPException(status_code=403, detail="Invalid path")
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-    return file_path
 
 
 @router.get("")
@@ -115,40 +38,11 @@ def list_refs(
     assets_root: AssetsRoot,
     owner_id: OwnerId,
     kind: Annotated[str | None, Query()] = None,
-    limit: Annotated[int | None, Query(ge=1, le=MAX_REF_LIMIT)] = None,
+    limit: Annotated[int | None, Depends(_limit)] = None,
 ) -> list[RefEntry]:
-    """The reuse picker's list.
-
-    Default: the `RECENT_USED_LIMIT` files you (this user) last *picked* (features/assets/ref_usage.py,
-    written by task_helpers.build_ordered_paths), then the
-    `RECENT_UPLOAD_LIMIT` most recently *uploaded* ones that aren't already in
-    that list. Those are two different orderings on purpose -- mtime means
-    "uploaded" and nothing rewrites it, since save_asset is content-deduped and
-    resolving a reused path no longer touches the file.
-
-    An explicit `?limit=` is the "show older" path: newest-uploaded first, no
-    usage grouping."""
-    stored = stored_files(assets_root, kind)
-    if limit is not None:
-        newest = heapq.nlargest(limit, stored.items(), key=itemgetter(1))
-        return [_entry(path, mtime) for path, mtime in newest]
-
-    used: list[RefEntry] = []
-    for raw, used_at in ref_usage.recent(owner_id, MAX_REF_LIMIT):
-        # A used file can have been deleted through the file manager since,
-        # or be of another kind than this picker wants.
-        mtime = stored.pop(raw, None)
-        if mtime is not None:
-            used.append(_entry(raw, mtime, used_at))
-        if len(used) == RECENT_USED_LIMIT:
-            break
-
-    uploaded = heapq.nlargest(RECENT_UPLOAD_LIMIT, stored.items(), key=itemgetter(1))
-    return used + [_entry(path, mtime) for path, mtime in uploaded]
-
-
-# Restored files one Recreate checks at once (a run holds a handful).
-MAX_CHECKED = 50
+    """The reuse picker's list: the files last picked, then the newest
+    uploads; an explicit `?limit=` is "show older", newest-uploaded first."""
+    return refs.listing(assets_root, owner_id, kind, limit)
 
 
 @router.get("/missing")
@@ -156,43 +50,17 @@ def missing_refs(
     assets_root: AssetsRoot, path: Annotated[list[str], Query(max_length=MAX_CHECKED)]
 ) -> MissingRefs:
     """Of `path`s (a past run's files, restored by Recreate), the ones this
-    session can no longer use: deleted since, never on this server, or not
-    its own. One request, so a restore checks every file without a 404 per
-    gone one."""
-    return MissingRefs(
-        missing=[
-            p
-            for p in path
-            if not (in_asset_root(assets_root, Path(p)) and Path(p).is_file())
-        ]
-    )
+    session can no longer use. One request, so a restore checks every file
+    without a 404 per gone one."""
+    return refs.missing(assets_root, path)
 
 
 @router.get("/file")
 def get_ref_file(assets_root: AssetsRoot, path: RefPath) -> Response:
-    file_path = _require_visible(assets_root, path)
+    file_path = refs.visible(assets_root, path)
     # Display name (hash prefix stripped) decides the type, and non-media is
     # forced to a download -- see media_response.
     return media_response(file_path, strip_asset_hash_prefix(file_path.name))
-
-
-def _make_thumb(source: Path, thumb: Path, kind: str, size: int) -> None:
-    """Writes the thumbnail unless a request it waited for just did."""
-    if thumb.is_file():
-        return
-    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        if kind == "image":
-            write_atomic(thumb, lambda tmp: write_image_thumb(source, tmp, size))
-        else:
-            write_video_thumb(source, thumb, size)
-    except PREVIEW_ERRORS:
-        # A corrupt/unreadable source shouldn't 500 the whole picker grid
-        # -- the client falls back to its icon tile on a 404.
-        logger.warning("could not thumbnail %s", source, exc_info=True)
-        raise HTTPException(
-            status_code=404, detail="Could not generate thumbnail"
-        ) from None
 
 
 @router.get("/thumb")
@@ -202,25 +70,9 @@ def get_ref_thumb(
     size: Annotated[int, Query(ge=16, le=1024)] = 200,
 ) -> Response:
     """Small cached preview for the reuse-picker/inputs grids -- never the
-    original (see THUMBS_DIR comment). Images thumbnail through Pillow, videos
-    through an ffmpeg first-frame grab; audio has no visual frame to show and
-    still gets an icon client-side."""
-    file_path = _require_visible(assets_root, path)
-
-    kind = classify_kind(file_path.name)
-    if kind not in ("image", "video"):
-        raise HTTPException(status_code=404, detail="No thumbnail for this file type")
-
-    # Videos share the cache namespace with images but not the key -- the
-    # digest is the file's own content hash, so there's no collision.
-    digest = file_path.name.split("__", 1)[0]
-    thumb_path = THUMBS_DIR / f"{digest}__{size}.webp"
-    if not thumb_path.is_file():
-        with _making(thumb_path):
-            _make_thumb(file_path, thumb_path, kind, size)
-
+    original."""
     return FileResponse(
-        thumb_path,
+        refs.thumb(assets_root, path, size),
         media_type="image/webp",
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )

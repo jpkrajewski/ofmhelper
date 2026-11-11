@@ -1,6 +1,6 @@
 # apify
 
-Apify's REST API v2 (https://docs.apify.com/api/v2), only the calls the app makes, through `utils.outbound` (no `apify-client` dependency; the fake answers at the wire).
+Apify's REST API v2 (https://docs.apify.com/api/v2), only the calls the app makes, through `integrations.outbound` (no `apify-client` dependency; the fake answers at the wire).
 
 - `client.py` — `ApifyClient(token)`: `remaining_usd()` (`GET /users/me/limits`: `limits.maxMonthlyUsageUsd - current.monthlyUsageUsd`), `run(actor, input, timeout_s)` (`POST /acts/{owner~name}/runs?timeout=` once, never retried: a lost answer would pay for a second run; then `GET /actor-runs/{id}?waitForFinish=60` until a final status), `items(run)` (`GET /datasets/{id}/items?clean=true`). Errors: 401 `ApifyAuthError` ("Wrong Apify API key"), 402/403 or an error type with "usage" `ApifyCreditError` ("No Apify credit left"), else `ApifyError`; messages are what a card shows. `by_credit(tokens)`: every readable account with its credit left, most first (unreadable ones logged and skipped); `richest(tokens)`: the first of them (none = `ApifyAuthError`).
 - `models.py` — `ActorRun` (`RunStatus`, dataset id, `cost_usd`), `Limits`, the `{"data": ...}` / `{"error": {type, message}}` envelopes. **Cost:** a pay-per-event actor's charges reach `usageTotalUsd` only after the run ends (a real 20-reel run, 2026-10-31: $0.001 when it turned SUCCEEDED, $0.053 later), so `cost_usd` = `chargedEventCounts` x `pricingInfo.pricingPerEvent.actorChargeEvents[*].eventPriceUsd`, or `usageTotalUsd` when that is more.

@@ -16,7 +16,8 @@ from logfire.testing import CaptureLogfire
 from signin import sign_in
 
 from ofmhelpers import log, telemetry
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
 
 

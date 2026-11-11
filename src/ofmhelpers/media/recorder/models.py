@@ -7,11 +7,12 @@ creation date, location) are not in it; `PerRecording` names them.
 """
 
 import datetime
-import math
 import random
 from enum import IntEnum, StrEnum
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+
+from ofmhelpers.config.types import GeoPoint, Place
 
 
 class _Frozen(BaseModel):
@@ -184,47 +185,6 @@ class Audio(_Frozen):
 
 
 # Metres per degree of latitude (and of longitude at the equator).
-_M_PER_DEGREE = 111_320.0
-
-
-class GeoPoint(_Frozen):
-    latitude: float = Field(ge=-90, le=90)
-    longitude: float = Field(ge=-180, le=180)
-    altitude_m: float
-
-    @property
-    def iso6709(self) -> str:
-        """As an iPhone writes it: "+40.7549-073.9840+010.000/"."""
-        return f"{self.latitude:+08.4f}{self.longitude:+09.4f}{self.altitude_m:+08.3f}/"
-
-    def moved(self, north_m: float, east_m: float) -> GeoPoint:
-        lon_m = _M_PER_DEGREE * math.cos(math.radians(self.latitude))
-        return self.model_copy(
-            update={
-                "latitude": self.latitude + north_m / _M_PER_DEGREE,
-                "longitude": self.longitude + east_m / lon_m,
-            }
-        )
-
-
-class Place(_Frozen):
-    """Where recordings are filmed: a centre, a radius each recording lands
-    in (uniform over the disc), and the GPS accuracy range it reports."""
-
-    center: GeoPoint
-    jitter_m: float = Field(ge=0)
-    accuracy_m: tuple[float, float]
-
-    def sample(self, rng: random.Random) -> tuple[GeoPoint, float]:
-        # sqrt: uniform over the disc's area, not bunched at its centre.
-        distance = self.jitter_m * math.sqrt(rng.random())
-        bearing = rng.uniform(0, 2 * math.pi)
-        point = self.center.moved(
-            distance * math.cos(bearing), distance * math.sin(bearing)
-        )
-        return point, rng.uniform(*self.accuracy_m)
-
-
 class Recording(_Frozen):
     """The per-recording values: when it ended (in the phone's local time
     zone), how long it ran, and where (None: Location Services off)."""
@@ -249,8 +209,13 @@ class Recording(_Frozen):
         end = datetime.datetime.now(tz)
         if place is None:
             return cls(end=end, duration_s=0)
-        point, accuracy = place.sample(rng or random.Random())  # noqa: S311 - not cryptography
-        return cls(end=end, duration_s=0, location=point, location_accuracy_m=accuracy)
+        at = place.sample(rng or random.Random())  # noqa: S311 - not cryptography
+        return cls(
+            end=end,
+            duration_s=0,
+            location=at.point,
+            location_accuracy_m=at.accuracy_m,
+        )
 
     @property
     def start(self) -> datetime.datetime:

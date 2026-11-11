@@ -65,7 +65,7 @@ def _api_fields(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
     values = with_defaults(spec, payload)
     return {
         "model": spec.model_id,
-        **{k: v for k, v in values.items() if k not in _OURS},
+        **{k: v for k, v in values.values.items() if k not in _OURS},
     }
 
 

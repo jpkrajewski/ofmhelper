@@ -22,10 +22,10 @@ from signin import make_user, sign_in
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
+from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.edit import service as edit_service
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import assets_root_for_user
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 pytestmark = pytest.mark.heavy  # real ffmpeg encodes
 
@@ -83,7 +83,7 @@ def _shape(path: str) -> tuple[int, int, float]:
 @pytest.fixture(autouse=True)
 def store(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "assets"
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", root)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: root)
     # Light copies, strips and work folders of this test only.
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     return root
@@ -260,7 +260,7 @@ def test_an_upload_is_a_video_kept_in_edit_staging(client, mine, tmp_path):
             "/edit/upload", files={"file": ("phone.mp4", f, "video/mp4")}
         )
 
-    assert answer.status_code == 200
+    assert answer.status_code == 201
     assert Path(answer.json()["path"]).parent == mine / ".edit"
     refused = client.post(
         "/edit/upload", files={"file": ("notes.txt", b"hi", "text/plain")}
@@ -293,7 +293,7 @@ def test_what_edit_makes_never_shows_in_the_reuse_pickers(client, mine):
 
 
 def _prepares(video: str) -> list:
-    jobs, _ = list_jobs_page({"edit_prepare"}, 0, 50)
+    jobs = list_jobs_page({"edit_prepare"}, 0, 50).jobs
     return [j for j in jobs if j.params.get("video") == video]
 
 

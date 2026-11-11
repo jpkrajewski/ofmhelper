@@ -11,7 +11,7 @@ from functools import lru_cache
 
 from ofmhelpers.db.repositories import DuplicateError, PicturePresetRepository
 from ofmhelpers.db.stores.users import agency_id
-from ofmhelpers.schemas.pictures import PicturePreset
+lazy from ofmhelpers.schemas.pictures import PicturePreset
 
 __all__ = ["DuplicateError", "create", "delete", "get", "update", "visible"]
 
@@ -21,8 +21,8 @@ def _repository() -> PicturePresetRepository:
     return PicturePresetRepository()
 
 
-def _preset(row: dict, viewer: int) -> PicturePreset:
-    return PicturePreset(**row, mine=row["owner_id"] == viewer)
+def _preset(row: PicturePreset, viewer: int) -> PicturePreset:
+    return row.model_copy(update={"mine": row.owner_id == viewer})
 
 
 def visible(viewer: int) -> list[PicturePreset]:
@@ -33,7 +33,7 @@ def visible(viewer: int) -> list[PicturePreset]:
 def get(preset_id: int, viewer: int) -> PicturePreset | None:
     """The preset if `viewer` may see it."""
     row = _repository().get(preset_id)
-    if row is None or row["owner_id"] not in (viewer, agency_id()):
+    if row is None or row.owner_id not in (viewer, agency_id()):
         return None
     return _preset(row, viewer)
 

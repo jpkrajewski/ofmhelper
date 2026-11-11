@@ -17,20 +17,17 @@ not broken. Every page read the signed-in user through it, so a Redis stall
 """
 
 import json
-from functools import wraps
-from typing import Protocol, TypeVar
+from functools import cache, wraps
+from typing import Protocol, TypeVar, get_type_hints
 lazy from collections.abc import Callable
 
+from pydantic import TypeAdapter, ValidationError
 from redis.exceptions import RedisError
 lazy from redis import Redis
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.log import get_logger
-
-# Safety-net expiry in case a code path ever reads without writing through
-# this layer -- invalidation is driven by bump(), not by this TTL.
-_DEFAULT_TTL_S = settings.infra.cache_ttl_s
 
 T = TypeVar("T")
 
@@ -48,13 +45,22 @@ class RepositoryCache:
     repository (e.g. "job", "application")."""
 
     def __init__(
-        self, redis: Redis | None, namespace: str, ttl_s: int = _DEFAULT_TTL_S
+        self, redis: Redis | None, namespace: str, ttl_s: int | None = None
     ) -> None:
         """`redis` None: the process's connection (`get_redis()`) at each
-        call, for the URL in force then."""
+        call, for the URL in force then. `ttl_s` None: `cache_ttl_s`, read
+        at each write."""
         self._fixed = redis
         self._namespace = namespace
-        self._ttl_s = ttl_s
+        self._fixed_ttl_s = ttl_s
+
+    @property
+    def _ttl_s(self) -> int:
+        """Safety-net expiry in case a code path ever reads without writing
+        through this layer -- invalidation is driven by bump(), not by it."""
+        if self._fixed_ttl_s is not None:
+            return self._fixed_ttl_s
+        return settings.infra.cache_ttl_s
 
     @property
     def _redis(self) -> Redis:
@@ -113,18 +119,40 @@ def _cache_key_args(args: tuple, kwargs: dict) -> tuple:
     return args + tuple(f"{k}={v}" for k, v in sorted(kwargs.items()))
 
 
+@cache
+def _returned[T](method: Callable[..., T]) -> TypeAdapter[T]:
+    """What `method` says it returns (its models), to and from the cache's JSON."""
+    return TypeAdapter(get_type_hints(method)["return"])
+
+
 def cached[T](method: Callable[..., T]) -> Callable[..., T]:
     """Mark a repository read method as cache-aside. The wrapped method's
     body is only run on a cache miss; the cache key is the method name plus
     its call arguments, resolved against `self._cache` (see
-    `CachedRepository`)."""
+    `CachedRepository`). The method returns what it is annotated with
+    (Pydantic models, lists of them, plain values); Redis holds their JSON.
+    A cached value that no longer fits the annotation (the model changed
+    since it was stored) is a miss: read from the database."""
 
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         cache_args = _cache_key_args(args, kwargs)
-        return self._cache.get_or_set(
-            method.__name__, cache_args, lambda: method(self, *args, **kwargs)
+        returned = _returned(method)
+        stored = self._cache.get_or_set(
+            method.__name__,
+            cache_args,
+            lambda: returned.dump_python(method(self, *args, **kwargs), mode="json"),
         )
+        try:
+            return returned.validate_python(stored)
+        except ValidationError:
+            logger.warning(
+                "cache %s: stored %s does not fit its model, read from the database",
+                self.cache_namespace,
+                method.__name__,
+                exc_info=True,
+            )
+            return method(self, *args, **kwargs)
 
     return wrapper
 

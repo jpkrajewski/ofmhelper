@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import short_links as link_store
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links.errors import LinkError
 from ofmhelpers.integrations.short_links.providers import get_link_provider
 from ofmhelpers.log import get_logger
@@ -49,7 +49,7 @@ def last_day(links: list[ShortLink], owner: int, now: float) -> LastDay:
             by_provider.setdefault(link.provider, []).append(link)
     found = LastDay()
     for key, mine in sorted(by_provider.items()):
-        api_key = link_store.api_key(owner, key)
+        api_key = link_keys.api_key(owner, key)
         if not api_key:
             continue
         provider = get_link_provider(key)(api_key)
@@ -64,7 +64,9 @@ def last_day(links: list[ShortLink], owner: int, now: float) -> LastDay:
             hours = [
                 hour
                 for per_link in read
-                for hour in per_link.get(link.remote_id or "", [])
+                for one in per_link
+                if one.remote_id == link.remote_id
+                for hour in one.hours
                 if hour.hour >= start
             ]
             found.counts[link.id] = DayCount(

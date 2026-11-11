@@ -82,9 +82,9 @@ def models_delivering(platform: ChatPlatform) -> set[str]:
     if not url:
         return set()
     return {
-        username
-        for username, target in chats.webhook_targets(platform)
-        if target == url and get_text(_alive_key(platform, username))
+        target.model_username
+        for target in chats.webhook_targets(platform)
+        if target.url == url and get_text(_alive_key(platform, target.model_username))
     }
 
 

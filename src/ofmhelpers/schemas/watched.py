@@ -6,7 +6,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ValidationError
 
-from ofmhelpers.integrations.instagram import ProfileHandle, ProfileReels, Reel
+from ofmhelpers.schemas.instagram import ProfileHandle, ProfileReels, Reel
 
 
 class WatchedProfile(BaseModel):

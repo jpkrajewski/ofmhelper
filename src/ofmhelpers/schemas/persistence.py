@@ -21,7 +21,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict
 
-from ofmhelpers.integrations.downloaders.models import DownloadResult
+from ofmhelpers.schemas.downloads import DownloadResult
 
 
 class JobStatus(StrEnum):
@@ -32,19 +32,23 @@ class JobStatus(StrEnum):
     failed = "failed"
 
 
+class JobHeader(BaseModel):
+    """Which task a job is and who started it."""
+
+    task: str
+    actor: str | None
+
+
 class ResultFile(BaseModel):
     """One output file in a job's stored `result` (the one-entry-per-file
     shape; grouped download results are `downloaders` models). `path` is None
     when only kie.ai's hosted copy exists; `remote_url` is set only by the
-    kie.ai tools. Stored via `to_result()`, so a field never set stays out of
-    the JSON exactly as before this was a model."""
+    kie.ai tools. Stored with `exclude_unset` (`db/stores/jobs.py`), so a
+    field never set stays out of the JSON exactly as before this was a model."""
 
     name: str
     path: str | None
     remote_url: str | None = None
-
-    def to_result(self) -> dict[str, Any]:
-        return self.model_dump(exclude_unset=True)
 
 
 class JobPreview(BaseModel):
@@ -141,3 +145,38 @@ class Job(BaseModel):
         if not self.is_grouped:
             return []
         return [DownloadResult.model_validate(r) for r in self._entries]
+
+
+class JobPage(BaseModel):
+    """One page of jobs, newest first, and how many match in total (before
+    the slice: whether another page exists)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    jobs: list[Job]
+    total: int
+
+
+class GalleryJobs(BaseModel):
+    """One page of jobs. No `next_offset` is what ends the infinite scroll."""
+
+    jobs: list[Job]
+    next_offset: int | None
+
+
+class JobCount(BaseModel):
+    """How many done jobs of `task` `actor` has."""
+
+    model_config = ConfigDict(frozen=True)
+
+    actor: str
+    task: str
+    count: int
+
+
+class JobParams(BaseModel):
+    """One job's stored `params`, exactly as stored."""
+
+    model_config = ConfigDict(frozen=True)
+
+    params: dict[str, Any] = {}

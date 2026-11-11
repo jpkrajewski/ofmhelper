@@ -11,6 +11,7 @@ from ofmhelpers.schemas.chatting import (
     ChatAccount,
     ChatDelivery,
     ChatPlatform,
+    ChatPosition,
     ChatRead,
     ChatTokens,
     ChatWebhook,
@@ -20,6 +21,7 @@ from ofmhelpers.schemas.chatting import (
     ModelTotal,
     OpenWait,
     StoredNotification,
+    WebhookTarget,
 )
 
 
@@ -28,7 +30,7 @@ def _repository() -> ChatRepository:
     return ChatRepository()
 
 
-def last_read(platform: ChatPlatform) -> dict[str, str]:
+def last_read(platform: ChatPlatform) -> list[ChatPosition]:
     return _repository().last_read(platform)
 
 
@@ -59,13 +61,12 @@ def models(platform: ChatPlatform) -> list[str]:
 def fan_messages(
     platform: ChatPlatform, username: str, since: float
 ) -> list[FanMessage]:
-    rows = _repository().fan_messages(platform, username, since)
-    return [FanMessage.model_validate(row) for row in rows]
+    return _repository().fan_messages(platform, username, since)
 
 
 def open_waits(before: float) -> list[OpenWait]:
     """Every platform's."""
-    return [OpenWait.model_validate(row) for row in _repository().open_waits(before)]
+    return _repository().open_waits(before)
 
 
 def save_notification(
@@ -98,27 +99,18 @@ def save_sale(platform: ChatPlatform, delivery: ChatDelivery, username: str) -> 
 
 def sales_between(since: float, until: float) -> list[ModelTotal]:
     """Each model's sales in [since, until), every platform."""
-    return [
-        ModelTotal.model_validate(row)
-        for row in _repository().sales_between(since, until)
-    ]
+    return _repository().sales_between(since, until)
 
 
 def counts_between(kind: DeliveryKind, since: float, until: float) -> list[ModelTotal]:
     """Each model's new subscribers or mass messages in [since, until)."""
-    return [
-        ModelTotal.model_validate(row)
-        for row in _repository().counts_between(kind, since, until)
-    ]
+    return _repository().counts_between(kind, since, until)
 
 
 def models_reaching_chats(
     platform: ChatPlatform, since: float, min_chats: int
 ) -> list[ModelReach]:
-    return [
-        ModelReach.model_validate(row)
-        for row in _repository().models_reaching_chats(platform, since, min_chats)
-    ]
+    return _repository().models_reaching_chats(platform, since, min_chats)
 
 
 def recent_mass_messages(
@@ -129,10 +121,7 @@ def recent_mass_messages(
 
 def notifications(since: float) -> list[StoredNotification]:
     """Every platform's."""
-    return [
-        StoredNotification.model_validate(row)
-        for row in _repository().notifications(since)
-    ]
+    return _repository().notifications(since)
 
 
 def open_channels(platform: ChatPlatform) -> set[str]:
@@ -140,10 +129,10 @@ def open_channels(platform: ChatPlatform) -> set[str]:
 
 
 def webhooks(platform: ChatPlatform) -> list[ChatWebhook]:
-    return [ChatWebhook.model_validate(row) for row in _repository().webhooks(platform)]
+    return _repository().webhooks(platform)
 
 
-def webhook_targets(platform: ChatPlatform) -> list[tuple[str, str]]:
+def webhook_targets(platform: ChatPlatform) -> list[WebhookTarget]:
     return _repository().webhook_targets(platform)
 
 
@@ -153,10 +142,7 @@ def save_webhook(platform: ChatPlatform, webhook: ChatWebhook) -> None:
 
 def accounts(platform: ChatPlatform) -> list[ChatAccount]:
     """Those connected on this server."""
-    return [
-        ChatAccount.model_validate(row)
-        for row in _repository().accounts(platform, settings.web.base_url)
-    ]
+    return _repository().accounts(platform, settings.web.base_url)
 
 
 def save_account(

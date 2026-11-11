@@ -1,5 +1,5 @@
 """
-ofmhelpers/web/recovery.py
+ofmhelpers/features/jobs/recovery.py (`registry` below: features/jobs/registry.py)
 
 Background recovery sweeper: every few minutes, settle the jobs whose
 provider request outlived their poll (it timed out, the worker restarted
@@ -23,7 +23,8 @@ on its task's own queue (`registry.QUEUES`). A running job neither holds
 export) is cut off, judged against a view of the queues read after the
 slow part of the sweep: with a remembered request
 it is settled like a failed one (resumed, never paid twice); one whose task
-can start over (`RESTARTS`: a /trials Generate) is queued again; any other
+can start over (`RESTARTS`: a /trials Generate, local ffmpeg and download
+work; never a task that pays a provider) is queued again; any other
 fails with "Interrupted by a restart", so no card spins forever. A done or
 deleted job is forgotten, and nothing older than `resume_max_age_s` is
 checked again. Provider-agnostic: a new provider is recovered without a
@@ -36,30 +37,31 @@ from collections.abc import Callable
 from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.cache.queue import active_job_ids
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import (
-    fail_job,
-    get_job,
-    reopen_job,
-    run_job,
-    running_jobs,
-)
+from ofmhelpers.db.stores.jobs import fail_job, get_job, reopen_job, running_jobs
+from ofmhelpers.features.assets.store import assets_root_for_actor
 from ofmhelpers.features.clone_links.review import resume_reviews
+from ofmhelpers.features.jobs.registry import JOB_TIMEOUTS, QUEUES, RESUMABLE
+from ofmhelpers.features.jobs.registry import RESTARTS as LOCAL_RESTARTS
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.trials import folder as trials_folder
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobStatus
-from ofmhelpers.web.routers.registry import JOB_TIMEOUTS, QUEUES, RESUMABLE
-from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
+from ofmhelpers.utils.registry import Registry
 
 logger = get_logger(__name__)
 
 INTERRUPTED = "Interrupted by a restart: run it again."
-# Cut off with nothing to resume, these start over (True: queued again).
+# Cut off with nothing to resume, these start over (True: queued again): a
+# /trials Generate, and the tasks whose work is local and free to repeat
+# (`registry.RESTARTS`, features/jobs/restart.py). Never one that pays a
+# provider.
 RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(
     {
         trials_folder.TASK: trials_folder.restart,
+        **{task: restart.again for task, restart in LOCAL_RESTARTS.items()},
     }
 )
 
@@ -143,10 +145,10 @@ def _restarted(job: Job) -> bool:
         return False
 
 
-def fail_cut_off(active: set[str] | None, remembered: set[str]) -> dict[str, str]:
+def fail_cut_off(active: set[str] | None, remembered: set[str]) -> Registry[str]:
     """Every cut-off running job with no request to resume started over
     (`RESTARTS`) or failed."""
-    outcomes = {}
+    outcomes: dict[str, str] = {}
     for job in running_jobs():
         if job.id in remembered or not _cut_off(job, active):
             continue
@@ -159,14 +161,14 @@ def fail_cut_off(active: set[str] | None, remembered: set[str]) -> dict[str, str
         fail_job(job.id, INTERRUPTED)
         logger.warning("recovery: job %s was cut off by a restart", job.id)
         outcomes[job.id] = "interrupted"
-    return outcomes
+    return Registry[str](entries=outcomes)
 
 
-def run_recovery_once() -> dict[str, str]:
+def run_recovery_once() -> Registry[str]:
     """One sweep: job id -> outcome. Blocking -- features/jobs/sweeps.py runs it in a
     thread every `recovery_sweep_interval_s`. One bad task never stops the
     sweep."""
-    outcomes = {}
+    outcomes: dict[str, str] = {}
     active = active_job_ids()
     remembered = tasks.remembered()
     by_job: dict[str, list[tasks.ProviderTask]] = {}
@@ -186,11 +188,12 @@ def run_recovery_once() -> dict[str, str]:
         # meanwhile would be failed as cut off while its runs wait in RQ.
         # Read before fail_cut_off reads the running rows, so a row made in
         # between is younger than the grace.
-        outcomes |= fail_cut_off(active_job_ids(), {t.job_id for t in remembered})
+        cut_off = fail_cut_off(active_job_ids(), {t.job_id for t in remembered})
+        outcomes |= cut_off.entries
     except Exception:
         logger.exception("recovery could not check for cut-off jobs")
     try:
-        outcomes |= resume_reviews()
+        outcomes |= resume_reviews().entries
     except Exception:
         logger.exception("recovery could not resume /clone-links reviews")
-    return outcomes
+    return Registry[str](entries=outcomes)

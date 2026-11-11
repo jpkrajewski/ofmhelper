@@ -15,16 +15,16 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
 from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.clone.service import subject_picks
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import assets_root_for_user
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 @pytest.fixture(autouse=True)
 def store(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "assets"
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", root)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: root)
     return root
 
 

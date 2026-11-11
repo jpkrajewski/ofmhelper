@@ -15,7 +15,9 @@ from signin import sign_in
 from ofmhelpers.db.models import SelfLinkClickRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import self_links, short_links
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links import NewLink
+from ofmhelpers.schemas.links import PlannedLink
 from ofmhelpers.web.main import app
 
 
@@ -31,17 +33,17 @@ def _make_link(user_id: int, slug: str, host: str, dest: str) -> int:
         user_id,
         "self",
         [
-            {
-                "slug": slug,
-                "domain": host,
-                "destination": dest,
-                "target": "onlyfans",
-                "account_id": None,
-                "creator": "",
-            }
+            PlannedLink(
+                slug=slug,
+                domain=host,
+                destination=dest,
+                target="onlyfans",
+                account_id=None,
+                creator="",
+            )
         ],
     )
-    provider = short_links.client(user_id, "self")
+    provider = link_keys.client(user_id, "self")
     assert provider is not None
     short_links.created(
         link_id, provider.create(NewLink(slug=slug, domain=host, destination=dest))

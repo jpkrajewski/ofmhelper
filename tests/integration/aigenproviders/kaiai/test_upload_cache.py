@@ -39,8 +39,6 @@ def client(tmp_path):
     return KieAIClient(
         api_key="test-key",
         out_dir=tmp_path / "out",
-        task_log=tmp_path / "tasks.jsonl",
-        completions_log=tmp_path / "completions.jsonl",
     )
 
 
@@ -127,12 +125,8 @@ def test_second_upload_is_served_from_cache_when_remote_confirms_alive(
 def test_a_second_client_with_the_same_key_reuses_the_cached_upload(tmp_path, ref_file):
     """The point of moving this to Redis: every KieAIClient instance, in this
     process or in the worker, sees the same answer."""
-    kwargs = {
-        "task_log": tmp_path / "t.jsonl",
-        "completions_log": tmp_path / "c.jsonl",
-    }
-    first_client = KieAIClient(api_key="k", out_dir=tmp_path / "a", **kwargs)
-    second_client = KieAIClient(api_key="k", out_dir=tmp_path / "b", **kwargs)
+    first_client = KieAIClient(api_key="k", out_dir=tmp_path / "a")
+    second_client = KieAIClient(api_key="k", out_dir=tmp_path / "b")
 
     with kie_http() as mreq:
         mreq.post.return_value = _mock_post_response(url="https://tempfile.example/x")
@@ -253,14 +247,10 @@ def test_different_api_keys_never_share_a_cached_upload(tmp_path, ref_file):
     client_a = KieAIClient(
         api_key="key-a",
         out_dir=tmp_path / "a",
-        task_log=tmp_path / "a.jsonl",
-        completions_log=tmp_path / "a-c.jsonl",
     )
     client_b = KieAIClient(
         api_key="key-b",
         out_dir=tmp_path / "b",
-        task_log=tmp_path / "b.jsonl",
-        completions_log=tmp_path / "b-c.jsonl",
     )
 
     with kie_http() as mreq:
@@ -359,8 +349,6 @@ def test_one_file_asked_for_at_once_is_uploaded_once(tmp_path, ref_file):
         return KieAIClient(
             api_key="test-key",
             out_dir=tmp_path / "out",
-            task_log=tmp_path / "tasks.jsonl",
-            completions_log=tmp_path / "completions.jsonl",
         )
 
     lock_key = f"lock:{_key(new_client(), ref_file)}"

@@ -8,10 +8,10 @@ preview and poster all live here, under the router's own prefix.
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.features.jobs import own
 from ofmhelpers.schemas import Job, JobStatusPayload
 from ofmhelpers.web.dependencies import Actor
 from ofmhelpers.web.routers.task_helpers.responses import (
@@ -51,9 +51,7 @@ def add_job_routes(
 
     @router.get("/jobs/{job_id}")
     def job_status(request: Request, job_id: str, actor: Actor) -> Response:
-        job = get_job(job_id, actor)
-        if job is None:
-            raise HTTPException(status_code=404, detail="Job not found")
+        job = own.own(job_id, actor)
         assets, failed_sources = job_assets(job, files_prefix)
         return render(
             request,
@@ -70,18 +68,18 @@ def add_job_routes(
 
     @router.get("/jobs/{job_id}/status")
     def job_status_json(job_id: str, actor: Actor) -> JobStatusPayload:
-        return job_status_payload(get_job(job_id, actor), files_prefix)
+        return job_status_payload(own.find(job_id, actor), files_prefix)
 
     @router.get("/files/{job_id}/{index}")
     def download_file(
         job_id: str, index: int, actor: Actor, dl: Annotated[int, Query()] = 0
     ) -> Response:
-        return serve_job_file(get_job(job_id, actor), index, as_attachment=bool(dl))
+        return serve_job_file(own.find(job_id, actor), index, as_attachment=bool(dl))
 
     @router.get("/files/{job_id}/{index}/preview")
     def preview_file(job_id: str, index: int, actor: Actor) -> Response:
-        return serve_job_preview(get_job(job_id, actor), index, files_prefix)
+        return serve_job_preview(own.find(job_id, actor), index, files_prefix)
 
     @router.get("/files/{job_id}/{index}/poster")
     def poster_file(job_id: str, index: int, actor: Actor) -> Response:
-        return serve_job_poster(get_job(job_id, actor), index)
+        return serve_job_poster(own.find(job_id, actor), index)

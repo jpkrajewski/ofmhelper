@@ -13,6 +13,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from PIL import Image
 
+from ofmhelpers.features.pictures import targets as picture_targets
 from ofmhelpers.integrations.ai_providers import runner, tasks
 from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY, fake_apiyi
 from ofmhelpers.integrations.ai_providers.apiyi.families import split
@@ -62,7 +63,8 @@ def _calls(prefix: str) -> list:
 def _run(provider, key: str, values: dict, job: str) -> list[Path]:
     spec = get_spec(key)
     spec.check(values)
-    return runner.generate(provider, spec, spec.request(values, provider.upload), job)
+    sent = spec.request(values, provider.upload).model_dump()
+    return runner.generate(provider, spec, sent, job)
 
 
 # --- Nano Banana (Gemini) --------------------------------------------------------
@@ -149,7 +151,8 @@ def test_a_sync_image_is_a_task_like_any_other(provider):
 
     remembered = tasks.recall("nb-task")
     assert remembered is not None
-    family, own = split(remembered.task_id)
+    task = split(remembered.task_id)
+    family, own = task.family, task.own_id
     assert remembered.task_id.startswith("img:")
     assert provider.status(remembered.task_id).state == "done"
     assert family.tag == "img"
@@ -409,7 +412,7 @@ def test_a_pictures_run_on_apiyi_is_nano_banana_pro_at_2k(provider, image):
     from ofmhelpers.web.routers.image_tools import pictures
 
     target = pictures.PICTURE_TARGETS["apiyi"]
-    values = pictures._values(
+    values = picture_targets.values(
         target,
         {
             "prompt": "Refer to the first images, replicate the last one",
@@ -419,12 +422,11 @@ def test_a_pictures_run_on_apiyi_is_nano_banana_pro_at_2k(provider, image):
             ),
             "resolution": pictures._resolution(target.spec, target.resolution),
         },
-    )
+    ).model_dump()
     target.spec.check(values)
 
-    [saved] = runner.generate(
-        provider, target.spec, target.spec.request(values, provider.upload), "pic-apiyi"
-    )
+    sent = target.spec.request(values, provider.upload).model_dump()
+    [saved] = runner.generate(provider, target.spec, sent, "pic-apiyi")
 
     assert saved.stat().st_size > 0
     assert target.max_images == 14

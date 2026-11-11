@@ -17,15 +17,37 @@ from pathlib import Path
 from typing import Any, Literal
 
 from jsonschema import Draft202012Validator
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, create_model
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    create_model,
+    model_serializer,
+)
 
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
+from ofmhelpers.utils.registry import Registry
 
 MediaKind = Literal["image", "video", "audio"]
 OutputKind = Literal["image", "video"]
 ScalarType = Literal["string", "integer", "number", "boolean"]
 
 Payload = dict[str, JsonValue]
+
+
+class Fields(BaseModel):
+    """A model's fields under the names its schema gives them, in the order
+    set. The names are catalog data, not code, so they are held in `values`;
+    `model_dump()` is `values` itself: what a provider is sent and what a
+    job's params store."""
+
+    values: dict[str, Any] = {}
+
+    @model_serializer
+    def _as_given(self) -> dict[str, Any]:
+        return dict(self.values)
+
 
 # Field-name words that say what a media field takes, most specific first:
 # "image_reference_url" is an image, "first_frame_url" too.
@@ -152,14 +174,15 @@ class ModelSpec(BaseModel):
         return f"{self.provider}:{self.model_id}"
 
     @cached_property
-    def properties(self) -> dict[str, FieldSchema]:
+    def properties(self) -> Registry[FieldSchema]:
         raw = self.input_schema.get("properties")
-        if not isinstance(raw, dict):
-            return {}
-        return {
-            name: FieldSchema.model_validate(value).concrete
-            for name, value in raw.items()
-        }
+        schema = raw if isinstance(raw, dict) else {}
+        return Registry[FieldSchema](
+            entries={
+                name: FieldSchema.model_validate(value).concrete
+                for name, value in schema.items()
+            }
+        )
 
     @cached_property
     def required(self) -> frozenset[str]:
@@ -171,7 +194,7 @@ class ModelSpec(BaseModel):
     @cached_property
     def media_fields(self) -> list[MediaField]:
         fields = []
-        for name, field in self.properties.items():
+        for name, field in self.properties.entries.items():
             kind = _media_kind(name, field)
             if kind is None or field.base_type not in ("string", "array"):
                 continue
@@ -194,7 +217,7 @@ class ModelSpec(BaseModel):
         applies its own default for them."""
         media = {f.name for f in self.media_fields}
         fields = []
-        for name, field in self.properties.items():
+        for name, field in self.properties.entries.items():
             kind = field.base_type
             if name in media or kind not in _SCALAR_TYPES or field.is_uri:
                 continue
@@ -223,7 +246,7 @@ class ModelSpec(BaseModel):
         }
         return create_model(f"Form_{self.key}", **fields)
 
-    def parse_form(self, values: Mapping[str, str]) -> Payload:
+    def parse_form(self, values: Mapping[str, str]) -> Fields:
         """Typed values for the scalar settings present in `values`. A blank
         field is left out, so the provider's default applies."""
         names = {f.name for f in self.form_fields}
@@ -232,14 +255,14 @@ class ModelSpec(BaseModel):
             parsed = self._form_model.model_validate(present)
         except ValueError as exc:
             raise InvalidInputError(str(exc)) from exc
-        return parsed.model_dump(exclude_none=True)
+        return Fields(values=parsed.model_dump(exclude_none=True))
 
     def check(self, values: Mapping[str, Any]) -> None:
         """Raise `InvalidInputError` naming the first field that breaks the
         schema -- before anything is uploaded or paid for. Local paths stand
         in for the URLs: URL format is not checked, counts and required
         fields are."""
-        body = self._body(values, str)
+        body = self._body(values, str).values
         error = next(
             iter(Draft202012Validator(self.input_schema).iter_errors(body)), None
         )
@@ -250,18 +273,16 @@ class ModelSpec(BaseModel):
 
     def request(
         self, values: Mapping[str, Any], upload: Callable[[Path], str]
-    ) -> Payload:
+    ) -> Fields:
         """The body sent to the provider: `fixed` plus the settings and each
         media field's files uploaded to URLs."""
-        return {**self.fixed, **self._body(values, upload)}
+        return Fields(values={**self.fixed, **self._body(values, upload).values})
 
-    def _body(
-        self, values: Mapping[str, Any], upload: Callable[[Path], str]
-    ) -> Payload:
+    def _body(self, values: Mapping[str, Any], upload: Callable[[Path], str]) -> Fields:
         """The schema's own fields out of `values`; a media field's paths go
         through `upload`, and an empty one is left out (providers reject an
         empty list)."""
-        body: Payload = {}
+        body: dict[str, Any] = {}
         media = {f.name: f for f in self.media_fields}
         for name, value in values.items():
             if name not in self.properties:
@@ -273,4 +294,4 @@ class ModelSpec(BaseModel):
             urls: list[JsonValue] = [upload(Path(p)) for p in paths if p]
             if urls:
                 body[name] = urls if media[name].multiple else urls[0]
-        return body
+        return Fields(values=body)

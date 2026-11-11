@@ -3,7 +3,8 @@ save -- driven against an in-memory provider, no HTTP."""
 
 import pytest
 
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import runner, self_heal, tasks
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.catalog import get_spec

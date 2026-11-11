@@ -34,6 +34,7 @@ import uuid
 lazy from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run, run_bytes
+lazy from ofmhelpers.media.size import Size
 
 
 def _short_side(side: int) -> str:
@@ -61,17 +62,15 @@ def turn_filter(turn: int, mirror: bool) -> str | None:
     return _filters(_TURNS.get(turn), "hflip" if mirror else None) or None
 
 
-def crop_filter(
-    ratio: tuple[int, int] | None, x: float, y: float, scale: float = 1.0
-) -> str:
-    """A `ratio` (width, height; None: the picture's own) box, `scale` times
+def crop_filter(ratio: Size | None, x: float, y: float, scale: float = 1.0) -> str:
+    """A `ratio` (width to height; None: the picture's own) box, `scale` times
     the biggest one inside the upright picture, even-sized, at `x` / `y`
     (0..1) along the room it has to move. Pure ffmpeg expressions: no probe
     of the size or the rotation."""
     if ratio is None:
         w_max, h_max = "iw", "ih"
     else:
-        w, h = ratio
+        w, h = ratio.width, ratio.height
         w_max, h_max = f"min(iw,ih*{w}/{h})", f"min(ih,iw*{h}/{w})"
     return (
         f"crop=w='trunc({w_max}*{scale:.4f}/2)*2'"

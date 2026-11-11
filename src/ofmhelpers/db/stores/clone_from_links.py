@@ -13,17 +13,13 @@ from functools import lru_cache
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import CloneFromLinkRepository
 from ofmhelpers.db.stores import clone_ai_checks
-from ofmhelpers.schemas import Job
-from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
+lazy from ofmhelpers.schemas import Job
+lazy from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
 
 
 @lru_cache(maxsize=1)
 def _repository() -> CloneFromLinkRepository:
     return CloneFromLinkRepository()
-
-
-def _reviews(rows: list[dict]) -> list[CloneFromLink]:
-    return [CloneFromLink.model_validate(r) for r in rows]
 
 
 def start(job_id: str, file_index: int, user_id: int, path: str | None) -> int | None:
@@ -36,21 +32,19 @@ def start(job_id: str, file_index: int, user_id: int, path: str | None) -> int |
 
 
 def get(review_id: int) -> CloneFromLink | None:
-    found = _repository().get(review_id)
-    return CloneFromLink.model_validate(found) if found else None
+    return _repository().get(review_id)
 
 
 def claim(review_id: int) -> CloneFromLink | None:
     """The review, claimed by the calling worker; None when it is settled
     or another worker holds it."""
-    found = _repository().claim(review_id)
-    return CloneFromLink.model_validate(found) if found else None
+    return _repository().claim(review_id)
 
 
 def for_jobs(job_ids: list[str], user_id: int | None = None) -> list[CloneFromLink]:
     """Every review of these jobs' results (only `user_id`'s when given:
     what a page passes), each with its check."""
-    rows = _reviews(_repository().for_jobs(job_ids, user_id))
+    rows = _repository().for_jobs(job_ids, user_id)
     checks = {c.id: c for c in clone_ai_checks.for_jobs(job_ids)}
     return [
         r.model_copy(update={"check": checks.get(r.check_id)}) if r.check_id else r
@@ -88,12 +82,12 @@ def finish(
 
 def cut_off(stale_before: float) -> list[CloneFromLink]:
     """Running reviews a worker claimed before `stale_before`."""
-    return _reviews(_repository().cut_off(stale_before))
+    return _repository().cut_off(stale_before)
 
 
 def never_claimed(created_before: float) -> list[CloneFromLink]:
     """Running reviews no worker has claimed, made before `created_before`."""
-    return _reviews(_repository().never_claimed(created_before))
+    return _repository().never_claimed(created_before)
 
 
 def release(review: CloneFromLink) -> bool:
@@ -103,7 +97,7 @@ def release(review: CloneFromLink) -> bool:
 
 def failed_since(since: float) -> list[CloneFromLink]:
     """Failed reviews with nothing in Drive, finished after `since`."""
-    return _reviews(_repository().failed_since(since))
+    return _repository().failed_since(since)
 
 
 def reopen(review: CloneFromLink) -> bool:
@@ -114,6 +108,4 @@ def reopen(review: CloneFromLink) -> bool:
 
 def unreviewed_jobs(task: str, since: float) -> list[Job]:
     """`task`'s done jobs finished after `since` that have no review."""
-    return [
-        Job.model_validate(row) for row in _repository().unreviewed_jobs(task, since)
-    ]
+    return _repository().unreviewed_jobs(task, since)

@@ -79,10 +79,11 @@ def test_children_of_lists_several_folders_at_once(drive, parent):
 
     found = drive.children_of([one.id, two.id, empty.id])
 
-    assert [f.id for f in found[one.id]] == [inner_new.id, inner_old.id]
-    assert [f.id for f in found[two.id]] == [other.id]
-    assert found[empty.id] == []
-    assert drive.children_of([]) == {}
+    assert [f.id for f in found.of(one.id)] == [inner_new.id, inner_old.id]
+    assert [f.id for f in found.of(two.id)] == [other.id]
+    assert found.of(empty.id) == []
+    assert [f.folder_id for f in found.folders] == [one.id, two.id, empty.id]
+    assert drive.children_of([]).folders == []
 
 
 def test_find_folder_is_none_for_a_name_not_there(drive, parent):

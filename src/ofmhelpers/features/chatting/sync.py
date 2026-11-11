@@ -73,10 +73,10 @@ def sync(
     started = time.monotonic()
     lookback = timedelta(seconds=settings.chatting.lookback_s)
     oldest = datetime.now(UTC) - lookback
-    scope = ReadScope(
-        seen=chats.last_read(platform),
-        oldest=oldest,
-        open_channels=chats.open_channels(platform),
+    scope = ReadScope.since(
+        chats.last_read(platform),
+        oldest,
+        chats.open_channels(platform),
         thorough=thorough,
     )
     reached = source.models()
@@ -116,10 +116,10 @@ def read_now(source: ChatSource, usernames: set[str]) -> set[str]:
     the others with it."""
     platform = source.platform
     oldest = datetime.now(UTC) - timedelta(seconds=settings.chatting.lookback_s)
-    scope = ReadScope(
-        seen=chats.last_read(platform),
-        oldest=oldest,
-        open_channels=chats.open_channels(platform),
+    scope = ReadScope.since(
+        chats.last_read(platform),
+        oldest,
+        chats.open_channels(platform),
         thorough=False,
     )
     read = set()

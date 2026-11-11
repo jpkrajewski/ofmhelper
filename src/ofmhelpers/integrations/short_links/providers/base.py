@@ -15,6 +15,7 @@ from redis import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.short_links import provider_infos
 from ofmhelpers.integrations.short_links.errors import (
     AuthError,
@@ -23,10 +24,9 @@ from ofmhelpers.integrations.short_links.errors import (
     RateLimitedError,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
-lazy from ofmhelpers.integrations.short_links.models import (
-    DayStat,
-    HourStat,
+lazy from ofmhelpers.schemas.link_catalog.models import (
+    LinkDays,
+    LinkHours,
     NewLink,
     ProviderInfo,
     RemoteLink,
@@ -182,14 +182,12 @@ class LinkProvider(ABC):
         """Every link of the account."""
 
     @abstractmethod
-    def daily(
-        self, remote_ids: list[str], start: date, end: date
-    ) -> dict[str, list[DayStat]]:
+    def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
         """Per link, its days from `start` to `end` (UTC, both included)
         that had any traffic."""
 
     @abstractmethod
-    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+    def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
         """Per link, the hours of the UTC `day` that had any traffic (what the
         provider answers for a one-day range: hourly buckets), as fresh as the
         provider counts. A link gone since it was listed is left out."""

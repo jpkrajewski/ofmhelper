@@ -26,8 +26,8 @@ lazy from collections.abc import Mapping
 
 import requests
 
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 FAKE_KEY = "ek_live_fake-elyum-key"
 HOST = "api.elyum.ai"
@@ -199,8 +199,11 @@ def _files(request: requests.PreparedRequest, _proxies: Mapping[str, str]) -> Fa
     )
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def api(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_elyum().handle(request)
 
-    return {HOST: api, FILES_HOST: _files}
+    return [
+        FakeRoute(host=HOST, handler=api),
+        FakeRoute(host=FILES_HOST, handler=_files),
+    ]

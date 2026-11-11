@@ -24,8 +24,9 @@ from ofmhelpers.cache import (
     get_queue,
     get_redis,
 )
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.jobs import recovery
+from ofmhelpers.features.jobs.runner import run_job
 
 
 @pytest.fixture(autouse=True)
@@ -57,6 +58,36 @@ def test_enqueued_job_runs_in_a_worker_and_finishes_in_postgres():
     assert job.result == [{"name": "out.mp4", "path": None}]
 
 
+def test_a_job_queued_under_run_jobs_old_path_still_runs():
+    # Jobs waiting in Redis across the deploy that moved `run_job` to
+    # features/jobs/runner.py name it where it was: RQ looks that path up.
+    old_path = "ofmhelpers.db.stores.jobs.run_job"
+    job_id = create_job("seedance", {})
+    rq_job = get_queue().enqueue(
+        old_path, job_id, worker_tasks.make_result, {"name": "out.mp4"}
+    )
+    assert rq_job.func_name == old_path
+
+    _drain_queue()
+
+    job = get_job(job_id)
+    assert job.status == "done"
+    assert job.result == [{"name": "out.mp4", "path": None}]
+
+
+def test_a_failing_job_queued_under_the_old_path_is_recorded_failed():
+    job_id = create_job("seedance", {})
+    get_queue().enqueue(
+        "ofmhelpers.db.stores.jobs.run_job", job_id, worker_tasks.always_fails, {}
+    )
+
+    _drain_queue()
+
+    job = get_job(job_id)
+    assert job.status == "failed"
+    assert job.error == "Wrong API Key"
+
+
 def test_worker_marks_a_raising_job_failed_never_stuck_running():
     job_id = create_job("seedance", {})
     get_queue().enqueue(run_job, job_id, worker_tasks.always_fails, {})
@@ -76,7 +107,7 @@ def test_worker_log_description_never_carries_the_job_arguments():
         run_job, job_id, worker_tasks.make_result, {"name": "secret-api-key"}
     )
 
-    assert rq_job.description == "ofmhelpers.db.stores.jobs.run_job"
+    assert rq_job.description == "ofmhelpers.features.jobs.runner.run_job"
     _drain_queue()
     assert get_job(job_id).status == "done"
 
@@ -118,7 +149,7 @@ def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
         assert queue.get_job_ids() == []
 
     assert active_job_ids() == {default_id, links_id}
-    assert recovery.fail_cut_off(active_job_ids(), set()) == {}
+    assert recovery.fail_cut_off(active_job_ids(), set()).entries == {}
     assert get_job(default_id).status == "running"
     assert get_job(links_id).status == "running"
 

@@ -10,13 +10,16 @@ Optional: the C++ tools built from ThreatExchange (commit
 295fd16e53c553443d8cfcb83ddc2f1c1d826fbd: `cd tmk/cpp && make`) in
 `OFM_TMK_DIR` (tmk-hash-video, tmk-two-level-score); `available()` says
 whether it runs here. A source's hash is kept per file (the lab checks
-hundreds of copies of the same few sources).
+hundreds of copies of the same few sources) in the uploads root's `.tmk`
+folder, next to the other caches there (`.previews`, `.edit`); one unused
+for a day is dropped when the next is made. It was the container's temp dir
+until 2026-11-11: never cleaned while the container lived.
 """
 
 import hashlib
 import subprocess
 import tempfile
-from functools import lru_cache
+import time
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -25,6 +28,8 @@ from ofmhelpers.config import settings
 from ofmhelpers.media.ffmpeg import binary
 
 THRESHOLD = 0.7
+# A stored source hash nobody compared against for this long goes.
+_KEEP_S = 86400
 _TOOLS = ("tmk-hash-video", "tmk-two-level-score")
 
 
@@ -64,12 +69,33 @@ def _hash(video: Path, dst: Path, timeout_s: int) -> Path:
     return dst
 
 
-@lru_cache(maxsize=32)
+def sources_dir() -> Path:
+    """Where the sources' hashes are kept."""
+    return Path(settings.infra.uploads_root) / ".tmk"
+
+
+def _drop_old(folder: Path) -> None:
+    oldest = time.time() - _KEEP_S
+    for stored in folder.glob("*.tmk"):
+        if stored.stat().st_mtime < oldest:
+            stored.unlink(missing_ok=True)
+
+
 def _source(path: str, mtime: float, timeout_s: int) -> Path:
+    """The stored hash of the source at `path`, made once per file version."""
     key = hashlib.sha1(f"{path}|{mtime}".encode(), usedforsecurity=False).hexdigest()
-    folder = Path(tempfile.gettempdir()) / "tmk_sources"
-    folder.mkdir(exist_ok=True)
-    return _hash(Path(path), folder / f"{key}.tmk", timeout_s)
+    folder = sources_dir()
+    stored = folder / f"{key}.tmk"
+    if stored.is_file():
+        # Used now: `_drop_old` goes by this time.
+        stored.touch()
+        return stored
+    folder.mkdir(parents=True, exist_ok=True)
+    _drop_old(folder)
+    # Under its name only once whole: a hash cut off half-written would be
+    # compared against for a day.
+    partial = _hash(Path(path), folder / f"{key}.part", timeout_s)
+    return partial.replace(stored)
 
 
 def compare(source: Path, copy: Path, timeout_s: int) -> TmkScore:

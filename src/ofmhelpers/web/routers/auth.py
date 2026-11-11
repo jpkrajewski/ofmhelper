@@ -15,10 +15,8 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import log_event
 from ofmhelpers.features.signin import consent, flow, password_link, passwords
-from ofmhelpers.features.signin.outcome import Outcome
+from ofmhelpers.features.signin.outcome import Outcome, signed_out
 from ofmhelpers.features.signin.state import (
     HOME,
     STATE_COOKIE,
@@ -26,19 +24,11 @@ from ofmhelpers.features.signin.state import (
     drop_state,
     safe_next,
 )
-from ofmhelpers.integrations.signin import Provider, SignInError, configured, providers
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(tags=["auth"])
-
-
-def _provider(name: str) -> Provider:
-    found = providers().get(name)
-    if found is None or not found.configured():
-        raise HTTPException(status_code=404, detail="No such sign-in")
-    return found
 
 
 def _login_page(
@@ -49,7 +39,7 @@ def _login_page(
         "login.html",
         next=next_url,
         error=error,
-        providers=configured(),
+        providers=consent.offered(),
         status_code=status_code,
     )
 
@@ -78,7 +68,7 @@ def login_form(
 def login_submit(
     request: Request,
     password: Annotated[str, Form()],
-    email: Annotated[str, Form()] = users.PASSWORD_ADMIN,
+    email: Annotated[str, Form()] = passwords.PASSWORD_ADMIN,
     next_url: Annotated[str, Form(alias="next")] = HOME,
 ) -> Response:
     return _respond(request, passwords.login(request, email, password, next_url))
@@ -88,7 +78,7 @@ def login_submit(
 def logout(request: Request) -> Response:
     user = AuthMiddleware.session_user(request)
     if user is not None:
-        log_event("logout", actor=user.actor)  # capture before clearing
+        signed_out(user.actor)  # capture before clearing
     request.session.clear()
     return see_other("/login")
 
@@ -102,7 +92,7 @@ def start(
 ) -> Response:
     """To the provider's consent. `link`: connect it to the signed-in user
     (/account) -- for Google, asking consent again so a Drive token comes."""
-    provider = _provider(name)
+    provider = consent.provider(name)
     current = AuthMiddleware.session_user(request)
     if link and current is None:
         return see_other("/login")
@@ -114,7 +104,7 @@ def start(
 
 
 def _finish(request: Request, name: str, code: str, state: str, error: str) -> Response:
-    provider = _provider(name)
+    provider = consent.provider(name)
     back = flow.Callback(
         code=code,
         state=state,
@@ -189,11 +179,7 @@ def fake_consent_submit(
     if not settings.infra.fake_externals:
         raise HTTPException(status_code=404)
     cookie = request.cookies.get(STATE_COOKIE, "")
-    try:
-        url = consent.fake_callback(cookie, provider, state, email)
-    except SignInError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return see_other(url)
+    return see_other(consent.fake_callback(cookie, provider, state, email))
 
 
 def _password_page(request: Request, page: password_link.LinkPage) -> Response:

@@ -22,8 +22,8 @@ lists it under folders no login owns).
 from ofmhelpers.db.stores import devices
 from ofmhelpers.db.stores.tracked_accounts import untrack
 from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.phones.catalog import services
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.phone_catalog import services
 lazy from ofmhelpers.schemas import Device, DeviceLogin
 
 logger = get_logger(__name__)

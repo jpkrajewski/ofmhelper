@@ -16,6 +16,7 @@ from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.sync import sync
 from ofmhelpers.features.chatting.webhooks import cover_models
 from ofmhelpers.integrations.fanvue import fake as fanvue_fake
+from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.stacked import fake as stacked_fake
 from ofmhelpers.schemas.chatting import (
     ChatAccount,
@@ -23,7 +24,6 @@ from ofmhelpers.schemas.chatting import (
     ChatTokens,
     ChatWebhook,
 )
-from ofmhelpers.utils.outbound import FakeReply
 lazy from ofmhelpers.integrations.chat_source import ChatSource
 
 STACKED_SECRET = (
@@ -81,12 +81,12 @@ class StackedDriver:
 
     def fan_writes(self, fan: str, at: float) -> str:
         message = self.fake.add_message(self._chat_of(fan), fan, "hi", int(at * 1000))
-        return str(message["messageId"])
+        return str(message.message_id)
 
     def model_replies(self, fan: str, at: float) -> str:
         channel = self._chat_of(fan)
         message = self.fake.add_message(channel, self.model_id, "hey", int(at * 1000))
-        return str(message["messageId"])
+        return str(message.message_id)
 
     def fail_next_reads(self, count: int, status: int = HTTPStatus.BAD_GATEWAY) -> None:
         self.fake.fail_next.extend(
@@ -230,9 +230,9 @@ class FanvueDriver:
                 is_agency=True,
             ),
             ChatTokens(
-                access_token=tokens["access_token"],
-                refresh_token=tokens["refresh_token"],
-                expires_at=time.time() + tokens["expires_in"],
+                access_token=tokens.access_token,
+                refresh_token=tokens.refresh_token,
+                expires_at=time.time() + tokens.expires_in,
             ),
         )
         cover_models(self.source, self.source.models().found)

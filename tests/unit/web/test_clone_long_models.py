@@ -94,18 +94,21 @@ def test_a_shape_asks_for_the_nearest_offered_ratio(size, ratio):
     ],
 )
 def test_a_shape_at_a_height_keeps_its_aspect_with_even_sides(size, height, expected):
-    assert Shape(width=size[0], height=size[1]).size_at(height) == expected
+    sized = Shape(width=size[0], height=size[1]).size_at(height)
+
+    assert (sized.width, sized.height) == expected
 
 
 @pytest.mark.parametrize(
     ("size", "expected"),
     [
-        ((3840, 2160), (1920, 1080)),  # 4K phone video, landscape
-        ((2160, 3840), (1080, 1920)),  # and upright
+        # 4K phone video, landscape
+        ((3840, 2160), Shape(width=1920, height=1080)),
+        ((2160, 3840), Shape(width=1080, height=1920)),  # and upright
         ((1080, 1350), None),  # short side already 1080
         ((1280, 720), None),
-        ((1440, 1800), (1080, 1350)),
-        ((4000, 4000), (1080, 1080)),
+        ((1440, 1800), Shape(width=1080, height=1350)),
+        ((4000, 4000), Shape(width=1080, height=1080)),
     ],
 )
 def test_a_shape_within_a_side_caps_its_short_side_only(size, expected):

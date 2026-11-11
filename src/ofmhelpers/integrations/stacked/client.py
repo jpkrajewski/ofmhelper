@@ -1,5 +1,5 @@
 """Stacked's public API, the read calls this app makes. Through
-`utils.outbound`, so OFM_FAKE_EXTERNALS answers it from `stacked/fake.py`.
+`integrations.outbound`, so OFM_FAKE_EXTERNALS answers it from `stacked/fake.py`.
 
 One client works for both kinds of key: a creator key reaches its one creator,
 an agency key every linked creator, and `creators()` lists them either way.
@@ -9,14 +9,14 @@ chat read."""
 import time
 from datetime import UTC, datetime
 from http import HTTPStatus
-from typing import Any, NamedTuple
+from typing import Any
 lazy from collections.abc import Iterable, Iterator
 
 import requests
-from pydantic import ValidationError
-lazy from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.stacked.errors import (
     StackedAuthError,
     StackedError,
@@ -40,7 +40,6 @@ from ofmhelpers.integrations.stacked.models import (
     WebhooksPage,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
@@ -198,12 +197,21 @@ class StackedClient:
         )
 
 
-class Reach(NamedTuple):
+class Reached(BaseModel):
+    """A creator and the client to use for it."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    client: StackedClient
+    creator: AccessibleCreator
+
+
+class Reach(BaseModel):
     """Every creator the keys reach, with the client to use for each. `failed`:
     Stacked did not answer for a key, so someone may be missing. A key it refuses
     is not that: it stays refused, and trying again changes nothing."""
 
-    found: list[tuple[StackedClient, AccessibleCreator]]
+    found: list[Reached]
     failed: bool
 
 
@@ -211,7 +219,7 @@ def reach(api_keys: Iterable[str]) -> Reach:
     """A creator key gives its creator, an agency key each linked one. A creator
     two keys reach stays with the first. A key that cannot be read is skipped
     (logged), so one revoked key does not take the others down."""
-    found: dict[str, tuple[StackedClient, AccessibleCreator]] = {}
+    found: dict[str, Reached] = {}
     failed = False
     for api_key in api_keys:
         client = StackedClient(api_key)
@@ -225,11 +233,11 @@ def reach(api_keys: Iterable[str]) -> Reach:
             failed = True
             continue
         for creator in creators:
-            found.setdefault(creator.user_id, (client, creator))
-    return Reach(list(found.values()), failed)
+            found.setdefault(creator.user_id, Reached(client=client, creator=creator))
+    return Reach(found=list(found.values()), failed=failed)
 
 
-def reachable(api_keys: Iterable[str]) -> list[tuple[StackedClient, AccessibleCreator]]:
+def reachable(api_keys: Iterable[str]) -> list[Reached]:
     """Just the creators, for a caller that does not care who may be missing."""
     return reach(api_keys).found
 

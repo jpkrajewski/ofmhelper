@@ -28,7 +28,7 @@ def test_one_run_gets_a_reels_video_and_a_posts_images(client):
     post = "https://www.instagram.com/p/xyz/"
 
     r = client.post("/download-media/run", data={"urls": f"{reel}\n{post}"})
-    assert r.status_code == 200
+    assert r.status_code == 202
     status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
 
     assert status["status"] == "done"

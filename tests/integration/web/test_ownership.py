@@ -49,12 +49,12 @@ def bob() -> TestClient:
 def _no_scans(monkeypatch):
     """Adding accounts or profiles queues scans: none reach Instagram."""
     monkeypatch.setattr(reel_watch, "queue_due_scans", list)
+    from ofmhelpers.features.accounts import page as accounts
     from ofmhelpers.features.accounts import tracker as account_tracker
-    from ofmhelpers.web.routers.tracking import accounts
 
     monkeypatch.setattr(account_tracker, "queue_due_scans", list)
     monkeypatch.setattr(accounts, "queue_due_scans", list)
-    from ofmhelpers.web.routers.downloads import reels
+    from ofmhelpers.features.reels import page as reels
 
     monkeypatch.setattr(reels, "queue_due_scans", list)
 
@@ -74,7 +74,7 @@ def _agency() -> TestClient:
 
 def _add_phone(client: TestClient, **extra) -> int:
     r = client.post("/phones/add", json=PHONE | extra)
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     return r.json()["id"]
 
 
@@ -83,7 +83,7 @@ def _add_login(client: TestClient, device: int, username: str, password: str) ->
         f"/phones/{device}/logins",
         json={"service": "instagram", "username": username, "password": password},
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     return r.json()["id"]
 
 

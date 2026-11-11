@@ -151,7 +151,7 @@ def test_the_fake_answers_the_plainest_value_the_schema_allows():
 
 
 def test_a_strict_schema_is_closed_inlined_and_all_required():
-    found = strict_schema(_Answer.model_json_schema())
+    found = strict_schema(_Answer).json_schema
 
     assert "$defs" not in found
     assert found["additionalProperties"] is False

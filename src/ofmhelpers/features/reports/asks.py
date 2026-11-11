@@ -20,7 +20,9 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.features.events.dispatch import deliver_to
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.reports import daily
 from ofmhelpers.integrations.senders.telegram import inbox
 from ofmhelpers.integrations.senders.telegram.client import (
@@ -36,6 +38,8 @@ ASKS: dict[str, Callable[[], list[Event]]] = {
     "money": daily.money_now,
 }
 _SENDER = "telegram"
+# An ask's job row.
+TASK = "report_ask"
 # Between reads: at once (each read waits for a message itself), or this long
 # after one failed (Telegram or Redis down: no read and no warning every second).
 _NEXT_READ_S = 1.0
@@ -84,7 +88,7 @@ def answer_asks() -> None:
         secret = token.get_secret_value()
         found = inbox.read(TelegramClient(secret), set(ASKS), _bot_name(secret))
         for ask in found.asks:
-            enqueue(answer, ask.chat_id, ask.word)
+            _start(ask.chat_id, ask.word)
             # No chat id: the app never logs where a message goes (senders/CLAUDE.md).
             logger.info("telegram: %r asked", ask.word)
         inbox.confirm(found)
@@ -96,6 +100,13 @@ def answer_asks() -> None:
         state.failed = True
         raise
     state.failed = False
+
+
+def _start(chat_id: str, word: str) -> None:
+    """The answer as a job (the agency's): its row keeps the word, never the
+    chat (the app does not store where a message goes)."""
+    job_id = create_job(TASK, {"word": word})
+    enqueue(run_job, job_id, answer, {"chat_id": chat_id, "word": word})
 
 
 def answer(chat_id: str, word: str) -> None:

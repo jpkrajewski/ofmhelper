@@ -15,7 +15,9 @@ from sqlalchemy import select
 from ofmhelpers.db.models import SelfLinkClickRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import self_links, short_links
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links import NewLink
+from ofmhelpers.schemas.links import PlannedLink
 from ofmhelpers.web.main import app
 
 HOST = "mybridge.test"
@@ -31,17 +33,17 @@ def _seed_link(slug: str = "dany", destination: str = DEST) -> None:
         user.id,
         "self",
         [
-            {
-                "slug": slug,
-                "domain": HOST,
-                "destination": destination,
-                "target": "onlyfans",
-                "account_id": None,
-                "creator": "",
-            }
+            PlannedLink(
+                slug=slug,
+                domain=HOST,
+                destination=destination,
+                target="onlyfans",
+                account_id=None,
+                creator="",
+            )
         ],
     )
-    provider = short_links.client(user.id, "self")
+    provider = link_keys.client(user.id, "self")
     assert provider is not None
     short_links.created(
         link_id,

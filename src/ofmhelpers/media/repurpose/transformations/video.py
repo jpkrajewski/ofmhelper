@@ -44,6 +44,7 @@ from ofmhelpers.media.repurpose.transformations.handheld import _WARP_EPS, Handh
 from ofmhelpers.media.repurpose.transformations.patterns import Pattern
 from ofmhelpers.media.repurpose.transformations.patterns import write as write_pattern
 from ofmhelpers.media.repurpose.values import Value, chance, draw, draw_int, even, pick
+from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.repurpose.probe import Source
 
 # Kept after every cut, at least: the cuts never eat the clip.
@@ -295,11 +296,13 @@ class VideoTransformer:
         self,
         settings: VideoSettings,
         source: Source,
-        output_size: tuple[int, int],
+        output_size: Size,
         rng: random.Random,
     ) -> None:
         self.settings = settings
-        self.draws = _draw(settings, source, output_size, rng)
+        # A pair in the draws: they are stored as they are (a trial's recipe).
+        size = (output_size.width, output_size.height)
+        self.draws = _draw(settings, source, size, rng)
 
     @classmethod
     def from_draws(cls, settings: VideoSettings, draws: VideoDraws) -> Self:
@@ -314,8 +317,9 @@ class VideoTransformer:
         return self.draws.timeline
 
     @property
-    def output_size(self) -> tuple[int, int]:
-        return self.draws.output_size
+    def output_size(self) -> Size:
+        width, height = self.draws.output_size
+        return Size(width=width, height=height)
 
     def write_caption(self, work_dir: Path) -> Path | None:
         """The snapchat caption PNG (`extras/snapchat`), if the settings name

@@ -29,6 +29,10 @@ While the gate runs: the `kimi` skill, a read-only review of the diff that is
 about to ship (code and config; not uv.lock, not moved docs). A HIGH finding
 is fixed, or disproved with the quoted code, before the commit; anything fixed
 means step 2 again. Name every finding and what happened to it in the report.
+The review is also against the rules: give Kimi the `.claude/rules/*.md` files
+whose `paths` match the changed files and have it name each broken rule (for a
+Zalando rule, its id). A `tests/unit/architecture/baseline.json` that grew is
+a HIGH finding.
 
 ## 3. Dependencies (every ship, before the commit)
 Renovate opens the bump PRs (into `dev`, label `deps`; `renovate.json`);

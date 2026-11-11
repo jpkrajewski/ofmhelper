@@ -1,7 +1,7 @@
 """
 Job history, now backed by Postgres (see db/) instead of an in-memory
 dict mirrored to uploads/jobs.json. The public API here is unchanged --
-create_job/log_event/run_job/get_job/set_job_preview/list_jobs -- so the
+create_job/log_event/get_job/set_job_preview/list_jobs -- so the
 routers and templates that use it are untouched; only the storage underneath
 moved to the database.
 
@@ -15,28 +15,33 @@ UPDATE (see JobRepository.update_status).
 Result files still live inside a job's `result` payload exactly as before (a
 list of {"name","path"} dicts, a grouped {"url","success","output_paths"}
 list, or a bare id string) -- there is no separate file-reference table.
+
+Running a job (`run_job`, `start_job`: previews, provider requests, the
+trace) is `features/jobs/runner.py`. The `run_job` here is only the name jobs
+queued before that move carry in Redis: it hands them to that runner.
 """
 
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-lazy from collections.abc import Callable
 
-import logfire
 from pydantic import BaseModel
-from redis.exceptions import RedisError
-from rq.timeouts import JobTimeoutException
 
-from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.db.repositories import JobRepository
 from ofmhelpers.db.stores.users import agency_id
-from ofmhelpers.features.previews.render import warm_previews
-from ofmhelpers.integrations.ai_providers import tasks
-from ofmhelpers.integrations.ai_providers.errors import ProviderError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobPreview, ResultFile
-from ofmhelpers.schemas.persistence import GenerationRecord, JobMeta
+from ofmhelpers.schemas.persistence import (
+    GalleryJobs,
+    JobCount,
+    JobHeader,
+    JobPage,
+    JobParams,
+)
+lazy from ofmhelpers.schemas.persistence import JobMeta
 
 logger = get_logger(__name__)
 
@@ -69,134 +74,79 @@ def log_event(task_name: str, actor: str | None, params: dict | None = None) -> 
     return _repository().create(task_name, params or {}, actor=actor, status="done")
 
 
-def resumable(exc: BaseException) -> bool:
-    """Whether a job failing with `exc` keeps its provider request(s) for
-    recovery to finish: a provider error (timed out, download failed) or RQ
-    ending the job at its time limit -- paid pieces of a long clone
-    included -- or an error that says so itself (`keep_request`: a /clone
-    export that failed every try, re-run a bounded number of times).
-    Anything else failed after the result was in (asset store): recovery
-    re-running it would fail the same way every sweep."""
-    return isinstance(exc, (ProviderError, JobTimeoutException)) or bool(
-        getattr(exc, "keep_request", False)
-    )
+# The one that runs jobs, `(job_id, fn, kwargs)`: `features/jobs/runner.py`
+# puts itself here when imported (the web app and `worker._preload_jobs`
+# import it before any job runs).
+type Runner = Callable[[str, Callable[..., Any], dict], None]
 
 
-def run_job(job_id: str, fn, kwargs: dict):
-    """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
-    endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
-    status transition straight to Postgres so the API process sees it even
-    when this runs in a separate worker. One trace per run (telemetry.py):
-    the job, who started it, and every call it makes inside.
-
-    A job whose row is gone (the history cap, a heal) is not run: nobody
-    could see or review what it made, yet it would pay the provider."""
-    row = _repository().get(job_id)
-    if row is None:
-        logger.warning("job %s no longer exists: not run", job_id)
-        tasks.forget(job_id)
-        return
-    with logfire.span(
-        "job {task} {job_id}",
-        job_id=job_id,
-        task=row["task"],
-        actor=row["actor"],
-        function=fn.__qualname__,
-        **{"enduser.id": row["actor"]},
-    ) as span:
-        try:
-            result = fn(**kwargs)
-            _repository().update_status(job_id, "done", result=_stored(result))
-            _record_outcome(span, job_id, result)
-            # Saved: its provider request (if any) needs no resuming.
-            _keep_cost(job_id)
-            tasks.forget(job_id)
-        except Exception as exc:
-            # The status pages show this directly to whoever is running the
-            # job -- a raw traceback isn't useful to them, just the
-            # exception's own message (e.g. "Wrong API Key"). Full detail
-            # goes to the logs and the trace for whoever is debugging it.
-            _repository().update_status(
-                job_id, "failed", error=str(exc) or exc.__class__.__name__
-            )
-            if not resumable(exc):
-                # Paid for and then failed (its export, its upload): still a cost.
-                _keep_cost(job_id)
-                tasks.forget(job_id)
-            span.record_exception(exc)
-            span.set_level("error")
-            logger.exception("job %s failed", job_id)
-            return
-    _queue_previews(job_id)
+@lru_cache(maxsize=1)
+def _runners() -> list[Runner]:
+    return []
 
 
-def start_job(
-    task: str,
-    params: dict,
-    run: Callable[..., Any],
-    kwargs: dict,
-    *,
-    actor: str | None,
-    queue: QueueName | None = None,
-    job_timeout: int | None = None,
-    at_front: bool = False,
-) -> str:
-    """A new job and its run on `queue` (default: the default queue), at the
-    front of its line with `at_front` (`JobQueue.put`).
-    `kwargs`: what `run` gets besides `job_id`; a key goes there, never in
-    `params`, which the job's page shows. A queue failure is raised as it
-    came and the row stays `running`: recovery settles it as cut off."""
-    job_id = create_job(task, params, actor=actor)
-    enqueue_to(
-        queue or QueueName.DEFAULT,
-        run_job,
-        job_id,
-        run,
-        {"job_id": job_id, **kwargs},
-        job_timeout=job_timeout,
-        at_front=at_front,
-    )
-    return job_id
+def register_runner(runner: Runner) -> None:
+    _runners()[:] = [runner]
 
 
-def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None:
-    """A job that ran to its end can still have failed: a download of three
-    links stores which ones did, as results, and is `done`. Only the span and
-    the log say so, or a trace of a failed download reads as a success."""
-    items = result if isinstance(result, list) else []
-    failed = [item for item in items if getattr(item, "success", True) is False]
-    if not failed:
-        return
-    span.set_attributes({"results": len(items), "results_failed": len(failed)})
-    span.set_level("error" if len(failed) == len(items) else "warning")
-    logger.warning(
-        "job %s: %d of %d results failed: %s",
-        job_id,
-        len(failed),
-        len(items),
-        [getattr(item, "error", None) for item in failed],
-    )
+def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+    """Not for new code: `features/jobs/runner.py` `run_job` is what gets
+    queued. Jobs queued before it moved name this function
+    (`ofmhelpers.db.stores.jobs.run_job`); it passes them on."""
+    runners = _runners()
+    if not runners:
+        msg = "no job runner registered: import ofmhelpers.features.jobs.runner"
+        raise RuntimeError(msg)
+    runners[0](job_id, fn, kwargs)
 
 
-def _queue_previews(job_id: str) -> None:
-    """A finished job's gallery previews, made now on the previews worker so
-    its first viewer waits for none (see features/previews/render.py). Redis down: the
-    preview routes make them on request instead."""
-    job = get_job(job_id)
-    if job is None:
-        return
-    try:
-        enqueue_to(QueueName.PREVIEWS, warm_previews, job.id, job.local_paths())
-    except RedisError:
-        logger.warning("could not queue previews of job %s", job_id, exc_info=True)
+def task_of(job_id: str) -> JobHeader | None:
+    """What the runner's trace names of a job; None when its row is gone."""
+    job = _repository().get(job_id)
+    return JobHeader(task=job.task, actor=job.actor) if job else None
+
+
+def finish_job(job_id: str, result: Any) -> None:
+    """Done, with what its run function returned as the stored result."""
+    _repository().update_status(job_id, "done", result=_stored(result))
+
+
+def record_failure(job_id: str, error: str) -> None:
+    """Failed by its own run, which logs the exception itself."""
+    _repository().update_status(job_id, "failed", error=error)
+
+
+def set_job_meta(job_id: str, meta: JobMeta) -> None:
+    """What happened on the way (`jobs.meta`): its provider requests, cost."""
+    _repository().set_meta(job_id, meta.model_dump(mode="json"))
+
+
+def _stored(result: Any) -> Any:
+    """A run function's return value as the JSON the result column holds:
+    its models (`ResultFile`, `DownloadResult`, a job's own summary) dumped,
+    anything else as is."""
+    if isinstance(result, BaseModel):
+        return result.model_dump(mode="json")
+    if not isinstance(result, list):
+        return result
+    return [_stored_entry(item) for item in result]
+
+
+def _stored_entry(item: Any) -> Any:
+    if isinstance(item, ResultFile):
+        # Only what was set: a field never given stays out of the stored JSON.
+        return item.model_dump(mode="json", exclude_unset=True)
+    if isinstance(item, BaseModel):
+        return item.model_dump(mode="json")
+    return item
 
 
 def running_jobs() -> list[Job]:
     """Every job still marked running (recovery: which were cut off)."""
-    return [Job.model_validate(row) for row in _repository().list_running()]
+    return _repository().list_running()
 
 
-def params_naming(fragment: str, while_running: set[str]) -> list[dict[str, Any]]:
+def params_naming(fragment: str, while_running: set[str]) -> list[JobParams]:
     """The params of every job naming `fragment`, a job of `while_running`
     only while it runs or waits (the /edit sweep: what a job names, it
     keeps)."""
@@ -226,49 +176,14 @@ def fail_job(job_id: str, error: str) -> None:
     _repository().update_status(job_id, "failed", error=error)
 
 
-def _keep_cost(job_id: str) -> None:
-    """The job's provider requests into its row (`jobs.meta`) before they are
-    forgotten: Logfire keeps their cost 30 days, the job keeps it for good.
-    Never the key they ran on. Best effort: the job is already saved."""
-    try:
-        made = [
-            GenerationRecord.model_validate(task.model_dump(exclude={"api_key"}))
-            for task in tasks.of_job(job_id)
-        ]
-        if made:
-            meta = JobMeta.of(made).model_dump(mode="json")
-            _repository().set_meta(job_id, meta)
-    except Exception:
-        logger.warning("could not keep the cost of job %s", job_id, exc_info=True)
-
-
-def _stored(result: Any) -> Any:
-    """A run function's return value as the JSON the result column holds:
-    its models (`ResultFile`, `DownloadResult`, a job's own summary) dumped,
-    anything else as is."""
-    if isinstance(result, BaseModel):
-        return result.model_dump(mode="json")
-    if not isinstance(result, list):
-        return result
-    return [_stored_entry(item) for item in result]
-
-
-def _stored_entry(item: Any) -> Any:
-    if isinstance(item, ResultFile):
-        return item.to_result()
-    if isinstance(item, BaseModel):
-        return item.model_dump(mode="json")
-    return item
-
-
 def get_job(job_id: str, actor: str | None = None) -> Job | None:
     """The job, or None if it doesn't exist -- or, when `actor` is given, if
     someone else ran it (a session passes its own, AuthMiddleware.actor --
     an admin's too). None is "no restriction": the worker only."""
-    row = _repository().get(job_id)
-    if row is None or (actor is not None and row["actor"] != actor):
+    job = _repository().get(job_id)
+    if job is None or (actor is not None and job.actor != actor):
         return None
-    return Job.model_validate(row)
+    return job
 
 
 def set_job_preview(job_id: str, preview: JobPreview) -> None:
@@ -286,7 +201,7 @@ def history() -> list[Job]:
     preview backfill): a result whose files cannot be seen right now -- a
     volume not mounted yet, a database copied without its files (dev on a
     prod snapshot) -- must never cost the job."""
-    return [Job.model_validate(row) for row in _repository().list_all()]
+    return _repository().list_all()
 
 
 def list_jobs() -> list[Job]:
@@ -310,7 +225,7 @@ def list_jobs_page(
     actor: str | None = None,
     status: str | None = None,
     hidden: bool | None = None,
-) -> tuple[list[Job], int]:
+) -> JobPage:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that it ran -- same meaning as get_job's), newest first, plus how
     many there are in total (before the slice, so the caller can tell whether
@@ -326,8 +241,7 @@ def list_jobs_page(
     page = _repository().list_page(
         tuple(sorted(tasks)), actor, offset, limit, status, hidden
     )
-    jobs = [Job.model_validate(row) for row in page["jobs"]]
-    return _visible(jobs), page["total"]
+    return JobPage(jobs=_visible(page.jobs), total=page.total)
 
 
 def gallery_page(
@@ -336,20 +250,20 @@ def gallery_page(
     limit: int,
     actor: str | None,
     hidden: bool | None,
-) -> tuple[list[Job], int | None]:
+) -> GalleryJobs:
     """One page of a gallery (`list_jobs_page`) and the next page's offset
     (None after the last)."""
-    jobs, total = list_jobs_page(tasks, offset, limit, actor, hidden=hidden)
+    page = list_jobs_page(tasks, offset, limit, actor, hidden=hidden)
     next_offset = offset + limit
-    return jobs, next_offset if next_offset < total else None
+    return GalleryJobs(
+        jobs=page.jobs, next_offset=next_offset if next_offset < page.total else None
+    )
 
 
 def list_batch(task: str, batch: str, actor: str) -> list[Job]:
     """`actor`'s jobs of `task` from one submit (params `batch`), oldest
     first. Not healed: callers read params only."""
-    return [
-        Job.model_validate(row) for row in _repository().list_batch(task, actor, batch)
-    ]
+    return _repository().list_batch(task, actor, batch)
 
 
 def merge_params(job_id: str, values: dict[str, Any]) -> None:
@@ -366,25 +280,40 @@ def redone_links(task: str, actor: str, links: list[str], after: float) -> set[s
     return _repository().redone_links(task, actor, links, after)
 
 
-def last_param(tasks: set[str], actor: str, field: str, among: list[str]) -> str | None:
-    """Param `field` of `actor`'s newest job of `tasks` with one of the
-    values `among` (a provider the page offers), else None."""
-    return _repository().last_param(
-        tuple(sorted(tasks)), actor, field, tuple(sorted(among))
-    )
+@dataclass(frozen=True)
+class ParamHistory:
+    """One param (`field`) across `actor`'s jobs of `tasks`."""
 
+    tasks: frozenset[str]
+    actor: str
+    field: str
 
-def last_used_firsts(tasks: set[str], actor: str, field: str, limit: int) -> list[str]:
-    """The first file of `actor`'s jobs' list param `field` (the subject of
-    `reference_images`) in their jobs of `tasks`, last used first, one path
-    per picture (same content = same file). The path may be gone since: the
-    caller checks."""
-    return _repository().last_used_firsts(tuple(sorted(tasks)), actor, field, limit)
+    @property
+    def _tasks(self) -> tuple[str, ...]:
+        """Sorted: the repository's stable cache key."""
+        return tuple(sorted(self.tasks))
 
+    def last(self, among: list[str]) -> str | None:
+        """The param of the newest job with one of the values `among` (a
+        provider the page offers), else None."""
+        return _repository().last_param(
+            self._tasks, self.actor, self.field, tuple(sorted(among))
+        )
 
-def most_used_firsts(tasks: set[str], actor: str, field: str, limit: int) -> list[str]:
-    """As `last_used_firsts`, the one in the most jobs first."""
-    return _repository().most_used_firsts(tuple(sorted(tasks)), actor, field, limit)
+    def last_used_firsts(self, limit: int) -> list[str]:
+        """The first file of the list param (the subject of
+        `reference_images`), last used first, one path per picture (same
+        content = same file). The path may be gone since: the caller
+        checks."""
+        return _repository().last_used_firsts(
+            self._tasks, self.actor, self.field, limit
+        )
+
+    def most_used_firsts(self, limit: int) -> list[str]:
+        """As `last_used_firsts`, the one in the most jobs first."""
+        return _repository().most_used_firsts(
+            self._tasks, self.actor, self.field, limit
+        )
 
 
 def count_hidden_jobs(tasks: set[str], actor: str) -> int:
@@ -404,8 +333,8 @@ def hide_job(job_id: str, actor: str, hidden: bool) -> Job | None:
     return job.model_copy(update={"hidden_at": hidden_at})
 
 
-def job_counts(tasks: set[str]) -> dict[str, dict[str, int]]:
-    """actor -> task -> how many done jobs, for `tasks`."""
+def job_counts(tasks: set[str]) -> list[JobCount]:
+    """How many done jobs each actor has of each of `tasks`."""
     return _repository().counts(tuple(sorted(tasks)))
 
 

@@ -51,6 +51,7 @@ from ofmhelpers.integrations.llm.models import (
     Usage,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.utils.registry import Registry
 
 logger = get_logger(__name__)
 
@@ -332,13 +333,13 @@ def _import_providers() -> None:
                     raise
 
 
-def llm_classes() -> dict[str, type[LLMProvider]]:
+def llm_classes() -> Registry[type[LLMProvider]]:
     _import_providers()
-    return dict(sorted(_registry().items()))
+    return Registry[type[LLMProvider]](entries=dict(sorted(_registry().items())))
 
 
 def llm_names() -> list[str]:
-    return list(llm_classes())
+    return llm_classes().names()
 
 
 def llm_class(name: str) -> type[LLMProvider]:

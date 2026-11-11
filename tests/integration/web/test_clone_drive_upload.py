@@ -19,11 +19,12 @@ from signin import sign_in
 
 from ofmhelpers.db.stores import drive_folders as folder_store
 from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, record_scan
 from ofmhelpers.db.stores.users import _repository as user_repository
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import uploads as drive_uploads
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.gdrive import DriveError, DriveFile
 from ofmhelpers.integrations.gdrive.fake import fake_drive
 from ofmhelpers.integrations.signin import SignInError
@@ -428,6 +429,43 @@ def test_a_revoked_google_token_refuses_the_remove_with_a_reason(
     r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
     assert r.status_code == 400
     assert r.json()["detail"] == "Connect Google Drive on your Account page first"
+
+
+def test_an_upload_leaves_a_job_row_naming_what_went_up(drive, tmp_path):
+    from ofmhelpers.db.stores.jobs import history
+
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    state = _upload(ann, _finished_run("ann@example.com", tmp_path), login)
+
+    [row] = [job for job in history() if job.task == "drive_upload"]
+    assert row.actor == str(users.by_email("ann@example.com").id)
+    assert (row.status, row.params) == ("done", {"upload_ids": [state["id"]]})
+
+
+def test_drive_failing_the_remove_is_a_502_in_our_words_and_keeps_the_upload(
+    drive, tmp_path, monkeypatch
+):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_run("ann@example.com", tmp_path)
+    state = _upload(ann, job, login)
+
+    class Failing:
+        def trash_file(self, _file_id):
+            msg = "backendError 500: internal-google-detail"
+            raise DriveError(msg)
+
+    monkeypatch.setattr(drive_uploads, "connect_as", lambda _token: Failing())
+
+    r = ann.post(f"/clone/drive-uploads/{state['id']}/remove")
+
+    assert r.status_code == 502
+    assert r.json() == {"detail": "Google Drive did not remove it. Try again."}
+    assert "internal-google-detail" not in r.text
+    [kept] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert kept["status"] == "done"
+    assert len(_files_in(drive, "ann.ig - Anna")) == 1
 
 
 def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(

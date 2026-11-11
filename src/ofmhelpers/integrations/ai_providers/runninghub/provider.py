@@ -18,6 +18,7 @@ from ofmhelpers.integrations.ai_providers.runninghub.models import (
     SUCCESS,
     is_no_credits,
 )
+from ofmhelpers.integrations.ai_providers.spec import Fields
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 # Our schema keyword: a field the form takes as a number that RunningHub
@@ -47,7 +48,7 @@ class RunningHubProvider(Provider):
         log); a re-run never resubmits (the runner resumes the remembered
         task) and the client never resends."""
         return self.client.submit(
-            spec.model_id, wire_body(spec, payload), job=idempotency_key
+            spec.model_id, wire_body(spec, payload).model_dump(), job=idempotency_key
         )
 
     def status(self, task_id: str) -> TaskState:
@@ -70,7 +71,7 @@ class RunningHubProvider(Provider):
         raise ProviderUnavailableError(msg)
 
 
-def wire_body(spec: ModelSpec, payload: Payload) -> Payload:
+def wire_body(spec: ModelSpec, payload: Payload) -> Fields:
     """What RunningHub is sent: every default of the schema the payload left
     out (the API requires fields the form may skip, `aspectRatio`) and the
     `x-wire: string` fields as strings."""
@@ -84,4 +85,4 @@ def wire_body(spec: ModelSpec, payload: Payload) -> Payload:
             body[name] = field["default"]
         if field.get(WIRE_TYPE) == "string" and name in body:
             body[name] = str(body[name])
-    return body
+    return Fields(values=body)

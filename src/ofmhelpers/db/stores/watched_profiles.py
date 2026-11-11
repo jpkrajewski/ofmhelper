@@ -12,8 +12,8 @@ from functools import lru_cache
 
 from ofmhelpers.db.repositories import WatchedProfileRepository
 from ofmhelpers.db.stores.users import agency_id
-from ofmhelpers.schemas import WatchedProfile
-lazy from ofmhelpers.integrations.instagram import ProfileReels
+lazy from ofmhelpers.schemas import WatchedProfile
+lazy from ofmhelpers.schemas.instagram import ProfileReels
 
 
 @lru_cache(maxsize=1)
@@ -29,9 +29,7 @@ def list_watched(
     """`owner`'s watched profiles (everyone's, each username once, for
     None), or only `group`'s."""
     profiles = [
-        p
-        for p in map(WatchedProfile.model_validate, _repository().list_all(owner))
-        if group is None or p.group == group
+        p for p in _repository().list_all(owner) if group is None or p.group == group
     ]
     if owner is None:
         # After the group filter: a profile one user has in `group` stays in
@@ -60,9 +58,7 @@ def watchers(username: str) -> list[int]:
     """Who watches `username`, earliest-added first (whose login its
     shared scan uses: `stores.cookies.for_watched`)."""
     return [
-        row["user_id"]
-        for row in _repository().list_all(None)
-        if row["username"] == username
+        row.user_id for row in _repository().list_all(None) if row.username == username
     ]
 
 

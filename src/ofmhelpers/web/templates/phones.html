@@ -222,7 +222,7 @@
             <div class="field">
                 <label for="ph-login-service">Service</label>
                 <select id="ph-login-service" name="service">
-                    {% for key, s in services.items() %}<option value="{{ key }}" data-custom="{{ 'true' if s.custom else 'false' }}">{{ s.label }}</option>{% endfor %}
+                    {% for s in services.all() %}<option value="{{ s.key }}" data-custom="{{ 'true' if s.custom else 'false' }}">{{ s.label }}</option>{% endfor %}
                 </select>
             </div>
             <div class="field" data-provider hidden>

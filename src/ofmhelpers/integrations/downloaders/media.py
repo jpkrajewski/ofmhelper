@@ -19,9 +19,12 @@ gets its turn -- never a broken file reported as downloaded.
 import secrets
 import shutil
 import subprocess
+from collections.abc import Callable
 from contextlib import contextmanager
-lazy from collections.abc import Callable, Iterator
-lazy from pathlib import Path
+from pathlib import Path
+lazy from collections.abc import Iterator
+
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.downloaders import generic, images, kvs, savers
@@ -37,46 +40,80 @@ logger = get_logger(__name__)
 _OUTPUT_ROOT = generic.DownloadConfig().output_dir
 
 
-def _video(url: str, cookiefile: str | None, out: Path, single: bool) -> DownloadResult:
-    config = (
-        generic.DownloadConfig.single_post(output_dir=out)
-        if single
-        else generic.DownloadConfig(output_dir=out)
-    )
-    return generic.download(url, config=config, cookiefile=cookiefile)
+class _Tool(BaseModel):
+    """One downloader to try: its name in the reasons, and its call."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    fetch: Callable[[], DownloadResult]
 
 
-def _images(
-    url: str, cookiefile: str | None, out: Path, single: bool
-) -> DownloadResult:
-    most = settings.downloaders.single_post_items if single else None
-    config = images.ImageDownloadConfig(output_dir=out, max_items=most)
-    return images.download(url, config=config, cookiefile=cookiefile)
+class _Download(BaseModel):
+    """One URL's download into its own directory `out`, logged in as
+    `cookiefile` (None: logged out). `single`: the linked post only."""
 
+    model_config = ConfigDict(frozen=True)
 
-def _kvs(url: str, cookiefile: str | None, out: Path, single: bool) -> DownloadResult:
-    del cookiefile, single  # a KVS page is one public video
-    return kvs.download(url, out)
+    url: str
+    cookiefile: str | None
+    out: Path
+    single: bool = False
 
+    def video(self) -> DownloadResult:
+        config = (
+            generic.DownloadConfig.single_post(output_dir=self.out)
+            if self.single
+            else generic.DownloadConfig(output_dir=self.out)
+        )
+        return generic.download(self.url, config=config, cookiefile=self.cookiefile)
 
-def _order(
-    url: str,
-) -> list[tuple[str, Callable[[str, str | None, Path, bool], DownloadResult]]]:
-    """The tools to try, in turn; each takes (url, cookiefile, its
-    directory, one post only). The saver sites go last: a fallback for
-    posts Instagram keeps from yt-dlp and gallery-dl, never the first
-    try (their sessions and rate limits are not ours to spend)."""
-    video, player, pictures = ("video", _video), ("kvs", _kvs), ("images", _images)
-    if images_first(url):
-        return [pictures, video, ("savers", _savers)]
-    return [video, player, pictures, ("savers", _savers)]
+    def images(self) -> DownloadResult:
+        most = settings.downloaders.single_post_items if self.single else None
+        config = images.ImageDownloadConfig(output_dir=self.out, max_items=most)
+        return images.download(self.url, config=config, cookiefile=self.cookiefile)
 
+    def kvs(self) -> DownloadResult:
+        # A KVS page is one public video: no login, nothing around it.
+        return kvs.download(self.url, self.out)
 
-def _savers(
-    url: str, cookiefile: str | None, out: Path, single: bool
-) -> DownloadResult:
-    del cookiefile  # saver sites log in with their own sessions
-    return savers.download(url, out, single=single)
+    def savers(self) -> DownloadResult:
+        # Saver sites log in with their own sessions.
+        return savers.download(self.url, self.out, single=self.single)
+
+    def order(self) -> list[_Tool]:
+        """The tools to try, in turn. The saver sites go last: a fallback
+        for posts Instagram keeps from yt-dlp and gallery-dl, never the
+        first try (their sessions and rate limits are not ours to spend)."""
+        video = _Tool(name="video", fetch=self.video)
+        player = _Tool(name="kvs", fetch=self.kvs)
+        pictures = _Tool(name="images", fetch=self.images)
+        last = _Tool(name="savers", fetch=self.savers)
+        if images_first(self.url):
+            return [pictures, video, last]
+        return [video, player, pictures, last]
+
+    def run(self) -> DownloadResult:
+        """The first tool's files that really are what they claim; when
+        none gets any, every reason."""
+        url = self.url
+        errors: list[str] = []
+        for tool in self.order():
+            result = tool.fetch()
+            reason = _broken_video(result) if result.success else None
+            if result.success and reason is None:
+                return result
+            if reason is not None:
+                result = DownloadResult(url=url, success=False, error=reason)
+            logger.info(
+                "download %s: %s gave nothing: %s", url, tool.name, result.error
+            )
+            errors.append(f"{tool.name}: {result.error or 'no files'}")
+        # A tool that does not know the site at all says nothing useful next to
+        # the other's real reason (prod, 2026-10-22: PornHub's 403 was shown as
+        # gallery-dl's "Unsupported URL").
+        known = [e for e in errors if "unsupported url" not in e.lower()]
+        return DownloadResult(url=url, success=False, error=" | ".join(known or errors))
 
 
 def _broken_video(result: DownloadResult) -> str | None:
@@ -105,7 +142,8 @@ def download(url: str, cookiefile: str | None = None) -> DownloadResult:
     from the post (and some extractors have no unique id -- every titleless
     X video is `twitter_None_1.mp4`), so a shared folder let one download
     overwrite another's file (prod, 2026-10-23). Isolated, no two collide."""
-    return _download_into(url, cookiefile, _OUTPUT_ROOT / secrets.token_hex(8))
+    out = _OUTPUT_ROOT / secrets.token_hex(8)
+    return _Download(url=url, cookiefile=cookiefile, out=out).run()
 
 
 @contextmanager
@@ -121,29 +159,9 @@ def downloaded(
     (`--range`)."""
     out = _OUTPUT_ROOT / secrets.token_hex(8)
     try:
-        yield _download_into(url, cookiefile, out, single=single)
+        yield _Download(url=url, cookiefile=cookiefile, out=out, single=single).run()
     finally:
         shutil.rmtree(out, ignore_errors=True)
-
-
-def _download_into(
-    url: str, cookiefile: str | None, out: Path, *, single: bool = False
-) -> DownloadResult:
-    errors: list[str] = []
-    for name, fetch in _order(url):
-        result = fetch(url, cookiefile, out, single)
-        reason = _broken_video(result) if result.success else None
-        if result.success and reason is None:
-            return result
-        if reason is not None:
-            result = DownloadResult(url=url, success=False, error=reason)
-        logger.info("download %s: %s gave nothing: %s", url, name, result.error)
-        errors.append(f"{name}: {result.error or 'no files'}")
-    # A tool that does not know the site at all says nothing useful next to
-    # the other's real reason (prod, 2026-10-22: PornHub's 403 was shown as
-    # gallery-dl's "Unsupported URL").
-    known = [e for e in errors if "unsupported url" not in e.lower()]
-    return DownloadResult(url=url, success=False, error=" | ".join(known or errors))
 
 
 def download_all(urls: list[str], cookies: str | None = None) -> list[DownloadResult]:

@@ -17,6 +17,7 @@ query with all 8).
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
+from pydantic import BaseModel
 
 SIZE = 256
 # The centre crop's share of each side (the notes: 70-80%).
@@ -53,8 +54,17 @@ def _flat_run(flat: np.ndarray, limit: int) -> int:
     return run
 
 
-def content_box(grey: Image.Image) -> tuple[int, int, int, int]:
-    """(left, top, right, bottom) inside the borders / padding."""
+class Box(BaseModel, frozen=True):
+    """A rectangle in a picture, in pixels."""
+
+    left: int
+    top: int
+    right: int
+    bottom: int
+
+
+def content_box(grey: Image.Image) -> Box:
+    """The picture inside the borders / padding."""
     pixels = np.asarray(grey, dtype=np.float32)
     height, width = pixels.shape
     rows = pixels.std(axis=1) < _FLAT_STD
@@ -63,7 +73,7 @@ def content_box(grey: Image.Image) -> tuple[int, int, int, int]:
     bottom = _flat_run(rows[::-1], int(height * _MAX_CROP))
     left = _flat_run(cols, int(width * _MAX_CROP))
     right = _flat_run(cols[::-1], int(width * _MAX_CROP))
-    return left, top, width - right, height - bottom
+    return Box(left=left, top=top, right=width - right, bottom=height - bottom)
 
 
 def is_flat(frame: Image.Image) -> bool:
@@ -73,7 +83,8 @@ def is_flat(frame: Image.Image) -> bool:
 
 def normalize(frame: Image.Image) -> Image.Image:
     grey = ImageOps.grayscale(frame)
-    grey = ImageOps.equalize(grey.crop(content_box(grey)))
+    box = content_box(grey)
+    grey = ImageOps.equalize(grey.crop((box.left, box.top, box.right, box.bottom)))
     grey = grey.filter(ImageFilter.GaussianBlur(_BLUR_RADIUS))
     return grey.resize((SIZE, SIZE), Image.Resampling.BILINEAR)
 

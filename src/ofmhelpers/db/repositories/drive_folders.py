@@ -16,6 +16,7 @@ from ofmhelpers.db.repositories.cached_repository import (
     invalidates_cache,
 )
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.drive import AccountScan, PostedCount, StoredFolder
 
 # pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
 _SYNC_LOCK_KEY = 0x0D21_5E00
@@ -25,7 +26,7 @@ class DriveFolderRepository(CachedRepository):
     cache_namespace = "drive_folder"
 
     @cached
-    def account_folders(self, roots: list[str]) -> list[dict]:
+    def account_folders(self, roots: list[str]) -> list[StoredFolder]:
         """The logins' folders in any of `roots` (each owner's current
         "ALL ACCOUNTS"); rows of any other root are left out (an old root,
         or prod's in a dev copy of its database)."""
@@ -40,25 +41,25 @@ class DriveFolderRepository(CachedRepository):
                 .all()
             )
             return [
-                {
-                    "login_id": r.login_id,
-                    "folder_id": r.folder_id,
-                    "name": r.name,
-                    "root_folder_id": r.root_folder_id,
-                    "posted_folder_id": r.posted_folder_id,
-                    "scan": r.scan,
-                    "scanned_at": r.scanned_at,
-                }
+                StoredFolder(
+                    login_id=r.login_id,
+                    folder_id=r.folder_id,
+                    name=r.name,
+                    # Never None here: the query keeps rows of `roots` only.
+                    root_folder_id=r.root_folder_id or "",
+                    posted_folder_id=r.posted_folder_id,
+                    scan=(
+                        None if r.scan is None else AccountScan.model_validate(r.scan)
+                    ),
+                    scanned_at=r.scanned_at,
+                )
                 for r in rows
             ]
 
     @cached
-    def posted_counts(
-        self, roots: list[str], since: list[float]
-    ) -> dict[str, list[int]]:
-        """{login id (str: the cache is JSON): [files first seen posted at
-        or after each of `since`]}, for the logins with a folder in `roots`;
-        only files seen in that folder."""
+    def posted_counts(self, roots: list[str], since: list[float]) -> list[PostedCount]:
+        """Per login with a folder in `roots`, the files first seen posted
+        at or after each of `since`; only files seen in that folder."""
         with session_scope() as s:
             columns = [
                 func.count().filter(DrivePostedFileRow.first_seen_at >= t)
@@ -74,7 +75,10 @@ class DriveFolderRepository(CachedRepository):
                 .where(DriveAccountFolderRow.root_folder_id.in_(roots))
                 .group_by(DrivePostedFileRow.login_id)
             ).all()
-            return {str(login_id): list(counts) for login_id, *counts in rows}
+            return [
+                PostedCount(login_id=login_id, counts=list(counts))
+                for login_id, *counts in rows
+            ]
 
     @contextmanager
     def sync_lock(self) -> Iterator[bool]:

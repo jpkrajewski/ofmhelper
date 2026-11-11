@@ -209,6 +209,12 @@ ignore-variadic-names = true
 # Every route of a /trials folder gets `{login_id}` through one dependency
 # (`Trials`): the rule does not look behind the alias.
 "src/ofmhelpers/web/routers/video_tools/trials.py" = ["FAST003"]
+# `{user_id}` of an upload reaches three routes through `Asset`.
+"src/ofmhelpers/web/routers/admin/file_manager.py" = ["FAST003"]
+# `{device_id}` and `{login_id}` reach their routes through `Phone` / `Login`.
+"src/ofmhelpers/web/routers/inventory/phones.py" = ["FAST003"]
+# `{user_id}` reaches role / active / delete through `OtherUser`.
+"src/ofmhelpers/web/routers/admin/users.py" = ["FAST003"]
 "src/ofmhelpers/web/dependencies.py" = ["TC001", "TC002"]
 "src/ofmhelpers/web/forms.py" = ["TC001", "TC002"]
 # Lazy singletons that rebuild when the configured URL changes -- `global`

@@ -15,9 +15,9 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.db.stores.jobs import create_job, list_jobs, run_job
+from ofmhelpers.db.stores.jobs import create_job, list_jobs
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.admin import file_manager
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def client():
 def _isolated_kieai_root(monkeypatch, tmp_path):
     root = tmp_path / "kieai_out"
     root.mkdir()
-    monkeypatch.setitem(file_manager.ROOTS, "kieai_out", root)
+    monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(root))
     return root
 
 

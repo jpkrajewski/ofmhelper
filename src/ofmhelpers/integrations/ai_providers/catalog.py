@@ -11,19 +11,21 @@ from pydantic import TypeAdapter
 
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.ai_providers.spec import ModelSpec, OutputKind
+from ofmhelpers.utils.registry import Registry
 
 
 @lru_cache(maxsize=1)
-def catalog() -> dict[str, ModelSpec]:
+def catalog() -> Registry[ModelSpec]:
     """Every model by `ModelSpec.key`, providers in discovery order and each
     provider's models in its file's order (the form lists them that way)."""
     adapter = TypeAdapter(list[ModelSpec])
     specs: dict[str, ModelSpec] = {}
-    for name, cls in provider_classes().items():
+    for cls in provider_classes().all():
         entries = json.loads(cls.catalog_path().read_text(encoding="utf-8"))
-        for spec in adapter.validate_python([{**e, "provider": name} for e in entries]):
+        rows = [{**e, "provider": cls.name} for e in entries]
+        for spec in adapter.validate_python(rows):
             specs[spec.key] = spec
-    return specs
+    return Registry[ModelSpec](entries=specs)
 
 
 def get_spec(key: str) -> ModelSpec:
@@ -37,6 +39,6 @@ def get_spec(key: str) -> ModelSpec:
 def models_for(provider: str, kind: OutputKind | None = None) -> list[ModelSpec]:
     return [
         spec
-        for spec in catalog().values()
+        for spec in catalog().all()
         if spec.provider == provider and (kind is None or spec.kind == kind)
     ]

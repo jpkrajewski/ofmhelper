@@ -10,6 +10,8 @@ from datetime import date, datetime, timedelta
 from enum import StrEnum
 from zoneinfo import ZoneInfo
 
+from pydantic import BaseModel
+
 from ofmhelpers.config import settings
 lazy from ofmhelpers.schemas.reports import ReportRun
 
@@ -28,13 +30,20 @@ def _past_time(at: datetime) -> bool:
     return at.time() >= settings.reports.daily_time()
 
 
-def due(now: float, last: ReportRun | None) -> tuple[Due, date]:
+class Planned(BaseModel, frozen=True):
+    """What to do now, and the report day it stands for."""
+
+    action: Due
+    day: date
+
+
+def due(now: float, last: ReportRun | None) -> Planned:
     """What to do now, and the report day it stands for."""
     at = local(now)
     today = at.date()
     if last is None:
         day = today if _past_time(at) else today - timedelta(days=1)
-        return Due.BASELINE, day
+        return Planned(action=Due.BASELINE, day=day)
     if last.day >= today or not _past_time(at):
-        return Due.NOTHING, today
-    return Due.SEND, today
+        return Planned(action=Due.NOTHING, day=today)
+    return Planned(action=Due.SEND, day=today)

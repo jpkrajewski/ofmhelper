@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import WebSettings, settings
 from ofmhelpers.features.clone.targets import CloneTarget, PriceRate, clone_targets
+from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
 
 
@@ -45,15 +46,17 @@ def _price(target: CloneTarget, rate: PriceRate, web: WebSettings) -> ClonePrice
     )
 
 
-def clone_pricing() -> dict[str, ClonePrice]:
+def clone_pricing() -> Registry[ClonePrice]:
     """Every clone provider's price. A provider without one gets no estimate
     (the panel hides)."""
     web = settings.web
-    return {
-        name: _price(target, target.price, web)
-        for name, target in clone_targets().items()
-        if target.price
-    }
+    return Registry[ClonePrice](
+        entries={
+            name: _price(target, target.price, web)
+            for name, target in clone_targets().entries.items()
+            if target.price
+        }
+    )
 
 
 def clone_price(provider: str) -> ClonePrice:

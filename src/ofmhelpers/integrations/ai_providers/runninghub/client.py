@@ -4,7 +4,7 @@ downloading are `runner.py`'s.
 
 RunningHub has no idempotency key: a submit is sent once and never retried
 here (a lost answer would start, and charge, a second task). Through
-`utils.outbound`, so OFM_FAKE_EXTERNALS answers it from `fake.py`.
+`integrations.outbound`, so OFM_FAKE_EXTERNALS answers it from `fake.py`.
 """
 
 from pathlib import Path

@@ -17,6 +17,8 @@ Wan 3.0 (`wan3.0-video`, `wan3.0-video-prime`).
 import re
 from typing import Any
 
+from pydantic import BaseModel, model_serializer
+
 from ofmhelpers.integrations.ai_providers.apiyi.client import (
     ApiyiClient,
     refused_read,
@@ -33,6 +35,7 @@ from ofmhelpers.integrations.ai_providers.apiyi.models import (
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.http import parsed
+from ofmhelpers.integrations.ai_providers.spec import Fields
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
@@ -57,9 +60,31 @@ def cited(prompt: str) -> str:
     return _CITE.sub(lambda m: f"{m.group(1)} {m.group(2)}", prompt)
 
 
-def with_defaults(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
+class Media(BaseModel):
+    type: str
+    url: str
+
+
+class Body(BaseModel):
+    """DashScope's nested body. `prompts` (what goes in `input`) and
+    `parameters` keep the names and order the catalog's schema gives them."""
+
+    model: str
+    prompts: dict[str, Any]
+    media: list[Media]
+    parameters: dict[str, Any]
+
+    @model_serializer
+    def _wire(self) -> dict[str, Any]:
+        inputs = dict(self.prompts)
+        if self.media:
+            inputs["media"] = [m.model_dump() for m in self.media]
+        return {"model": self.model, "input": inputs, "parameters": self.parameters}
+
+
+def with_defaults(spec: ModelSpec, payload: Payload) -> Fields:
     """`payload` plus every schema default it left out (`resolution` sets the
-    price: never left to the upstream's own)."""
+    price: never left to the upstream's own), by field name."""
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     values: dict[str, Any] = {
@@ -68,19 +93,19 @@ def with_defaults(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
         if isinstance(field, dict) and "default" in field
     }
     values.update(payload)
-    return values
+    return Fields(values=values)
 
 
-def wire_body(spec: ModelSpec, payload: Payload, link: Any = str) -> dict[str, Any]:
+def wire_body(spec: ModelSpec, payload: Payload, link: Any = str) -> Body:
     """What APIYI is sent: DashScope's nested body; `link` turns a reference
     into the URL the upstream fetches."""
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     media_fields = {f.name for f in spec.media_fields}
-    inputs: dict[str, Any] = {}
+    prompts: dict[str, Any] = {}
     parameters: dict[str, Any] = {}
-    media: list[dict[str, str]] = []
-    for name, value in with_defaults(spec, payload).items():
+    media: list[Media] = []
+    for name, value in with_defaults(spec, payload).values.items():
         if name in media_fields:
             field = schema.get(name)
             role = (
@@ -89,14 +114,14 @@ def wire_body(spec: ModelSpec, payload: Payload, link: Any = str) -> dict[str, A
                 else DEFAULT_ROLE
             )
             refs = value if isinstance(value, list) else [value]
-            media += [{"type": role, "url": link(str(v))} for v in refs if v]
+            media += [Media(type=role, url=link(str(v))) for v in refs if v]
         elif name in INPUT_FIELDS:
-            inputs[name] = cited(value) if isinstance(value, str) else value
+            prompts[name] = cited(value) if isinstance(value, str) else value
         else:
             parameters[PARAMETER_NAMES.get(name, name)] = value
-    if media:
-        inputs["media"] = media
-    return {"model": spec.model_id, "input": inputs, "parameters": parameters}
+    return Body(
+        model=spec.model_id, prompts=prompts, media=media, parameters=parameters
+    )
 
 
 class DashScope(Family):
@@ -107,7 +132,9 @@ class DashScope(Family):
         self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
     ) -> str:
         body = wire_body(spec, payload, client.link)
-        response = client.submit(SUBMIT_PATH, json=body, headers=ASYNC_HEADER)
+        response = client.submit(
+            SUBMIT_PATH, json=body.model_dump(), headers=ASYNC_HEADER
+        )
         task_id = parsed(response, ApiyiSubmit, PROVIDER).task_id
         if not task_id:
             # A 200 without an id we can read: the task is likely made. Its
@@ -124,7 +151,7 @@ class DashScope(Family):
             "apiyi %s task %s %s (job %s)",
             spec.model_id,
             task_id,
-            body["parameters"],
+            body.parameters,
             job,
         )
         return task_id

@@ -12,20 +12,22 @@ no references -- a different picture. `as_ai_params` reads an old job as the
 Recreate restores the model, settings and reference files too.
 """
 
+from typing import Any
+
 from fastapi import APIRouter
 
-from ofmhelpers.features.generate.legacy import Params, legacy_tools
+from ofmhelpers.features.generate.legacy import legacy_tools
 from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 
 
-def as_ai_params(job: Job) -> Params:
+def as_ai_params(job: Job) -> dict[str, Any]:
     """An old job's params as /ai stores them (every old tool ran on kie.ai),
     or unchanged when its tool has no translation."""
     tool = legacy_tools().get(job.task)
     if tool is None or tool.as_ai is None:
         return job.params
-    return {"provider": "kie", **tool.as_ai.translate(job.params)}
+    return {"provider": "kie", **tool.as_ai.translate(job.params).model_dump()}
 
 
 def _router(prefix: str, label: str) -> APIRouter:
@@ -44,5 +46,5 @@ def _router(prefix: str, label: str) -> APIRouter:
 # task name -> (label, router)
 LEGACY_TOOLS = {
     task: (tool.label, _router(tool.prefix, tool.label))
-    for task, tool in legacy_tools().items()
+    for task, tool in legacy_tools().entries.items()
 }

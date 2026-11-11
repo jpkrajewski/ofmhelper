@@ -14,6 +14,7 @@ from signin import sign_in_admin
 
 from ofmhelpers.db.stores import cookies, users
 from ofmhelpers.db.stores import devices as store
+from ofmhelpers.features.cookies import jar as cookie_jar
 from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 
@@ -57,7 +58,7 @@ def client() -> TestClient:
     user = sign_in_admin(c, USER)
     users._repository().signed_in(user.id, "", "a-google-refresh-token")
     users.set_api_key(user.id, "kie", "a-provider-key")
-    cookies.save(user.id, COOKIES, "cookies.txt")
+    cookie_jar.save(user.id, COOKIES, "cookies.txt")
     device = store.add_device(
         DeviceFields(label="Phone 01", model_id="iphone-13", color_id="blue"),
         user.id,
@@ -68,7 +69,7 @@ def client() -> TestClient:
         user.id,
     )
     assert added is not None
-    store.archive_logins([added[0]], user.id)
+    store.archive_logins([added.id], user.id)
     store.add_login(
         device,
         LoginFields(service="gmail", username="kept@b.c", password="secret"),
@@ -102,9 +103,9 @@ def test_what_cannot_be_read_counts_as_not_saved(client):
 
     assert user.drive_connected is True  # the row says so without the key
     assert users.refresh_token(user.id) == ""
-    assert users.api_keys(user.id) == {}
+    assert users.api_keys(user.id).keys == []
     assert cookies.for_user(user.id) is None
-    assert cookies.saved(user.id) is None
+    assert cookie_jar.saved(user.id) is None
 
 
 @pytest.mark.usefixtures("_key_gone")

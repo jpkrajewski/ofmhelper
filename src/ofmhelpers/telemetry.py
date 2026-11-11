@@ -1,8 +1,9 @@
 """Traces, logs and metrics to Pydantic Logfire (OpenTelemetry).
 
 `configure_telemetry(service)` is called once per process by the
-entrypoints only -- web/main.py ("ascend-web") and each RQ worker process
-(worker.py, "ascend-worker") -- next to `configure_logging()`:
+entrypoints only -- web/main.py ("ascend-web"), each RQ worker process
+(worker.py, "ascend-worker") and the sweeps process (sweeps.py,
+"ascend-sweeps") -- next to `configure_logging()`:
 
 - `logfire.configure` first (the instrumentors below send nowhere
   without it), tagged with the service, `settings.infra.env` and

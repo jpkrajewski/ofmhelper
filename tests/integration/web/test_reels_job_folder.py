@@ -15,9 +15,9 @@ import requests
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.reels import page as reels
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.downloads import reels
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 CDN = "https://scontent.cdninstagram.com/{}.mp4"
 PICKED = json.dumps(
@@ -31,8 +31,8 @@ PICKED = json.dumps(
 @pytest.fixture
 def uploads(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "uploads"
-    monkeypatch.setattr(reels, "UPLOADS_ROOT", root)
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path / "assets")
+    monkeypatch.setattr(reels, "uploads_root", lambda: root)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
     return root
 
 

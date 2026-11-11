@@ -1,12 +1,13 @@
 """The small parts of /chatting that need nothing around them."""
 
 import logging
+from datetime import UTC, datetime
 
 import pytest
 
 from ofmhelpers.features.chatting.alerts import money
 from ofmhelpers.log import _HideLoginCodes
-from ofmhelpers.schemas.chatting import ChatEvent, ChatRead
+from ofmhelpers.schemas.chatting import ChatEvent, ChatPosition, ChatRead, ReadScope
 
 
 @pytest.mark.parametrize(
@@ -71,3 +72,19 @@ def test_a_fans_name_is_made_storable():
 
     assert read.fan_name.startswith("ab")
     assert len(read.fan_name) == 255
+
+
+def test_a_round_knows_each_chats_last_message_read():
+    scope = ReadScope.since(
+        [
+            ChatPosition(channel_id="a", last_message_id="7"),
+            ChatPosition(channel_id="b", last_message_id="9"),
+        ],
+        datetime(2026, 1, 1, tzinfo=UTC),
+        {"b"},
+        thorough=False,
+    )
+
+    assert scope.seen == {"a": "7", "b": "9"}
+    assert scope.open_channels == {"b"}
+    assert scope.thorough is False

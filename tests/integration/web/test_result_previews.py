@@ -21,8 +21,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from ofmhelpers.cache import QueueName
-from ofmhelpers.db.stores import jobs as jobs_store
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.jobs import runner as jobs_store
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.web.main import app
@@ -341,7 +342,7 @@ def test_a_preview_that_timed_out_is_not_tried_again_for_that_file(
     previews.warm_previews(job_id, sources)
     previews.warm_previews(job_id, sources)
     with pytest.raises(previews.FailedBeforeError):
-        previews.make_preview(clip, job_id, 0)
+        previews.ResultPreview(clip, job_id, 0).make()
 
     assert len(tries) == 2
     assert previews.is_warm(job_id, sources)  # the backfill leaves it alone
@@ -485,7 +486,7 @@ def test_media_and_downloads_are_never_gzipped(client, tmp_path):
 def test_video_preview_is_720p_smaller_faststart(client, tmp_path, no_warming):
     clip = _clip(tmp_path / "big.mp4", 1080, 1920)
     job_id = _done_job(clip)
-    previews.make_preview(clip, job_id, 0)  # what the preview worker does
+    previews.ResultPreview(clip, job_id, 0).make()  # what the preview worker does
 
     r = client.get(f"{PREFIX}/files/{job_id}/0/preview")
 
@@ -503,7 +504,7 @@ def test_video_preview_is_720p_smaller_faststart(client, tmp_path, no_warming):
 def test_a_small_video_is_never_upscaled(client, tmp_path, no_warming):
     clip = _clip(tmp_path / "small.mp4", 320, 568)
     job_id = _done_job(clip)
-    previews.make_preview(clip, job_id, 0)
+    previews.ResultPreview(clip, job_id, 0).make()
 
     (cached,) = previews.previews_dir().glob("*.mp4")
     assert _probe_height(cached) == 568

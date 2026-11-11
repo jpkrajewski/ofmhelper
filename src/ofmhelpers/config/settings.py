@@ -16,6 +16,7 @@ config/__init__.py's docstring for why.
 """
 
 import datetime
+import os
 from enum import IntEnum, StrEnum
 from typing import Literal
 
@@ -35,8 +36,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from ofmhelpers.media.image_fit import ImageLimits
-from ofmhelpers.media.recorder.models import GeoPoint, Place
+from ofmhelpers.config.types import GeoPoint, ImageLimits, Place, StackedKey
+from ofmhelpers.utils.registry import Registry
 
 _SCAN_TIMES_MSG = "OFM_ACCOUNTS_SCAN_TIMES must be HH:MM, comma-separated"
 # Pydantic-settings lowercases the names it reads.
@@ -424,6 +425,14 @@ class WebSettings(BaseSettings):
     )
 
 
+def _compose_database_url() -> str:
+    """The compose stack's database when OFM_DATABASE_URL is not set: the
+    `postgres` service, its password from POSTGRES_PASSWORD (what that
+    service is given too), else the one docker-compose.yml falls back to."""
+    password = os.environ.get("POSTGRES_PASSWORD") or "ofmhelpers"
+    return f"postgresql+psycopg://ofmhelpers:{password}@postgres:5432/ofmhelpers"
+
+
 class InfraSettings(BaseSettings):
     """Backing services shared by the API and the RQ worker: Postgres (the
     durable job/application store) and Redis (the RQ broker). Kept in one
@@ -435,8 +444,7 @@ class InfraSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = Field(
-        default="postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers",
-        validation_alias="OFM_DATABASE_URL",
+        default_factory=_compose_database_url, validation_alias="OFM_DATABASE_URL"
     )
     redis_url: str = Field(
         default="redis://redis:6379/0", validation_alias="OFM_REDIS_URL"
@@ -477,10 +485,10 @@ class InfraSettings(BaseSettings):
     edit_workers: int = Field(default=1, ge=1, validation_alias="OFM_EDIT_WORKERS")
 
     @property
-    def queues(self) -> dict[QueueName, QueueConfig]:
-        """Every queue, top priority first: the default one on top, the heavy
-        encodes at the bottom."""
-        return {
+    def queues(self) -> Registry[QueueConfig]:
+        """Every queue by its `QueueName`, top priority first: the default one
+        on top, the heavy encodes at the bottom."""
+        entries: dict[str, QueueConfig] = {
             QueueName.DEFAULT: QueueConfig(
                 workers=self.rq_workers, priority=QueuePriority.HIGHEST
             ),
@@ -500,6 +508,7 @@ class InfraSettings(BaseSettings):
                 workers=self.media_workers, priority=QueuePriority.LOWEST
             ),
         }
+        return Registry[QueueConfig](entries=entries)
 
     # Everything the app writes on behalf of a user lives under one root:
     # uploads/assets (the shared reference store), plus a subdir per tool.
@@ -512,9 +521,11 @@ class InfraSettings(BaseSettings):
     cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")
     # Which deployment this is. Only the server's .env says "production";
     # anything else (dev, CI, tests) is kept off live resources that must
-    # only ever be touched by production (the live Drive folder).
+    # only ever be touched by production (the live Drive folder). No default:
+    # a deployment that does not say which it is does not start (the dev
+    # overlay and the test suite say "development").
     environment: Literal["production", "development"] = Field(
-        default="development", validation_alias="OFM_ENV"
+        validation_alias="OFM_ENV"
     )
     # Every outside service (Drive, AI providers, Instagram) swapped for its
     # in-process fake (`ofmhelpers.fakes`). E2E runs with it on; production
@@ -564,13 +575,11 @@ class ProviderSettings(BaseSettings):
 
 
 class KieAISettings(ProviderSettings):
-    """integrations/ai_providers/kie/: kie.ai's endpoints, upload limits and audit
-    logs. What every provider shares (output dir, polling) is AigenSettings."""
+    """integrations/ai_providers/kie/: kie.ai's endpoints and upload limits.
+    What every provider shares (output dir, polling) is AigenSettings."""
 
     model_config = SettingsConfigDict(env_prefix="OFM_KIEAI_")
 
-    task_log: str = "/app/kieai_out/tasks.jsonl"
-    completions_log: str = "/app/kieai_out/completions.jsonl"
     # Well under kie.ai's own tempfile retention, and every hit is confirmed live
     # before it is trusted anyway, so this only bounds how long a dead entry can
     # keep costing one HEAD.
@@ -1199,11 +1208,11 @@ class SignInSettings(BaseSettings):
     )
 
     @property
-    def admin_emails(self) -> tuple[str, ...]:
+    def admin_emails(self) -> list[str]:
         """In the order given: the first one takes over the password
         account (and the agency's data) at their first Google sign-in."""
         found = (p.strip().lower() for p in self.admin_emails_raw.split(","))
-        return tuple(dict.fromkeys(e for e in found if e))
+        return list(dict.fromkeys(e for e in found if e))
 
     @property
     def google_configured(self) -> bool:
@@ -2123,18 +2132,18 @@ class StackedSettings(BaseSettings):
     )
 
     @property
-    def api_keys(self) -> dict[str, str]:
-        """Each `STACKED_API_KEY_<NAME>` as {name: key}, sorted. A new creator
+    def api_keys(self) -> list[StackedKey]:
+        """Each `STACKED_API_KEY_<NAME>` with its name, sorted. A new creator
         or agency = a new line in .env; the API says which kind a key is."""
         found = {
             **DotEnvSettingsSource(type(self)).env_vars,
             **EnvSettingsSource(type(self)).env_vars,
         }
-        return {
-            name.removeprefix(_STACKED_KEY_PREFIX): key
+        return [
+            StackedKey(name=name.removeprefix(_STACKED_KEY_PREFIX), key=key)
             for name, key in sorted(found.items())
             if name.startswith(_STACKED_KEY_PREFIX) and key
-        }
+        ]
 
 
 def _names(value: str) -> list[str]:
@@ -2155,7 +2164,7 @@ class ReportsSettings(BaseSettings):
     timezone: str = Field(
         default="Europe/Warsaw", validation_alias="OFM_REPORTS_TIMEZONE"
     )
-    # How often the web process looks whether it is due.
+    # How often the sweeps process looks whether it is due.
     check_s: float = Field(default=60, gt=0, validation_alias="OFM_REPORTS_CHECK_S")
 
     @field_validator("daily_at")

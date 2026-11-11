@@ -1,5 +1,5 @@
-"""The background sweeps the web process runs, started and stopped by
-`web/main.py`'s lifespan (FastAPI's lifespan events).
+"""The background sweeps, run by a process of their own (`ofmhelpers/sweeps.py`,
+the `sweeps` compose service): exactly one, however many web processes serve.
 
 Each sweep is a blocking function run in a thread, again `interval_s()`
 after its previous run ended -- read fresh every round, so a settings change
@@ -11,7 +11,7 @@ down, Drive refusing) never takes its loop down. A new sweep is one entry in
 A thread is for a sweep that only looks and queues, or waits on the network.
 One that does the work itself (walks the disk, runs ffmpeg) names a `queue`:
 its round only puts the function in that line, and a worker container -- its
-own CPU and memory limits -- runs it, never the process serving the pages. A
+own CPU and memory limits -- runs it, never the sweeps process. A
 round whose last one still waits or runs puts nothing.
 """
 
@@ -76,7 +76,7 @@ def _drive_enabled() -> bool:
 
 
 def sweeps() -> list[Sweep]:
-    """Every sweep the web process runs."""
+    """Every sweep the sweeps process runs."""
     return [
         # Finishes provider requests that outlived their job's poll, and
         # jobs a restart cut off -- features/jobs/recovery.py.
@@ -154,8 +154,8 @@ def sweeps() -> list[Sweep]:
         ),
         # What is typed to the bot (`money`): each read itself waits for a
         # message (`OFM_TELEGRAM_ASK_WAIT_S`), so the next starts a second later
-        # (longer after a failed one). A read still waiting holds the app's stop
-        # up to that long: `stop_grace_period` of `ofmhelpers` covers it.
+        # (longer after a failed one). A read still waiting holds the process's stop
+        # up to that long: `stop_grace_period` of `sweeps` covers it.
         Sweep(
             name="telegram asks",
             run=report_asks.answer_asks,
@@ -203,7 +203,7 @@ async def _loop(sweep: Sweep) -> None:
 @asynccontextmanager
 async def running(all_sweeps: list[Sweep]) -> AsyncGenerator[None]:
     """`all_sweeps` running for the duration of the block; on exit each is
-    cancelled and awaited, so none outlives the app."""
+    cancelled and awaited, so none outlives the process."""
     tasks = [asyncio.create_task(_loop(s), name=f"sweep {s.name}") for s in all_sweeps]
     try:
         yield

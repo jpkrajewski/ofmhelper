@@ -46,9 +46,12 @@ lazy from fastapi import UploadFile
 from ofmhelpers.cache.queue import JobQueue
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import QueueName
-from ofmhelpers.db.stores.jobs import drop_job, get_job, list_jobs_page, start_job
+from ofmhelpers.db.stores.jobs import drop_job, get_job, list_jobs_page
 from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.assets.manifests import keep_files
+from ofmhelpers.features.assets.store import register_generated_asset, save_asset
 from ofmhelpers.features.edit.options import Framing
+from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim
@@ -157,10 +160,6 @@ def _touch(path: Path) -> None:
 
 
 def _stored_video(video: str, assets_root: Path) -> Path:
-    # The asset store still lives in the routers package (see
-    # features/clone/service.card).
-    from ofmhelpers.web.routers.task_helpers import keep_files
-
     kept = keep_files([video], assets_root, "video")
     if not kept:
         raise EditRefusedError(_GONE)
@@ -232,8 +231,6 @@ def upload(
 ) -> EditVideo:
     """A video from the person's computer into `.edit/`, to open here; its
     light copy and strip are queued at once (`run`, as for `page`)."""
-    from ofmhelpers.web.routers.task_helpers import save_asset
-
     if classify_kind(file.filename or "") != "video":
         msg = "Pick a video file"
         raise EditRefusedError(msg)
@@ -276,6 +273,14 @@ def _prepared_files(path: Path) -> dict[PreparedKind, Path]:
     }
 
 
+class PreparedFiles(BaseModel, frozen=True):
+    """Where a prepared video's parts are: `run_prepare`'s stored result."""
+
+    proxy: str
+    strip: str
+    frames: str
+
+
 def _ready(path: Path) -> Prepared | None:
     files = _prepared_files(path).values()
     if not all(f.is_file() for f in files):
@@ -293,8 +298,7 @@ def _ready(path: Path) -> Prepared | None:
 
 
 def _prepares(actor: str, status: str) -> list[Job]:
-    jobs, _ = list_jobs_page({PREPARE_TASK}, 0, 50, actor, status=status)
-    return jobs
+    return list_jobs_page({PREPARE_TASK}, 0, 50, actor, status=status).jobs
 
 
 def _running_prepare(path: Path, actor: str) -> Job | None:
@@ -322,7 +326,7 @@ def _drop_older(path: Path, actor: str) -> None:
 
 
 def _in_line(job_id: str) -> Prepared:
-    ahead = JobQueue(QueueName.EDIT).line().get(job_id)
+    ahead = JobQueue(QueueName.EDIT).line().ahead(job_id)
     return Prepared(status="running", ahead=ahead)
 
 
@@ -395,7 +399,11 @@ def _write_frame_times(proxy: Path, dest: Path) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def run_prepare(video: str, assets_root: str) -> dict[str, Any]:
+def run_prepare(
+    video: str,
+    assets_root: str,
+    job_id: str | None = None,  # noqa: ARG001 -- start_job hands every run its job id
+) -> PreparedFiles:
     """Makes the light copy, then its strip and frame times (on the edit
     worker); a part already made is kept."""
     path = _stored_video(video, Path(assets_root))
@@ -430,7 +438,11 @@ def run_prepare(video: str, assets_root: str) -> dict[str, Any]:
     except _FFMPEG_ERRORS as exc:
         logger.warning("could not prepare %s", path, exc_info=True)
         raise EditRefusedError(_why_not_prepared(path, exc)) from exc
-    return {kind: str(f) for kind, f in files.items()}
+    return PreparedFiles(
+        proxy=str(files["proxy"]),
+        strip=str(files["strip"]),
+        frames=str(files["frames"]),
+    )
 
 
 def _why_not_prepared(path: Path, exc: BaseException) -> str:
@@ -536,8 +548,7 @@ def queue_cut(
     (routers/video_tools/edit.py `run_cut`, a path RQ can import)."""
     path = _stored_video(video, assets_root)
     start, end = _part(start, end, _seconds(path))
-    _, waiting = list_jobs_page({TASK}, 0, 1, actor, status="running")
-    if waiting:
+    if list_jobs_page({TASK}, 0, 1, actor, status="running").total:
         msg = "Your last cut is still running: wait for it"
         raise EditRefusedError(msg)
     params = {
@@ -571,8 +582,6 @@ def _make_cut(
     path: Path, start: float, end: float, framing: Framing, speed: float, root: Path
 ) -> Path:
     """The part, cut in a work folder and stored in `.edit/`."""
-    from ofmhelpers.web.routers.task_helpers import register_generated_asset
-
     web = settings.web
     work = Path(settings.infra.uploads_root) / STAGING
     work.mkdir(parents=True, exist_ok=True)
@@ -609,7 +618,8 @@ def run_cut(
     x: float = 0.5,
     y: float = 0.5,
     speed: float = 1.0,
-) -> dict[str, Any]:
+    job_id: str | None = None,  # noqa: ARG001 -- start_job hands every run its job id
+) -> EditVideo:
     """The cut itself (on the edit worker), as `<name>_cut.mp4` in `.edit/`.
     Any failure is one sentence for the page; the cause goes to the log."""
     root = Path(assets_root)
@@ -628,7 +638,7 @@ def run_cut(
     try:
         stored = _make_cut(path, start, end, framing, speed, root)
         _touch(stored)
-        return _video(stored, _seconds(stored)).model_dump()
+        return _video(stored, _seconds(stored))
     except EditRefusedError:
         raise
     except Exception as exc:
@@ -645,4 +655,6 @@ def cut_state(job_id: str, actor: str) -> CutState:
         return CutState(status="done", video=EditVideo.model_validate(job.result))
     if job.status == "failed":
         return CutState(status="failed", error=job.error or "Could not cut: try again")
-    return CutState(status="running", ahead=JobQueue(QueueName.EDIT).line().get(job_id))
+    return CutState(
+        status="running", ahead=JobQueue(QueueName.EDIT).line().ahead(job_id)
+    )

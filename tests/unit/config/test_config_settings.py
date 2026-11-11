@@ -42,8 +42,6 @@ ALL_ENV_VARS = [
     "OFM_CLONE_LINKS_WORKERS",
     "OFM_PREVIEW_WORKERS",
     "OFM_KIEAI_OUT_DIR",
-    "OFM_KIEAI_TASK_LOG",
-    "OFM_KIEAI_COMPLETIONS_LOG",
     "OFM_KIEAI_RESOLVED_LOG",
     "OFM_KIEAI_RESUME_MAX_AGE_S",
     "OFM_KIEAI_UPLOAD_CACHE_MAX_ENTRIES",
@@ -165,8 +163,6 @@ def test_infra_settings_env_overrides(monkeypatch):
 
 def test_kieai_settings_defaults_match_pre_refactor_values(clean_env):
     s = KieAISettings(_env_file=None)
-    assert s.task_log == "/app/kieai_out/tasks.jsonl"
-    assert s.completions_log == "/app/kieai_out/completions.jsonl"
     assert s.upload_cache_ttl_s == 12 * 3600
 
 
@@ -257,7 +253,7 @@ def test_uploads_root_and_cache_ttl_default_to_the_previous_literals(clean_env):
 
 def test_uploads_root_is_overridable(monkeypatch):
     """Every per-tool upload dir derives from this one, so an override has to
-    reach all of them -- see routers/task_helpers.UPLOADS_ROOT."""
+    reach all of them -- see features/assets/store.py `uploads_root()`."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", "/data/uploads")
     assert InfraSettings(_env_file=None).uploads_root == "/data/uploads"
 
@@ -339,3 +335,26 @@ def test_no_gemini_key_is_no_keys(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     assert LLMSettings(_env_file=None).gemini_keys == []
+
+
+def test_a_deployment_must_say_which_it_is(monkeypatch):
+    """OFM_ENV has no default: "development" assumed on a server whose .env
+    lost the key would let it touch nothing live, silently. Nothing starts
+    instead (dev's compose overlay and this suite say development)."""
+    monkeypatch.delenv("OFM_ENV")
+    with pytest.raises(ValidationError, match="OFM_ENV"):
+        InfraSettings(_env_file=None)
+
+
+def test_the_compose_database_password_comes_from_the_environment(monkeypatch):
+    """Not a literal in the code: POSTGRES_PASSWORD, what compose gives the
+    postgres service too; unset, the value every existing volume has."""
+    monkeypatch.delenv("OFM_DATABASE_URL")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "s3cret")
+    assert InfraSettings(_env_file=None).database_url == (
+        "postgresql+psycopg://ofmhelpers:s3cret@postgres:5432/ofmhelpers"
+    )
+    monkeypatch.delenv("POSTGRES_PASSWORD")
+    assert InfraSettings(_env_file=None).database_url == (
+        "postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers"
+    )

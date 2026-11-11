@@ -10,10 +10,11 @@ updates are single UPDATE statements (atomic) -- the read-modify-write race
 the old JSON files documented (two jobs finishing at once losing an update)
 is gone.
 
-Return values are plain dicts in the exact shape the old in-memory dicts had,
-so callers (templates, task_helpers, routers) are unaffected.
+A method returns Pydantic models (`schemas/`), a list of them, None or one
+plain value: never a row, a dict or a tuple. The stores pass them on.
 
-Reads are cached (see cached_repository.py); `@cached` marks a read method,
+Reads are cached (see cached_repository.py); `@cached` marks a read method
+(Redis holds the JSON of what its return annotation names),
 `@invalidates_cache` marks a write method. Repositories never touch
 `self._cache` directly -- that plumbing lives in `CachedRepository` and the
 two decorators.

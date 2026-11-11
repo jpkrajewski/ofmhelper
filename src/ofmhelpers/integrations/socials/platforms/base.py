@@ -5,30 +5,21 @@ subclass in its own file plus one entry in `platforms/__init__.py`'s
 `_PLATFORM_TYPES`; a scraping API for it is one `AccountSource` returned by
 `api_source`. Nothing else changes."""
 
-from abc import ABC, abstractmethod
-from typing import ClassVar
+from abc import abstractmethod
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.socials.client_source import LoginSource, ProxySource
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.socials import PlatformNames
 lazy from ofmhelpers.integrations.socials.models import AccountStats
 lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
 logger = get_logger(__name__)
 
 
-class Platform(ABC):
-    # Stored on every tracked account; never rename one in use.
-    key: ClassVar[str]
-    label: ClassVar[str]
-
-    @abstractmethod
-    def handle(self, text: str) -> str:
-        """`text` as pasted ("name", "@name", a profile URL) reduced to the
-        stored handle. Raises ValueError when it is none."""
-
-    @abstractmethod
-    def profile_url(self, handle: str) -> str: ...
+class Platform(PlatformNames):
+    """`key`, `label`, `handle` and `profile_url` come from the platform's
+    `PlatformNames` (`schemas/socials.py`)."""
 
     @abstractmethod
     def proxies(self) -> list[str]:

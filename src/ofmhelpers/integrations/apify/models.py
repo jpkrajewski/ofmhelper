@@ -3,7 +3,7 @@ run, and an account's usage limits."""
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class _Api(BaseModel):
@@ -84,6 +84,31 @@ class ActorRun(_Api):
 
 class RunEnvelope(_Api):
     data: ActorRun
+
+
+class DatasetItem(BaseModel):
+    """One item of a run's dataset. Its fields are the actor's own (kept as
+    sent, `read` maps them); an item the actor could not read carries
+    `error` instead."""
+
+    model_config = ConfigDict(extra="allow")
+
+    error: str | None = None
+    url: str = ""
+
+    @field_validator("error", "url", mode="before")
+    @classmethod
+    def _as_text(cls, value: object) -> object:
+        """Only ever logged: whatever the actor put there, as text."""
+        return value if value is None else str(value)
+
+    @property
+    def failed(self) -> bool:
+        return "error" in self.model_fields_set
+
+    def read[T: BaseModel](self, model: type[T]) -> T:
+        """The item as `model`; `ValidationError` when it does not fit."""
+        return model.model_validate(self.model_dump(exclude_unset=True))
 
 
 class _MonthlyLimit(_Api):

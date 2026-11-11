@@ -222,11 +222,11 @@ class Repurpose:
                 ZoneInfo(recorder.time_zone), recorder.place, rng
             )
             return made.model_copy(update={"seed": seed})
-        point, accuracy = recorder.place.sample(rng) if recorder.place else (None, None)
+        at = recorder.place.sample(rng) if recorder.place else None
         return Recording(
             end=self.recorded_at,
             duration_s=0,
-            location=point,
-            location_accuracy_m=accuracy,
+            location=at.point if at else None,
+            location_accuracy_m=at.accuracy_m if at else None,
             seed=seed,
         )

@@ -22,18 +22,21 @@ from ofmhelpers.db.repositories.cached_repository import (
 )
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.watched import WatchedProfile
 
 
-def _to_dict(row: WatchedProfileRow) -> dict:
-    return {
-        "user_id": row.user_id,
-        "username": row.username,
-        "group": row.group_name,
-        "added_at": row.added_at,
-        "scanned_at": row.scanned_at,
-        "error": row.error,
-        "result": row.result,
-    }
+def _profile(row: WatchedProfileRow) -> WatchedProfile:
+    return WatchedProfile.model_validate(
+        {
+            "user_id": row.user_id,
+            "username": row.username,
+            "group": row.group_name,
+            "added_at": row.added_at,
+            "scanned_at": row.scanned_at,
+            "error": row.error,
+            "result": row.result,
+        }
+    )
 
 
 class WatchedProfileRepository(CachedRepository):
@@ -79,7 +82,7 @@ class WatchedProfileRepository(CachedRepository):
             return added.scalar_one_or_none() is not None
 
     @cached
-    def list_all(self, owner: int | None = None) -> list[dict]:
+    def list_all(self, owner: int | None = None) -> list[WatchedProfile]:
         """`owner`'s watch list, oldest first, so a newly added profile
         lands at the bottom."""
         with session_scope() as s:
@@ -92,7 +95,7 @@ class WatchedProfileRepository(CachedRepository):
                 .scalars()
                 .all()
             )
-            return [_to_dict(r) for r in rows]
+            return [_profile(r) for r in rows]
 
     @invalidates_cache
     def create_group(self, name: str, user_id: int) -> None:

@@ -19,8 +19,6 @@ def client(tmp_path):
     return KieAIClient(
         api_key="test-key",
         out_dir=tmp_path / "out",
-        task_log=tmp_path / "tasks.jsonl",
-        completions_log=tmp_path / "completions.jsonl",
     )
 
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.media.ffmpeg import binary, run
+from ofmhelpers.media.size import Size
 
 
 def _rate(fraction: str) -> float | None:
@@ -48,11 +49,11 @@ class Source(BaseModel, frozen=True):
         )
 
     @property
-    def display_size(self) -> tuple[int, int]:
+    def display_size(self) -> Size:
         """Width and height as played, i.e. as the filters see the frames."""
         if self.rotation % 180:
-            return self.height, self.width
-        return self.width, self.height
+            return Size(width=self.height, height=self.width)
+        return Size(width=self.width, height=self.height)
 
     @property
     def aspect(self) -> float:

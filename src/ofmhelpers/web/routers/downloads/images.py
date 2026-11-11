@@ -1,40 +1,28 @@
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form
 
-from ofmhelpers.db.stores import cookies as login_cookies
-from ofmhelpers.integrations.downloaders.images import download_all
-from ofmhelpers.integrations.downloaders.models import DownloadResult
+from ofmhelpers.features.downloads import images
+
+# Jobs queued before 2026-11-11 name the run function by this module's path.
+from ofmhelpers.features.downloads.images import run_downloads as _run_downloads
 from ofmhelpers.schemas import JobQueued
 from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
-from ofmhelpers.web.routers.downloads.shared import queue_downloads
-from ofmhelpers.web.routers.task_helpers import add_job_routes, register_grouped_results
+from ofmhelpers.web.routers.task_helpers import add_job_routes
+
+__all__ = ["_run_downloads", "router"]
 
 router = APIRouter(prefix="/download-images", tags=["download-images"])
 
 
-def _run_downloads(
-    urls: list[str], assets_root: str, user_id: int | None = None
-) -> list[DownloadResult]:
-    """Runs in the background, logged in as the user who started it (their
-    own cookies.txt, read here: never in the queued job); run_job stores
-    the results as JSON."""
-    results = download_all(urls, cookies=login_cookies.for_user(user_id))
-    register_grouped_results(results, Path(assets_root))
-    return results
-
-
-@router.post("/run")
+@router.post("/run", status_code=202)
 def run(
     urls: Annotated[str, Form()],
     actor: Actor,
     owner_id: OwnerId,
     assets_root: AssetsRoot,
 ) -> JobQueued:
-    return queue_downloads(
-        "download_images", urls, _run_downloads, actor, owner_id, assets_root
-    )
+    return images.start(urls, actor, owner_id, assets_root)
 
 
 add_job_routes(

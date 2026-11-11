@@ -47,8 +47,8 @@ class StackedSite:
         self._start = datetime.fromtimestamp(since, UTC)
         self._end = datetime.fromtimestamp(until, UTC)
         self._reach: dict[str, tuple[StackedClient, str]] = {
-            creator.username: (client, creator.user_id)
-            for client, creator in reachable(settings.stacked.api_keys.values())
+            r.creator.username: (r.client, r.creator.user_id)
+            for r in reachable(k.key for k in settings.stacked.api_keys)
         }
 
     def models(self) -> list[str]:
@@ -99,7 +99,6 @@ class FanvueSite:
         )
 
 
-def fan_sites(since: float, until: float) -> dict[ChatPlatform, FanSite]:
+def fan_sites(since: float, until: float) -> list[FanSite]:
     """Every platform with numbers, for the window [since, until)."""
-    sites: list[FanSite] = [StackedSite(since, until), FanvueSite(since, until)]
-    return {site.platform: site for site in sites}
+    return [StackedSite(since, until), FanvueSite(since, until)]

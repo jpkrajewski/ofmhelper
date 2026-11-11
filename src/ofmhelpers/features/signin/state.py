@@ -10,11 +10,11 @@ lazy from fastapi.responses import Response
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.signin import SignInError
-from ofmhelpers.web.middleware import AuthMiddleware
 
 STATE_COOKIE = "ofm_signin"
 _COOKIE_PATH = "/auth/"
-HOME = AuthMiddleware.HOME
+# Where a signed-in person lands without a page to return to.
+HOME = "/home"
 
 
 class SignInState(BaseModel):

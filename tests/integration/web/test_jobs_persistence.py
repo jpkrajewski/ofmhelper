@@ -23,9 +23,10 @@ from ofmhelpers.db.stores.jobs import (
     merge_params,
     redone_links,
     reopen_job,
-    run_job,
 )
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
+from ofmhelpers.schemas.persistence import JobPage
 
 
 def test_create_job_persists_immediately():
@@ -87,9 +88,9 @@ def test_jobs_survive_a_simulated_restart():
 
     restored = JobRepository().get(job_id)
     assert restored is not None
-    assert restored["task"] == "kling3"
-    assert restored["status"] == "done"
-    assert restored["result"] == [{"name": "a.mp4", "path": "/tmp/a.mp4"}]
+    assert restored.task == "kling3"
+    assert restored.status == "done"
+    assert restored.result == [{"name": "a.mp4", "path": "/tmp/a.mp4"}]
 
 
 def test_list_jobs_drops_a_job_whose_flat_result_file_was_deleted(tmp_path):
@@ -165,16 +166,16 @@ def test_list_jobs_page_filters_slices_and_reports_the_total():
     ids = [create_job("fake_ai", {"i": i}) for i in range(5)]
     create_job("download_videos", {})  # a task this gallery doesn't show
 
-    page, total = list_jobs_page({"fake_ai"}, 0, 2)
-    assert total == 5
+    page = list_jobs_page({"fake_ai"}, 0, 2)
+    assert page.total == 5
     # newest first
-    assert [j.id for j in page] == [ids[4], ids[3]]
+    assert [j.id for j in page.jobs] == [ids[4], ids[3]]
 
-    page, total = list_jobs_page({"fake_ai"}, 4, 2)
-    assert total == 5
-    assert [j.id for j in page] == [ids[0]]
+    page = list_jobs_page({"fake_ai"}, 4, 2)
+    assert page.total == 5
+    assert [j.id for j in page.jobs] == [ids[0]]
 
-    assert list_jobs_page({"fake_ai"}, 99, 2) == ([], 5)
+    assert list_jobs_page({"fake_ai"}, 99, 2) == JobPage(jobs=[], total=5)
 
 
 def test_the_heal_keeps_a_tasks_own_result_fields(tmp_path):
@@ -219,10 +220,10 @@ def test_list_jobs_page_only_touches_the_disk_for_the_page(tmp_path, monkeypatch
         return real_is_file(self)
 
     monkeypatch.setattr(Path, "is_file", counting_is_file)
-    page, total = list_jobs_page({"fake_ai"}, 0, 2)
+    page = list_jobs_page({"fake_ai"}, 0, 2)
 
-    assert total == 4
-    assert len(page) == 2
+    assert page.total == 4
+    assert len(page.jobs) == 2
     assert len(checked) == 2
 
 
@@ -235,16 +236,16 @@ def test_list_jobs_page_filters_and_pages_in_sql():
     create_job("wan3", {}, actor="admin")
     create_job("uniqify", {}, actor="va")
 
-    page, total = list_jobs_page({"wan3", "kling3"}, 0, 2, actor="va")
-    rest, _ = list_jobs_page({"wan3"}, 2, 2, actor="va")
-    assert total == 3
+    first = list_jobs_page({"wan3", "kling3"}, 0, 2, actor="va")
+    rest = list_jobs_page({"wan3"}, 2, 2, actor="va").jobs
+    assert first.total == 3
     # Pages don't overlap and cover exactly the VA's wan3 jobs, newest first
     # (compared on created_at: create_job can tie on a coarse clock).
-    pages = page + rest
+    pages = first.jobs + rest
     assert sorted(j.id for j in pages) == sorted(va)
     stamps = [j.created_at for j in pages]
     assert stamps == sorted(stamps, reverse=True)
-    assert list_jobs_page({"wan3"}, 0, 10, actor=None)[1] == 4
+    assert list_jobs_page({"wan3"}, 0, 10, actor=None).total == 4
 
 
 # --- the history cap (review #3) ---------------------------------------------

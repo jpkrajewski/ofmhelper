@@ -32,6 +32,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
 from ofmhelpers.features.chatting import rechecks
+from ofmhelpers.features.chatting.rechecks import ChatKey
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.sync import read_now
 from ofmhelpers.features.events import Event, emit, listening
@@ -116,14 +117,15 @@ def _event(waiting: dict[_Model, list[OpenWait]], now: float, key: str) -> Event
 
 
 def _untold(
-    waiting: dict[_Model, list[OpenWait]], chats_due: set[tuple[str, str]]
+    waiting: dict[_Model, list[OpenWait]], chats_due: set[ChatKey]
 ) -> list[OpenWait]:
     """The waits of the chats in `chats_due` nobody was told about yet."""
     due = [
         wait
         for waits in waiting.values()
         for wait in waits
-        if (wait.platform.value, wait.channel_id) in chats_due
+        if ChatKey(platform=wait.platform.value, channel_id=wait.channel_id)
+        in chats_due
     ]
     return rechecks.untold(due)
 
@@ -132,10 +134,10 @@ class _Told(NamedTuple):
     """How many models a list named, and the chats due that could not be read."""
 
     models: int = 0
-    unread: frozenset[tuple[str, str]] = frozenset()
+    unread: frozenset[ChatKey] = frozenset()
 
 
-def _tell(now: float, key: str | None, chats_due: set[tuple[str, str]] | None) -> _Told:
+def _tell(now: float, key: str | None, chats_due: set[ChatKey] | None) -> _Told:
     """The list of every model with fans still waiting after a fresh read, one list
     at a time (`rechecks.one_teller`). `chats_due` (a recheck): only when one of
     those chats still waits untold, its key then named after those waits; else (a
@@ -154,7 +156,7 @@ def _tell(now: float, key: str | None, chats_due: set[tuple[str, str]] | None) -
             names = {username for p, username in waiting if p == platform}
             fresh |= {(platform, username) for username in _fresh(platform, names)}
         unread = frozenset(
-            (w.platform.value, w.channel_id)
+            ChatKey(platform=w.platform.value, channel_id=w.channel_id)
             for w in due
             if (w.platform, w.model_username) not in fresh
         )

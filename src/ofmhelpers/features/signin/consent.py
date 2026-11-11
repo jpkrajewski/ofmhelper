@@ -5,9 +5,14 @@ import secrets
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.signin.state import SignInState, safe_next, seal, unseal
+from ofmhelpers.integrations.signin import SignInError, configured, providers
 from ofmhelpers.integrations.signin.fake import FakeAccount, fake_code
+from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.signin import Provider
+
+logger = get_logger(__name__)
 
 
 class ConsentStart(BaseModel):
@@ -15,6 +20,21 @@ class ConsentStart(BaseModel):
 
     url: str
     cookie: str
+
+
+def provider(name: str) -> Provider:
+    """The sign-in in the path (/auth/<name>/...): unknown, or its
+    credentials not set, is `NotFoundError`."""
+    found = providers().get(name)
+    if found is None or not found.configured():
+        msg = "No such sign-in"
+        raise NotFoundError(msg)
+    return found
+
+
+def offered() -> list[Provider]:
+    """The sign-ins the login page has a button for."""
+    return configured()
 
 
 def redirect_uri(provider: Provider, site: str) -> str:
@@ -49,8 +69,14 @@ def begin(
 
 
 def fake_callback(cookie: str, provider: str, state: str, email: str) -> str:
-    """Where the fake consent screen returns to. Raises `SignInError`."""
-    carried = unseal(cookie, provider, state)
+    """Where the fake consent screen returns to. A state that is not this
+    browser's own is `RefusedError`."""
+    try:
+        carried = unseal(cookie, provider, state)
+    except SignInError as exc:
+        logger.warning("fake consent for %s refused", provider, exc_info=True)
+        msg = "Sign-in did not work. Try again."
+        raise RefusedError(msg) from exc
     # Like Google: a Drive (refresh) token only when connecting, never on a
     # plain sign-in.
     code = fake_code(

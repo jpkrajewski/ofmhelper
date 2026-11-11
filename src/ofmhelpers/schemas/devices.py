@@ -7,13 +7,14 @@ from typing import Annotated
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     StringConstraints,
     field_validator,
     model_validator,
 )
 
-from ofmhelpers.features.phones.catalog import (
+from ofmhelpers.schemas.phone_catalog import (
     Family,
     Finish,
     LoginService,
@@ -67,7 +68,7 @@ class DeviceFields(BaseModel):
         if found is None:
             msg = f"Unknown model: {self.model_id}"
             raise ValueError(msg)
-        model = found[1]
+        model = found.model
         if self.color_id and catalog().color(model, self.color_id) is None:
             msg = f"{model.label} never came in {self.color_id}"
             raise ValueError(msg)
@@ -106,6 +107,17 @@ class LoginSecrets(BaseModel):
 
     password: str
     backup_codes: str
+
+
+class AddedLogin(BaseModel):
+    """A login just put on a phone. `existed`: the phone's owner had the
+    account saved already (on another phone, or archived); it was linked,
+    not stored twice."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    existed: bool
 
 
 class ArchivedLogin(BaseModel):
@@ -216,12 +228,12 @@ class Device(BaseModel):
     @property
     def family(self) -> Family | None:
         found = find_model(self.model_id) if self.model_id else None
-        return found[0] if found else None
+        return found.family if found else None
 
     @property
     def model(self) -> PhoneModel | None:
         found = find_model(self.model_id) if self.model_id else None
-        return found[1] if found else None
+        return found.model if found else None
 
     @property
     def finish(self) -> Finish | None:
@@ -264,6 +276,27 @@ class Device(BaseModel):
             *(f"{x.label} {x.username}" for x in self.logins),
         ]
         return " ".join(parts).lower()
+
+
+class AccountPhones(BaseModel):
+    """One /accounts row's phones: the active ones signed in to it."""
+
+    account_id: int
+    phones: list[Device]
+
+
+class PhonesByAccount(BaseModel):
+    """The phones of each tracked account that has any (/accounts shows
+    them in place of a typed note)."""
+
+    rows: list[AccountPhones] = Field(default_factory=list)
+
+    def of(self, account_id: int) -> list[Device]:
+        """The account's phones, by label; none when it is on no phone."""
+        for row in self.rows:
+            if row.account_id == account_id:
+                return row.phones
+        return []
 
 
 class PhoneSort(StrEnum):

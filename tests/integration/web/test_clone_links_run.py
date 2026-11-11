@@ -24,9 +24,12 @@ from clone_links_helpers import (
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import clone_from_links
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.clone import run as clone_run
+from ofmhelpers.features.clone_links import job as clone_links_job
 from ofmhelpers.features.clone_links import run as run_module
 from ofmhelpers.features.clone_links.stop import stop_batch, stopped
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import Provider
 from ofmhelpers.integrations.ai_providers.errors import (
@@ -40,7 +43,7 @@ from ofmhelpers.media import exports as exports_module
 from ofmhelpers.media import fake_media
 from ofmhelpers.schemas import Job, ResultFile
 from ofmhelpers.schemas.errors import error_reason
-from ofmhelpers.web.routers.generation import clone
+from ofmhelpers.web.routers.generation import clone, clone_links
 from ofmhelpers.web.routers.generation.clone_links import TASK
 from ofmhelpers.web.routers.task_helpers import assets_root_for_actor
 
@@ -105,7 +108,7 @@ def _rerun(job_id: str) -> Job:
     job = get_job(job_id)
     run_job(
         job.id,
-        run_module.run_clone_link,
+        clone_links.run_clone_link,
         {
             **job.params,
             "job_id": job.id,
@@ -240,7 +243,7 @@ def test_no_credits_fails_the_rest_of_its_generate_without_downloading(
     def empty(*_a, **_k):
         raise ProviderNoCreditsError(message)
 
-    monkeypatch.setattr(run_module, "_run_clone", empty)
+    monkeypatch.setattr(clone_links_job, "run_clone", empty)
 
     queued = run(ann, [REEL, OTHER])
 
@@ -270,6 +273,7 @@ def test_a_run_whose_job_is_gone_downloads_and_pays_nothing(downloads, tmp_path)
             prompt="p",
             resolution="720P",
             reference_images=[],
+            run_clone=clone._run_clone,
         )
 
     assert downloads == []
@@ -360,7 +364,7 @@ def _hosted_only(monkeypatch):
         url = f"https://{RESULT_HOST}/results/hosted-{job_id}.mp4"
         return [ResultFile(name=f"hosted-{job_id}.mp4", path=None, remote_url=url)]
 
-    monkeypatch.setattr(clone, "run_ai", hosted)
+    monkeypatch.setattr(clone_run, "run_ai", hosted)
 
 
 def test_a_result_only_hosted_is_saved_here_and_reviewed(ann, monkeypatch):

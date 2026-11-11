@@ -18,6 +18,8 @@ import secrets
 import threading
 from functools import lru_cache
 
+from pydantic import BaseModel, ConfigDict
+
 from ofmhelpers.config import settings
 
 _N, _R, _P = 2**17, 8, 1
@@ -72,10 +74,18 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(_derive(password, salt, n, r, p), key)
 
 
-def new_link_token() -> tuple[str, str]:
-    """(token for the URL, its SHA-256 to store)."""
+class LinkToken(BaseModel):
+    """A one-time link's token for the URL, and its SHA-256 to store."""
+
+    model_config = ConfigDict(frozen=True)
+
+    token: str
+    token_hash: str
+
+
+def new_link_token() -> LinkToken:
     token = secrets.token_urlsafe(32)
-    return token, link_hash(token)
+    return LinkToken(token=token, token_hash=link_hash(token))
 
 
 def link_hash(token: str) -> str:

@@ -11,16 +11,20 @@ from functools import lru_cache
 lazy from datetime import date
 
 from ofmhelpers.db.repositories import SelfLinkRepository, ShortLinkRepository
-from ofmhelpers.integrations.short_links import DayStat, HourStat, RemoteLink
+from ofmhelpers.schemas.link_catalog import LinkDays, LinkHours
 from ofmhelpers.schemas.self_links import (
-    SelfBreakdownRow,
     SelfChart,
-    SelfDomain,
     SelfLinkStat,
-    SelfSeriesPoint,
     SelfStats,
 )
-lazy from ofmhelpers.schemas.self_links import SelfClick, SelfRange
+lazy from ofmhelpers.schemas.link_catalog import RemoteLink
+lazy from ofmhelpers.schemas.self_links import (
+    BridgeTarget,
+    SelfBreakdownRow,
+    SelfClick,
+    SelfDomain,
+    SelfRange,
+)
 
 # Statuses of a self link that exists (is serveable / counts in the plan).
 _LIVE = ("active", "inactive")
@@ -45,48 +49,36 @@ def live_links(user_id: int) -> list[RemoteLink]:
     """`user_id`'s self links that exist, as RemoteLinks (the provider lists
     its own rows)."""
     return [
-        RemoteLink(
-            remote_id=row["remote_id"],
-            slug=row["slug"],
-            domain=row["domain"],
-            url=row["url"],
-            destination=row["destination"],
-            active=row["active"],
-            adult=row["adult"],
-            created_at=row["created_at"],
-        )
-        for row in _links().provider_links(user_id, PROVIDER, _LIVE)
+        row.as_remote() for row in _links().provider_links(user_id, PROVIDER, _LIVE)
     ]
 
 
 def _remote_to_id(user_id: int) -> dict[str, int]:
     return {
-        row["remote_id"]: row["id"]
+        row.remote_id: row.id
         for row in _links().provider_links(user_id, PROVIDER, _LIVE)
-        if row["remote_id"]
+        if row.remote_id
     }
 
 
 def daily(
     user_id: int, remote_ids: list[str], start: date, end: date
-) -> dict[str, list[DayStat]]:
+) -> list[LinkDays]:
     ids = _remote_to_id(user_id)
     wanted = {ids[r]: r for r in remote_ids if r in ids}
-    by_link = _self().daily(list(wanted), start, end)
-    return {
-        wanted[link_id]: [DayStat.model_validate(d) for d in days]
-        for link_id, days in by_link.items()
-    }
+    return [
+        LinkDays(remote_id=wanted[found.link_id], days=found.days)
+        for found in _self().daily(list(wanted), start, end)
+    ]
 
 
-def hourly(user_id: int, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+def hourly(user_id: int, remote_ids: list[str], day: date) -> list[LinkHours]:
     ids = _remote_to_id(user_id)
     wanted = {ids[r]: r for r in remote_ids if r in ids}
-    by_link = _self().hourly(list(wanted), day)
-    return {
-        wanted[link_id]: [HourStat.model_validate(h) for h in hours]
-        for link_id, hours in by_link.items()
-    }
+    return [
+        LinkHours(remote_id=wanted[found.link_id], hours=found.hours)
+        for found in _self().hourly(list(wanted), day)
+    ]
 
 
 def live_count(user_id: int) -> int:
@@ -101,7 +93,7 @@ def active_hosts(owner: int | None = None) -> list[str]:
     return _self().active_hosts(owner)
 
 
-def list_domains(owner: int | None = None) -> list[dict]:
+def list_domains(owner: int | None = None) -> list[SelfDomain]:
     return _self().list_domains(owner)
 
 
@@ -127,7 +119,7 @@ def record_click(click: SelfClick) -> None:
 # --- the bridge -------------------------------------------------------------
 
 
-def bridge_target(host: str, slug: str) -> dict | None:
+def bridge_target(host: str, slug: str) -> BridgeTarget | None:
     """The live self link served at `host`/`slug` (id + destination), or None.
     What the public bridge page looks up on every hit."""
     return _links().active_self_link(host, slug)
@@ -137,39 +129,37 @@ def bridge_target(host: str, slug: str) -> dict | None:
 
 
 def domains(owner: int | None = None) -> list[SelfDomain]:
-    return [SelfDomain.model_validate(d) for d in _self().list_domains(owner)]
+    return _self().list_domains(owner)
 
 
 def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
     """Everything the Self links page draws for `owner` over `window`, read
     from the click log so any time frame works. `page` scopes it to one link
     by its slug (the "All pages" picker); None is all of them."""
-    start, end = window.resolved()
+    span = window.resolved()
+    start, end = span.start, span.end
     by_hour = window.by_hour()
     rows = _links().provider_links(owner, PROVIDER, _LIVE)
     if page:
-        rows = [r for r in rows if r["slug"] == page]
-    ids = [r["id"] for r in rows]
+        rows = [r for r in rows if r.slug == page]
+    ids = [r.id for r in rows]
     totals = _self().totals(ids, start, end)
-    per = _self().per_link(ids, start, end)
-    series = [
-        SelfSeriesPoint(**p) for p in _self().series(ids, start, end, by_hour=by_hour)
-    ]
+    per = {c.link_id: c for c in _self().per_link(ids, start, end)}
+    series = _self().series(ids, start, end, by_hour=by_hour)
 
     def rows_of(column: str) -> list[SelfBreakdownRow]:
-        return [
-            SelfBreakdownRow(**r) for r in _self().breakdown(ids, start, end, column)
-        ]
+        return _self().breakdown(ids, start, end, column)
 
     links = sorted(
         (
             SelfLinkStat(
-                id=r["id"],
-                slug=r["slug"],
-                domain=r["domain"],
-                url=r["url"],
-                destination=r["destination"],
-                **per.get(r["id"], {"views": 0, "clicks": 0}),
+                id=r.id,
+                slug=r.slug,
+                domain=r.domain,
+                url=r.url,
+                destination=r.destination,
+                views=per[r.id].views if r.id in per else 0,
+                clicks=per[r.id].clicks if r.id in per else 0,
             )
             for r in rows
         ),
@@ -180,9 +170,9 @@ def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
         start=start,
         end=end,
         by_hour=by_hour,
-        views=totals["views"],
-        clicks=totals["clicks"],
-        visitors=totals["visitors"],
+        views=totals.views,
+        clicks=totals.clicks,
+        visitors=totals.visitors,
         series=series,
         chart=SelfChart.build(series, by_hour=by_hour),
         countries=rows_of("country"),

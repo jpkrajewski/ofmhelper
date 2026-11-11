@@ -12,6 +12,7 @@ from ofmhelpers.media.capcut import (
     SourceInfo,
     apply_preset,
 )
+from ofmhelpers.media.size import Size
 
 PORTRAIT = SourceInfo(duration=9.0, width=720, height=1280, has_audio=True)
 NEUTRAL = Jitter(
@@ -96,7 +97,7 @@ def test_jitter_stays_inside_the_medium_ranges():
 
 def test_landscape_goes_to_3840x2160():
     landscape = PORTRAIT.model_copy(update={"width": 1280, "height": 720})
-    assert landscape.size_4k() == (3840, 2160)
+    assert landscape.size_4k() == Size(width=3840, height=2160)
 
 
 def test_out_of_range_slider_rejected():

@@ -32,6 +32,7 @@ lazy from starlette.requests import Request
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.users import get_user
+from ofmhelpers.features.signin import state as signin_state
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import SessionUser, User
 
@@ -44,7 +45,7 @@ _STAMP = "stamp"
 class AuthMiddleware(BaseHTTPMiddleware):
     # Where a signed-in person lands without a page to return to: the app's
     # home ("/" is the public landing page, never shown to them).
-    HOME = "/home"
+    HOME = signin_state.HOME
 
     async def dispatch(self, request: Request, call_next):
         if self.is_public(request.url.path):

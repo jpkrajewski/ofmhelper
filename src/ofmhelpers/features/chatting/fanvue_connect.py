@@ -33,10 +33,10 @@ def can_connect() -> bool:
 def connect_url() -> str:
     """Where to send the browser. The verifier waits in Redis, under a state only
     this browser's trip carries."""
-    verifier, challenge = oauth.pkce_pair()
+    pkce = oauth.pkce_pair()
     state = secrets.token_urlsafe(32)
-    set_text(_state_key(state), verifier, settings.fanvue.connect_ttl_s)
-    return oauth.authorize_url(_redirect_uri(), state, challenge)
+    set_text(_state_key(state), pkce.verifier, settings.fanvue.connect_ttl_s)
+    return oauth.authorize_url(_redirect_uri(), state, pkce.challenge)
 
 
 def finish(code: str, state: str) -> bool:

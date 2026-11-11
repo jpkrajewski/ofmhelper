@@ -21,9 +21,9 @@ from pydantic import BaseModel
 lazy from yt_dlp.extractor.generic import GenericIE
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 

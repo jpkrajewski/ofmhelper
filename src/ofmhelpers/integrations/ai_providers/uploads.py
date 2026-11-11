@@ -13,11 +13,11 @@ import requests
 
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers.base import upload_lock
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import FITTABLE_SUFFIXES, ImageLimits, fitted
 from ofmhelpers.media.video_mp4 import CONVERTIBLE_SUFFIXES, as_mp4
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 

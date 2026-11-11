@@ -47,7 +47,7 @@ def test_a_preset_is_made_picked_and_run(va: Session, subject_images: list[Path]
     va.page.fill("#api-key", FAKE_KEY)
     with va.page.expect_response(lambda r: r.url.endswith("/pictures/run")) as run:
         va.page.click('#pictures-form button[type="submit"]')
-    assert run.value.status == 200, run.value.text()
+    assert run.value.status == 202, run.value.text()
     [job_id] = run.value.json()["job_ids"]
 
     card = va.page.locator(f'.result-item[data-job-id="{job_id}"]')

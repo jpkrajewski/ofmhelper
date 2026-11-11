@@ -6,9 +6,21 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter, model_serializer
 
-Params = dict[str, Any]
+from ofmhelpers.utils.registry import Registry
+
+
+class AiParams(BaseModel):
+    """An old job's params as /ai stores them: the catalog model, then its
+    fields under the schema's names. `model_dump()` is that one flat dict."""
+
+    model: str
+    values: dict[str, Any]
+
+    @model_serializer
+    def _as_stored(self) -> dict[str, Any]:
+        return {"model": self.model, **self.values}
 
 
 class ModelPick(BaseModel):
@@ -24,7 +36,7 @@ class ModelPick(BaseModel):
     with_references: str
     without_references: str
 
-    def key(self, template: str, params: Params) -> str:
+    def key(self, template: str, params: dict[str, Any]) -> str:
         references = params.get(self.references_field)
         return template.format(
             variant=params.get(self.variant_field, self.default_variant),
@@ -42,13 +54,15 @@ class AsAi(BaseModel):
     renames: dict[str, str] = {}
     pick: ModelPick | None = None
 
-    def translate(self, params: Params) -> Params:
+    def translate(self, params: dict[str, Any]) -> AiParams:
         key = self.pick.key(self.model, params) if self.pick else self.model
         dropped = self.pick.variant_field if self.pick else None
-        return {
-            "model": key,
-            **{self.renames.get(k, k): v for k, v in params.items() if k != dropped},
-        }
+        return AiParams(
+            model=key,
+            values={
+                self.renames.get(k, k): v for k, v in params.items() if k != dropped
+            },
+        )
 
 
 class LegacyTool(BaseModel):
@@ -60,7 +74,8 @@ class LegacyTool(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def legacy_tools() -> dict[str, LegacyTool]:
-    """The table: one dict for the whole process."""
+def legacy_tools() -> Registry[LegacyTool]:
+    """The table, old task name -> tool: one for the whole process."""
     raw = Path(__file__).with_name("legacy_tools.json").read_text(encoding="utf-8")
-    return TypeAdapter(dict[str, LegacyTool]).validate_json(raw)
+    rows = TypeAdapter(dict[str, LegacyTool]).validate_json(raw)
+    return Registry[LegacyTool](entries=rows)

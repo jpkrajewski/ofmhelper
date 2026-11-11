@@ -22,7 +22,7 @@ from ofmhelpers.integrations.gdrive import (
     FolderGoneError,
 )
 from ofmhelpers.integrations.gdrive import client as drive_client
-from ofmhelpers.integrations.gdrive.models import FOLDER_MIME, DriveFile
+from ofmhelpers.integrations.gdrive.models import FOLDER_MIME, DriveFile, DriveThumb
 
 _OK = {"status": "200"}
 
@@ -298,7 +298,9 @@ def test_thumbnail_asks_for_the_size(monkeypatch):
     monkeypatch.setattr(drive_client, "AuthorizedSession", _Session)
     drive, _ = _drive()
     item = _item(thumbnailLink="https://lh3.example/abc=s220")
-    assert drive.thumbnail(item, 400) == (b"jpeg", "image/jpeg")
+    assert drive.thumbnail(item, 400) == DriveThumb(
+        content=b"jpeg", media_type="image/jpeg"
+    )
     assert asked["url"] == "https://lh3.example/abc=s400"
 
 

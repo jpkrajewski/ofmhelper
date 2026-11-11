@@ -15,10 +15,11 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 import pytest
 from fastapi.testclient import TestClient
 
-from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.task_helpers import ASSETS_ROOT, in_asset_root
+from ofmhelpers.web.routers.task_helpers import assets_root, in_asset_root
 
 
 @pytest.fixture
@@ -34,7 +35,7 @@ def _downloaded(tmp_path: Path, name: str) -> str:
     src = tmp_path / "downloads" / name
     src.parent.mkdir(exist_ok=True)
     src.write_bytes(b"\x00\x00\x00\x18ftypmp42" + name.encode())
-    assert not in_asset_root(ASSETS_ROOT, src.resolve())
+    assert not in_asset_root(assets_root(), src.resolve())
     return str(src)
 
 
@@ -70,7 +71,7 @@ def test_send_to_clone_registers_the_videos_and_opens_clone_with_them(client, tm
     # Each handed-over path is now a real file inside the session's store.
     assert len(videos) == 2
     assert all(
-        in_asset_root(ASSETS_ROOT, Path(v)) and Path(v).is_file() for v in videos
+        in_asset_root(assets_root(), Path(v)) and Path(v).is_file() for v in videos
     )
 
     html = client.get(r.json()["redirect"]).text
@@ -88,7 +89,7 @@ def test_send_to_clone_long_opens_with_only_the_first_video(client, tmp_path):
     assert r.status_code == 200
     videos = _redirect_videos(r)
     assert len(videos) == 1
-    assert in_asset_root(ASSETS_ROOT, Path(videos[0]))
+    assert in_asset_root(assets_root(), Path(videos[0]))
 
     html = client.get(r.json()["redirect"]).text
     assert _prefill(html, "clone-long-form", "data-prefill-video") == videos

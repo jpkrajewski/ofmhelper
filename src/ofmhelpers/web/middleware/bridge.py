@@ -207,21 +207,19 @@ class BridgeMiddleware:
         # the event loop or one slow hit stalls every request in the process.
         ua = request.headers.get("user-agent", "")
         link = await run_in_threadpool(self_links.bridge_target, host, slug)
-        if link is None or not _is_http(link["destination"]):
+        if link is None or not _is_http(link.destination):
             response = await run_in_threadpool(
                 render, request, "bridge.html", status_code=404, destination=None
             )
             response.headers.update(_HEADERS)
             return response
         if request.method == "GET" and not _BOT.search(ua) and _allow(request):
-            await run_in_threadpool(
-                _record, _visitor(request, "view", link["id"], None)
-            )
+            await run_in_threadpool(_record, _visitor(request, "view", link.id, None))
         response = await run_in_threadpool(
             render,
             request,
             "bridge.html",
-            destination=link["destination"],
+            destination=link.destination,
             slug=slug,
             blocked=bool(_FB_APP.search(ua)),
         )
@@ -239,6 +237,6 @@ class BridgeMiddleware:
             if link is not None:
                 await run_in_threadpool(
                     _record,
-                    _visitor(request, "click", link["id"], body.get("referrer")),
+                    _visitor(request, "click", link.id, body.get("referrer")),
                 )
         return Response(status_code=204, headers=_HEADERS)

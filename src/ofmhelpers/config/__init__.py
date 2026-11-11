@@ -16,10 +16,13 @@ reads and parses `.env` and validates every field -- /reels built groups
 
 Call-site convention: reference `settings.<group>.<field>` inline inside the
 function that needs it, every time -- never stash it in a module-level or
-long-lived variable. A few modules still capture a value at import (e.g.
-`routers/generation/clone.py` DEFAULT_PROMPT, `routers/task_helpers/uploads.py`
-ASSETS_ROOT) because tests patch those module attributes; they are not a
-pattern to copy.
+long-lived variable: a value kept at import is the environment of that
+moment, whatever it says later. Where a name helps, it is a small accessor
+(`features/assets/store.py` `uploads_root()`, `assets_root()`), and a limit on
+a form field is a validator (`web/forms.py` `at_most`), not `Field(le=...)`.
+`tests/unit/config/test_settings_read_at_call_time.py` fails on a new
+module-level value built from `settings`. The one left: `web/main.py`, whose
+session middleware is built with the app.
 """
 
 import os

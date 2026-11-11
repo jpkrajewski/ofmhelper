@@ -9,7 +9,7 @@ import pytest
 from ofmhelpers.features.reports import clicks, daily
 from ofmhelpers.features.reports.fan_sites import FanStats
 from ofmhelpers.features.reports.format import compact, money, percent, window_title
-from ofmhelpers.features.reports.schedule import Due, due
+from ofmhelpers.features.reports.schedule import Due, Planned, due
 from ofmhelpers.integrations.short_links import DayStat
 from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.schemas.links import ShortLink
@@ -69,26 +69,30 @@ def test_a_day_long_window_is_the_last_24h_and_another_says_where_it_starts():
 
 
 def test_the_first_look_takes_a_baseline_that_still_lets_todays_report_out():
-    assert due(_at(2026, 11, 6, 10, 0), None) == (Due.BASELINE, date(2026, 11, 5))
-    assert due(_at(2026, 11, 6, 15, 0), None) == (Due.BASELINE, date(2026, 11, 6))
+    assert due(_at(2026, 11, 6, 10, 0), None) == Planned(
+        action=Due.BASELINE, day=date(2026, 11, 5)
+    )
+    assert due(_at(2026, 11, 6, 15, 0), None) == Planned(
+        action=Due.BASELINE, day=date(2026, 11, 6)
+    )
 
 
 def test_it_goes_out_at_14_warsaw_once_a_day():
     yesterday = _run(date(2026, 11, 5))
 
-    assert due(_at(2026, 11, 6, 13, 59), yesterday)[0] == Due.NOTHING
-    assert due(_at(2026, 11, 6, 14, 0), yesterday) == (Due.SEND, date(2026, 11, 6))
-    assert due(_at(2026, 11, 6, 20, 0), _run(date(2026, 11, 6)))[0] == Due.NOTHING
+    assert due(_at(2026, 11, 6, 13, 59), yesterday).action == Due.NOTHING
+    assert due(_at(2026, 11, 6, 14, 0), yesterday) == Planned(
+        action=Due.SEND, day=date(2026, 11, 6)
+    )
+    assert due(_at(2026, 11, 6, 20, 0), _run(date(2026, 11, 6))).action == Due.NOTHING
 
 
 def test_a_day_missed_while_down_goes_out_when_back():
-    assert due(_at(2026, 11, 8, 9, 0), _run(date(2026, 11, 5))) == (
-        Due.NOTHING,
-        date(2026, 11, 8),
+    assert due(_at(2026, 11, 8, 9, 0), _run(date(2026, 11, 5))) == Planned(
+        action=Due.NOTHING, day=date(2026, 11, 8)
     )
-    assert due(_at(2026, 11, 8, 16, 30), _run(date(2026, 11, 5))) == (
-        Due.SEND,
-        date(2026, 11, 8),
+    assert due(_at(2026, 11, 8, 16, 30), _run(date(2026, 11, 5))) == Planned(
+        action=Due.SEND, day=date(2026, 11, 8)
     )
 
 
@@ -100,7 +104,7 @@ def test_a_day_missed_while_down_goes_out_when_back():
 def test_summer_time_moves_it_an_hour_in_utc(utc_hour, sent):
     now = datetime(2026, 7, 1, utc_hour, 0, tzinfo=UTC).timestamp()
 
-    assert (due(now, _run(date(2026, 6, 30)))[0] == Due.SEND) is sent
+    assert (due(now, _run(date(2026, 6, 30))).action == Due.SEND) is sent
 
 
 def _link(link_id: int, *days: tuple[date, int, int]) -> ShortLink:
@@ -168,7 +172,7 @@ class _Site:
 
 
 def _rows(monkeypatch, links, sites) -> dict[str, tuple[int | None, int | None]]:
-    monkeypatch.setattr(daily, "fan_sites", lambda *_: {s.platform: s for s in sites})
+    monkeypatch.setattr(daily, "fan_sites", lambda *_: list(sites))
     previous = ReportRun(
         name="daily", day=_NOV5, ran_at=_RAN, sent=True, marks=ReportMarks()
     )

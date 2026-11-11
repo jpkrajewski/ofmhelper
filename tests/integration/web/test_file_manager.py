@@ -21,11 +21,11 @@ from PIL import Image
 from signin import sign_in
 
 from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, fail_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.schemas import UserForm
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.admin import file_manager
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def client():
 def root(monkeypatch, tmp_path):
     found = tmp_path / "kieai_out"
     found.mkdir()
-    monkeypatch.setitem(file_manager.ROOTS, "kieai_out", found)
+    monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(found))
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     return found
 
@@ -170,7 +170,7 @@ def test_a_non_admin_sees_no_file(root):
 @pytest.fixture
 def assets(monkeypatch, tmp_path):
     found = tmp_path / "assets"
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", found)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: found)
     return found
 
 

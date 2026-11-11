@@ -14,12 +14,12 @@ import io
 import pytest
 from PIL import Image
 
+from ofmhelpers.features.assets import store as task_helper_uploads
+from ofmhelpers.features.downloads import clean as clean_image
+from ofmhelpers.features.downloads import images as download_images
+from ofmhelpers.features.downloads import videos as download_reels
 from ofmhelpers.integrations.downloaders.generic import DownloadResult
 from ofmhelpers.web.routers import task_helpers
-from ofmhelpers.web.routers.downloads import clean_image
-from ofmhelpers.web.routers.downloads import images as download_images
-from ofmhelpers.web.routers.downloads import videos as download_reels
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 def _png_bytes() -> bytes:
@@ -32,7 +32,7 @@ def _png_bytes() -> bytes:
 def assets_dir(tmp_path, monkeypatch):
     d = tmp_path / "assets"
     d.mkdir()
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", d)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: d)
     return d
 
 
@@ -52,7 +52,7 @@ def test_downloaded_videos_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
         ],
     )
 
-    download_reels._run_downloads(["https://example.com/x"], str(assets_dir))
+    download_reels.run_downloads(["https://example.com/x"], str(assets_dir))
 
     assert "reel.mp4" in _stored_names(assets_dir)
 
@@ -69,7 +69,7 @@ def test_downloaded_images_land_in_the_asset_store(tmp_path, assets_dir, monkeyp
         ],
     )
 
-    download_images._run_downloads(["https://example.com/y"], str(assets_dir))
+    download_images.run_downloads(["https://example.com/y"], str(assets_dir))
 
     assert "shot.png" in _stored_names(assets_dir)
 
@@ -80,7 +80,7 @@ def test_cleaned_images_land_in_the_asset_store(tmp_path, assets_dir, monkeypatc
     (job_dir / "cleaned.png").write_bytes(_png_bytes())
     monkeypatch.setattr(clean_image, "clean_metadata", lambda d: None)
 
-    result = clean_image._run_clean(str(job_dir), str(assets_dir))
+    result = clean_image.run_clean(str(job_dir), str(assets_dir))
 
     assert [f.name for f in result] == ["cleaned.png"]
     assert "cleaned.png" in _stored_names(assets_dir)

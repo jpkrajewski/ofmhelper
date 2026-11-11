@@ -26,18 +26,24 @@ x-app-environment: &app-environment
   # Inside the uploads mount: the asset store's copy of each result is then
   # a hard link, not a second file (two mounts cannot link: prod
   # 2026-11-11, 17.5 GB of the 72 GB disk was every result twice). The old
-  # ./kieai_out mount stays: earlier jobs name files there, and the logs.
+  # ./kieai_out mount stays: earlier jobs name files there.
   - OFM_KIEAI_OUT_DIR=/app/uploads/kieai_out
-  - OFM_KIEAI_TASK_LOG=/app/kieai_out/tasks.jsonl
-  - OFM_KIEAI_COMPLETIONS_LOG=/app/kieai_out/completions.jsonl
   # Postgres (durable job/application store) and Redis (RQ broker). The code
   # defaults these to the service names, but we set them explicitly so the same
-  # file documents the wiring on any host.
-  - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:ofmhelpers@postgres:5432/ofmhelpers
+  # file documents the wiring on any host. The password: POSTGRES_PASSWORD
+  # from the environment or .env, the same value the postgres service is
+  # given below (the fallback is what every existing volume was made with).
+  - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:${POSTGRES_PASSWORD:-ofmhelpers}@postgres:5432/ofmhelpers
   - OFM_REDIS_URL=redis://redis:6379/0
   # What is running, on every trace (telemetry.py): both deploy paths export
   # the deployed commit; anything else (dev, a manual `up`) says "dev".
   - OFM_RELEASE=${OFM_RELEASE:-dev}
+
+# One image for every app service, named by the commit it was built from: both
+# deploy paths export OFM_RELEASE, tag the build with it and keep the one
+# before (README "Deploying": an earlier commit is deployed from its kept
+# image). Anything else (dev, a manual `up`) builds and runs `:dev`.
+x-app-image: &app-image ofmhelpers-app:${OFM_RELEASE:-dev}
 
 x-app-volumes: &app-volumes
   # No ./src mount here -- production runs the code baked into the image, so a
@@ -51,6 +57,7 @@ x-app-volumes: &app-volumes
 services:
   ofmhelpers:
     build: .
+    image: *app-image
     container_name: ofmhelpers
     restart: unless-stopped
     ports:
@@ -62,10 +69,6 @@ services:
     env_file:
       - .env
     volumes: *app-volumes
-    # A stop waits for the sweeps' threads: the Telegram read (`telegram asks`)
-    # waits up to OFM_TELEGRAM_ASK_WAIT_S (10 s) for a message. Docker's 10 s
-    # default killed the app mid-read about half the time.
-    stop_grace_period: 30s
     depends_on:
       # Never against an un-migrated database: `migrate` must have exited 0.
       migrate:
@@ -94,7 +97,7 @@ services:
   # the API -- a worker crash must not take down the web app, and vice versa.
   worker:
     build: .
-    container_name: ofmhelpers-worker
+    image: *app-image
     restart: unless-stopped
     # Runs RQ via ofmhelpers.worker so the pool starts with the app's logging
     # configured (see ofmhelpers/log.py); it reads OFM_RQ_WORKERS/OFM_REDIS_URL
@@ -142,6 +145,42 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
+  # The background sweeps (features/jobs/sweeps.py: recovery, due rescans,
+  # Drive, chats, the daily report), in a process of their own: exactly one,
+  # however many web processes serve. They ran inside the web process until
+  # 2026-11-11, where a second one would have run every sweep twice. One
+  # Python process, threads only: the work itself goes to the workers.
+  sweeps:
+    build: .
+    image: *app-image
+    restart: unless-stopped
+    command: ["python", "-m", "ofmhelpers.sweeps"]
+    # A stop waits for the sweeps' threads: the Telegram read (`telegram asks`)
+    # waits up to OFM_TELEGRAM_ASK_WAIT_S (10 s) for a message. Docker's 10 s
+    # default killed it mid-read about half the time.
+    stop_grace_period: 30s
+    healthcheck:
+      disable: true
+    environment: *app-environment
+    env_file:
+      - .env
+    volumes: *app-volumes
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
   # Local encodes of big videos (`QueueName.MEDIA`: /trials copies). One
   # process, so one encode at a time, first in first out, however many wait: a
   # 4K copy holds 1.5 GB, and six at once on prod's 7.75 GB had the kernel
@@ -149,7 +188,7 @@ services:
   # cores: the site stays quick.
   media-worker:
     build: .
-    container_name: ofmhelpers-media-worker
+    image: *app-image
     restart: unless-stopped
     command: ["python", "-m", "ofmhelpers.worker", "media"]
     cpus: 3.0
@@ -182,7 +221,7 @@ services:
   # 3 CPUs: a 14 s 1440p 60 fps cut takes 15 s at 1.5, 7 s at 3 (2026-11-06).
   edit-worker:
     build: .
-    container_name: ofmhelpers-edit-worker
+    image: *app-image
     restart: unless-stopped
     command: ["python", "-m", "ofmhelpers.worker", "edit"]
     cpus: 3.0
@@ -215,10 +254,12 @@ services:
   # result after a deploy) never slows the app or the generation workers.
   preview-worker:
     build: .
-    container_name: ofmhelpers-preview-worker
+    image: *app-image
     restart: unless-stopped
     command: ["python", "-m", "ofmhelpers.worker", "previews"]
     cpus: 2.0
+    # As the other workers: the encode it runs finishes on `compose stop`.
+    stop_grace_period: 120s
     healthcheck:
       disable: true
     environment: *app-environment
@@ -247,6 +288,7 @@ services:
   # code on an old schema (or any code on a half-migrated one).
   migrate:
     build: .
+    image: *app-image
     container_name: ofmhelpers-migrate
     restart: "no"
     command: ["alembic", "upgrade", "head"]
@@ -275,7 +317,9 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=ofmhelpers
-      - POSTGRES_PASSWORD=ofmhelpers
+      # Only read when the volume is first made: on a server that already has
+      # one, setting POSTGRES_PASSWORD also needs an ALTER USER (README).
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ofmhelpers}
       - POSTGRES_DB=ofmhelpers
     # No published port in production: nothing off the compose network needs to
     # reach the database, and `docker compose exec postgres psql -U ofmhelpers`
@@ -316,7 +360,10 @@ services:
     # Same reason postgres above keeps default caps.
 
   pot-provider:
-    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    # The digest prod ran on 2026-11-11, so dev and a rebuilt server run the
+    # same build (`:latest` alone moved under us). The tag is kept for
+    # Renovate, which proposes the next digest (renovate.json "downloaders").
+    image: brainicism/bgutil-ytdlp-pot-provider:latest@sha256:ed86b6fdd5e430ddd7c8ce1adb55e1ab54db7c7dbc1bcbf3a82454a85b971164
     container_name: bgutil-pot-provider
     restart: unless-stopped
     expose:

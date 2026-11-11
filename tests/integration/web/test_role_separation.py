@@ -16,9 +16,9 @@ from PIL import Image
 from signin import ADMIN_EMAIL, USER_EMAIL, sign_in
 
 from ofmhelpers.db.stores import users
+from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.task_helpers import uploads as task_helper_uploads
 
 
 def _login(password: str) -> TestClient:
@@ -47,7 +47,7 @@ def va():
 
 @pytest.fixture
 def assets_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(task_helper_uploads, "ASSETS_ROOT", tmp_path)
+    monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path)
     return tmp_path
 
 

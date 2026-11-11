@@ -27,7 +27,8 @@ from pydantic import BaseModel, Field
 lazy import requests
 
 from ofmhelpers.config import settings
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
+from ofmhelpers.utils.registry import Registry
 
 OOPSIE_FAKE_KEY = "gmp_live_fake"
 BOUNCY_FAKE_KEY = "bcy_live_pk_fake"
@@ -51,6 +52,38 @@ def _days(start: str, end: str) -> list[date]:
     return [first + timedelta(d) for d in range((last - first).days + 1)]
 
 
+class Traffic(BaseModel, frozen=True):
+    """Landing views and clicks through of one day or hour."""
+
+    views: int = 0
+    clicks: int = 0
+
+
+class OopsiePage(BaseModel, extra="allow"):
+    """A page as Oopsie's API returns it (a PATCH may add more fields)."""
+
+    id: str
+    slug: str
+    display_name: str
+    links: list[Any]
+    is_active: bool
+    created_at: str
+    theme: dict[str, Any]
+
+
+class BouncyLink(BaseModel):
+    """A deeplink as Bouncy's API returns it."""
+
+    id: str
+    slug: str
+    domain: str
+    destination: str
+    url: str
+    is_active: bool = Field(alias="isActive")
+    type: str
+    created_at: dict[str, int] = Field(alias="createdAt")
+
+
 class FakeAccount(BaseModel):
     """One provider account: its links by id, quota, forced 18+ gates
     (Bouncy), and traffic by "id|YYYY-MM-DD" -> [views, clicks]."""
@@ -65,18 +98,18 @@ class FakeAccount(BaseModel):
     hours: dict[str, list[int]] = Field(default_factory=dict)
     calls: list[str] = Field(default_factory=list)
 
-    def numbers(self, link_id: str, day: date) -> tuple[int, int]:
+    def numbers(self, link_id: str, day: date) -> Traffic:
         views, clicks = self.traffic.get(f"{link_id}|{day.isoformat()}", [0, 0])
-        return views, clicks
+        return Traffic(views=views, clicks=clicks)
 
-    def hour_numbers(self, link_id: str, day: date, hour: int) -> tuple[int, int]:
+    def hour_numbers(self, link_id: str, day: date, hour: int) -> Traffic:
         """That hour's numbers; a day seeded only as a whole sits in its first
         hour (so a day's hours add up to it)."""
         set_hours = [k for k in self.hours if k.startswith(f"{link_id}|{day}T")]
         if set_hours:
             views, clicks = self.hours.get(f"{link_id}|{day}T{hour:02}", [0, 0])
-            return views, clicks
-        return self.numbers(link_id, day) if hour == 0 else (0, 0)
+            return Traffic(views=views, clicks=clicks)
+        return self.numbers(link_id, day) if hour == 0 else Traffic()
 
 
 class _Fake:
@@ -158,8 +191,13 @@ class FakeOopsie(_Fake):
     default_limit = 50
 
     @property
-    def pages(self) -> dict[str, dict[str, Any]]:
-        return self._links()
+    def pages(self) -> Registry[OopsiePage]:
+        return Registry[OopsiePage](
+            entries={
+                slug: OopsiePage.model_validate(page)
+                for slug, page in self._links().items()
+            }
+        )
 
     @staticmethod
     def _ok(data: Any, status: int = 200) -> FakeReply:
@@ -250,8 +288,12 @@ class FakeOopsie(_Fake):
             series = [
                 {
                     "slug": slug,
-                    "views": [state.hour_numbers(slug, day, h)[0] for h in range(24)],
-                    "clicks": [state.hour_numbers(slug, day, h)[1] for h in range(24)],
+                    "views": [
+                        state.hour_numbers(slug, day, h).views for h in range(24)
+                    ],
+                    "clicks": [
+                        state.hour_numbers(slug, day, h).clicks for h in range(24)
+                    ],
                 }
                 for slug in slugs
             ]
@@ -261,8 +303,8 @@ class FakeOopsie(_Fake):
             series = [
                 {
                     "slug": slug,
-                    "views": [state.numbers(slug, d)[0] for d in days],
-                    "clicks": [state.numbers(slug, d)[1] for d in days],
+                    "views": [state.numbers(slug, d).views for d in days],
+                    "clicks": [state.numbers(slug, d).clicks for d in days],
                 }
                 for slug in slugs
             ]
@@ -282,8 +324,13 @@ class FakeBouncy(_Fake):
     default_active_limit = 5
 
     @property
-    def links(self) -> dict[str, dict[str, Any]]:
-        return self._links()
+    def links(self) -> Registry[BouncyLink]:
+        return Registry[BouncyLink](
+            entries={
+                link_id: BouncyLink.model_validate(link)
+                for link_id, link in self._links().items()
+            }
+        )
 
     @property
     def adult(self) -> set[str]:
@@ -423,17 +470,17 @@ class FakeBouncy(_Fake):
         if len(days) == 1:  # one day: by the hour, "YYYY-MM-DD HH"
             [day] = days
             buckets = [
-                {"date": f"{day} {h:02}", "views": views, "clicks": clicks}
+                {"date": f"{day} {h:02}", "views": n.views, "clicks": n.clicks}
                 for h in range(24)
-                for views, clicks in [state.hour_numbers(link_id, day, h)]
-                if views or clicks
+                for n in [state.hour_numbers(link_id, day, h)]
+                if n.views or n.clicks
             ]
             return FakeReply.json_body({"id": link_id, "dailyViews": buckets})
         daily = [
-            {"date": d.isoformat(), "views": views, "clicks": clicks}
+            {"date": d.isoformat(), "views": n.views, "clicks": n.clicks}
             for d in days
-            for views, clicks in [state.numbers(link_id, d)]
-            if views or clicks
+            for n in [state.numbers(link_id, d)]
+            if n.views or n.clicks
         ]
         return FakeReply.json_body({"id": link_id, "dailyViews": daily})
 
@@ -456,11 +503,14 @@ def fake_bouncy() -> FakeBouncy:
     return _fake_bouncy(settings.infra.fakes_dir)
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def oopsie(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_oopsie().handle(request)
 
     def bouncy(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_bouncy().handle(request)
 
-    return {"oopsie.bio": oopsie, "api.bouncy.ai": bouncy}
+    return [
+        FakeRoute(host="oopsie.bio", handler=oopsie),
+        FakeRoute(host="api.bouncy.ai", handler=bouncy),
+    ]

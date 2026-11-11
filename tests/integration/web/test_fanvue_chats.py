@@ -32,8 +32,8 @@ from ofmhelpers.features.chatting.webhooks import (
 )
 from ofmhelpers.integrations.fanvue import fake as fanvue_fake
 from ofmhelpers.integrations.fanvue.errors import FanvueAuthError, FanvueError
+from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.schemas.chatting import ChatPlatform
-from ofmhelpers.utils.outbound import FakeReply
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.usefixtures("fake_externals")

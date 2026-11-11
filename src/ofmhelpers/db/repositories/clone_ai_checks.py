@@ -9,31 +9,34 @@ from sqlalchemy import select
 from ofmhelpers.db.models import CloneAiCheckRow
 from ofmhelpers.db.repositories.cached_repository import CachedRepository
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.clone_ai_checks import StoredCloneAiCheck
 
 _COLUMNS = [c.name for c in CloneAiCheckRow.__table__.columns]
 
 
-def _to_dict(row: CloneAiCheckRow) -> dict[str, Any]:
-    return {name: getattr(row, name) for name in _COLUMNS}
+def _check(row: CloneAiCheckRow) -> StoredCloneAiCheck:
+    return StoredCloneAiCheck.model_validate(
+        {name: getattr(row, name) for name in _COLUMNS}
+    )
 
 
 class CloneAiCheckRepository(CachedRepository):
     cache_namespace = "clone_ai_check"
 
-    def add(self, values: dict[str, Any]) -> dict[str, Any]:
+    def add(self, values: dict[str, Any]) -> StoredCloneAiCheck:
         """The new row, stamped now."""
         with session_scope() as s:
             row = CloneAiCheckRow(**values, created_at=time.time())
             s.add(row)
             s.flush()
-            return _to_dict(row)
+            return _check(row)
 
-    def get(self, check_id: int) -> dict[str, Any] | None:
+    def get(self, check_id: int) -> StoredCloneAiCheck | None:
         with session_scope() as s:
             row = s.get(CloneAiCheckRow, check_id)
-            return _to_dict(row) if row else None
+            return _check(row) if row else None
 
-    def for_jobs(self, job_ids: list[str]) -> list[dict[str, Any]]:
+    def for_jobs(self, job_ids: list[str]) -> list[StoredCloneAiCheck]:
         """Every check of these jobs' results, oldest first."""
         if not job_ids:
             return []
@@ -43,4 +46,4 @@ class CloneAiCheckRepository(CachedRepository):
                 .where(CloneAiCheckRow.job_id.in_(job_ids))
                 .order_by(CloneAiCheckRow.id)
             ).scalars()
-            return [_to_dict(r) for r in rows]
+            return [_check(r) for r in rows]

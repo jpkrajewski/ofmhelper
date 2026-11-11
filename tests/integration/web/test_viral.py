@@ -38,7 +38,7 @@ TOP_PLAYS = [3_000_000, 1_500_000, 900_000]
 
 @pytest.fixture
 def client(fake_externals, tmp_path, monkeypatch):
-    monkeypatch.setattr(viral, "UPLOADS_ROOT", tmp_path / "uploads")
+    monkeypatch.setattr(viral, "uploads_root", lambda: tmp_path / "uploads")
     monkeypatch.setenv("APIFY_API_KEYS", "fake-apify-key")
     monkeypatch.setenv("OFM_VIRAL_TOP", "3")
     c = TestClient(app)
@@ -48,7 +48,7 @@ def client(fake_externals, tmp_path, monkeypatch):
 
 def _search(client: TestClient, profile: str = PROFILE):
     r = client.post("/viral/run", data={"profile": profile})
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     job = get_job(r.json()["job_id"])
     assert job is not None
     return job

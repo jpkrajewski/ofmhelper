@@ -90,7 +90,7 @@
         <tbody>
             {% for a in page.rows %}
             {% set views = a.views(period.days) %}
-            {% set on_phones = phones.get(a.id, []) %}
+            {% set on_phones = phones.of(a.id) %}
             {% set own_links = links.get(a.id, []) %}
             {% set problem = a.error or ("Private account" if a.status == "private" else "") %}
             {% set syncing = a.syncing or a.status == "scanning" %}

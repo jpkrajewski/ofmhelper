@@ -60,7 +60,7 @@ def test_a_clone_runs_end_to_end_and_saves_its_video(provider, image, video):
             "duration": 5,
         },
         provider.upload,
-    )
+    ).model_dump()
 
     [saved] = runner.generate(provider, spec, body, "elyum-job-1")
 
@@ -92,12 +92,11 @@ def test_a_clone_run_is_valid_for_wan_3_on_elyum():
         audio=True,
         images=["/s.png", "/t.png"],
         video="/v.mp4",
-    )
+    ).model_dump()
 
     target.spec.check(values)
-    body = wire_body(
-        target.spec, target.spec.request(values, lambda p: f"https://u/{p.name}")
-    )
+    sent = target.spec.request(values, lambda p: f"https://u/{p.name}").model_dump()
+    body = wire_body(target.spec, sent).model_dump()
 
     assert "aspect_ratio" not in body
     assert (body["resolution"], body["duration"], body["audio"]) == ("720p", 12, True)

@@ -2,7 +2,7 @@
 ofmhelpers/web/link_sync.py
 
 /links' background work, all on the worker, each on the link owner's own
-key (stores.short_links.client):
+key (features/links/keys.py `client`):
 
 - `sync_links`: what a provider lists for a user, and every link's daily
   views and clicks of the longest period; a sweep queues one per (user,
@@ -25,6 +25,7 @@ from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import short_links as store
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
+from ofmhelpers.features.links import keys
 from ofmhelpers.integrations.short_links import (
     AuthError,
     LinkError,
@@ -37,7 +38,7 @@ from ofmhelpers.integrations.short_links import (
 )
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.links import utc_today
+from ofmhelpers.schemas.links import LinkSyncKey, utc_today
 lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
 lazy from ofmhelpers.schemas import ShortLink
 
@@ -69,7 +70,7 @@ def sync_links(user_id: int, provider: str) -> None:
     """The worker job: one user's links on one provider and their numbers,
     then the 18+ gate on wherever it is missing. A failure is recorded on
     the sync (shown on /links), never raised."""
-    found = store.client(user_id, provider)
+    found = keys.client(user_id, provider)
     if found is None:
         store.finish_sync(user_id, provider, None, "No API key")
         return
@@ -141,7 +142,7 @@ def create_links(user_id: int, provider: str, link_ids: list[int]) -> None:
     the reason; one that stops every next call stops the batch; anything
     unexpected fails that one link, never the rest."""
     links = [x for x in store.get_links(link_ids, user_id) if x.status == "creating"]
-    found = store.client(user_id, provider)
+    found = keys.client(user_id, provider)
     if found is None:
         store.failed([x.id for x in links], "No API key: add one on /account")
         return
@@ -177,7 +178,7 @@ def _clients(user_id: int) -> Callable[[str], LinkProvider | None]:
 
     def client(provider: str) -> LinkProvider | None:
         if provider not in made:
-            made[provider] = store.client(user_id, provider)
+            made[provider] = keys.client(user_id, provider)
         return made[provider]
 
     return client
@@ -224,26 +225,28 @@ def delete_links(user_id: int, link_ids: list[int]) -> None:
         sync_now(user_id)
 
 
-def _queue(pairs: list[tuple[int, str]]) -> list[tuple[int, str]]:
-    due = store.claim_due(pairs)
-    for user_id, provider in due:
-        enqueue(sync_links, user_id, provider)
+def _queue(wanted: list[LinkSyncKey]) -> list[LinkSyncKey]:
+    due = store.claim_due(wanted)
+    for key in due:
+        enqueue(sync_links, key.user_id, key.provider)
     if due:
         logger.info("syncing links of %d (user, provider) pair(s)", len(due))
     return due
 
 
-def queue_due_syncs() -> list[tuple[int, str]]:
-    return _queue(store.keyed())
+def queue_due_syncs() -> list[LinkSyncKey]:
+    return _queue(
+        [LinkSyncKey(user_id=k.user_id, provider=k.provider) for k in keys.keyed()]
+    )
 
 
-def sync_now(user_id: int, provider: str | None = None) -> list[tuple[int, str]]:
+def sync_now(user_id: int, provider: str | None = None) -> list[LinkSyncKey]:
     """`user_id`'s links (on `provider`, else all) synced at once."""
     store.mark_due(user_id, provider)
     return _queue(
         [
-            (user_id, key)
-            for key in link_providers()
-            if (provider is None or key == provider) and store.api_key(user_id, key)
+            LinkSyncKey(user_id=user_id, provider=key)
+            for key in link_providers().names()
+            if (provider is None or key == provider) and keys.api_key(user_id, key)
         ]
     )

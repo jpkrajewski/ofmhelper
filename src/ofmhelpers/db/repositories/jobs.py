@@ -25,27 +25,30 @@ from ofmhelpers.db.repositories.cached_repository import (
     invalidates_cache,
 )
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.persistence import Job, JobCount, JobPage, JobParams
 
 # Sentinel so update_status can tell "leave this column alone" apart from
 # "set it to None" (a failed job explicitly clears result, etc.).
 _UNSET = sentinel("_UNSET")
 
 
-def _job_to_dict(row: JobRow) -> dict:
-    return {
-        "id": row.id,
-        "task": row.task,
-        "params": row.params or {},
-        "actor": row.actor,
-        "status": row.status,
-        "result": row.result,
-        "error": row.error,
-        "created_at": row.created_at,
-        "finished_at": row.finished_at,
-        "preview": row.preview,
-        "hidden_at": row.hidden_at,
-        "meta": row.meta or {},
-    }
+def _job(row: JobRow) -> Job:
+    return Job.model_validate(
+        {
+            "id": row.id,
+            "task": row.task,
+            "params": row.params or {},
+            "actor": row.actor,
+            "status": row.status,
+            "result": row.result,
+            "error": row.error,
+            "created_at": row.created_at,
+            "finished_at": row.finished_at,
+            "preview": row.preview,
+            "hidden_at": row.hidden_at,
+            "meta": row.meta or {},
+        }
+    )
 
 
 class JobRepository(CachedRepository):
@@ -105,10 +108,10 @@ class JobRepository(CachedRepository):
             session.execute(delete(JobRow).where(JobRow.id.in_(stale_ids)))
 
     @cached
-    def get(self, job_id: str) -> dict | None:
+    def get(self, job_id: str) -> Job | None:
         with session_scope() as s:
             row = s.get(JobRow, job_id)
-            return _job_to_dict(row) if row is not None else None
+            return _job(row) if row is not None else None
 
     @invalidates_cache
     def update_status(
@@ -160,7 +163,7 @@ class JobRepository(CachedRepository):
         with session_scope() as s:
             s.execute(delete(JobRow).where(JobRow.id == job_id))
 
-    def list_running(self) -> list[dict]:
+    def list_running(self) -> list[Job]:
         """Jobs still marked running, oldest first. Uncached: recovery
         decides from it which were cut off."""
         with session_scope() as s:
@@ -173,7 +176,7 @@ class JobRepository(CachedRepository):
                 .scalars()
                 .all()
             )
-            return [_job_to_dict(r) for r in rows]
+            return [_job(r) for r in rows]
 
     def files_naming(self, fragment: str) -> list[Any]:
         """The params and result of every job (any status) whose params or
@@ -190,7 +193,7 @@ class JobRepository(CachedRepository):
             ).all()
             return [value for row in rows for value in row if value]
 
-    def params_naming(self, fragment: str, while_running: set[str]) -> list[dict]:
+    def params_naming(self, fragment: str, while_running: set[str]) -> list[JobParams]:
         """The params of every job whose params hold `fragment` anywhere:
         whatever its status, but a job of `while_running` only while it is
         running (or queued). Uncached: the /edit sweep keeps the files they
@@ -209,10 +212,10 @@ class JobRepository(CachedRepository):
                 .scalars()
                 .all()
             )
-            return [params or {} for params in rows]
+            return [JobParams(params=params or {}) for params in rows]
 
     @cached
-    def list_all(self) -> list[dict]:
+    def list_all(self) -> list[Job]:
         """Newest first."""
         with session_scope() as s:
             rows = (
@@ -220,11 +223,11 @@ class JobRepository(CachedRepository):
                 .scalars()
                 .all()
             )
-            return [_job_to_dict(r) for r in rows]
+            return [_job(r) for r in rows]
 
     @cached
-    def counts(self, tasks: tuple[str, ...]) -> dict[str, dict[str, int]]:
-        """actor -> task -> how many done jobs, for `tasks` (sorted tuple:
+    def counts(self, tasks: tuple[str, ...]) -> list[JobCount]:
+        """How many done jobs each actor has of each of `tasks` (sorted tuple:
         stable cache key). The admin file manager's per-user totals."""
         with session_scope() as s:
             rows = s.execute(
@@ -236,10 +239,7 @@ class JobRepository(CachedRepository):
                 )
                 .group_by(JobRow.actor, JobRow.task)
             ).all()
-        found: dict[str, dict[str, int]] = {}
-        for actor, task, n in rows:
-            found.setdefault(actor, {})[task] = n
-        return found
+        return [JobCount(actor=actor, task=task, count=n) for actor, task, n in rows]
 
     @cached
     def list_page(
@@ -250,7 +250,7 @@ class JobRepository(CachedRepository):
         limit: int,
         status: str | None = None,
         hidden: bool | None = None,
-    ) -> dict:
+    ) -> JobPage:
         """One page of the jobs whose task is in `tasks` (and that `actor` ran,
         unless None), newest first, plus how many match in total. Filtered and
         sliced in SQL: a gallery page loads its 20 rows, not the history.
@@ -279,13 +279,10 @@ class JobRepository(CachedRepository):
                 .all()
             )
             total = s.execute(select(func.count()).select_from(JobRow).where(*where))
-            return {
-                "jobs": [_job_to_dict(r) for r in rows],
-                "total": total.scalar_one(),
-            }
+            return JobPage(jobs=[_job(r) for r in rows], total=total.scalar_one())
 
     @cached
-    def list_batch(self, task: str, actor: str, batch: str) -> list[dict]:
+    def list_batch(self, task: str, actor: str, batch: str) -> list[Job]:
         """`actor`'s jobs of `task` queued by one submit (params `batch`),
         oldest first: the order they were pasted in."""
         with session_scope() as s:
@@ -302,7 +299,7 @@ class JobRepository(CachedRepository):
                 .scalars()
                 .all()
             )
-            return [_job_to_dict(r) for r in rows]
+            return [_job(r) for r in rows]
 
     @invalidates_cache
     def merge_params(self, job_id: str, values: dict[str, Any]) -> None:

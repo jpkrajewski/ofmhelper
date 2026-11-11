@@ -21,8 +21,8 @@ lazy from collections.abc import Mapping
 from pydantic import BaseModel
 lazy import requests
 
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
 
 HOST = "api.telegram.org"
 TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"  # noqa: S105 -- a fake's
@@ -180,8 +180,8 @@ def fake_telegram() -> FakeTelegram:
     return FakeTelegram()
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def telegram(request: requests.PreparedRequest, _: Mapping[str, str]) -> FakeReply:
         return fake_telegram().handle(request)
 
-    return {HOST: telegram}
+    return [FakeRoute(host=HOST, handler=telegram)]

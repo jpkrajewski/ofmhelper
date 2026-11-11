@@ -3,6 +3,7 @@ request sends, how each answer maps to a state or an error, and the exact
 body each catalog model produces."""
 
 import json
+import logging
 
 import pytest
 from kie_http_fake import kie_http, response
@@ -15,6 +16,7 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
+from ofmhelpers.integrations.ai_providers.kie import client as client_module
 from ofmhelpers.integrations.ai_providers.kie.client import KieAIClient, _session
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 
@@ -22,8 +24,6 @@ from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 @pytest.fixture
 def provider(tmp_path, monkeypatch):
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
-    monkeypatch.setenv("OFM_KIEAI_TASK_LOG", str(tmp_path / "tasks.jsonl"))
-    monkeypatch.setenv("OFM_KIEAI_COMPLETIONS_LOG", str(tmp_path / "done.jsonl"))
     return KieProvider("kie-key")
 
 
@@ -31,9 +31,14 @@ def _record(state, **extra):
     return response({"code": 200, "data": {"taskId": "t1", "state": state, **extra}})
 
 
-def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path):
+def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path, caplog):
+    """The paid request's audit line is a log event (stdout, Logfire), not a
+    file the app appends to for ever (tasks.jsonl until 2026-11-11)."""
     spec = get_spec("kie:wan/3-0-video")
-    with kie_http() as http:
+    with (
+        caplog.at_level(logging.INFO, logger=client_module.__name__),
+        kie_http() as http,
+    ):
         http.request.return_value = response({"code": 200, "data": {"taskId": "t1"}})
         task_id = provider.submit(spec, {"prompt": "p"}, idempotency_key="job1")
 
@@ -47,8 +52,10 @@ def test_submit_sends_model_and_input_and_logs_the_task(provider, tmp_path):
     assert http.request.call_args.kwargs["headers"] == {
         "Authorization": "Bearer kie-key"
     }
-    logged = json.loads((tmp_path / "tasks.jsonl").read_text())
-    assert (logged["taskId"], logged["jobId"]) == ("t1", "job1")
+    assert "kie.ai task created: taskId=t1 model=wan/3-0-video jobId=job1" in (
+        caplog.text
+    )
+    assert list(tmp_path.rglob("*.jsonl")) == []
 
 
 @pytest.mark.parametrize(
@@ -111,8 +118,6 @@ def test_the_upload_cache_key_never_carries_the_api_key(tmp_path):
     client = KieAIClient(
         api_key=api_key,
         out_dir=tmp_path / "out",
-        task_log=tmp_path / "t.jsonl",
-        completions_log=tmp_path / "c.jsonl",
     )
     path = "/app/uploads/assets/users/7/ab__x.mp4"
 
@@ -124,8 +129,6 @@ def test_the_upload_cache_key_never_carries_the_api_key(tmp_path):
     other = KieAIClient(
         api_key="another-key",
         out_dir=tmp_path / "out",
-        task_log=tmp_path / "t.jsonl",
-        completions_log=tmp_path / "c.jsonl",
     )
     assert other._upload_cache_key(path) != key, "uploads are per account"
 
@@ -158,8 +161,13 @@ def test_create_task_is_never_retried_by_the_transport():
     assert "GET" in retry.allowed_methods
 
 
-def test_status_success_returns_the_result_urls_and_logs_credits(provider, tmp_path):
-    with kie_http() as http:
+def test_status_success_returns_the_result_urls_and_logs_credits(
+    provider, tmp_path, caplog
+):
+    with (
+        caplog.at_level(logging.INFO, logger=client_module.__name__),
+        kie_http() as http,
+    ):
         http.request.return_value = _record(
             "success",
             resultJson=json.dumps({"resultUrls": ["https://cdn/v.mp4"]}),
@@ -168,7 +176,8 @@ def test_status_success_returns_the_result_urls_and_logs_credits(provider, tmp_p
         state = provider.status("t1")
 
     assert (state.state, state.urls) == ("done", ["https://cdn/v.mp4"])
-    assert json.loads((tmp_path / "done.jsonl").read_text())["credits"] == 12.5
+    assert "kie.ai task completed: taskId=t1 credits=12.5" in caplog.text
+    assert list(tmp_path.rglob("*.jsonl")) == []
 
 
 def test_status_fail_carries_kies_reason(provider):
@@ -269,7 +278,7 @@ def test_catalog_models_build_kies_body(key, values, body):
     spec = get_spec(key)
     spec.check(values)
 
-    assert spec.request(values, lambda p: f"https://up/{p.name}") == body
+    assert spec.request(values, lambda p: f"https://up/{p.name}").model_dump() == body
 
 
 @pytest.mark.parametrize(
@@ -327,7 +336,7 @@ def test_every_kie_model_submits_its_catalog_body(provider, spec):
     form's own field names never inside the input."""
     values = _minimal(spec)
     spec.check(values)
-    body = spec.request(values, lambda p: f"https://up/{p.name}")
+    body = spec.request(values, lambda p: f"https://up/{p.name}").model_dump()
 
     for name, field in {f.name: f for f in spec.media_fields}.items():
         if name in body:
@@ -370,7 +379,7 @@ def test_generated_models_build_kies_body(key, values, body):
     spec = get_spec(key)
     spec.check(values)
 
-    assert spec.request(values, lambda p: f"https://up/{p.name}") == body
+    assert spec.request(values, lambda p: f"https://up/{p.name}").model_dump() == body
 
 
 def test_input_variants_are_one_form_validated_per_variant():

@@ -7,7 +7,6 @@ claim left it (`started_at` equal), so a run whose row was restarted or
 taken over meanwhile writes nothing."""
 
 import time
-from typing import Any
 
 from sqlalchemy import (
     ColumnElement,
@@ -25,13 +24,15 @@ from sqlalchemy.dialects.postgresql import insert
 from ofmhelpers.db.models import CloneFromLinkRow, JobRow
 from ofmhelpers.db.repositories.cached_repository import CachedRepository
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
+from ofmhelpers.schemas.persistence import Job
 
 _COLUMNS = [c.name for c in CloneFromLinkRow.__table__.columns]
 _RUNNING = ("checking", "uploading")
 
 
-def _to_dict(row: CloneFromLinkRow) -> dict[str, Any]:
-    return {name: getattr(row, name) for name in _COLUMNS}
+def _review(row: CloneFromLinkRow) -> CloneFromLink:
+    return CloneFromLink.model_validate({name: getattr(row, name) for name in _COLUMNS})
 
 
 def _held(claimed: float | None) -> ColumnElement[bool]:
@@ -98,12 +99,12 @@ class CloneFromLinkRepository(CachedRepository):
             )
             return found.scalar_one_or_none()
 
-    def get(self, review_id: int) -> dict[str, Any] | None:
+    def get(self, review_id: int) -> CloneFromLink | None:
         with session_scope() as s:
             row = s.get(CloneFromLinkRow, review_id)
-            return _to_dict(row) if row else None
+            return _review(row) if row else None
 
-    def claim(self, review_id: int) -> dict[str, Any] | None:
+    def claim(self, review_id: int) -> CloneFromLink | None:
         """The row, claimed for this worker (`started_at` now, one more
         attempt); None when it is not running or another worker holds it
         (a second queued job for the same review)."""
@@ -120,11 +121,11 @@ class CloneFromLinkRepository(CachedRepository):
                 .returning(*CloneFromLinkRow.__table__.columns)
             )
             claimed = found.mappings().one_or_none()
-            return dict(claimed) if claimed else None
+            return CloneFromLink.model_validate(dict(claimed)) if claimed else None
 
     def for_jobs(
         self, job_ids: list[str], user_id: int | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[CloneFromLink]:
         """Every review of these jobs' results (only `user_id`'s when
         given), by job then file."""
         if not job_ids:
@@ -136,7 +137,7 @@ class CloneFromLinkRepository(CachedRepository):
             rows = s.execute(
                 query.order_by(CloneFromLinkRow.job_id, CloneFromLinkRow.file_index)
             ).scalars()
-            return [_to_dict(r) for r in rows]
+            return [_review(r) for r in rows]
 
     def checked(
         self,
@@ -181,7 +182,7 @@ class CloneFromLinkRepository(CachedRepository):
 
     # --- recovery (features/clone_links/review.py resume_reviews) ----------------
 
-    def cut_off(self, stale_before: float) -> list[dict[str, Any]]:
+    def cut_off(self, stale_before: float) -> list[CloneFromLink]:
         """Running rows a worker claimed before `stale_before`."""
         row = CloneFromLinkRow
         with session_scope() as s:
@@ -190,9 +191,9 @@ class CloneFromLinkRepository(CachedRepository):
                 .where(row.status.in_(_RUNNING), row.started_at < stale_before)
                 .order_by(row.id)
             ).scalars()
-            return [_to_dict(r) for r in rows]
+            return [_review(r) for r in rows]
 
-    def never_claimed(self, created_before: float) -> list[dict[str, Any]]:
+    def never_claimed(self, created_before: float) -> list[CloneFromLink]:
         """Running rows no worker has claimed, made before `created_before`."""
         row = CloneFromLinkRow
         with session_scope() as s:
@@ -205,7 +206,7 @@ class CloneFromLinkRepository(CachedRepository):
                 )
                 .order_by(row.id)
             ).scalars()
-            return [_to_dict(r) for r in rows]
+            return [_review(r) for r in rows]
 
     def release(self, review_id: int, claimed: float | None) -> bool:
         """The claim made at `claimed` dropped (its worker is gone): the row
@@ -217,7 +218,7 @@ class CloneFromLinkRepository(CachedRepository):
             .values(started_at=None)
         )
 
-    def failed_since(self, since: float) -> list[dict[str, Any]]:
+    def failed_since(self, since: float) -> list[CloneFromLink]:
         """Failed rows with nothing in Drive, finished after `since`."""
         row = CloneFromLinkRow
         with session_scope() as s:
@@ -230,7 +231,7 @@ class CloneFromLinkRepository(CachedRepository):
                 )
                 .order_by(row.id)
             ).scalars()
-            return [_to_dict(r) for r in rows]
+            return [_review(r) for r in rows]
 
     def reopen(self, review_id: int, finished_at: float | None) -> bool:
         """A failed row (as it finished at `finished_at`) running again:
@@ -254,7 +255,7 @@ class CloneFromLinkRepository(CachedRepository):
             )
         )
 
-    def unreviewed_jobs(self, task: str, since: float) -> list[dict[str, Any]]:
+    def unreviewed_jobs(self, task: str, since: float) -> list[Job]:
         """`task`'s done jobs finished after `since` with no review row: a
         run whose review never started. Only what `Job` needs to read its
         result; never the healing job listing."""
@@ -273,4 +274,4 @@ class CloneFromLinkRepository(CachedRepository):
                 )
                 .order_by(job.created_at)
             ).mappings()
-            return [dict(r) for r in rows]
+            return [Job.model_validate(dict(r)) for r in rows]

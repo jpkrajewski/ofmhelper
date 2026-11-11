@@ -12,14 +12,16 @@ from ofmhelpers.integrations.short_links.errors import (
     SlugTakenError,
     UngatedError,
 )
-from ofmhelpers.integrations.short_links.models import (
+from ofmhelpers.integrations.short_links.providers.base import LinkProvider
+from ofmhelpers.schemas.link_catalog.models import (
     DayStat,
     HourStat,
+    LinkDays,
+    LinkHours,
     RemoteLink,
     Usage,
 )
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider
-lazy from ofmhelpers.integrations.short_links.models import NewLink
+lazy from ofmhelpers.schemas.link_catalog.models import NewLink
 
 _CREATED = 201
 # An hourly bucket's label: "07:00".
@@ -139,36 +141,40 @@ class OopsieProvider(LinkProvider):
         if response.status_code != _NOT_FOUND:
             self._data(response, f"delete {remote_id}")
 
-    def daily(
-        self, remote_ids: list[str], start: date, end: date
-    ) -> dict[str, list[DayStat]]:
+    def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
         days = [start + timedelta(d) for d in range((end - start).days + 1)]
         # Labels are "MM-DD": unambiguous within the 93 days a range may span.
         by_label = {d.strftime("%m-%d"): d for d in days}
-        return {
-            slug: [
-                DayStat(day=by_label[label], views=v, clicks=c)
-                for label, v, c in buckets
-                if label in by_label and (v or c)
-            ]
+        return [
+            LinkDays(
+                remote_id=slug,
+                days=[
+                    DayStat(day=by_label[label], views=v, clicks=c)
+                    for label, v, c in buckets
+                    if label in by_label and (v or c)
+                ],
+            )
             for slug, buckets in self._activity(remote_ids, start, end).items()
-        }
+        ]
 
-    def hourly(self, remote_ids: list[str], day: date) -> dict[str, list[HourStat]]:
+    def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
         # A one-day range comes back by the hour, labels "HH:00" (UTC: `tz`),
         # checked on the real API 2026-11-08.
-        return {
-            slug: [
-                HourStat(
-                    hour=datetime.combine(day, time(int(label[:2])), tzinfo=UTC),
-                    views=v,
-                    clicks=c,
-                )
-                for label, v, c in buckets
-                if _HOUR_LABEL.fullmatch(label) and (v or c)
-            ]
+        return [
+            LinkHours(
+                remote_id=slug,
+                hours=[
+                    HourStat(
+                        hour=datetime.combine(day, time(int(label[:2])), tzinfo=UTC),
+                        views=v,
+                        clicks=c,
+                    )
+                    for label, v, c in buckets
+                    if _HOUR_LABEL.fullmatch(label) and (v or c)
+                ],
+            )
             for slug, buckets in self._activity(remote_ids, day, day).items()
-        }
+        ]
 
     def _activity(
         self, remote_ids: list[str], start: date, end: date

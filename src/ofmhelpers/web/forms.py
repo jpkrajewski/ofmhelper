@@ -33,6 +33,16 @@ Upper = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True)]
 Files = Annotated[list[UploadFile], Field(default_factory=list)]
 
 
+def at_most[N: (int, float)](value: N, limit: N) -> N:
+    """`value`, refused (the form's 422) above `limit`: for a field whose upper
+    limit is a setting, checked in a `field_validator` when the form is read.
+    A `Field(le=settings...)` keeps what the setting said at import."""
+    if value > limit:
+        msg = f"Input should be less than or equal to {limit}"
+        raise ValueError(msg)
+    return value
+
+
 class LoggedFields(BaseModel):
     """A route's arguments taken as one object: telemetry reads them one by one."""
 

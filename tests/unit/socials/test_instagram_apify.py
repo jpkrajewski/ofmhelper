@@ -3,9 +3,14 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from ofmhelpers.integrations.apify import ActorRun, RunStatus
+from pydantic import BaseModel
+
+from ofmhelpers.integrations.apify import ActorRun, DatasetItem, RunStatus
+from ofmhelpers.integrations.apify.instagram import ApifyReel
 from ofmhelpers.integrations.socials.platforms.instagram_apify import (
     ApifyInstagramSource,
+    profile_input,
+    reel_input,
 )
 
 
@@ -18,13 +23,16 @@ class _Client:
         self.inputs: list[tuple[str, dict[str, Any]]] = []
         self._items = {"profiles": profiles, "reels": reels}
 
-    def run(self, actor: str, run_input: dict[str, Any], _timeout_s: int) -> ActorRun:
-        self.inputs.append((actor, run_input))
+    def run(self, actor: str, run_input: BaseModel, _timeout_s: int) -> ActorRun:
+        self.inputs.append((actor, run_input.model_dump(by_alias=True)))
         kind = "profiles" if "profile" in actor else "reels"
         return ActorRun(id=kind, status=RunStatus.SUCCEEDED, defaultDatasetId=kind)
 
-    def items(self, run: ActorRun) -> list[dict]:
-        return self._items[run.default_dataset_id]
+    def items(self, run: ActorRun) -> list[DatasetItem]:
+        return [
+            DatasetItem.model_validate(item)
+            for item in self._items[run.default_dataset_id]
+        ]
 
 
 def _posted(hours: float) -> str:
@@ -75,3 +83,40 @@ def test_a_reel_listed_twice_is_one_post():
     read, _ = ApifyInstagramSource()._read(client, ["yuki"])  # type: ignore[arg-type]
 
     assert [p.id for p in read["yuki"].posts] == ["A"]
+
+
+def test_a_dataset_item_reads_as_the_actors_fields_it_was_sent_with():
+    sent = {"shortCode": "A", "url": "https://www.instagram.com/p/A/", "likesCount": 3}
+    item = DatasetItem.model_validate(sent)
+
+    assert not item.failed
+    assert item.model_dump(exclude_unset=True) == sent
+    assert item.read(ApifyReel).code == "A"
+
+
+def test_an_error_item_is_told_apart_by_its_error_key():
+    item = DatasetItem.model_validate(
+        {"url": "https://www.instagram.com/gone", "error": "not_found"}
+    )
+
+    assert item.failed
+    assert (item.error, item.url) == ("not_found", "https://www.instagram.com/gone")
+
+
+def test_the_actors_get_their_inputs_under_their_own_names():
+    """What `ApifyClient.run` posts: the keys, their order, nothing unset."""
+    sent = {"by_alias": True, "exclude_none": True}
+
+    assert list(profile_input(["a", "b"]).model_dump(**sent).items()) == [
+        ("usernames", ["a", "b"]),
+        ("includeAboutSection", False),
+    ]
+    assert list(reel_input(["a"], 31, 7).model_dump(**sent).items()) == [
+        ("username", ["a"]),
+        ("resultsLimit", 31),
+        ("onlyPostsNewerThan", "7 days"),
+        ("skipPinnedPosts", False),
+        ("includeSharesCount", False),
+        ("includeTranscript", False),
+        ("includeDownloadedVideo", False),
+    ]

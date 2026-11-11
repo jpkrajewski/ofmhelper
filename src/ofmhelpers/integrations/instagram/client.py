@@ -33,6 +33,7 @@ from urllib3.util.retry import Retry
 
 from ofmhelpers.config import settings
 from ofmhelpers.errors import AppError
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.downloaders.cookies import CookieFileError, load_jar
 from ofmhelpers.integrations.instagram import pages
 from ofmhelpers.integrations.instagram.models import (
@@ -46,9 +47,9 @@ from ofmhelpers.integrations.instagram.models import (
     ReelMedia,
     ReelSummary,
     TimelinePage,
+    TimelinePost,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
@@ -231,10 +232,8 @@ class InstagramClient:
                 return
             cursor = next_cursor
 
-    def timeline(
-        self, username: str
-    ) -> Iterator[tuple[str, ReelMedia | None, float, bool]]:
-        """The posts grid, newest first after its pinned posts, as (code, its
+    def timeline(self, username: str) -> Iterator[TimelinePost]:
+        """The posts grid, newest first after its pinned posts (code, its
         mp4 + length or None for a photo, posted at, pinned) -- twelve posts a
         request, where `media` costs one request per reel. Ends early, without
         error, for an account hidden from logged-out visitors (Instagram
@@ -267,11 +266,11 @@ class InstagramClient:
                 variables,
             )
             for node in page.nodes:
-                yield (
-                    node.code,
-                    ReelMedia.from_dash(node),
-                    float(node.taken_at),
-                    bool(node.timeline_pinned_user_ids),
+                yield TimelinePost(
+                    code=node.code,
+                    media=ReelMedia.from_dash(node),
+                    posted_at=float(node.taken_at),
+                    pinned=bool(node.timeline_pinned_user_ids),
                 )
             cursor = page.next_cursor
             if not cursor:

@@ -24,11 +24,11 @@ def test_job_create_get_round_trip():
     job_id = repo.create("seedance", {"prompt": "hi"}, actor="admin")
 
     job = repo.get(job_id)
-    assert job["task"] == "seedance"
-    assert job["params"] == {"prompt": "hi"}
-    assert job["actor"] == "admin"
-    assert job["status"] == "running"
-    assert job["result"] is None
+    assert job.task == "seedance"
+    assert job.params == {"prompt": "hi"}
+    assert job.actor == "admin"
+    assert job.status == "running"
+    assert job.result is None
 
 
 def test_update_status_is_atomic_under_concurrent_writers():
@@ -55,8 +55,8 @@ def test_update_status_is_atomic_under_concurrent_writers():
 
     assert not errors
     final = repo.get(job_id)
-    assert final["status"] == "done"
-    assert final["result"] in values  # exactly one writer's value, intact
+    assert final.status == "done"
+    assert final.result in values  # exactly one writer's value, intact
 
 
 def test_update_status_failure_path_records_error_not_result():
@@ -66,9 +66,9 @@ def test_update_status_failure_path_records_error_not_result():
     repo.update_status(job_id, "failed", error="Wrong API Key")
 
     job = repo.get(job_id)
-    assert job["status"] == "failed"
-    assert job["error"] == "Wrong API Key"
-    assert job["result"] is None
+    assert job.status == "failed"
+    assert job.error == "Wrong API Key"
+    assert job.result is None
 
 
 def test_job_get_is_served_from_cache_until_a_write_invalidates_it():
@@ -90,10 +90,10 @@ def test_job_get_is_served_from_cache_until_a_write_invalidates_it():
 
     repo.update_status(job_id, "done")  # goes through the repo -> bumps cache
 
-    assert repo.get(job_id)["status"] == "done"
+    assert repo.get(job_id).status == "done"
     # A second repo sharing the same cache namespace sees the invalidation too.
     other_repo = JobRepository(cache=RepositoryCache(get_redis(), namespace))
-    assert other_repo.get(job_id)["status"] == "done"
+    assert other_repo.get(job_id).status == "done"
 
 
 def test_repository_cache_bump_invalidates_all_prior_reads():
@@ -145,10 +145,10 @@ def test_an_unreachable_cache_reads_and_writes_through_to_the_database():
     page 500 through the signed-in user's cached read)."""
     repo = JobRepository(cache=RepositoryCache(_dead_redis(), "job"))
     job_id = repo.create("seedance", {"prompt": "hi"}, actor="admin")
-    assert repo.get(job_id)["status"] == "running"
+    assert repo.get(job_id).status == "running"
 
     repo.update_status(job_id, "done", result=[])
-    assert repo.get(job_id)["status"] == "done"
+    assert repo.get(job_id).status == "done"
 
 
 def test_pages_answer_while_the_cache_is_down(monkeypatch):

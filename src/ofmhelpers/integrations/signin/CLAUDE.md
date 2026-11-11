@@ -2,7 +2,7 @@
 
 How people sign in (`settings.signin`, `OFM_*` in config/settings.py `SignInSettings`). Used by `web/routers/auth.py`, `web/routers/account.py`, `db/stores/users.py`.
 
-- `base.py` — `Provider` protocol (`consent_url`, `exchange`, `identity`, `callback_method`, `local_consent`, `linkable`), `Identity`, `SignInError` (message safe to show), `claims` (id-token payload), `checked` (nonce), `token_request` (via `utils.outbound.post`).
+- `base.py` — `Provider` protocol (`consent_url`, `exchange`, `identity`, `callback_method`, `local_consent`, `linkable`), `Identity`, `SignInError` (message safe to show), `claims` (id-token payload), `checked` (nonce), `token_request` (via `integrations.outbound.post`).
 - Sign-in chains Drive (2026-10-22): a provider with `connects_drive` (Google) signing into an account without a Drive token goes straight on to `/auth/<p>/start?link=1&next=<page>` (one flow, no "Connect" to find); with a token on file, straight in. A link that worked returns to its `next` page (else /account); a failed one while signed in -> `/account?<p>=failed`.
 - `google.py` — sign-in asks only `openid email profile` (non-sensitive: no "unverified app" screen); connecting on /account (`connect=True`, `/auth/google/start?link=1`) adds the restricted `drive` scope with `access_type=offline` + `prompt=consent` (Google hands out a refresh token only there; that one step shows the unverified warning until a paid CASA assessment); `drive_credentials(refresh_token)` for `gdrive.connect_as`. A new Drive token queues that person's Drive sync (routers/auth.py `_sync_new_drive`).
 - `apple.py` — Sign in with Apple; `response_mode=form_post` (Apple POSTs the callback); client secret = ES256 JWT signed with the .p8 per exchange (`cryptography`, no JWT lib).

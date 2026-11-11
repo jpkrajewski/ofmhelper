@@ -19,10 +19,11 @@ import re
 import threading
 from typing import Any
 
+from pydantic import BaseModel
 lazy import requests
 
+from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.media import fake_media
-from ofmhelpers.utils.outbound import FakeReply
 
 FILES_HOST = "fake-oss.apiyi.com"
 _PART = re.compile(
@@ -39,8 +40,14 @@ def error(status: int, code: str, message: str) -> FakeReply:
     )
 
 
-def form(raw: bytes) -> tuple[dict[str, str], list[tuple[str, str]]]:
-    """A multipart body's plain fields and its (field, file name) files."""
+class Multipart(BaseModel):
+    """A multipart body: its plain fields and its (field, file name) files."""
+
+    fields: dict[str, str]
+    files: list[tuple[str, str]]
+
+
+def form(raw: bytes) -> Multipart:
     fields: dict[str, str] = {}
     files: list[tuple[str, str]] = []
     for name, filename, value in _PART.findall(raw):
@@ -48,7 +55,7 @@ def form(raw: bytes) -> tuple[dict[str, str], list[tuple[str, str]]]:
             files.append((name.decode(), filename.decode()))
         else:
             fields[name.decode()] = value.decode(errors="replace")
-    return fields, files
+    return Multipart(fields=fields, files=files)
 
 
 def _png_b64() -> str:
@@ -127,8 +134,9 @@ class FakeFamilies:
         content_type = str(request.headers.get("Content-Type", ""))
         if content_type.startswith("multipart/"):
             raw = request.body if isinstance(request.body, bytes) else b""
-            body, files = form(raw)
-            self._record(path, body, files)
+            sent = form(raw)
+            body = sent.fields
+            self._record(path, body, sent.files)
         else:
             body = self._json(request)
             self._record(path, body)
@@ -203,13 +211,13 @@ class FakeFamilies:
         content_type = str(request.headers.get("Content-Type", ""))
         if content_type.startswith("multipart/"):
             raw = request.body if isinstance(request.body, bytes) else b""
-            body, files = form(raw)
-            self._record(path, body, files)
+            sent = form(raw)
+            body = sent.fields
+            self._record(path, body, sent.files)
             seconds: Any = body.get("seconds", "8")
         else:
             body = self._json(request)
             self._record(path, body)
-            files = []
             seconds = body.get("seconds", "8")
             if "generateAudio" in json.dumps(body):
                 return error(400, "INVALID_ARGUMENT", "generateAudio is not supported")

@@ -10,7 +10,7 @@ under the platform's is heard too (seen 2026-11-05: Fanvue at
 /events/fanvue/creator-events, a 404 until then).
 
 An AI provider's callback (`/events/ai/<provider>/<job key>`,
-`integrations/ai_providers/self_heal.py`) names the request it made for a job: what
+`features/generate/callbacks.py`) names the request it made for a job: what
 finds one whose submit answer was lost.
 """
 
@@ -21,18 +21,11 @@ from fastapi.responses import Response
 from ofmhelpers.config import settings
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.webhooks import receive
-from ofmhelpers.integrations.ai_providers.self_heal import Heard, heard
+from ofmhelpers.features.generate import callbacks
 from ofmhelpers.schemas.chatting import ChatPlatform
 from ofmhelpers.web.middleware.ratelimit import record_refused_webhook, webhook_blocked
 
 router = APIRouter(prefix="/events", tags=["events"])
-
-_HEARD_STATUS = {
-    Heard.FOUND: status.HTTP_200_OK,
-    Heard.IGNORED: status.HTTP_200_OK,
-    Heard.REFUSED: status.HTTP_401_UNAUTHORIZED,
-    Heard.UNKNOWN: status.HTTP_404_NOT_FOUND,
-}
 
 
 async def _capped_body(request: Request) -> bytes | None:
@@ -77,7 +70,12 @@ async def provider_callback(provider: str, job_key: str, request: Request) -> Re
     raw = await _capped_body(request)
     if raw is None:
         return Response(status_code=status.HTTP_413_CONTENT_TOO_LARGE)
-    outcome = await run_in_threadpool(heard, provider, job_key, raw, request.headers)
-    if outcome == Heard.REFUSED:
+    heard = await run_in_threadpool(
+        callbacks.receive, provider, job_key, raw, request.headers
+    )
+    if not heard.known:
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+    if not heard.genuine:
         await run_in_threadpool(record_refused_webhook, request)
-    return Response(status_code=_HEARD_STATUS[outcome])
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+    return Response(status_code=status.HTTP_200_OK)

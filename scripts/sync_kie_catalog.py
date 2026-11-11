@@ -7,7 +7,10 @@ Flux Kontext, Suno -- is a `POST /api/v1/jobs/createTask` with `model` plus
 an `input` object. This walks the image and video pages, turns each `input`
 into the JSON schema `ModelSpec` reads, and merges it into the catalog:
 
-    uv run python scripts/sync_kie_catalog.py
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml         run --rm tests uv run --frozen python scripts/sync_kie_catalog.py
+
+(the tests container: tools never run on the host; the checkout is mounted
+there, so the catalog it writes is the one in the working tree).
 
 Merge rules (the catalog is shared with jobs and /clone, so ids never move):
 - `CURATED` entries are kept verbatim: their schemas were hand-tuned to the

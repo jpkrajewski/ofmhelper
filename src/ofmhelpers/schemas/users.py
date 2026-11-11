@@ -90,6 +90,23 @@ class LinkedAccount(BaseModel):
     linked_at: float
 
 
+class SavedKey(BaseModel):
+    """A user's own key for one provider (/account)."""
+
+    provider: str
+    api_key: str
+
+
+class SavedKeys(BaseModel):
+    """Every key a user saved, one per provider."""
+
+    keys: list[SavedKey] = []
+
+    def get(self, provider: str) -> str:
+        """`provider`'s key; "" without one."""
+        return next((k.api_key for k in self.keys if k.provider == provider), "")
+
+
 class PasswordForm(BaseModel):
     """Setting a password (from a link, or /account). Length is checked
     against `settings.signin.password_min_length` by the store."""
@@ -115,3 +132,16 @@ class ApiKeysForm(BaseModel):
 def normalized_email(value: str) -> str:
     """How an email is stored and compared: trimmed, lower case."""
     return _email(value)
+
+
+class Identity(BaseModel):
+    """Who the provider says signed in."""
+
+    provider: str
+    # The provider's stable id for the account: what links it to a user.
+    subject: str
+    email: str = ""
+    email_verified: bool = False
+    name: str = ""
+    # Google only: lets Drive uploads go up as this person.
+    refresh_token: str | None = None

@@ -14,7 +14,7 @@ lazy from collections.abc import Mapping
 from pydantic import BaseModel, ValidationError
 lazy import requests
 
-from ofmhelpers.utils.outbound import FakeHandler, FakeReply
+from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 
 _PREFIX = "fake:"
 _HOSTS = ("oauth2.googleapis.com", "appleid.apple.com")
@@ -80,10 +80,10 @@ def token_reply(request: requests.PreparedRequest) -> FakeReply:
     return FakeReply.json_body(reply)
 
 
-def routes() -> dict[str, FakeHandler]:
+def routes() -> list[FakeRoute]:
     def handle(
         request: requests.PreparedRequest, _proxies: Mapping[str, str]
     ) -> FakeReply:
         return token_reply(request)
 
-    return dict.fromkeys(_HOSTS, handle)
+    return [FakeRoute(host=host, handler=handle) for host in _HOSTS]

@@ -5,39 +5,33 @@ run is its own card in the gallery, the same card as /generate's
 (`_gallery_card.html`), newest first.
 
 Routes only; what they do is in `features/clone/` (the Wan 3.0 table, pricing,
-the submit's checks, cards, Drive picker, export). `_run_clone` stays here: RQ
-pickles a job's function by path. `run_ai`, `duration_s` and `_exported` are
-looked up here when called and handed on, so this module stays their one seam.
+the submit's checks, cards, Drive picker, export; `run.py`: the worker's
+`run_clone`). `_run_clone` is that function under the path jobs queued before
+2026-11-11 name. `duration_s` is looked up here when called and handed on.
 """
 
-from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import Response
 from pydantic import Field
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import get_job, start_job
-from ofmhelpers.features.clone.addons import prompt_addons
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
     ExportFailedError,
-    export_choice,
-    export_results,
 )
-from ofmhelpers.features.clone.export import exported_file as _exported
-from ofmhelpers.features.clone.pricing import clip_duration, clone_pricing
+from ofmhelpers.features.clone.page import form_view
+from ofmhelpers.features.clone.pricing import clip_duration
+from ofmhelpers.features.clone.run import run_clone as _run_clone
 from ofmhelpers.features.clone.service import (
     FILES_PREFIX,
     PREFIX,
     TASK,
-    CloneRun,
+    Submit,
     cards,
-    check_choices,
+    cards_of,
     drive_picker,
-    plan_runs,
-    subject_picks,
     upload_states,
     video_seconds,
 )
@@ -46,19 +40,13 @@ from ofmhelpers.features.clone.targets import (
     DEFAULT_RESOLUTION,
     CloneTarget,
     clone_targets,
-    offered_resolutions,
 )
 from ofmhelpers.features.clone.targets import clone_values as _clone_values
 from ofmhelpers.features.drive.uploads import queue_uploads, remove_upload
-from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
-from ofmhelpers.integrations.gdrive import DriveError
-from ofmhelpers.media.exports import ExportOptions, exports
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.schemas import (
     CloneQueued,
     DriveUpload,
-    ProviderChoice,
-    ResultFile,
     UploadRequest,
     UploadsQueued,
 )
@@ -71,18 +59,12 @@ from ofmhelpers.web.dependencies import (
 )
 from ofmhelpers.web.forms import Files, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
-from ofmhelpers.web.routers.generation.ai import run_ai
-from ofmhelpers.web.routers.task_helpers import (
-    add_job_routes,
-    build_ordered_paths,
-    keep_videos,
-)
+from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
 # What other modules and the tests read here (same objects as the package's).
 __all__ = [
     "CLONE_TARGETS",
-    "DEFAULT_PROMPT",
     "EXPORT_FAILURES",
     "FILES_PREFIX",
     "TASK",
@@ -90,15 +72,19 @@ __all__ = [
     "ExportFailedError",
     "_card",
     "_clone_values",
-    "_exported",
     "_run_clone",
     "clip_duration",
+    "default_prompt",
     "router",
 ]
 
 router = APIRouter(prefix=PREFIX, tags=["clone"])
 
-DEFAULT_PROMPT = settings.web.clone_default_prompt
+
+def default_prompt() -> str:
+    """What the prompt box starts with: a setting, read at each use."""
+    return settings.web.clone_default_prompt
+
 
 CLONE_TARGETS = clone_targets()
 
@@ -106,7 +92,7 @@ gallery = Gallery({TASK})
 
 
 class CloneForm(PaidForm):
-    prompt: str = Field(DEFAULT_PROMPT, min_length=1)
+    prompt: str = Field(default_factory=default_prompt, min_length=1)
     resolution: str = DEFAULT_RESOLUTION
     audio: bool = False
     export: str = ""
@@ -117,73 +103,16 @@ class CloneForm(PaidForm):
     videos_manifest: str = "[]"
 
 
-def _run_clone(
-    job_id: str,
-    api_key: str,
-    assets_root: str,
-    provider: str,
-    prompt: str,
-    resolution: str,
-    duration: int,
-    reference_images: list[str],
-    reference_videos: list[str],
-    audio: bool = False,
-    export: str | None = None,
-    mirror: bool = False,
-    capcut: bool = False,
-    **page_keys: Any,
-) -> list[ResultFile]:
-    """One clone run. `page_keys` (`model`; older jobs also `clone_batch`,
-    `clone_index`) are stored on the job for the page only, but for
-    `EXPORT_FAILURES` (earlier runs whose export failed). `capcut` is the
-    choice of jobs from before `export` (re-run by recovery)."""
-    target = CLONE_TARGETS[provider]
-    values = _clone_values(
-        target,
-        prompt,
-        resolution,
-        duration,
-        audio,
-        reference_images,
-        reference_videos[0],
-    )
-    results = run_ai(
-        job_id, api_key, assets_root, provider=provider, model=target.model, **values
-    )
-    return export_results(
-        job_id,
-        results,
-        export_choice(export, capcut),
-        ExportOptions(mirror=mirror),
-        Path(assets_root),
-        failures=int(page_keys.get(EXPORT_FAILURES) or 0),
-        exported=_exported,
-    )
-
-
 def _video_seconds(path: str) -> float:
     return video_seconds(path, duration_s)
 
 
-def _queue(run: CloneRun, api_key: str, assets_root: Path, actor: str) -> str:
-    """One run's job. The key goes to the worker only, never into the
-    params its page shows."""
-    params = run.model_dump()
-    return start_job(
-        TASK,
-        params,
-        _run_clone,
-        {"api_key": api_key, "assets_root": str(assets_root), **params},
-        actor=actor,
-    )
-
-
 def _rendered_cards(job_ids: list[str], actor: str, user_id: int) -> str:
     """These jobs' cards, newest first like the gallery."""
-    jobs = [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
     picker = dict(drive_picker(user_id))
     return "".join(
-        render_partial("_clone_card.html", job=card, **picker) for card in cards(jobs)
+        render_partial("_clone_card.html", job=card, **picker)
+        for card in cards_of(job_ids, actor)
     )
 
 
@@ -203,25 +132,8 @@ def form(
         gallery=cards(first.jobs),
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(actor),
-        providers=ProviderChoice.all(list(CLONE_TARGETS)),
-        selected_provider=start_provider(actor, CLONE_TASKS, list(CLONE_TARGETS)),
         api_keys=api_keys,
-        pricing={name: price.model_dump() for name, price in clone_pricing().items()},
-        default_prompt=DEFAULT_PROMPT,
-        default_resolution=DEFAULT_RESOLUTION,
-        resolutions=offered_resolutions(),
-        max_videos=settings.web.clone_max_videos,
-        max_images=settings.web.clone_max_images,
-        live_poll_s=settings.web.gallery_live_poll_s,
-        # The `?video=` paths /reels or a download hands over; a stale link
-        # just opens with fewer videos picked.
-        prefill_videos=keep_videos(video or [], assets_root),
-        subjects=subject_picks(actor, assets_root),
-        addons=prompt_addons(),
-        max_reference_s=min(t.max_reference_s for t in CLONE_TARGETS.values()),
-        exports=list(exports().values()),
-        default_export=settings.exports.default,
-        default_mirror=settings.exports.mirror,
+        **dict(form_view(actor, assets_root, video or [])),
         **dict(drive_picker(user.id)),
     )
 
@@ -271,10 +183,7 @@ def drive_upload(user: CurrentUser, body: UploadRequest) -> UploadsQueued:
 @router.post("/drive-uploads/{upload_id}/remove")
 def drive_upload_remove(user: CurrentUser, upload_id: int) -> DriveUpload:
     """Takes an uploaded video back out of its account folder (Drive trash)."""
-    try:
-        return remove_upload(user, upload_id)
-    except DriveError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return remove_upload(user, upload_id)
 
 
 @router.get("/drive-uploads")
@@ -286,7 +195,7 @@ def drive_upload_states(
     return upload_states(job, actor)
 
 
-@router.post("/run")
+@router.post("/run", status_code=202)
 def run(
     form: Annotated[CloneForm, Form()],
     actor: Actor,
@@ -297,21 +206,14 @@ def run(
     """Queues one run per video and returns their job ids plus their cards
     rendered, newest first like the gallery, so the page shows them without
     a reload."""
-    choices = check_choices(form.provider, form.api_key, form.export, form.resolution)
-    runs = plan_runs(
-        choices,
-        form.prompt,
-        form.audio,
-        form.mirror,
-        build_ordered_paths(
-            form.image_manifest, form.image, assets_root, user_id=owner
-        ),
-        build_ordered_paths(
-            form.videos_manifest, form.videos, assets_root, user_id=owner
-        ),
-        _video_seconds,
+    submit = Submit(
+        actor=actor,
+        owner=owner,
+        assets_root=assets_root,
+        run=_run_clone,
+        probe=_video_seconds,
     )
-    job_ids = [_queue(r, choices.api_key, assets_root, actor) for r in runs]
+    job_ids = submit.start(form)
     return CloneQueued(job_ids=job_ids, html=_rendered_cards(job_ids, actor, user.id))
 
 

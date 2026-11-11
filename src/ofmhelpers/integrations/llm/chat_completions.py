@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import httpx
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.base import LLMProvider
@@ -76,10 +76,20 @@ _NOT_STRICT = frozenset(
 )
 
 
-def strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """`schema` (as Pydantic writes it) in strict mode's form: `$ref`s
-    inlined, every object closed (`additionalProperties: false`) with every
-    property required, keywords strict mode rejects dropped."""
+class StrictSchema(BaseModel):
+    """`response_format.json_schema`: the answer's name and its schema in
+    strict mode's form."""
+
+    name: str
+    strict: bool = True
+    json_schema: dict[str, Any] = Field(serialization_alias="schema")
+
+
+def strict_schema(answer: type[BaseModel]) -> StrictSchema:
+    """`answer`'s schema (as Pydantic writes it) in strict mode's form:
+    `$ref`s inlined, every object closed (`additionalProperties: false`) with
+    every property required, keywords strict mode rejects dropped."""
+    schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 
     def walk(node: Any) -> Any:
@@ -103,7 +113,7 @@ def strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
             out["additionalProperties"] = False
         return out
 
-    return walk(schema)
+    return StrictSchema(name=answer.__name__, json_schema=walk(schema))
 
 
 class _Message(BaseModel):
@@ -156,20 +166,16 @@ class ChatCompletionsLLM(LLMProvider):
         )
 
     def _ask(self, prompt: Prompt, answer: type[BaseModel], timeout_s: float) -> Reply:
-        schema = strict_schema(answer.model_json_schema())
+        schema = strict_schema(answer)
         temperature = self._temperature(prompt)
         with tempfile.TemporaryDirectory(prefix="llm-img-") as work:
             body = {
                 "model": self.model,
-                "messages": self._messages(prompt, schema, Path(work)),
+                "messages": self._messages(prompt, schema.json_schema, Path(work)),
                 **({} if temperature is None else {"temperature": temperature}),
                 "response_format": {
                     "type": "json_schema",
-                    "json_schema": {
-                        "name": answer.__name__,
-                        "strict": True,
-                        "schema": schema,
-                    },
+                    "json_schema": schema.model_dump(by_alias=True),
                 },
                 **self.extra_body,
             }

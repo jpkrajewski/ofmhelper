@@ -24,14 +24,14 @@ from pydantic import (
     model_validator,
 )
 
-from ofmhelpers.integrations.socials import (
+from ofmhelpers.schemas.socials import (
     AccountMetrics,
     AccountProfile,
     PostStat,
     PostViews,
     ViewWindow,
-    get_platform,
-    platforms,
+    names_of,
+    platform_names,
 )
 
 # The creator filter's value for accounts with no creator. Creator names
@@ -174,7 +174,7 @@ class TrackedAccount(BaseModel):
 
     @property
     def profile_url(self) -> str:
-        return get_platform(self.platform).profile_url(self.handle)
+        return names_of(self.platform).profile_url(self.handle)
 
     @property
     def name(self) -> str:
@@ -682,10 +682,10 @@ class AddAccounts(BaseModel):
     def parsed(self) -> list[str]:
         """The stored handles, deduped, in order. Raises ValueError naming
         the lines that are not one, so a bad paste adds nothing."""
-        if self.platform not in platforms():
+        if self.platform not in platform_names():
             msg = f"Unknown platform: {self.platform}"
             raise ValueError(msg)
-        platform = get_platform(self.platform)
+        platform = names_of(self.platform)
         handles: list[str] = []
         bad: list[str] = []
         for line in self.handles.splitlines():

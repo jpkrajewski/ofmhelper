@@ -13,7 +13,7 @@ What each API sends and reads is its family's.
   The key is checked once first (`GET /v1/models`), so a wrong one fails
   before anything is paid.
 
-Through `utils.outbound`, so OFM_FAKE_EXTERNALS answers it from `fake.py`.
+Through `integrations.outbound`, so OFM_FAKE_EXTERNALS answers it from `fake.py`.
 """
 
 import base64
@@ -23,8 +23,10 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import requests
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.ai_providers import hosting
 from ofmhelpers.integrations.ai_providers.apiyi.models import (
     PROVIDER,
@@ -44,7 +46,6 @@ from ofmhelpers.integrations.ai_providers.uploads import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.image_fit import ImageLimits, fitted
-from ofmhelpers.utils import outbound
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,15 @@ IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp"})
 VIDEO_SUFFIXES = frozenset({".mp4", ".mov"})
 AUDIO_SUFFIXES = frozenset({".wav", ".mp3"})
 ACCEPTED_SUFFIXES = IMAGE_SUFFIXES | VIDEO_SUFFIXES | AUDIO_SUFFIXES
+
+
+class InlineImage(BaseModel):
+    """An image sent inside a request: its mime type and base64 bytes."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mime: str
+    data: str
 
 
 def refused(response: requests.Response) -> NoReturn:
@@ -208,16 +218,16 @@ class ApiyiClient:
         return fitted(path, out, limits)
 
     @classmethod
-    def inline(cls, ref: str, limits: ImageLimits) -> tuple[str, str]:
-        """(mime type, base64) of a reference image within `limits`."""
+    def inline(cls, ref: str, limits: ImageLimits) -> InlineImage:
+        """A reference image within `limits`, as base64."""
         path = cls.image_file(ref, limits)
         mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
-        return mime, base64.b64encode(path.read_bytes()).decode()
+        return InlineImage(mime=mime, data=base64.b64encode(path.read_bytes()).decode())
 
     @classmethod
     def data_url(cls, ref: str, limits: ImageLimits) -> str:
-        mime, data = cls.inline(ref, limits)
-        return f"data:{mime};base64,{data}"
+        image = cls.inline(ref, limits)
+        return f"data:{image.mime};base64,{image.data}"
 
     @staticmethod
     def fetch(url: str) -> bytes:

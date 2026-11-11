@@ -18,13 +18,14 @@ DEPLOYS = [
     REPO / "scripts" / "deploy.sh",
     REPO / ".github" / "workflows" / "deploy.yml",
 ]
-WORKERS = {"worker", "media-worker", "edit-worker"}
+WORKERS = {"worker", "media-worker", "edit-worker", "preview-worker"}
 
 
 class Service(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     build: Any = None
+    image: str | None = None
     container_name: str | None = None
     command: list[str] = []
     stop_grace_period: str | None = None
@@ -101,7 +102,7 @@ def test_a_worker_finishes_its_job_on_compose_stop():
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
 def test_both_deploys_build_and_start_every_app_service(path: Path):
     app = _app_services()
-    assert app >= {"ofmhelpers", "migrate", "preview-worker", *WORKERS}
+    assert app >= {"ofmhelpers", "migrate", "sweeps", *WORKERS}
     assert _compose_calls(path, "build") == [app]
     assert _compose_calls(path, "up -d --no-deps --force-recreate") == [app]
 
@@ -111,7 +112,126 @@ def test_both_deploys_stop_the_workers_before_the_app(path: Path):
     """The workers drain (up to their grace period) while the app still
     serves; only then does the app stop for the migration."""
     workers = set(_worker_queues())
-    assert _compose_calls(path, "stop") == [workers, {"ofmhelpers"}]
+    assert workers == WORKERS
+    assert _compose_calls(path, "stop") == [workers | {"sweeps"}, {"ofmhelpers"}]
+
+
+def test_the_sweeps_have_one_service_of_their_own():
+    """Their own process (`ofmhelpers/sweeps.py`), never the web app's: a
+    second web process would run every sweep twice. Time to finish the
+    Telegram read on `compose stop` (OFM_TELEGRAM_ASK_WAIT_S, 10 s)."""
+    services = _compose().services
+    running = [name for name, s in services.items() if "ofmhelpers.sweeps" in s.command]
+    assert running == ["sweeps"]
+    assert services["sweeps"].command == ["python", "-m", "ofmhelpers.sweeps"]
+    assert services["sweeps"].stop_grace_period == "30s"
+
+
+def test_a_worker_service_can_be_scaled():
+    """A fixed `container_name` refuses `--scale` (two containers, one name).
+    More load = more worker processes or containers per queue."""
+    services = _compose().services
+    named = {name for name in (*WORKERS, "sweeps") if services[name].container_name}
+    assert named == set()
+
+
+def test_every_app_service_runs_the_release_image():
+    """One image, named by the commit it was built from (OFM_RELEASE, set by
+    both deploys): the build is the artifact, and the one before is kept."""
+    images = {_compose().services[name].image for name in _app_services()}
+    assert images == {"ofmhelpers-app:${OFM_RELEASE:-dev}"}
+
+
+@pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
+def test_both_deploys_keep_the_previous_release_image(path: Path):
+    """The server builds the image, so the one it replaces is the only way
+    back without a rebuild: it is tagged with its commit, the deploy reuses a
+    commit's image when it is still there, and the clean-up spares the
+    release it replaced."""
+    text = path.read_text(encoding="utf-8")
+    assert 'release="ofmhelpers-app:$OFM_RELEASE"' in text
+    assert 'docker image inspect "$release" >/dev/null 2>&1 || $compose build' in text
+    assert (
+        '[ "$image" = "$release" ] || [ "$image" = "$previous" ] || docker image rm'
+        in text
+    )
+    assert "docker image prune -af" not in text
+    assert "docker system prune" not in text
+
+
+@pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
+def test_both_deploys_take_only_a_commit_of_main(path: Path):
+    text = path.read_text(encoding="utf-8")
+    assert 'git merge-base --is-ancestor "$target" origin/main' in text
+    assert 'git reset --hard "$target"' in text
+
+
+def test_the_manual_deploy_never_commits_or_pushes():
+    """Until 2026-11-11 it ran `git add -A`, committed, pushed main and
+    deployed, with no CI in between."""
+    code = [
+        line.strip()
+        for line in DEPLOYS[0].read_text(encoding="utf-8").splitlines()
+        if not line.strip().startswith("#")
+    ]
+    assert [
+        line for line in code if line.startswith(("git add", "git commit", "git push"))
+    ] == []
+    assert 'if [ -n "$(git status --porcelain)" ]; then' in code
+    assert (
+        'if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then' in code
+    )
+
+
+def test_the_deploy_workflow_takes_a_sha_by_hand():
+    workflow = yaml.safe_load(DEPLOYS[1].read_text(encoding="utf-8"))
+    # PyYAML reads the key `on` as True.
+    inputs = workflow[True]["workflow_dispatch"]["inputs"]
+    assert inputs["sha"]["required"] is False
+
+
+def test_the_database_password_comes_from_the_environment():
+    """Not written into the file: POSTGRES_PASSWORD, with the value every
+    existing volume was made with as the fallback (the server sets none)."""
+    services = _compose().services
+    postgres = services["postgres"].model_dump()["environment"]
+    app = services["ofmhelpers"].model_dump()["environment"]
+    assert "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ofmhelpers}" in postgres
+    assert (
+        "OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:"
+        "${POSTGRES_PASSWORD:-ofmhelpers}@postgres:5432/ofmhelpers"
+    ) in app
+
+
+def test_no_image_floats_on_a_tag_alone():
+    """`:latest` is a different build every pull: dev, CI and a rebuilt
+    server would each run their own."""
+    images = [
+        s.image for s in _compose().services.values() if s.image and s.build is None
+    ]
+    floating = [i for i in images if i.endswith(":latest") or ":" not in i]
+    assert floating == []
+    assert any("bgutil-ytdlp-pot-provider:latest@sha256:" in i for i in images)
+
+
+def test_dev_says_it_is_development_and_puts_nginx_in_front():
+    """OFM_ENV has no default: the overlay names it on every app service.
+    nginx there uses the site file the server does (nginx/ofmhelpers.conf)."""
+    text = (REPO / "docker-compose.dev.yml").read_text(encoding="utf-8")
+    dev = yaml.safe_load(text)["services"]
+    for name in (*_app_services(), "tests"):
+        assert "OFM_ENV=development" in dev[name]["environment"], name
+    assert (
+        "./nginx/ofmhelpers.conf:/etc/nginx/conf.d/default.conf:ro"
+        in (dev["nginx"]["volumes"])
+    )
+    site = (REPO / "nginx" / "ofmhelpers.conf").read_text(encoding="utf-8")
+    assert "client_max_body_size 2048m;" in site
+    assert "proxy_set_header X-Forwarded-Proto $scheme;" in site
+    assert "proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;" in site
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    assert "nginx/ofmhelpers.conf" in readme
+    assert "proxy_pass" not in readme
 
 
 @pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
@@ -143,3 +263,24 @@ def test_results_land_in_the_asset_stores_mount(name: str):
     out = _mount_of(f"{env['OFM_KIEAI_OUT_DIR']}/x", service["volumes"])
 
     assert out == _mount_of("/app/uploads/assets/x", service["volumes"])
+
+
+@pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
+def test_both_deploys_fail_when_the_sweeps_or_a_worker_did_not_stay_up(path: Path):
+    """`/health` is the web app only (Kimi review 2026-11-11): a sweeps or
+    worker container crashing at its start would be a green deploy with
+    recovery, the scans and every queue dead."""
+    text = path.read_text(encoding="utf-8")
+    services = "sweeps worker preview-worker media-worker edit-worker"
+    assert f"for service in {services}; do" in text
+    assert '[ "$state" != "running 0" ]' in text
+    assert set(services.split()) == WORKERS | {"sweeps"}
+
+
+@pytest.mark.parametrize("path", DEPLOYS, ids=lambda p: p.name)
+def test_both_deploys_keep_the_image_of_the_one_running_app_container(path: Path):
+    """`ps -a` also lists stopped and one-off containers: two ids made
+    `previous` two lines, it matched no image, and the kept release was removed."""
+    text = path.read_text(encoding="utf-8")
+    assert "running=$($compose ps -q ofmhelpers | head -n 1)" in text
+    assert "ps -aq ofmhelpers" not in text

@@ -6,7 +6,7 @@ preview and its source took 13 GB of prod's 72 GB disk (922 copies,
 A copy older than `keep_s` (a day) loses its video, preview and source; its
 poster (a frame from the middle) and its recipe in state.json stay, a few KB.
 Nothing is lost by it: the source is still in Drive under the reel's key, and
-the recipe (seed + caption) makes the same edit again -- `tasks._make` does
+the recipe (seed + caption) makes the same edit again -- `tasks.Folder.make` does
 when the reel is uploaded, regenerated or given a caption. A reel a job is
 working on is left alone, and so is one whose poster cannot be made, and one
 whose source POSTED no longer has (`ReelState.posted`, read again first): that

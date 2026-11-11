@@ -11,6 +11,7 @@ from datetime import timedelta
 import pytest
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.short_links import NewLink, provider_infos
 from ofmhelpers.integrations.short_links.fake import (
     BOUNCY_FAKE_KEY,
@@ -20,7 +21,6 @@ from ofmhelpers.integrations.short_links.fake import (
 )
 from ofmhelpers.integrations.short_links.providers import get_link_provider
 from ofmhelpers.schemas.links import utc_today
-from ofmhelpers.utils import outbound
 
 PROVIDERS = ["oopsie", "bouncy"]
 _FAKE_KEYS = {"oopsie": OOPSIE_FAKE_KEY, "bouncy": BOUNCY_FAKE_KEY}
@@ -114,8 +114,8 @@ def test_daily_numbers_fall_in_the_range(provider):
     start = end - timedelta(days=89)
     ids = [x.remote_id for x in provider.list_links()][:3]
     found = provider.daily(ids, start, end)
-    assert set(found) <= set(ids)
-    for days in found.values():
+    assert {x.remote_id for x in found} <= set(ids)
+    for days in [x.days for x in found]:
         assert all(start <= d.day <= end for d in days)
         assert all(d.views >= 0 and d.clicks >= 0 for d in days)
         assert len({d.day for d in days}) == len(days)
@@ -130,8 +130,8 @@ def test_daily_leaves_out_a_link_gone_since_it_was_listed(provider):
     ids = [x.remote_id for x in provider.list_links()][:2]
     gone = f"ofmh-gone-{uuid.uuid4().hex[:8]}"
     found = provider.daily([*ids, gone], end - timedelta(days=6), end)
-    assert gone not in found
-    assert set(found) <= set(ids)
+    assert gone not in {x.remote_id for x in found}
+    assert {x.remote_id for x in found} <= set(ids)
 
 
 @pytest.mark.parametrize("name", PROVIDERS)
@@ -139,9 +139,9 @@ def test_fake_reports_the_seeded_traffic(name, fake_externals):
     provider = _client(name, "fake")
     end = utc_today()
     [link] = provider.list_links()
-    days = provider.daily([link.remote_id], end - timedelta(days=6), end)[
-        link.remote_id
-    ]
+    [found] = provider.daily([link.remote_id], end - timedelta(days=6), end)
+    assert found.remote_id == link.remote_id
+    days = found.days
     assert sum(d.views for d in days) == 14
     assert sum(d.clicks for d in days) == 8
 
@@ -152,8 +152,8 @@ def test_one_day_comes_back_by_the_hour(provider):
     day = utc_today()
     ids = [x.remote_id for x in provider.list_links()][:3]
     found = provider.hourly(ids, day)
-    assert set(found) <= set(ids)
-    for hours in found.values():
+    assert {x.remote_id for x in found} <= set(ids)
+    for hours in [x.hours for x in found]:
         assert all(h.hour.date() == day and h.hour.minute == 0 for h in hours)
         assert all(h.hour.utcoffset() == timedelta(0) for h in hours)
         assert len({h.hour for h in hours}) == len(hours)
@@ -163,7 +163,9 @@ def test_one_day_comes_back_by_the_hour(provider):
 def test_fake_reports_the_seeded_hours(name, fake_externals):
     provider = _client(name, "fake")
     [link] = provider.list_links()
-    hours = provider.hourly([link.remote_id], utc_today())[link.remote_id]
+    [found] = provider.hourly([link.remote_id], utc_today())
+    assert found.remote_id == link.remote_id
+    hours = found.hours
     # The seed's day as a whole: its first hour.
     assert [(h.hour.hour, h.views, h.clicks) for h in hours] == [(0, 10, 7)]
 

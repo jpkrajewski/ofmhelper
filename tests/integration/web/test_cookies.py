@@ -29,11 +29,12 @@ from ofmhelpers.db.stores.tracked_accounts import (
 )
 from ofmhelpers.db.stores.watched_profiles import watch
 from ofmhelpers.features.accounts import tracker as account_tracker
+from ofmhelpers.features.cookies import jar as cookie_jar
+from ofmhelpers.features.downloads import media as download_media
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.integrations.socials import AccountProfile, AccountStats, SocialError
 from ofmhelpers.integrations.socials.platforms.instagram import InstagramPlatform
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.downloads import media as download_media
 
 
 def _jar(secret: str, domain: str = ".instagram.com") -> bytes:
@@ -99,7 +100,7 @@ def test_replace_then_remove(ann):
     client, user_id = ann
     _upload(client, _jar(ANN_SECRET))
     _upload(client, _jar("newer", ".youtube.com"), "second.txt")
-    saved = cookies.saved(user_id)
+    saved = cookie_jar.saved(user_id)
     assert saved is not None
     assert saved.file_name == "second.txt"
     assert saved.summary.domains == ["tiktok.com", "youtube.com"]
@@ -315,7 +316,7 @@ def test_a_download_logs_in_as_whoever_started_it(ann, bob, monkeypatch):
 
     for client, _ in (ann, bob):
         r = client.post("/download-media/run", data={"urls": "https://x.test/p/1"})
-        assert r.status_code == 200
+        assert r.status_code == 202
 
     assert ANN_SECRET in (logins[0] or "")
     assert logins[1] is None

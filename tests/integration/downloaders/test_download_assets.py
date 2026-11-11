@@ -22,13 +22,14 @@ from signin import sign_in
 
 from ofmhelpers.db.stores import jobs as jobs_store
 from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
+from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.features.downloads import clean as clean_image_router
+from ofmhelpers.features.downloads import images as download_images_router
+from ofmhelpers.features.downloads import videos as download_reels_router
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.downloaders.generic import DownloadResult
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.downloads import clean_image as clean_image_router
-from ofmhelpers.web.routers.downloads import images as download_images_router
-from ofmhelpers.web.routers.downloads import videos as download_reels_router
 
 
 @pytest.fixture
@@ -74,13 +75,13 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
             },
         ]
 
-    monkeypatch.setattr(download_reels_router, "_run_downloads", fake_downloads)
+    monkeypatch.setattr(download_reels_router, "run_downloads", fake_downloads)
 
     r = client.post(
         "/download-videos/run",
         data={"urls": "https://a.example/1\nhttps://b.example/2"},
     )
-    assert r.status_code == 200
+    assert r.status_code == 202
     job_id = r.json()["job_id"]
 
     status = client.get(f"/download-videos/jobs/{job_id}/status").json()
@@ -99,12 +100,12 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
 
 
 def test_clean_images_json_run_and_status(client, monkeypatch, tmp_path):
-    monkeypatch.setattr(clean_image_router, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
     monkeypatch.setattr(clean_image_router, "clean_metadata", lambda d: None)
 
     files = [("files", ("photo.png", io.BytesIO(b"img bytes"), "image/png"))]
     r = client.post("/clean-images/run", files=files)
-    assert r.status_code == 200
+    assert r.status_code == 202
     job_id = r.json()["job_id"]
 
     status = client.get(f"/clean-images/jobs/{job_id}/status").json()
@@ -115,7 +116,7 @@ def test_clean_images_json_run_and_status(client, monkeypatch, tmp_path):
 
 def test_clean_images_keeps_two_images_with_one_name(client, monkeypatch, tmp_path):
     """Picks add up across folders, so two can share a name."""
-    monkeypatch.setattr(clean_image_router, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
     monkeypatch.setattr(clean_image_router, "clean_metadata", lambda d: None)
 
     files = [
@@ -133,7 +134,7 @@ def test_a_cleaned_image_saves_under_a_name_of_its_own_job(
 ):
     """Every run's first image is IMG_0001.png. From that name alone each saved
     as IMG_3133.png: "IMG_3133 (9).png" on disk."""
-    monkeypatch.setattr(clean_image_router, "UPLOAD_ROOT", tmp_path)
+    monkeypatch.setattr(clean_image_router, "upload_root", lambda: tmp_path)
 
     def cleaned() -> tuple[str, dict]:
         image = io.BytesIO()
@@ -172,7 +173,7 @@ def test_empty_submissions_rejected_cleanly(client):
 def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     monkeypatch.setattr(
         download_reels_router,
-        "_run_downloads",
+        "run_downloads",
         lambda urls, assets_root, user_id=None: [],
     )
 
@@ -227,7 +228,7 @@ def test_run_downloads_stringifies_output_paths(monkeypatch, tmp_path):
 
     monkeypatch.setattr(download_reels_router, "download_all", fake_download_all)
 
-    result = download_reels_router._run_downloads(
+    result = download_reels_router.run_downloads(
         ["https://a.example/1"], str(tmp_path / "assets")
     )
 
@@ -245,7 +246,7 @@ def test_run_downloads_images_stringifies_output_paths(monkeypatch, tmp_path):
 
     monkeypatch.setattr(download_images_router, "download_all", fake_download_all)
 
-    result = download_images_router._run_downloads(
+    result = download_images_router.run_downloads(
         ["https://a.example/1"], str(tmp_path / "assets")
     )
 

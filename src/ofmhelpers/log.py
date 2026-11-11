@@ -32,6 +32,7 @@ Dockerfile) is what makes them appear immediately.
 
 Who calls configure_logging():
   - `web/main.py` (uvicorn imports it to find `app`)
+  - `sweeps.py` (the sweeps container's entrypoint)
   - `worker.py` -- twice, deliberately: once in the pool parent, and again
     inside each worker child via ConfiguredWorker.work(), because
     `rq worker-pool` forks children that never ran the parent's setup.

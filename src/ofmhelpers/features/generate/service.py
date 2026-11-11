@@ -17,7 +17,11 @@ from starlette.datastructures import FormData, UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, run_job, set_job_preview
+from ofmhelpers.db.stores.jobs import create_job, set_job_preview
+from ofmhelpers.features.assets.manifests import build_ordered_paths
+from ofmhelpers.features.assets.store import register_generated_asset
+from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.integrations.ai_providers import runner
 from ofmhelpers.integrations.ai_providers.base import (
     get_provider,
@@ -89,7 +93,7 @@ def _settings(form: FormData, spec: ModelSpec) -> dict[str, Any]:
         for f in spec.form_fields
         if (values := form.getlist(f.name))
     }
-    return spec.parse_form(raw)
+    return spec.parse_form(raw).model_dump()
 
 
 def _media(
@@ -98,10 +102,6 @@ def _media(
     """Each media picker resolved to asset-store paths (always a list, so a
     job's params restore into the same picker). Starlette's `UploadFile`:
     a raw form holds those, not FastAPI's subclass."""
-    # Imported here, not at the top: the asset store still lives in the routers
-    # package, whose __init__ imports every router -- and /ai imports this.
-    from ofmhelpers.web.routers.task_helpers import build_ordered_paths
-
     media = {}
     for field in spec.media_fields:
         files = [v for v in form.getlist(field.name) if isinstance(v, UploadFile)]
@@ -110,6 +110,15 @@ def _media(
         if paths:
             media[field.name] = paths
     return media
+
+
+def model_spec(model: str) -> ModelSpec:
+    """The catalog entry of a model the form picked."""
+    try:
+        return get_spec(model)
+    except KeyError:
+        msg = "Unknown model"
+        raise NotFoundError(msg) from None
 
 
 def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
@@ -185,9 +194,6 @@ def _hosted_results(remote: list[str], spec: ModelSpec) -> list[ResultFile]:
 def _saved_results(
     paths: list[Path], remote: list[str], assets_root: Path
 ) -> list[ResultFile]:
-    # Imported here, not at the top: see `_media`.
-    from ofmhelpers.web.routers.task_helpers import register_generated_asset
-
     for path in paths:
         register_generated_asset(path, assets_root)
     return [
@@ -231,7 +237,7 @@ def run_ai(
             spec,
             # A callable: references upload only when a request is really
             # sent, so a resumed job never uploads them again.
-            lambda: spec.request(values, uploader(client, spec)),
+            lambda: spec.request(values, uploader(client, spec)).model_dump(),
             job_id,
             on_result_urls,
             part=part,

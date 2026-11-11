@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from signin import make_user, make_user_with_password, sign_in, sign_in_admin
 
 from ofmhelpers.db.stores import users
+from ofmhelpers.features.signin import credentials
 from ofmhelpers.integrations.signin.passwords import hash_password
 from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
@@ -625,6 +626,10 @@ def test_a_users_saved_key_prefills_their_forms_and_nobody_elses(client, monkeyp
     assert "user-key-1234" not in client.get("/generate").text
 
 
+def _saved_keys(user_id: int) -> dict[str, str]:
+    return {k.provider: k.api_key for k in users.api_keys(user_id).keys}
+
+
 def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
     """Both keys typed, one click: both saved. A blank field later leaves its
     saved key alone; only Remove removes."""
@@ -635,7 +640,7 @@ def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
         data={"key_kie": "kie-key-1111", "key_higgsfield": "hf-key-2222"},
     )
     assert "kie.ai and Higgsfield keys saved." in r.text
-    assert users.api_keys(user.id) == {
+    assert _saved_keys(user.id) == {
         "kie": "kie-key-1111",
         "higgsfield": "hf-key-2222",
     }
@@ -643,7 +648,7 @@ def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
     r = client.post(
         "/account/keys", data={"key_kie": "kie-key-3333", "key_higgsfield": ""}
     )
-    assert users.api_keys(user.id) == {
+    assert _saved_keys(user.id) == {
         "kie": "kie-key-3333",
         "higgsfield": "hf-key-2222",
     }
@@ -653,7 +658,7 @@ def test_one_save_stores_every_key_typed_and_keeps_the_blank_ones(client):
     assert "Nothing to save" in r.text
 
     client.post("/account/keys", data={"remove": "higgsfield", "key_kie": ""})
-    assert users.api_keys(user.id) == {"kie": "kie-key-3333"}
+    assert _saved_keys(user.id) == {"kie": "kie-key-3333"}
     assert client.post("/account/keys", data={"remove": "nope"}).status_code == 404
 
 
@@ -767,7 +772,7 @@ def test_concurrent_adds_of_one_email_make_one_user_and_never_raise():
     found = _together(8, lambda: repo.add("race@example.com", "user"))
     made = [f for f in found if f is not None]
     assert len(made) == 1
-    assert made[0]["email"] == "race@example.com"
+    assert made[0].email == "race@example.com"
     assert [u.email for u in users.list_users()].count("race@example.com") == 1
 
 
@@ -841,7 +846,7 @@ def test_a_password_change_signs_out_every_other_session(client, caplog):
 def test_a_password_set_from_a_link_signs_out_the_old_sessions(client):
     user = make_user_with_password(password=PASSWORD)
     assert _password_login(client, user.email, PASSWORD).status_code == 303
-    link = f"/password/{users.password_link(user.id)}"
+    link = f"/password/{credentials.password_link(user.id)}"
 
     done = TestClient(app).post(
         link,
@@ -903,3 +908,20 @@ def test_a_deactivated_agency_admin_stays_out_until_the_admin_password(client):
 
     assert _password_login(client, "admin", "test-admin").status_code == 303
     assert users.get_user(agency).active
+
+
+@pytest.mark.usefixtures("providers_on")
+def test_a_fake_consent_for_another_sign_in_is_a_400_in_our_words(client):
+    """A state that is not this browser's own (no trip started, or another
+    one's): refused, the reason logged, never shown."""
+    client.get("/auth/google/start", follow_redirects=False)
+
+    r = client.post(
+        "/auth/fake-consent",
+        data={"provider": "google", "state": "not-mine", "email": "a@example.com"},
+        follow_redirects=False,
+    )
+
+    assert r.status_code == 400
+    assert r.json() == {"detail": "Sign-in did not work. Try again."}
+    assert client.get("/generate", follow_redirects=False).status_code == 303

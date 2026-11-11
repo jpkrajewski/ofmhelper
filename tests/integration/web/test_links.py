@@ -19,7 +19,9 @@ from ofmhelpers.db.models import ShortLinkRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import short_links, users
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.features.links import sync as link_sync
+from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.short_links.fake import (
     BOUNCY_FAKE_KEY,
     OOPSIE_FAKE_KEY,
@@ -28,8 +30,7 @@ from ofmhelpers.integrations.short_links.fake import (
     fake_oopsie,
 )
 from ofmhelpers.schemas import Role, UserForm
-from ofmhelpers.schemas.links import utc_today
-from ofmhelpers.utils.outbound import FakeReply
+from ofmhelpers.schemas.links import LinkSyncKey, PlannedLink, utc_today
 from ofmhelpers.web.main import app
 
 FANVUE = "https://www.fanvue.com/walker_dane"
@@ -94,7 +95,7 @@ def test_a_user_without_their_own_key_gets_no_env_key(client):
     user = sign_in(client)
     # self is always keyed (served from our own data); the remote providers
     # need the user's own key and fall back to no env key for a non-admin.
-    keyed = {s.key: s.has_key for s in short_links.provider_states(user.id)}
+    keyed = {s.key: s.has_key for s in link_keys.provider_states(user.id)}
     assert keyed == {"self": True, "oopsie": False, "bouncy": False}
     page = client.get("/links")
     assert "No Oopsie API key" in page.text
@@ -131,6 +132,26 @@ def test_bouncy_links_are_made_per_account_and_18_plus_gated(client, admin):
     assert {x.account_handle for x in links.values()} == {"dane.walker", "dane_2nd"}
 
 
+def test_generate_leaves_a_job_row_naming_its_links(client, admin):
+    from ofmhelpers.db.stores.jobs import history
+
+    ids = _accounts(admin.id, "Rachel", "rachel.rose")
+    _generate(
+        client,
+        ids,
+        provider="oopsie",
+        domain="cutie.bio",
+        target="onlyfans",
+        destination="https://onlyfans.com/rachel.rosee/c124",
+        creator="Rachel",
+    )
+
+    [row] = [job for job in history() if job.task == "links_create"]
+    assert (row.actor, row.status) == (str(admin.id), "done")
+    assert row.params["provider"] == "oopsie"
+    assert len(row.params["link_ids"]) == len(ids)
+
+
 def test_oopsie_links_are_direct_deeplinks_with_the_age_gate(client, admin):
     ids = _accounts(admin.id, "Rachel", "rachel.rose")
     response = _generate(
@@ -142,12 +163,12 @@ def test_oopsie_links_are_direct_deeplinks_with_the_age_gate(client, admin):
         destination="https://onlyfans.com/rachel.rosee/c124",
         creator="Rachel",
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     page = fake_oopsie().pages["rachel.rose"]
-    assert page["theme"]["age_gate"] is True
-    assert page["theme"]["page_type"] == "direct"
-    assert page["theme"]["preferred_public_host"] == "cutie.bio"
-    assert page["theme"]["destination_url"] == "https://onlyfans.com/rachel.rosee/c124"
+    assert page.theme["age_gate"] is True
+    assert page.theme["page_type"] == "direct"
+    assert page.theme["preferred_public_host"] == "cutie.bio"
+    assert page.theme["destination_url"] == "https://onlyfans.com/rachel.rosee/c124"
     assert _links(admin.id)["rachel.rose"].url == "https://cutie.bio/rachel.rose"
 
 
@@ -160,7 +181,7 @@ def test_a_slug_taken_on_the_provider_is_numbered(client, admin):
     assert set(links) == {"dane-walker", "dane-walker-2"}
     assert links["dane-walker-2"].adult is True
     assert (
-        fake_bouncy().links["dane-walker"]["destination"]
+        fake_bouncy().links["dane-walker"].destination
         == "https://fanvue.com/someone-else"
     )
 
@@ -242,7 +263,7 @@ def test_a_link_whose_gate_fails_is_deleted_again(client, admin, monkeypatch):
     [row] = short_links.list_links(admin.id)
     assert row.status == "failed"
     assert row.error == "Bouncy did not take the 18+ gate on dane-walker"
-    assert fake_bouncy().links == {}
+    assert fake_bouncy().links.names() == []
 
 
 @pytest.mark.parametrize(
@@ -294,12 +315,12 @@ def test_sync_imports_links_matches_accounts_and_stores_days(client, admin):
     assert (dany.views(7), dany.clicks(7), dany.clicks(30)) == (10, 8, 48)
     # Links are always 18+ gated: the sync turns it on where it is off.
     assert links["ungated"].adult is True
-    assert fake_oopsie().pages["ungated"]["theme"]["age_gate"] is True
+    assert fake_oopsie().pages["ungated"].theme["age_gate"] is True
     page = client.get("/links?period=30")
     assert "without the 18+ confirmation" not in page.text
     assert "48" in page.text
     [usage] = [
-        s.usage for s in short_links.provider_states(admin.id) if s.key == "oopsie"
+        s.usage for s in link_keys.provider_states(admin.id) if s.key == "oopsie"
     ]
     assert (usage.used, usage.limit) == (2, 50)
 
@@ -315,8 +336,8 @@ def test_a_link_gone_from_the_provider_goes_from_the_list(client, admin):
 def test_a_link_its_job_lost_is_found_by_address_or_failed(client, admin, monkeypatch):
     ids = _accounts(admin.id, "Dane", "dane.walker", "lost.one")
     planned = [
-        {"slug": s, "domain": "bouncy.ai", "destination": FANVUE, "target": "fanvue",
-         "account_id": i, "creator": "Dane"}
+        PlannedLink(slug=s, domain="bouncy.ai", destination=FANVUE, target="fanvue",
+                    account_id=i, creator="Dane")
         for s, i in zip(["dane-walker", "lost-one"], ids, strict=True)
     ]  # fmt: skip
     short_links.add_creating(admin.id, "bouncy", planned)
@@ -335,13 +356,13 @@ def test_a_link_its_job_lost_is_found_by_address_or_failed(client, admin, monkey
 def test_a_provider_error_is_kept_on_the_sync(client, admin, monkeypatch):
     monkeypatch.setenv("BOUNCY_API_KEY_ADMIN", "bcy_live_pk_revoked")
     link_sync.sync_now(admin.id)
-    [state] = [s for s in short_links.provider_states(admin.id) if s.key == "bouncy"]
+    [state] = [s for s in link_keys.provider_states(admin.id) if s.key == "bouncy"]
     assert "refused the API key" in (state.error or "")
     assert "Bouncy: Bouncy refused the API key" in client.get("/links").text
 
 
 def test_two_sweeps_never_claim_the_same_sync(admin):
-    pairs = [(admin.id, "oopsie")]
+    pairs = [LinkSyncKey(user_id=admin.id, provider="oopsie")]
     assert short_links.claim_due(pairs) == pairs
     assert short_links.claim_due(pairs) == []
 
@@ -354,7 +375,7 @@ def test_turn_on_18_plus_for_an_ungated_page(client, admin):
     link_sync.sync_now(admin.id)
     [link] = short_links.list_links(admin.id)
     assert client.post("/links/adult", json={"ids": [link.id]}).json() == {"count": 1}
-    assert fake_oopsie().pages["ungated"]["theme"]["age_gate"] is True
+    assert fake_oopsie().pages["ungated"].theme["age_gate"] is True
     assert short_links.list_links(admin.id)[0].adult is True
 
 
@@ -363,12 +384,12 @@ def test_delete_removes_links_on_the_provider_and_here(client, admin):
     _generate(client, ids)
     [link] = short_links.list_links(admin.id)
     assert client.post("/links/delete", json={"ids": [link.id]}).json() == {"count": 1}
-    assert fake_bouncy().links == {}
+    assert fake_bouncy().links.names() == []
     assert short_links.list_links(admin.id) == []
 
 
 def _oopsie_state(user_id: int):
-    [state] = [s for s in short_links.provider_states(user_id) if s.key == "oopsie"]
+    [state] = [s for s in link_keys.provider_states(user_id) if s.key == "oopsie"]
     return state
 
 
@@ -469,7 +490,7 @@ def test_account_page_takes_link_provider_keys_and_syncs(client):
     fake_oopsie().add_page("mine", "https://onlyfans.com/me")
     saved = client.post("/account/keys", data={"key_oopsie": OOPSIE_FAKE_KEY})
     assert "Oopsie key saved." in saved.text
-    assert users.api_keys(user.id)["oopsie"] == OOPSIE_FAKE_KEY
+    assert users.api_keys(user.id).get("oopsie") == OOPSIE_FAKE_KEY
     assert set(_links(user.id)) == {"mine"}
 
 
@@ -480,10 +501,13 @@ def test_only_the_agency_admin_runs_on_the_env_keys(client, admin):
     """Another admin (added on /users) has data of their own: the agency's
     .env keys would sync, show and let them delete the agency's links."""
     other = users.add_user(UserForm(email="second.admin@example.com", role=Role.ADMIN))
-    assert short_links.api_key(other.id, "bouncy") is None
+    assert link_keys.api_key(other.id, "bouncy") is None
     agency = users.agency_id()
-    assert short_links.api_key(agency, "bouncy") == BOUNCY_FAKE_KEY
-    assert (other.id, "bouncy") not in short_links.keyed()
+    assert link_keys.api_key(agency, "bouncy") == BOUNCY_FAKE_KEY
+    assert (
+        link_keys.KeyedProvider(user_id=other.id, provider="bouncy")
+        not in link_keys.keyed()
+    )
 
 
 def test_a_link_left_ungated_is_recorded_flagged_and_gated_at_the_next_sync(
@@ -560,9 +584,10 @@ def test_a_sync_on_an_odd_answer_is_recorded_not_lost(client, admin, monkeypatch
 
     monkeypatch.setattr(BouncyProvider, "list_links", odd)
     link_sync.sync_now(admin.id, "bouncy")
-    [state] = [s for s in short_links.provider_states(admin.id) if s.key == "bouncy"]
+    [state] = [s for s in link_keys.provider_states(admin.id) if s.key == "bouncy"]
     assert state.error == "Sync failed (KeyError): 'pagination'"
-    assert short_links.claim_due([(admin.id, "bouncy")]) == []  # claim dropped
+    due = [LinkSyncKey(user_id=admin.id, provider="bouncy")]
+    assert short_links.claim_due(due) == []  # claim dropped
 
 
 def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(

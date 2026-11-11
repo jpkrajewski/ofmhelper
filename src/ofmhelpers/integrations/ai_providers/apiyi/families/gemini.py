@@ -100,8 +100,8 @@ class Gemini(SyncImages):
         limits = ImageLimits(max_bytes=each, max_side=_MAX_SIDE)
         parts: list[dict[str, Any]] = [{"text": str(payload.get("prompt", ""))}]
         for ref in images:
-            mime, data = client.inline(str(ref), limits)
-            parts.append({"inlineData": {"mimeType": mime, "data": data}})
+            sent = client.inline(str(ref), limits)
+            parts.append({"inlineData": {"mimeType": sent.mime, "data": sent.data}})
         image_config: dict[str, Any] = {}
         ratio = payload.get("aspect_ratio")
         if ratio and ratio != AUTO:

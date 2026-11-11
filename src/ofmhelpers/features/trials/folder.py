@@ -12,7 +12,7 @@ from typing import Self
 
 from pydantic import BaseModel
 
-from ofmhelpers.cache import JobQueue, QueueName
+from ofmhelpers.cache import JobQueue, Line, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import drive_folders as drive_store
 from ofmhelpers.db.stores.jobs import (
@@ -20,11 +20,11 @@ from ofmhelpers.db.stores.jobs import (
     get_job,
     merge_params,
     reopen_job,
-    run_job,
     running_jobs,
 )
 from ofmhelpers.db.stores.users import refresh_token
 from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.trials import media, tasks
 from ofmhelpers.features.trials.state import (
@@ -84,12 +84,12 @@ class FolderProgress(BaseModel):
     ahead: int | None = None
 
     @classmethod
-    def of(cls, state: FolderState, running: set[str], line: dict[str, int]) -> Self:
+    def of(cls, state: FolderState, running: set[str], line: Line) -> Self:
         return cls(
             ready=len(state.ready),
             total=len(state.reels),
             making=state.job_id in running,
-            ahead=line.get(state.job_id or ""),
+            ahead=line.ahead(state.job_id or ""),
         )
 
     @property
@@ -136,8 +136,8 @@ class FolderView(BaseModel):
     making: bool
     busy: set[str]
     uploading: set[str]
-    # The media queue: app job id -> jobs ahead of it.
-    line: dict[str, int]
+    # The media queue: who waits, and how many jobs are ahead of each.
+    line: Line
 
     @classmethod
     def of(cls, uid: int, state: FolderState) -> Self:
@@ -154,7 +154,7 @@ class FolderView(BaseModel):
                 for r in state.reels
                 if r.key in busy and r.status == ReelStatus.UPLOADING
             },
-            line=JobQueue(QueueName.MEDIA).line() if active else {},
+            line=JobQueue(QueueName.MEDIA).line() if active else Line(),
         )
 
     @property
@@ -171,7 +171,7 @@ class FolderView(BaseModel):
     @property
     def ahead(self) -> int | None:
         """Jobs before this folder's Generate, while it waits in the queue."""
-        return self.line.get(self.state.job_id or "") if self.making else None
+        return self.line.ahead(self.state.job_id or "") if self.making else None
 
     @property
     def queued(self) -> set[str]:
@@ -196,9 +196,9 @@ class FolderView(BaseModel):
         if self.uploading:
             return f"Uploading {len(self.uploading)} to Drive…"
         waiting = [
-            self.line[r.job_id]
+            ahead
             for r in self.state.reels
-            if r.job_id and r.job_id in self.line
+            if r.job_id and (ahead := self.line.ahead(r.job_id)) is not None
         ]
         if waiting:
             return _in_line(min(waiting))
@@ -287,9 +287,21 @@ def read_posted(uid: int, login_id: int) -> None:
         logger.info("trials: no folder card for login %s", login_id)
 
 
-def phone_cards(
-    uid: int, scope: int | None
-) -> tuple[DriveBoard, dict[int, FolderProgress]]:
+class PhoneCards(BaseModel):
+    """/trials: /drive's last read and each card's trials by its login."""
+
+    board: DriveBoard
+    progress: dict[int, FolderProgress]
+
+
+class OpenedFolder(BaseModel):
+    """One folder's page: its card and its reels."""
+
+    card: DriveCard
+    view: FolderView
+
+
+def phone_cards(uid: int, scope: int | None) -> PhoneCards:
     """/drive's last read and each card's trials."""
     board = drive_folders.board(owner=scope, viewer=uid, live=False)
     running = {j.id for j in running_jobs() if j.actor == str(uid)}
@@ -300,7 +312,7 @@ def phone_cards(
         )
         for c in board.cards
     }
-    return board, progress
+    return PhoneCards(board=board, progress=progress)
 
 
 class _Claim:
@@ -375,9 +387,9 @@ class Trials:
     encode: Callable[..., object]
     enqueue: Callable[..., object]
 
-    def open(self) -> tuple[DriveCard, FolderView]:
+    def open(self) -> OpenedFolder:
         card, state = _sync_state(self.scope, self.uid, self.login_id)
-        return card, FolderView.of(self.uid, state)
+        return OpenedFolder(card=card, view=FolderView.of(self.uid, state))
 
     def live(self) -> FolderLive:
         return FolderView.of(self.uid, load(self.uid, self.login_id)).live()
@@ -389,29 +401,23 @@ class Trials:
             raise NotFoundError(NO_FOLDER)
         return FolderView.of(self.uid, load(self.uid, self.login_id))
 
-    def _claim(self, label: str) -> _Claim:
+    def claim(self, label: str) -> _Claim:
         return _Claim(self.uid, self.login_id, label)
 
-    def _token(self) -> str:
+    def token(self) -> str:
         return refresh_token(self.uid) or ""
 
-    def _busy(self, job_id: str | None) -> bool:
+    def busy(self, job_id: str | None) -> bool:
         return _at_work(self.uid, job_id)
-
-    def _change_reel(self, key: str, edit: Callable[[ReelState], None]) -> FolderState:
-        state = change_reel(self.uid, self.login_id, key, edit)
-        if state.reel(key) is None:
-            raise NotFoundError(NO_REEL)
-        return state
 
     def generate(self) -> Started:
         """POSTED read for new reels: those downloaded and made, a copy already
         made left alone; a second click while it runs does nothing."""
         _sync_state(self.scope, self.uid, self.login_id)
-        claim = self._claim(GENERATE)
+        claim = self.claim(GENERATE)
 
         def take(state: FolderState) -> None:
-            if not self._busy(state.job_id):
+            if not self.busy(state.job_id):
                 state.job_id = claim.job()
                 state.tell(None)
                 for reel in state.failed:
@@ -423,64 +429,9 @@ class Trials:
                 self.encode,
                 tasks.make_trials,
                 len(state.reels),
-                refresh_token=self._token(),
+                refresh_token=self.token(),
             )
         return Started(started=bool(claim.job_id))
-
-    def remake(self, key: str, caption: str | None = None) -> Started:
-        """One reel made again as its own job, alongside whatever else runs
-        (with `caption` first, when given)."""
-        claim = self._claim("Making one trial")
-
-        def take(reel: ReelState) -> None:
-            if not self._busy(reel.job_id):
-                reel.claim_remake(claim.job(), caption)
-
-        self._change_reel(key, take)
-        if claim.job_id:
-            claim.launch(
-                self.encode,
-                tasks.generate_reels,
-                1,
-                keys=[key],
-                refresh_token=self._token(),
-            )
-        return Started(started=bool(claim.job_id))
-
-    def ask_captions(self, key: str) -> Started:
-        """A reel made before there were captions to choose from gets them, as
-        its own job (a click on one that has them does nothing: it would cost
-        quota)."""
-        claim = self._claim("Writing captions")
-
-        def take(reel: ReelState) -> None:
-            if not reel.captions and not self._busy(reel.job_id):
-                reel.claim_captions(claim.job())
-
-        self._change_reel(key, take)
-        if claim.job_id:
-            claim.launch(
-                self.enqueue,
-                tasks.write_captions,
-                1,
-                key=key,
-                refresh_token=self._token(),
-            )
-        return Started(started=bool(claim.job_id))
-
-    def apply_caption(self, key: str, caption: str) -> Started:
-        """A caption chosen or written: saved, then the reel is made again
-        with it."""
-        text = " ".join(caption.split())[:CAPTION_MAX]
-        # An empty box changes nothing: "" would mean "ask the AI", which costs
-        # quota.
-        if not text:
-            return Started(started=False)
-        return self.remake(key, text)
-
-    def select(self, key: str, selected: bool) -> Selected:
-        self._change_reel(key, lambda r: r.select(selected))
-        return Selected(selected=selected)
 
     def upload(self, approved: list[str] | None) -> Uploading:
         """The selected copies replace what is in TRIALS: each claimed for this
@@ -489,17 +440,17 @@ class Trials:
         at once would delete each other's. A copy deleted since (`cleanup`) is
         made again by the upload first, so that one waits its turn to encode."""
         wanted = set(approved or [])
-        claim = self._claim("Uploading")
+        claim = self.claim("Uploading")
         claimed: list[str] = []
 
         def take(state: FolderState) -> None:
             if not state.account_folder_id or any(
-                r.status == ReelStatus.UPLOADING and self._busy(r.job_id)
+                r.status == ReelStatus.UPLOADING and self.busy(r.job_id)
                 for r in state.reels
             ):
                 return
             for reel in state.ready:
-                if reel.key in wanted and not self._busy(reel.job_id):
+                if reel.key in wanted and not self.busy(reel.job_id):
                     reel.claim_upload(claim.job())
                     claimed.append(reel.key)
 
@@ -510,38 +461,110 @@ class Trials:
                 self.encode if remade else self.enqueue,
                 tasks.upload_trials,
                 len(claimed),
-                refresh_token=self._token(),
+                refresh_token=self.token(),
                 account_folder_id=state.account_folder_id,
                 keys=claimed,
             )
         return Uploading(uploading=claimed)
 
-    def _copy(self, key: str) -> Path:
-        reel = load(self.uid, self.login_id).reel(key)
-        path = at(self.uid, self.login_id, reel.out) if reel else None
+
+@dataclass(frozen=True)
+class Reel:
+    """One reel (`key`) of a viewer's trials: everything a route of one card
+    does. A key the folder does not have is `NotFoundError`."""
+
+    trials: Trials
+    key: str
+
+    def _change(self, edit: Callable[[ReelState], None]) -> FolderState:
+        state = change_reel(self.trials.uid, self.trials.login_id, self.key, edit)
+        if state.reel(self.key) is None:
+            raise NotFoundError(NO_REEL)
+        return state
+
+    def remake(self, caption: str | None = None) -> Started:
+        """One reel made again as its own job, alongside whatever else runs
+        (with `caption` first, when given)."""
+        claim = self.trials.claim("Making one trial")
+
+        def take(reel: ReelState) -> None:
+            if not self.trials.busy(reel.job_id):
+                reel.claim_remake(claim.job(), caption)
+
+        self._change(take)
+        if claim.job_id:
+            claim.launch(
+                self.trials.encode,
+                tasks.generate_reels,
+                1,
+                keys=[self.key],
+                refresh_token=self.trials.token(),
+            )
+        return Started(started=bool(claim.job_id))
+
+    def ask_captions(self) -> Started:
+        """A reel made before there were captions to choose from gets them, as
+        its own job (a click on one that has them does nothing: it would cost
+        quota)."""
+        claim = self.trials.claim("Writing captions")
+
+        def take(reel: ReelState) -> None:
+            if not reel.captions and not self.trials.busy(reel.job_id):
+                reel.claim_captions(claim.job())
+
+        self._change(take)
+        if claim.job_id:
+            claim.launch(
+                self.trials.enqueue,
+                tasks.write_captions,
+                1,
+                key=self.key,
+                refresh_token=self.trials.token(),
+            )
+        return Started(started=bool(claim.job_id))
+
+    def apply_caption(self, caption: str) -> Started:
+        """A caption chosen or written: saved, then the reel is made again
+        with it."""
+        text = " ".join(caption.split())[:CAPTION_MAX]
+        # An empty box changes nothing: "" would mean "ask the AI", which costs
+        # quota.
+        if not text:
+            return Started(started=False)
+        return self.remake(text)
+
+    def select(self, selected: bool) -> Selected:
+        self._change(lambda r: r.select(selected))
+        return Selected(selected=selected)
+
+    def _copy(self) -> Path:
+        reel = load(self.trials.uid, self.trials.login_id).reel(self.key)
+        path = at(self.trials.uid, self.trials.login_id, reel.out) if reel else None
         if path is None or not path.is_file():
             raise NotFoundError(NOT_GENERATED)
         return path
 
-    def playable(self, key: str) -> Path:
+    def playable(self) -> Path:
         """The copy as the page plays it (H.264, `media`); the copy itself when
         no preview can be made."""
-        copy = self._copy(key)
+        copy = self._copy()
         try:
             return media.preview(copy)
         except PREVIEW_ERRORS:
             logger.warning("trials: preview of %s failed", copy, exc_info=True)
             return copy
 
-    def poster(self, key: str) -> Path:
+    def poster(self) -> Path:
         """The copy's poster; of one deleted since (`cleanup`), the one kept."""
-        reel = load(self.uid, self.login_id).reel(key)
+        reel = load(self.trials.uid, self.trials.login_id).reel(self.key)
         gone = (
-            at(self.uid, self.login_id, reel.out) if reel and not reel.stored else None
+            at(self.trials.uid, self.trials.login_id, reel.out)
+            if reel and not reel.stored
+            else None
         )
         if gone is not None and (kept := media.poster_path(gone)).is_file():
             return kept
-        copy = self._copy(key)
+        copy = self._copy()
         try:
             return media.poster(copy)
         except PREVIEW_ERRORS as exc:

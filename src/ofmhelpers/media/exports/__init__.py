@@ -25,6 +25,7 @@ from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.recorder import available, load_profile
 from ofmhelpers.media.recorder.models import Recording
 from ofmhelpers.media.recorder.recorder import record
+from ofmhelpers.utils.registry import Registry
 
 __all__ = ["Export", "ExportOptions", "exports", "get_export"]
 
@@ -133,9 +134,9 @@ def _build() -> list[Export]:
 
 
 @lru_cache
-def exports() -> dict[str, Export]:
+def exports() -> Registry[Export]:
     """Every export, by name, in the order a page lists them."""
-    return {e.name: e for e in _build()}
+    return Registry[Export](entries={e.name: e for e in _build()})
 
 
 def get_export(name: str) -> Export:

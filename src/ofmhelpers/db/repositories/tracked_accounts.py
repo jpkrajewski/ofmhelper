@@ -25,25 +25,33 @@ from ofmhelpers.db.repositories.cached_repository import (
 )
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.accounts import Baseline, Snapshot, TrackedAccount
+from ofmhelpers.schemas.socials import (
+    AccountMetrics,
+    AccountProfile,
+    PostStat,
+    PostViews,
+)
 
 
-def _to_dict(row: TrackedAccountRow, creator: str | None) -> dict:
-    return {
-        "id": row.id,
-        "user_id": row.user_id,
-        "platform": row.platform,
-        "handle": row.handle,
-        "creator": creator,
-        "notes": row.notes,
-        "added_at": row.added_at,
-        "scanned_at": row.scanned_at,
-        "claimed_at": row.claimed_at,
-        "untracked_at": row.untracked_at,
-        "error": row.error,
-        "profile": row.profile,
-        "metrics": row.metrics,
-        "covered_since": row.covered_since,
-    }
+def _account(row: TrackedAccountRow, creator: str | None) -> TrackedAccount:
+    profile, metrics = row.profile, row.metrics
+    return TrackedAccount(
+        id=row.id,
+        user_id=row.user_id,
+        platform=row.platform,
+        handle=row.handle,
+        creator=creator,
+        notes=row.notes,
+        added_at=row.added_at,
+        scanned_at=row.scanned_at,
+        claimed_at=row.claimed_at,
+        untracked_at=row.untracked_at,
+        error=row.error,
+        profile=None if profile is None else AccountProfile.model_validate(profile),
+        metrics=None if metrics is None else AccountMetrics.model_validate(metrics),
+        covered_since=row.covered_since,
+    )
 
 
 def _creator_id(s: Session, name: str | None, user_id: int) -> int | None:
@@ -84,7 +92,7 @@ def _baselines(
     return {a: (f, t) for a, f, t in s.execute(query).all()}
 
 
-def _post_views(s: Session, account_id: int | None) -> dict[int, list[dict]]:
+def _post_views(s: Session, account_id: int | None) -> dict[int, list[PostViews]]:
     """Per account (or only `account_id`), its kept posts: views and publish
     time only, what view windows need. Retention is applied when a scan
     succeeds, never on read: an account that stopped syncing (banned,
@@ -93,9 +101,9 @@ def _post_views(s: Session, account_id: int | None) -> dict[int, list[dict]]:
     query = select(post.account_id, post.views, post.posted_at)
     if account_id is not None:
         query = query.where(post.account_id == account_id)
-    out: dict[int, list[dict]] = {}
+    out: dict[int, list[PostViews]] = {}
     for a, views, posted_at in s.execute(query).all():
-        out.setdefault(a, []).append({"views": views, "posted_at": posted_at})
+        out.setdefault(a, []).append(PostViews(views=views, posted_at=posted_at))
     return out
 
 
@@ -229,8 +237,8 @@ def _with_baselines(
     rows: Sequence[Row],
     periods_days: list[int],
     account_id: int | None,
-) -> list[dict]:
-    """The `_ACCOUNTS` results as dicts, each with `baselines`: per
+) -> list[TrackedAccount]:
+    """The `_ACCOUNTS` results as accounts, each with `baselines`: per
     period, the newest snapshot at least that old (none for an account
     tracked for less), `first`: its first snapshot, for growth since it
     was added, `latest`: its newest one (the last successful sync), and
@@ -242,20 +250,24 @@ def _with_baselines(
     post_views = _post_views(s, account_id)
     out = []
     for row, creator in rows:
-        item = _to_dict(row, creator)
-        item["post_views"] = post_views.get(row.id, [])
-        item["baselines"] = [
-            {"days": d, "followers": base[0], "taken_at": base[1]}
+        item = _account(row, creator)
+        item.post_views = post_views.get(row.id, [])
+        item.baselines = [
+            Baseline(days=d, followers=base[0], taken_at=base[1])
             for d in periods_days
             if (base := periods[d].get(row.id))
         ]
-        for key, found in (("first", first), ("latest", latest)):
-            snap = found.get(row.id)
-            item[key] = (
-                {"days": 0, "followers": snap[0], "taken_at": snap[1]} if snap else None
-            )
+        item.first = _snapshot_baseline(first.get(row.id))
+        item.latest = _snapshot_baseline(latest.get(row.id))
         out.append(item)
     return out
+
+
+def _snapshot_baseline(snap: tuple[int, float] | None) -> Baseline | None:
+    """A `_baselines` (followers, taken_at) that is no period's: days 0."""
+    if snap is None:
+        return None
+    return Baseline(days=0, followers=snap[0], taken_at=snap[1])
 
 
 class TrackedAccountRepository(CachedRepository):
@@ -310,7 +322,9 @@ class TrackedAccountRepository(CachedRepository):
             return restored is not None
 
     @cached
-    def list_all(self, periods_days: list[int], owner: int | None = None) -> list[dict]:
+    def list_all(
+        self, periods_days: list[int], owner: int | None = None
+    ) -> list[TrackedAccount]:
         """`owner`'s tracked accounts, newest first, with their growth
         baselines and their posts' views (see `_with_baselines`)."""
         with session_scope() as s:
@@ -325,7 +339,7 @@ class TrackedAccountRepository(CachedRepository):
             return _with_baselines(s, rows, periods_days, None)
 
     @cached
-    def get(self, account_id: int, periods_days: list[int]) -> dict | None:
+    def get(self, account_id: int, periods_days: list[int]) -> TrackedAccount | None:
         """One account, tracked or not, with its baselines and its kept
         posts, in full."""
         with session_scope() as s:
@@ -339,22 +353,20 @@ class TrackedAccountRepository(CachedRepository):
                 .where(post.account_id == account_id)
                 .order_by(post.posted_at.desc())
             ).scalars()
-            return {
-                **item[0],
-                "posts": [
-                    {
-                        "id": p.post_id,
-                        "url": p.url,
-                        "views": p.views,
-                        "posted_at": p.posted_at,
-                        "thumbnail_url": p.thumbnail_url,
-                    }
-                    for p in posts
-                ],
-            }
+            item[0].posts = [
+                PostStat(
+                    id=p.post_id,
+                    url=p.url,
+                    views=p.views,
+                    posted_at=p.posted_at,
+                    thumbnail_url=p.thumbnail_url,
+                )
+                for p in posts
+            ]
+            return item[0]
 
     @cached
-    def history(self, account_id: int, since: float) -> list[dict]:
+    def history(self, account_id: int, since: float) -> list[Snapshot]:
         """The account's snapshots taken since `since`, oldest first."""
         snap = AccountSnapshotRow
         with session_scope() as s:
@@ -363,7 +375,7 @@ class TrackedAccountRepository(CachedRepository):
                 .where(snap.account_id == account_id, snap.taken_at >= since)
                 .order_by(snap.taken_at)
             ).all()
-            return [{"taken_at": t, "followers": f, "metrics": m} for t, f, m in rows]
+            return [Snapshot(taken_at=t, followers=f, metrics=m) for t, f, m in rows]
 
     @cached
     def list_creators(self, owner: int | None = None) -> list[str]:

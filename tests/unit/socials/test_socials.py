@@ -24,6 +24,7 @@ from ofmhelpers.integrations.socials import (
     platforms,
 )
 from ofmhelpers.integrations.socials.platforms import instagram as ig_platform
+from ofmhelpers.schemas.socials import platform_names
 
 NOW = 1_800_000_000.0
 DAY = 86400
@@ -261,3 +262,11 @@ def test_capped_scan_does_not_cover_windows_it_did_not_reach():
     assert ViewWindow.of(POSTS, 7, NOW, covered_since=reach).covered
     assert not ViewWindow.of(POSTS, 14, NOW, covered_since=reach).covered
     assert not ViewWindow.of(POSTS, 1, NOW, covered_since=None).covered
+
+
+def test_every_platform_has_its_names_under_the_same_key():
+    """`schemas/socials.py` names a platform for the code below integrations
+    (stores, forms); the scanning class here extends those names."""
+    assert platform_names().names() == platforms().names()
+    for key, platform in platforms().entries.items():
+        assert isinstance(platform, type(platform_names()[key]))

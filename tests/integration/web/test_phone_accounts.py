@@ -36,7 +36,7 @@ def _add(admin: TestClient, phone: int, service: str, username: str) -> int:
     r = admin.post(
         f"/phones/{phone}/logins", json={"service": service, "username": username}
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     return r.json()["id"]
 
 
@@ -147,7 +147,7 @@ def test_a_failing_tracker_never_fails_the_saved_login(admin, monkeypatch):
         json={"service": "instagram", "username": "yuki_kanasiva"},
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert [x.username for x in store.list_devices()[0].logins] == ["yuki_kanasiva"]
 
 

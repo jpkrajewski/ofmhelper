@@ -25,13 +25,13 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.signin.base import (
-    Identity,
     SignInError,
     TokenReply,
     checked,
     claims,
     token_request,
 )
+from ofmhelpers.schemas.users import Identity
 
 ISSUER = "https://appleid.apple.com"
 AUTH_URL = f"{ISSUER}/auth/authorize"

@@ -11,13 +11,14 @@ in it must be the one this sign-in started with.
 
 import base64
 import json
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import requests
 from pydantic import BaseModel, ValidationError, field_validator
 
 from ofmhelpers.errors import AppError
-from ofmhelpers.utils import outbound
+from ofmhelpers.integrations import outbound
+lazy from ofmhelpers.schemas.users import Identity
 
 _TIMEOUT_S = 20
 
@@ -25,19 +26,6 @@ _TIMEOUT_S = 20
 class SignInError(AppError):
     """The provider refused, failed, or answered something unusable; the
     message is safe to show."""
-
-
-class Identity(BaseModel):
-    """Who the provider says signed in."""
-
-    provider: str
-    # The provider's stable id for the account: what links it to a user.
-    subject: str
-    email: str = ""
-    email_verified: bool = False
-    name: str = ""
-    # Google only: lets Drive uploads go up as this person.
-    refresh_token: str | None = None
 
 
 class Claims(BaseModel):
@@ -61,6 +49,7 @@ class TokenReply(BaseModel):
     refresh_token: str | None = None
 
 
+@runtime_checkable
 class Provider(Protocol):
     """One way to sign in. `name` is its URL segment (/auth/<name>/...)."""
 

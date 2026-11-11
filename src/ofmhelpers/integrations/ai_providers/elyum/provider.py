@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, model_serializer
+
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.base import (
     Provider,
@@ -56,7 +58,8 @@ class ElyumProvider(Provider):
         return self.client.upload(path, max_bytes)
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
-        return self.client.create(wire_body(spec, payload), idempotency_key).id
+        body = wire_body(spec, payload).model_dump()
+        return self.client.create(body, idempotency_key).id
 
     def status(self, task_id: str) -> TaskState:
         generation = self.client.get(task_id)
@@ -79,23 +82,48 @@ class ElyumProvider(Provider):
         raise ProviderUnavailableError(msg)
 
 
-def _source(value: str) -> dict[str, str]:
-    key = "file" if value.startswith(FILE_ID_PREFIX) else "url"
-    return {key: value}
+class Input(BaseModel):
+    """One of `inputs`: an upload's id (`file`) or a link (`url`), and its role."""
+
+    role: str
+    file: str | None = None
+    url: str | None = None
 
 
-def wire_body(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
+class Body(BaseModel):
+    """`POST /v1/generations`: `settings` go beside `model` by the names and
+    in the order given, `inputs` last and only when there are any."""
+
+    model: str
+    settings: dict[str, Any]
+    inputs: list[Input]
+
+    @model_serializer
+    def _wire(self) -> dict[str, Any]:
+        body = {"model": self.model, **self.settings}
+        if self.inputs:
+            body["inputs"] = [i.model_dump(exclude_none=True) for i in self.inputs]
+        return body
+
+
+def _input(role: str, value: str) -> Input:
+    if value.startswith(FILE_ID_PREFIX):
+        return Input(role=role, file=value)
+    return Input(role=role, url=value)
+
+
+def wire_body(spec: ModelSpec, payload: Payload) -> Body:
     """What Elyum is sent: the model id, every setting as given, and each
     media field's files as `inputs` in field order (Elyum numbers them per
     kind in the order sent)."""
     raw = spec.input_schema.get("properties")
     schema = raw if isinstance(raw, dict) else {}
     media = {f.name for f in spec.media_fields}
-    body: dict[str, Any] = {"model": spec.model_id}
-    inputs: list[dict[str, str]] = []
+    given: dict[str, Any] = {}
+    inputs: list[Input] = []
     for name, value in payload.items():
         if name not in media:
-            body[name] = value
+            given[name] = value
             continue
         field = schema.get(name)
         role = (
@@ -104,11 +132,9 @@ def wire_body(spec: ModelSpec, payload: Payload) -> dict[str, Any]:
             else DEFAULT_ROLE
         )
         values = value if isinstance(value, list) else [value]
-        inputs += [{"role": role, **_source(str(v))} for v in values if v]
-    if inputs:
-        body["inputs"] = inputs
-    if isinstance(body.get("prompt"), str):
-        body["prompt"] = _CITE.sub(
-            lambda m: f"@{m.group(1).lower()}{m.group(2)}", body["prompt"]
+        inputs += [_input(role, str(v)) for v in values if v]
+    if isinstance(given.get("prompt"), str):
+        given["prompt"] = _CITE.sub(
+            lambda m: f"@{m.group(1).lower()}{m.group(2)}", given["prompt"]
         )
-    return body
+    return Body(model=spec.model_id, settings=given, inputs=inputs)

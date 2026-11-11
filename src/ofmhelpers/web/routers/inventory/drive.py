@@ -12,51 +12,24 @@ sweep now instead of at the next interval.
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Request, Response
+from fastapi import APIRouter, Path, Request, Response
 
-from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import get_job
 from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.integrations.gdrive import DriveError
-from ofmhelpers.integrations.signin import SignInError
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import SyncReport, UploadPick
+from ofmhelpers.features.drive import page
+from ofmhelpers.schemas import SyncReport
 from ofmhelpers.web.dependencies import Actor, CurrentUser, Scope
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import FILES_PREFIX as CLONE_FILES
 from ofmhelpers.web.routers.generation.clone import TASK as CLONE_TASK
-from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.templates_config import render
-
-logger = get_logger(__name__)
 
 router = APIRouter(prefix="/drive", tags=["drive"])
 
 # Drive ids: letters, digits, - and _.
 FileId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{10,128}$")]
 
-
-def _upload_pick(actor: str, job_id: str) -> UploadPick | None:
-    """The /clone video `?upload=` names, when it is the session's own
-    finished run."""
-    job = get_job(job_id, actor)
-    if job is None or job.task != CLONE_TASK or job.status != "done":
-        return None
-    assets, _failed = job_assets(job, CLONE_FILES)
-    if not assets:
-        return None
-    first = assets[0]
-    return UploadPick(
-        job_id=job.id,
-        name=first.download_name,
-        preview_url=first.preview_url or first.view_url,
-        poster_url=first.poster_url,
-        already=[
-            u.login_id
-            for u in upload_store.for_jobs([job.id])
-            if u.status in ("done", "queued")
-        ],
-    )
+# `?upload=` names a finished /clone run.
+_CLONE = page.Source(task=CLONE_TASK, files_prefix=CLONE_FILES)
 
 
 @router.get("")
@@ -66,9 +39,8 @@ def drive_page(
     """At once, from each folder's last read: no Drive call. drive.js then
     swaps in `/drive/live`. `upload`: a /clone run whose video goes into
     the account card clicked (drive.js)."""
-    board = drive_folders.board(owner=scope, viewer=user.id, live=False)
-    pick = _upload_pick(actor, upload) if upload else None
-    return render(request, "drive.html", board=board, pick=pick)
+    view = page.page_view(scope, user.id, actor, upload, _CLONE)
+    return render(request, "drive.html", **dict(view))
 
 
 @router.get("/live")
@@ -89,13 +61,8 @@ def sync(scope: Scope) -> SyncReport:
 
 @router.get("/thumb/{login_id}/{file_id}")
 def thumb(login_id: int, file_id: FileId, scope: Scope) -> Response:
-    try:
-        found = drive_folders.thumbnail(login_id, file_id, scope)
-    except (DriveError, SignInError) as exc:
-        logger.warning("drive: preview of %s failed: %s", file_id, exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="No preview") from exc
-    if found is None:
-        raise HTTPException(status_code=404, detail="No preview yet")
-    content, media_type = found
+    found = page.preview(login_id, file_id, scope)
     # A file's preview never changes; the browser keeps it, nobody else.
-    return Response(content=content, media_type=media_type, headers=PRIVATE_FOR_A_DAY)
+    return Response(
+        content=found.content, media_type=found.media_type, headers=PRIVATE_FOR_A_DAY
+    )

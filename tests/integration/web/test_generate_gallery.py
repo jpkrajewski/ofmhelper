@@ -6,7 +6,7 @@ static/js/gallery-scroll.js to append. What matters is that the two render the
 same card markup, that pages don't overlap, and that the sentinel disappears at
 the end -- its absence is the only thing that stops the scroll.
 
-Page size is patched down to PAGE here rather than fixtured up to the real
+Page size is set down to PAGE here rather than fixtured up to the real
 gallery_limit: conftest truncates the jobs table before every test, so each one
 would otherwise pay for ~40 job inserts to prove arithmetic that three per page
 demonstrates just as well. test_gallery_limit_still_comes_from_config keeps the
@@ -24,9 +24,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, run_job
+from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
-from ofmhelpers.web.routers.generation import index as gallery_index
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -35,7 +35,7 @@ PAGE = 3
 
 @pytest.fixture(autouse=True)
 def small_pages(monkeypatch):
-    monkeypatch.setattr(gallery_index, "GALLERY_LIMIT", PAGE)
+    monkeypatch.setenv("OFM_GALLERY_LIMIT", str(PAGE))
 
 
 @pytest.fixture
@@ -125,8 +125,10 @@ def test_gallery_cards_show_the_asset_filename(client, tmp_path):
     assert '<p class="filename">her-voice.mp3</p>' in html
 
 
-def test_gallery_limit_still_comes_from_config(small_pages):
-    """small_pages patched the module constant, not the setting behind it."""
+def test_gallery_limit_still_comes_from_config(monkeypatch):
+    """`small_pages` sets the setting itself (the page reads it at each
+    request): without it the real default is back."""
+    monkeypatch.delenv("OFM_GALLERY_LIMIT")
     assert settings.web.gallery_limit == 20
 
 

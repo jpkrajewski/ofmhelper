@@ -27,7 +27,7 @@ def _key_of_kind(backend: str, kind: AccountType) -> str:
     """A real key of that kind from .env; the test is skipped without one."""
     if backend == "fake":
         return CREATOR_KEY if kind == AccountType.CREATOR else AGENCY_KEY
-    for key in settings.stacked.api_keys.values():
+    for key in (k.key for k in settings.stacked.api_keys):
         if StackedClient(key).me().account.type == kind:
             return key
     pytest.skip(f"no {kind} key in .env (STACKED_API_KEY_<NAME>)")

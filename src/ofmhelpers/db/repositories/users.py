@@ -23,6 +23,7 @@ from ofmhelpers.db.repositories.cached_repository import (
     invalidates_cache,
 )
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.users import LinkedAccount, Role, SavedKey, SavedKeys, User
 
 
 def _credential_stamp(password_hash: str) -> str:
@@ -33,30 +34,30 @@ def _credential_stamp(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
 
 
-def _to_dict(row: UserRow) -> dict:
-    return {
-        "id": row.id,
-        "email": row.email,
-        "name": row.name,
-        "role": row.role,
-        "active": row.active,
-        "created_at": row.created_at,
-        "last_login_at": row.last_login_at,
-        "drive_connected": row.drive_connected,
-        "has_password": bool(row.password_hash),
-        "drive_root_id": row.drive_root_id,
-        "is_password_account": row.is_password_account,
-        "credential_stamp": _credential_stamp(row.password_hash),
-    }
+def _user(row: UserRow) -> User:
+    return User(
+        id=row.id,
+        email=row.email,
+        name=row.name,
+        role=Role(row.role),
+        active=row.active,
+        created_at=row.created_at,
+        last_login_at=row.last_login_at,
+        drive_connected=row.drive_connected,
+        has_password=bool(row.password_hash),
+        drive_root_id=row.drive_root_id,
+        is_password_account=row.is_password_account,
+        credential_stamp=_credential_stamp(row.password_hash),
+    )
 
 
-def _identity_to_dict(row: UserIdentityRow) -> dict:
-    return {
-        "provider": row.provider,
-        "subject": row.subject,
-        "email": row.email,
-        "linked_at": row.linked_at,
-    }
+def _linked_account(row: UserIdentityRow) -> LinkedAccount:
+    return LinkedAccount(
+        provider=row.provider,
+        subject=row.subject,
+        email=row.email,
+        linked_at=row.linked_at,
+    )
 
 
 class OwnsDataError(ValueError):
@@ -68,34 +69,34 @@ class UserRepository(CachedRepository):
     cache_namespace = "user"
 
     @cached
-    def get(self, user_id: int) -> dict | None:
+    def get(self, user_id: int) -> User | None:
         with session_scope() as s:
             row = s.get(UserRow, user_id)
-            return _to_dict(row) if row else None
+            return _user(row) if row else None
 
     @cached
-    def by_email(self, email: str) -> dict | None:
+    def by_email(self, email: str) -> User | None:
         with session_scope() as s:
             row = s.execute(
                 select(UserRow).where(UserRow.email == email)
             ).scalar_one_or_none()
-            return _to_dict(row) if row else None
+            return _user(row) if row else None
 
     @cached
-    def list_all(self) -> list[dict]:
+    def list_all(self) -> list[User]:
         """Admins first, then by email."""
         with session_scope() as s:
             rows = s.execute(select(UserRow)).scalars().all()
-            found = [_to_dict(r) for r in rows]
-        return sorted(found, key=lambda u: (u["role"] != "admin", u["email"]))
+            found = [_user(r) for r in rows]
+        return sorted(found, key=lambda u: (not u.is_admin, u.email))
 
     @cached
-    def password_account(self) -> dict | None:
+    def password_account(self) -> User | None:
         with session_scope() as s:
             row = s.execute(
                 select(UserRow).where(UserRow.is_password_account.is_(True)).limit(1)
             ).scalar_one_or_none()
-            return _to_dict(row) if row else None
+            return _user(row) if row else None
 
     @invalidates_cache
     def set_drive_root(self, user_id: int, folder_id: str | None) -> None:
@@ -112,7 +113,7 @@ class UserRepository(CachedRepository):
         name: str = "",
         *,
         password_account: bool = False,
-    ) -> dict | None:
+    ) -> User | None:
         """None when the email is taken -- also by a request racing this
         one (one INSERT ... ON CONFLICT DO NOTHING: never an IntegrityError)."""
         with session_scope() as s:
@@ -131,10 +132,10 @@ class UserRepository(CachedRepository):
                 .on_conflict_do_nothing(index_elements=[UserRow.email])
                 .returning(UserRow)
             ).one_or_none()
-            return _to_dict(row) if row else None
+            return _user(row) if row else None
 
     @invalidates_cache
-    def update(self, user_id: int, **fields: object) -> dict | None:
+    def update(self, user_id: int, **fields: object) -> User | None:
         """Sets `fields` (role, active, name); None when there is no such user."""
         with session_scope() as s:
             row = s.get(UserRow, user_id)
@@ -143,7 +144,7 @@ class UserRepository(CachedRepository):
             for key, value in fields.items():
                 setattr(row, key, value)
             s.flush()
-            return _to_dict(row)
+            return _user(row)
 
     @invalidates_cache
     def signed_in(self, user_id: int, name: str, refresh_token: str | None) -> None:
@@ -180,13 +181,15 @@ class UserRepository(CachedRepository):
             row = s.get(UserRow, user_id)
             return row.google_refresh_token if row else ""
 
-    def api_keys(self, user_id: int) -> dict[str, str]:
-        """provider -> key, decrypted: never cached."""
+    def api_keys(self, user_id: int) -> SavedKeys:
+        """Each provider's key, decrypted: never cached."""
         with session_scope() as s:
             rows = s.execute(
                 select(UserApiKeyRow).where(UserApiKeyRow.user_id == user_id)
             ).scalars()
-            return {r.provider: r.api_key for r in rows}
+            return SavedKeys(
+                keys=[SavedKey(provider=r.provider, api_key=r.api_key) for r in rows]
+            )
 
     def set_api_key(self, user_id: int, provider: str, api_key: str) -> None:
         """Stores the key; "" removes it."""
@@ -216,14 +219,14 @@ class UserRepository(CachedRepository):
             return row.user_id if row else None
 
     @cached
-    def identities(self, user_id: int) -> list[dict]:
+    def identities(self, user_id: int) -> list[LinkedAccount]:
         with session_scope() as s:
             rows = s.execute(
                 select(UserIdentityRow)
                 .where(UserIdentityRow.user_id == user_id)
                 .order_by(UserIdentityRow.provider)
             ).scalars()
-            return [_identity_to_dict(r) for r in rows]
+            return [_linked_account(r) for r in rows]
 
     @invalidates_cache
     def link_identity(

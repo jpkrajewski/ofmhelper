@@ -28,6 +28,15 @@ from ofmhelpers.db.repositories.cached_repository import (
 )
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
+from ofmhelpers.schemas.link_catalog import DayStat
+from ofmhelpers.schemas.links import (
+    LinkAddress,
+    LinkSync,
+    LinkSyncKey,
+    ShortLink,
+)
+from ofmhelpers.schemas.self_links import BridgeTarget, SelfLink
+lazy from ofmhelpers.schemas.links import PlannedLink
 
 # The statuses of a link the provider has.
 LIVE = ("active", "inactive")
@@ -39,30 +48,37 @@ _LINKS = (
 )
 
 
-def _to_dict(row: ShortLinkRow, creator: str | None, handle: str | None) -> dict:
-    return {
-        "id": row.id,
-        "user_id": row.user_id,
-        "provider": row.provider,
-        "remote_id": row.remote_id,
-        "slug": row.slug,
-        "domain": row.domain,
-        "url": row.url,
-        "destination": row.destination,
-        "target": row.target,
-        "creator": creator,
-        "account_id": row.account_id,
-        "account_handle": handle,
-        "status": row.status,
-        "adult": row.adult,
-        "error": row.error,
-        "created_at": row.created_at,
-        "updated_at": row.updated_at,
-    }
+def _link(
+    row: ShortLinkRow,
+    creator: str | None,
+    handle: str | None,
+    days: list[DayStat] | None = None,
+) -> ShortLink:
+    return ShortLink.model_validate(
+        {
+            "id": row.id,
+            "user_id": row.user_id,
+            "provider": row.provider,
+            "remote_id": row.remote_id,
+            "slug": row.slug,
+            "domain": row.domain,
+            "url": row.url,
+            "destination": row.destination,
+            "target": row.target,
+            "creator": creator,
+            "account_id": row.account_id,
+            "account_handle": handle,
+            "status": row.status,
+            "adult": row.adult,
+            "error": row.error,
+            "created_at": row.created_at,
+            "days": days or [],
+        }
+    )
 
 
-def _days(s: Session, link_ids: list[int], since: date) -> dict[int, list[dict]]:
-    found: dict[int, list[dict]] = {}
+def _days(s: Session, link_ids: list[int], since: date) -> dict[int, list[DayStat]]:
+    found: dict[int, list[DayStat]] = {}
     if not link_ids:
         return found
     day = ShortLinkDayRow
@@ -72,9 +88,7 @@ def _days(s: Session, link_ids: list[int], since: date) -> dict[int, list[dict]]
         .order_by(day.day)
     ).all()
     for link_id, d, views, clicks in rows:
-        found.setdefault(link_id, []).append(
-            {"day": d.isoformat(), "views": views, "clicks": clicks}
-        )
+        found.setdefault(link_id, []).append(DayStat(day=d, views=views, clicks=clicks))
     return found
 
 
@@ -89,7 +103,7 @@ def _creator_of_account(s: Session, account_id: int | None) -> int | None:
 class ShortLinkRepository(CachedRepository):
     cache_namespace = "short_link"
 
-    def list_all(self, owner: int | None, since: date) -> list[dict]:
+    def list_all(self, owner: int | None, since: date) -> list[ShortLink]:
         """`owner`'s links, newest first, each with its `days` since
         `since`."""
         with session_scope() as s:
@@ -100,20 +114,20 @@ class ShortLinkRepository(CachedRepository):
             ).all()
             days = _days(s, [r[0].id for r in rows], since)
             return [
-                {**_to_dict(row, creator, handle), "days": days.get(row.id, [])}
+                _link(row, creator, handle, days.get(row.id))
                 for row, creator, handle in rows
             ]
 
-    def by_ids(self, ids: list[int], owner: int | None = None) -> list[dict]:
+    def by_ids(self, ids: list[int], owner: int | None = None) -> list[ShortLink]:
         with session_scope() as s:
             rows = s.execute(
                 _LINKS.where(
                     ShortLinkRow.id.in_(ids), *mine(ShortLinkRow.user_id, owner)
                 ).order_by(ShortLinkRow.id)
             ).all()
-            return [_to_dict(*r) for r in rows]
+            return [_link(*r) for r in rows]
 
-    def active_self_link(self, host: str, slug: str) -> dict | None:
+    def active_self_link(self, host: str, slug: str) -> BridgeTarget | None:
         """The live self-hosted bridge link on `host` with `slug` (the bridge
         serves it); None when there is no active one."""
         link = ShortLinkRow
@@ -128,16 +142,16 @@ class ShortLinkRepository(CachedRepository):
             ).first()
             if row is None:
                 return None
-            return {
-                "id": row.id,
-                "destination": row.destination,
-                "slug": row.slug,
-                "domain": row.domain,
-            }
+            return BridgeTarget(
+                id=row.id,
+                destination=row.destination,
+                slug=row.slug,
+                domain=row.domain,
+            )
 
     def provider_links(
         self, user_id: int, provider: str, statuses: tuple[str, ...]
-    ) -> list[dict]:
+    ) -> list[SelfLink]:
         """`user_id`'s links on `provider` in any of `statuses`, as a local
         provider (self) lists them: the fields of a RemoteLink, read straight
         from our own rows."""
@@ -151,55 +165,56 @@ class ShortLinkRepository(CachedRepository):
                 )
             ).scalars()
             return [
-                {
-                    "remote_id": r.remote_id,
-                    "slug": r.slug,
-                    "domain": r.domain,
-                    "url": r.url,
-                    "destination": r.destination,
-                    "active": r.status == "active",
-                    "adult": r.adult,
-                    "created_at": r.created_at,
-                    "id": r.id,
-                }
+                SelfLink(
+                    remote_id=r.remote_id,
+                    slug=r.slug,
+                    domain=r.domain,
+                    url=r.url,
+                    destination=r.destination,
+                    active=r.status == "active",
+                    adult=r.adult,
+                    created_at=r.created_at,
+                    id=r.id,
+                )
                 for r in rows
             ]
 
-    def taken(self, user_id: int, provider: str) -> set[tuple[str, str]]:
-        """(domain, slug) of every link `user_id` has on `provider`."""
+    def taken(self, user_id: int, provider: str) -> list[LinkAddress]:
+        """The address of every link `user_id` has on `provider`."""
         with session_scope() as s:
             rows = s.execute(
                 select(ShortLinkRow.domain, ShortLinkRow.slug).where(
                     ShortLinkRow.user_id == user_id, ShortLinkRow.provider == provider
                 )
             ).all()
-            return {(d, slug) for d, slug in rows}
+            return [LinkAddress(domain=d, slug=slug) for d, slug in rows]
 
-    def add_creating(self, user_id: int, provider: str, links: list[dict]) -> list[int]:
-        """New links, still to be made (status "creating"): `links` carry
-        slug, domain, destination, target, account_id; each takes its
+    def add_creating(
+        self, user_id: int, provider: str, links: list[PlannedLink]
+    ) -> list[int]:
+        """New links, still to be made (status "creating"); each takes its
         account's creator, or `creator` (a name of `user_id`'s)."""
         now = time.time()
         with session_scope() as s:
             ids = []
             for link in links:
-                creator_id = _creator_of_account(s, link["account_id"])
-                if creator_id is None and link.get("creator"):
+                creator_id = _creator_of_account(s, link.account_id)
+                if creator_id is None and link.creator:
                     creator_id = s.execute(
                         select(CreatorRow.id).where(
                             CreatorRow.user_id == user_id,
-                            CreatorRow.name == link["creator"],
+                            CreatorRow.name == link.creator,
                         )
                     ).scalar_one_or_none()
                 row = ShortLinkRow(
                     user_id=user_id,
                     provider=provider,
-                    slug=link["slug"],
-                    domain=link["domain"],
+                    slug=link.slug,
+                    domain=link.domain,
                     url="",
-                    destination=link["destination"],
-                    target=link["target"],
-                    account_id=link["account_id"],
+                    destination=link.destination,
+                    target=link.target,
+                    account_id=link.account_id,
                     creator_id=creator_id,
                     status="creating",
                     created_at=now,
@@ -391,27 +406,29 @@ class ShortLinkRepository(CachedRepository):
     # --- sync state -------------------------------------------------------
 
     @cached
-    def syncs(self, owner: int | None = None) -> list[dict]:
+    def syncs(self, owner: int | None = None) -> list[LinkSync]:
         with session_scope() as s:
             rows = s.execute(
                 select(LinkSyncRow).where(*mine(LinkSyncRow.user_id, owner))
             ).scalars()
             return [
-                {
-                    "user_id": r.user_id,
-                    "provider": r.provider,
-                    "synced_at": r.synced_at,
-                    "claimed_at": r.claimed_at,
-                    "error": r.error,
-                    "usage": r.usage,
-                }
+                LinkSync.model_validate(
+                    {
+                        "user_id": r.user_id,
+                        "provider": r.provider,
+                        "synced_at": r.synced_at,
+                        "claimed_at": r.claimed_at,
+                        "error": r.error,
+                        "usage": r.usage or None,
+                    }
+                )
                 for r in rows
             ]
 
     @invalidates_cache
     def claim_due(
-        self, pairs: list[tuple[int, str]], interval_s: float, claim_ttl_s: float
-    ) -> list[tuple[int, str]]:
+        self, pairs: list[LinkSyncKey], interval_s: float, claim_ttl_s: float
+    ) -> list[LinkSyncKey]:
         """Of `pairs` (user, provider), those not synced for `interval_s`
         and not claimed within `claim_ttl_s`, claimed in one UPDATE: of two
         sweepers racing, each pair goes to exactly one."""
@@ -422,14 +439,17 @@ class ShortLinkRepository(CachedRepository):
         with session_scope() as s:
             s.execute(
                 insert(sync)
-                .values([{"user_id": u, "provider": p} for u, p in pairs])
+                .values([{"user_id": k.user_id, "provider": k.provider} for k in pairs])
                 .on_conflict_do_nothing()
             )
             claimed = s.execute(
                 update(sync)
                 .where(
                     or_(
-                        *((sync.user_id == u) & (sync.provider == p) for u, p in pairs)
+                        *(
+                            (sync.user_id == k.user_id) & (sync.provider == k.provider)
+                            for k in pairs
+                        )
                     ),
                     or_(sync.synced_at.is_(None), sync.synced_at < now - interval_s),
                     or_(sync.claimed_at.is_(None), sync.claimed_at < now - claim_ttl_s),
@@ -437,7 +457,10 @@ class ShortLinkRepository(CachedRepository):
                 .values(claimed_at=now)
                 .returning(sync.user_id, sync.provider)
             ).all()
-            return sorted((u, p) for u, p in claimed)
+            return [
+                LinkSyncKey(user_id=u, provider=p)
+                for u, p in sorted((u, p) for u, p in claimed)
+            ]
 
     @invalidates_cache
     def mark_due(self, user_id: int, provider: str | None = None) -> None:

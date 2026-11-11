@@ -30,6 +30,7 @@ from ofmhelpers.media.mov_atoms import (
     top_level,
 )
 from ofmhelpers.media.recorder import atoms, sample_entries, sample_tables
+from ofmhelpers.media.size import Size
 lazy from ofmhelpers.media.recorder.models import DeviceProfile, Recording, TimingPlan
 
 # VBV around the profile's average bitrate.
@@ -45,10 +46,12 @@ _FTYP_MINOR_OFFSET = 12
 _MDHD_LANG_OFFSET = 20
 
 
-def frame_size(profile: DeviceProfile, src: SourceInfo) -> tuple[int, int]:
+def frame_size(profile: DeviceProfile, src: SourceInfo) -> Size:
     """The profile's portrait size, or its landscape twin for a wide source."""
     w, h = profile.video.width, profile.video.height
-    return (w, h) if src.height >= src.width else (h, w)
+    if src.height >= src.width:
+        return Size(width=w, height=h)
+    return Size(width=h, height=w)
 
 
 def _timing_filters(profile: DeviceProfile, plan: TimingPlan) -> str:
@@ -69,7 +72,8 @@ def _video_filter(
     profile: DeviceProfile, src: SourceInfo, plan: TimingPlan, *, mirror: bool
 ) -> str:
     v = profile.video
-    w, h = frame_size(profile, src)
+    size = frame_size(profile, src)
+    w, h = size.width, size.height
     return (
         ("hflip," if mirror else "")
         + f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
@@ -180,7 +184,7 @@ class _Retagger:
     """Rewrites one ffmpeg moov into the profile's."""
 
     def __init__(
-        self, profile: DeviceProfile, recording: Recording, size: tuple[int, int]
+        self, profile: DeviceProfile, recording: Recording, size: Size
     ) -> None:
         self.profile = profile
         self.recording = recording
@@ -225,7 +229,7 @@ class _Retagger:
                 set_duration(elst, self.length)
             children.append(self.mdia(atom, kind) if atom.type == b"mdia" else atom)
             if atom.type == b"tkhd" and kind == "vide":
-                children.append(atoms.track_aperture(*self.size))
+                children.append(atoms.track_aperture(self.size.width, self.size.height))
         if kind == "vide":
             track_meta = atoms.meta(self.profile.video_track_keys, self.recording)
             if track_meta is not None:
@@ -315,13 +319,13 @@ def record(
         ],
         timeout_s,
     )
-    moov, offset = read_moov(dst)
-    if top_level(dst)[-1][0] != b"moov":
+    moov = read_moov(dst)
+    if top_level(dst)[-1].kind != b"moov":
         msg = f"{dst.name}: moov is not the last atom, cannot rewrite it"
         raise RuntimeError(msg)
-    new_moov = _Retagger(profile, recording, frame_size(profile, info)).moov(moov)
+    new_moov = _Retagger(profile, recording, frame_size(profile, info)).moov(moov.atom)
     with dst.open("r+b") as f:
-        f.seek(offset)
+        f.seek(moov.offset)
         f.write(new_moov.to_bytes())
         f.truncate()
     with dst.open("r+b") as f, mmap.mmap(f.fileno(), 0) as m:

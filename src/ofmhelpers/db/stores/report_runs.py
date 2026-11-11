@@ -4,7 +4,7 @@ from functools import lru_cache
 lazy from datetime import date
 
 from ofmhelpers.db.repositories import ReportRunRepository
-from ofmhelpers.schemas.reports import ReportMarks, ReportRun
+lazy from ofmhelpers.schemas.reports import ReportMarks, ReportRun
 
 
 @lru_cache(maxsize=1)
@@ -13,8 +13,7 @@ def _repository() -> ReportRunRepository:
 
 
 def last_run(name: str) -> ReportRun | None:
-    found = _repository().last(name)
-    return ReportRun.model_validate(found) if found else None
+    return _repository().last(name)
 
 
 def claim(name: str, day: date, ran_at: float, sent: bool, marks: ReportMarks) -> bool:
