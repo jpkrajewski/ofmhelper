@@ -3,6 +3,7 @@ save -- driven against an in-memory provider, no HTTP."""
 
 import pytest
 
+from ofmhelpers.db.stores.jobs import create_job, get_job, run_job
 from ofmhelpers.integrations.ai_providers import runner, self_heal, tasks
 from ofmhelpers.integrations.ai_providers.base import TaskState
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
@@ -256,3 +257,48 @@ def test_a_download_failing_for_another_reason_is_not_retried(slept):
 
     assert len(provider.downloaded) == 1
     assert slept == []
+
+
+# --- what a run cost is kept with its job (Logfire keeps it 30 days) -------------
+
+
+def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
+    job_id = create_job("ai", {"prompt": "p"}, actor="1")
+    first = ScriptedProvider(
+        [TaskState(state="done", urls=["https://cdn/x/a.mp4"], cost_usd=0.4)]
+    )
+    second = ScriptedProvider(
+        [TaskState(state="done", urls=["https://cdn/x/b.mp4"], cost_usd=0.25)]
+    )
+
+    def run() -> list[str]:
+        made = runner.generate(first, SPEC, {"prompt": "p"}, job_id)
+        made += runner.generate(second, SPEC, {"prompt": "p"}, job_id, part=1)
+        return [str(path) for path in made]
+
+    run_job(job_id, run, {})
+
+    job = get_job(job_id)
+    assert job is not None
+    assert job.params == {"prompt": "p"}  # inputs only: a re-run gets them back
+    assert job.meta.cost_usd == 0.65
+    assert [
+        (g.part, g.provider, g.model, g.task_id, g.state, g.cost_usd)
+        for g in job.meta.generations
+    ] == [
+        (0, "kie", SPEC.key, "task-1", "done", 0.4),
+        (1, "kie", SPEC.key, "task-1", "done", 0.25),
+    ]
+    assert all(g.seconds is not None for g in job.meta.generations)
+    assert "key" not in job.meta.model_dump_json()
+    assert tasks.of_job(job_id) == []  # saved: nothing left to resume
+
+
+def test_a_job_that_asked_no_provider_keeps_an_empty_meta():
+    job_id = create_job("download_media", {"urls": ["u"]}, actor="1")
+
+    run_job(job_id, list, {})
+
+    job = get_job(job_id)
+    assert job is not None
+    assert (job.meta.generations, job.meta.cost_usd) == ([], None)

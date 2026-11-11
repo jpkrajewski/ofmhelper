@@ -133,8 +133,8 @@ def test_web_settings_defaults_match_pre_refactor_values(clean_env):
 
 def test_each_worker_pool_has_its_own_size(clean_env, monkeypatch):
     """The default queue, /clone-links' own queue, the previews queue and the
-    media and events queues are separate pools (compose worker / clone-links-worker /
-    preview-worker / media-worker / events-worker)."""
+    media and events queues are separate pools (the first, second and last in
+    compose `worker`, the others in preview-worker / media-worker)."""
     s = InfraSettings(_env_file=None)
     assert (s.rq_workers, s.clone_links_workers, s.preview_workers) == (10, 5, 1)
     assert (s.media_workers, s.events_workers) == (1, 1)

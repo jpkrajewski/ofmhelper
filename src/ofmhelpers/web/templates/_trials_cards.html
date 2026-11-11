@@ -15,8 +15,10 @@
     {% set file = "/trials/files/" ~ view.login_id ~ "/" ~ reel.key %}
     {% if busy %}
     <div class="result-file tr-pending"><span class="spinner"></span> {{ "uploading…" if reel.key in view.uploading else ("in queue…" if reel.key in view.queued else "generating…") }}</div>
-    {% else %}
+    {% elif reel.stored %}
     <video class="tr-video" src="{{ file }}?v={{ reel.made }}" poster="{{ file }}/poster?v={{ reel.made }}" controls playsinline preload="none"></video>
+    {% else %}
+    <img class="tr-video" src="{{ file }}/poster?v={{ reel.made }}" alt="" loading="lazy">
     {% endif %}
     {% set reel_url = "/trials/" ~ view.login_id ~ "/reel/" ~ reel.key %}
     {% if reel.captions %}

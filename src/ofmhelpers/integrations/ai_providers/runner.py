@@ -145,6 +145,7 @@ def generate(
         span.set_attributes({"state": state.state, "results": len(state.urls)})
         if state.cost_usd is not None:
             span.set_attribute("cost_usd", state.cost_usd)
+        tasks.settle(job_id, part, state.state, state.cost_usd)
         if state.state == "failed":
             tasks.forget(job_id)
             msg = (

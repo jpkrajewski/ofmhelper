@@ -6,6 +6,7 @@ job, the rest do nothing. What encodes waits its turn on the media queue, the
 rest runs beside it; a reel being made or uploaded is the only thing blocked."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
@@ -215,7 +216,7 @@ class FolderView(BaseModel):
         choices = len(reel.captions)
         return (
             f"{reel.made}.{reel.status}.{busy}.{reel.approved}.{choices}"
-            f".{reel.error or ''}"
+            f".{reel.stored}.{reel.error or ''}"
         )
 
     def made_among(self, keys: set[str]) -> list[ReelState]:
@@ -276,6 +277,16 @@ def _sync_state(
     return card, state
 
 
+def read_posted(uid: int, login_id: int) -> None:
+    """The folder's state matched to the last read of its POSTED (no Drive
+    call), for work that has no page open (`cleanup`). A login with no card
+    any more: nothing is read."""
+    try:
+        _sync_state(uid, uid, login_id)
+    except NotFoundError:
+        logger.info("trials: no folder card for login %s", login_id)
+
+
 def phone_cards(
     uid: int, scope: int | None
 ) -> tuple[DriveBoard, dict[int, FolderProgress]]:
@@ -290,25 +301,6 @@ def phone_cards(
         for c in board.cards
     }
     return board, progress
-
-
-def open_folder(
-    uid: int, scope: int | None, login_id: int
-) -> tuple[DriveCard, FolderView]:
-    card, state = _sync_state(scope, uid, login_id)
-    return card, FolderView.of(uid, state)
-
-
-def live(uid: int, login_id: int) -> FolderLive:
-    return FolderView.of(uid, load(uid, login_id)).live()
-
-
-def view_of_own(uid: int, scope: int | None, login_id: int) -> FolderView:
-    """The folder's view, when the login is one of the viewer's phones' (the
-    phones /drive's cards are made from, without building them)."""
-    if all(t.login_id != login_id for t in drive_store.targets(scope)):
-        raise NotFoundError(NO_FOLDER)
-    return FolderView.of(uid, load(uid, login_id))
 
 
 class _Claim:
@@ -341,32 +333,6 @@ class _Claim:
         )
 
 
-def generate(
-    uid: int, scope: int | None, login_id: int, enqueue: Callable[..., object]
-) -> Started:
-    """POSTED read for new reels: those downloaded and made, a copy already
-    made left alone; a second click while it runs does nothing."""
-    _sync_state(scope, uid, login_id)
-    claim = _Claim(uid, login_id, GENERATE)
-
-    def take(state: FolderState) -> None:
-        if not _at_work(uid, state.job_id):
-            state.job_id = claim.job()
-            state.tell(None)
-            for reel in state.failed:
-                reel.try_again()
-
-    state = change(uid, login_id, take)
-    if claim.job_id:
-        claim.launch(
-            enqueue,
-            tasks.make_trials,
-            len(state.reels),
-            refresh_token=refresh_token(uid) or "",
-        )
-    return Started(started=bool(claim.job_id))
-
-
 def restart(job: Job) -> bool:
     """A Generate cut off by a restart, queued again (recovery,
     features/jobs/recovery.py): a deploy gives workers 120 s and a Generate
@@ -396,127 +362,188 @@ def restart(job: Job) -> bool:
     return True
 
 
-def remake(
-    uid: int,
-    login_id: int,
-    key: str,
-    enqueue: Callable[..., object],
-    caption: str | None = None,
-) -> Started:
-    """One reel made again as its own job, alongside whatever else runs
-    (with `caption` first, when given)."""
-    claim = _Claim(uid, login_id, "Making one trial")
+@dataclass(frozen=True)
+class Trials:
+    """One viewer's trials of one login: everything a route of the folder page
+    does. `scope`: whose phones the viewer may see (None: everyone's).
+    `encode` puts what makes a copy in the line of the media queue (4K encodes,
+    one at a time), `enqueue` the rest beside it."""
 
-    def take(reel: ReelState) -> None:
-        if not _at_work(uid, reel.job_id):
-            reel.claim_remake(claim.job(), caption)
+    uid: int
+    scope: int | None
+    login_id: int
+    encode: Callable[..., object]
+    enqueue: Callable[..., object]
 
-    state = change_reel(uid, login_id, key, take)
-    if state.reel(key) is None:
-        raise NotFoundError(NO_REEL)
-    if claim.job_id:
-        claim.launch(enqueue, tasks.generate_reels, 1, keys=[key])
-    return Started(started=bool(claim.job_id))
+    def open(self) -> tuple[DriveCard, FolderView]:
+        card, state = _sync_state(self.scope, self.uid, self.login_id)
+        return card, FolderView.of(self.uid, state)
 
+    def live(self) -> FolderLive:
+        return FolderView.of(self.uid, load(self.uid, self.login_id)).live()
 
-def ask_captions(
-    uid: int, login_id: int, key: str, enqueue: Callable[..., object]
-) -> Started:
-    """A reel made before there were captions to choose from gets them, as its
-    own job (a click on one that has them does nothing: it would cost quota)."""
-    claim = _Claim(uid, login_id, "Writing captions")
+    def view(self) -> FolderView:
+        """The folder's view, when the login is one of the viewer's phones' (the
+        phones /drive's cards are made from, without building them)."""
+        if all(t.login_id != self.login_id for t in drive_store.targets(self.scope)):
+            raise NotFoundError(NO_FOLDER)
+        return FolderView.of(self.uid, load(self.uid, self.login_id))
 
-    def take(reel: ReelState) -> None:
-        if not reel.captions and not _at_work(uid, reel.job_id):
-            reel.claim_captions(claim.job())
+    def _claim(self, label: str) -> _Claim:
+        return _Claim(self.uid, self.login_id, label)
 
-    state = change_reel(uid, login_id, key, take)
-    if state.reel(key) is None:
-        raise NotFoundError(NO_REEL)
-    if claim.job_id:
-        claim.launch(enqueue, tasks.write_captions, 1, key=key)
-    return Started(started=bool(claim.job_id))
+    def _token(self) -> str:
+        return refresh_token(self.uid) or ""
 
+    def _busy(self, job_id: str | None) -> bool:
+        return _at_work(self.uid, job_id)
 
-def apply_caption(
-    uid: int, login_id: int, key: str, caption: str, enqueue: Callable[..., object]
-) -> Started:
-    """A caption chosen or written: saved, then the reel is made again with it."""
-    text = " ".join(caption.split())[:CAPTION_MAX]
-    # An empty box changes nothing: "" would mean "ask the AI", which costs quota.
-    if not text:
-        return Started(started=False)
-    return remake(uid, login_id, key, enqueue, text)
+    def _change_reel(self, key: str, edit: Callable[[ReelState], None]) -> FolderState:
+        state = change_reel(self.uid, self.login_id, key, edit)
+        if state.reel(key) is None:
+            raise NotFoundError(NO_REEL)
+        return state
 
+    def generate(self) -> Started:
+        """POSTED read for new reels: those downloaded and made, a copy already
+        made left alone; a second click while it runs does nothing."""
+        _sync_state(self.scope, self.uid, self.login_id)
+        claim = self._claim(GENERATE)
 
-def select(uid: int, login_id: int, key: str, selected: bool) -> Selected:
-    state = change_reel(uid, login_id, key, lambda r: r.select(selected))
-    if state.reel(key) is None:
-        raise NotFoundError(NO_REEL)
-    return Selected(selected=selected)
+        def take(state: FolderState) -> None:
+            if not self._busy(state.job_id):
+                state.job_id = claim.job()
+                state.tell(None)
+                for reel in state.failed:
+                    reel.try_again()
 
+        state = change(self.uid, self.login_id, take)
+        if claim.job_id:
+            claim.launch(
+                self.encode,
+                tasks.make_trials,
+                len(state.reels),
+                refresh_token=self._token(),
+            )
+        return Started(started=bool(claim.job_id))
 
-def upload(
-    uid: int,
-    login_id: int,
-    approved: list[str] | None,
-    enqueue: Callable[..., object],
-) -> Uploading:
-    """The selected copies replace what is in TRIALS: each claimed for this
-    upload (one being made is left out; one already in Drive can go up again,
-    or it would be deleted with the rest). One upload at a time: two at once
-    would delete each other's."""
-    wanted = set(approved or [])
-    claim = _Claim(uid, login_id, "Uploading")
-    claimed: list[str] = []
+    def remake(self, key: str, caption: str | None = None) -> Started:
+        """One reel made again as its own job, alongside whatever else runs
+        (with `caption` first, when given)."""
+        claim = self._claim("Making one trial")
 
-    def take(state: FolderState) -> None:
-        if not state.account_folder_id or any(
-            r.status == ReelStatus.UPLOADING and _at_work(uid, r.job_id)
-            for r in state.reels
-        ):
-            return
-        for reel in state.ready:
-            if reel.key in wanted and not _at_work(uid, reel.job_id):
-                reel.claim_upload(claim.job())
-                claimed.append(reel.key)
+        def take(reel: ReelState) -> None:
+            if not self._busy(reel.job_id):
+                reel.claim_remake(claim.job(), caption)
 
-    state = change(uid, login_id, take)
-    if claim.job_id:
-        claim.launch(
-            enqueue,
-            tasks.upload_trials,
-            len(claimed),
-            refresh_token=refresh_token(uid) or "",
-            account_folder_id=state.account_folder_id,
-            keys=claimed,
+        self._change_reel(key, take)
+        if claim.job_id:
+            claim.launch(
+                self.encode,
+                tasks.generate_reels,
+                1,
+                keys=[key],
+                refresh_token=self._token(),
+            )
+        return Started(started=bool(claim.job_id))
+
+    def ask_captions(self, key: str) -> Started:
+        """A reel made before there were captions to choose from gets them, as
+        its own job (a click on one that has them does nothing: it would cost
+        quota)."""
+        claim = self._claim("Writing captions")
+
+        def take(reel: ReelState) -> None:
+            if not reel.captions and not self._busy(reel.job_id):
+                reel.claim_captions(claim.job())
+
+        self._change_reel(key, take)
+        if claim.job_id:
+            claim.launch(
+                self.enqueue,
+                tasks.write_captions,
+                1,
+                key=key,
+                refresh_token=self._token(),
+            )
+        return Started(started=bool(claim.job_id))
+
+    def apply_caption(self, key: str, caption: str) -> Started:
+        """A caption chosen or written: saved, then the reel is made again
+        with it."""
+        text = " ".join(caption.split())[:CAPTION_MAX]
+        # An empty box changes nothing: "" would mean "ask the AI", which costs
+        # quota.
+        if not text:
+            return Started(started=False)
+        return self.remake(key, text)
+
+    def select(self, key: str, selected: bool) -> Selected:
+        self._change_reel(key, lambda r: r.select(selected))
+        return Selected(selected=selected)
+
+    def upload(self, approved: list[str] | None) -> Uploading:
+        """The selected copies replace what is in TRIALS: each claimed for this
+        upload (one being made is left out; one already in Drive can go up
+        again, or it would be deleted with the rest). One upload at a time: two
+        at once would delete each other's. A copy deleted since (`cleanup`) is
+        made again by the upload first, so that one waits its turn to encode."""
+        wanted = set(approved or [])
+        claim = self._claim("Uploading")
+        claimed: list[str] = []
+
+        def take(state: FolderState) -> None:
+            if not state.account_folder_id or any(
+                r.status == ReelStatus.UPLOADING and self._busy(r.job_id)
+                for r in state.reels
+            ):
+                return
+            for reel in state.ready:
+                if reel.key in wanted and not self._busy(reel.job_id):
+                    reel.claim_upload(claim.job())
+                    claimed.append(reel.key)
+
+        state = change(self.uid, self.login_id, take)
+        if claim.job_id:
+            remade = any(not r.stored for r in state.reels if r.key in claimed)
+            claim.launch(
+                self.encode if remade else self.enqueue,
+                tasks.upload_trials,
+                len(claimed),
+                refresh_token=self._token(),
+                account_folder_id=state.account_folder_id,
+                keys=claimed,
+            )
+        return Uploading(uploading=claimed)
+
+    def _copy(self, key: str) -> Path:
+        reel = load(self.uid, self.login_id).reel(key)
+        path = at(self.uid, self.login_id, reel.out) if reel else None
+        if path is None or not path.is_file():
+            raise NotFoundError(NOT_GENERATED)
+        return path
+
+    def playable(self, key: str) -> Path:
+        """The copy as the page plays it (H.264, `media`); the copy itself when
+        no preview can be made."""
+        copy = self._copy(key)
+        try:
+            return media.preview(copy)
+        except PREVIEW_ERRORS:
+            logger.warning("trials: preview of %s failed", copy, exc_info=True)
+            return copy
+
+    def poster(self, key: str) -> Path:
+        """The copy's poster; of one deleted since (`cleanup`), the one kept."""
+        reel = load(self.uid, self.login_id).reel(key)
+        gone = (
+            at(self.uid, self.login_id, reel.out) if reel and not reel.stored else None
         )
-    return Uploading(uploading=claimed)
-
-
-def _copy(uid: int, login_id: int, key: str) -> Path:
-    reel = load(uid, login_id).reel(key)
-    path = at(uid, login_id, reel.out) if reel else None
-    if path is None or not path.is_file():
-        raise NotFoundError(NOT_GENERATED)
-    return path
-
-
-def playable(uid: int, login_id: int, key: str) -> Path:
-    """The copy as the page plays it (H.264, `media`); the copy itself when no
-    preview can be made."""
-    copy = _copy(uid, login_id, key)
-    try:
-        return media.preview(copy)
-    except PREVIEW_ERRORS:
-        logger.warning("trials: preview of %s failed", copy, exc_info=True)
-        return copy
-
-
-def poster(uid: int, login_id: int, key: str) -> Path:
-    copy = _copy(uid, login_id, key)
-    try:
-        return media.poster(copy)
-    except PREVIEW_ERRORS as exc:
-        logger.warning("trials: poster of %s failed", copy, exc_info=True)
-        raise NotFoundError(NO_POSTER) from exc
+        if gone is not None and (kept := media.poster_path(gone)).is_file():
+            return kept
+        copy = self._copy(key)
+        try:
+            return media.poster(copy)
+        except PREVIEW_ERRORS as exc:
+            logger.warning("trials: poster of %s failed", copy, exc_info=True)
+            raise NotFoundError(NO_POSTER) from exc

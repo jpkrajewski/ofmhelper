@@ -46,7 +46,9 @@ _STACKED_KEY_PREFIX = "stacked_api_key_"
 class QueueName(StrEnum):
     """The background job queues (`cache/queue.py`), first in first out, highest
     priority first. A new one: a member here, its entry in `InfraSettings.queues`,
-    its compose service, both deploys (tests/unit/test_worker_services.py)."""
+    and a compose service that serves it: `worker`'s command for network work,
+    its own service (in both deploys) when it needs its own CPU or memory limit
+    (tests/unit/test_worker_services.py)."""
 
     # Generations, downloads, uploads: the queue a job is on unless it says otherwise.
     DEFAULT = "default"
@@ -1880,6 +1882,11 @@ class TrialsSettings(BaseSettings):
     job_grace_s: int = Field(
         default=300, ge=0, validation_alias="OFM_TRIALS_JOB_GRACE_S"
     )
+    # A copy's video, its page preview and its source are deleted this long
+    # after it was made (`trials/cleanup.py`): its poster and recipe stay, and
+    # an upload makes it again. Prod 2026-11-11: 922 copies, 13 GB of 72.
+    keep_s: int = Field(default=86400, ge=1, validation_alias="OFM_TRIALS_KEEP_S")
+    sweep_s: int = Field(default=3600, ge=1, validation_alias="OFM_TRIALS_SWEEP_S")
 
 
 class ViralSettings(BaseSettings):

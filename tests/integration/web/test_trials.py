@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
@@ -24,8 +25,9 @@ from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.db.stores import devices, users
 from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.jobs import recovery
-from ofmhelpers.features.trials import media, tasks
+from ofmhelpers.features.jobs import recovery, sweeps
+from ofmhelpers.features.previews.render import write_video_thumb
+from ofmhelpers.features.trials import cleanup, media, tasks
 from ofmhelpers.features.trials import state as trial_state
 from ofmhelpers.features.trials.captions import ReelNotes
 from ofmhelpers.integrations.gdrive import DriveError, DriveFile
@@ -303,6 +305,24 @@ def test_a_second_generate_while_one_runs_starts_nothing(drive, made):
     assert live["status"] == "Making trials… 0 of 1 ready"
     assert live["cards"] == [{"key": f"pending-{pending.key}", "stamp": ""}]
     assert "generating…" in page
+
+
+def test_fifty_generate_clicks_at_once_start_one_job(drive, made, real_queue):
+    """Each click checks and takes the folder in one locked write: the first
+    makes the job, the other 49 find it running and do nothing."""
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.get(f"/trials/{login}")
+    real_queue()
+
+    with ThreadPoolExecutor(50) as pool:
+        answers = list(
+            pool.map(lambda _: client.post(f"/trials/{login}/generate"), range(50))
+        )
+
+    assert {r.status_code for r in answers} == {200}
+    assert [r.json()["started"] for r in answers].count(True) == 1
+    assert get_queue(QueueName.MEDIA).count == 1
 
 
 def test_a_phone_card_whose_generate_runs_still_opens_its_folder(drive, made):
@@ -1209,3 +1229,354 @@ def test_a_job_that_cannot_start_over_still_fails_as_interrupted(
     assert job.status == "failed"
     assert job.error == recovery.INTERRUPTED
     assert made == []
+
+
+# --- a day old: the video goes, the poster and the recipe stay ----------------
+
+_TWO_DAYS_S = 2 * 86400
+
+
+@pytest.fixture
+def posters(made, monkeypatch) -> None:
+    """A poster is a file of its own next to the copy (the cleanup keeps it)."""
+
+    def poster(copy, *, again=False):
+        dest = media.poster_path(copy)
+        dest.write_bytes(b"RIFF")
+        return dest
+
+    monkeypatch.setattr(media, "poster", poster)
+
+
+def _a_day_later(login: int) -> None:
+    cleanup.clean(users.agency_id(), login, time.time() + _TWO_DAYS_S)
+
+
+def _files(login: int) -> list[str]:
+    root = trial_state.work_dir(users.agency_id(), login)
+    return sorted(p.name for p in root.rglob("*") if p.is_file())
+
+
+def test_a_copy_a_day_old_keeps_only_its_poster_and_what_made_it(drive, made, posters):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    (before,) = _state(login).reels
+
+    _a_day_later(login)
+
+    (reel,) = _state(login).reels
+    assert _files(login) == [f"{reel.key}.poster.webp", "state.json"]
+    assert (reel.stored, reel.local, reel.status) == (False, None, "generated")
+    assert reel.recipe == trial_state.Recipe(
+        seed=tasks._seed(reel.key, 0),
+        caption="caption 0",
+        pipeline="snapchat_iphone16_usa",
+    )
+    assert reel.recipe == before.recipe
+    page = client.get(f"/trials/{login}").text
+    src = f"/trials/files/{login}/{reel.key}"
+    assert f'<img class="tr-video" src="{src}/poster?v=1"' in page
+    assert "<video" not in page
+    assert f'name="approved" value="{reel.key}"' in page  # still selectable
+    assert client.get(f"{src}/poster").content == b"RIFF"
+    assert client.get(src).status_code == 404
+
+
+def test_a_copy_made_today_or_being_worked_on_is_left(drive, made, posters):
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    uid = users.agency_id()
+    first, second = _state(login).reels
+
+    cleanup.clean(uid, login, time.time())  # today
+
+    assert all(r.stored for r in _state(login).reels)
+    job = _running_job()
+    trial_state.change_reel(uid, login, first.key, lambda r: r.claim_remake(job))
+
+    _a_day_later(login)
+
+    state = _state(login)
+    assert [r.stored for r in state.reels] == [True, False]
+    assert f"{first.key}.mp4" in _files(login)
+    assert f"{second.key}.mp4" not in _files(login)
+
+
+def test_uploading_a_deleted_copy_makes_the_same_one_again_first(
+    drive, made, posters, monkeypatch
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    runs: list[tuple[str, int]] = []
+    pipeline = tasks.pipeline_run
+
+    def recording(src, out, *, caption, seed):
+        assert src.is_file()  # downloaded again
+        runs.append((caption, seed))
+        pipeline(src, out, caption=caption, seed=seed)
+
+    monkeypatch.setattr(tasks, "pipeline_run", recording)
+    client.post(f"/trials/{login}/generate")
+    _a_day_later(login)
+    (reel,) = _state(login).reels
+
+    r = client.post(f"/trials/{login}/upload", data={"approved": [reel.key]})
+
+    assert r.json() == {"uploading": [reel.key]}
+    assert runs[0] == runs[1]  # the same caption and seed: the same edit
+    (again,) = _state(login).reels
+    assert (again.status, again.stored, again.made) == ("uploaded", True, 1)
+    assert drive.names_in(_trials_folder(drive)) == [again.uploaded_as]
+    assert "<video" in client.get(f"/trials/{login}").text
+
+
+def test_an_upload_that_makes_a_copy_again_waits_its_turn_to_encode(
+    drive, made, posters, real_queue
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    (reel,) = _state(login).reels
+    _a_day_later(login)
+    real_queue()
+
+    client.post(f"/trials/{login}/upload", data={"approved": [reel.key]})
+
+    assert get_queue(QueueName.MEDIA).count == 1
+
+
+def test_an_upload_of_copies_on_disk_does_not_wait_behind_encodes(
+    drive, made, posters, real_queue
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    (reel,) = _state(login).reels
+    real_queue()
+
+    client.post(f"/trials/{login}/upload", data={"approved": [reel.key]})
+
+    assert get_queue(QueueName.MEDIA).count == 0
+
+
+def test_regenerate_and_a_caption_work_on_a_deleted_copy(drive, made, posters):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    _a_day_later(login)
+    (reel,) = _state(login).reels
+
+    client.post(f"/trials/{login}/reel/{reel.key}/regenerate")
+
+    (again,) = _state(login).reels
+    assert (again.stored, again.made, again.status) == (True, 2, "generated")
+    assert again.recipe is not None
+    assert again.recipe.seed == tasks._seed(reel.key, 1)  # a new variant
+    _a_day_later(login)
+
+    client.post(f"/trials/{login}/reel/{reel.key}/caption", data={"caption": "mine"})
+
+    (mine,) = _state(login).reels
+    assert (mine.stored, mine.made, mine.caption) == (True, 3, "mine")
+    assert made == ["caption 0", "caption 0", "mine"]
+
+
+def test_a_deleted_copy_whose_source_left_drive_says_so_and_the_rest_go_up(
+    drive, made, posters
+):
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    _a_day_later(login)
+    gone, kept = _state(login).reels
+    drive.delete(gone.key)
+
+    _uploaded(client, login, gone.key, kept.key)
+
+    first, second = _state(login).reels
+    assert (first.status, first.error, first.approved) == (
+        "generated",
+        "Source video is gone from Drive",
+        True,
+    )
+    assert (second.status, second.stored) == ("uploaded", True)
+    assert drive.names_in(_trials_folder(drive)) == [second.uploaded_as]
+
+
+def test_a_copy_from_before_recipes_were_kept_is_made_again_the_same(
+    drive, made, posters, monkeypatch
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    _a_day_later(login)
+    uid = users.agency_id()
+    (reel,) = _state(login).reels
+
+    def forget(r: trial_state.ReelState) -> None:
+        r.recipe = None
+
+    trial_state.change_reel(uid, login, reel.key, forget)
+    seeds: list[int] = []
+    pipeline = tasks.pipeline_run
+
+    def recording(src, out, *, caption, seed):
+        seeds.append(seed)
+        pipeline(src, out, caption=caption, seed=seed)
+
+    monkeypatch.setattr(tasks, "pipeline_run", recording)
+
+    _uploaded(client, login, reel.key)
+
+    assert seeds == [tasks._seed(reel.key, 0)]
+    assert made[-1] == "caption 0"
+    assert _state(login).reels[0].status == "uploaded"
+
+
+def test_a_source_never_made_into_a_copy_goes_after_a_day_and_comes_back(
+    drive, made, posters, monkeypatch
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+
+    def broken(src, out, *, caption, seed):
+        msg = "encoder died"
+        raise RuntimeError(msg)
+
+    working = tasks.pipeline_run
+    monkeypatch.setattr(tasks, "pipeline_run", broken)
+    client.post(f"/trials/{login}/generate")
+    assert any(name.endswith("a.mp4") for name in _files(login))
+
+    _a_day_later(login)
+
+    assert _files(login) == ["state.json"]
+    monkeypatch.setattr(tasks, "pipeline_run", working)
+    client.post(f"/trials/{login}/generate")
+    (reel,) = _state(login).reels
+    assert (reel.status, reel.stored) == ("generated", True)
+
+
+def test_the_sweep_cleans_every_folder_and_a_broken_one_stops_nothing(
+    drive, made, posters, monkeypatch, tmp_path
+):
+    login = _login(drive, "a.mp4")
+    _client().post(f"/trials/{login}/generate")
+    broken = tmp_path / "trials" / "999" / "1"
+    broken.mkdir(parents=True)
+    (broken / "state.json").write_text("not json", encoding="utf-8")
+    (reel,) = _state(login).reels
+    copy = trial_state.at(users.agency_id(), login, reel.out)
+    assert copy is not None
+    old = time.time() - _TWO_DAYS_S
+    os.utime(copy, (old, old))
+
+    cleanup.remove_old()
+
+    assert _state(login).reels[0].stored is False
+    assert not copy.exists()
+
+
+@pytest.mark.heavy
+def test_the_poster_is_a_frame_from_the_middle(tmp_path):
+    copy = _hevc_10bit(tmp_path / "KEY.mp4")
+    first = tmp_path / "first.webp"
+    write_video_thumb(copy, first, 480)
+
+    poster = media.poster(copy)
+
+    assert poster.read_bytes()[:4] == b"RIFF"
+    assert poster.read_bytes() != first.read_bytes()
+
+
+def test_the_cleanup_sweep_is_put_in_the_workers_line_once(real_queue):
+    """Its ffmpeg and file work is a worker's, never the web process's; a
+    round while the last one still waits (a busy worker) adds nothing."""
+    (sweep,) = [s for s in sweeps.sweeps() if s.name == "trials cleanup"]
+    real_queue()
+
+    sweep.round()
+    sweep.round()
+
+    queue = get_queue(QueueName.PREVIEWS)
+    assert queue.get_job_ids() == ["sweep-trials-cleanup"]
+    # Done (a finished job is not kept): the next round puts it again.
+    queue.empty()
+    sweep.round()
+    assert queue.count == 1
+
+
+class _Ran:
+    """What the pipeline answers: `repurpose.RunResult`, as far as trials reads it."""
+
+    seconds = 9.5
+
+    class step:  # noqa: N801 - the attribute's name
+        @staticmethod
+        def model_dump(**kwargs):
+            assert kwargs["exclude"] == {"command"}
+            return {"video": {"speed": 1.03}, "audio": {"pitch": 0.98}}
+
+
+def test_what_the_pipeline_drew_is_kept_with_the_recipe_and_survives_a_restore(
+    drive, made, posters, monkeypatch
+):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    pipeline = tasks.pipeline_run
+
+    def drawing(src, out, *, caption, seed):
+        pipeline(src, out, caption=caption, seed=seed)
+        return _Ran()
+
+    monkeypatch.setattr(tasks, "pipeline_run", drawing)
+    client.post(f"/trials/{login}/generate")
+    drew = {"video": {"speed": 1.03}, "audio": {"pitch": 0.98}, "seconds": 9.5}
+    (reel,) = _state(login).reels
+    assert reel.recipe is not None
+    assert reel.recipe.draws == drew
+
+    _a_day_later(login)
+    _uploaded(client, login, reel.key)
+
+    (again,) = _state(login).reels
+    assert again.status == "uploaded"
+    assert again.recipe == reel.recipe  # the copy's own, not the re-render's
+
+
+def test_a_copy_whose_source_left_posted_is_never_deleted(drive, made, posters):
+    """It could not be made again: the copy is all there is of it."""
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    gone, _kept = _state(login).reels
+    drive.delete(gone.key)
+    drive_folders.sync()  # the read the cleanup goes by
+
+    _a_day_later(login)
+
+    first, second = _state(login).reels
+    assert (first.key, first.stored, first.posted) == (gone.key, True, False)
+    assert (second.stored, second.posted) == (False, True)
+    assert f"{gone.key}.mp4" in _files(login)
+
+
+def test_a_folder_nobody_read_since_the_update_keeps_its_copies(drive, made, posters):
+    """A state file from before `posted` was kept: unknown is not "in Drive"."""
+    login = _login(drive, "a.mp4")
+    _client().post(f"/trials/{login}/generate")
+    uid = users.agency_id()
+
+    def unknown(state: trial_state.FolderState) -> None:
+        state.posted_folder_id = ""
+        for reel in state.reels:
+            reel.posted = None
+
+    trial_state.change(uid, login, unknown)
+    devices.remove_login(devices.list_devices()[0].id, login)  # no card any more
+
+    _a_day_later(login)
+
+    assert _state(login).reels[0].stored is True

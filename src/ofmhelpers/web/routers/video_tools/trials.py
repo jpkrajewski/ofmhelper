@@ -16,7 +16,7 @@ as /drive). The work behind each route: `features.trials.folder`."""
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 
 from ofmhelpers.cache import JobQueue, QueueName, enqueue
@@ -32,38 +32,41 @@ def _encodes() -> Callable[..., object]:
     return JobQueue(QueueName.MEDIA).put
 
 
+def _trials(login_id: int, user: CurrentUser, scope: Scope) -> folder.Trials:
+    return folder.Trials(
+        uid=user.id, scope=scope, login_id=login_id, encode=_encodes(), enqueue=enqueue
+    )
+
+
+# The signed-in person's trials of the login in the path.
+Trials = Annotated[folder.Trials, Depends(_trials)]
+
+
 @router.get("")
 def trials_page(request: Request, user: CurrentUser, scope: Scope) -> Response:
-    """The phone cards. A card whose Generate runs keeps a way into its
-    folder ("Making… 0 of 21"): with nothing made yet it showed no button,
-    as if the click had been lost (prod 2026-11-02)."""
     board, progress = folder.phone_cards(user.id, scope)
     return render(request, "trials.html", board=board, progress=progress)
 
 
 @router.get("/{login_id}")
-def folder_page(
-    request: Request, login_id: int, user: CurrentUser, scope: Scope
-) -> Response:
-    card, view = folder.open_folder(user.id, scope, login_id)
+def folder_page(request: Request, trials: Trials) -> Response:
+    card, view = trials.open()
     return render(request, "trials_folder.html", card=card, view=view)
 
 
 @router.get("/{login_id}/live")
-def live(login_id: int, user: CurrentUser) -> folder.FolderLive:
-    return folder.live(user.id, login_id)
+def live(trials: Trials) -> folder.FolderLive:
+    return trials.live()
 
 
 @router.get("/{login_id}/cards")
 def cards(
     request: Request,
-    login_id: int,
-    user: CurrentUser,
-    scope: Scope,
+    trials: Trials,
     key: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
     """The cards `key` as the page renders them, for trials.js to swap in."""
-    view = folder.view_of_own(user.id, scope, login_id)
+    view = trials.view()
     wanted = set(key or [])
     return render(
         request,
@@ -75,58 +78,50 @@ def cards(
 
 
 @router.post("/{login_id}/generate")
-def generate(login_id: int, user: CurrentUser, scope: Scope) -> folder.Started:
-    return folder.generate(user.id, scope, login_id, _encodes())
+def generate(trials: Trials) -> folder.Started:
+    return trials.generate()
 
 
 @router.post("/{login_id}/reel/{key}/regenerate")
-def regenerate(login_id: int, key: str, user: CurrentUser) -> folder.Started:
+def regenerate(key: str, trials: Trials) -> folder.Started:
     """The pipeline again on one reel, a new variant with its caption as it
     is: no AI call (its daily quota is small)."""
-    return folder.remake(user.id, login_id, key, _encodes())
+    return trials.remake(key)
 
 
 @router.post("/{login_id}/reel/{key}/caption")
 def set_caption(
-    login_id: int,
-    key: str,
-    caption: Annotated[str, Form()],
-    user: CurrentUser,
+    key: str, caption: Annotated[str, Form()], trials: Trials
 ) -> folder.Started:
-    return folder.apply_caption(user.id, login_id, key, caption, _encodes())
+    return trials.apply_caption(key, caption)
 
 
 @router.post("/{login_id}/reel/{key}/captions")
-def write_captions(login_id: int, key: str, user: CurrentUser) -> folder.Started:
+def write_captions(key: str, trials: Trials) -> folder.Started:
     """Captions to choose from, for a reel made before there were any."""
-    return folder.ask_captions(user.id, login_id, key, enqueue)
+    return trials.ask_captions(key)
 
 
 @router.post("/{login_id}/reel/{key}/select")
 def select(
-    login_id: int,
-    key: str,
-    user: CurrentUser,
-    selected: Annotated[bool, Form()] = False,
+    key: str, trials: Trials, selected: Annotated[bool, Form()] = False
 ) -> folder.Selected:
     """Select / unselect, kept at once."""
-    return folder.select(user.id, login_id, key, selected)
+    return trials.select(key, selected)
 
 
 @router.post("/{login_id}/upload")
 def upload(
-    login_id: int,
-    user: CurrentUser,
-    approved: Annotated[list[str] | None, Form()] = None,
+    trials: Trials, approved: Annotated[list[str] | None, Form()] = None
 ) -> folder.Uploading:
-    return folder.upload(user.id, login_id, approved, enqueue)
+    return trials.upload(approved)
 
 
 @router.get("/files/{login_id}/{key}")
-def video(login_id: int, key: str, user: CurrentUser) -> Response:
-    return FileResponse(folder.playable(user.id, login_id, key), media_type="video/mp4")
+def video(key: str, trials: Trials) -> Response:
+    return FileResponse(trials.playable(key), media_type="video/mp4")
 
 
 @router.get("/files/{login_id}/{key}/poster")
-def poster(login_id: int, key: str, user: CurrentUser) -> Response:
-    return FileResponse(folder.poster(user.id, login_id, key), media_type="image/webp")
+def poster(key: str, trials: Trials) -> Response:
+    return FileResponse(trials.poster(key), media_type="image/webp")

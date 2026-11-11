@@ -26,7 +26,7 @@ fi
 compose=(docker compose -f docker-compose.yml -f docker-compose.dev.yml)
 snapshot=tests/fixtures/prod_snapshot.sql
 # Everything that writes to the database: stopped while it is replaced.
-writers=(ofmhelpers worker clone-links-worker preview-worker media-worker edit-worker events-worker)
+writers=(ofmhelpers worker preview-worker media-worker edit-worker)
 psql_dev=("${compose[@]}" exec -T postgres psql -U ofmhelpers -v ON_ERROR_STOP=1)
 
 # Exact row count of every table, `table|rows`, sorted.

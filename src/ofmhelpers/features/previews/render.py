@@ -84,10 +84,10 @@ def write_image_thumb(source: Path, dest: Path, size: int) -> None:
 
 
 def write_video_thumb(
-    source: Path, dest: Path, size: int, *, pre_filter: str = ""
+    source: Path, dest: Path, size: int, *, pre_filter: str = "", at_s: float = 0
 ) -> None:
-    """First frame, scaled to fit a `size` box, as webp; `pre_filter`
-    (ending in a comma) runs first.
+    """The frame at `at_s` (the first), scaled to fit a `size` box, as webp;
+    `pre_filter` (ending in a comma) runs first.
 
     Extracted with ffmpeg rather than served as a <video preload="metadata">
     tile: that made the browser range-request every clip in a grid just to
@@ -103,6 +103,8 @@ def write_video_thumb(
                 "-y",
                 "-loglevel",
                 "error",
+                "-ss",
+                f"{at_s:.3f}",
                 "-i",
                 str(source),
                 "-frames:v",

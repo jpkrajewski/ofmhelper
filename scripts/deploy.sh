@@ -81,14 +81,16 @@ remote_script='
   OFM_RELEASE=$(git rev-parse --short HEAD)
   export OFM_RELEASE
   echo "== building =="
-  $compose build ofmhelpers worker clone-links-worker preview-worker media-worker edit-worker events-worker migrate
+  $compose build ofmhelpers worker preview-worker media-worker edit-worker migrate
   echo "== swapping in the new containers =="
-  $compose up -d postgres redis pot-provider
+  # --remove-orphans: a service taken out of the compose file (clone-links-worker,
+  # events-worker, 2026-11-11) would run on with the old code, next to the new.
+  $compose up -d --remove-orphans postgres redis pot-provider
   # Workers first, while the app still serves: each finishes the job it runs
   # (stop_grace_period, up to 120 s) and takes no new one; jobs queued
   # meanwhile wait in Redis for the new workers.
   echo "== stopping the workers =="
-  $compose stop worker clone-links-worker preview-worker media-worker edit-worker events-worker
+  $compose stop worker preview-worker media-worker edit-worker
   # Seconds of downtime, so old code never sees the new schema.
   echo "== stopping the app =="
   $compose stop ofmhelpers
@@ -99,7 +101,7 @@ remote_script='
   echo "== migrating, then starting the app =="
   # A failed migration exits non-zero here (and leaves the app down): print
   # why before `set -e` ends the deploy.
-  if ! $compose up -d --no-deps --force-recreate migrate ofmhelpers worker clone-links-worker preview-worker media-worker edit-worker events-worker; then
+  if ! $compose up -d --no-deps --force-recreate migrate ofmhelpers worker preview-worker media-worker edit-worker; then
     $compose logs migrate
     exit 1
   fi

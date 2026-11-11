@@ -28,7 +28,7 @@ lazy from collections.abc import Callable
 import logfire
 from pydantic import BaseModel
 from rq import Queue, Retry, Worker
-from rq.job import Job
+from rq.job import Job, JobStatus
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
@@ -74,6 +74,14 @@ class QueueJob(BaseModel):
             waited_s=round(waited.total_seconds(), 1),
             waiting=queue.count,
         )
+
+
+# A `put_once` job that waits or runs: its key is taken.
+_IN_LINE = frozenset(
+    {JobStatus.QUEUED, JobStatus.STARTED, JobStatus.DEFERRED, JobStatus.SCHEDULED}
+)
+# A failed one is kept an hour for a look, then its key is free anyway.
+_ONCE_FAILURE_TTL_S = 3600
 
 
 @dataclass(frozen=True)
@@ -131,6 +139,27 @@ class JobQueue:
             rq_job_id=rq_job.id,
         )
         return rq_job
+
+    def put_once(self, key: str, fn: Callable[[], Any]) -> bool:
+        """`fn()` to the back of the line as the one job `key` (letters,
+        digits, dashes): nothing while the `key` put before still waits or
+        runs, so repeated work (a sweep's round) never piles up behind
+        itself. True when put. Synchronous mode: called directly."""
+        if not settings.infra.rq_async:
+            fn()
+            return True
+        queue = get_queue(self.name)
+        before = queue.fetch_job(key)
+        if before is not None and before.get_status() in _IN_LINE:
+            return False
+        queue.enqueue(
+            fn,
+            job_id=key,
+            description=f"{fn.__module__}.{fn.__qualname__}",
+            result_ttl=0,
+            failure_ttl=_ONCE_FAILURE_TTL_S,
+        )
+        return True
 
     def drop(self, job_id: str) -> bool:
         """Takes app job `job_id` (`run_job`'s first argument) out of the line

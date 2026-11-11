@@ -39,6 +39,10 @@ class ProviderTask(BaseModel):
     task_id: str
     api_key: str
     created_at: float = Field(default_factory=time.time)
+    # How it ended (`settle`): what the job row keeps of it once saved.
+    state: str | None = None
+    cost_usd: float | None = None
+    seconds: float | None = None
 
     @property
     def age_s(self) -> float:
@@ -70,6 +74,37 @@ def recall(job_id: str, part: int = 0) -> ProviderTask | None:
         logger.warning("could not recall the task of job %s", job_id, exc_info=True)
         return None
     return ProviderTask.model_validate_json(raw) if raw else None
+
+
+def settle(job_id: str, part: int, state: str, cost_usd: float | None) -> None:
+    """How the job's request ended and what it cost, noted on the remembered
+    task: `of_job` reads it when the job is saved."""
+    task = recall(job_id, part)
+    if task is None:
+        return
+    remember(
+        task.model_copy(
+            update={
+                "state": state,
+                "cost_usd": cost_usd,
+                "seconds": round(task.age_s, 1),
+            }
+        )
+    )
+
+
+def of_job(job_id: str) -> list[ProviderTask]:
+    """Every remembered request of the job, by part."""
+    try:
+        redis = get_redis()
+        keys = [_key(job_id), *redis.scan_iter(f"{_PREFIX}{job_id}:*")]
+        found = [
+            ProviderTask.model_validate_json(raw) for raw in redis.mget(keys) if raw
+        ]
+    except RedisError:
+        logger.warning("could not read the tasks of job %s", job_id, exc_info=True)
+        return []
+    return sorted(found, key=lambda task: task.part)
 
 
 _SENT_PREFIX = "aigen:sent:"

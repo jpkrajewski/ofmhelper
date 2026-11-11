@@ -14,8 +14,9 @@ it is older than `raw_keep_s` (14 days) and nothing names it:
 
 Folders (`fitted/` 14 MB, `higgsfield/` 2 MB on prod) and other files (the
 `.jsonl` logs) are never touched. Nor is the copy the asset store keeps of each
-download (`uploads/assets`, the Reuse picker's): a full copy, not a hardlink,
-since `uploads` and `kieai_out` are two mounts (prod 2026-11-08: link count 1).
+download (`uploads/assets`, the Reuse picker's): a hard link since 2026-11-11
+(`out_dir` is inside the uploads mount, docker-compose.yml), so deleting the
+raw file frees space only once the store's copy is gone too.
 """
 
 import time

@@ -7,6 +7,7 @@ import threading
 from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
 
+from ofmhelpers.cache import QueueName
 from ofmhelpers.features.chatting import sync as chat_history
 from ofmhelpers.features.jobs import sweeps
 from ofmhelpers.features.jobs.sweeps import Sweep, running
@@ -144,7 +145,7 @@ def test_a_hanging_chat_platform_does_not_hold_up_the_next(monkeypatch):
     assert stacked_saw == [True]
 
 
-def test_the_web_process_runs_all_fifteen_sweeps():
+def test_the_web_process_runs_all_sixteen_sweeps():
     assert {sweep.name for sweep in sweeps.sweeps()} == {
         "recovery",
         "reel watch",
@@ -159,6 +160,7 @@ def test_the_web_process_runs_all_fifteen_sweeps():
         "daily report",
         "telegram asks",
         "edit cleanup",
+        "trials cleanup",
         "raw files",
         "preview backfill",
     }
@@ -185,3 +187,21 @@ def test_scheduled_account_scans_can_be_switched(monkeypatch):
     monkeypatch.setenv("OFM_ENV", "production")
     monkeypatch.setenv("OFM_ACCOUNTS_SCHEDULED_SCANS", "false")
     assert not _account_sweep().enabled()
+
+
+# --- a sweep that does the work itself runs on a worker, not in the web process
+
+
+def test_a_sweep_with_no_queue_runs_here():
+    ran = []
+
+    Sweep(name="light", run=lambda: ran.append("run")).round()
+
+    assert ran == ["run"]
+
+
+def test_the_sweeps_that_walk_the_disk_or_run_ffmpeg_are_the_workers():
+    heavy = {s.name for s in sweeps.sweeps() if s.queue is not None}
+
+    assert heavy == {"edit cleanup", "trials cleanup", "raw files"}
+    assert {s.queue for s in sweeps.sweeps() if s.queue} == {QueueName.PREVIEWS}
