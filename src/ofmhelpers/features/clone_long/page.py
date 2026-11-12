@@ -11,6 +11,7 @@ from pydantic import BaseModel
 lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_videos
@@ -137,22 +138,28 @@ def _measure(path: str) -> Measured:
     return found
 
 
-def _require_choices(form: Submitted) -> None:
+def _require_choices(form: Submitted, owner_id: int) -> str:
+    """The form's picks checked; the key the run goes out on (`owner_id`'s
+    for the target's model, `Keys.for_run`)."""
     if form.provider not in TARGETS:
         msg = "That provider cannot clone"
         raise RefusedError(msg)
-    if not form.api_key:
+    api_key = Keys.of(owner_id).for_run(
+        form.provider, TARGETS[form.provider].model, form.api_key
+    )
+    if not api_key:
         msg = "API key is required"
         raise RefusedError(msg)
     if form.resolution not in RESOLUTIONS:
         msg = "Unknown resolution"
         raise RefusedError(msg)
+    return api_key
 
 
 def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
     """One run queued: its job id. The key goes to the worker only, never into the params
     its page shows."""
-    _require_choices(form)
+    api_key = _require_choices(form, owner_id)
     image = _one(
         build_ordered_paths(
             form.image_manifest, form.image, assets_root, user_id=owner_id
@@ -182,7 +189,7 @@ def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> str:
         TASK,
         params,
         run_long_clone,
-        {"api_key": form.api_key, "assets_root": str(assets_root), **params},
+        {"api_key": api_key, "assets_root": str(assets_root), **params},
         actor=actor,
         job_timeout=clone.time_limit(),
     )

@@ -9,6 +9,7 @@ import inspect
 
 import pytest
 from rq.timeouts import JobTimeoutException
+from signin import make_user
 
 from ofmhelpers.cache import QueueName
 from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
@@ -335,15 +336,30 @@ _LOCAL_JOBS = {
     ),
     "download_media": (
         {"urls": ["https://example.com/v/1"]},
-        {"urls": ["https://example.com/v/1"], "assets_root": "ASSETS", "user_id": 7},
+        {
+            "urls": ["https://example.com/v/1"],
+            "assets_root": "ASSETS",
+            "user_id": 7,
+            "job_id": "JOB",
+        },
     ),
     "download_videos": (
         {"urls": ["https://example.com/v/1"]},
-        {"urls": ["https://example.com/v/1"], "assets_root": "ASSETS", "user_id": 7},
+        {
+            "urls": ["https://example.com/v/1"],
+            "assets_root": "ASSETS",
+            "user_id": 7,
+            "job_id": "JOB",
+        },
     ),
     "download_images": (
         {"urls": ["https://example.com/p/1"]},
-        {"urls": ["https://example.com/p/1"], "assets_root": "ASSETS", "user_id": 7},
+        {
+            "urls": ["https://example.com/p/1"],
+            "assets_root": "ASSETS",
+            "user_id": 7,
+            "job_id": "JOB",
+        },
     ),
 }
 
@@ -367,6 +383,14 @@ def test_no_task_that_pays_a_provider_is_ever_started_over():
     assert paid & set(recovery.RESTARTS) == set()
 
 
+def _seven() -> str:
+    """Whose the local jobs below are: a real user (`jobs.user_id` is a
+    foreign key) with the id their expected kwargs name, 7."""
+    made = [make_user(f"user{n}@example.com") for n in range(1, 8)]
+    assert made[-1].id == 7
+    return "7"
+
+
 @pytest.mark.parametrize("task", sorted(_LOCAL_JOBS))
 def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
     task, status, restarts, active
@@ -374,7 +398,7 @@ def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
     """A deploy gives workers 120 s; an encode or a download cut off then
     used to fail "Interrupted by a restart". Local work, free to repeat."""
     params, kwargs = _LOCAL_JOBS[task]
-    job_id = create_job(task, params, actor="7")
+    job_id = create_job(task, params, actor=_seven())
 
     assert recovery.run_recovery_once().entries == {job_id: "restarted"}
 
@@ -382,8 +406,11 @@ def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
     assert (rerun_id, fn) == (job_id, RESTARTS[task].run)
     inspect.signature(fn).bind(**queued)  # the run takes exactly these
     root = queued.get("assets_root")
+    # A download's run is told its own job: it writes that job's rows.
+    stand_ins = (("ASSETS", root), ("JOB", job_id))
     assert queued == {
-        name: (root if value == "ASSETS" else value) for name, value in kwargs.items()
+        name: next((real for mark, real in stand_ins if value == mark), value)
+        for name, value in kwargs.items()
     }
     assert root is None or root.endswith("/users/7")
     job = get_job(job_id)
@@ -395,9 +422,9 @@ def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
 ):
     monkeypatch.setenv("OFM_UNIQIFY_ENCODE_TIMEOUT_S", "600")
     monkeypatch.setenv("OFM_EDIT_CUT_TIMEOUT_S", "300")
-    create_job("repurpose", _LOCAL_JOBS["repurpose"][0], actor="7")
-    create_job("edit_cut", _LOCAL_JOBS["edit_cut"][0], actor="7")
-    create_job("uniqify", _LOCAL_JOBS["uniqify"][0], actor="7")
+    create_job("repurpose", _LOCAL_JOBS["repurpose"][0], actor=_seven())
+    create_job("edit_cut", _LOCAL_JOBS["edit_cut"][0], actor=_seven())
+    create_job("uniqify", _LOCAL_JOBS["uniqify"][0], actor=_seven())
 
     recovery.run_recovery_once()
 
@@ -419,7 +446,7 @@ def test_a_local_job_cut_off_again_and_again_fails(status, restarts, active):
     """Something kills it (memory, a file ffmpeg cannot get through): it must
     not start over for ever."""
     params = {**_LOCAL_JOBS["uniqify"][0], "restarts": restart_module.RESTARTS_MAX}
-    job_id = create_job("uniqify", params, actor="7")
+    job_id = create_job("uniqify", params, actor=_seven())
 
     assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
 
@@ -430,7 +457,7 @@ def test_a_local_job_cut_off_again_and_again_fails(status, restarts, active):
 def test_a_second_restart_runs_with_the_same_arguments(status, restarts, active):
     """The count is the job's own param, never an argument of its run."""
     params = {**_LOCAL_JOBS["uniqify"][0], "restarts": 1}
-    job_id = create_job("uniqify", params, actor="7")
+    job_id = create_job("uniqify", params, actor=_seven())
 
     assert recovery.run_recovery_once().entries == {job_id: "restarted"}
 
@@ -442,7 +469,7 @@ def test_a_second_restart_runs_with_the_same_arguments(status, restarts, active)
 def test_a_local_job_whose_params_cannot_be_read_fails_as_interrupted(
     status, restarts, active
 ):
-    job_id = create_job("download_media", {"links": "an old shape"}, actor="7")
+    job_id = create_job("download_media", {"links": "an old shape"}, actor=_seven())
 
     assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
 

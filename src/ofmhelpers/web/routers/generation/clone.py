@@ -50,12 +50,17 @@ from ofmhelpers.schemas import (
     UploadRequest,
     UploadsQueued,
 )
+from ofmhelpers.schemas.access import Action, Area
 from ofmhelpers.web.dependencies import (
+    Access,
     Actor,
+    Actors,
     ApiKeys,
     AssetsRoot,
+    Can,
     CurrentUser,
     OwnerId,
+    Viewing,
 )
 from ofmhelpers.web.forms import Files, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
@@ -78,7 +83,7 @@ __all__ = [
     "router",
 ]
 
-router = APIRouter(prefix=PREFIX, tags=["clone"])
+router = APIRouter(prefix=PREFIX, tags=["clone"], dependencies=[Access(Area.CLONE)])
 
 
 def default_prompt() -> str:
@@ -120,18 +125,19 @@ def _rendered_cards(job_ids: list[str], actor: str, user_id: int) -> str:
 def form(
     request: Request,
     actor: Actor,
+    viewer: Viewing,
     user: CurrentUser,
     api_keys: ApiKeys,
     assets_root: AssetsRoot,
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
-    first = gallery.page(actor)
+    first = gallery.page(viewer)
     return render(
         request,
         "clone.html",
         gallery=cards(first.jobs),
         next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(actor),
+        hidden_count=gallery.hidden_count(viewer),
         api_keys=api_keys,
         **dict(form_view(actor, assets_root, video or [])),
         **dict(drive_picker(user.id)),
@@ -142,12 +148,12 @@ def form(
 def gallery_page(
     request: Request,
     user: CurrentUser,
-    actor: Actor,
+    viewer: Viewing,
     query: GalleryParams,
 ) -> Response:
     """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    found = gallery.page(actor, query)
+    found = gallery.page(viewer, query)
     return render(
         request,
         "clone_gallery_fragment.html",
@@ -158,29 +164,33 @@ def gallery_page(
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request, actor: Actor, user: CurrentUser) -> Response:
+def gallery_latest(request: Request, viewer: Viewing, user: CurrentUser) -> Response:
     """The newest page of cards, no sentinel: what live-gallery.js polls to
     show runs started in other sessions."""
     return render_polled(
         request,
         "clone_gallery_fragment.html",
-        gallery=cards(gallery.page(actor).jobs),
+        gallery=cards(gallery.page(viewer).jobs),
         next_offset=None,
         **dict(drive_picker(user.id)),
     )
 
 
-@router.post("/drive-upload")
-def drive_upload(user: CurrentUser, body: UploadRequest) -> UploadsQueued:
-    """These runs' videos into each picked account's Drive folder, on the
-    worker, as the clicker's Google account."""
-    uploads = queue_uploads(user, body.job_ids, body.login_ids)
+@router.post("/drive-upload", dependencies=[Can(Action.DRIVE_UPLOAD)])
+def drive_upload(
+    user: CurrentUser, actors: Actors, body: UploadRequest
+) -> UploadsQueued:
+    """These runs' videos (the clicker's own or their VAs') into each picked
+    account's Drive folder, on the worker, as the clicker's Google account."""
+    uploads = queue_uploads(user, body.job_ids, body.login_ids, actors)
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
     )
 
 
-@router.post("/drive-uploads/{upload_id}/remove")
+@router.post(
+    "/drive-uploads/{upload_id}/remove", dependencies=[Can(Action.DRIVE_UPLOAD)]
+)
 def drive_upload_remove(user: CurrentUser, upload_id: int) -> DriveUpload:
     """Takes an uploaded video back out of its account folder (Drive trash)."""
     return remove_upload(user, upload_id)
@@ -188,11 +198,11 @@ def drive_upload_remove(user: CurrentUser, upload_id: int) -> DriveUpload:
 
 @router.get("/drive-uploads")
 def drive_upload_states(
-    actor: Actor, job: Annotated[list[str], Query(max_length=200)]
+    actors: Actors, job: Annotated[list[str], Query(max_length=200)]
 ) -> list[DriveUpload]:
     """Where these runs' videos are in Drive: what clone.js polls while
     uploads run. Only runs this session may see."""
-    return upload_states(job, actor)
+    return upload_states(job, actors)
 
 
 @router.post("/run", status_code=202)

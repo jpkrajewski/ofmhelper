@@ -4,7 +4,9 @@
    (Recreate, then the page's own items, `menu_items`, then Hide), a
    failed one Recreate and a ⋯ menu (Hide). A hidden card (`data-hidden`,
    Unhide instead of Hide) is only drawn in "Show hidden"'s view of only the
-   hidden cards (_gallery_hidden.html).
+   hidden cards (_gallery_hidden.html). A card of someone else's job
+   (`job.made_by`: a VA's, read by the owner) names its maker at the end of
+   the meta line and has no Hide: hiding is the maker's.
    A page's card is `{% extends "_gallery_card.html" %}` overriding only
    its blocks (`actions`: the whole row; /repurpose keeps only Recreate);
    it expects `job` (a schemas.TaskCard or a subclass).
@@ -20,14 +22,14 @@
         {{ am.asset_media(job.assets[0]) }}
         {% if job.assets[0].kind == "audio" %}<p class="filename">{{ job.assets[0].name }}</p>{% endif %}
     {% elif job.status == "failed" %}
-        <div class="result-file result-failed" title="{{ job.error }}">{{ job.error_reason }}</div>
+        <div class="result-file result-failed" data-reason="{{ job.error_reason }}">{{ job.error_line }}</div>
     {% elif job.status == "done" %}
         {% block no_output %}<div class="result-file">No output</div>{% endblock %}
     {% else %}
         <div class="result-file"><span class="spinner"></span> {% block pending_label %}generating…{% endblock %}</div>
     {% endif %}
     {% block notes %}{% endblock %}
-    <p class="source">{% block meta %}{{ job.task_label }}{% endblock %}</p>
+    <p class="source">{% block meta %}{{ job.task_label }}{% endblock %}{% if job.made_by %} · {{ job.made_by }}{% endif %}</p>
     {% block below %}{% endblock %}
     {% if job.status in ("done", "failed") %}
     <div class="result-actions">
@@ -37,11 +39,11 @@
         {% call ui.menu("More actions") %}
             {{ ui.menu_item("Recreate", "restore", "recreate-btn") }}
             {% block menu_items %}{% endblock %}
-            {{ hide.items(job.hidden) }}
+            {% if not job.made_by %}{{ hide.items(job.hidden) }}{% endif %}
         {% endcall %}
         {% else %}
         {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
-        {% call ui.menu("More actions") %}{{ hide.items(job.hidden) }}{% endcall %}
+        {% if not job.made_by %}{% call ui.menu("More actions") %}{{ hide.items(job.hidden) }}{% endcall %}{% endif %}
         {% endif %}
         {% endblock %}
     </div>

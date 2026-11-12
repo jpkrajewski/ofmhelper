@@ -5,6 +5,7 @@
 {{ ui.page_header("Users") }}
 
 {% if error %}{{ ui.notice(error, "warn") }}{% endif %}
+{% if message %}{{ ui.notice(message, "ok") }}{% endif %}
 
 {% if link %}
 {% call ui.notice(hook="users-link") %}
@@ -29,8 +30,21 @@
         <div class="field users-add-role">
             <label for="users-role">Role</label>
             <select name="role" id="users-role">
-                {% for r in roles %}<option value="{{ r }}"{% if r == "user" %} selected{% endif %}>{{ r|capitalize }}</option>{% endfor %}
+                {% for r in roles %}<option value="{{ r }}"{% if r == "user" %} selected{% endif %}>{{ "VA" if r == "va" else r|capitalize }}</option>{% endfor %}
             </select>
+        </div>
+        {# Only a VA has an owner: shown once VA is picked. #}
+        <div class="field users-add-owner" id="users-owner-field" hidden>
+            <label for="users-owner">VA's employer</label>
+            <select name="owner_id" id="users-owner">
+                {% for o in owners %}<option value="{{ o.id }}">{{ o.label }}</option>{% endfor %}
+            </select>
+        </div>
+        {# A VA signs in with "Login as Virtual Assistant": the employer's
+           email and this password. #}
+        <div class="field users-add-password" id="users-password-field" hidden>
+            <label for="users-password">VA password</label>
+            <input type="text" name="password" id="users-password" minlength="{{ password_min }}" autocomplete="off">
         </div>
         {{ ui.button("Add user", "primary", type="submit") }}
     </form>
@@ -56,19 +70,20 @@
                     {% if u.name %}<span class="pending">{{ u.email }}</span>{% endif %}
                 </td>
                 <td>
-                    {% if mine %}<span class="users-role-text">{{ u.role|capitalize }}</span>
-                    {% else %}
-                    <form method="post" action="/users/{{ u.id }}/role">
-                        <select name="role" class="users-role" aria-label="Role of {{ u.email }}" onchange="this.form.submit()">
-                            {% for r in roles %}<option value="{{ r }}"{% if r == u.role %} selected{% endif %}>{{ r|capitalize }}</option>{% endfor %}
+                    <span class="users-role-text">{{ "VA" if u.role == "va" else u.role|capitalize }}</span>
+                    {% if u.email in env_admins %}<span class="pending users-note">always admin</span>{% endif %}
+                    {% if u.role == "va" %}
+                    <form method="post" action="/users/{{ u.id }}/owner">
+                        <select name="owner_id" class="users-role" aria-label="Owner of {{ u.email }}" onchange="this.form.submit()">
+                            {% if not u.owner_id %}<option value="" selected>No employer</option>{% endif %}
+                            {% for o in owners %}<option value="{{ o.id }}"{% if o.id == u.owner_id %} selected{% endif %}>VA of {{ o.label }}</option>{% endfor %}
                         </select>
                     </form>
                     {% endif %}
-                    {% if u.email in env_admins %}<span class="pending users-note">always admin</span>{% endif %}
                 </td>
                 <td>
                     {%- set ways = [] -%}
-                    {%- if u.has_password %}{% set _ = ways.append("password") %}{% endif -%}
+                    {%- if u.has_password %}{% set _ = ways.append("VA login" if u.role == "va" else "password") %}{% endif -%}
                     {%- if u.drive_connected %}{% set _ = ways.append("Google + Drive") %}{% endif -%}
                     {{ ways|join(", ") if ways else "—" }}
                 </td>
@@ -78,15 +93,27 @@
                 </td>
                 <td>
                     <div class="users-actions">
+                        {% if not mine and u.active %}
+                        <form method="post" action="/users/{{ u.id }}/viewing">
+                            {{ ui.button("View as", type="submit") }}
+                        </form>
+                        {% endif %}
                         {% if not mine %}
                         <form method="post" action="/users/{{ u.id }}/active">
                             <input type="hidden" name="active" value="{{ 'false' if u.active else 'true' }}">
                             {{ ui.button("Deactivate" if u.active else "Activate", "ghost" if u.active else "secondary", type="submit") }}
                         </form>
                         {% endif %}
+                        {% if u.role == "va" %}
+                        <form method="post" action="/users/{{ u.id }}/password" class="users-set-password">
+                            <input type="text" name="password" required minlength="{{ password_min }}" autocomplete="off" placeholder="New password" aria-label="New password for {{ u.email }}">
+                            {{ ui.button("Set password", type="submit") }}
+                        </form>
+                        {% else %}
                         <form method="post" action="/users/{{ u.id }}/link">
                             {{ ui.button("Password link", type="submit") }}
                         </form>
+                        {% endif %}
                         {% if not mine %}
                         <form method="post" action="/users/{{ u.id }}/delete" data-confirm="Remove {{ u.email }}? What they made stays.">
                             {{ ui.button("Remove", "ghost", type="submit") }}
@@ -114,6 +141,24 @@
             }
             setTimeout(() => { copy.textContent = "Copy"; }, 2000);
         });
+    }
+    const role = document.getElementById("users-role");
+    const ownerField = document.getElementById("users-owner-field");
+    const owner = document.getElementById("users-owner");
+    const passwordField = document.getElementById("users-password-field");
+    const password = document.getElementById("users-password");
+    function showOwner() {
+        const va = role.value === "va";
+        ownerField.hidden = !va;
+        owner.disabled = !va;
+        owner.required = va;
+        passwordField.hidden = !va;
+        password.disabled = !va;
+        password.required = va;
+    }
+    if (role && ownerField && owner) {
+        role.addEventListener("change", showOwner);
+        showOwner();
     }
     document.querySelectorAll("time[data-ts]").forEach((t) => {
         const ts = Number(t.dataset.ts);

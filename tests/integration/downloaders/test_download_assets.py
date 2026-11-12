@@ -59,7 +59,7 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
     out_file = tmp_path / "clip.mp4"
     out_file.write_bytes(b"fake video")
 
-    def fake_downloads(urls, assets_root, user_id=None):
+    def fake_downloads(urls, assets_root, user_id=None, job_id=None):
         return [
             {
                 "url": urls[0],
@@ -174,7 +174,7 @@ def test_action_log_records_who_ran_what(client, monkeypatch, tmp_path):
     monkeypatch.setattr(
         download_reels_router,
         "run_downloads",
-        lambda urls, assets_root, user_id=None: [],
+        lambda urls, assets_root, user_id=None, job_id=None: [],
     )
 
     # admin runs one

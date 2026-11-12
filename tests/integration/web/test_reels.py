@@ -913,7 +913,19 @@ def test_a_claimed_profile_is_not_claimed_twice():
     assert claim_due(0, 0) == ["x"]
 
 
+def _watching(monkeypatch, *codes: str) -> None:
+    """The signed-in person watches a profile whose scan found `codes`."""
+    found = _found("u")
+    found.reels = [found.reels[0].model_copy(update={"code": code}) for code in codes]
+    profiles = [WatchedProfile(user_id=1, username="u", added_at=0, result=found)]
+    monkeypatch.setattr(
+        reels, "list_watched", lambda _group=None, _owner=None: profiles
+    )
+
+
 def test_clone_downloads_picked_reels_and_opens_clone_with_them(client, monkeypatch):
+    _watching(monkeypatch, "A1", "B2")
+
     def fake_download(_self, url, dest: Path):
         dest.write_bytes(url.encode())
         return dest
@@ -936,7 +948,33 @@ def test_clone_downloads_picked_reels_and_opens_clone_with_them(client, monkeypa
     assert prefill == videos
 
 
+@pytest.mark.parametrize("url", ["/reels/clone", "/reels/download"])
+def test_a_reel_of_no_watched_profile_is_404_and_fetches_nothing(
+    client, monkeypatch, url
+):
+    """The picks are checked against the person's own watch list, like a
+    cover: a reel of a profile somebody else watches is not theirs to fetch."""
+    _watching(monkeypatch, "A1")
+    fetched: list[str] = []
+    monkeypatch.setattr(
+        reels.InstagramClient,
+        "download_video",
+        lambda _self, video, _dest: fetched.append(video),
+    )
+    picked = [
+        {"code": "A1", "video_url": CDN.format("a")},
+        {"code": "NotWatched1", "video_url": CDN.format("b")},
+    ]
+
+    r = client.post(url, data={"reels": json.dumps(picked)})
+
+    assert (r.status_code, r.json()) == (404, {"detail": "No such reel"})
+    assert fetched == []
+
+
 def test_download_answers_one_mp4_or_a_zip_of_several(client, tmp_path, monkeypatch):
+    _watching(monkeypatch, "A1", "B2")
+
     def fake_download(_self, url, dest: Path):
         dest.write_bytes(url.encode())
         return dest

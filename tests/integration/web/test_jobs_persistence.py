@@ -12,6 +12,8 @@ tables between tests, so these never touch dev/prod data.
 
 from pathlib import Path
 
+from signin import make_user
+
 from ofmhelpers.db.repositories import JobRepository
 from ofmhelpers.db.stores.jobs import (
     create_job,
@@ -29,14 +31,20 @@ from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.schemas.persistence import JobPage
 
 
+def _someone(email: str = "someone@example.com") -> str:
+    """A real user's id as a job takes it: `jobs.user_id` is a foreign key."""
+    return str(make_user(email).id)
+
+
 def test_create_job_persists_immediately():
-    job_id = create_job("seedance", {"prompt": "a cat"}, actor="admin")
+    admin = _someone("boss@example.com")
+    job_id = create_job("seedance", {"prompt": "a cat"}, actor=admin)
 
     job = get_job(job_id)
     assert job.task == "seedance"
     assert job.params == {"prompt": "a cat"}
     assert job.status == "running"
-    assert job.actor == "admin"
+    assert job.actor == admin
 
 
 def test_run_job_success_persists_result():
@@ -83,7 +91,7 @@ def test_jobs_survive_a_simulated_restart():
     the process wiped it even though the generated files were untouched. Now
     the database is the store -- a brand-new repository instance (what a fresh
     process would use) reads the same row straight back."""
-    job_id = create_job("kling3", {"prompt": "hi"}, actor="va")
+    job_id = create_job("kling3", {"prompt": "hi"}, actor=_someone())
     run_job(job_id, lambda: [{"name": "a.mp4", "path": "/tmp/a.mp4"}], {})
 
     restored = JobRepository().get(job_id)
@@ -142,7 +150,7 @@ def test_list_jobs_partially_prunes_a_grouped_result(tmp_path):
 
 
 def test_log_event_is_never_pruned_it_has_no_result():
-    job_id = log_event("login", actor="admin")
+    job_id = log_event("login", actor=_someone())
 
     assert any(j.id == job_id for j in list_jobs())
 
@@ -232,12 +240,13 @@ def test_list_jobs_page_filters_and_pages_in_sql():
     first, with the total before slicing."""
     from ofmhelpers.db.stores.jobs import create_job, list_jobs_page
 
-    va = [create_job("wan3", {"i": i}, actor="va") for i in range(3)]
-    create_job("wan3", {}, actor="admin")
-    create_job("uniqify", {}, actor="va")
+    someone, admin = _someone(), _someone("boss@example.com")
+    va = [create_job("wan3", {"i": i}, actor=someone) for i in range(3)]
+    create_job("wan3", {}, actor=admin)
+    create_job("uniqify", {}, actor=someone)
 
-    first = list_jobs_page({"wan3", "kling3"}, 0, 2, actor="va")
-    rest = list_jobs_page({"wan3"}, 2, 2, actor="va").jobs
+    first = list_jobs_page({"wan3", "kling3"}, 0, 2, actor=someone)
+    rest = list_jobs_page({"wan3"}, 2, 2, actor=someone).jobs
     assert first.total == 3
     # Pages don't overlap and cover exactly the VA's wan3 jobs, newest first
     # (compared on created_at: create_job can tie on a coarse clock).
@@ -257,8 +266,9 @@ def test_the_history_cap_drops_the_oldest_finished_jobs_never_a_running_one(
     """A queued /clone-links run behind a big backlog is the oldest row: the
     cap once deleted it, and the run still paid with nobody to see it."""
     monkeypatch.setenv("OFM_JOBS_MAX_ENTRIES", "2")
+    someone = _someone()
     queued = create_job("clone_links", {"link": "https://x/1"})
-    finished = [log_event("login", actor="1") for _ in range(4)]
+    finished = [log_event("login", actor=someone) for _ in range(4)]
 
     assert get_job(queued).status == "running"
     assert [job_id for job_id in finished if get_job(job_id)] == finished[-2:]
@@ -311,18 +321,19 @@ def test_merge_params_on_a_missing_job_does_nothing():
 def test_redone_links_are_the_links_queued_again_later_running_or_done():
     """What a stale failed card's Recreate leaves out: the same actor's
     later runs of the same task and link that did not fail."""
-    early = create_job("clone_links", {"link": "https://x/early"}, actor="7")
-    stale = create_job("clone_links", {"link": "https://x/running"}, actor="7")
+    me, other = _someone(), _someone("other@example.com")
+    early = create_job("clone_links", {"link": "https://x/early"}, actor=me)
+    stale = create_job("clone_links", {"link": "https://x/running"}, actor=me)
     fail_job(stale, "Timed out")
     after = get_job(stale).created_at
-    create_job("clone_links", {"link": "https://x/running"}, actor="7")
-    done = create_job("clone_links", {"link": "https://x/done"}, actor="7")
+    create_job("clone_links", {"link": "https://x/running"}, actor=me)
+    done = create_job("clone_links", {"link": "https://x/done"}, actor=me)
     run_job(done, list, {})
-    failed = create_job("clone_links", {"link": "https://x/failed"}, actor="7")
+    failed = create_job("clone_links", {"link": "https://x/failed"}, actor=me)
     fail_job(failed, "Timed out")
-    create_job("clone_links", {"link": "https://x/other-actor"}, actor="8")
-    create_job("clone", {"link": "https://x/other-task"}, actor="7")
-    create_job("clone_links", {"link": "https://x/not-asked"}, actor="7")
+    create_job("clone_links", {"link": "https://x/other-actor"}, actor=other)
+    create_job("clone", {"link": "https://x/other-task"}, actor=me)
+    create_job("clone_links", {"link": "https://x/not-asked"}, actor=me)
     asked = [
         "https://x/early",
         "https://x/running",
@@ -333,8 +344,8 @@ def test_redone_links_are_the_links_queued_again_later_running_or_done():
     ]
 
     assert get_job(early).status == "running"
-    assert redone_links("clone_links", "7", asked, after) == {
+    assert redone_links("clone_links", me, asked, after) == {
         "https://x/running",
         "https://x/done",
     }
-    assert redone_links("clone_links", "7", [], after) == set()
+    assert redone_links("clone_links", me, [], after) == set()

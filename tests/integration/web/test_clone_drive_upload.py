@@ -29,6 +29,7 @@ from ofmhelpers.integrations.gdrive import DriveError, DriveFile
 from ofmhelpers.integrations.gdrive.fake import fake_drive
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import AccountProfile, AccountStats
+from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 ROOT = "upload-root-folder"
@@ -555,3 +556,28 @@ def test_upload_mode_only_for_the_sessions_own_finished_run(drive, tmp_path):
     assert 'id="dr-pick"' not in ann.get("/drive", params={"upload": bob_job}).text
     assert 'id="dr-pick"' not in ann.get("/drive", params={"upload": "nope"}).text
     assert 'id="dr-pick"' not in ann.get("/drive").text
+
+
+def test_an_owner_posts_their_vas_clone_and_the_va_cannot(drive, tmp_path):
+    """The VA makes the clone, the owner uploads it: the VA has no Drive
+    upload at all (`Action.DRIVE_UPLOAD`), a stranger still gets nothing."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    owner = users.by_email("ann@example.com")
+    va = TestClient(app)
+    va_user = sign_in(va, "va@example.com", Role.VA)
+    users.set_owner(va_user.id, owner.id)
+    job = _finished_run("va@example.com", tmp_path, "va.mp4")
+    request = {"job_ids": [job], "login_ids": [login]}
+
+    assert va.post("/clone/drive-upload", json=request).status_code == 403
+    assert _files_in(drive, "ann.ig - Anna") == []
+    bob = _client("bob@example.com")
+    assert bob.post("/clone/drive-upload", json=request).status_code == 400
+
+    r = ann.post("/clone/drive-upload", json=request)
+
+    assert r.status_code == 200, r.text
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert state["status"] == "done"
+    assert len(_files_in(drive, "ann.ig - Anna")) == 1

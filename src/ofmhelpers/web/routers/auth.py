@@ -24,11 +24,17 @@ from ofmhelpers.features.signin.state import (
     drop_state,
     safe_next,
 )
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.middleware import AuthMiddleware
+from ofmhelpers.web.middleware.auth import STOP_VIEWING_PATH
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(tags=["auth"])
+
+# Public (`settings.web.public_paths`): the page a VA signs in on.
+VA_LOGIN_PATH = "/login/va"
 
 
 def _login_page(
@@ -74,7 +80,46 @@ def login_submit(
     return _respond(request, passwords.login(request, email, password, next_url))
 
 
-@router.post("/logout")
+@router.get(VA_LOGIN_PATH)
+def va_login_form(
+    request: Request, next_url: Annotated[str, Query(alias="next")] = HOME
+) -> Response:
+    """ "Login as Virtual Assistant": the employer's email and the VA's
+    password (set on /users)."""
+    if AuthMiddleware.session_user(request):
+        return see_other(safe_next(next_url))
+    return render(request, "va_login.html", next=safe_next(next_url), error=None)
+
+
+@router.post(VA_LOGIN_PATH)
+def va_login_submit(
+    request: Request,
+    employer: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+    next_url: Annotated[str, Form(alias="next")] = HOME,
+) -> Response:
+    outcome = passwords.va_login(request, employer, password, safe_next(next_url))
+    if outcome.redirect is None:
+        return render(
+            request,
+            "va_login.html",
+            next=outcome.next_url,
+            error=outcome.error,
+            status_code=outcome.status_code,
+        )
+    if outcome.user is not None:
+        AuthMiddleware.sign_in(request, outcome.user)
+    return see_other(outcome.redirect)
+
+
+@router.post(STOP_VIEWING_PATH, dependencies=[Access(Area.SESSION)])
+def stop_viewing(request: Request) -> Response:
+    """ "Back to my view": the admin's own pages again."""
+    AuthMiddleware.stop_viewing(request)
+    return see_other("/users")
+
+
+@router.post("/logout", dependencies=[Access(Area.SESSION)])
 def logout(request: Request) -> Response:
     user = AuthMiddleware.session_user(request)
     if user is not None:

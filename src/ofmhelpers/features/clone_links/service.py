@@ -26,6 +26,7 @@ from ofmhelpers.db.stores.jobs import (
     redone_links,
 )
 from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths
 from ofmhelpers.features.clone.pricing import UnpricedError, clone_price
@@ -46,6 +47,7 @@ from ofmhelpers.features.clone_links.preview import (
     THUMB_KEY,
     Price,
     preview_all,
+    previewed,
     thumb_file,
 )
 from ofmhelpers.features.clone_links.review import NOT_CONNECTED
@@ -167,10 +169,13 @@ def previews(
     return preview_all(links, owner_id, price, THUMBS_PREFIX)
 
 
-def cover(key: str) -> Path:
+def cover(key: str, owner_id: int) -> Path:
     """A previewed link's cover, kept small on disk (`preview`): only a file
-    already made, never a fetch."""
-    path = thumb_file(key) if THUMB_KEY.match(key) else None
+    already made, never a fetch, and only of a link `owner_id` previewed
+    (the kept file is shared, who may fetch is not): somebody else's
+    answers like one that is not there."""
+    mine = bool(THUMB_KEY.match(key)) and previewed(key, owner_id)
+    path = thumb_file(key) if mine else None
     if path is None or not path.is_file():
         msg = "No cover"
         raise NotFoundError(msg)
@@ -258,11 +263,18 @@ class Generate(BaseModel):
             raise
         return job_id
 
+    def _key(self, form: Submitted) -> str:
+        """The key the runs go out on: the owner's for the target's model
+        (`Keys.for_run`); "" without one."""
+        return Keys.of(self.owner_id).for_run(
+            form.provider, _target(form.provider).model, form.api_key
+        )
+
     def _checked(self, form: Submitted) -> dict[str, Any]:
         """What every run of this Generate shares; every refusal is raised
         here, before anything is marked sent or queued."""
         target = _target(form.provider)
-        if not form.api_key:
+        if not self._key(form):
             msg = "API key is required"
             raise RefusedError(msg)
         if form.export not in exports():
@@ -312,9 +324,10 @@ class Generate(BaseModel):
         # batch's failed links (`recreate`), Stop stops them all.
         shared = {**shared, "reference_images": images, "batch": batch}
         queued = {job.params.get("link") for job in sent if job.error != NOT_QUEUED}
+        api_key = self._key(form)
         try:
             job_ids = [
-                self._queue(form.api_key, {**shared, "link": url})
+                self._queue(api_key, {**shared, "link": url})
                 for url in urls
                 if url not in queued
             ]

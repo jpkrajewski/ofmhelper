@@ -6,15 +6,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
+from pydantic import StringConstraints
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets import refs
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
-from ofmhelpers.schemas import MissingRefs, RefEntry
-from ofmhelpers.web.dependencies import AssetsRoot, OwnerId
+from ofmhelpers.schemas import MissingRefs, RefEntry, StoredRefs
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import media_response
 
-router = APIRouter(prefix="/refs", tags=["refs"])
+router = APIRouter(prefix="/refs", tags=["refs"], dependencies=[Access(Area.REFS)])
 
 # Restored files one Recreate checks at once (a run holds a handful).
 MAX_CHECKED = 50
@@ -31,6 +33,9 @@ def _limit(limit: Annotated[int | None, Query(ge=1)] = None) -> int | None:
 
 
 RefPath = Annotated[str, Query()]
+# A file's content digest, as `save_asset` names it: hex only, so it is safe
+# in the store's glob.
+Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
 @router.get("")
@@ -47,12 +52,26 @@ def list_refs(
 
 @router.get("/missing")
 def missing_refs(
-    assets_root: AssetsRoot, path: Annotated[list[str], Query(max_length=MAX_CHECKED)]
+    assets_root: AssetsRoot,
+    actor: Actor,
+    path: Annotated[list[str], Query(max_length=MAX_CHECKED)],
 ) -> MissingRefs:
     """Of `path`s (a past run's files, restored by Recreate), the ones this
     session can no longer use. One request, so a restore checks every file
-    without a 404 per gone one."""
-    return refs.missing(assets_root, path)
+    without a 404 per gone one. `restorable`: the asker's own downloads
+    among them, removed to save space."""
+    return refs.missing(assets_root, path, actor)
+
+
+@router.get("/stored")
+def stored_refs(
+    assets_root: AssetsRoot,
+    digest: Annotated[list[Sha256], Query(max_length=MAX_CHECKED)],
+) -> StoredRefs:
+    """Of `digest`s (files just picked from a computer, hashed by the page),
+    the ones this session already has: the page sends those as stored files
+    instead of uploading them again."""
+    return refs.stored(assets_root, digest)
 
 
 @router.get("/file")

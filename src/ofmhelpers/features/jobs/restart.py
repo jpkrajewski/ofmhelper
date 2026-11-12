@@ -17,7 +17,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.cache import QueueName, enqueue_to
-from ofmhelpers.db.stores.jobs import merge_params, reopen_job
+from ofmhelpers.db.stores.jobs import merge_params, reopen_job, reopen_settled
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.schemas import Job
 
@@ -52,6 +52,25 @@ class Restart(BaseModel):
         # Counted first: a restart that dies on the way still counts.
         merge_params(job.id, {COUNT: restarts + 1})
         reopen_job(job.id)
+        enqueue_to(
+            self.queue,
+            run_job,
+            job.id,
+            self.run,
+            kwargs,
+            job_timeout=self.job_timeout(job.params) if self.job_timeout else None,
+        )
+        return True
+
+    def replay(self, job: Job) -> bool:
+        """Queues a settled `job` again on its person's word (a download
+        whose video was removed, fetched again): not a restart, so nothing
+        is counted. False, and nothing queued, when it is running already:
+        of two clicks one queues. A queue failure leaves the row running,
+        and recovery starts it over (`again`)."""
+        kwargs = self.kwargs(job)
+        if not reopen_settled(job.id):
+            return False
         enqueue_to(
             self.queue,
             run_job,

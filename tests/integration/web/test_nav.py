@@ -12,6 +12,7 @@ from repo_paths import SRC
 from signin import sign_in, sign_in_admin
 
 from ofmhelpers.schemas.nav import NAV, NavPlace, nav
+from ofmhelpers.schemas.users import Role
 from ofmhelpers.web.main import app
 
 ICONS = (SRC / "web" / "templates" / "_icons.html").read_text("utf-8")
@@ -30,8 +31,44 @@ def test_every_entry_has_an_icon_and_opens_a_page():
 
 
 def test_a_user_never_gets_an_admin_page():
-    assert all(not item.admin_only for item in nav(is_admin=False))
-    assert nav(is_admin=True) == list(NAV)
+    admin_pages = {
+        "/chatting",
+        "/users",
+        "/character-sheet",
+        "/applications",
+        "/file-manager",
+        "/styleguide",
+        "/action-log",
+    }
+    assert nav(Role.ADMIN) == list(NAV)
+    assert [item.href for item in nav(Role.USER)] == [
+        item.href for item in NAV if item.href not in admin_pages
+    ]
+    assert len(nav(Role.USER)) == len(NAV) - len(admin_pages)
+
+
+def test_a_va_gets_the_five_pages_they_work_in():
+    assert [item.label for item in nav(Role.VA)] == [
+        "Gen AI",
+        "Clone",
+        "Download",
+        "Edit",
+        "Account",
+    ]
+
+
+def test_header_and_home_render_only_a_vas_pages():
+    client = TestClient(app)
+    sign_in(client, "nav-va@example.com", Role.VA)
+    html = client.get("/home").text
+    assert re.findall(r'<a href="(/[^"]*)"', _header(html)) == [
+        "/generate",
+        "/clone",
+        "/download-assets",
+        "/edit",
+        "/account",
+    ]
+    assert html.count('class="link-card"') == 5
 
 
 @pytest.mark.parametrize(
@@ -53,7 +90,7 @@ def test_header_and_home_render_the_list_for_a_user():
     sign_in(client)
     html = client.get("/home").text
     header = _header(html)
-    shown = [item for item in NAV if not item.admin_only]
+    shown = nav(Role.USER)
     assert re.findall(r'<a href="(/[^"]*)"', header) == [
         i.href for i in shown if i.place == NavPlace.BAR
     ] + [i.href for i in shown if i.place == NavPlace.MORE]

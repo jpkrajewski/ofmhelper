@@ -14,6 +14,7 @@ lazy from fastapi import UploadFile
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import picture_presets
+from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import build_ordered_paths
 from ofmhelpers.features.assets.store import save_asset
@@ -206,15 +207,21 @@ class Submitted(Protocol):
     pictures_manifest: str
 
 
-def _target(provider: str, api_key: str) -> PictureTarget:
+def _target(provider: str) -> PictureTarget:
     target = PICTURE_TARGETS.get(provider)
     if target is None:
         msg = "That provider has no Nano Banana Pro"
         raise RefusedError(msg)
+    return target
+
+
+def _key(form: Submitted, target: PictureTarget, owner_id: int) -> str:
+    """The key the runs go out on: `owner_id`'s for the target's model."""
+    api_key = Keys.of(owner_id).for_run(form.provider, target.model, form.api_key)
     if not api_key:
         msg = "API key is required"
         raise RefusedError(msg)
-    return target
+    return api_key
 
 
 def _pictures(form: Submitted, owner_id: int, assets_root: Path) -> list[str]:
@@ -275,13 +282,14 @@ def start(
     before anything is queued. `run`: the worker function the router owns
     (RQ stores it by path). The key goes to the worker only."""
     chosen = visible(form.preset, owner_id)
-    target = _target(form.provider, form.api_key)
+    target = _target(form.provider)
+    api_key = _key(form, target, owner_id)
     runs = _runs(chosen, target, _pictures(form, owner_id, assets_root))
     job_ids = []
     for params in runs:
         job_params = {"provider": form.provider, "model": target.model, **params}
         kwargs = {
-            "api_key": form.api_key,
+            "api_key": api_key,
             "assets_root": str(assets_root),
             **job_params,
         }

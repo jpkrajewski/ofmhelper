@@ -63,11 +63,34 @@ def list_users() -> list[User]:
 
 def add_user(form: UserForm) -> User | None:
     """None when the email is already a user."""
-    return _repository().add(form.email, form.role, form.name)
+    return _repository().add(
+        form.email,
+        form.role,
+        form.name,
+        owner_id=form.owner_id if form.role == Role.VA else None,
+    )
 
 
 def set_role(user_id: int, role: Role) -> User | None:
-    return _repository().update(user_id, role=role)
+    """Only a VA has an owner: any other role drops it."""
+    if role == Role.VA:
+        return _repository().update(user_id, role=role)
+    return _repository().update(user_id, role=role, owner_id=None)
+
+
+def set_owner(user_id: int, owner_id: int | None) -> User | None:
+    """Whose VA `user_id` is (None: nobody's yet)."""
+    return _repository().update(user_id, owner_id=owner_id)
+
+
+def vas_of(owner_id: int) -> list[User]:
+    """The VAs working for `owner_id`, deactivated ones too: what they made
+    stays visible to their owner."""
+    return [
+        user
+        for user in _repository().list_all()
+        if user.role == Role.VA and user.owner_id == owner_id
+    ]
 
 
 def set_active(user_id: int, *, active: bool) -> User | None:

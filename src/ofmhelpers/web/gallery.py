@@ -1,10 +1,13 @@
 """A tool's gallery of past runs, newest first.
 
 `gallery = Gallery({TASK})` once per router. The page's route and a
-`/gallery/latest` call `gallery.page(actor)` for the newest page; `/gallery`
+`/gallery/latest` call `gallery.page(viewer)` for the newest page; `/gallery`
 takes `query: GalleryParams` (`?offset=&hidden=`, gallery-scroll.js and
-hidden-cards.js) and calls `gallery.page(actor, query)`. Turning jobs into cards
+hidden-cards.js) and calls `gallery.page(viewer, query)`. Turning jobs into cards
 is the router's: each tool has its own card.
+
+A gallery shows the reader's own jobs and their VAs' (`Viewer.actors`); a
+job someone else made carries its maker's name (`Job.made_by`).
 """
 
 from collections.abc import Callable, Collection
@@ -17,6 +20,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import count_hidden_jobs, gallery_page
 from ofmhelpers.web.forms import LoggedFields
 lazy from ofmhelpers.schemas.persistence import GalleryJobs
+lazy from ofmhelpers.schemas.users import Viewer
 
 
 class GalleryQuery(LoggedFields):
@@ -33,14 +37,29 @@ def _default_limit() -> int:
 
 class Gallery:
     def __init__(
-        self, tasks: Collection[str], limit: Callable[[], int] = _default_limit
+        self,
+        tasks: Collection[str],
+        limit: Callable[[], int] = _default_limit,
+        *,
+        by_use: bool = False,
     ) -> None:
+        """`by_use`: the job whose download was asked for or used last
+        first (/download-assets), not the newest."""
         self.tasks = set(tasks)
         self.limit = limit
+        self.by_use = by_use
 
-    def page(self, actor: str, query: GalleryQuery | None = None) -> GalleryJobs:
+    def page(self, viewer: Viewer, query: GalleryQuery | None = None) -> GalleryJobs:
         asked = query or GalleryQuery()
-        return gallery_page(self.tasks, asked.offset, self.limit(), actor, asked.hidden)
+        return gallery_page(
+            self.tasks,
+            asked.offset,
+            self.limit(),
+            viewer.actors,
+            asked.hidden,
+            reader=viewer.user.id,
+            by_use=self.by_use,
+        )
 
-    def hidden_count(self, actor: str) -> int:
-        return count_hidden_jobs(self.tasks, actor)
+    def hidden_count(self, viewer: Viewer) -> int:
+        return count_hidden_jobs(self.tasks, viewer.actors)

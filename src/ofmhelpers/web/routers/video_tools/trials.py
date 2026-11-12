@@ -21,10 +21,13 @@ from fastapi.responses import FileResponse, Response
 
 from ofmhelpers.cache import JobQueue, QueueName, enqueue
 from ofmhelpers.features.trials import folder
-from ofmhelpers.web.dependencies import CurrentUser, Scope
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, CurrentUser, Scope
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/trials", tags=["trials"])
+router = APIRouter(
+    prefix="/trials", tags=["trials"], dependencies=[Access(Area.TRIALS)]
+)
 
 
 def _encodes() -> Callable[..., object]:

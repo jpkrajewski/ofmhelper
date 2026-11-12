@@ -16,23 +16,28 @@ The empty tables of removed features were dropped in alembic 7a8b9c0d1e2f.
 `drive_day_folders` is still there, unmapped: it holds rows (alembic/env.py).
 """
 
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     Date,
+    DateTime,
     Float,
     ForeignKey,
+    Identity,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
     false,
     func,
     text,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, column_property, mapped_column
@@ -79,6 +84,12 @@ class UserRow(Base):
     # to; the first `OFM_ADMIN_EMAILS` admin's Google sign-in takes it over.
     is_password_account: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
+    )
+    # A VA's owner (role "va"): whose keys and store the VA works with and
+    # who sees the VA's jobs. NULL for everyone else, and for a VA nobody
+    # owns yet. RESTRICT: an owner is not removed from under their VAs.
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
     )
 
 
@@ -292,7 +303,10 @@ class JobRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     task: Mapped[str] = mapped_column(String(64), nullable=False)
-    actor: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Whose job it is; NULL = nobody's (a system event, a removed user's).
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
     # Set when the job reaches done/failed, cleared when it is run again.
@@ -305,14 +319,72 @@ class JobRow(Base):
     # When its owner hid its card from the galleries; NULL = shown. A view
     # choice only: the job and its files stay.
     hidden_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # What the run cost (`schemas.JobMeta`): never an input, so not `params`.
+    # What happened on the way (`schemas.JobMeta`): never an input, so not
+    # `params`.
     meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    # What the run cost in dollars; NULL = no known price (never 0).
+    # `cost_estimated`: the provider reported none, the amount is the app's
+    # own price for the run (`features/jobs/cost.py`).
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    cost_estimated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
     )
 
     __table_args__ = (
         # Every read (list_jobs, pruning) sorts/filters by created_at.
         Index("ix_jobs_created_at", "created_at"),
+        # One person's jobs, newest first: galleries, /spending.
+        Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
+    )
+
+
+class DownloadRow(Base):
+    """One file a download job fetched (alembic f4b5c6d7e8a1; written by
+    `features/downloads/service.py` when the job finishes, read by the
+    retention sweep, the same-link lookup and /download-assets' order).
+    `position`: the file's index among its job's files, the `{i}` of
+    `/files/{job}/{i}`. `file_path`: where the downloader left it;
+    `asset_path`: its copy in the owner's part of the asset store (what a
+    clone's `reference_videos` names; NULL: not looked up yet, or none).
+    `stored`: the video is on this server; false once the sweep removed it
+    (`removed_at`), its poster and this row stay. `last_used_at`: when the
+    person last asked for it, or a job last used it. Real columns, not the
+    job's JSONB result: each is filtered or sorted on."""
+
+    __tablename__ = "downloads"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    job_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    asset_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stored: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_used_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("job_id", "position", name="uq_downloads_job_position"),
+        # "Has this person downloaded this link": the same-link lookup.
+        Index("ix_downloads_user_id_url", "user_id", "url"),
+        # The sweep: what is still stored, least recently used first.
+        Index("ix_downloads_stored_last_used_at", "stored", "last_used_at"),
     )
 
 

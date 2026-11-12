@@ -7,12 +7,17 @@ from ofmhelpers.features.downloads import clean
 # Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.downloads.clean import run_clean as _run_clean
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.dependencies import Actor, AssetsRoot
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 
 __all__ = ["_run_clean", "router"]
 
-router = APIRouter(prefix="/clean-images", tags=["clean-images"])
+router = APIRouter(
+    prefix="/clean-images",
+    tags=["clean-images"],
+    dependencies=[Access(Area.DOWNLOAD_OLD)],
+)
 
 
 @router.post("/run", status_code=202)

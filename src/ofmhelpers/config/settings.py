@@ -141,7 +141,15 @@ class WebSettings(BaseSettings):
     #                                Google OAuth consent screen links them and
     #                                its reviewers fetch them signed out
     public_paths: set[str] = Field(
-        default={"/login", "/health", "/", "/apply", "/privacy", "/terms"},
+        default={
+            "/login",
+            "/login/va",
+            "/health",
+            "/",
+            "/apply",
+            "/privacy",
+            "/terms",
+        },
         validation_alias="OFM_PUBLIC_PATHS",
     )
     # The contact the legal pages show (empty: Telegram only).
@@ -876,6 +884,33 @@ class DownloadersSettings(BaseSettings):
     single_post_items: int = Field(
         default=10, ge=1, validation_alias="OFM_DOWNLOAD_SINGLE_POST_ITEMS"
     )
+    # How long a downloaded video stays on this server
+    # (features/downloads/cleanup.py; its poster and its card stay for good,
+    # and its Download button fetches it again): one no job used, this long
+    # after it was last asked for (owner 2026-11-11: 24 h); one a clone used,
+    # this long after its last use (14 days); any, this long after it was
+    # first downloaded (30 days). Nothing asked for or used within
+    # `keep_unused_s` goes, whatever its age: a video fetched again stays a day.
+    keep_unused_s: int = Field(
+        default=86400, ge=1, validation_alias="OFM_DOWNLOADS_KEEP_UNUSED_S"
+    )
+    keep_cloned_s: int = Field(
+        default=1209600, ge=1, validation_alias="OFM_DOWNLOADS_KEEP_CLONED_S"
+    )
+    keep_max_s: int = Field(
+        default=2592000, ge=1, validation_alias="OFM_DOWNLOADS_KEEP_MAX_S"
+    )
+    sweep_s: int = Field(default=3600, ge=1, validation_alias="OFM_DOWNLOADS_SWEEP_S")
+    # The sweep itself. Unset: production only -- dev runs on a copy of
+    # prod's rows next to the developer's own files, and a round there would
+    # delete those. `python -m ofmhelpers.features.downloads.cleanup` counts
+    # what a round would remove, anywhere, and removes nothing.
+    sweep_enabled: bool | None = Field(
+        default=None, validation_alias="OFM_DOWNLOADS_SWEEP"
+    )
+
+    def sweeping(self, production: bool) -> bool:
+        return production if self.sweep_enabled is None else self.sweep_enabled
 
 
 class InstagramSettings(BaseSettings):

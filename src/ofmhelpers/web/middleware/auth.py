@@ -12,6 +12,13 @@ from when it signed in: once the password changes, every other session of
 theirs is signed out (the one that changed it is re-remembered). A session
 from before users existed (it holds a role, no user) is sent back to /login.
 
+Once the session is good, the request's `Viewer` is built
+(`features/users/viewing.py`) and kept on `request.state.viewer`: who the
+request acts as -- the person signed in, or the person an admin is viewing
+as, in which case nothing but a read goes through (`_look_only`). Every
+"who" a route asks for (`web/dependencies.py`) and every "may they"
+(`require`, against `schemas/access.py`) is answered from it.
+
 The allowlist is deployment config (`settings.web.public_paths` /
 `public_prefixes`), not literals in here.
 """
@@ -33,13 +40,22 @@ lazy from starlette.requests import Request
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.users import get_user
 from ofmhelpers.features.signin import state as signin_state
+from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import SessionUser, User
+from ofmhelpers.schemas.access import Action, Area, allowed
+lazy from ofmhelpers.schemas.users import Viewer
 
 logger = get_logger(__name__)
 
 _KEYS = ("user_id", "email", "role")
 _STAMP = "stamp"
+# The id of the person an admin is viewing as (`view_as` / `stop_viewing`).
+_VIEWING = "viewing"
+# What goes through while viewing as someone: reads, and the two ways out.
+_READS = frozenset({"GET", "HEAD", "OPTIONS"})
+STOP_VIEWING_PATH = "/viewing/delete"
+_WAYS_OUT = frozenset({STOP_VIEWING_PATH, "/logout"})
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -68,15 +84,38 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return self._to_login(request)
         if user.role != current.role or user.email != current.email:
             self.remember(request, user)
-        # Whose request this trace is (OpenTelemetry's enduser.*).
+        viewer = await run_in_threadpool(
+            viewer_for, user, request.session.get(_VIEWING)
+        )
+        if not viewer.read_only:
+            # Nobody viewed (any more: the person removed, the admin demoted).
+            request.session.pop(_VIEWING, None)
+        request.state.viewer = viewer
+        # Whose request this trace is (OpenTelemetry's enduser.*): the person
+        # signed in; `viewing.id` when they look as someone else.
         trace.get_current_span().set_attributes(
             {
                 "enduser.id": str(user.id),
                 "enduser.email": user.email,
                 "enduser.role": str(user.role),
+                **({"viewing.id": str(viewer.user.id)} if viewer.read_only else {}),
             }
         )
+        if (
+            viewer.read_only
+            and request.method not in _READS
+            and request.url.path not in _WAYS_OUT
+        ):
+            return self._look_only(request, viewer)
         return await call_next(request)
+
+    def _look_only(self, request: Request, viewer: Viewer) -> Response:
+        """An admin viewing as someone changes nothing of theirs: every
+        write is refused here, in one place, whatever the route."""
+        detail = f"Viewing as {viewer.label}: look only"
+        if self.is_fetch(request):
+            return JSONResponse({"detail": detail}, status_code=403)
+        return PlainTextResponse(detail, status_code=403)
 
     @staticmethod
     def _refused(
@@ -197,31 +236,38 @@ class AuthMiddleware(BaseHTTPMiddleware):
             id=session["user_id"], email=session["email"], role=session["role"]
         )
 
-    @classmethod
-    def user(cls, request: Request) -> SessionUser:
-        """The signed-in user of a protected route (the middleware let it
+    @staticmethod
+    def view_as(request: Request, user: User) -> None:
+        """From the next request on this admin's pages are `user`'s, read
+        only (`viewer_for` checks the admin and the person each time)."""
+        request.session[_VIEWING] = user.id
+
+    @staticmethod
+    def stop_viewing(request: Request) -> None:
+        request.session.pop(_VIEWING, None)
+
+    @staticmethod
+    def viewer(request: Request) -> Viewer:
+        """Who this protected request acts as (the middleware let it
         through, so there is one)."""
-        found = cls.session_user(request)
+        found = getattr(request.state, "viewer", None)
         if found is None:
             raise HTTPException(status_code=401, detail="Not signed in")
         return found
 
     @classmethod
-    def is_admin(cls, request: Request) -> bool:
-        found = cls.session_user(request)
-        return found is not None and found.is_admin
+    def user(cls, request: Request) -> SessionUser:
+        """The person the request acts as: the one signed in, or the one an
+        admin is viewing as."""
+        return cls.viewer(request).user
 
     @classmethod
-    def require_admin(cls, request: Request) -> None:
-        """FastAPI dependency: 403s anyone not an admin.
-
-        Use as a router-level `dependencies=[Depends(AuthMiddleware.require_admin)]`
-        for whole pages users shouldn't reach at all (file-manager, action-log,
-        /users). For routes where users can view but only admins can mutate,
-        check `is_admin` inline per-route instead.
-        """
-        if not cls.is_admin(request):
-            raise HTTPException(status_code=403, detail="Admins only")
+    def require(cls, request: Request, what: Area | Action) -> None:
+        """403s a role the access map (`schemas/access.py`) does not let
+        open the area or do the action. Used through the `Access` / `Can`
+        dependencies of `web/dependencies.py`, never called by a route."""
+        if not allowed(cls.viewer(request).user.role, what):
+            raise HTTPException(status_code=403, detail="Not available to you")
 
     @classmethod
     def actor(cls, request: Request) -> str:
@@ -231,14 +277,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
     @classmethod
     def owner_id(cls, request: Request) -> int:
         """Who a row this request creates (a phone, an account, a watched
-        profile) belongs to: the signed-in user."""
+        profile) belongs to: the person the request acts as."""
         return cls.user(request).id
 
     @classmethod
     def scope(cls, request: Request) -> int:
-        """Whose rows this request may see and change: the signed-in user's
-        own, admins included -- nobody reads another person's phones,
-        accounts, reels or Drive folders. An admin's extra power is managing
-        people (/users) and the admin-only tools, not other users' work.
+        """Whose rows this request may see and change: the person's own,
+        admins included -- nobody reads another person's phones, accounts,
+        reels or Drive folders (an admin looks at someone's through "view
+        as", which makes that person the request's). Jobs alone reach
+        further: an owner also sees their VAs' (`Viewer.actors`).
         "Everyone's" (owner None in the stores) is the background sweeps'."""
         return cls.user(request).id

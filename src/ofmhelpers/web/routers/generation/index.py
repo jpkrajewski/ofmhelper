@@ -11,19 +11,24 @@ from fastapi.responses import Response
 from ofmhelpers.config import settings
 from ofmhelpers.features.generate.choices import model_choices, provider_choices
 from ofmhelpers.features.generate.providers import start_provider
-from ofmhelpers.web.dependencies import Actor, ApiKeys
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, ApiKeys, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
 from ofmhelpers.web.templates_config import render, render_polled
 
-router = APIRouter(prefix="/generate", tags=["generate"])
+router = APIRouter(
+    prefix="/generate", tags=["generate"], dependencies=[Access(Area.GENERATE)]
+)
 
 gallery = Gallery(GENERATE_TOOLS, limit=lambda: settings.web.gallery_limit)
 
 
 @router.get("")
-def form(request: Request, actor: Actor, api_keys: ApiKeys) -> Response:
-    first = gallery.page(actor)
+def form(
+    request: Request, actor: Actor, viewer: Viewing, api_keys: ApiKeys
+) -> Response:
+    first = gallery.page(viewer)
     providers = provider_choices()
     return render(
         request,
@@ -36,7 +41,7 @@ def form(request: Request, actor: Actor, api_keys: ApiKeys) -> Response:
         api_keys=api_keys,
         gallery=[task_card(j) for j in first.jobs],
         next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(actor),
+        hidden_count=gallery.hidden_count(viewer),
         live_poll_s=settings.web.gallery_live_poll_s,
         # The most images one submit may queue (each its own job and card).
         max_batch=settings.aigen.max_batch,
@@ -44,12 +49,12 @@ def form(request: Request, actor: Actor, api_keys: ApiKeys) -> Response:
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
+def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
     """The next page of gallery cards as a fragment gallery-scroll.js appends --
     same partial the page's first page renders, so an appended card is
     indistinguishable from a server-rendered one. `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    found = gallery.page(actor, query)
+    found = gallery.page(viewer, query)
     return render(
         request,
         "generate_gallery_fragment.html",
@@ -59,12 +64,12 @@ def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Respon
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request, actor: Actor) -> Response:
+def gallery_latest(request: Request, viewer: Viewing) -> Response:
     """The newest page of cards, no sentinel: what live-gallery.js polls to
     prepend runs started in other sessions."""
     return render_polled(
         request,
         "generate_gallery_fragment.html",
-        gallery=[task_card(j) for j in gallery.page(actor).jobs],
+        gallery=[task_card(j) for j in gallery.page(viewer).jobs],
         next_offset=None,
     )

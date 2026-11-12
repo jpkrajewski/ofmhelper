@@ -14,6 +14,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import make_user
 
 from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.features.jobs.runner import run_job
@@ -103,7 +104,9 @@ def test_a_download_with_no_video_cannot_be_sent(client, tmp_path):
 
 
 def test_another_users_download_cannot_be_sent(client, tmp_path):
-    job = _download_job([_downloaded(tmp_path, "a.mp4")], actor="999999")
+    job = _download_job(
+        [_downloaded(tmp_path, "a.mp4")], actor=str(make_user("other@example.com").id)
+    )
 
     r = client.post("/download-media/send", data={"job_id": job, "target": "clone"})
     assert r.status_code == 404

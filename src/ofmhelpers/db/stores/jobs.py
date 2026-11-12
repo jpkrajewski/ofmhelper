@@ -22,7 +22,7 @@ queued before that move carry in Redis: it hands them to that runner.
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -31,17 +31,22 @@ from typing import Any
 from pydantic import BaseModel
 
 from ofmhelpers.db.repositories import JobRepository
-from ofmhelpers.db.stores.users import agency_id
+from ofmhelpers.db.stores import downloads
+from ofmhelpers.db.stores.users import agency_id, get_user
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobPreview, ResultFile
+from ofmhelpers.schemas.downloads import RemovedFile
 from ofmhelpers.schemas.persistence import (
     GalleryJobs,
     JobCount,
     JobHeader,
     JobPage,
     JobParams,
+    Named,
+    Spend,
+    SpendPeriod,
 )
-lazy from ofmhelpers.schemas.persistence import JobMeta
+lazy from ofmhelpers.schemas.persistence import JobCost, JobMeta
 
 logger = get_logger(__name__)
 
@@ -54,13 +59,34 @@ def _repository() -> JobRepository:
     return JobRepository()
 
 
+# Whose jobs a read is for: one person (`AuthMiddleware.actor`, a worker's
+# `actor` kwarg) or several (`Viewer.actors`: a person and their VAs), as
+# the user ids' text. None is "no restriction": the worker and sweeps only.
+type Readers = str | Collection[str] | None
+
+
+def _user_id(actor: str | None) -> int | None:
+    """The user an `actor` names; None for none or for text that is no
+    user id (nobody's)."""
+    return int(actor) if actor is not None and actor.isdecimal() else None
+
+
+def _user_ids(actors: Readers) -> tuple[int, ...] | None:
+    """`actors` as the repository's sorted ids (a stable cache key); None
+    stays "no restriction". Text that is no user id names nobody."""
+    if actors is None:
+        return None
+    named = [actors] if isinstance(actors, str) else actors
+    return tuple(sorted({int(a) for a in named if a.isdecimal()}))
+
+
 def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
     """`actor`: the id (as a string) of the user who ran it -- whose job it
-    is (only they see it), and who the action log names. None (scripts,
-    tests): the agency's, like every store call without an owner."""
-    if actor is None:
-        actor = str(agency_id())
-    job_id = _repository().create(task_name, params, actor=actor, status="running")
+    is (they and their owner see it), and who the action log names. None
+    (scripts, tests): the agency's, like every store call without an owner.
+    Text that is no user id: nobody's."""
+    user_id = agency_id() if actor is None else _user_id(actor)
+    job_id = _repository().create(task_name, params, user_id=user_id, status="running")
     # Inside the request's trace: what ties it to the job's own trace.
     logger.info("job %s created: %s", job_id, task_name)
     return job_id
@@ -71,7 +97,9 @@ def log_event(task_name: str, actor: str | None, params: dict | None = None) -> 
     work -- recorded straight into the Action log already "done", no
     background task involved. `params`: what the log shows with it (who,
     signed in how)."""
-    return _repository().create(task_name, params or {}, actor=actor, status="done")
+    return _repository().create(
+        task_name, params or {}, user_id=_user_id(actor), status="done"
+    )
 
 
 # The one that runs jobs, `(job_id, fn, kwargs)`: `features/jobs/runner.py`
@@ -116,9 +144,18 @@ def record_failure(job_id: str, error: str) -> None:
     _repository().update_status(job_id, "failed", error=error)
 
 
-def set_job_meta(job_id: str, meta: JobMeta) -> None:
-    """What happened on the way (`jobs.meta`): its provider requests, cost."""
-    _repository().set_meta(job_id, meta.model_dump(mode="json"))
+def keep_cost(job_id: str, meta: JobMeta, cost: JobCost) -> None:
+    """What happened on the way (`jobs.meta`: its provider requests) and
+    what the run cost (`jobs.cost_usd`, `cost_estimated`)."""
+    _repository().set_cost(
+        job_id, meta.model_dump(mode="json"), cost.usd, cost.estimated
+    )
+
+
+def spend(user_ids: Collection[int], periods: list[SpendPeriod]) -> list[Spend]:
+    """What each of `user_ids`' runs cost in each of `periods`, summed in
+    SQL: one entry per person and period that has a run."""
+    return _repository().spend(tuple(sorted(user_ids)), tuple(periods))
 
 
 def _stored(result: Any) -> Any:
@@ -159,6 +196,20 @@ def files_naming(fragment: str) -> list[Any]:
     return _repository().files_naming(fragment)
 
 
+def naming_each(fragments: list[str]) -> list[Named]:
+    """Which of `fragments` (a file's digest, a name) a job names, each with
+    its newest use (the downloads sweep: a video a clone used is kept
+    longer, one a running job reads is never removed)."""
+    return _repository().naming_each(tuple(sorted(set(fragments))))
+
+
+def reopen_settled(job_id: str) -> bool:
+    """A done or failed job back to running, to be run again on its
+    person's word; False when it is running already: a second click
+    queues nothing."""
+    return _repository().reopen_settled(job_id)
+
+
 def reopen_job(job_id: str) -> None:
     """Back to running, error cleared, for a job about to be run again."""
     _repository().update_status(job_id, "running", error=None)
@@ -176,12 +227,16 @@ def fail_job(job_id: str, error: str) -> None:
     _repository().update_status(job_id, "failed", error=error)
 
 
-def get_job(job_id: str, actor: str | None = None) -> Job | None:
+def get_job(job_id: str, actor: Readers = None) -> Job | None:
     """The job, or None if it doesn't exist -- or, when `actor` is given, if
-    someone else ran it (a session passes its own, AuthMiddleware.actor --
-    an admin's too). None is "no restriction": the worker only."""
+    none of them ran it: a session changing a job passes its own
+    (AuthMiddleware.actor -- an admin's too), a session reading one passes
+    everyone whose jobs it sees (`Viewer.actors`: its own and its VAs').
+    A job with no owner is nobody's. None is "no restriction": the worker
+    only."""
     job = _repository().get(job_id)
-    if job is None or (actor is not None and job.actor != actor):
+    readers = _user_ids(actor)
+    if job is None or (readers is not None and job.user_id not in readers):
         return None
     return job
 
@@ -222,12 +277,13 @@ def list_jobs_page(
     tasks: set[str],
     offset: int,
     limit: int,
-    actor: str | None = None,
+    actor: Readers = None,
     status: str | None = None,
     hidden: bool | None = None,
+    by_use: bool = False,
 ) -> JobPage:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
-    given, that it ran -- same meaning as get_job's), newest first, plus how
+    given, that one of them ran -- same meaning as get_job's), newest first, plus how
     many there are in total (before the slice, so the caller can tell whether
     another page exists). `hidden`: only the jobs hidden from the galleries
     (`hide_job`; a gallery's "Show hidden"), only the others (a gallery), or
@@ -237,10 +293,16 @@ def list_jobs_page(
     is checked against the disk (`_visible`), so rendering 20 cards costs 20
     jobs' worth of rows and disk checks instead of the whole history's. A
     page never writes: a job whose files are missing is left out of it, not
-    deleted."""
-    page = _repository().list_page(
-        tuple(sorted(tasks)), actor, offset, limit, status, hidden
-    )
+    deleted. `by_use`: the job whose download was asked for or used last
+    first (/download-assets), not the newest."""
+    if by_use:
+        page = _repository().page_by_use(
+            tuple(sorted(tasks)), _user_ids(actor), offset, limit, hidden
+        )
+    else:
+        page = _repository().list_page(
+            tuple(sorted(tasks)), _user_ids(actor), offset, limit, status, hidden
+        )
     return JobPage(jobs=_visible(page.jobs), total=page.total)
 
 
@@ -248,22 +310,36 @@ def gallery_page(
     tasks: set[str],
     offset: int,
     limit: int,
-    actor: str | None,
+    actor: Readers,
     hidden: bool | None,
+    reader: int | None = None,
+    by_use: bool = False,
 ) -> GalleryJobs:
     """One page of a gallery (`list_jobs_page`) and the next page's offset
-    (None after the last)."""
-    page = list_jobs_page(tasks, offset, limit, actor, hidden=hidden)
+    (None after the last). `reader`: who looks at it -- a job someone else
+    made (their VA) names its maker (`Job.made_by`)."""
+    page = list_jobs_page(tasks, offset, limit, actor, hidden=hidden, by_use=by_use)
     next_offset = offset + limit
     return GalleryJobs(
-        jobs=page.jobs, next_offset=next_offset if next_offset < page.total else None
+        jobs=[_signed(job, reader) for job in page.jobs],
+        next_offset=next_offset if next_offset < page.total else None,
     )
+
+
+def _signed(job: Job, reader: int | None) -> Job:
+    """`job` with its maker's name when that is not `reader` (None: nobody
+    is named)."""
+    if reader is None or job.user_id is None or job.user_id == reader:
+        return job
+    maker = get_user(job.user_id)
+    return job.model_copy(update={"made_by": maker.label}) if maker else job
 
 
 def list_batch(task: str, batch: str, actor: str) -> list[Job]:
     """`actor`'s jobs of `task` from one submit (params `batch`), oldest
     first. Not healed: callers read params only."""
-    return _repository().list_batch(task, actor, batch)
+    user_id = _user_id(actor)
+    return [] if user_id is None else _repository().list_batch(task, user_id, batch)
 
 
 def merge_params(job_id: str, values: dict[str, Any]) -> None:
@@ -277,7 +353,10 @@ def redone_links(task: str, actor: str, links: list[str], after: float) -> set[s
     """Which of `links` `actor` queued again as `task` after `after`
     (created_at), still running or done: a stale failed card's Recreate
     leaves those out."""
-    return _repository().redone_links(task, actor, links, after)
+    user_id = _user_id(actor)
+    if user_id is None:
+        return set()
+    return _repository().redone_links(task, user_id, links, after)
 
 
 @dataclass(frozen=True)
@@ -293,11 +372,17 @@ class ParamHistory:
         """Sorted: the repository's stable cache key."""
         return tuple(sorted(self.tasks))
 
+    @property
+    def _user_id(self) -> int | None:
+        return _user_id(self.actor)
+
     def last(self, among: list[str]) -> str | None:
         """The param of the newest job with one of the values `among` (a
         provider the page offers), else None."""
+        if self._user_id is None:
+            return None
         return _repository().last_param(
-            self._tasks, self.actor, self.field, tuple(sorted(among))
+            self._tasks, self._user_id, self.field, tuple(sorted(among))
         )
 
     def last_used_firsts(self, limit: int) -> list[str]:
@@ -305,20 +390,25 @@ class ParamHistory:
         `reference_images`), last used first, one path per picture (same
         content = same file). The path may be gone since: the caller
         checks."""
+        if self._user_id is None:
+            return []
         return _repository().last_used_firsts(
-            self._tasks, self.actor, self.field, limit
+            self._tasks, self._user_id, self.field, limit
         )
 
     def most_used_firsts(self, limit: int) -> list[str]:
         """As `last_used_firsts`, the one in the most jobs first."""
+        if self._user_id is None:
+            return []
         return _repository().most_used_firsts(
-            self._tasks, self.actor, self.field, limit
+            self._tasks, self._user_id, self.field, limit
         )
 
 
-def count_hidden_jobs(tasks: set[str], actor: str) -> int:
-    """How many of `actor`'s jobs of `tasks` are hidden from the galleries."""
-    return _repository().count_hidden(tuple(sorted(tasks)), actor)
+def count_hidden_jobs(tasks: set[str], actor: str | Collection[str]) -> int:
+    """How many of `actor`'s jobs (one person's, or several's) of `tasks`
+    are hidden from the galleries."""
+    return _repository().count_hidden(tuple(sorted(tasks)), _user_ids(actor) or ())
 
 
 def hide_job(job_id: str, actor: str, hidden: bool) -> Job | None:
@@ -338,14 +428,22 @@ def job_counts(tasks: set[str]) -> list[JobCount]:
     return _repository().counts(tuple(sorted(tasks)))
 
 
-def _without_missing(job: Job) -> Job | None:
+def _removed(jobs: list[Job]) -> list[RemovedFile]:
+    """The result files of `jobs` the downloads sweep removed on purpose
+    (`downloads.stored` false): each keeps its place in the result, so its
+    card stays and no file index moves."""
+    grouped = [job.id for job in jobs if job.status == "done" and job.is_grouped]
+    return downloads.removed_in(grouped)
+
+
+def _without_missing(job: Job, removed: list[RemovedFile]) -> Job | None:
     """`job` minus the result files no longer on disk (deleted through the
     file manager, or by hand on the server); None when nothing of its result
     is left. A job without a file result (still running, failed, an audit
-    event) comes back as it is."""
+    event) comes back as it is. A file in `removed` is not missing."""
     if job.status != "done" or not (job.result_files() or job.is_grouped):
         return job
-    kept = _live_entries(job)
+    kept = _live_entries(job, removed)
     if kept == job.result:
         return job
     return job.model_copy(update={"result": kept}) if kept else None
@@ -357,7 +455,10 @@ def _visible(jobs: list[Job]) -> list[Job]:
     memory only. A read never writes: files that are merely unreachable (a
     volume not mounted yet, dev on a prod snapshot) must not cost the
     history (2026-10-21/24: page views on dev deleted 277, then 392 jobs)."""
-    return [shown for job in jobs if (shown := _without_missing(job)) is not None]
+    removed = _removed(jobs)
+    return [
+        shown for job in jobs if (shown := _without_missing(job, removed)) is not None
+    ]
 
 
 def _heal(jobs: list[Job]) -> list[Job]:
@@ -365,8 +466,9 @@ def _heal(jobs: list[Job]) -> list[Job]:
     each job's stored result, and a job with none left is deleted. Only
     `list_jobs()` heals."""
     surviving: list[Job] = []
+    removed = _removed(jobs)
     for job in jobs:
-        healed = _without_missing(job)
+        healed = _without_missing(job, removed)
         if healed is None:
             _repository().delete(job.id)
         elif healed is not job:
@@ -377,7 +479,7 @@ def _heal(jobs: list[Job]) -> list[Job]:
     return surviving
 
 
-def _live_entries(job: Job) -> list[dict]:
+def _live_entries(job: Job, removed: list[RemovedFile]) -> list[dict]:
     """The job's stored result minus whatever no longer exists on disk. A
     kept entry stays exactly as stored: a task's own fields on top of
     `ResultFile`'s (a /clone-links Check's `url`/`seconds`) were lost when
@@ -394,8 +496,14 @@ def _live_entries(job: Job) -> list[dict]:
         ]
 
     kept = []
+    position = 0
     for entry in job.download_results():
-        live = [p for p in entry.output_paths if p.is_file()]
+        live = []
+        for path in entry.output_paths:
+            gone_on_purpose = RemovedFile(job_id=job.id, position=position) in removed
+            if gone_on_purpose or path.is_file():
+                live.append(path)
+            position += 1
         if live:
             kept.append(entry.model_copy(update={"output_paths": live}))
         elif not entry.success:

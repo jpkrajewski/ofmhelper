@@ -107,6 +107,12 @@ def _info_key(key: str, user_id: int | None) -> str:
     return f"clone-links:info:{user_id or 0}:{key}"
 
 
+def previewed(key: str, user_id: int | None) -> bool:
+    """Whether `user_id` has a read of the link behind `key` (its cover's
+    name): the per-user record of whose cover it is."""
+    return get_text(_info_key(key, user_id)) is not None
+
+
 def _remembered(info_key: str) -> VideoInfo | None:
     """The link's yt-dlp read from Redis; None on a miss (or Redis down)."""
     raw = get_text(info_key)

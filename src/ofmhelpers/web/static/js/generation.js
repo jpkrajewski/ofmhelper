@@ -83,6 +83,18 @@
         attachJobData(div, job);
         div.dataset.fileIndex = item.index;
 
+        // A download whose video is not on the server (removed to save space
+        // and not fetched again): what was kept of it and the Download that
+        // fetches it, as _download_gallery_card.html draws it.
+        if (item.removed && document.getElementById("card-actions-removed")) {
+            div.append(
+                buildRemovedMedia(item),
+                buildSourceLabel(label),
+                cloneActions("card-actions-removed")
+            );
+            return div;
+        }
+
         // Not media (a zip): no preview element, just the name -- same as
         // _asset_media.html's fallback, so it matches a reloaded card.
         if (kind !== "video" && kind !== "audio" && kind !== "image") {
@@ -133,6 +145,22 @@
             buildDoneActions(item)
         );
         return div;
+    }
+
+    function buildRemovedMedia(item) {
+        const still = item.poster_url || item.preview_url;
+        if (!still) {
+            const file = document.createElement("div");
+            file.className = "result-file";
+            file.textContent = item.name;
+            return file;
+        }
+        const img = document.createElement("img");
+        img.src = still;
+        img.className = "result-video";
+        img.alt = item.name;
+        img.loading = "lazy";
+        return img;
     }
 
     function buildPendingCard(label) {
@@ -207,15 +235,16 @@
 
     // job is optional: the "Not found" card (a job gone) has no params
     // to restore, so that card gets no Recreate button.
-    // `reason` is the short one (schemas/errors.py, the status payload's
-    // error_reason); the full message stays as the hover text.
-    function buildFailedCard(label, error, job, reason) {
+    // `line` is what the card shows (schemas/errors.py `error_line`, the
+    // status payload's error_line): provider, reason and what it said, on
+    // the card itself -- Safari shows no hover text.
+    function buildFailedCard(label, error, job, line) {
         const div = document.createElement("div");
         div.className = "result-item";
         const box = document.createElement("div");
         box.className = "result-file result-failed";
-        box.title = error;
-        box.textContent = reason || "Failed";
+        if (job?.error_reason) box.dataset.reason = job.error_reason;
+        box.textContent = line || error || "Failed";
         div.append(box, buildSourceLabel(label));
         if (job) {
             attachJobData(div, job);
@@ -276,7 +305,7 @@
                 }
                 if (job.status === "failed") {
                     card.replaceWith(
-                        buildFailedCard(label, job.error || "Generation failed.", job, job.error_reason)
+                        buildFailedCard(label, job.error || "Generation failed.", job, job.error_line)
                     );
                     return;
                 }
@@ -395,15 +424,21 @@
                 // /ai/run answers with one id per image (a batch); other
                 // tools answer with a single job_id.
                 const ids = data.job_ids || [data.job_id];
-                const first = buildPendingCard(label);
-                card.replaceWith(first);
-                track(first, ids[0]);
+                // Nothing new to run (/download-media: every link was
+                // downloaded before): no card of its own; the page shows the
+                // ones there are (download.js reads `detail.again`).
+                if (!ids.length) card.remove();
+                else {
+                    const first = buildPendingCard(label);
+                    card.replaceWith(first);
+                    track(first, ids[0]);
+                }
                 for (const id of ids.slice(1)) {
                     const extra = buildPendingCard(label);
                     gallery.prepend(extra);
                     track(extra, id);
                 }
-                form.dispatchEvent(new CustomEvent("generation:queued"));
+                form.dispatchEvent(new CustomEvent("generation:queued", { detail: data }));
             })
             .catch((err) => {
                 // The optimistic card can't become a result now -- turn it
@@ -474,10 +509,11 @@
                 })
                 .catch(() => {
                     // kie.ai's URL has gone stale -- fall back to our own
-                    // copy (same-origin, so plain navigation triggers a real
-                    // download) if one was ever recorded for this asset.
+                    // copy if one was ever recorded for this asset. `dl=1`
+                    // makes the server send it as an attachment: the bare
+                    // URL is the inline view, it only showed the picture.
                     const fallback = link.dataset.localFallbackUrl;
-                    if (fallback) window.location.href = fallback;
+                    if (fallback) window.location.href = `${fallback}?dl=1`;
                     else window.open(link.href, "_blank");
                 });
         });

@@ -264,7 +264,12 @@ class CloneFromLinkRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 select(
-                    job.id, job.task, job.actor, job.status, job.result, job.created_at
+                    job.id,
+                    job.task,
+                    job.user_id,
+                    job.status,
+                    job.result,
+                    job.created_at,
                 )
                 .where(
                     job.task == task,

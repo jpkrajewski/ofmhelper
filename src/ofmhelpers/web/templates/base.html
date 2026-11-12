@@ -26,10 +26,12 @@
 <body data-session-max-age="{{ session_max_age() }}">
     <a class="skip-link" href="#main">Skip to content</a>
 
-    {% set is_admin = request.session.get("role") == "admin" %}
-    {% set signed_in_as = request.session.get("email", "") %}
+    {# Who the page is for: the person signed in, or the one an admin views as. #}
+    {% set viewer = viewer_of(request) %}
+    {% set is_admin = viewer is not none and viewer.user.is_admin %}
+    {% set signed_in_as = viewer.user.email if viewer is not none else "" %}
     {# schemas/nav.py NAV: a new page is one entry there. #}
-    {% set pages = nav(is_admin) %}
+    {% set pages = nav(viewer.user.role if viewer is not none else none) %}
     {% set here = request.url.path %}
     {% set chosen_zone = time_zone(request.cookies.get("ofm_timezone")) %}
 
@@ -109,6 +111,12 @@
             {{ ui.button("Buy more space", href="https://one.google.com/storage", hook="drive-full-buy", attrs={"target": "_blank", "rel": "noopener"}) }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-full-dismiss") }}
         {% endcall %}
+        {% if viewer is not none and viewer.read_only %}
+        {% call ui.notice(kind="warn", hook="viewing-as") %}
+            <span>Viewing as {{ viewer.label }}</span>
+            <form method="post" action="/viewing/delete">{{ ui.button("Back to my view", type="submit") }}</form>
+        {% endcall %}
+        {% endif %}
         {# While images/videos still go up (static/js/upload-guard.js). #}
         {{ ui.notice("Images/videos are still uploading to server. Wait till they are uploaded.", "warn", hook="upload-wait", attrs={"hidden": true}) }}
         {% call ui.notice(kind="fail", hook="drive-reconnect-banner", attrs={"hidden": true}) %}

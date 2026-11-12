@@ -18,6 +18,7 @@ from starlette.datastructures import FormData, UploadFile
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import create_job, set_job_preview
+from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.manifests import build_ordered_paths
 from ofmhelpers.features.assets.store import register_generated_asset
 from ofmhelpers.features.jobs.runner import run_job
@@ -126,7 +127,7 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
     reason otherwise. Uploads are saved only once the head is good."""
     head = _head(form)
     spec = _spec_for(head)
-    api_key = head.api_key.strip()
+    api_key = Keys.of(user_id).for_run(spec.provider, spec.key, head.api_key)
     if provider_class(spec.provider).needs_key and not api_key:
         msg = "API key is required"
         raise GenerateRefusedError(msg)

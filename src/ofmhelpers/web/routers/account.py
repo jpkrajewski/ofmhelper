@@ -16,12 +16,15 @@ from ofmhelpers.features.account import service
 from ofmhelpers.features.account.service import Notice
 from ofmhelpers.features.drive.space import DriveSpace, drive_space
 from ofmhelpers.schemas import ApiKeysForm
-from ofmhelpers.web.dependencies import CurrentUser
+from ofmhelpers.schemas.access import Action, Area
+from ofmhelpers.web.dependencies import Access, Can, CurrentUser
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/account", tags=["account"])
+router = APIRouter(
+    prefix="/account", tags=["account"], dependencies=[Access(Area.ACCOUNT)]
+)
 
 
 def _page(request: Request, user_id: int, notice: Notice) -> Response:
@@ -51,7 +54,7 @@ def drive_space_now(me: CurrentUser) -> DriveSpace | None:
     return drive_space(me.id)
 
 
-@router.post("/password")
+@router.post("/password", dependencies=[Can(Action.CHANGE_PASSWORD)])
 def change_password(
     request: Request,
     me: CurrentUser,
@@ -73,7 +76,7 @@ async def _keys_form(request: Request) -> ApiKeysForm:
     return service.keys_form(await request.form())
 
 
-@router.post("/keys")
+@router.post("/keys", dependencies=[Can(Action.SAVE_KEYS)])
 def save_keys(
     request: Request, me: CurrentUser, form: Annotated[ApiKeysForm, Depends(_keys_form)]
 ) -> Response:

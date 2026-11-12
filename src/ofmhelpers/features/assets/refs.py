@@ -4,6 +4,7 @@ person's part of the store as they are on disk -- no separate metadata store
 
 import heapq
 import os
+import re
 import threading
 from functools import lru_cache
 from operator import attrgetter
@@ -12,6 +13,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores import downloads
 from ofmhelpers.features.assets import ref_usage, store
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.store import in_asset_root, strip_asset_hash_prefix
@@ -24,7 +26,8 @@ from ofmhelpers.features.previews.render import (
 )
 from ofmhelpers.features.refusals import ForbiddenError, NotFoundError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import MissingRefs, RefEntry
+from ofmhelpers.schemas import MissingRefs, RefEntry, StoredRef, StoredRefs
+from ofmhelpers.schemas.files import RestorableRef
 
 logger = get_logger(__name__)
 
@@ -127,17 +130,52 @@ def listing(
     return used + _newest(list(stored.values()), web.recent_upload_limit)
 
 
-def missing(assets_root: Path, paths: list[str]) -> MissingRefs:
+_DIGEST = re.compile(r"[0-9a-f]{64}")
+
+
+def _restorable(path: str, actor: str | None) -> RestorableRef | None:
+    """`path` as `actor`'s own download the retention sweep removed
+    (`downloads.asset_path`, matched by the content digest in its name)."""
+    digest = Path(path).name.split("__", 1)[0]
+    if actor is None or not actor.isdecimal() or not _DIGEST.fullmatch(digest):
+        return None
+    found = downloads.by_asset(int(actor), digest)
+    if not found:
+        return None
+    return RestorableRef(path=path, job_id=found[0].job_id, index=found[0].position)
+
+
+def missing(
+    assets_root: Path, paths: list[str], actor: str | None = None
+) -> MissingRefs:
     """Of `paths` (a past run's files, restored by Recreate), the ones the
     asker can no longer use: deleted since, never on this server, or not
-    their own."""
+    their own. `restorable`: those of them that were `actor`'s downloads,
+    removed to save space -- the page fetches them again."""
+    gone = [
+        p
+        for p in paths
+        if not (in_asset_root(assets_root, Path(p)) and Path(p).is_file())
+    ]
+    found = (_restorable(path, actor) for path in gone)
     return MissingRefs(
-        missing=[
-            p
-            for p in paths
-            if not (in_asset_root(assets_root, Path(p)) and Path(p).is_file())
-        ]
+        missing=gone, restorable=[ref for ref in found if ref is not None]
     )
+
+
+def _stored(assets_root: Path, digest: str) -> StoredRef | None:
+    path = next(assets_root.glob(f"{digest}__*"), None)
+    if path is None or not path.is_file():
+        return None
+    return StoredRef(digest=digest, path=str(path))
+
+
+def stored(assets_root: Path, digests: list[str]) -> StoredRefs:
+    """Of `digests` (the sha256 of files just picked from a computer), the
+    ones already in the asker's part of the store, where `save_asset` names
+    every file by that digest: those need no upload."""
+    found = (_stored(assets_root, digest) for digest in digests)
+    return StoredRefs(stored=[ref for ref in found if ref is not None])
 
 
 def visible(assets_root: Path, path: str) -> Path:

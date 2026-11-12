@@ -1,7 +1,10 @@
-"""A failed job's error as one short reason a card can show ("No credits",
-"Flagged content", ...). The provider is already on the card, and the full
-message stays available as the card's hover text, so the reason is all the
-card itself needs.
+"""A failed job's error as a card shows it: who refused, the short reason
+and what they said, all on the card itself -- "APIYI: Flagged content,
+[DataInspectionFailed] Green net check rejected image (input)"
+(`error_line`). Not behind a hover: Safari shows no `title` tooltip, and a
+bare "Flagged content" or "No credits" sent the owner looking in the wrong
+place (2026-11-11). `error_reason` is the short reason alone, for code that
+branches on the kind of failure.
 
 A new kind of failure = one `ErrorReason` in `REASONS`; first match wins.
 Our own fixed messages come first, anchored at the start (a /clone-links
@@ -16,6 +19,11 @@ from functools import lru_cache
 from pydantic import BaseModel
 
 FALLBACK = "Failed"
+# "<who>: <what they said>": every provider error starts with its label
+# ("APIYI: ...", "kie.ai: ...", `integrations/ai_providers/errors.py`).
+_WHO = re.compile(r"^([A-Za-z][\w.\- ]{1,23}): (.+)$", re.DOTALL)
+# The most of a provider's own words a card carries.
+_SAID_MAX = 240
 
 
 class ErrorReason(BaseModel):
@@ -91,3 +99,34 @@ def error_reason(error: str | None) -> str:
             if pattern.search(error):
                 return label
     return FALLBACK
+
+
+def error_line(error: str | None) -> str:
+    """The failure as a card shows it: "<Provider>: <Reason>, <what the
+    provider said>". One of our own messages already opens with its reason
+    ("Too long: ...", "Could not download ..."): shown as it is."""
+    if not error:
+        return FALLBACK
+    reason = error_reason(error)
+    text = " ".join(error.split())
+    found = _WHO.match(text)
+    who, said = (found.group(1), found.group(2)) if found else ("", text)
+    if who.lower() == reason.lower():
+        # Ours, "Too long: ...": the reason is its own first words.
+        who, said = "", text
+    line = _reasoned(reason, said)
+    return _capped(f"{who}: {line}" if who else line)
+
+
+def _reasoned(reason: str, said: str) -> str:
+    """`said` led by `reason`, unless it already says it: at its start
+    (spelled as the reason then), or somewhere in it (left as it is)."""
+    if said.lower().startswith(reason.lower()):
+        return reason + said[len(reason) :]
+    if reason.lower() in said.lower():
+        return said
+    return f"{reason}, {said}"
+
+
+def _capped(text: str) -> str:
+    return text if len(text) <= _SAID_MAX else f"{text[: _SAID_MAX - 1].rstrip()}…"

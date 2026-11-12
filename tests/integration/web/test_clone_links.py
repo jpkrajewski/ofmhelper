@@ -436,7 +436,7 @@ def test_the_page_never_waits_on_google_for_the_drive_space(monkeypatch):
     assert seen["reel_mb"] == settings.clone_links.reel_mb
 
 
-def test_a_failed_card_says_why_in_a_few_words():
+def test_a_failed_card_says_why_on_the_card_itself():
     ann = client()
     _failed(_reel(1), "ffff6666", "Could not download this reel")
     _failed(_reel(2), "ffff6666", "Stopped")
@@ -445,6 +445,11 @@ def test_a_failed_card_says_why_in_a_few_words():
     cards = ann.get("/clone-links/gallery/latest").text
 
     assert re.findall(r'result-failed"[^>]*>([^<]+)<', cards) == [
+        "kie.ai is still generating (task t-401)",
+        "Stopped",
+        "Could not download this reel",
+    ]
+    assert re.findall(r'result-failed" data-reason="([^"]+)"', cards) == [
         "Still generating",
         "Stopped",
         "Could not download",

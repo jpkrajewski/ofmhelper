@@ -26,7 +26,8 @@ from ofmhelpers.features.repurpose.service import (
 from ofmhelpers.features.repurpose.service import run_repurpose as _run_repurpose
 from ofmhelpers.media.repurpose.presets import Preset
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.dependencies import Actor, AssetsRoot, OwnerId
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import Files, FormModel, at_most
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
@@ -40,7 +41,9 @@ __all__ = [
     "router",
 ]
 
-router = APIRouter(prefix=PREFIX, tags=["repurpose"])
+router = APIRouter(
+    prefix=PREFIX, tags=["repurpose"], dependencies=[Access(Area.REPURPOSE)]
+)
 
 
 class RepurposeForm(FormModel):

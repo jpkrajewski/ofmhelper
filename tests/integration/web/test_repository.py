@@ -13,6 +13,7 @@ import threading
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from redis import Redis
+from signin import make_user
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.db.repositories import JobRepository
@@ -21,12 +22,13 @@ from ofmhelpers.db.repositories.cached_repository import RepositoryCache
 
 def test_job_create_get_round_trip():
     repo = JobRepository()
-    job_id = repo.create("seedance", {"prompt": "hi"}, actor="admin")
+    admin = make_user("boss@example.com")
+    job_id = repo.create("seedance", {"prompt": "hi"}, user_id=admin.id)
 
     job = repo.get(job_id)
     assert job.task == "seedance"
     assert job.params == {"prompt": "hi"}
-    assert job.actor == "admin"
+    assert (job.user_id, job.actor) == (admin.id, str(admin.id))
     assert job.status == "running"
     assert job.result is None
 
@@ -144,7 +146,7 @@ def test_an_unreachable_cache_reads_and_writes_through_to_the_database():
     database and writes still save (2026-10-24: a Redis stall made every
     page 500 through the signed-in user's cached read)."""
     repo = JobRepository(cache=RepositoryCache(_dead_redis(), "job"))
-    job_id = repo.create("seedance", {"prompt": "hi"}, actor="admin")
+    job_id = repo.create("seedance", {"prompt": "hi"})
     assert repo.get(job_id).status == "running"
 
     repo.update_status(job_id, "done", result=[])

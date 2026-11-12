@@ -9,9 +9,10 @@ from fastapi import APIRouter
 
 from ofmhelpers.features.jobs import own
 from ofmhelpers.schemas import JobVisibility
-from ofmhelpers.web.dependencies import Actor
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(prefix="/jobs", tags=["jobs"], dependencies=[Access(Area.JOBS)])
 
 
 @router.post("/{job_id}/hidden")

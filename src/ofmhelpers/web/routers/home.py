@@ -8,7 +8,8 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from ofmhelpers.features.server.status import duration, server_status
-from ofmhelpers.web.dependencies import AdminOnly
+from ofmhelpers.schemas.access import Action, Area
+from ofmhelpers.web.dependencies import Access, Can
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(tags=["home"])
@@ -18,12 +19,15 @@ class Health(BaseModel):
     status: str = "ok"
 
 
-@router.get("/home", response_class=HTMLResponse)
+@router.get("/home", response_class=HTMLResponse, dependencies=[Access(Area.HOME)])
 def home(request: Request) -> Response:
     return render(request, "home.html")
 
 
-@router.get("/home/server", dependencies=[AdminOnly])
+@router.get(
+    "/home/server",
+    dependencies=[Access(Area.HOME), Can(Action.SERVER_STATUS)],
+)
 def server(request: Request) -> Response:
     """The Server section's body: CPU, RAM, disk, uploads, database,
     Redis, queues, running jobs (features/server)."""

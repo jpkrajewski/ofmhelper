@@ -16,10 +16,36 @@ class RefEntry(BaseModel):
     used_at: float | None = None
 
 
+class RestorableRef(BaseModel):
+    """A missing file that was the asker's download, removed to save space:
+    `POST /download-media/{job_id}/replays` fetches it again, and
+    `GET /download-media/{job_id}/files/{index}/stored` then says where it
+    is."""
+
+    path: str
+    job_id: str
+    index: int
+
+
 class MissingRefs(BaseModel):
-    """`/refs/missing`: which of the asked paths can no longer be used."""
+    """`/refs/missing`: which of the asked paths can no longer be used, and
+    which of those can be brought back (`restorable`)."""
 
     missing: list[str]
+    restorable: list[RestorableRef] = []
+
+
+class StoredRef(BaseModel):
+    """A file the asker already has in the store, by its content digest."""
+
+    digest: str
+    path: str
+
+
+class StoredRefs(BaseModel):
+    """`/refs/stored`: which of the asked digests need no upload."""
+
+    stored: list[StoredRef]
 
 
 class DirEntry(BaseModel):

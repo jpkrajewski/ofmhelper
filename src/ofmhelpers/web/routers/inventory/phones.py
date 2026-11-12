@@ -24,7 +24,8 @@ from ofmhelpers.features.phones import workbook as phones_workbook
 from ofmhelpers.features.phones.service import LoginAdded
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
-from ofmhelpers.web.dependencies import CurrentUser, OwnerId, Scope
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, CurrentUser, OwnerId, Scope
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.templates_config import render
 
@@ -44,7 +45,9 @@ def _vault_reason() -> Iterator[None]:
 
 VAULT_REASON = [Depends(_vault_reason)]
 
-router = APIRouter(prefix="/phones", tags=["phones"])
+router = APIRouter(
+    prefix="/phones", tags=["phones"], dependencies=[Access(Area.PHONES)]
+)
 
 
 def _phone(device_id: int, scope: Scope) -> service.Phone:

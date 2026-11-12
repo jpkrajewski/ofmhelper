@@ -10,14 +10,15 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ofmhelpers.features.applications import service
-from ofmhelpers.web.dependencies import AdminOnly
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/applications",
     tags=["applications"],
-    dependencies=[AdminOnly],
+    dependencies=[Access(Area.APPLICATIONS)],
 )
 
 

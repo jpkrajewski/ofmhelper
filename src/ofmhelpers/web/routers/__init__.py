@@ -18,9 +18,10 @@ Every HTTP route in the app, grouped by what it is *for*:
 - `admin/`      -- admin-only surfaces: who may sign in (/users), landing-page
   applications, file manager, action log.
 
-Ten modules sit at this level because they belong to no single feature:
+Eleven modules sit at this level because they belong to no single feature:
 `auth` (signing in and out: Google, Apple, password), `account` (your own
 sign-ins, Drive connection and API keys), `cookies` (your own cookies.txt),
+`spending` (what your VAs' runs cost),
 `chatting` (the agency's chat platforms and models, admins), `webhooks`
 (outside services calling in, signed), `ai_files` (reference files an AI
 provider without uploads fetches, one random token each),
@@ -47,6 +48,7 @@ from ofmhelpers.web.routers import (
     jobs,
     legal,
     refs,
+    spending,
     webhooks,
 )
 from ofmhelpers.web.routers.admin import action_log, file_manager
@@ -74,6 +76,7 @@ ROUTERS = [
     auth.router,
     account.router,
     cookies.router,
+    spending.router,
     chatting.router,
     webhooks.router,
     ai_files.router,

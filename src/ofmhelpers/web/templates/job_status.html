@@ -53,7 +53,7 @@
 {% endif %}
 
 {% elif job.status == "failed" %}
-<pre class="inputs-long-text fail" title="{{ job.error }}">{{ job.error_reason }}</pre>
+<pre class="inputs-long-text fail">{{ job.error_line }}</pre>
 
 {% elif job.status == "done" %}
 {% if job_inputs %}<h2 class="col-title">Output</h2>{% endif %}

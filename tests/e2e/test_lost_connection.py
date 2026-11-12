@@ -177,6 +177,83 @@ def test_leave_in_the_box_goes_there_without_asking_again(va: Session, tmp_path)
     assert asked == []
 
 
+REFERENCES = '#model-fields .file-picker[data-field="reference_image_urls"]'
+
+
+def _fake_image_form(va: Session, picture: Path) -> None:
+    va.goto("/generate")
+    va.page.select_option("#provider-select", "fake")
+    va.page.select_option("#model-select", "fake:image")
+    va.page.fill('#model-fields [name="delay"]', "0")
+    va.page.fill('textarea[name="prompt"]', "e2e: the same picture again")
+    va.page.locator(f"{REFERENCES} .file-add-input").set_input_files(str(picture))
+
+
+def _run(va: Session) -> bytes:
+    """Generate; what the browser sent to /ai/run."""
+    with va.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
+        va.page.click('#generate-form button[type="submit"]')
+    assert run.value.status == 202, run.value.text()
+    card = f'.result-item[data-job-id="{run.value.json()["job_id"]}"]'
+    expect(va.page.locator(f"{card} .download-btn")).to_be_visible(
+        timeout=RESULT_TIMEOUT_MS
+    )
+    return run.value.request.post_data_buffer or b""
+
+
+def test_a_picture_uploaded_once_is_never_uploaded_again(va: Session, tmp_path: Path):
+    """Prod 2026-11-11: the same picture went up whole on every Generate,
+    "still uploading" each time. Once it is in the store the page sends its
+    path: on the next Generate, and when it is picked from the computer again."""
+    side = 64
+    picture = tmp_path / "face.png"
+    Image.frombytes("RGB", (side, side), os.urandom(side * side * 3)).save(picture)
+    reused = va.page.locator(f"{REFERENCES} .reused-badge")
+
+    _fake_image_form(va, picture)
+    expect(va.page.locator(f"{REFERENCES} .file-order-list li")).to_have_count(1)
+    expect(reused).to_have_count(0)
+    assert b'filename="face.png"' in _run(va)
+
+    # Still in the picker: reused from now on.
+    expect(reused).to_have_count(1)
+    assert b'filename="face.png"' not in _run(va)
+
+    # Picked from the computer again on a fresh page.
+    _fake_image_form(va, picture)
+    expect(reused).to_have_count(1)
+    assert b'filename="face.png"' not in _run(va)
+    assert _page_errors(va) == []
+
+
+def test_download_saves_our_copy_when_the_providers_link_is_dead(va: Session):
+    """Prod 2026-11-11: the provider's hosted link no longer answered, Download
+    fell back to our copy's bare URL and the browser showed the picture
+    instead of saving it."""
+    va.goto("/generate")
+    card = _generate(va, delay_s=0)
+    button = va.page.locator(f"{card} .download-btn")
+    expect(button).to_be_visible(timeout=RESULT_TIMEOUT_MS)
+    # The card as it is with a provider-hosted result: a link on the
+    # provider's host, our own copy as the fallback.
+    dead = "https://provider.invalid/result.png"
+    va.page.route(dead, lambda route: route.abort("connectionfailed"))
+    button.evaluate(
+        """(a, dead) => {
+            a.dataset.localFallbackUrl = a.getAttribute("href").replace("?dl=1", "");
+            a.href = dead;
+        }""",
+        dead,
+    )
+
+    with va.page.expect_download() as saved:
+        button.click()
+
+    assert saved.value.suggested_filename == button.get_attribute("download")
+    assert va.page.url.endswith("/generate")
+    assert _page_errors(va) == []
+
+
 def test_a_job_that_is_gone_ends_its_polling(va: Session):
     polls: list[str] = []
 

@@ -29,10 +29,11 @@ from ofmhelpers.features.edit.service import (
     run_prepare,
 )
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.web.dependencies import Actor, AssetsRoot
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix=PREFIX, tags=["edit"])
+router = APIRouter(prefix=PREFIX, tags=["edit"], dependencies=[Access(Area.EDIT)])
 
 _PREPARED_CACHE = {"Cache-Control": "private, max-age=86400"}
 

@@ -14,10 +14,12 @@ from pathlib import Path
 
 import pytest
 from app_pages import ADMIN_ONLY_PAGES, VA_PAGES
+from download_files import removed_download
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
 from ofmhelpers.db.stores import devices, watched_profiles
+from ofmhelpers.db.stores.jobs import create_job, fail_job
 from ofmhelpers.integrations.gdrive.fake import FakeDrive
 from ofmhelpers.schemas import DeviceFields, LoginFields
 
@@ -27,6 +29,7 @@ pytestmark = pytest.mark.e2e
 RESULT_TIMEOUT_MS = 30_000
 # The live gallery polls every OFM_GALLERY_LIVE_POLL_S (5 s by default).
 LIVE_TIMEOUT_MS = 15_000
+VA_ID = 2  # e2e conftest `_seed_users`
 
 
 def _nav_paths(session: Session) -> list[str]:
@@ -266,12 +269,12 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
 
     # kie.ai rejects the key at the first upload: every run fails with it,
     # and nothing is generated or paid for.
-    # The card shows the short reason; the provider's message is its title.
+    # The card itself says who refused and why (no hover text: Safari has none).
     failed = va.page.locator("#clone-gallery .result-failed").filter(
-        has_text="Wrong API key"
+        has_text="kie.ai: Wrong API key"
     )
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
-    expect(failed.first).to_have_attribute("title", re.compile("kie.ai: wrong API key"))
+    expect(failed.first).to_have_attribute("data-reason", "Wrong API key")
 
     # A failed card's action is Recreate (its ⋯ menu only hides it): the
     # images and its video back, without re-uploading.
@@ -310,6 +313,40 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     expect(va.page.locator('.file-picker[data-field="image"] li')).to_have_count(2)
     # The card itself still shows that run's inputs: their thumbnail 404s.
     assert all("404" in e for e in va.js_errors), va.js_errors
+
+
+def test_recreate_downloads_a_clones_removed_video_again(
+    va: Session, tmp_path: Path, app_dir: Path
+):
+    """A clone made from a download whose video the sweep has removed:
+    Recreate does not drop it with "pick it again" -- the picker fetches it
+    again ("Downloading again…") and holds it under the path it now has."""
+    removed = removed_download(
+        tmp_path, app_dir / "uploads", VA_ID, "https://www.example.com/watch/recreate"
+    )
+    params = {
+        "provider": "kie",
+        "prompt": "e2e: clone it again",
+        "reference_images": [],
+        "reference_videos": [removed.asset_path],
+        "resolution": "720p",
+    }
+    clone = create_job("clone", params, actor=str(VA_ID))
+    fail_job(clone, "kie.ai: no credits left")
+
+    va.goto("/clone")
+    va.page.locator(f'#clone-gallery > [data-job-id="{clone}"] .recreate-btn').click()
+
+    videos = va.page.locator('.file-picker[data-field="videos"]')
+    expect(videos.locator("li")).to_have_count(1)
+    expect(videos.locator(".reused-badge")).to_have_text("Downloading again…")
+    expect(videos.locator(".reused-badge")).to_have_text(
+        "reused", timeout=RESULT_TIMEOUT_MS
+    )
+    expect(videos.locator("li")).to_have_count(1)
+    expect(videos.locator(".file-picker-missing")).to_have_count(0)
+    expect(videos.locator("li img.thumb-small")).to_have_count(1)
+    assert va.js_errors == []
 
 
 # Profiles of the Instagram fake (src/ofmhelpers/instagram/fake_profiles.json):
@@ -539,8 +576,7 @@ def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     assert len(body["job_ids"]) == len(picked)
     # Higgsfield is the default provider; the wrong key fails on it.
     failed = va.page.locator(
-        '#clone-gallery .result-failed[title*="Higgsfield: wrong API key"]',
-        has_text="Wrong API key",
+        "#clone-gallery .result-failed", has_text="Higgsfield: Wrong API key"
     )
     expect(failed).to_have_count(len(picked), timeout=RESULT_TIMEOUT_MS)
 

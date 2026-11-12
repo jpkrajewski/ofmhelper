@@ -35,7 +35,15 @@ from ofmhelpers.features.pictures.targets import (
 )
 from ofmhelpers.features.pictures.targets import resolution as _resolution
 from ofmhelpers.schemas import Job, JobsQueued, PicturePreset, TaskCard
-from ofmhelpers.web.dependencies import Actor, ApiKeys, AssetsRoot, OwnerId
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import (
+    Access,
+    Actor,
+    ApiKeys,
+    AssetsRoot,
+    OwnerId,
+    Viewing,
+)
 from ofmhelpers.web.forms import Files, FormModel, PaidForm, Stripped
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
@@ -58,7 +66,9 @@ __all__ = [
     "run_picture",
 ]
 
-router = APIRouter(prefix="/pictures", tags=["pictures"])
+router = APIRouter(
+    prefix="/pictures", tags=["pictures"], dependencies=[Access(Area.PICTURES)]
+)
 
 gallery = Gallery({TASK})
 
@@ -95,24 +105,25 @@ def page(
     request: Request,
     owner_id: OwnerId,
     actor: Actor,
+    viewer: Viewing,
     api_keys: ApiKeys,
     preset: Annotated[int | None, Query()] = None,
 ) -> Response:
-    first = gallery.page(actor)
+    first = gallery.page(viewer)
     return render(
         request,
         "pictures.html",
         api_keys=api_keys,
         gallery=_cards(first.jobs),
         next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(actor),
+        hidden_count=gallery.hidden_count(viewer),
         **dict(service.form_view(owner_id, actor, preset)),
     )
 
 
 @router.get("/gallery")
-def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Response:
-    found = gallery.page(actor, query)
+def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
+    found = gallery.page(viewer, query)
     return render(
         request,
         "generate_gallery_fragment.html",
@@ -122,11 +133,11 @@ def gallery_page(request: Request, actor: Actor, query: GalleryParams) -> Respon
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request, actor: Actor) -> Response:
+def gallery_latest(request: Request, viewer: Viewing) -> Response:
     return render_polled(
         request,
         "generate_gallery_fragment.html",
-        gallery=_cards(gallery.page(actor).jobs),
+        gallery=_cards(gallery.page(viewer).jobs),
         next_offset=None,
     )
 

@@ -14,17 +14,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 
-from ofmhelpers.features.users import service
+from ofmhelpers.features.users import service, viewing
 from ofmhelpers.features.users.service import Shown
 from ofmhelpers.schemas import Role, User
-from ofmhelpers.web.dependencies import AdminOnly, CurrentUser
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, CurrentUser
+from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
 router = APIRouter(
     prefix="/users",
     tags=["users"],
-    dependencies=[AdminOnly],
+    dependencies=[Access(Area.USERS)],
 )
 
 # A page that shows a set-password link: never cached, never sent on.
@@ -63,8 +65,10 @@ def add(
     email: Annotated[str, Form()],
     role: RoleField = Role.USER,
     name: Annotated[str, Form()] = "",
+    owner_id: Annotated[int | None, Form()] = None,
+    password: Annotated[str, Form()] = "",
 ) -> Response:
-    shown = service.add(email, role, name, str(request.base_url))
+    shown = service.add(email, role, name, str(request.base_url), owner_id, password)
     return _page(request, me.id, shown)
 
 
@@ -75,10 +79,32 @@ def new_link(request: Request, user_id: int, me: CurrentUser) -> Response:
     return _page(request, me.id, service.new_link(user_id, str(request.base_url)))
 
 
-@router.post("/{user_id}/role")
-def change_role(user: OtherUser, role: RoleField) -> Response:
-    service.set_role(user, role)
+@router.post("/{user_id}/password")
+def set_password(
+    request: Request,
+    user: OtherUser,
+    me: CurrentUser,
+    password: Annotated[str, Form()],
+) -> Response:
+    """The password an admin gives a VA: what the VA signs in with."""
+    return _page(request, me.id, service.set_va_password(user, password))
+
+
+@router.post("/{user_id}/owner")
+def change_owner(
+    user: OtherUser, owner_id: Annotated[int | None, Form()] = None
+) -> Response:
+    """Whose VA this is (blank: nobody's yet)."""
+    service.set_owner(user, owner_id)
     return see_other("/users")
+
+
+@router.post("/{user_id}/viewing")
+def view_as(request: Request, user_id: int, me: CurrentUser) -> Response:
+    """The admin's pages become this person's, to look at: every write is
+    refused until "Back to my view" (`middleware/auth.py`)."""
+    AuthMiddleware.view_as(request, viewing.viewable(user_id, me.id))
+    return see_other("/home")
 
 
 @router.post("/{user_id}/active")

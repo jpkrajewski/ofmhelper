@@ -1,7 +1,10 @@
 """The one request lifecycle every provider shares: submit or resume, wait,
 save -- driven against an in-memory provider, no HTTP."""
 
+from decimal import Decimal
+
 import pytest
+from signin import make_user
 
 from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
@@ -264,7 +267,7 @@ def test_a_download_failing_for_another_reason_is_not_retried(slept):
 
 
 def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
-    job_id = create_job("ai", {"prompt": "p"}, actor="1")
+    job_id = create_job("ai", {"prompt": "p"}, actor=str(make_user().id))
     first = ScriptedProvider(
         [TaskState(state="done", urls=["https://cdn/x/a.mp4"], cost_usd=0.4)]
     )
@@ -282,7 +285,7 @@ def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
     job = get_job(job_id)
     assert job is not None
     assert job.params == {"prompt": "p"}  # inputs only: a re-run gets them back
-    assert job.meta.cost_usd == 0.65
+    assert (job.cost_usd, job.cost_estimated) == (Decimal("0.65"), False)
     assert [
         (g.part, g.provider, g.model, g.task_id, g.state, g.cost_usd)
         for g in job.meta.generations
@@ -291,15 +294,19 @@ def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
         (1, "kie", SPEC.key, "task-1", "done", 0.25),
     ]
     assert all(g.seconds is not None for g in job.meta.generations)
-    assert "key" not in job.meta.model_dump_json()
+    # The run's key is "key": neither it nor an `api_key` field is kept
+    # (`key_tail` holds the end of a real-length key only).
+    assert '"key"' not in job.meta.model_dump_json()
+    assert "api_key" not in job.meta.model_dump_json()
+    assert [g.key_tail for g in job.meta.generations] == [None, None]
     assert tasks.of_job(job_id) == []  # saved: nothing left to resume
 
 
 def test_a_job_that_asked_no_provider_keeps_an_empty_meta():
-    job_id = create_job("download_media", {"urls": ["u"]}, actor="1")
+    job_id = create_job("download_media", {"urls": ["u"]}, actor=str(make_user().id))
 
     run_job(job_id, list, {})
 
     job = get_job(job_id)
     assert job is not None
-    assert (job.meta.generations, job.meta.cost_usd) == ([], None)
+    assert (job.meta.generations, job.cost_usd) == ([], None)

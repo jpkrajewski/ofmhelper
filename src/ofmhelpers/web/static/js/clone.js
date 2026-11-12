@@ -47,7 +47,10 @@
         const maxImages = Number(form.dataset.maxImages);
         const videos = manifestCount(formData, "videos");
         const images = manifestCount(formData, "image");
-        if (!String(formData.get("api_key") || "").trim()) return "Enter the API key.";
+        // No key field to fill (a VA runs on the owner's saved key): the
+        // server picks it.
+        const keyField = form.querySelector('[name="api_key"]');
+        if (keyField && !keyField.disabled && !String(formData.get("api_key") || "").trim()) return "Enter the API key.";
         if (images < 1) return "Pick at least one subject image.";
         if (images > maxImages) return `Pick at most ${maxImages} subject images.`;
         if (videos < 1) return "Pick at least one video.";
@@ -113,6 +116,12 @@
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             if (uploading) return;
+            // Recreate of a clone whose video was removed: the picker is
+            // downloading it again (file-picker.js `restore`).
+            if (window.FilePicker.restoring()) {
+                setStatus(statusEl, "Wait: a video is downloading again.", true);
+                return;
+            }
             const invalid = validate(form, window.FilePicker.collectFormData(new FormData(form)));
             if (invalid) {
                 setStatus(statusEl, invalid, true);
@@ -247,8 +256,8 @@
             }
         } else if (upload.status === "failed") {
             const span = document.createElement("span");
-            span.title = upload.error || "";
-            span.textContent = `Drive upload to ${upload.folder_name} failed`;
+            // The reason on the card itself: Safari shows no hover text.
+            span.textContent = `Drive upload to ${upload.folder_name} failed${upload.error ? `: ${upload.error}` : ""}`;
             li.appendChild(span);
         } else {
             const spinner = document.createElement("span");

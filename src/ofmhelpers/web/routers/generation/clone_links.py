@@ -61,13 +61,16 @@ from ofmhelpers.features.clone_links.service import (
     Sent,
 )
 from ofmhelpers.schemas import CloneQueued
+from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import (
+    Access,
     Actor,
     ApiKeys,
     AssetsRoot,
     CurrentUser,
     OwnerId,
     Scope,
+    Viewing,
 )
 from ofmhelpers.web.forms import Files, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
@@ -88,7 +91,9 @@ __all__ = [
     "run_clone_link",
 ]
 
-router = APIRouter(prefix=PREFIX, tags=["clone-links"])
+router = APIRouter(
+    prefix=PREFIX, tags=["clone-links"], dependencies=[Access(Area.CLONE_LINKS)]
+)
 
 # The preview stream line by line through the host's nginx, never buffered.
 _UNBUFFERED = {"X-Accel-Buffering": "no"}
@@ -144,11 +149,11 @@ def previews(
 
 
 @router.get("/thumb/{key}")
-def thumb(key: str) -> FileResponse:
-    """A previewed link's cover, kept on disk under its link's hash: fine to
-    cache a day."""
+def thumb(key: str, owner_id: OwnerId) -> FileResponse:
+    """A previewed link's cover, kept on disk under its link's hash, for the
+    person who previewed it: fine to cache a day."""
     return FileResponse(
-        service.cover(key), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
+        service.cover(key, owner_id), media_type="image/webp", headers=PRIVATE_FOR_A_DAY
     )
 
 
@@ -191,15 +196,20 @@ def run(
 
 @router.get("")
 def form(
-    request: Request, user: CurrentUser, actor: Actor, scope: Scope, api_keys: ApiKeys
+    request: Request,
+    user: CurrentUser,
+    actor: Actor,
+    viewer: Viewing,
+    scope: Scope,
+    api_keys: ApiKeys,
 ) -> Response:
-    first = gallery.page(actor)
+    first = gallery.page(viewer)
     return render(
         request,
         "clone_links.html",
         gallery=service.cards(first.jobs, scope),
         next_offset=first.next_offset,
-        hidden_count=gallery.hidden_count(actor),
+        hidden_count=gallery.hidden_count(viewer),
         api_keys=api_keys,
         **dict(form_view(actor, user.id)),
     )
@@ -207,11 +217,11 @@ def form(
 
 @router.get("/gallery")
 def gallery_page(
-    request: Request, scope: Scope, actor: Actor, query: GalleryParams
+    request: Request, scope: Scope, viewer: Viewing, query: GalleryParams
 ) -> Response:
     """The next page of cards (gallery-scroll.js); `hidden`: only the hidden
     cards (hidden-cards.js's "Show hidden")."""
-    found = gallery.page(actor, query)
+    found = gallery.page(viewer, query)
     return render(
         request,
         "clone_links_gallery_fragment.html",
@@ -221,12 +231,12 @@ def gallery_page(
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request, actor: Actor, scope: Scope) -> Response:
+def gallery_latest(request: Request, viewer: Viewing, scope: Scope) -> Response:
     """The newest page of cards, no sentinel: what live-gallery.js polls."""
     return render_polled(
         request,
         "clone_links_gallery_fragment.html",
-        gallery=service.cards(gallery.page(actor).jobs, scope),
+        gallery=service.cards(gallery.page(viewer).jobs, scope),
         next_offset=None,
     )
 

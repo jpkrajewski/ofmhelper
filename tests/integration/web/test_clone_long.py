@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from rq.timeouts import JobTimeoutException
-from signin import sign_in
+from signin import make_user, sign_in
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import fail_job, get_job, list_jobs
@@ -828,7 +828,7 @@ def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeyp
     params = _params(tmp_path).model_dump()
     from ofmhelpers.db.stores.jobs import create_job
 
-    job_id = create_job("clone_long", params, actor="1")
+    job_id = create_job("clone_long", params, actor=str(make_user().id))
     fail_job(job_id, "Task exceeded maximum timeout value")
     for part in range(3):
         tasks.remember(

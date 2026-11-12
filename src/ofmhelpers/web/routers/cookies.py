@@ -11,11 +11,14 @@ from fastapi.responses import Response
 
 from ofmhelpers.features.cookies import service
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.web.dependencies import OwnerId
+from ofmhelpers.schemas.access import Area
+from ofmhelpers.web.dependencies import Access, OwnerId
 from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render
 
-router = APIRouter(prefix="/cookies", tags=["cookies"])
+router = APIRouter(
+    prefix="/cookies", tags=["cookies"], dependencies=[Access(Area.COOKIES)]
+)
 
 
 def _page(

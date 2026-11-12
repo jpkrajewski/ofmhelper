@@ -1,42 +1,18 @@
 """Every page of the header, in header order: the bar, then "More" (Uniqify,
-Account, Cookies, then the admin pages). A new page = one entry here."""
+Account, Cookies, then the admin pages). Read from the menu (`schemas/nav.py`)
+and the access map behind it (`schemas/access.py`): a new page = one `NavItem`
+there, nothing here."""
 
-VA_PAGES = [
-    "/generate",
-    "/clone",
-    "/clone-long",
-    "/clone-links",
-    "/download-assets",
-    "/accounts",
-    "/links",
-    "/phones",
-    "/drive",
-    "/viral",
-    "/pictures",
-    "/reels",
-    "/uniqify",
-    "/edit",
-    "/trials",
-    "/self-links",
-    "/repurpose",
-    "/account",
-    "/cookies",
-]
-ADMIN_ONLY_PAGES = [
-    "/chatting",
-    "/users",
-    "/character-sheet",
-    "/applications",
-    "/file-manager",
-    "/styleguide",
-    "/action-log",
-]
+from ofmhelpers.schemas.nav import NavPlace, nav
+from ofmhelpers.schemas.users import Role
+
+# The name is historic (the first non-admin role was called VA): these are the
+# pages a plain user (`Role.USER`) sees. A real VA's are `REAL_VA_PAGES`.
+VA_PAGES = [item.href for item in nav(Role.USER)]
+# What role `va` may open of the menu.
+REAL_VA_PAGES = [item.href for item in nav(Role.VA)]
+ADMIN_ONLY_PAGES = [item.href for item in nav(Role.ADMIN) if item.href not in VA_PAGES]
 
 # An admin's header: their one extra bar link comes right after the shared ones.
-SHARED_BAR_LINKS = 9
-ADMIN_HEADER = [
-    *VA_PAGES[:SHARED_BAR_LINKS],
-    "/chatting",
-    *VA_PAGES[SHARED_BAR_LINKS:],
-    *ADMIN_ONLY_PAGES[1:],
-]
+SHARED_BAR_LINKS = sum(item.place == NavPlace.BAR for item in nav(Role.USER))
+ADMIN_HEADER = [item.href for item in nav(Role.ADMIN)]

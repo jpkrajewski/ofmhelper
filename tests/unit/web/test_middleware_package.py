@@ -36,7 +36,7 @@ def test_auth_policy_lives_on_the_middleware():
     assert callable(AuthMiddleware.is_fetch)
     assert callable(AuthMiddleware.sign_in)
     assert callable(AuthMiddleware.actor)
-    assert callable(AuthMiddleware.require_admin)
+    assert callable(AuthMiddleware.require)
 
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("ofmhelpers.web.auth")

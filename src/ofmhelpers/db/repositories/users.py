@@ -47,6 +47,7 @@ def _user(row: UserRow) -> User:
         has_password=bool(row.password_hash),
         drive_root_id=row.drive_root_id,
         is_password_account=row.is_password_account,
+        owner_id=row.owner_id,
         credential_stamp=_credential_stamp(row.password_hash),
     )
 
@@ -61,8 +62,8 @@ def _linked_account(row: UserIdentityRow) -> LinkedAccount:
 
 
 class OwnsDataError(ValueError):
-    """A user who still owns phones, accounts or watched profiles: not
-    deleted (their data would be orphaned); deactivate them instead."""
+    """A user who still owns jobs, phones, accounts or watched profiles:
+    not deleted (their data would be orphaned); deactivate them instead."""
 
 
 class UserRepository(CachedRepository):
@@ -113,6 +114,7 @@ class UserRepository(CachedRepository):
         name: str = "",
         *,
         password_account: bool = False,
+        owner_id: int | None = None,
     ) -> User | None:
         """None when the email is taken -- also by a request racing this
         one (one INSERT ... ON CONFLICT DO NOTHING: never an IntegrityError)."""
@@ -128,6 +130,7 @@ class UserRepository(CachedRepository):
                     google_refresh_token="",
                     password_hash="",
                     is_password_account=password_account,
+                    owner_id=owner_id,
                 )
                 .on_conflict_do_nothing(index_elements=[UserRow.email])
                 .returning(UserRow)
@@ -172,7 +175,10 @@ class UserRepository(CachedRepository):
                 s.flush()
                 return True
         except IntegrityError as exc:
-            msg = "still owns phones, accounts, watched profiles or picture presets"
+            msg = (
+                "still owns jobs, phones, accounts, watched profiles, picture"
+                " presets or VAs"
+            )
             raise OwnsDataError(msg) from exc
 
     def refresh_token(self, user_id: int) -> str:

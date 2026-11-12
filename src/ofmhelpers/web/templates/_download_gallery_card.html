@@ -3,10 +3,13 @@
    when its file is a video -- a [Clone | Clone long] control that opens that
    page with this video already picked (static/js/download.js posts the job id
    and the card's file index; a card that finishes live has the same control
-   cloned in). #}
+   cloned in). A card whose video the retention sweep removed shows its
+   poster and one Download, which fetches it again (download.js); its Clone
+   control is back once the video is. #}
 {% extends "_gallery_card.html" %}
 {% import "components/ui.html" as ui %}
-{% block below %}{% if job.status == "done" and job.assets|selectattr("kind", "equalto", "video")|list %}
+{% import "_card_hide.html" as hide %}
+{% block below %}{% if job.status == "done" and not job.made_by and not job.assets|selectattr("removed")|list and job.assets|selectattr("kind", "equalto", "video")|list %}
     <div class="send-to">
     {% call ui.segmented("Clone this download") %}
         {{ ui.button("Clone", icon="sparkles", hook="send-to-clone") }}
@@ -16,6 +19,13 @@
 {% endif %}{% endblock %}
 {% block no_output %}{% if not job.failed_sources %}<div class="result-file">No output</div>{% endif %}{% endblock %}
 {% block pending_label %}working…{% endblock %}
+{% block actions %}{% if job.status == "done" and job.assets and job.assets[0].removed %}
+        {{ ui.button("Download", icon="download", hook="download-again") }}
+        {% call ui.menu("More actions") %}
+            {{ ui.menu_item("Recreate", "restore", "recreate-btn") }}
+            {% if not job.made_by %}{{ hide.items(job.hidden) }}{% endif %}
+        {% endcall %}
+{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block notes %}{% if job.failed_sources %}
     <div class="result-file result-failed fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">
         {{ job.failed_sources|length }} link{{ "s" if job.failed_sources|length != 1 }} failed
