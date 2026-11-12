@@ -27,6 +27,10 @@ class ConflictError(ValueError):
     """What is there already stands in the way (409)."""
 
 
+class TooSoonError(RuntimeError):
+    """Asked again before its rest was over (429)."""
+
+
 class UnavailableError(RuntimeError):
     """An outside service did not do its part (502). The message is ours;
     the service's own error goes to the log, never to the page."""

@@ -132,7 +132,7 @@ def _bot_root(user_id: int) -> str | None:
     return s.root_folder_id if agency and agency.is_password_account else None
 
 
-def _person_drive(user_id: int, *, interactive: bool = False) -> DriveApi | None:
+def person_drive(user_id: int, *, interactive: bool = False) -> DriveApi | None:
     """The owner's own Drive; for the agency admin without Google, the Drive
     bot in the configured root (`_bot_root`, kept as their root); None when
     neither."""
@@ -186,6 +186,26 @@ def usable_root(drive: DriveApi, user_id: int) -> str | None:
         )
         return None
     return stored
+
+
+def find_root(drive: DriveApi, user_id: int) -> str | None:
+    """The owner's root folder for a reader: `usable_root`; else the oldest
+    folder in their My Drive whose name is `root_name()` in any case. Only
+    asks: nothing is made, stored or forgotten. Raises `DriveError`."""
+    stored = usable_root(drive, user_id)
+    if stored:
+        return stored
+    if _bot_root(user_id) is not None:
+        # `drive` is the Drive bot's: its own My Drive is not the agency's.
+        return None
+    wanted = root_name().casefold()
+    named = [
+        f
+        for f in drive.children("root", folders_only=True)
+        if f.name.strip().casefold() == wanted
+    ]
+    # Drive lists newest first: the oldest is the one people have been using.
+    return named[-1].id if named else None
 
 
 def ensure_root(drive: DriveApi, user_id: int) -> str:
@@ -402,7 +422,7 @@ def trash_folders(user_id: int, login_ids: list[int]) -> None:
     if not folders:
         return
     try:
-        drive = _person_drive(user_id)
+        drive = person_drive(user_id)
     except DriveError, SignInError:
         logger.warning("drive: cannot trash folders of %s", user_id, exc_info=True)
         return
@@ -590,7 +610,7 @@ def _tally_one(
     report (merged by `_tally`): the accounts run in parallel threads, each
     with its own Drive connection."""
     report = SyncReport()
-    drive = _person_drive(user_id)
+    drive = person_drive(user_id)
     if drive is None:
         return report
     try:
@@ -644,7 +664,7 @@ def _tally(user_id: int, targets: list[DriveTarget], report: SyncReport) -> None
 
 
 def _sync_owner(user_id: int, targets: list[DriveTarget], report: SyncReport) -> None:
-    drive = _person_drive(user_id)
+    drive = person_drive(user_id)
     if drive is None:
         report.not_connected.append(_owner_label(user_id))
         return
@@ -704,7 +724,7 @@ def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
     if card.account_folder_id is None:
         return
     try:
-        drive = _person_drive(user_id, interactive=True)
+        drive = person_drive(user_id, interactive=True)
         if drive is None:
             return
         folder_id = card.account_folder_id
@@ -731,7 +751,7 @@ def _root_folders(user_id: int, drive: DriveApi, root: str) -> list[DriveFile]:
     round trip is a few hundred ms)."""
 
     def check() -> None:
-        other = _person_drive(user_id, interactive=True)
+        other = person_drive(user_id, interactive=True)
         if other is None:
             return
         current = other.folder(root)
@@ -850,7 +870,7 @@ def _list_owner(
         f"{_owner_label(user_id)} has not connected Google Drive: their"
         " Account page, Connect Google Drive"
     )
-    drive = _person_drive(user_id, interactive=True)
+    drive = person_drive(user_id, interactive=True)
     if drive is None:
         for card in cards:
             card.error = not_connected
@@ -1001,7 +1021,7 @@ def thumbnail(
     folder = store.account_folders().get(login_id) if target else None
     if target is None or folder is None:
         return None
-    drive = _person_drive(target.device.user_id, interactive=True)
+    drive = person_drive(target.device.user_id, interactive=True)
     if drive is None:
         return None
     try:

@@ -931,6 +931,22 @@ class DownloadersSettings(BaseSettings):
         default=None, validation_alias="OFM_DOWNLOADS_SWEEP"
     )
 
+    # /download-assets "Download from Drive sheet" (features/downloads/sheet.py):
+    # the Google Sheet in the person's Drive root people add links to, a date
+    # per column, found by this name; and how long the button rests after a
+    # click.
+    sheet_name: str = Field(
+        default="content_links", validation_alias="OFM_DOWNLOADS_SHEET_NAME"
+    )
+    sheet_cooldown_s: int = Field(
+        default=60, ge=1, validation_alias="OFM_DOWNLOADS_SHEET_COOLDOWN_S"
+    )
+    # How long a link read from the sheet stays known as queued (its job may
+    # still be running, so it has no `downloads` row yet).
+    sheet_claim_s: int = Field(
+        default=259200, ge=1, validation_alias="OFM_DOWNLOADS_SHEET_CLAIM_S"
+    )
+
     def sweeping(self, production: bool) -> bool:
         return production if self.sweep_enabled is None else self.sweep_enabled
 
@@ -1872,6 +1888,12 @@ class GDriveSettings(BaseSettings):
     )
     interactive_retries: int = Field(
         default=1, ge=0, validation_alias="OFM_GDRIVE_INTERACTIVE_RETRIES"
+    )
+    # The biggest Google Sheet read whole (`Drive.sheet`, its xlsx export
+    # parsed in the request): a links sheet is a few KB; Drive's own export
+    # cap is 10 MB.
+    sheet_max_bytes: int = Field(
+        default=2 * 1024 * 1024, ge=1, validation_alias="OFM_GDRIVE_SHEET_MAX_BYTES"
     )
     # Folders listed at once when /drive opens.
     list_workers: int = Field(

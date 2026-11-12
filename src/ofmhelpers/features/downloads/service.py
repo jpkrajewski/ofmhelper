@@ -59,19 +59,38 @@ def queue_downloads(
     seen = again.sort_out(actor, links)
     if not seen.new:
         return DownloadsQueued(again=seen.jobs)
-    job_id = create_job(task, {"urls": seen.new}, actor=actor)
-    enqueue(
-        run_job,
-        job_id,
-        run,
-        {
-            "urls": seen.new,
-            "assets_root": str(assets_root),
-            "user_id": owner_id,
-            "job_id": job_id,
-        },
-    )
+    job_id = Links(
+        task=task, run=run, actor=actor, owner_id=owner_id, assets_root=assets_root
+    ).queue(seen.new)
     return DownloadsQueued(job_id=job_id, job_ids=[job_id], again=seen.jobs)
+
+
+class Links(BaseModel, frozen=True):
+    """A download job to be: whose it is and what runs it. `queue` makes the
+    job of `task` for the links and puts its run in line."""
+
+    task: str
+    run: Callable[..., Any]
+    actor: str
+    owner_id: int
+    assets_root: Path
+
+    def queue(self, links: list[str], **noted: str) -> str:
+        """The new job's id. `noted`: what else its row says about where the
+        links came from (`params`, next to `urls`)."""
+        job_id = create_job(self.task, {"urls": links, **noted}, actor=self.actor)
+        enqueue(
+            run_job,
+            job_id,
+            self.run,
+            {
+                "urls": links,
+                "assets_root": str(self.assets_root),
+                "user_id": self.owner_id,
+                "job_id": job_id,
+            },
+        )
+        return job_id
 
 
 def _on_disk(result: DownloadResult | None) -> bool:

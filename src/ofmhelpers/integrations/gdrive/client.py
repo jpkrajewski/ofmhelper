@@ -12,6 +12,7 @@ room), `DriveAuthError` (Google refused the person's sign-in: reconnect).
 import json
 import re
 import threading
+import zipfile
 from functools import lru_cache
 from http import HTTPStatus
 from typing import Any
@@ -42,10 +43,12 @@ from ofmhelpers.integrations.gdrive.models import (
     DriveFile,
     DriveFolder,
     DriveListing,
+    DriveSheet,
     DriveStorage,
     DriveThumb,
     FolderItems,
 )
+from ofmhelpers.integrations.gdrive.sheets import XLSX_MIME, read_xlsx
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
@@ -85,6 +88,12 @@ class ReadOnlyDrive:
 
     def file(self, file_id: str) -> DriveFile:
         return self._inner.file(file_id)
+
+    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
+        return self._inner.find_file(parent_id, name)
+
+    def sheet(self, file_id: str) -> DriveSheet:
+        return self._inner.sheet(file_id)
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._inner.thumbnail(item, px)
@@ -453,6 +462,46 @@ class Drive:
             msg = f"File {file_id} is trashed"
             raise FolderGoneError(msg)
         return DriveFile.model_validate(found)
+
+    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
+        """The oldest item of that name in the folder that is not a folder
+        (names are not unique in Drive: the one people have been using)."""
+        query = (
+            f"'{_quoted(parent_id)}' in parents and name = '{_quoted(name)}'"
+            f" and mimeType != '{FOLDER_MIME}' and trashed = false"
+        )
+        rows = self._list(query, _FILE_FIELDS, f"Finding {name!r}")
+        if not rows:
+            return None
+        oldest = min(rows, key=lambda row: row.get("createdTime", ""))
+        return DriveFile.model_validate(oldest)
+
+    def sheet(self, file_id: str) -> DriveSheet:
+        """A Google Sheet's cells, every tab (Drive's xlsx export, at most
+        `OFM_GDRIVE_SHEET_MAX_BYTES`: bigger is a `DriveError`, never
+        parsed). Anything that is not a Google Sheet: Drive refuses the
+        export, a `DriveError`."""
+        what = f"Sheet {file_id}"
+        try:
+            content = self._files.export(fileId=file_id, mimeType=XLSX_MIME).execute(
+                num_retries=self._retries
+            )
+        except (
+            GoogleApiError,
+            GoogleAuthError,
+            OSError,
+            httplib2.HttpLib2Error,
+        ) as exc:
+            raise _failure(exc, what) from exc
+        limit = settings.gdrive.sheet_max_bytes
+        if len(content) > limit:
+            msg = f"{what}: too big to read ({len(content)} bytes, limit {limit})"
+            raise DriveError(msg)
+        try:
+            return read_xlsx(content)
+        except (ValueError, KeyError, OSError, zipfile.BadZipFile) as exc:
+            msg = f"{what}: Drive's export could not be read"
+            raise DriveError(msg) from exc
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         """`item`'s preview image and its content type, `px` on its

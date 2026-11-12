@@ -2,7 +2,7 @@
 (`integrations/downloaders`) return it and a grouped download job stores a
 list of them."""
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -61,6 +61,21 @@ class RemovedFile(BaseModel):
 
     job_id: str
     position: int
+
+
+class SheetQueued(BaseModel):
+    """`POST /download-media/sheet-downloads`: what today's column of the
+    Drive sheet held. `job_id`: the job downloading the `new` links (none:
+    nothing new). `already`: links downloaded or queued before. `skipped`:
+    filled cells that are not a link. `cooldown_s`: how long the button
+    rests."""
+
+    job_id: str | None = None
+    day: date
+    new: int = 0
+    already: int = 0
+    skipped: int = 0
+    cooldown_s: int = 0
 
 
 class DownloadsQueued(BaseModel):

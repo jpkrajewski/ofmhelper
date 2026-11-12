@@ -39,13 +39,16 @@ from ofmhelpers.integrations.gdrive.base import (
 )
 from ofmhelpers.integrations.gdrive.models import (
     FOLDER_MIME,
+    SHEET_MIME,
     DriveDownload,
     DriveFile,
     DriveFolder,
     DriveListing,
+    DriveSheet,
     DriveStorage,
     DriveThumb,
     FolderItems,
+    SheetTab,
 )
 
 FAKE_BOT_EMAIL = "drive-bot@fake.iam.gserviceaccount.com"
@@ -65,6 +68,8 @@ class FakeItem(BaseModel):
     has_thumbnail: bool = False
     # Who else may edit it (`grant`), besides the bot.
     editors: list[str] = Field(default_factory=list)
+    # A Google Sheet's cells (`add_sheet`).
+    sheet: DriveSheet | None = None
 
 
 class FakeDriveState(BaseModel):
@@ -275,6 +280,30 @@ class FakeDrive:
         with self._state("file") as state:
             return self._as_file(self._live(state, file_id, f"File {file_id}"))
 
+    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
+        with self._state("find_file") as state:
+            self._live(state, parent_id, f"Finding {name!r}")
+            found = [
+                i
+                for i in state.items.values()
+                if parent_id in i.parents
+                and i.name == name
+                and i.mime_type != FOLDER_MIME
+                and not i.trashed
+            ]
+            if not found:
+                return None
+            return self._as_file(min(found, key=lambda i: i.created))
+
+    def sheet(self, file_id: str) -> DriveSheet:
+        with self._state("sheet") as state:
+            item = self._live(state, file_id, f"Sheet {file_id}")
+            if item.sheet is None:
+                # As Drive: only its own editors' files export.
+                msg = f"Sheet {file_id}: Drive refused (Export only supports Docs Editors files.)"
+                raise DriveError(msg)
+            return item.sheet
+
     def storage(self) -> DriveStorage:
         with self._state("storage") as state:
             return DriveStorage(usage=state.storage_used, limit=state.storage_limit)
@@ -382,6 +411,31 @@ class FakeDrive:
                 parents=[parent],
                 owner=owner,
                 has_thumbnail=thumbnail,
+            ).id
+
+    def add_sheet(
+        self,
+        parent: str,
+        name: str,
+        tabs: list[SheetTab],
+        *,
+        owner: str = DEFAULT_OWNER,
+    ) -> str:
+        """A Google Sheet made by hand, or (same name there) typed into
+        again: its cells are now `tabs`."""
+        with self._state() as state:
+            content = DriveSheet(tabs=tabs)
+            for item in state.items.values():
+                if parent in item.parents and item.name == name and item.sheet:
+                    item.sheet = content
+                    return item.id
+            return self._new(
+                state,
+                name=name,
+                mime_type=SHEET_MIME,
+                parents=[parent],
+                owner=owner,
+                sheet=content,
             ).id
 
     def trash_file(self, item_id: str) -> None:
@@ -538,6 +592,12 @@ class FakePersonDrive:
 
     def file(self, file_id: str) -> DriveFile:
         return self._me().file(file_id)
+
+    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
+        return self._me().find_file(self._id(parent_id), name)
+
+    def sheet(self, file_id: str) -> DriveSheet:
+        return self._me().sheet(file_id)
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
         return self._me().thumbnail(item, px)

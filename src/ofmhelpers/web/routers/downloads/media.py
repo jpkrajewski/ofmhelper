@@ -7,14 +7,14 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Path
 from pydantic import Field
 
-from ofmhelpers.features.downloads import again, media
+from ofmhelpers.features.downloads import again, media, sheet
 
 # Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.downloads.media import run_downloads as _run_downloads
 from ofmhelpers.features.downloads.service import Redirect
 from ofmhelpers.schemas import JobQueued
 from ofmhelpers.schemas.access import Area
-from ofmhelpers.schemas.downloads import DownloadsQueued
+from ofmhelpers.schemas.downloads import DownloadsQueued, SheetQueued
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import FormModel
 from ofmhelpers.web.routers.task_helpers import add_job_routes
@@ -45,6 +45,16 @@ def run(
     assets_root: AssetsRoot,
 ) -> DownloadsQueued:
     return media.start(urls, actor, owner_id, assets_root)
+
+
+@router.post("/sheet-downloads", summary="Download today's links of the Drive sheet")
+def sheet_downloads(
+    actor: Actor, owner_id: OwnerId, assets_root: AssetsRoot
+) -> SheetQueued:
+    """Today's column of the sheet in the person's Drive root: every link
+    not downloaded or queued before becomes one download job (`job_id`;
+    none when nothing is new). 429 while the button rests."""
+    return sheet.start(actor, owner_id, assets_root)
 
 
 @router.post("/send")

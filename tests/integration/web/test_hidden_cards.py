@@ -35,6 +35,10 @@ class Gallery(BaseModel, frozen=True):
     page: str
     fragment: str
     task: str
+    # The toolbar row's opening tag with a card hidden, and with none: the
+    # row goes then, unless the page has a button of its own in it.
+    row: str = '<div class="ph-toolbar">'
+    idle_row: str = '<div class="ph-toolbar" hidden>'
 
 
 GALLERIES = [
@@ -45,6 +49,9 @@ GALLERIES = [
         page="/download-assets",
         fragment="/download-assets/gallery",
         task="download_media",
+        # "Download from Drive sheet" keeps the row (test_download_sheet.py).
+        row='<div class="ph-toolbar" data-keep>',
+        idle_row='<div class="ph-toolbar" data-keep>',
     ),
 ]
 
@@ -124,7 +131,7 @@ def test_hide_takes_the_card_out_and_show_hidden_brings_it_back(ann, tmp_path, g
     assert _ids(page) == [kept]
     tools = _tools(page)
     assert 'data-hidden-count="1"' in tools
-    assert tools.startswith('<div class="ph-toolbar">')
+    assert tools.startswith(gallery.row)
     assert "Show hidden (1)" in tools
     # A plain button, bordered like every other: not the borderless ghost.
     assert 'class="btn hidden-toggle"' in tools
@@ -159,7 +166,7 @@ def test_unhide_puts_it_back_and_the_toggle_goes(ann, tmp_path, gallery):
     assert _hidden_ids(page) == []
     tools = _tools(page)
     assert 'data-hidden-count="0"' in tools
-    assert tools.startswith('<div class="ph-toolbar" hidden>')
+    assert tools.startswith(gallery.idle_row)
 
 
 def test_hidden_cards_carry_unhide_and_shown_ones_hide(ann, tmp_path):
