@@ -8,6 +8,10 @@ single calls; this decides what to do with each answer:
 - a new request goes through `self_heal.new_task`: what is resent, waited
   for or never sent again when a submit's answer is lost -- one policy for
   every provider, each declaring on `Provider` how it is found again;
+- a request that failed because the provider could not fetch a reference
+  from this server (`TaskState.unfetched`: nothing made or paid) is sent
+  again after each `unfetched_retry_waits_s`, the last time with lighter
+  references (`Provider.send_lighter`);
 - a status check that fails transiently is retried until the deadline, a
   finished request is downloaded (`self_heal.download`: a failed download
   tried again a few times, the result is paid for), a failed one fails the
@@ -139,10 +143,34 @@ def generate(
         job_id=job_id,
         part=part,
     ) as span:
-        task_id = _task_id(provider, spec, payload, job_id, part)
-        span.set_attribute("task_id", task_id)
-        state = wait(provider, task_id, spec.kind)
-        span.set_attributes({"state": state.state, "results": len(state.urls)})
+        waits = settings.aigen.unfetched_retry_waits_s
+        sent = 0
+        while True:
+            task_id = _task_id(provider, spec, payload, job_id, part)
+            sent += 1
+            span.set_attribute("task_id", task_id)
+            state = wait(provider, task_id, spec.kind)
+            if not state.unfetched or sent > len(waits):
+                break
+            # Nothing made, nothing paid: the same request, sent again; the
+            # last time with lighter references, where the provider has them.
+            lighter = sent == len(waits) and provider.send_lighter()
+            logger.warning(
+                "job %s: %s task %s could not fetch a reference (%s); "
+                "sent again in %s s (try %s%s)",
+                job_id,
+                provider.name,
+                task_id,
+                state.error,
+                waits[sent - 1],
+                sent + 1,
+                ", lighter references" if lighter else "",
+            )
+            tasks.forget_part(job_id, part)
+            time.sleep(waits[sent - 1])
+        span.set_attributes(
+            {"state": state.state, "results": len(state.urls), "sent": sent}
+        )
         if state.cost_usd is not None:
             span.set_attribute("cost_usd", state.cost_usd)
         tasks.settle(job_id, part, state.state, state.cost_usd)
@@ -151,6 +179,8 @@ def generate(
             msg = (
                 f"{provider.label} failed this generation: {state.error or 'no result'}"
             )
+            if state.unfetched:
+                msg = f"{state.error}. Tried {sent} times, nothing was charged"
             if state.no_credits:
                 raise ProviderNoCreditsError(msg)
             raise ProviderGenerationError(msg)

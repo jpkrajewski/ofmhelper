@@ -28,7 +28,7 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas.errors import error_reason
+from ofmhelpers.schemas.errors import error_line, error_reason
 from ofmhelpers.web.main import app
 
 WAN = "apiyi:wan3.0-video"
@@ -246,6 +246,87 @@ def test_a_submit_whose_answer_is_lost_is_never_sent_again(provider):
     from ofmhelpers.integrations.ai_providers import tasks
 
     assert tasks.recall("apiyi-lost") is None
+
+
+_NOT_FETCHED = (
+    "InvalidParameter",
+    "Failed to download https://ascendglobal.test/files/ai/s3cr3t-token/ref.png",
+)
+
+
+def test_a_reference_alibaba_could_not_download_is_sent_again(provider, monkeypatch):
+    """Prod 2026-11-12, jobs e33af3e0 / 42323138: "Failed to download
+    https://.../ref.png (InvalidParameter)" while the line to Beijing was
+    slow; the task is refunded."""
+    monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0, 0]")
+    fake_apiyi().fail_next = _NOT_FETCHED
+    spec = get_spec(WAN)
+
+    [saved] = runner.generate(provider, spec, {"prompt": "p"}, "apiyi-unfetched")
+
+    assert saved.stat().st_size > 0
+    assert len(fake_apiyi().created) == 2
+
+
+def test_the_last_try_links_a_big_image_as_a_jpeg_under_the_link_limit(
+    provider, tmp_path, monkeypatch
+):
+    """The original first, every time; only the last try goes lighter."""
+    monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0, 0]")
+    big = tmp_path / "sheet.png"
+    Image.frombytes("RGB", (1600, 1600), os.urandom(1600 * 1600 * 3)).save(big)
+    spec = get_spec(WAN)
+    body = spec.request(
+        {"prompt": "p", "reference_image_urls": [str(big)], "resolution": "480P"},
+        provider.upload,
+    ).model_dump()
+    fake = fake_apiyi()
+    sends = iter([_NOT_FETCHED, _NOT_FETCHED, None])
+    submit = fake._submit
+
+    def failing_twice(sent):
+        fake.fail_next = next(sends)
+        return submit(sent)
+
+    monkeypatch.setattr(fake, "_submit", failing_twice)
+
+    runner.generate(provider, spec, body, "apiyi-lighter")
+
+    first, second, last = (c["input"]["media"][0]["url"] for c in fake.created)
+    assert _served(first) == big.read_bytes()
+    assert _served(second) == big.read_bytes()
+    assert last.endswith("/ref.jpg")
+    assert len(_served(last)) <= 2_000_000
+    assert big.stat().st_size > 7_000_000
+
+
+def test_a_download_that_is_not_of_our_link_is_never_sent_again(provider):
+    """Review 2026-11-12: only a failed fetch of our own hosted link is ours
+    to send again."""
+    fake_apiyi().fail_next = (
+        "InternalError",
+        "Failed to download https://oss.example/output/result.mp4",
+    )
+    spec = get_spec(WAN)
+
+    with pytest.raises(ProviderGenerationError, match="result.mp4"):
+        runner.generate(provider, spec, {"prompt": "p"}, "apiyi-not-ours")
+    assert len(fake_apiyi().created) == 1
+
+
+def test_a_reference_never_downloaded_reads_plainly_on_the_card(provider, monkeypatch):
+    monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[]")
+    fake_apiyi().fail_next = _NOT_FETCHED
+    spec = get_spec(WAN)
+
+    with pytest.raises(ProviderGenerationError) as failed:
+        runner.generate(provider, spec, {"prompt": "p"}, "apiyi-unfetched-2")
+
+    assert error_line(str(failed.value)) == (
+        "APIYI: Chinese server is slow, try again later. Tried 1 times, "
+        "nothing was charged"
+    )
+    assert "s3cr3t-token" not in str(failed.value)
 
 
 def test_a_rate_limited_submit_is_sent_again_and_made_once(provider, monkeypatch):

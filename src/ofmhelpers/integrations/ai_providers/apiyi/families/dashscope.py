@@ -170,7 +170,9 @@ class DashScope(Family):
         if task.state in FAILED:
             # Docs: a failed task is fully refunded.
             logger.info("apiyi task %s %s: %s", task_id, task.state, task.failure)
-            return TaskState(state="failed", error=task.failure)
+            return TaskState(
+                state="failed", error=task.failure, unfetched=task.unfetched
+            )
         # No verdict: failing here would forget a task that may be paid for.
         # Asked again until the deadline, then recovery takes over.
         msg = f"{PROVIDER}: task {task_id} answered status {task.state!r}"

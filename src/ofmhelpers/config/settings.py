@@ -687,6 +687,16 @@ class AigenSettings(BaseSettings):
     rate_limit_max_wait_s: float = Field(
         default=180, ge=0, validation_alias="OFM_AIGEN_RATE_LIMIT_MAX_WAIT_S"
     )
+    # A request that failed because the provider could not fetch a reference
+    # from this server (`TaskState.unfetched`: nothing made, nothing paid) is
+    # sent again after each of these waits (runner.generate). Prod 2026-11-12,
+    # APIYI jobs e33af3e0 / 42323138: the line to Alibaba's Beijing servers
+    # was slow for minutes, and each failed request took ~3.5 min to say so
+    # (Alibaba's own download tries), so the waits between sends stay short.
+    # The last send goes with lighter references (`Provider.send_lighter`).
+    unfetched_retry_waits_s: list[float] = Field(
+        default=[5, 5, 5], validation_alias="OFM_AIGEN_UNFETCHED_RETRY_WAITS_S"
+    )
     # A provider's result URLs outlive this (kie.ai ~24h, Higgsfield 7 days),
     # so a job recovery has not finished by then is written off.
     resume_max_age_s: int = Field(
@@ -831,6 +841,18 @@ class ApiyiSettings(ProviderSettings):
     ref_image_max_bytes: int = 20 * 1000 * 1000
     max_video_bytes: int = 100 * 1000 * 1000
     max_audio_bytes: int = 15 * 1000 * 1000
+    # The last try of a request whose reference Alibaba could not download
+    # (runner.generate, `send_lighter`): a linked image over this goes as a
+    # JPEG copy under it, same pixels first. Prod 2026-11-12: at Beijing's
+    # evening peak a 9.2 MB PNG got 3.0-8.4 MB through in their 60 s a fetch.
+    link_image_max_bytes: int = 2 * 1000 * 1000
+    # The hours (UTC) the provider select warns that APIYI can be slow
+    # (`apiyi/hours.py`): 19:00-01:00 in Beijing, when the line from this
+    # server to Alibaba's crawls. Prod: failed downloads 2026-11-10 and
+    # 2026-11-12 15:18 UTC; every run from 17:33 UTC on went through. Equal
+    # hours = never.
+    slow_from_utc_h: int = Field(default=11, ge=0, le=23)
+    slow_until_utc_h: int = Field(default=17, ge=0, le=23)
     # A .webm/.mkv/.m4v reference is sent as an MP4 copy (utils/video_mp4.py).
     video_convert_timeout_s: int = 900
     # Docs: poll every 5-10 s, never faster than 3 s (runner.wait's floor).

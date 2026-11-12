@@ -30,6 +30,51 @@ def actor(client) -> str:
     return str(sign_in(client).id)
 
 
+SLOW = "APIYI can be slow right now. Fastest from {17:00Z} to {11:00Z}, {zone} time"
+
+
+@pytest.fixture
+def slow_hours(monkeypatch):
+    """The clock inside APIYI's slow hours (15:18 UTC, as on prod
+    2026-11-12)."""
+    from datetime import UTC, datetime
+
+    from ofmhelpers.integrations.ai_providers.apiyi import provider
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            del tz
+            return cls(2026, 11, 12, 15, 18, tzinfo=UTC)
+
+    monkeypatch.setattr(provider, "datetime", Clock)
+
+
+@pytest.mark.parametrize("page", ["/clone", "/clone-links", "/clone-long", "/generate"])
+def test_in_its_slow_hours_apiyi_carries_a_warning_on_the_select(
+    client, slow_hours, page
+):
+    html = client.get(page).text
+
+    assert (
+        f'value="apiyi" data-needs-key="true"\n                data-notice="{SLOW}"'
+        in html
+    )
+    assert 'value="kie" data-needs-key="true"\n                data-notice=""' in html
+    assert 'id="provider-notice" hidden' in html
+
+
+def test_pictures_never_warns_its_images_go_inside_the_request(client, slow_hours):
+    assert SLOW not in client.get("/pictures").text
+
+
+def test_outside_its_slow_hours_apiyi_carries_no_warning(client, monkeypatch):
+    monkeypatch.setenv("OFM_APIYI_SLOW_FROM_UTC_H", "0")
+    monkeypatch.setenv("OFM_APIYI_SLOW_UNTIL_UTC_H", "0")
+
+    assert "can be slow" not in client.get("/clone").text
+
+
 def _selected(html: str) -> str:
     found = re.search(r'<option value="([^"]+)"[^>]*\bselected\b', html)
     assert found is not None

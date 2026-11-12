@@ -66,7 +66,7 @@ def form_view(owner_id: int, actor: str, preset: int | None) -> FormView:
     return FormView(
         presets=presets,
         selected=preset if preset in ids else (ids[0] if ids else None),
-        providers=provider_choices(list(PICTURE_TARGETS)),
+        providers=provider_choices(list(PICTURE_TARGETS), notices=False),
         selected_provider=start_provider(
             actor, frozenset({TASK}), list(PICTURE_TARGETS)
         ),

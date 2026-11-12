@@ -9,6 +9,7 @@ Self-heal (`self_heal.py`): no APIYI API has an idempotency key, a callback
 or a task list, so a submit whose answer is lost is never sent again (never
 paid twice), as on RunningHub."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ofmhelpers.config import settings
@@ -18,6 +19,7 @@ from ofmhelpers.integrations.ai_providers.apiyi.families import (
     family_for,
     split,
 )
+from ofmhelpers.integrations.ai_providers.apiyi.hours import slow_notice
 from ofmhelpers.integrations.ai_providers.apiyi.keys import (
     SLOTS,
     admin_keys,
@@ -78,6 +80,10 @@ class ApiyiProvider(Provider):
             logger.warning("apiyi: a key's models could not be listed", exc_info=True)
             return None
 
+    @classmethod
+    def notice(cls) -> str:
+        return slow_notice(datetime.now(UTC))
+
     def upload(self, path: Path, max_bytes: int | None = None) -> str:
         return self.client.upload(path, max_bytes)
 
@@ -97,7 +103,11 @@ class ApiyiProvider(Provider):
     def _use_key(self, key: str) -> None:
         if key != self.api_key:
             self.api_key = key
-            self.client = ApiyiClient(key)
+            self.client = ApiyiClient(key, lighter=self.client.lighter)
+
+    def send_lighter(self) -> bool:
+        self.client.lighter = True
+        return True
 
     def status(self, task_id: str) -> TaskState:
         task = split(task_id)

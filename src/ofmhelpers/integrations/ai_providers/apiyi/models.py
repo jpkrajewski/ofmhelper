@@ -68,6 +68,12 @@ _REFUSED_CODE = re.compile(r"inspection|infringement", re.IGNORECASE)
 # download/format failure) stays in the text, since `_REFUSED_CODE` would
 # read "inspection" in it as moderation -- narrow that before widening this.
 _CODE_IN_MESSAGE = re.compile(r"^\[(\w+)\]\s*(.*)$", re.DOTALL)
+# Alibaba could not fetch a reference from our link inside its own timeout:
+# it answers "Failed to download <our link> (InvalidParameter)"
+# (prod 2026-11-10 and 2026-11-12). The task is refunded; the link (its
+# token) never goes on a card. Only our own hosted links (`hosting.link`:
+# /files/ai/): any other failed download is not ours to send again.
+_UNFETCHED = re.compile(r"failed to download\s+\S*/files/ai/", re.IGNORECASE)
 
 
 def _text(value: Any) -> Any:
@@ -253,9 +259,24 @@ class ApiyiTask(Lenient):
         return [url] if url else []
 
     @property
+    def _said(self) -> str:
+        message = self.error.message if isinstance(self.error, ApiyiError) else ""
+        plain = self.error if isinstance(self.error, str) else ""
+        native = self.output.message if self.output else ""
+        return f"{message} {plain} {self.fail_reason} {native}"
+
+    @property
+    def unfetched(self) -> bool:
+        """It failed because the upstream could not fetch one of our
+        reference links: nothing made, refunded, worth sending again."""
+        return _UNFETCHED.search(self._said) is not None
+
+    @property
     def failure(self) -> str:
         """Why it ended without a result, worded so the card's reason reads
         it (a moderation code -> Flagged content)."""
+        if self.unfetched:
+            return f"{PROVIDER}: Chinese server is slow, try again later"
         if isinstance(self.error, ApiyiError):
             reason, code = self.error.message, self.error.code
         else:

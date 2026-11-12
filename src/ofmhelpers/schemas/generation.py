@@ -11,9 +11,13 @@ from pydantic import BaseModel
 
 
 class ProviderChoice(BaseModel):
+    """A provider as the select lists it. `notice`: a passing warning shown
+    while it is picked ("" = none)."""
+
     name: str
     label: str
     needs_key: bool
+    notice: str = ""
 
 
 class KeySlot(BaseModel):

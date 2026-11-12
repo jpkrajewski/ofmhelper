@@ -1,17 +1,21 @@
 {# Provider select + its API key, shared by /generate and /clone.
    `providers`: ProviderChoice list; `api_keys`: provider -> pre-filled key.
    Switching provider swaps the key to that provider's pre-fill, unless the
-   user typed one; a provider that needs no key hides the field. Emits
+   user typed one; a provider that needs no key hides the field. A provider's
+   `notice` shows under the select while it is picked. Emits
    "provider:change" on the select for the page to react to. #}
+{% import "components/ui.html" as ui %}
 <div class="field">
     <label for="provider-select">Provider</label>
     <select name="provider" id="provider-select">
         {% for p in providers %}
         <option value="{{ p.name }}" data-needs-key="{{ 'true' if p.needs_key else 'false' }}"
+                data-notice="{{ p.notice }}"
                 {% if p.name == selected_provider %}selected{% endif %}>{{ p.label }}</option>
         {% endfor %}
     </select>
 </div>
+{{ ui.notice("", "warn", attrs={"id": "provider-notice", "hidden": true}) }}
 {# A VA runs on the owner's saved key and an admin viewing as someone on
    nobody's: no field, no key in the page (`Viewer.types_key`). #}
 {% set types_key = viewer_of(request).types_key %}
@@ -38,8 +42,31 @@
     let userTouched = false;
     field.addEventListener("input", () => { userTouched = true; });
 
+    const notice = document.getElementById("provider-notice");
+    // The zone the header's clock is set to (time-zone.js), and its name.
+    const headerClock = document.querySelector(".clock-now");
+    const zoneChoices = [...document.querySelectorAll(".time-zone-choice")];
+    let zone = headerClock ? headerClock.dataset.zone : undefined;
+
+    // A notice writes a time of day as {HH:MMZ} (UTC) and the zone's name as
+    // {zone}: shown in the header clock's zone, always with AM/PM, 12 o'clock
+    // spelled out.
+    function localTimes(text) {
+        const clock = new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", minute: "2-digit", hour12: true });
+        const chosen = zoneChoices.find((choice) => choice.dataset.zone === zone);
+        return text
+            .replace("{zone}", chosen ? chosen.textContent.trim() : "your")
+            .replace(/\{(\d\d):(\d\d)Z\}/g, (_all, hour, minute) => {
+                const at = new Date();
+                at.setUTCHours(Number(hour), Number(minute), 0, 0);
+                return clock.format(at).replace("12:00 PM", "12:00 noon").replace("12:00 AM", "12:00 midnight");
+            });
+    }
+
     function apply() {
         const option = select.selectedOptions[0];
+        notice.textContent = localTimes(option ? option.dataset.notice || "" : "");
+        notice.hidden = !notice.textContent;
         const needsKey = !("serverKey" in wrap.dataset)
             && (!option || option.dataset.needsKey !== "false");
         wrap.style.display = needsKey ? "" : "none";
@@ -53,6 +80,12 @@
         apply();
         select.dispatchEvent(new CustomEvent("provider:change", { bubbles: true }));
     });
+    for (const choice of zoneChoices) {
+        choice.addEventListener("click", () => {
+            zone = choice.dataset.zone;
+            apply();
+        });
+    }
     apply();
     [100, 400].forEach((delay) => setTimeout(() => { if (!userTouched) apply(); }, delay));
 })();
