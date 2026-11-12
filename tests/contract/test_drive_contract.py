@@ -176,3 +176,19 @@ def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
         drive.folder(child.id)
     with pytest.raises(FolderGoneError):
         drive.trash_file(_missing_id())
+
+
+def test_find_file_is_none_for_a_name_not_there_and_never_a_folder(drive, parent):
+    """How /download-assets looks for the links sheet in a root: by name,
+    among what is not a folder."""
+    assert drive.find_file(parent, "content_links") is None
+    drive.create_folder(parent, "content_links")
+    assert drive.find_file(parent, "content_links") is None
+
+
+def test_reading_what_is_no_google_sheet_as_a_sheet_is_refused(drive, parent):
+    """Drive exports only its own editors' files: anything else is a
+    `DriveError`, never an empty sheet."""
+    folder = drive.create_folder(parent, "not a sheet")
+    with pytest.raises(DriveError):
+        drive.sheet(folder.id)

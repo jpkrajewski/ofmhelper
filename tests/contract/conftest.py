@@ -2,6 +2,9 @@
 service. `backend` runs a test twice: "fake" (OFM_FAKE_EXTERNALS, in the
 default run, offline) and "real" (marked `live`: only `scripts/test.sh live`
 or `deploy`), so a fake that drifts from the service fails here first.
+`paid_backend` is the same for a test whose real half spends money at the
+service (an Apify run): that half is also marked `paid`, so it runs only by
+`scripts/test.sh paid`, never in the deploy gate.
 
 The real half reads the repo's `.env` (the suite otherwise never does):
 keys, proxies, the Drive sandbox folder.
@@ -99,14 +102,27 @@ def real_env(monkeypatch) -> None:
     use_real_env(monkeypatch)
 
 
-@pytest.fixture(params=[FAKE, pytest.param(REAL, marks=pytest.mark.live)])
-def backend(request, monkeypatch, tmp_path) -> Iterator[str]:
-    if request.param == FAKE:
+def _switched(which: str, monkeypatch, tmp_path) -> Iterator[str]:
+    if which == FAKE:
         monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
         monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path / "fakes"))
     else:
         use_real_env(monkeypatch)
-    assert app_settings.infra.fake_externals == (request.param == FAKE)
+    assert app_settings.infra.fake_externals == (which == FAKE)
     _reset_fakes()
-    yield request.param
+    yield which
     _reset_fakes()
+
+
+@pytest.fixture(params=[FAKE, pytest.param(REAL, marks=pytest.mark.live)])
+def backend(request, monkeypatch, tmp_path) -> Iterator[str]:
+    yield from _switched(request.param, monkeypatch, tmp_path)
+
+
+@pytest.fixture(
+    params=[FAKE, pytest.param(REAL, marks=[pytest.mark.live, pytest.mark.paid])]
+)
+def paid_backend(request, monkeypatch, tmp_path) -> Iterator[str]:
+    """`backend` for a test whose real half costs money: only
+    `scripts/test.sh paid` runs that half."""
+    yield from _switched(request.param, monkeypatch, tmp_path)

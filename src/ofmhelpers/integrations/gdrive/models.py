@@ -1,20 +1,27 @@
 """What Drive answers, as models: a folder, and any item in one."""
 
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ofmhelpers.schemas.gdrive import FOLDER_MIME, DriveFile, folder_url
 
 __all__ = [
     "FOLDER_MIME",
+    "SHEET_MIME",
     "DriveDownload",
     "DriveFile",
     "DriveFolder",
     "DriveListing",
+    "DriveSheet",
     "DriveStorage",
     "DriveThumb",
     "FolderItems",
+    "SheetTab",
     "folder_url",
 ]
+
+SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 
 
 class DriveFolder(BaseModel):
@@ -65,6 +72,25 @@ class DriveDownload(BaseModel):
 
     content: bytes
     name: str
+
+
+class SheetTab(BaseModel):
+    """One tab of a `DriveSheet`: its cells row by row, as far as the tab is
+    filled. A date cell is a `date`, any other filled cell its text (a cell
+    showing a label over a link: the link), an empty one None."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    rows: list[list[date | str | None]] = Field(default_factory=list)
+
+
+class DriveSheet(BaseModel):
+    """A Google Sheet's content (`sheet`): every tab, in its order."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tabs: list[SheetTab] = Field(default_factory=list)
 
 
 class DriveStorage(BaseModel):

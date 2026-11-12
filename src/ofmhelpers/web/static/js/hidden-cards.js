@@ -41,7 +41,12 @@
     function render(button, count) {
         const showing = stash !== null;
         button.dataset.hiddenCount = String(count);
-        button.closest(".ph-toolbar").hidden = count === 0 && !showing;
+        // A row with another button (`data-keep`) stays: only this one goes.
+        const row = button.closest(".ph-toolbar");
+        const idle = count === 0 && !showing;
+        const kept = "keep" in row.dataset;
+        row.hidden = idle && !kept;
+        button.hidden = idle && kept;
         button.setAttribute("aria-pressed", String(showing));
         setLabel(button, showing ? "Hide hidden" : `Show hidden (${count})`);
     }

@@ -29,6 +29,7 @@ from ofmhelpers.features.refusals import (
     ConflictError,
     ForbiddenError,
     RefusedError,
+    TooSoonError,
     TryAgainError,
     UnavailableError,
 )
@@ -58,6 +59,7 @@ REFUSALS: frozendict[type[Exception], int] = frozendict(
         NotFoundError: 404,
         ConflictError: 409,
         DuplicateError: 409,
+        TooSoonError: 429,
         UnavailableError: 502,
         TryAgainError: 503,
     }

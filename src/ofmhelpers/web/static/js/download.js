@@ -163,7 +163,76 @@
         first.replaceWith(...fresh);
     }
 
+    // "Download from Drive sheet": the button rests (disabled, counting
+    // down in its label) after every click, and after a reload for what is
+    // left of that rest (`data-cooldown-s`).
+    const SHEET_LABEL = "Download from Drive sheet";
+
+    function sheetLabel(btn, text) {
+        const last = btn.lastChild;
+        if (last?.nodeType === Node.TEXT_NODE) last.textContent = ` ${text}`;
+        else btn.append(` ${text}`);
+    }
+
+    function restSheet(btn, seconds) {
+        clearInterval(btn.restTimer);
+        let left = Math.ceil(Number(seconds) || 0);
+        const draw = () => {
+            btn.disabled = left > 0;
+            sheetLabel(btn, left > 0 ? `${SHEET_LABEL} (${left} s)` : SHEET_LABEL);
+        };
+        draw();
+        if (left <= 0) return;
+        btn.restTimer = setInterval(() => {
+            left -= 1;
+            draw();
+            if (left <= 0) clearInterval(btn.restTimer);
+        }, 1000);
+    }
+
+    function sheetStatus(text) {
+        const box = document.querySelector("#results-panel .generation-status");
+        if (box) box.textContent = text;
+    }
+
+    function sheetDay(iso) {
+        const [, month, day] = iso.split("-");
+        return `${day}/${month}`;
+    }
+
+    async function downloadSheet(btn) {
+        btn.disabled = true;
+        sheetStatus("Reading the Drive sheet…");
+        let rest = 0;
+        try {
+            const r = await fetch(`${PREFIX}/sheet-downloads`, { method: "POST" });
+            const answer = await r.json();
+            if (!r.ok) {
+                sheetStatus(typeof answer.detail === "string" ? answer.detail : "Could not read the Drive sheet");
+                rest = Number(r.status === 429 ? /\d+/.exec(answer.detail)?.[0] : 0) || 0;
+                return;
+            }
+            if (answer.job_id) {
+                // The server draws the running card; generation.js polls it.
+                window.location.reload();
+                return;
+            }
+            rest = answer.cooldown_s;
+            sheetStatus(`No new links for ${sheetDay(answer.day)}`);
+        } catch (err) {
+            sheetStatus("Could not read the Drive sheet");
+            console.error("drive sheet download failed", err);
+        } finally {
+            restSheet(btn, rest);
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
+        const sheetButton = document.querySelector(".sheet-download");
+        if (sheetButton) {
+            restSheet(sheetButton, sheetButton.dataset.cooldownS);
+            sheetButton.addEventListener("click", () => downloadSheet(sheetButton));
+        }
         const panel = document.getElementById("results-panel");
         if (!panel) return;
         const gallery = panel.querySelector(".results");

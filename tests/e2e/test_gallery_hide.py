@@ -2,7 +2,9 @@
 /download-assets): Hide in a card's ⋯ menu takes it out of view at once,
 "Show hidden (N)" appears in the toolbar under the title and shows only
 the hidden cards (each with Unhide), "Hide hidden" goes back to the normal
-view -- and a reload shows what the server kept."""
+view -- and a reload shows what the server kept. With nothing hidden the
+button is not there: its whole row on three pages, the button alone on
+/download-assets, whose row keeps "Download from Drive sheet"."""
 
 from pathlib import Path
 
@@ -65,7 +67,7 @@ def test_hide_show_hidden_unhide(va: Session, tmp_path: Path, path: str, task: s
     def card(job_id: str):
         return page.locator(f'#results-panel .results > [data-job-id="{job_id}"]')
 
-    expect(tools).to_be_hidden()
+    expect(toggle).to_be_hidden()
     for job_id in (kept, shown, failed):
         expect(card(job_id)).to_have_count(1)
 
@@ -107,11 +109,11 @@ def test_hide_show_hidden_unhide(va: Session, tmp_path: Path, path: str, task: s
     toggle.click()
     expect(card(kept)).to_have_count(0)
     _pick(card(failed), ".unhide-btn")
-    expect(tools).to_be_hidden()
+    expect(toggle).to_be_hidden()
     for job_id in (kept, shown, failed):
         expect(card(job_id)).to_have_count(1)
     page.reload()
-    expect(tools).to_be_hidden()
+    expect(toggle).to_be_hidden()
     expect(card(failed)).to_have_count(1)
     assert va.js_errors == []
 

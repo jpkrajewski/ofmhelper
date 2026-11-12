@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.downloads import sheet
 from ofmhelpers.schemas import Job, TaskCard
 from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Viewing
@@ -48,6 +49,7 @@ def form(request: Request, viewer: Viewing) -> Response:
         gallery=_cards(first.jobs),
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(viewer),
+        sheet_cooldown_s=sheet.cooldown_left(viewer.user.id),
     )
 
 

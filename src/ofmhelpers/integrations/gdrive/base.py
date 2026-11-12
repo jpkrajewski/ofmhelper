@@ -10,6 +10,7 @@ lazy from ofmhelpers.integrations.gdrive.models import (
     DriveFile,
     DriveFolder,
     DriveListing,
+    DriveSheet,
     DriveStorage,
     DriveThumb,
 )
@@ -60,6 +61,15 @@ class DriveApi(Protocol):
     def rename(self, folder_id: str, name: str) -> DriveFolder: ...
 
     def file(self, file_id: str) -> DriveFile: ...
+
+    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
+        """The oldest item of that name in the folder that is not a folder."""
+        ...
+
+    def sheet(self, file_id: str) -> DriveSheet:
+        """A Google Sheet's cells, every tab; `DriveError` when the file is
+        not a Google Sheet."""
+        ...
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None: ...
 
