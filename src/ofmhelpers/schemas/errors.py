@@ -47,6 +47,9 @@ REASONS = (
     ErrorReason(label="Profile not found", pattern=r"^profile not found"),
     ErrorReason(label="No reels", pattern=r"^no reels"),
     ErrorReason(label="No Apify credit", pattern=r"^no apify credit"),
+    # The provider could not fetch our reference link (APIYI: nothing made,
+    # nothing charged, already sent again a few times by the runner).
+    ErrorReason(label="Chinese server is slow", pattern=r"chinese server is slow"),
     # Paid and still being made: recovery finishes it (integrations/ai_providers/runner).
     ErrorReason(label="Still generating", pattern=r"still generating"),
     ErrorReason(

@@ -114,6 +114,15 @@ def _sent_key(job_id: str, part: int) -> str:
     return f"{_SENT_PREFIX}{job_id}:{part}"
 
 
+def forget_part(job_id: str, part: int) -> None:
+    """One ended request of the job, so its part can be sent again (the
+    other parts stay remembered)."""
+    try:
+        get_redis().delete(_key(job_id, part))
+    except RedisError:
+        logger.warning("could not forget the task of job %s", job_id, exc_info=True)
+
+
 def forget(job_id: str) -> None:
     """Every part of the job, and every submit of it still waiting for its
     answer: a callback after this finds nothing to finish (a job forgotten

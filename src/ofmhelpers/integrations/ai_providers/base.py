@@ -41,13 +41,17 @@ logger = get_logger(__name__)
 class TaskState(BaseModel):
     """Where a submitted request stands. `urls` is set once it is `done`,
     `error` once it `failed` (moderation included); `no_credits`: it failed
-    for want of credits (nothing made, nothing paid); `cost_usd`: what it cost,
-    when the provider says."""
+    for want of credits (nothing made, nothing paid); `unfetched`: it failed
+    because the provider could not fetch a reference from us (nothing made,
+    nothing paid: the runner sends it again; only for a provider whose resend
+    is a new request, not an idempotent replay of the failed one);
+    `cost_usd`: what it cost, when the provider says."""
 
     state: Literal["pending", "done", "failed"]
     urls: list[str] = []
     error: str | None = None
     no_credits: bool = False
+    unfetched: bool = False
     cost_usd: float | None = None
 
 
@@ -72,6 +76,22 @@ class Provider(ABC):
         """The least wait between two status reads the provider allows (APIYI:
         never faster than 3 s); 0 = `AigenSettings.poll_interval_s` alone."""
         return 0
+
+    @classmethod
+    def notice(cls) -> str:
+        """A passing warning the provider select shows while this provider is
+        picked (APIYI: slow at China's evening hours); "" = none. A time of
+        day in it is written `{HH:MMZ}` (UTC) and the zone's name `{zone}`:
+        the page shows them in the zone its header clock is set to
+        (`_provider_fields.html`, `schemas/time_zones.py`)."""
+        return ""
+
+    def send_lighter(self) -> bool:
+        """From the next submit on, send the references as lighter copies
+        (APIYI: a linked image as a JPEG of the same pixels); False when it
+        has none to offer. The runner's last try for a request whose
+        reference the provider could not fetch (`TaskState.unfetched`)."""
+        return False
 
     def callback_url(self, job_key: str) -> str:  # noqa: ARG002 -- none by default
         """Where the provider tells of the request it made for `job_key`, so a

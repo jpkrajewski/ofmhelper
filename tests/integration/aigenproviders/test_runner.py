@@ -49,6 +49,10 @@ class ScriptedProvider:
         del job_key
         return ""
 
+    def send_lighter(self):
+        self.lighter_from = len(self.submitted) + 1
+        return True
+
     def min_poll_interval_s(self):
         return 0
 
@@ -134,6 +138,66 @@ def test_a_failed_generation_fails_with_the_providers_reason_and_is_forgotten():
     with pytest.raises(ProviderGenerationError, match="nsfw input"):
         runner.generate(provider, SPEC, {}, "job5")
     assert tasks.recall("job5") is None
+
+
+UNFETCHED = TaskState(
+    state="failed", error="Scripted: Chinese server is slow", unfetched=True
+)
+
+
+def test_a_request_whose_reference_was_not_fetched_is_sent_again(monkeypatch):
+    """Prod 2026-11-12, APIYI jobs e33af3e0 / 42323138: Alibaba could not
+    download our reference in time, the task failed (refunded) and the card
+    just said so; the next try minutes later went through."""
+    monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[20, 60, 120]")
+    waits: list[float] = []
+    monkeypatch.setattr(runner.time, "sleep", waits.append)
+    provider = ScriptedProvider([UNFETCHED, UNFETCHED, DONE])
+
+    [path] = runner.generate(provider, SPEC, {"prompt": "p"}, "job5c")
+
+    assert path.read_bytes() == b"result"
+    assert len(provider.submitted) == 3
+    assert [w for w in waits if w] == [20, 60]
+    assert tasks.recall("job5c").task_id == "task-3"
+
+
+def test_a_reference_never_fetched_fails_after_its_tries_saying_so(monkeypatch):
+    monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[20, 60, 120]")
+    provider = ScriptedProvider([UNFETCHED] * 4)
+
+    with pytest.raises(ProviderGenerationError) as failed:
+        runner.generate(provider, SPEC, {}, "job5d")
+
+    assert str(failed.value) == (
+        "Scripted: Chinese server is slow. Tried 4 times, nothing was charged"
+    )
+    assert len(provider.submitted) == 4
+    # Three sends as they are, the fourth with lighter references.
+    assert provider.lighter_from == 4
+    assert tasks.recall("job5d") is None
+
+
+def test_a_resend_leaves_the_jobs_other_parts_remembered(monkeypatch):
+    monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0]")
+    tasks.remember(
+        tasks.ProviderTask(
+            job_id="job5e", provider="kie", model=SPEC.key, task_id="paid", api_key="k"
+        )
+    )
+    provider = ScriptedProvider([UNFETCHED, DONE])
+
+    runner.generate(provider, SPEC, {}, "job5e", part=1)
+
+    assert tasks.recall("job5e").task_id == "paid"
+
+
+def test_any_other_failure_is_never_sent_again():
+    provider = ScriptedProvider([TaskState(state="failed", error="nsfw input")])
+
+    with pytest.raises(ProviderGenerationError):
+        runner.generate(provider, SPEC, {}, "job5f")
+    assert len(provider.submitted) == 1
 
 
 def test_a_generation_ended_for_want_of_credits_is_no_credits():

@@ -132,8 +132,10 @@ def maybe_paid(exc: ProviderUnavailableError) -> ProviderUnavailableError:
 class ApiyiClient:
     """One APIYI key."""
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, *, lighter: bool = False) -> None:
         self.api_key = api_key
+        # Linked images go as JPEG copies under `link_image_max_bytes`.
+        self.lighter = lighter
         self._base = settings.apiyi.base_url.rstrip("/")
         self._http = bearer_session(api_key)
 
@@ -224,13 +226,25 @@ class ApiyiClient:
             raise ProviderInputError(msg)
         return sent
 
-    @staticmethod
-    def link(ref: str) -> str:
-        """A public link the API fetches the reference from (a URL as is)."""
+    def link(self, ref: str) -> str:
+        """A public link the API fetches the reference from (a URL as is);
+        `lighter`: an image over `link_image_max_bytes` as a JPEG copy."""
         path = local_path(ref)
         if path is None:
             return ref
-        return hosting.link(path, PROVIDER, settings.apiyi.upload_cache_ttl_s)
+        s = settings.apiyi
+        if self.lighter:
+            limits = ImageLimits(
+                max_bytes=s.link_image_max_bytes, max_side=s.ref_image_max_side
+            )
+            out = Path(settings.aigen.out_dir) / "apiyi" / "fitted"
+            try:
+                path = fitted(path, out, limits)
+            except (OSError, ValueError) as exc:
+                logger.warning("apiyi: %s could not be prepared", path, exc_info=True)
+                msg = f"Could not prepare {path.name} for {PROVIDER}"
+                raise ProviderInputError(msg) from exc
+        return hosting.link(path, PROVIDER, s.upload_cache_ttl_s)
 
     @staticmethod
     def image_file(ref: str, limits: ImageLimits) -> Path:
