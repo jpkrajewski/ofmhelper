@@ -18,7 +18,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from signin import sign_in
+from signin import sign_in, sign_in_agency
 
 from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.jobs import create_job, fail_job
@@ -31,7 +31,7 @@ from ofmhelpers.web.main import app
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     yield c
     c.close()
 

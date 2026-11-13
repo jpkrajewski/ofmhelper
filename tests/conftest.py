@@ -149,11 +149,11 @@ def _test_database(_test_environment):
 
 @pytest.fixture(autouse=True)
 def _clean_tables(request):
-    """Truncate every mapped table before each test so nothing leaks between
-    tests -- the DB equivalent of the old per-test temp JSON files. The list
-    comes from the ORM metadata, so it matches what create_all built: a
-    hardcoded list kept naming retired tables that a fresh CI database never
-    has. Also flushes the test Redis db: repository.py caches reads there, and
+    """Empty every mapped table before each test so nothing leaks between
+    tests -- the DB equivalent of the old per-test temp JSON files
+    (`_wipe_sql`). The list comes from the ORM metadata, so it matches what
+    create_all built: a hardcoded list kept naming retired tables that a
+    fresh CI database never has. Also flushes the test Redis db: repository.py caches reads there, and
     a cached list/get from a previous test would otherwise survive the
     TRUNCATE above until its TTL expired. Unit tests have no database: their
     URLs point at sockets that do not exist (pytest-socket cannot see
@@ -163,15 +163,45 @@ def _clean_tables(request):
         monkeypatch.setenv("OFM_DATABASE_URL", _NO_DATABASE)
         monkeypatch.setenv("OFM_REDIS_URL", _NO_REDIS)
         return
-    request.getfixturevalue("_test_database")
+    wipe = request.getfixturevalue("_wipe_sql")
     from ofmhelpers.cache import get_redis
+    from ofmhelpers.db.session import get_engine
+
+    with get_engine().begin() as conn:
+        conn.exec_driver_sql(wipe)
+    get_redis().flushdb()
+
+
+@pytest.fixture(scope="session")
+def _wipe_sql(_test_database) -> str:
+    """One round trip that leaves every mapped table empty and every
+    sequence at its start, as `TRUNCATE ... RESTART IDENTITY CASCADE` did.
+    That TRUNCATE cost 18 ms a test (37 tables: a new file for each), this
+    0.9 ms (measured 2026-11-13; ~2650 tests wipe the database). Foreign keys
+    are not checked while it runs (`session_replication_role`): every table
+    goes, in any order."""
     from ofmhelpers.db.models import Base
     from ofmhelpers.db.session import get_engine
 
-    tables = ", ".join(Base.metadata.tables)
     with get_engine().begin() as conn:
-        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
-    get_redis().flushdb()
+        found = conn.execute(
+            text(
+                "SELECT quote_ident(sequencename) FROM pg_sequences"
+                " WHERE schemaname = current_schema()"
+            )
+        )
+        sequences = [row[0] for row in found]
+    # The names are the ORM's own tables: nothing a request sent.
+    deletes = "".join(
+        f'DELETE FROM "{table}"; '  # noqa: S608
+        for table in Base.metadata.tables
+    )
+    restarts = ", ".join(f"setval('{name}', 1, false)" for name in sequences)
+    return (
+        "SET LOCAL session_replication_role = replica; "
+        + deletes
+        + (f"SELECT {restarts}" if sequences else "")
+    )
 
 
 _NO_DATABASE = (
@@ -190,6 +220,26 @@ def _kind(item: pytest.Item) -> str:
         msg = f"{rel}: every test lives under tests/{{{','.join(_KINDS)}}}/"
         raise pytest.UsageError(msg)
     return kind
+
+
+# Parked, not deleted (owner 2026-11-13): /clone-links, /reels and /repurpose are
+# retired (schemas/access.py `RETIRED`) because nobody uses them; their
+# code stays. Their own tests are not collected in any preset, nor those of
+# what only they use: /clone-links' AI check (clone_ai_check) and its GOOD /
+# TRIAL REELS review folders, the feed's kept thumbnails. To bring a page
+# back: take its lines out, take it out of `RETIRED` and, for /clone-links, its
+# worker back in tests/e2e/conftest.py; /reels' browser tests are
+# `REELS_PARKED` in tests/e2e/test_app_flows.py.
+collect_ignore_glob = [
+    "*/test_clone_links*.py",
+    "*/clone_ai_check/test_*.py",
+    "*/test_drive_review_folder.py",
+    "*/test_reels*.py",
+    "*/test_reel_thumbs.py",
+    # /repurpose the page only: its engine (media/repurpose) is /trials' too,
+    # so tests/unit/repurpose still runs.
+    "*/test_repurpose_run.py",
+]
 
 
 # First: xdist's own hook reads `xdist_group` to keep the e2e tests on one

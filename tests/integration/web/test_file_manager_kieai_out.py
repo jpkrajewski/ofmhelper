@@ -14,6 +14,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in_agency
 
 from ofmhelpers.db.stores.jobs import create_job, list_jobs
 from ofmhelpers.features.jobs.runner import run_job
@@ -23,7 +24,7 @@ from ofmhelpers.web.main import app
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 

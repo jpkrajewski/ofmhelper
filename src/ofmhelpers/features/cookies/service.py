@@ -15,6 +15,7 @@ from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.reels.watch import unlock_gated
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.schemas import SavedCookies
+from ofmhelpers.schemas.access import Area, retired
 
 # The job an upload starts: the person's login-only reels opened up.
 UNLOCK_TASK = "reels_unlock"
@@ -42,9 +43,11 @@ def page_view(
 
 
 def _after_upload(user_id: int) -> None:
-    # /reels' login-only reels of profiles they watch open up now.
-    job_id = create_job(UNLOCK_TASK, {}, actor=str(user_id))
-    enqueue(run_job, job_id, unlock_gated, {"user_id": user_id})
+    # /reels' login-only reels of profiles they watch open up now; not
+    # while /reels is retired (schemas/access.py `RETIRED`).
+    if not retired(Area.REELS):
+        job_id = create_job(UNLOCK_TASK, {}, actor=str(user_id))
+        enqueue(run_job, job_id, unlock_gated, {"user_id": user_id})
     # Their /accounts synced without a working login: every reel counted now.
     rescan_limited(user_id)
 

@@ -15,7 +15,7 @@ from signin import sign_in
 from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.web.main import app
 
-CLONE_PAGES = ["/clone", "/clone-links", "/clone-long"]
+CLONE_PAGES = ["/clone", "/clone-long"]
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def slow_hours(monkeypatch):
     monkeypatch.setattr(provider, "datetime", Clock)
 
 
-@pytest.mark.parametrize("page", ["/clone", "/clone-links", "/clone-long", "/generate"])
+@pytest.mark.parametrize("page", ["/clone", "/clone-long", "/generate"])
 def test_in_its_slow_hours_apiyi_carries_a_warning_on_the_select(
     client, slow_hours, page
 ):

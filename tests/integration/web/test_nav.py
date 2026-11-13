@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from repo_paths import SRC
 from signin import sign_in, sign_in_admin
 
+from ofmhelpers.schemas.access import RETIRED
 from ofmhelpers.schemas.nav import NAV, NavPlace, nav
 from ofmhelpers.schemas.users import Role
 from ofmhelpers.web.main import app
@@ -27,7 +28,9 @@ def test_every_entry_has_an_icon_and_opens_a_page():
     sign_in_admin(client)
     for item in NAV:
         assert f'"{item.icon}":' in ICONS, item.icon
-        assert client.get(item.href).status_code == 200, item.href
+        # A retired page's entry stays for the day it is back; it opens for nobody.
+        opens = 403 if item.area in RETIRED else 200
+        assert client.get(item.href).status_code == opens, item.href
 
 
 def test_a_user_never_gets_an_admin_page():
@@ -40,11 +43,12 @@ def test_a_user_never_gets_an_admin_page():
         "/styleguide",
         "/action-log",
     }
-    assert nav(Role.ADMIN) == list(NAV)
+    live = [item for item in NAV if item.area not in RETIRED]
+    assert nav(Role.ADMIN) == live
     assert [item.href for item in nav(Role.USER)] == [
-        item.href for item in NAV if item.href not in admin_pages
+        item.href for item in live if item.href not in admin_pages
     ]
-    assert len(nav(Role.USER)) == len(NAV) - len(admin_pages)
+    assert len(nav(Role.USER)) == len(live) - len(admin_pages)
 
 
 def test_a_va_gets_the_five_pages_they_work_in():

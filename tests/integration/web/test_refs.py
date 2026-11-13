@@ -56,7 +56,7 @@ def _write_test_video(dest: Path, width: int = 640, height: int = 360) -> None:
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 
@@ -307,7 +307,7 @@ def test_a_burst_for_one_new_thumb_decodes_the_original_once(
 
     def ask(_n: int) -> int:
         c = TestClient(app)
-        c.post("/login", data={"password": "test-admin", "next": "/"})
+        sign_in_agency(c)
         return c.get(f"/refs/thumb?path={original}&size=100").status_code
 
     with ThreadPoolExecutor(max_workers=8) as pool:

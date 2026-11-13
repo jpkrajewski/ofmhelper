@@ -41,6 +41,7 @@ from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.features.trials import cleanup as trials_cleanup
 from ofmhelpers.log import get_logger
+from ofmhelpers.schemas.access import Area, retired
 
 logger = get_logger(__name__)
 
@@ -91,6 +92,8 @@ def sweeps() -> list[Sweep]:
             name="reel watch",
             run=reel_watch.queue_due_scans,
             interval_s=lambda: settings.instagram.rescan_check_interval_s,
+            # /reels is retired (schemas/access.py `RETIRED`): no scan runs.
+            enabled=lambda: not retired(Area.REELS),
         ),
         # Rescans /accounts' tracked social accounts when due (production
         # only unless OFM_ACCOUNTS_SCHEDULED_SCANS: each scan pays Apify).

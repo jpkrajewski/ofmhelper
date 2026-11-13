@@ -22,6 +22,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in_agency
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import create_job
@@ -41,7 +42,7 @@ def small_pages(monkeypatch):
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import requests
 from fastapi.testclient import TestClient
-from signin import sign_in
+from signin import sign_in, sign_in_agency
 
 import ofmhelpers.media.exports as exports_module
 from ofmhelpers.db.stores.jobs import get_job, list_jobs
@@ -114,7 +114,7 @@ def test_latest_gallery_shows_another_sessions_run(client, tmp_path):
     sign_in(coworker)
     [theirs] = _post(coworker, ["a.mp4"]).json()["job_ids"]
     admin = TestClient(app)
-    admin.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(admin)
     [admins] = _post(admin, ["b.mp4"]).json()["job_ids"]
 
     html = client.get("/clone/gallery/latest").text

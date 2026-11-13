@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from signin import sign_in_agency
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import JobRepository
@@ -55,7 +56,7 @@ def _isolated(monkeypatch, tmp_path):
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 
@@ -151,20 +152,35 @@ def test_a_single_file_field_is_a_one_item_picker(client):
     )
 
 
-@pytest.mark.parametrize("key", catalog().names(), ids=str)
-def test_every_model_renders_its_fields(client, key):
-    """Every catalog entry (all of kie.ai's image/video models) gets a form: each
-    setting an input, each media field a picker of its kind."""
+def _unrendered(client, key: str) -> list[str]:
+    """What the form of model `key` lacks: nothing when every setting is an
+    input and every media field a picker of its kind."""
     spec = catalog()[key]
     response = client.get("/ai/fields", params={"model": key})
-
-    assert response.status_code == 200
+    if response.status_code != 200:
+        return [f"{key}: {response.status_code}"]
     html = response.text
-    for field in spec.form_fields:
-        if field.name != "prompt":
-            assert f'name="{field.name}"' in html
-    for media in spec.media_fields:
-        assert f'data-field="{media.name}" data-kind="{media.kind}"' in html
+    wanted = [
+        f'name="{field.name}"' for field in spec.form_fields if field.name != "prompt"
+    ] + [
+        f'data-field="{media.name}" data-kind="{media.kind}"'
+        for media in spec.media_fields
+    ]
+    return [f"{key}: no {markup}" for markup in wanted if markup not in html]
+
+
+def test_every_model_renders_its_fields(client):
+    """Every catalog entry (all of kie.ai's image/video models) gets a form: each
+    setting an input, each media field a picker of its kind. One test for
+    all ~600 models, not one each: the pages only read, and a test each paid
+    the sign-in and the database wipe 595 times (64 s of its 73 s,
+    2026-11-13). A failure names every model and what its form lacks."""
+    keys = catalog().names()
+
+    missing = [lack for key in keys for lack in _unrendered(client, key)]
+
+    assert len(keys) > 500
+    assert missing == []
 
 
 def test_fields_of_an_unknown_model_404(client):

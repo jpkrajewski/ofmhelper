@@ -3,7 +3,8 @@ asks -- the routers' guard (`web/dependencies.py` `Access` / `Can`), the menu
 (`schemas/nav.py`), the templates (`can(...)`) and the tests' page lists.
 
 An `Area` is a page with its routes (every router names one); an `Action`
-is one thing inside an area that fewer roles may do. A new page: one `Area`
+is one thing inside an area that fewer roles may do. A page switched off
+whole is in `RETIRED`. A new page: one `Area`
 member + its line in `ACCESS`; a new role: one more name in the sets below.
 `tests/unit/architecture/` fails on a route that names no area.
 """
@@ -86,13 +87,28 @@ _ADMINS = (
     Area.ACTION_LOG,
 )
 
+# Switched off, not deleted (owner 2026-11-13: nobody uses them). A retired
+# area is nobody's: its routes answer 403 to every role, the menu and the
+# home page leave it out (`schemas/nav.py`), its sweeps and follow-up jobs
+# do not run (`retired`: /reels' rescans, the unlock after a cookies upload)
+# and its tests are parked (tests/conftest.py `collect_ignore_glob`,
+# tests/e2e/test_app_flows.py `REELS_PARKED`). Code, tables and data stay.
+# To bring one back: take it out of this set and un-park its tests.
+RETIRED = frozenset({Area.CLONE_LINKS, Area.REELS, Area.REPURPOSE})
+
+
+def _roles(area: Area) -> frozenset[Role]:
+    if area in RETIRED:
+        return frozenset()
+    if area in _EVERYONE:
+        return EVERYONE
+    return ADMINS if area in _ADMINS else MEMBERS
+
+
 # Area -> the roles that may open it. An area in neither list above is
-# every member's (admin and user), not a VA's.
+# every member's (admin and user), not a VA's; a retired one is nobody's.
 ACCESS: frozendict[Area, frozenset[Role]] = frozendict(
-    {
-        area: EVERYONE if area in _EVERYONE else ADMINS if area in _ADMINS else MEMBERS
-        for area in Area
-    }
+    {area: _roles(area) for area in Area}
 )
 
 ACTIONS: frozendict[Action, frozenset[Role]] = frozendict(
@@ -109,6 +125,11 @@ def allowed(role: Role, what: Area | Action) -> bool:
     """Whether someone of `role` may open the area or do the action."""
     roles = ACTIONS[what] if isinstance(what, Action) else ACCESS[what]
     return role in roles
+
+
+def retired(area: Area) -> bool:
+    """Whether the area is switched off (`RETIRED`)."""
+    return area in RETIRED
 
 
 def areas_of(role: Role) -> list[Area]:
