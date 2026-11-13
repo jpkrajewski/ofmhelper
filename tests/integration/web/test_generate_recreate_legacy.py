@@ -18,6 +18,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in_agency
 
 from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.features.jobs.runner import run_job
@@ -32,7 +33,7 @@ REFS = ["uploads/assets/a__one.png", "/app/uploads/assets/b__two.png"]
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 

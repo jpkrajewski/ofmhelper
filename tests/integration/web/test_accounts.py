@@ -693,7 +693,7 @@ def test_cookie_upload_rescans_limited_accounts_now(fetches):
         record_scan(_id(handle), stats)
     fetches.clear()
     admin = TestClient(app)
-    admin.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(admin)
     r = admin.post("/cookies", files={"file": ("cookies.txt", COOKIES_TXT)})
     assert r.status_code == 200
     assert [h for h, _ in fetches] == ["limited"]

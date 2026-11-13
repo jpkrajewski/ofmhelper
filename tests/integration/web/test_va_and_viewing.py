@@ -22,7 +22,7 @@ from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.signin.passwords import hash_password
 from ofmhelpers.schemas import Role
-from ofmhelpers.schemas.access import Area, areas_of
+from ofmhelpers.schemas.access import RETIRED, Area, areas_of
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"
@@ -83,7 +83,7 @@ def test_the_map_gives_a_va_only_their_tools():
         Area.DOWNLOAD,
         Area.EDIT,
     }
-    assert set(areas_of(Role.ADMIN)) == set(Area)
+    assert set(areas_of(Role.ADMIN)) == set(Area) - RETIRED
     assert Area.USERS not in areas_of(Role.USER)
 
 

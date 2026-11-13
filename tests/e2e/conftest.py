@@ -207,7 +207,9 @@ def base_url(
         # Their own process, as in compose (`sweeps`): the web app runs none.
         [sys.executable, "-m", "ofmhelpers.sweeps"],
         [sys.executable, "-m", "ofmhelpers.worker"],
-        [sys.executable, "-m", "ofmhelpers.worker", "clone-links"],
+        # /clone-links is parked (tests/conftest.py `collect_ignore_glob`):
+        # no e2e test needs its queue. Back with the page: one more worker
+        # here, as the others, for the "clone-links" queue.
         [sys.executable, "-m", "ofmhelpers.worker", "previews"],
         [sys.executable, "-m", "ofmhelpers.worker", "media"],
         [sys.executable, "-m", "ofmhelpers.worker", "edit"],

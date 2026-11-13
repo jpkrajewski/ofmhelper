@@ -10,6 +10,7 @@ import io
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from signin import sign_in_agency
 
 from ofmhelpers.features.character_sheet import service as character_sheet
 from ofmhelpers.media.character_sheet import combine_side_by_side
@@ -30,7 +31,7 @@ def png_bytes(size=(9, 16)) -> bytes:
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 

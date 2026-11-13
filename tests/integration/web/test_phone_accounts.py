@@ -11,6 +11,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
+from signin import sign_in_agency
 
 from ofmhelpers.db.stores import devices as store
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, untrack
@@ -22,7 +23,7 @@ from ofmhelpers.web.main import app
 @pytest.fixture
 def admin(fake_externals) -> TestClient:
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 

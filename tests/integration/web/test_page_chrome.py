@@ -13,7 +13,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient
-from signin import sign_in
+from signin import sign_in, sign_in_agency
 
 from ofmhelpers.web.main import app
 
@@ -21,7 +21,7 @@ from ofmhelpers.web.main import app
 @pytest.fixture
 def client():
     c = TestClient(app)
-    c.post("/login", data={"password": "test-admin", "next": "/"})
+    sign_in_agency(c)
     return c
 
 
@@ -56,7 +56,6 @@ def test_bar_links_then_the_rest_under_more(client):
         "/generate",
         "/clone",
         "/clone-long",
-        "/clone-links",
         "/download-assets",
         "/accounts",
         "/links",
@@ -69,12 +68,10 @@ def test_bar_links_then_the_rest_under_more(client):
     assert more == [
         "/viral",
         "/pictures",
-        "/reels",
         "/uniqify",
         "/edit",
         "/trials",
         "/self-links",
-        "/repurpose",
         "/account",
         "/cookies",
         "/spending",
@@ -96,12 +93,10 @@ def test_a_users_more_has_no_admin_pages():
     assert more == [
         "/viral",
         "/pictures",
-        "/reels",
         "/uniqify",
         "/edit",
         "/trials",
         "/self-links",
-        "/repurpose",
         "/account",
         "/cookies",
         "/spending",

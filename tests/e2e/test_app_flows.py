@@ -360,6 +360,10 @@ def test_recreate_downloads_a_clones_removed_video_again(
 # Profiles of the Instagram fake (src/ofmhelpers/instagram/fake_profiles.json):
 # once scanned, sheep_love33 keeps 5 reels (12k followers) and brookslockvip
 # 4 (200k): within 14 days, 50k+ views, 15 s or shorter.
+# /reels is retired (schemas/access.py `RETIRED`, owner 2026-11-13): its browser tests
+# are kept and not run. Back with the page: take this marker off them.
+REELS_PARKED = pytest.mark.skip(reason="/reels is retired: schemas/access.py RETIRED")
+
 VIRAL_PROFILES = ["sheep_love33", "https://www.instagram.com/brookslockvip/"]
 FEED_REELS = 9
 SCAN_TIMEOUT_MS = 30_000
@@ -512,6 +516,7 @@ def test_clone_prices_the_picked_videos_live(va: Session, source_videos: list[Pa
     expect(va.page.locator("#clone-cost-usd")).to_have_text("$1.60")
 
 
+@REELS_PARKED
 def test_viral_reels_open_on_clone_and_run_with_a_wrong_key(
     va: Session, subject_images: list[Path]
 ):
@@ -634,6 +639,7 @@ def _chip_key(label: str, href: str) -> str:
     return query.get("group") or query.get("rank") or query.get("ratio") or label
 
 
+@REELS_PARKED
 def test_every_reels_filter_chip_shows_exactly_its_reels(va: Session):
     _add_viral_profiles(va)
     watched_profiles.set_group(
@@ -658,6 +664,7 @@ def test_every_reels_filter_chip_shows_exactly_its_reels(va: Session):
     assert va.js_errors == []
 
 
+@REELS_PARKED
 def test_three_picked_reels_download_as_one_zip(va: Session, tmp_path: Path):
     _add_viral_profiles(va)
     va.goto("/reels")
