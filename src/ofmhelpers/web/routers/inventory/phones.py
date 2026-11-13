@@ -25,6 +25,7 @@ from ofmhelpers.features.phones.service import LoginAdded
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
 from ofmhelpers.schemas.access import Area
+from ofmhelpers.schemas.devices import AssignAccount
 from ofmhelpers.web.dependencies import Access, CurrentUser, OwnerId, Scope
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.templates_config import render
@@ -156,6 +157,13 @@ def delete(phone: Phone) -> _Done:
 @router.post("/{device_id}/logins", status_code=201, dependencies=VAULT_REASON)
 def add_login(body: LoginFields, phone: Phone) -> LoginAdded:
     return phone.add_login(body)
+
+
+@router.post("/{device_id}/accounts", status_code=201, dependencies=VAULT_REASON)
+def assign_account(body: AssignAccount, phone: Phone) -> LoginAdded:
+    """/accounts "Assign phone": the tracked account onto this phone, its
+    Drive folder made; the phone's other accounts leave when `replace`."""
+    return phone.assign(body)
 
 
 @router.post("/logins/{login_id}", dependencies=VAULT_REASON)

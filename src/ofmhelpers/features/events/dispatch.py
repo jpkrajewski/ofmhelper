@@ -31,10 +31,10 @@ lose the job's arguments (log.py `_HideJobArguments`). Lost messages:
 
 import hashlib
 import time
-from dataclasses import dataclass
 from typing import Any
 
 import logfire
+from pydantic import BaseModel, SkipValidation
 from rq import Retry, get_current_job
 
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
@@ -88,7 +88,7 @@ def deliver_to(sender_name: str, target: str, event: Event) -> None:
     """`event` to that one target only (an answer to the chat that asked), the
     way every delivery goes: paced, retried, skipped while its sender is off.
     Raises when it could not be queued."""
-    JobQueue(QueueName.EVENTS).put(
+    JobQueue(name=QueueName.EVENTS).put(
         deliver,
         sender_name,
         target,
@@ -104,11 +104,10 @@ def _digest(target: str) -> str:
     return hashlib.sha256(target.encode()).hexdigest()[:16]
 
 
-@dataclass(frozen=True)
-class Delivery:
+class Delivery(BaseModel, frozen=True, arbitrary_types_allowed=True):
     """One event (`found`) on its way to one `target` of one `sender`."""
 
-    sender: Sender
+    sender: SkipValidation[Sender]
     target: str
     found: Event
 

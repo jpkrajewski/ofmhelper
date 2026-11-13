@@ -94,7 +94,9 @@ _ADMINS = (
 # and its tests are parked (tests/conftest.py `collect_ignore_glob`,
 # tests/e2e/test_app_flows.py `REELS_PARKED`). Code, tables and data stay.
 # To bring one back: take it out of this set and un-park its tests.
-RETIRED = frozenset({Area.CLONE_LINKS, Area.REELS, Area.REPURPOSE})
+# /pictures too (owner 2026-11-13); a picture run cut off by a deploy is
+# still settled by recovery, so nothing is paid twice.
+RETIRED = frozenset({Area.CLONE_LINKS, Area.PICTURES, Area.REELS, Area.REPURPOSE})
 
 
 def _roles(area: Area) -> frozenset[Role]:

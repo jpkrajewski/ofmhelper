@@ -172,6 +172,25 @@ class DeviceRepository(CachedRepository):
             ).mappings()
             return _devices(s, {r["id"]: DeviceLogin(**r) for r in rows}, owner)
 
+    def get(self, device_id: int, owner: int | None = None) -> Device | None:
+        """One phone by id with its logins in the order they were linked
+        (no secret); None when it does not exist (or is not `owner`'s).
+        A login's `on` (its other phones) is not read here."""
+        with session_scope() as s:
+            row = s.get(DeviceRow, device_id)
+            if row is None or (owner is not None and row.user_id != owner):
+                return None
+            logins = s.execute(
+                select(*_login_columns())
+                .join(DeviceLoginRow, DeviceLoginRow.login_id == LoginRow.id)
+                .where(
+                    DeviceLoginRow.device_id == device_id,
+                    LoginRow.archived_at.is_(None),
+                )
+                .order_by(DeviceLoginRow.linked_at, DeviceLoginRow.login_id)
+            ).mappings()
+            return _device(row, [DeviceLogin(**r) for r in logins])
+
     def export(self, owner: int | None = None) -> list[Device]:
         """`list_all` with every password and backup code decrypted."""
         with session_scope() as s:

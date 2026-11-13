@@ -1,6 +1,5 @@
 import random
 import subprocess
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
@@ -283,7 +282,7 @@ def download(
         )
 
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    reading = _Reading(yt_dlp, url, config.ydl_opts(cookiefile))
+    reading = _Reading(yt_dlp=yt_dlp, url=url, opts=config.ydl_opts(cookiefile))
     attempts: list[str | None] = [*_proxies_for(url), None]
     errors: list[str] = []
     for proxy in attempts:
@@ -340,7 +339,7 @@ def video_info(
     import yt_dlp
 
     config = DownloadConfig.single_post(socket_timeout=socket_timeout)
-    reading = _Reading(yt_dlp, url, config.ydl_opts(cookiefile))
+    reading = _Reading(yt_dlp=yt_dlp, url=url, opts=config.ydl_opts(cookiefile))
     errors: list[str] = []
     info = None
     for proxy in _proxies_for(url):
@@ -383,8 +382,7 @@ def _hidden_logged_out(error: str) -> bool:
     return any(sign in lowered for sign in _LOGGED_OUT_HIDDEN)
 
 
-@dataclass(frozen=True)
-class _Reading:
+class _Reading(BaseModel, frozen=True):
     """One URL read by yt-dlp (the imported module) with `opts`; each call
     names the proxy it goes through (None: direct, logged in)."""
 

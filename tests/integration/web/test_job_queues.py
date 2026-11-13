@@ -52,7 +52,7 @@ def _waiting_job() -> str:
 
 
 def test_jobs_run_in_the_order_they_joined():
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     for name in ("first", "second", "third"):
         media.put(worker_tasks.note_down, name)
 
@@ -62,7 +62,7 @@ def test_jobs_run_in_the_order_they_joined():
 
 
 def test_a_job_someone_waits_for_joins_the_front_of_the_line():
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     media.put(worker_tasks.note_down, "first")
     media.put(worker_tasks.note_down, "second")
     media.put(worker_tasks.note_down, "watched", at_front=True)
@@ -73,7 +73,7 @@ def test_a_job_someone_waits_for_joins_the_front_of_the_line():
 
 
 def test_a_waiting_job_dropped_never_runs_and_leaves_nothing_in_redis():
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     dropped = _waiting_job()
     rq_job = media.put(worker_tasks.note_down, dropped)
     media.put(worker_tasks.note_down, "kept")
@@ -87,7 +87,7 @@ def test_a_waiting_job_dropped_never_runs_and_leaves_nothing_in_redis():
 
 
 def test_the_line_says_how_many_are_ahead_of_each_job():
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     first, second = _waiting_job(), _waiting_job()
     media.put(run_job, first, worker_tasks.make_result, {"name": "a.mp4"})
     media.put(run_job, second, worker_tasks.make_result, {"name": "b.mp4"})
@@ -106,7 +106,7 @@ def test_a_line_counts_the_running_jobs_and_knows_who_does_not_wait():
 
 
 def test_the_job_being_run_counts_as_ahead():
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     waiting = _waiting_job()
     media.put(worker_tasks.note_the_line)
     media.put(run_job, waiting, worker_tasks.make_result, {"name": "a.mp4"})
@@ -121,7 +121,7 @@ def test_the_job_being_run_counts_as_ahead():
 def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
     """`active_job_ids` is what recovery asks before failing a running job."""
     job_id = _waiting_job()
-    JobQueue(QueueName.MEDIA).put(
+    JobQueue(name=QueueName.MEDIA).put(
         run_job, job_id, worker_tasks.make_result, {"name": "a.mp4"}
     )
 
@@ -149,7 +149,7 @@ def test_a_cut_someone_waits_for_gets_the_cpu_before_exports_and_trials():
 
 
 def test_joining_a_line_is_logged_without_the_jobs_arguments(capfire: CaptureLogfire):
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     media.put(worker_tasks.note_down, "before")
     job_id = _waiting_job()
 
@@ -170,7 +170,7 @@ def test_joining_a_line_is_logged_without_the_jobs_arguments(capfire: CaptureLog
 def test_a_run_says_its_queue_how_long_it_waited_and_who_still_waits(
     capfire: CaptureLogfire,
 ):
-    media = JobQueue(QueueName.MEDIA)
+    media = JobQueue(name=QueueName.MEDIA)
     first = media.put(worker_tasks.note_down, "first")
     second = media.put(worker_tasks.note_down, "second")
 

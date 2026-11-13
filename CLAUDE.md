@@ -74,6 +74,7 @@ Rules (`.claude/rules/*.md`) load by themselves when you open a matching file. G
 
 | Touching | Rules (auto-loaded) | Skill to load | The standard behind it |
 |---|---|---|---|
+| any Python file (write, change, review, debug) | `code.md` | `senior-python-rules` | Senior Python rules (simple, no new dependencies, Pydantic contracts, root cause, automate repetition) |
 | a route, a router, the app | `routers.md` | `fastapi`, `rest-api` | FastAPI's own guide for the pinned version; Zalando RESTful API Guidelines (MUST rules) |
 | a feature, an integration, a new module | `layers.md`, `code.md` | `architecture` | Architecture Patterns with Python (cosmicpython) |
 | a background job, a queue, a worker | `jobs.md` | `rq` | RQ docs for the pinned version + how this app wraps RQ |

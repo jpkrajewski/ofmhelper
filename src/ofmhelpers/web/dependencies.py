@@ -19,11 +19,11 @@ Reading the request's viewer is in-memory work, so those are `async def`
 Postgres, so those are plain `def` and run in the threadpool.
 """
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, Request
+from pydantic import BaseModel
 
 from ofmhelpers.schemas import SessionUser
 from ofmhelpers.schemas.access import Action, Area
@@ -56,8 +56,7 @@ async def _scope(request: Request) -> int:
     return AuthMiddleware.scope(request)
 
 
-@dataclass(frozen=True)
-class Allowed:
+class Allowed(BaseModel, frozen=True):
     """The guard behind `Access` and `Can`: 403 unless the access map lets
     the request's role open `what`. An object, so a test can read which area
     a route names (`route.dependant`)."""
@@ -70,12 +69,12 @@ class Allowed:
 
 def Access(area: Area) -> Any:  # noqa: N802 -- reads as the dependency it is
     """Router-level: `APIRouter(dependencies=[Access(Area.CLONE)])`."""
-    return Depends(Allowed(area))
+    return Depends(Allowed(what=area))
 
 
 def Can(action: Action) -> Any:  # noqa: N802
     """Route-level, for one thing fewer roles may do inside an area."""
-    return Depends(Allowed(action))
+    return Depends(Allowed(what=action))
 
 
 def _assets_root(request: Request) -> Path:

@@ -125,7 +125,10 @@
                         <img src="{{ d.drawing_url }}" alt="{{ d.label }}" width="20" height="38" loading="lazy">
                         <span>{{ d.owner or d.label }}</span>
                     </a>
-                    {% else %}<span class="pending" data-no-phone>—</span>{% endfor %}
+                    {% else %}
+                    {% if a.platform in phone_platforms %}<span data-no-phone>{{ ui.button("Assign phone", href="/phones?assign=" ~ a.id, icon="smartphone") }}</span>
+                    {% else %}<span class="pending" data-no-phone>—</span>{% endif %}
+                    {% endfor %}
                 </td>
                 <td data-label="Links · {{ link_period.short }}">
                     {% for x in own_links %}

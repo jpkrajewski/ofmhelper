@@ -32,7 +32,7 @@ router = APIRouter(
 
 def _encodes() -> Callable[..., object]:
     """What makes a copy waits its turn: 4K encodes, one at a time."""
-    return JobQueue(QueueName.MEDIA).put
+    return JobQueue(name=QueueName.MEDIA).put
 
 
 def _trials(login_id: int, user: CurrentUser, scope: Scope) -> folder.Trials:

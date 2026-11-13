@@ -350,7 +350,9 @@ def subject_picks(actor: str, assets_root: Path) -> SubjectPicks:
     and /clone-links runs, `clone_last_subjects` last used then
     `clone_top_subjects` most used."""
     web = settings.web
-    subjects = ParamHistory(frozenset(SUBJECT_TASKS), actor, "reference_images")
+    subjects = ParamHistory(
+        tasks=frozenset(SUBJECT_TASKS), actor=actor, field="reference_images"
+    )
     return SubjectPicks(
         last_used=_stored(
             subjects.last_used_firsts, assets_root, web.clone_last_subjects

@@ -35,6 +35,28 @@
 </div>
 <div class="generation-status" id="ph-status" role="status" aria-live="polite"></div>
 
+{% if assigning %}
+{# Pick mode (?assign=<account>, from /accounts "Assign phone"): a click on a
+   phone connects the account to it, after a confirm (phones.js). #}
+{% call ui.card(hook="ph-pick", attrs={"id": "ph-pick", "data-account": assigning.account.id, "data-handle": assigning.account.handle}) %}
+    <div class="dr-pick-text">
+        <h2>Click a phone to connect @{{ assigning.account.handle }}. Its Google Drive folder is made automatically.</h2>
+        {{ ui.button("Cancel", href="/accounts") }}
+    </div>
+{% endcall %}
+<dialog class="accounts-dialog" id="ph-pick-confirm">
+    <form method="dialog">
+        <h2>Connect account</h2>
+        <p id="ph-pick-question"></p>
+        <p class="generation-error" id="ph-pick-error" hidden></p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Back", "ghost", attrs={"id": "ph-pick-back"}) }}
+            {{ ui.button("Connect", "primary", attrs={"id": "ph-pick-submit"}) }}
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
 {% macro login_row(d, x, loop_index) -%}
 <li class="ph-login" data-login-id="{{ x.id }}"
     data-login='{{ {"service": x.service, "provider": x.provider, "username": x.username, "notes": x.notes}|tojson }}'
@@ -72,6 +94,7 @@
 
 {% macro phone_card(d) -%}
 <article class="ph-card" id="phone-{{ d.id }}" data-id="{{ d.id }}" data-search="{{ d.search_text }}"
+         {% if assigning and not d.retired %}data-pickable data-has="{{ d.accounts_of(assigning.service).names()|join(',') }}"{% endif %}
          {% if can_edit %}data-phone='{{ {"label": d.label, "model_id": d.model_id or "", "color_id": d.color_id or "", "custom_model": d.custom_model, "owner": d.owner, "phone_number": d.phone_number, "notes": d.notes}|tojson }}'{% endif %}>
     <div class="ph-media">
         <img src="{{ d.drawing_url }}" alt="{{ d.specs }}" loading="lazy">

@@ -23,7 +23,6 @@ queued before that move carry in Redis: it hands them to that runner.
 
 import time
 from collections.abc import Callable, Collection
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -380,8 +379,7 @@ def redone_links(task: str, actor: str, links: list[str], after: float) -> set[s
     return _repository().redone_links(task, user_id, links, after)
 
 
-@dataclass(frozen=True)
-class ParamHistory:
+class ParamHistory(BaseModel, frozen=True):
     """One param (`field`) across `actor`'s jobs of `tasks`."""
 
     tasks: frozenset[str]

@@ -41,6 +41,7 @@ __all__ = [
     "find_model",
     "get_service",
     "services",
+    "tracked_services",
 ]
 
 
@@ -60,6 +61,15 @@ def services() -> Registry[LoginService]:
     """Every login service by its stored key, in display order."""
     listed = TypeAdapter(list[LoginService]).validate_json(_read("services.json"))
     return Registry[LoginService](entries={s.key: s for s in listed})
+
+
+@lru_cache(maxsize=1)
+def tracked_services() -> Registry[LoginService]:
+    """The login services whose accounts /accounts tracks, by that platform
+    ("instagram" -> the Instagram service)."""
+    return Registry[LoginService](
+        entries={s.tracked_platform: s for s in services().all() if s.tracked_platform}
+    )
 
 
 def cookie_sites() -> list[CookieSite]:

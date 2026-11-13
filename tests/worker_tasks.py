@@ -26,4 +26,6 @@ def note_down(name):
 
 def note_the_line():
     """Leaves the media queue's line as it looks while this job runs."""
-    get_redis().set("line_seen", JobQueue(QueueName.MEDIA).line().model_dump_json())
+    get_redis().set(
+        "line_seen", JobQueue(name=QueueName.MEDIA).line().model_dump_json()
+    )

@@ -6,7 +6,6 @@ job, the rest do nothing. What encodes waits its turn on the media queue, the
 rest runs beside it; a reel being made or uploaded is the only thing blocked."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
@@ -154,7 +153,7 @@ class FolderView(BaseModel):
                 for r in state.reels
                 if r.key in busy and r.status == ReelStatus.UPLOADING
             },
-            line=JobQueue(QueueName.MEDIA).line() if active else Line(),
+            line=JobQueue(name=QueueName.MEDIA).line() if active else Line(),
         )
 
     @property
@@ -305,7 +304,7 @@ def phone_cards(uid: int, scope: int | None) -> PhoneCards:
     """/drive's last read and each card's trials."""
     board = drive_folders.board(owner=scope, viewer=uid, live=False)
     running = {j.id for j in running_jobs() if j.actor == str(uid)}
-    line = JobQueue(QueueName.MEDIA).line()
+    line = JobQueue(name=QueueName.MEDIA).line()
     progress = {
         c.target.login_id: FolderProgress.of(
             load(uid, c.target.login_id), running, line
@@ -366,7 +365,7 @@ def restart(job: Job) -> bool:
     claim = _Claim(uid, login_id, GENERATE)
     claim.job_id = job.id
     claim.launch(
-        JobQueue(QueueName.MEDIA).put,
+        JobQueue(name=QueueName.MEDIA).put,
         tasks.make_trials,
         len(load(uid, login_id).reels),
         refresh_token=refresh_token(uid) or "",
@@ -374,8 +373,7 @@ def restart(job: Job) -> bool:
     return True
 
 
-@dataclass(frozen=True)
-class Trials:
+class Trials(BaseModel, frozen=True):
     """One viewer's trials of one login: everything a route of the folder page
     does. `scope`: whose phones the viewer may see (None: everyone's).
     `encode` puts what makes a copy in the line of the media queue (4K encodes,
@@ -468,8 +466,7 @@ class Trials:
         return Uploading(uploading=claimed)
 
 
-@dataclass(frozen=True)
-class Reel:
+class Reel(BaseModel, frozen=True):
     """One reel (`key`) of a viewer's trials: everything a route of one card
     does. A key the folder does not have is `NotFoundError`."""
 

@@ -24,6 +24,7 @@ from ofmhelpers.schemas.phone_catalog import (
     get_service,
     services,
 )
+from ofmhelpers.utils.registry import Registry
 
 _Text = Annotated[str, StringConstraints(max_length=5000)]
 _Label = Annotated[
@@ -100,6 +101,15 @@ class LoginFields(BaseModel):
         self.username = service.username(self.username)
         self.backup_codes = self.backup_codes.strip()
         return self
+
+
+class AssignAccount(BaseModel):
+    """/accounts "Assign phone": one of the person's tracked accounts onto
+    the phone clicked. `replace`: the phone's other accounts of that service
+    leave it first (the page asked)."""
+
+    account_id: int
+    replace: bool = False
 
 
 class LoginSecrets(BaseModel):
@@ -217,6 +227,12 @@ class Device(BaseModel):
     def retired(self) -> bool:
         return self.retired_at is not None
 
+    def accounts_of(self, service: str) -> Registry[DeviceLogin]:
+        """Its logins of `service`, by username."""
+        return Registry[DeviceLogin](
+            entries={x.username: x for x in self.logins if x.service == service}
+        )
+
     @property
     def followers(self) -> int | None:
         """The most followers of any tracked account signed in on it."""
@@ -316,6 +332,8 @@ class PhoneQuery(BaseModel):
     owner: str = ""
     service: str = ""
     sort: PhoneSort = PhoneSort.FOLLOWERS
+    # /accounts "Assign phone": the tracked account waiting for a phone.
+    assign: int | None = None
 
     @field_validator("sort", mode="before")
     @classmethod

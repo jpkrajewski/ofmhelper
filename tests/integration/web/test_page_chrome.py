@@ -67,7 +67,6 @@ def test_bar_links_then_the_rest_under_more(client):
     # top reels, 2026-10-31) leads More: a 10th bar link wraps "More".
     assert more == [
         "/viral",
-        "/pictures",
         "/uniqify",
         "/edit",
         "/trials",
@@ -92,7 +91,6 @@ def test_a_users_more_has_no_admin_pages():
     _bar, more = _nav(va.get("/generate").text)
     assert more == [
         "/viral",
-        "/pictures",
         "/uniqify",
         "/edit",
         "/trials",

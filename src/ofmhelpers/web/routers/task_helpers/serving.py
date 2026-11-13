@@ -164,7 +164,7 @@ def serve_job_preview(
             headers={"Cache-Control": "no-store"},
         )
     try:
-        dest = previews.ResultPreview(path, job.id, index).make()
+        dest = previews.ResultPreview(source=path, job_id=job.id, index=index).make()
     except previews.FailedBeforeError:
         return media_response(path)
     except previews.PREVIEW_ERRORS:
@@ -184,7 +184,7 @@ def serve_job_poster(job: Job | None, index: int) -> FileResponse:
         return kept
     job, path = _result_media(job, index, {"video"})
     try:
-        dest = previews.ResultPreview(path, job.id, index).poster()
+        dest = previews.ResultPreview(source=path, job_id=job.id, index=index).poster()
     except previews.PREVIEW_ERRORS:
         logger.warning("could not make a poster of %s", path, exc_info=True)
         raise HTTPException(status_code=404, detail="No poster") from None

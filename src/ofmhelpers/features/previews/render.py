@@ -30,10 +30,10 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
+from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets.kinds import classify_kind
@@ -199,8 +199,7 @@ def _stamp(source: Path) -> str:
     return f"{st.st_size}:{st.st_mtime_ns}"
 
 
-@dataclass(frozen=True)
-class ResultPreview:
+class ResultPreview(BaseModel, frozen=True):
     """One result file of a job (`source`, its `index` in the job's results)
     and what a gallery shows of it."""
 
@@ -301,7 +300,7 @@ def is_warm(job_id: str, sources: list[str | None]) -> bool:
     """Whether every preview (and video poster) of a job's results exists, a
     file that failed too often lately counting as done (its poster too)."""
     return all(
-        ResultPreview(path, job_id, index).failed_before()
+        ResultPreview(source=path, job_id=job_id, index=index).failed_before()
         or (
             preview_path(job_id, index, kind).is_file()
             and (kind != "video" or poster_path(job_id, index).is_file())
@@ -316,7 +315,7 @@ def warm_previews(job_id: str, sources: list[str | None]) -> None:
     logged and skipped; the route serves its original instead. One that
     failed too often lately is not tried again, preview or poster."""
     for index, path, kind in _media(sources):
-        result = ResultPreview(path, job_id, index)
+        result = ResultPreview(source=path, job_id=job_id, index=index)
         if result.failed_before():
             continue
         try:

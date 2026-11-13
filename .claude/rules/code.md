@@ -20,7 +20,7 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 ## Architecture
 - `DB -> Repository (cached) -> Service`; services never touch the DB.
 - Config: one settings group per module in `config/settings.py`, imported via `ofmhelpers.config.settings` (fresh per access).
-- Background work goes through a FIFO queue, `cache.JobQueue(QueueName.X).put(fn, ...)` (`enqueue` = the default queue); how many run at once = its worker processes (`media`: one, for big local encodes); priority = who gets the CPU first, default on top, `media` at the bottom. New queue: a `QueueName` member + its entry in `InfraSettings.queues` (`config/settings.py`), its compose service, both deploys (`tests/unit/test_worker_services.py`).
+- Background work goes through a FIFO queue, `cache.JobQueue(name=QueueName.X).put(fn, ...)` (`enqueue` = the default queue); how many run at once = its worker processes (`media`: one, for big local encodes); priority = who gets the CPU first, default on top, `media` at the bottom. New queue: a `QueueName` member + its entry in `InfraSettings.queues` (`config/settings.py`), its compose service, both deploys (`tests/unit/test_worker_services.py`).
 - Caching only via `CachedRepository` + `@cached`/`@invalidates_cache`; no inline cache calls.
 - Middleware in `middleware/`, one concern per file, owning its policy and route helpers.
 - No module-level instances or `global`; shared instances via `lru_cache` accessor/singleton. Exceptions: `db/session.py` engine, `cache/redis.py` connection. `app`/`router` are fine.

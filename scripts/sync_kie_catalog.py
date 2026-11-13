@@ -46,13 +46,13 @@ import sys
 from collections import Counter
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import requests
 import yaml
+from pydantic import BaseModel
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
@@ -144,8 +144,7 @@ _SCALAR_OF = {str: "string", bool: "boolean", int: "integer", float: "number"}
 _MAX_DESCRIPTION = 240
 
 
-@dataclass(frozen=True)
-class Page:
+class Page(BaseModel, frozen=True):
     kind: str
     family: str
     title: str
@@ -185,7 +184,9 @@ def _pages(skipped: list[str]) -> list[Page]:
             other[m["cat"]] += 1
             continue
         family = m["group"].split(">")[0].strip().removesuffix(" API").strip()
-        pages.append(Page(KINDS[m["cat"]], family, title, m["url"]))
+        pages.append(
+            Page(kind=KINDS[m["cat"]], family=family, title=title, url=m["url"])
+        )
     skipped.extend(
         f"{count} {cat} pages: output is not image/video"
         for cat, count in other.items()

@@ -87,6 +87,13 @@ def list_devices(owner: int | None = None) -> list[Device]:
     return _linked(_repository().list_all(owner), list_accounts(owner))
 
 
+def get_device(device_id: int, owner: int | None = None) -> Device | None:
+    """One of `owner`'s phones by id with its logins (no secret); None when
+    there is none. Unlike the list: no /accounts link on a login, nor the
+    other phones it is on."""
+    return _repository().get(device_id, owner)
+
+
 def phones_by_account(
     accounts: list[TrackedAccount], owner: int | None = None
 ) -> PhonesByAccount:

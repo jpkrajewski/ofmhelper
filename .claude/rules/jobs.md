@@ -14,7 +14,7 @@ Depth: `rq` skill (RQ's docs for the pinned version, one page at a time, and how
 
 ## Starting work
 - User-visible work starts with `start_job(...)` (`features/jobs/runner.py`): it writes the job row (`db/stores/jobs.py` `create_job`), then queues `run_job` (same file), the wrapper that records `done` + result or `failed` + error. No bare `enqueue(some_function)` for work a person waits for or pays for.
-- Queues only through `cache.JobQueue(QueueName.X).put(...)` / `enqueue` / `enqueue_to`. Never `rq.Queue` directly, never `BackgroundTasks`, never a thread.
+- Queues only through `cache.JobQueue(name=QueueName.X).put(...)` / `enqueue` / `enqueue_to`. Never `rq.Queue` directly, never `BackgroundTasks`, never a thread.
 - The same work asked twice (double click, retry, sweep) runs once: `put_once(key, ...)` for sweeps, a check on the existing row for jobs.
 - Arguments are small and JSON-safe: ids and plain values, `str(path)` not `Path`, never a model instance, an open file or a secret. The job loads what it needs by id.
 

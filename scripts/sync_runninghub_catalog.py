@@ -33,11 +33,11 @@ import re
 import sys
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -76,8 +76,7 @@ _EXAMPLE_TEXT = frozenset({"prompt", "negativeprompt"})
 _AUTO = "auto"
 
 
-@dataclass(frozen=True)
-class Page:
+class Page(BaseModel, frozen=True):
     kind: str
     family: str
     title: str
@@ -93,7 +92,14 @@ def _pages(skipped: list[str]) -> list[Page]:
             continue
         groups = [g.strip() for g in m["groups"].split(">")]
         family = groups[1] if len(groups) > 1 else ""
-        pages.append(Page(kind, family, " ".join(m["title"].split()), m["url"]))
+        pages.append(
+            Page(
+                kind=kind,
+                family=family,
+                title=" ".join(m["title"].split()),
+                url=m["url"],
+            )
+        )
     return pages
 
 

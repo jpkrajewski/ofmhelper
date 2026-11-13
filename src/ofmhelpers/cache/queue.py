@@ -1,6 +1,6 @@
 """
 The job queues: first in, first out, on RQ. A route does
-`JobQueue(QueueName.MEDIA).put(run_job, job_id, fn, kwargs)` (`enqueue(...)` for
+`JobQueue(name=QueueName.MEDIA).put(run_job, job_id, fn, kwargs)` (`enqueue(...)` for
 the default queue) and returns at once; a worker process takes the job at the
 front of the line and writes its status to Postgres (db/stores/jobs.py), which
 the API reads back.
@@ -20,7 +20,6 @@ the durable half of what this app keeps in Redis, the caches are the throwaway
 half.
 """
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 lazy from collections.abc import Callable
@@ -101,8 +100,7 @@ class Line(BaseModel, frozen=True):
         return self.running + places[-1] if places else None
 
 
-@dataclass(frozen=True)
-class JobQueue:
+class JobQueue(BaseModel, frozen=True):
     """One first-in first-out line of background work: `put` joins the back,
     the queue's worker processes take from the front."""
 
@@ -303,7 +301,9 @@ def queue_loads() -> list[QueueLoad]:
 
 def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):
     """`put` on the default queue."""
-    return JobQueue(QueueName.DEFAULT).put(fn, *args, job_timeout=job_timeout, **kwargs)
+    return JobQueue(name=QueueName.DEFAULT).put(
+        fn, *args, job_timeout=job_timeout, **kwargs
+    )
 
 
 def enqueue_to(
@@ -315,6 +315,6 @@ def enqueue_to(
     **kwargs,
 ):
     """`put` on `queue`."""
-    return JobQueue(queue).put(
+    return JobQueue(name=queue).put(
         fn, *args, job_timeout=job_timeout, at_front=at_front, **kwargs
     )
