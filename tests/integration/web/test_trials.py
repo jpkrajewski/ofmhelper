@@ -1114,7 +1114,7 @@ def test_generate_waits_its_turn_and_the_pages_say_so(drive, made, real_queue):
     login = _login(drive, "a.mp4")
     client = _client()
     real_queue()
-    JobQueue(QueueName.MEDIA).put(worker_tasks.note_down, "before")
+    JobQueue(name=QueueName.MEDIA).put(worker_tasks.note_down, "before")
 
     client.post(f"/trials/{login}/generate")
 

@@ -31,7 +31,6 @@ PAGES = [
     "/phones",
     "/drive",
     "/viral",
-    "/pictures",
     "/uniqify",
     "/trials",
     "/self-links",

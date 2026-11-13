@@ -11,7 +11,6 @@ the log."""
 
 import random
 import zlib
-from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -186,8 +185,7 @@ class _Trials(BaseModel, frozen=True, arbitrary_types_allowed=True):
     files: list[DriveFile]
 
 
-@dataclass(frozen=True)
-class Folder:
+class Folder(BaseModel, frozen=True):
     """One login's folder as its owner works on it: every step of the jobs
     below, on that folder (`user_id`'s, of `login_id`), through the owner's
     Drive (`refresh_token`; "" = no Drive, what is on disk only)."""
@@ -477,7 +475,9 @@ class Folder:
 
 def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> Made:
     """Generate trials (`Folder.make_trials`)."""
-    return Folder(user_id, login_id, refresh_token).make_trials()
+    return Folder(
+        user_id=user_id, login_id=login_id, refresh_token=refresh_token
+    ).make_trials()
 
 
 def generate_reels(
@@ -488,14 +488,18 @@ def generate_reels(
     refresh_token: str = "",
 ) -> Made:
     """Make these reels' copies (`Folder.generate_reels`)."""
-    return Folder(user_id, login_id, refresh_token).generate_reels(keys)
+    return Folder(
+        user_id=user_id, login_id=login_id, refresh_token=refresh_token
+    ).generate_reels(keys)
 
 
 def write_captions(
     *, user_id: int, login_id: int, key: str, refresh_token: str = ""
 ) -> Captioned:
     """Captions for one reel (`Folder.write_captions`)."""
-    return Folder(user_id, login_id, refresh_token).write_captions(key)
+    return Folder(
+        user_id=user_id, login_id=login_id, refresh_token=refresh_token
+    ).write_captions(key)
 
 
 def upload_trials(
@@ -507,6 +511,6 @@ def upload_trials(
     keys: list[str],
 ) -> Uploaded:
     """Replace TRIALS with these reels (`Folder.upload_trials`)."""
-    return Folder(user_id, login_id, refresh_token).upload_trials(
-        account_folder_id, keys
-    )
+    return Folder(
+        user_id=user_id, login_id=login_id, refresh_token=refresh_token
+    ).upload_trials(account_folder_id, keys)

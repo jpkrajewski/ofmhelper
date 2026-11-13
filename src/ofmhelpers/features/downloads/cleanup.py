@@ -223,7 +223,9 @@ def _keeps_asset(seen: _Judged, now: datetime) -> bool:
 def _thumbnail(seen: _Judged) -> None:
     """What the card shows once the file is gone, made now if missing.
     Raises one of PREVIEW_ERRORS when it cannot be made."""
-    shown = previews.ResultPreview(seen.path, seen.file.job_id, seen.file.position)
+    shown = previews.ResultPreview(
+        source=seen.path, job_id=seen.file.job_id, index=seen.file.position
+    )
     kind = classify_kind(seen.path.name)
     if kind == "video":
         shown.poster()

@@ -80,4 +80,5 @@ A changed or lost `OFM_VAULT_KEY` costs the secrets, never the app (2026-11-03; 
 
 ## Phones <-> /accounts
 - Adding or renaming a phone login of a service with `tracked_platform` (services.json; Instagram today) tracks it on /accounts and queues its scan (`account_tracker.track_login`, called by the phones routes). Revision f4a5b6c7d8e9 did it once for logins saved before. Removed-by-hand accounts come back only when such a login is added again.
+- The other way (2026-11-13): an account added on /accounts has no phone and so no Drive folder; its row's **Assign phone** -> `/phones?assign=<id>` -> a click on a phone saves it as that phone's login (`POST /phones/{id}/accounts`) and starts the owner's Drive sync. Detail: `routers/inventory/CLAUDE.md`.
 - Logins link to their account by `(tracked_platform, platform.handle(username))` (`stores/devices._linked`), carrying `tracked_account_id` + `tracked_followers`; /phones shows "12.3k followers" per login and sorts by `Device.followers` (the most-followed account on it) by default (`PhoneSort.FOLLOWERS`; untracked phones last).

@@ -5,10 +5,9 @@ card and the phone dialog's preview use it, so no photo is stored or
 fetched anywhere. A new layout = one drawing function in `_LAYOUTS`."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from functools import lru_cache
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.schemas.phone_catalog.models import (
     CameraLayout,
@@ -95,13 +94,12 @@ class _Corner(BaseModel, frozen=True):
     y: float
 
 
-@dataclass(frozen=True)
-class _Camera:
+class _Camera(BaseModel, frozen=True, arbitrary_types_allowed=True):
     """One phone's camera, drawn with `pen` inside the body whose top-left
     corner is (x, y) and width `w`; coordinates are millimetres. Each layout
     is a method."""
 
-    pen: _Pen
+    pen: SkipValidation[_Pen]
     x: float
     y: float
     w: float
@@ -238,7 +236,7 @@ def render(model: PhoneModel | None, finish: Finish | None) -> str:
         f'fill="url(#g)" stroke="{pen.edge}" stroke-width="1.1"/>'
     )
     if model is not None:
-        _LAYOUTS[model.camera](_Camera(pen, x, y, w, model.lidar))
+        _LAYOUTS[model.camera](_Camera(pen=pen, x=x, y=y, w=w, lidar=model.lidar))
     label = f"{model.label} back" if model else "Phone back"
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {cw:g} {ch:g}" '

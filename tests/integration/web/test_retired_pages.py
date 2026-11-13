@@ -1,5 +1,5 @@
 """Retired pages (`schemas/access.py` `RETIRED`; owner 2026-11-13: /reels,
-/clone-links and /repurpose, nobody uses them): switched off whole, code and data kept.
+/clone-links, /repurpose and /pictures, nobody uses them): switched off whole, code and data kept.
 Nobody opens one, no menu lists it, and nothing of it runs in the
 background."""
 
@@ -20,11 +20,14 @@ from ofmhelpers.schemas.nav import NAV, nav
 from ofmhelpers.schemas.users import Role
 from ofmhelpers.web.main import app
 
-PAGES = ["/reels", "/clone-links", "/repurpose"]
+PAGES = ["/reels", "/clone-links", "/repurpose", "/pictures"]
 
 
-def test_reels_clone_links_and_repurpose_are_the_retired_ones():
-    assert frozenset({Area.REELS, Area.CLONE_LINKS, Area.REPURPOSE}) == RETIRED
+def test_reels_clone_links_repurpose_and_pictures_are_the_retired_ones():
+    assert (
+        frozenset({Area.REELS, Area.CLONE_LINKS, Area.REPURPOSE, Area.PICTURES})
+        == RETIRED
+    )
 
 
 @pytest.mark.parametrize("page", PAGES)
@@ -46,6 +49,7 @@ def test_a_retired_pages_other_routes_are_off_too():
 
     assert admin.post("/reels/watch", data={"profiles": "someone"}).status_code == 403
     assert admin.get("/clone-links/gallery").status_code == 403
+    assert admin.post("/pictures/run", data={"preset": "1"}).status_code == 403
 
 
 @pytest.mark.parametrize("role", list(Role))

@@ -64,6 +64,13 @@ def test_in_its_slow_hours_apiyi_carries_a_warning_on_the_select(
     assert 'id="provider-notice" hidden' in html
 
 
+# /pictures is retired (schemas/access.py `RETIRED`, owner 2026-11-13): parked.
+PICTURES_PARKED = pytest.mark.skip(
+    reason="/pictures is retired: schemas/access.py RETIRED"
+)
+
+
+@PICTURES_PARKED
 def test_pictures_never_warns_its_images_go_inside_the_request(client, slow_hours):
     assert SLOW not in client.get("/pictures").text
 
@@ -128,6 +135,7 @@ def test_a_last_provider_the_page_does_not_offer_is_passed_over(client, actor):
     assert _selected(client.get("/clone").text) == "runninghub"
 
 
+@PICTURES_PARKED
 def test_pictures_starts_on_the_last_pictures_run(client, actor):
     _ran("pictures", "apiyi", actor)
 

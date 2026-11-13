@@ -319,14 +319,14 @@ def _unreadable(path: Path, actor: str) -> bool:
 def _drop_older(path: Path, actor: str) -> None:
     """The person's prepares still waiting for another video leave the line:
     they opened this one, and cuts wait behind every prepare (one worker)."""
-    queue = JobQueue(QueueName.EDIT)
+    queue = JobQueue(name=QueueName.EDIT)
     for job in _prepares(actor, "running"):
         if job.params.get("video") != str(path) and queue.drop(job.id):
             drop_job(job.id, _REPLACED)
 
 
 def _in_line(job_id: str) -> Prepared:
-    ahead = JobQueue(QueueName.EDIT).line().ahead(job_id)
+    ahead = JobQueue(name=QueueName.EDIT).line().ahead(job_id)
     return Prepared(status="running", ahead=ahead)
 
 
@@ -656,5 +656,5 @@ def cut_state(job_id: str, actor: str) -> CutState:
     if job.status == "failed":
         return CutState(status="failed", error=job.error or "Could not cut: try again")
     return CutState(
-        status="running", ahead=JobQueue(QueueName.EDIT).line().ahead(job_id)
+        status="running", ahead=JobQueue(name=QueueName.EDIT).line().ahead(job_id)
     )

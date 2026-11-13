@@ -239,6 +239,8 @@ collect_ignore_glob = [
     # /repurpose the page only: its engine (media/repurpose) is /trials' too,
     # so tests/unit/repurpose still runs.
     "*/test_repurpose_run.py",
+    # /pictures (retired the same day).
+    "*/test_pictures*.py",
 ]
 
 

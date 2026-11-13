@@ -68,13 +68,7 @@ class Sweep(BaseModel):
             self.run()
         else:
             key = "sweep-" + "-".join(self.name.split())
-            JobQueue(self.queue).put_once(key, self.run)
-
-
-def _drive_enabled() -> bool:
-    """Drive is read through each owner's Google sign-in: nothing to sweep
-    until Google sign-in is configured (or every outside service is faked)."""
-    return settings.signin.google_configured or settings.infra.fake_externals
+            JobQueue(name=self.queue).put_once(key, self.run)
 
 
 def sweeps() -> list[Sweep]:
@@ -114,7 +108,7 @@ def sweeps() -> list[Sweep]:
             name="drive",
             run=drive_folders.sync,
             interval_s=lambda: settings.gdrive.check_interval_s,
-            enabled=_drive_enabled,
+            enabled=drive_folders.enabled,
         ),
         # Each model's webhook destination, on a server with a public address.
         Sweep(

@@ -8,7 +8,7 @@ description: RQ (Redis Queue) guide for this app: how jobs are started, wrapped,
 The MUST rules load by themselves from `.claude/rules/jobs.md` when a job file is touched. This skill is the depth behind them.
 
 ## How the app wraps RQ (read the code, these are the entry points)
-- **Queues**: `cache/queue.py`. `JobQueue(QueueName.X).put(fn, *args, job_timeout=, retry=, failure_ttl=, at_front=)`; `enqueue` = default queue; `enqueue_to(queue, fn, ...)`; `put_once(key, fn)` = at most one waiting or running per key (sweeps); `drop`. Nothing else may touch `rq.Queue`.
+- **Queues**: `cache/queue.py`. `JobQueue(name=QueueName.X).put(fn, *args, job_timeout=, retry=, failure_ttl=, at_front=)`; `enqueue` = default queue; `enqueue_to(queue, fn, ...)`; `put_once(key, fn)` = at most one waiting or running per key (sweeps); `drop`. Nothing else may touch `rq.Queue`.
 - **A job with a row**: `features/jobs/runner.py` `start_job(task, params, run, kwargs, actor=, queue=, job_timeout=, at_front=)` creates the row, then queues `run_job(job_id, fn, kwargs)`.
 - **The wrapper** `run_job`: opens the Logfire span `job {task} {job_id}`, calls `fn(**kwargs)`, stores `done` + result (a model is dumped to JSON) or `failed` + the error text, keeps the provider cost in `meta`, and decides whether the provider request stays resumable (`resumable(exc)`). It catches the exception on purpose: to RQ the job succeeded, the truth is in the row and the span. So RQ's failed-job registry does not list app failures; the jobs table and Logfire do.
 - **The row** (`db/models.py` `JobRow`): `task`, `actor`, `status`, `params`, `result`, `preview`, `meta`, `error`, `created_at`, `finished_at`. Keys and secrets go in `kwargs`, never `params` (the job page shows `params`).

@@ -52,7 +52,7 @@ def emit(event: Event) -> None:
         if not isinstance(event, Event):
             msg = f"emit takes an Event, not {type(event).__name__}"
             raise TypeError(msg)  # noqa: TRY301 -- logged below like any failure
-        JobQueue(QueueName.EVENTS).put(
+        JobQueue(name=QueueName.EVENTS).put(
             dispatch, _absolute(event).model_dump(mode="json")
         )
     except Exception:

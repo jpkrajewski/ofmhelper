@@ -138,6 +138,7 @@ def test_only_the_phone_routes_that_use_a_secret_answer_the_vault_reason():
         "add",
         "edit",
         "add_login",
+        "assign_account",
         "edit_login",
     }
 

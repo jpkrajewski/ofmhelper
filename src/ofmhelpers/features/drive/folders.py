@@ -107,6 +107,13 @@ _ROOT_NAME = "ALL ACCOUNTS"
 _DEV_PREFIX = "DEV - "
 
 
+def enabled() -> bool:
+    """Drive is read through each owner's Google sign-in: nothing to make or
+    sweep until Google sign-in is configured (or every outside service is
+    faked)."""
+    return settings.signin.google_configured or settings.infra.fake_externals
+
+
 def root_name() -> str:
     """ "ALL ACCOUNTS" in production; "DEV - ALL ACCOUNTS" anywhere else, so
     dev and tests never adopt or write into the live folders, even in the
@@ -934,7 +941,7 @@ def board(
         connected=bool(me and me.drive_connected),
         posted_folder_name=settings.gdrive.posted_folder_name,
     )
-    if not settings.signin.google_configured and not settings.infra.fake_externals:
+    if not enabled():
         result.problem = (
             "Google Drive works through each person's Google sign-in, which is"
             " not set up: OFM_GOOGLE_CLIENT_ID and OFM_GOOGLE_CLIENT_SECRET are"

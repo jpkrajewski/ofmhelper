@@ -4,11 +4,11 @@ drawn with Pillow at the copy's exact output size. Laid over the video at a
 few percent opacity (`video.VideoTransformer._overlay`)."""
 
 import random
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 from PIL import Image, ImageDraw
+from pydantic import BaseModel, SkipValidation
 
 
 class Pattern(StrEnum):
@@ -34,11 +34,10 @@ _PARTICLE_COLOURS = ("#4DA3FF", "#FE1648", "#FFB020", "#42A6FE", "#F13BDE", "#88
 _PSYCHE_COLOURS = ("#FE1648", "#F13BDE", "#880DFB", "#42A6FE", "#FFB020")
 
 
-@dataclass(frozen=True)
-class _Canvas:
+class _Canvas(BaseModel, frozen=True, arbitrary_types_allowed=True):
     """One pattern image being drawn: Pillow's pen and the frame's size."""
 
-    pen: ImageDraw.ImageDraw
+    pen: SkipValidation[ImageDraw.ImageDraw]
     w: int
     h: int
 
@@ -86,7 +85,7 @@ def draw(pattern: Pattern, size: tuple[int, int], rng: random.Random) -> Image.I
     w, h = size
     background = _PARTICLE_BACKGROUND if pattern is Pattern.PARTICLES else "black"
     image = Image.new("RGB", size, background)
-    canvas = _Canvas(ImageDraw.Draw(image), w, h)
+    canvas = _Canvas(pen=ImageDraw.Draw(image), w=w, h=h)
     if pattern is Pattern.STRIPES:
         canvas.stripes()
     elif pattern is Pattern.GRID:

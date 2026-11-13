@@ -236,6 +236,10 @@ ignore-variadic-names = true
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Owner 2026-11-13: one way to hold data. A class of fields is a Pydantic model.
+"dataclasses".msg = "Use a Pydantic model: class X(BaseModel, frozen=True)."
+
 [tool.ruff.format]
 docstring-code-format = true
 

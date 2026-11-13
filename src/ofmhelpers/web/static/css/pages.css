@@ -1323,7 +1323,7 @@ a.ph-login-user:hover { text-decoration: underline; }
 /* "Connect Google Drive" notices (/drive, /clone): the text, then the action. */
 .drive-connect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
 /* /drive upload mode: the video on top, account cards are the targets. */
-.card.dr-pick {
+.card.dr-pick, .card.ph-pick {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--s-5);
@@ -1345,8 +1345,9 @@ a.ph-login-user:hover { text-decoration: underline; }
 }
 .dr-pick-text { display: grid; gap: var(--s-4); justify-items: start; min-width: 0; }
 .dr-pick-text h2 { margin: 0; font-size: var(--step-2); line-height: 1.2; }
-.dr-card.dr-pickable { cursor: pointer; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.dr-card.dr-pickable:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+/* /phones pick mode (?assign=): the same, phone cards are the targets. */
+.dr-card.dr-pickable, .ph-card.ph-pickable { cursor: pointer; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.dr-card.dr-pickable:hover, .ph-card.ph-pickable:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .dr-card.dr-picked { opacity: 0.55; cursor: default; }
 .dr-card.dr-picked:hover { border-color: var(--border); box-shadow: none; }
 .dr-card.dr-picked .dr-account::after { content: " · Already there"; color: var(--text-faint); }

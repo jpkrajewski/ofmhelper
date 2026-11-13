@@ -6,23 +6,45 @@ a tracked service (Instagram) also shows on its phone owner's /accounts."""
 import datetime
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.db.encrypted import VaultError
 from ofmhelpers.db.stores import devices as store
+from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.db.stores.tracked_accounts import get_account
 from ofmhelpers.features.accounts.removal import logins_leaving
 from ofmhelpers.features.accounts.tracker import track_login
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.phones import workbook
 from ofmhelpers.features.phones.catalog.render import render as draw
 from ofmhelpers.features.refusals import ConflictError, NotFoundError
-from ofmhelpers.schemas import Device, PhoneQuery, PhoneSort
-from ofmhelpers.schemas.devices import ArchivedLogin, LoginSecrets
-from ofmhelpers.schemas.phone_catalog import catalog, find_model, services
+from ofmhelpers.log import get_logger
+from ofmhelpers.schemas import (
+    Device,
+    LoginFields,
+    PhoneQuery,
+    PhoneSort,
+    TrackedAccount,
+)
+from ofmhelpers.schemas.devices import ArchivedLogin, AssignAccount, LoginSecrets
+from ofmhelpers.schemas.phone_catalog import (
+    catalog,
+    find_model,
+    services,
+    tracked_services,
+)
 from ofmhelpers.schemas.phone_catalog.models import Catalog, LoginService
 from ofmhelpers.utils.registry import Registry
-lazy from ofmhelpers.schemas import DeviceFields, LoginFields
+lazy from ofmhelpers.schemas import DeviceFields
+lazy from ofmhelpers.schemas.devices import DeviceLogin
+
+logger = get_logger(__name__)
+
+# The job row of the Drive sync a login put on a phone starts.
+DRIVE_SYNC_TASK = "drive_sync"
 
 
 class SecretsUnreadableError(RuntimeError):
@@ -41,9 +63,19 @@ def _vault() -> Iterator[None]:
         raise SecretsUnreadableError(str(exc)) from exc
 
 
+class Assigning(BaseModel):
+    """/accounts "Assign phone": the tracked account waiting for a phone and
+    the phone-login service it is saved as."""
+
+    account: TrackedAccount
+    service: str
+
+
 class PageView(BaseModel):
     """/phones: each field is a name `phones.html` reads."""
 
+    # Pick mode (`?assign=`): a click on a phone connects this account.
+    assigning: Assigning | None
     devices: list[Device]
     retired: list[Device]
     archived: list[ArchivedLogin]
@@ -72,10 +104,21 @@ class LoginAdded(BaseModel):
     linked: bool
 
 
+def _assigning(account_id: int | None, scope: int) -> Assigning | None:
+    """The person's own tracked account `account_id`, when its platform is
+    one a phone login tracks (Instagram); None for anything else."""
+    account = get_account(account_id, scope) if account_id is not None else None
+    service = tracked_services().get(account.platform) if account else None
+    if account is None or service is None:
+        return None
+    return Assigning(account=account, service=service.key)
+
+
 def page_view(query: PhoneQuery, scope: int) -> PageView:
     devices = store.list_devices(scope)
     active = [d for d in devices if not d.retired]
     return PageView(
+        assigning=_assigning(query.assign, scope),
         devices=query.ordered([d for d in active if query.matches(d)]),
         retired=query.ordered([d for d in devices if d.retired]),
         archived=store.archived_logins(scope),
@@ -129,8 +172,26 @@ def _track(login_id: int, body: LoginFields, *, revive: bool) -> None:
         track_login(body.service, body.username, user_id=owner, revive=revive)
 
 
-@dataclass(frozen=True)
-class Phone:
+def _make_drive_folder(login_id: int, service: str) -> None:
+    """A tracked service's login just put on a phone: its owner's Drive
+    folders are made now (on the worker), not at the next sweep. Never
+    raises: the login is saved already; a failure is logged and the sweep
+    makes the folder."""
+    found = services().get(service)
+    if found is None or not found.tracked_platform or not drive_folders.enabled():
+        return
+    owner = store.owner_of_login(login_id)
+    if owner is None:
+        return
+    job_id = create_job(DRIVE_SYNC_TASK, {"owner": owner}, actor=str(owner))
+    try:
+        enqueue(run_job, job_id, drive_folders.sync, {"owner": owner})
+    except Exception:
+        logger.exception("queueing the Drive sync for login %s failed", login_id)
+        fail_job(job_id, "Could not queue the Drive sync")
+
+
+class Phone(BaseModel, frozen=True):
     """One phone of the person asking (`scope`); anything asked of a phone
     that is not theirs, or gone, is `NotFoundError`."""
 
@@ -159,7 +220,44 @@ class Phone:
             msg = "Phone not found"
             raise NotFoundError(msg)
         _track(added.id, body, revive=True)
+        _make_drive_folder(added.id, body.service)
         return LoginAdded(id=added.id, linked=added.existed)
+
+    def assign(self, body: AssignAccount) -> LoginAdded:
+        """/accounts "Assign phone": the person's tracked account becomes a
+        login on this phone (no password yet), so it gets its Drive folder.
+        The phone's other accounts of that service leave it when `replace`
+        (as Remove login does: off their last phone they leave /accounts and
+        Drive, password deleted); without it they refuse. The new account
+        goes on first: a failure half way leaves the phone with both, never
+        with none, and the same request sent again finishes it (an account
+        already on the phone is no error)."""
+        found = _assigning(body.account_id, self.scope)
+        phone = store.get_device(self.device_id, self.scope)
+        if found is None or phone is None:
+            msg = "Account or phone not found"
+            raise NotFoundError(msg)
+        if phone.retired:
+            msg = f"{phone.label} is retired: restore it first"
+            raise ConflictError(msg)
+        new = LoginFields(service=found.service, username=found.account.handle)
+        on_phone = phone.accounts_of(found.service)
+        already = on_phone.get(new.username)
+        others = [name for name in on_phone.names() if name != new.username]
+        if others and not body.replace:
+            names = ", ".join(f"@{name}" for name in others)
+            msg = f"{phone.label} already has {names}"
+            raise ConflictError(msg)
+        added = self._keep(already) if already else self.add_login(new)
+        for name in others:
+            self.remove_login(on_phone[name].id)
+        return added
+
+    def _keep(self, login: DeviceLogin) -> LoginAdded:
+        """The account is on this phone already: nothing saved again, its
+        Drive folder still made (the point of Assign phone)."""
+        _make_drive_folder(login.id, login.service)
+        return LoginAdded(id=login.id, linked=True)
 
     def remove_login(self, login_id: int) -> None:
         """Off its last phone, the account leaves /accounts and Drive too."""
@@ -167,8 +265,7 @@ class Phone:
         _require(store.remove_login(self.device_id, login_id, self.scope), "Login")
 
 
-@dataclass(frozen=True)
-class SavedLogin:
+class SavedLogin(BaseModel, frozen=True):
     """One saved login of the person asking (`scope`)."""
 
     scope: int

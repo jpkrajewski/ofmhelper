@@ -27,6 +27,7 @@ from ofmhelpers.schemas import (
 )
 from ofmhelpers.schemas.accounts import FollowerChart, TopPosts
 from ofmhelpers.schemas.devices import PhonesByAccount
+from ofmhelpers.schemas.phone_catalog import tracked_services
 
 
 class ListView(BaseModel):
@@ -36,6 +37,9 @@ class ListView(BaseModel):
 
     page: AccountPage
     phones: PhonesByAccount
+    # Platforms whose accounts are kept on a phone: a row of one with no
+    # phone offers "Assign phone".
+    phone_platforms: list[str]
     links: dict[int, list[ShortLink]]
     # Link numbers are per UTC day: "today", not "24h", for period 1.
     link_period: LinkPeriod
@@ -91,6 +95,7 @@ def list_view(query: AccountQuery, scope: int) -> ListView:
     return ListView(
         page=page,
         phones=phones_by_account(page.rows, scope),
+        phone_platforms=tracked_services().names(),
         links={x.account_id: x.links for x in links_by_account(scope)},
         link_period=LinkPeriod(days=period.days),
         summary=summary,

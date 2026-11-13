@@ -409,6 +409,56 @@
         });
     });
 
+    // Pick mode (/phones?assign=<account>, from /accounts "Assign phone"):
+    // every active phone is a target; a click asks to confirm (and to
+    // replace the account the phone already has), then the account is on it.
+    const pick = $("ph-pick");
+    if (pick) {
+        const handle = pick.dataset.handle;
+        const confirmBox = $("ph-pick-confirm");
+        const question = $("ph-pick-question");
+        const pickSubmit = $("ph-pick-submit");
+        const pickError = $("ph-pick-error");
+        let target = null;
+        let replace = false;
+
+        document.querySelectorAll(".ph-card[data-pickable]").forEach((card) => {
+            card.classList.add("ph-pickable");
+            card.addEventListener("click", (event) => {
+                if (event.target.closest("a, button, input, summary")) return;
+                const name = JSON.parse(card.dataset.phone).label;
+                const others = (card.dataset.has || "").split(",").filter((h) => h && h !== handle);
+                const old = others.map((h) => `@${h}`).join(", ");
+                target = card;
+                replace = others.length > 0;
+                question.textContent = replace
+                    ? `${name} already has ${old}. Replace it with @${handle}? If no other phone has ${old}, it leaves Accounts, its Drive folder goes to the trash and its saved password is deleted.`
+                    : `Connect @${handle} to ${name}?`;
+                pickSubmit.textContent = replace ? "Replace" : "Connect";
+                pickError.hidden = true;
+                pickSubmit.disabled = false;
+                confirmBox.showModal();
+            });
+        });
+        $("ph-pick-back").addEventListener("click", () => confirmBox.close());
+        pickSubmit.addEventListener("click", async (event) => {
+            event.preventDefault();
+            if (!target) return;
+            pickSubmit.disabled = true;
+            try {
+                await request(`/phones/${target.dataset.id}/accounts`, {
+                    account_id: Number(pick.dataset.account),
+                    replace,
+                });
+                window.location.href = `/phones#phone-${target.dataset.id}`;
+            } catch (error) {
+                pickError.textContent = error.message;
+                pickError.hidden = false;
+                pickSubmit.disabled = false;
+            }
+        });
+    }
+
     document.querySelectorAll(".ph-login-remove").forEach((button) => {
         button.addEventListener("click", () => {
             const row = rowOf(button);
