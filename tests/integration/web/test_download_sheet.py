@@ -329,7 +329,7 @@ def test_with_nothing_hidden_the_row_stays_and_only_show_hidden_goes():
 
     page = client.get("/download-assets").text
 
-    assert '<div class="ph-toolbar" data-keep>' in page
+    assert '<div class="ph-toolbar" data-keep data-zone-times>' in page
     assert 'data-hidden-count="0" aria-pressed="false" hidden>' in page
     assert 'sheet-download" data-cooldown-s="0">' in page
 

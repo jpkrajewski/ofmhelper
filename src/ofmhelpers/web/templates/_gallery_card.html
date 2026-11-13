@@ -8,7 +8,8 @@
    (`job.made_by`: a VA's, read by the owner) names its maker at the end of
    the meta line and has no Hide: hiding is the maker's.
    A page's card is `{% extends "_gallery_card.html" %}` overriding only
-   its blocks (`actions`: the whole row; /repurpose keeps only Recreate);
+   its blocks (`lead`: above the media, /clone's picture of the video being
+   cloned; `actions`: the whole row; /repurpose keeps only Recreate);
    it expects `job` (a schemas.TaskCard or a subclass).
    generation.js's buildResultCard builds the same card for a run that
    finishes while the page is open -- keep the two in step. #}
@@ -18,6 +19,7 @@
 <div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"{% if job.assets %} data-file-index="{{ job.assets[0].index }}"{% endif %}
      data-params='{{ job.params_json }}'{% if job.hidden %} data-hidden{% endif %}
      {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}" data-poll-kind="{{ job.result_kind }}"{% endif %}>
+    {% block lead %}{% endblock %}
     {% if job.status == "done" and job.assets %}
         {{ am.asset_media(job.assets[0]) }}
         {% if job.assets[0].kind == "audio" %}<p class="filename">{{ job.assets[0].name }}</p>{% endif %}

@@ -1,7 +1,14 @@
-{# One /clone gallery card: the shared card, plus where its video went in
-   Drive and "Upload to Drive" in its ⋯ menu (static/js/clone.js opens the
-   picker); × on an uploaded one takes it back out (Drive trash). #}
+{# One /clone gallery card: the shared card, plus -- while it runs and once
+   it has failed -- a big first frame of the video it clones (no file name:
+   owner 2026-11-12; ten runs side by side are told apart by the picture;
+   static/js/clone.js `showSource` draws the same on a card that fails while
+   the page is open), where its video went in Drive and "Upload to Drive" in
+   its ⋯ menu (clone.js opens the picker); × on an uploaded one takes it
+   back out (Drive trash). #}
 {% extends "_gallery_card.html" %}
+{% block lead %}{% if job.source and not (job.status == "done" and job.assets) %}
+    <img class="result-video" data-clone-source src="{{ job.source.thumb_url }}" alt="{{ job.source.name }}" loading="lazy" decoding="async" onerror="this.hidden=true">
+{% endif %}{% endblock %}
 {% block below %}
     <ul class="drive-states">
         {%- for u in job.drive_uploads if u.status != "removed" %}

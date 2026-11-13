@@ -87,11 +87,9 @@
         // and not fetched again): what was kept of it and the Download that
         // fetches it, as _download_gallery_card.html draws it.
         if (item.removed && document.getElementById("card-actions-removed")) {
-            div.append(
-                buildRemovedMedia(item),
-                buildSourceLabel(label),
-                cloneActions("card-actions-removed")
-            );
+            div.append(buildRemovedMedia(item));
+            if (item.removed_reason) div.append(buildRemovedReason(item));
+            div.append(buildSourceLabel(label), cloneActions("card-actions-removed"));
             return div;
         }
 
@@ -161,6 +159,17 @@
         img.alt = item.name;
         img.loading = "lazy";
         return img;
+    }
+
+    // Why a removed download did not come back, as
+    // _download_gallery_card.html draws it under the poster.
+    function buildRemovedReason(item) {
+        const note = document.createElement("div");
+        note.className = "result-file result-failed fail-note";
+        note.dataset.removedReason = "";
+        note.title = item.removed_error || "";
+        note.textContent = item.removed_reason;
+        return note;
     }
 
     function buildPendingCard(label) {
@@ -304,8 +313,14 @@
                     return;
                 }
                 if (job.status === "failed") {
-                    card.replaceWith(
-                        buildFailedCard(label, job.error || "Generation failed.", job, job.error_line)
+                    const failed = buildFailedCard(
+                        label, job.error || "Generation failed.", job, job.error_line
+                    );
+                    card.replaceWith(failed);
+                    // For pages that add their own bits to a failed card
+                    // (clone.js: the video it was cloning).
+                    failed.dispatchEvent(
+                        new CustomEvent("gallery:card-failed", { bubbles: true })
                     );
                     return;
                 }

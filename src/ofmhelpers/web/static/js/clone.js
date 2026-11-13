@@ -110,7 +110,9 @@
         const showEmpty = () => {
             empty.hidden =
                 gallery.querySelector(".result-item") !== null ||
-                document.querySelector(".ph-toolbar:not([hidden]) .hidden-toggle") !== null;
+                document.querySelector(
+                    ".ph-toolbar:not([hidden]) .hidden-toggle:not([hidden])"
+                ) !== null;
         };
 
         form.addEventListener("submit", async (e) => {
@@ -296,6 +298,52 @@
 
     // A card that finished while the page was open gets what a reloaded
     // one has: its Drive states and "Upload to Drive" in the menu.
+    // --- the video a card clones -------------------------------------------------
+
+    const SOURCE_THUMB_PX = 400;
+
+    // The first reference video of the card's run: its first frame, and its
+    // name as it was picked (the store's "<sha256>__" prefix off) for the
+    // alt text, as features/clone/service.py `source` gives a server-drawn
+    // card. Null for a file that is not the store's (its names carry their
+    // hash).
+    function sourceOf(card) {
+        let params = {};
+        try {
+            params = JSON.parse(card.dataset.params || "{}");
+        } catch {
+            return null;
+        }
+        const path = (params.reference_videos || [])[0];
+        if (!path) return null;
+        const file = String(path).split("/").pop();
+        const cut = file.indexOf("__");
+        if (cut <= 0 || file.length <= cut + 2) return null;
+        return {
+            name: file.slice(cut + 2),
+            thumb: `/refs/thumb?path=${encodeURIComponent(path)}&size=${SOURCE_THUMB_PX}`,
+        };
+    }
+
+    // A card that failed while the page is open (generation.js drew it
+    // again) gets the picture _clone_card.html draws on top of a failed card.
+    function showSource(card) {
+        if (!card.matches(".result-item") || card.querySelector("[data-clone-source]")) return;
+        const source = sourceOf(card);
+        if (!source) return;
+        const img = document.createElement("img");
+        img.className = "result-video";
+        img.dataset.cloneSource = "";
+        img.alt = source.name;
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.addEventListener("error", () => {
+            img.hidden = true;
+        });
+        img.src = source.thumb;
+        card.prepend(img);
+    }
+
     function decorateFinished(card) {
         if (!card.matches(".result-item") || card.querySelector(".drive-states")) return;
         const states = document.createElement("ul");
@@ -347,6 +395,7 @@
         const form = document.getElementById("clone-form");
         const gallery = document.getElementById("clone-gallery");
         gallery.addEventListener("gallery:card-ready", (e) => decorateFinished(e.target));
+        gallery.addEventListener("gallery:card-failed", (e) => showSource(e.target));
         initSubmit(form, gallery);
         initRecreate(form, gallery);
         initPrefill(form);

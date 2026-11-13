@@ -757,9 +757,10 @@ class DriveUploadRow(Base):
 
 class DrivePostedFileRow(Base):
     """A file seen in a login's POSTED folder, from the sweep that first saw
-    it: Drive keeps no time a file was moved, so this is what "posted today"
-    counts -- only the files seen in the login's current account folder
-    (`folder_id`), so a new folder (a dev copy's own root) starts at zero.
+    it: Drive keeps no time a file was moved, so this is what a sweep's
+    "newly posted" counts -- only the files seen in the login's current
+    account folder (`folder_id`), so a new folder (a dev copy's own root)
+    starts at zero.
     Never deleted when the file leaves POSTED (the live count drops, the
     history stays); deleted with the login."""
 

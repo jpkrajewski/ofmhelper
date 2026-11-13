@@ -122,14 +122,6 @@ class StoredFolders(BaseModel):
         return next((f for f in self.folders if f.login_id == login_id), None)
 
 
-class PostedCount(BaseModel):
-    """How many of a login's files were first seen posted since each of the
-    moments asked for, in their order."""
-
-    login_id: int
-    counts: list[int]
-
-
 class SyncReport(BaseModel):
     """One sweep: what it made, found, renamed, recorded, and could not do."""
 
@@ -164,14 +156,26 @@ class AccountScan(BaseModel):
     extra_posted_folders: list[DriveFile] = Field(default_factory=list)
 
 
+class UploadedToday(BaseModel):
+    """The files put into an account's folder today (by Drive's own
+    `createdTime`, wherever they are now: still waiting or moved to POSTED):
+    `clone` = sent by /clone's "Upload to Drive" (`drive_uploads`), `manual`
+    = put there by hand in Drive."""
+
+    clone: int = 0
+    manual: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.clone + self.manual
+
+
 class DriveCard(BaseModel):
     target: DriveTarget
     account_folder_id: str | None = None
     posted_folder_id: str | None = None
     scan: AccountScan = Field(default_factory=AccountScan)
-    # From the sweeps' record of when files first showed up in POSTED.
-    posted_today: int = 0
-    posted_week: int = 0
+    uploaded_today: UploadedToday = Field(default_factory=UploadedToday)
     error: str | None = None
     # Shown from the last read; this folder was never read yet.
     unread: bool = False
@@ -198,7 +202,7 @@ class DriveCard(BaseModel):
 
 
 class DriveBoard(BaseModel):
-    # Today in the Drive timezone: what "posted today" means.
+    # Today in the Drive timezone: what "uploaded today" means.
     day: datetime.date
     cards: list[DriveCard] = Field(default_factory=list)
     # Folders in the root no login owns: hand-made, old, misspelt.

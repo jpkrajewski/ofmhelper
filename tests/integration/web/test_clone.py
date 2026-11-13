@@ -271,6 +271,74 @@ def test_a_running_card_is_the_shared_card_with_no_timer():
     assert "result-actions" not in html
 
 
+def _with_video(job: Job, tmp_path: Path) -> Path:
+    video = tmp_path / ("0" * 64 + "__beach day.mp4")
+    video.write_bytes(b"mp4")
+    job.params["reference_videos"] = [str(video)]
+    return video
+
+
+@pytest.mark.parametrize(
+    ("status", "error", "line"),
+    [
+        ("running", None, "generating…"),
+        ("failed", "Generation failed", "Generation failed"),
+    ],
+)
+def test_a_running_and_a_failed_card_show_the_video_being_cloned(
+    status, error, line, tmp_path
+):
+    """Ten runs side by side, some failing, were told apart by nothing
+    (owner 2026-11-12): a big first frame of the video on top, no file name."""
+    job = _job("s1", status=status, error=error)
+    video = _with_video(job, tmp_path)
+
+    html = render_partial("_clone_card.html", job=clone._card(job, []))
+
+    asked = requests.utils.quote(str(video), safe="")
+    picture = (
+        f'<img class="result-video" data-clone-source'
+        f' src="/refs/thumb?path={asked}&amp;size=400" alt="beach day.mp4"'
+    )
+    assert picture in html
+    # On top: above the "generating…" / failure line.
+    assert html.index("data-clone-source") < html.index(line)
+    # The name is nowhere on the card but the picture's alt text.
+    assert html.count("beach day.mp4") == 1 + html.count("__beach day.mp4")
+
+
+def test_a_finished_card_shows_its_result_not_the_video_it_cloned(tmp_path):
+    out = tmp_path / "result.mp4"
+    out.write_bytes(b"mp4")
+    job = _job(
+        "s5",
+        status="done",
+        result=[ResultFile(name="result.mp4", path=str(out)).model_dump()],
+    )
+    _with_video(job, tmp_path)
+
+    html = render_partial("_clone_card.html", job=clone._card(job, []))
+
+    assert "data-clone-source" not in html
+    assert "<video" in html
+
+
+def test_a_video_gone_from_the_store_asks_for_no_picture(tmp_path):
+    """A frame of a video the sweep removed would answer 404 on every page
+    showing the card, one from outside the store 403."""
+    swept = _job("s3")
+    swept.params["reference_videos"] = [str(tmp_path / ("0" * 64 + "__gone.mp4"))]
+    outside = _job("s4")
+    (tmp_path / "plain.mp4").write_bytes(b"mp4")
+    outside.params["reference_videos"] = [str(tmp_path / "plain.mp4")]
+    none = _job("s2")
+    none.params["reference_videos"] = []
+
+    for job in (swept, outside, none):
+        html = render_partial("_clone_card.html", job=clone._card(job, []))
+        assert "data-clone-source" not in html
+
+
 def test_a_failed_card_offers_recreate_and_only_hide_in_its_menu():
     job = _job("f1", status="failed", error="Generation failed")
     html = render_partial("_clone_card.html", job=clone._card(job, []))

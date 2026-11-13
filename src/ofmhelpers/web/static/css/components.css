@@ -562,6 +562,16 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .result-failed { color: var(--fail); background: var(--fail-wash); font-weight: 500; }
 .fail-note { min-height: 0; }
 .drive-states:empty { display: none; }
+/* ui.date_range: the toolbar's date filter -- a "From" and a "To" button,
+   the day picked on each. The date box itself is never seen: it only holds
+   the value and anchors the browser's calendar under its button. */
+.date-range { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); margin: 0; }
+.date-pick { position: relative; display: inline-flex; }
+.date-pick .btn { min-width: var(--control-w-action); }
+.date-pick input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+/* A /clone card that runs or failed: the video it clones on top, its
+   "generating…" or failure line under it at its own height. */
+[data-clone-source] ~ .result-file { min-height: 0; }
 /* A hidden card (Show hidden's view): faded, its actions not. */
 .result-item[data-hidden] > :not(.result-actions) { opacity: 0.5; }
 /* What static/js/gallery-scroll.js watches for: spans the grid so it is only

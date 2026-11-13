@@ -82,8 +82,8 @@
 {% endif %}
 
 <div id="results-panel">
-    <div class="results" id="clone-gallery" data-gallery-endpoint="/clone/gallery"
-         data-live-endpoint="/clone/gallery/latest" data-live-key="jobId"
+    <div class="results" id="clone-gallery" data-gallery-endpoint="/clone/gallery{{ dates.dates }}"
+         data-live-endpoint="/clone/gallery/latest{{ dates.dates }}" data-live-key="jobId"
          data-live-interval="{{ live_poll_s }}" data-live-empty="clone-empty">
         {% for job in gallery %}{% include "_clone_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}
@@ -137,4 +137,5 @@
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
 <script src="{{ static_url('js/hidden-cards.js') }}"></script>
+<script src="{{ static_url('js/autosubmit.js') }}"></script>
 {% endblock %}

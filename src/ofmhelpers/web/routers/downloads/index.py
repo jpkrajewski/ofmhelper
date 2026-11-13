@@ -41,14 +41,15 @@ def _cards(jobs: list[Job]) -> list[TaskCard]:
 
 
 @router.get("")
-def form(request: Request, viewer: Viewing) -> Response:
-    first = gallery.page(viewer)
+def form(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
+    first = gallery.page(viewer, query)
     return render(
         request,
         "download_assets_form.html",
         gallery=_cards(first.jobs),
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(viewer),
+        dates=query,
         sheet_cooldown_s=sheet.cooldown_left(viewer.user.id),
     )
 

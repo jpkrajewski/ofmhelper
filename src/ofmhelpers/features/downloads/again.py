@@ -15,6 +15,7 @@ from ofmhelpers.db.stores.jobs import get_job, hide_job
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import JobQueued
+from ofmhelpers.schemas.errors import error_reason
 lazy from ofmhelpers.features.jobs.registry import RESTARTS
 lazy from ofmhelpers.schemas import Job
 lazy from ofmhelpers.schemas.downloads import Download
@@ -24,6 +25,7 @@ logger = get_logger(__name__)
 # The tasks whose jobs keep `downloads` rows.
 TASKS = frozenset({"download_media", "download_videos", "download_images"})
 NO_DOWNLOAD = "No such download"
+NOT_HERE = "Not on this server"
 
 
 class Seen(BaseModel):
@@ -107,12 +109,21 @@ def removed(job_id: str, position: int) -> bool:
 def stored_file(job_id: str, position: int, actor: str) -> StoredFile:
     """Where `actor`'s download now is in the asset store: what a clone's
     Recreate puts in its picker once the video is back (a video fetched
-    again may differ by a byte, and so may its stored name)."""
+    again may differ by a byte, and so may its stored name). Not back: the
+    refusal says why the last fetch got nothing, when one was tried."""
     job = get_job(job_id, actor)
     file = store.get(job_id, position) if job is not None else None
-    if file is None:
+    if job is None or file is None:
         raise NotFoundError(NO_DOWNLOAD)
     if not file.stored or not file.asset_path or not Path(file.asset_path).is_file():
-        msg = "Not on this server"
-        raise NotFoundError(msg)
+        raise NotFoundError(_why_not(job, file.url))
     return StoredFile(path=str(Path(file.asset_path).resolve()))
+
+
+def _why_not(job: Job, link: str) -> str:
+    """The short reason `link` was not fetched again, `NOT_HERE` when no
+    fetch was tried."""
+    failed = next(
+        (r.again_error for r in job.download_results() if r.url == link), None
+    )
+    return error_reason(failed) if failed else NOT_HERE

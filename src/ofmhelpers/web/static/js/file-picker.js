@@ -544,19 +544,24 @@
         return gone.map((item) => item.name);
     }
 
-    function noteMissing(picker, gone) {
+    // `why`: the server's reason one download did not come back ("Post
+    // deleted or profile banned"), in place of the usual sentence.
+    function noteMissing(picker, gone, why) {
         if (!gone.length) return;
         const note = document.createElement("p");
         note.className = "generation-error file-picker-missing";
         const names = gone.map((item) => item.name).join(", ");
-        note.textContent =
-            gone.length === 1
+        note.textContent = why
+            ? `${names} could not be downloaded again: ${why}`
+            : gone.length === 1
                 ? `${names} is not on this server: pick it again`
                 : `${gone.length} files are not on this server (${names}): pick them again`;
         picker.querySelector(".file-order-list").after(note);
     }
 
     const RESTORE_POLL_MS = 2000;
+    // features/downloads/again.py NOT_HERE: no fetch was tried, no reason.
+    const NOT_HERE = "Not on this server";
 
     // Resolves when the download job is done; rejects when it failed or is
     // gone. A failed poll (offline, a deploy) is tried again.
@@ -588,7 +593,12 @@
             if (!start.ok) throw new Error(`replay refused (${start.status})`);
             await downloaded(ref.job_id);
             const r = await fetch(`/download-media/${job}/files/${ref.index}/stored`);
-            if (!r.ok) throw new Error(`not stored (${r.status})`);
+            if (!r.ok) {
+                const refusal = await r.json().catch(() => ({}));
+                const failure = new Error(`not stored (${r.status})`);
+                if (refusal.detail !== NOT_HERE) failure.why = refusal.detail;
+                throw failure;
+            }
             item.path = (await r.json()).path;
             item.name = displayName(item.path);
             item.restoring = false;
@@ -598,7 +608,7 @@
             if (!picker._items.includes(item)) return;
             picker._items = picker._items.filter((other) => other !== item);
             renderList(picker);
-            noteMissing(picker, [item]);
+            noteMissing(picker, [item], typeof err.why === "string" ? err.why : "");
         }
     }
 

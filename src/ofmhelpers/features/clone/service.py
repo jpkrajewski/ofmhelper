@@ -17,6 +17,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict
 lazy from fastapi import UploadFile
@@ -29,6 +30,7 @@ from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_files
+from ofmhelpers.features.assets.store import strip_asset_hash_prefix
 from ofmhelpers.features.clone.export import export_choice
 from ofmhelpers.features.clone.pricing import clip_duration
 from ofmhelpers.features.clone.targets import CloneTarget, clone_targets, clone_values
@@ -37,11 +39,15 @@ from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
 from ofmhelpers.media.exports import exports
 from ofmhelpers.schemas import CloneCard, DriveUpload, Job, UploadTarget
+from ofmhelpers.schemas.gallery import CloneSource
 from ofmhelpers.telemetry import in_this_trace
 
 TASK = "clone"
 PREFIX = "/clone"
 FILES_PREFIX = f"{PREFIX}/files"
+# The size the confirm dialog asks `/refs/thumb` for: a running or failed
+# card shows the frame it already made.
+SOURCE_THUMB_PX = 400
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 # Runs whose subjects /clone's tiles offer: /clone-links runs take the same
 # people's pictures.
@@ -272,6 +278,23 @@ def export_label(params: dict[str, Any]) -> str:
     return choice.label if choice else name
 
 
+def source(params: dict[str, Any]) -> CloneSource | None:
+    """The video the run clones (a run has one), as a first frame: the
+    confirm dialog's own thumbnail, already made. None for a file the store
+    no longer holds (the sweep removed it) or never held (its names carry
+    their hash): its frame would answer 404 / 403 on every page showing the
+    card. clone.js `sourceOf` builds the same from the card's params."""
+    videos = params.get("reference_videos") or []
+    if not videos:
+        return None
+    path = Path(str(videos[0]))
+    name = strip_asset_hash_prefix(path.name)
+    if name == path.name or not path.is_file():
+        return None
+    thumb = f"/refs/thumb?path={quote(str(path), safe='')}&size={SOURCE_THUMB_PX}"
+    return CloneSource(name=name, thumb_url=thumb)
+
+
 def card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
     found = job_assets(job, FILES_PREFIX)
     return CloneCard.from_job(
@@ -282,6 +305,7 @@ def card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
         poll_prefix=PREFIX,
         result_kind="video",
         drive_uploads=uploads,
+        source=source(job.params),
     )
 
 

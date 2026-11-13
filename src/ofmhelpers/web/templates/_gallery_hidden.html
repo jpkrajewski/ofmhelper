@@ -4,14 +4,23 @@
    the label). The row is only there while at least one is hidden. Expects
    `hidden_count`.
 
+   A page that sets `dates` (its `GalleryQuery`: /generate, /clone,
+   /download-assets) gets the date filter at the left (`ui.date_range`, two
+   calendar icons: only the runs started on those days, the reader's own
+   days, hence `data-zone-times`); it keeps the row there (`data-keep`) whatever the
+   hidden count.
+
    /download-assets also sets `sheet_cooldown_s` (seconds its button still
    rests, 0 = ready): "Download from Drive sheet" comes first and keeps the
-   row there (`data-keep`) whatever the hidden count (static/js/download.js). #}
+   row too (static/js/download.js). #}
 {% import "components/ui.html" as ui %}
 {% set sheet_button = sheet_cooldown_s is defined %}
-<div class="ph-toolbar"{% if sheet_button %} data-keep{% elif not hidden_count %} hidden{% endif %}>
+{% set dated = dates is defined %}
+{% set kept = sheet_button or dated %}
+<div class="ph-toolbar"{% if kept %} data-keep{% elif not hidden_count %} hidden{% endif %}{% if dated %} data-zone-times{% endif %}>
+    {% if dated %}{{ ui.date_range(request.url.path, dates.date_from, dates.date_to, dates.today) }}{% endif %}
     <div class="toolbar-actions">
         {% if sheet_button %}{{ ui.button("Download from Drive sheet", icon="download", hook="sheet-download", attrs={"data-cooldown-s": sheet_cooldown_s}) }}{% endif %}
-        {{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": sheet_button and not hidden_count}) }}
+        {{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": kept and not hidden_count}) }}
     </div>
 </div>

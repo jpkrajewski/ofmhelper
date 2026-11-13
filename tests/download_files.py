@@ -24,6 +24,12 @@ HOUR = 3600
 DAY = 24 * HOUR
 
 
+GONE = (
+    "ERROR: [Instagram] DdolTu_JpJ0: Instagram sent an empty media response."
+    " Check if this post is accessible in your browser without being logged-in."
+)
+
+
 class FakeDownloads:
     """`downloaders.media.download_all`, offline: each link gets a folder of
     its own under `root` with one `clip.mp4` (a link with "photo" in it: one
@@ -42,9 +48,11 @@ class FakeDownloads:
         return [self._one(url) for url in urls]
 
     def failing(self, url: str) -> DownloadResult:
-        """What `_one` answers once the site no longer has the link."""
+        """What `_one` answers once the site no longer has the link: yt-dlp's
+        own words for a reel of a banned profile (prod 2026-11-12, job
+        65a6bb46)."""
         self.fetched.append(url)
-        return DownloadResult(url=url, success=False, error="gone from the site")
+        return DownloadResult(url=url, success=False, error=GONE)
 
     def _one(self, url: str) -> DownloadResult:
         if "fail" in url:

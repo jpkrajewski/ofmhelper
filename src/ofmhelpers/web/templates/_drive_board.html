@@ -48,7 +48,7 @@
         <p class="dr-note dr-missing">Nothing waiting to post</p>
         {% else %}
         <p class="dr-count">
-            <span>Waiting:</span>{% for kind, label in [("video", "video"), ("image", "image"), ("file", "file")] if c.count(kind) %}<span>{{ c.count(kind) }} {{ label }}{{ "" if c.count(kind) == 1 else "s" }}</span>{% endfor %}
+            <span>Waiting: <strong>{{ c.waiting|length }}</strong></span>
         </p>
         <ul class="dr-files">
             {% for f in c.waiting %}
@@ -65,8 +65,8 @@
         {% if c.scan.extra_posted_folders %}
         <p class="dr-note dr-missing">{{ c.scan.extra_posted_folders|length }} more "{{ board.posted_folder_name }}" folder{{ "" if c.scan.extra_posted_folders|length == 1 else "s" }} in here (counted too): move their videos into one and delete the rest.</p>
         {% endif %}
-        <p class="dr-posted">
-            <span>Posted today: <strong>{{ c.posted_today }}</strong></span>
+        <p class="dr-uploaded">
+            <span>Uploaded to Drive today: <strong>{{ c.uploaded_today.total }}</strong></span>
         </p>
         {% endif %}
         </div>

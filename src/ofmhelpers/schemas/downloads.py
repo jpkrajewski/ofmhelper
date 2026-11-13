@@ -11,7 +11,10 @@ from pydantic import BaseModel, ConfigDict
 class DownloadResult(BaseModel):
     """One source URL: whether it downloaded, and the files it produced (a
     post can hold several), or why it failed. A grouped download job stores a
-    list of these, dumped with `mode="json"` so the paths become strings."""
+    list of these, dumped with `mode="json"` so the paths become strings.
+    `again_error`: a downloaded link whose files the retention sweep removed
+    and that could not be fetched again, as the downloader said it; the
+    entry stays (its card and poster do) and a fetch that works clears it."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -19,6 +22,7 @@ class DownloadResult(BaseModel):
     success: bool
     output_paths: list[Path] = []
     error: str | None = None
+    again_error: str | None = None
 
 
 class Download(BaseModel):

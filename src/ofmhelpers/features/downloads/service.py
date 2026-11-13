@@ -157,7 +157,10 @@ def fetch(
             logger.warning(
                 "download job %s: %s not fetched again: %s", job_id, url, new.error
             )
-            results.append(old)
+            # The reason stays with the entry: its card says why the video
+            # is not back (prod 2026-11-12, job 65a6bb46: a reel of a banned
+            # profile, five clicks on Download, each ending in the poster).
+            results.append(old.model_copy(update={"again_error": new.error}))
         else:
             results.append(new)
     _keep(job, results, Path(assets_root), set(wanted))

@@ -5,7 +5,7 @@ signed-in person's own phones, admins included),
 with what waits in its folder (previews for images and videos, proxied
 through `/drive/thumb/{login}/{id}`: the owner's token never leaves the
 server)
-and what was posted (its POSTED folder: now, today, last 7 days). Below,
+and how many files were uploaded today (by /clone, and by hand). Below,
 the root's folders no login owns, to clean up. Sync runs the
 sweep now instead of at the next interval.
 """

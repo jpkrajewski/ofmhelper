@@ -37,6 +37,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Job, JobPreview, ResultFile
 from ofmhelpers.schemas.downloads import RemovedFile
 from ofmhelpers.schemas.persistence import (
+    Created,
     GalleryJobs,
     JobCount,
     JobHeader,
@@ -281,6 +282,7 @@ def list_jobs_page(
     status: str | None = None,
     hidden: bool | None = None,
     by_use: bool = False,
+    created: Created | None = None,
 ) -> JobPage:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that one of them ran -- same meaning as get_job's), newest first, plus how
@@ -294,14 +296,29 @@ def list_jobs_page(
     jobs' worth of rows and disk checks instead of the whole history's. A
     page never writes: a job whose files are missing is left out of it, not
     deleted. `by_use`: the job whose download was asked for or used last
-    first (/download-assets), not the newest."""
+    first (/download-assets), not the newest. `created`: only the jobs
+    started in that span (a gallery's date filter)."""
+    span = created or Created()
     if by_use:
         page = _repository().page_by_use(
-            tuple(sorted(tasks)), _user_ids(actor), offset, limit, hidden
+            tuple(sorted(tasks)),
+            _user_ids(actor),
+            offset,
+            limit,
+            hidden,
+            span.since,
+            span.until,
         )
     else:
         page = _repository().list_page(
-            tuple(sorted(tasks)), _user_ids(actor), offset, limit, status, hidden
+            tuple(sorted(tasks)),
+            _user_ids(actor),
+            offset,
+            limit,
+            status,
+            hidden,
+            span.since,
+            span.until,
         )
     return JobPage(jobs=_visible(page.jobs), total=page.total)
 
@@ -314,11 +331,15 @@ def gallery_page(
     hidden: bool | None,
     reader: int | None = None,
     by_use: bool = False,
+    created: Created | None = None,
 ) -> GalleryJobs:
     """One page of a gallery (`list_jobs_page`) and the next page's offset
     (None after the last). `reader`: who looks at it -- a job someone else
-    made (their VA) names its maker (`Job.made_by`)."""
-    page = list_jobs_page(tasks, offset, limit, actor, hidden=hidden, by_use=by_use)
+    made (their VA) names its maker (`Job.made_by`). `created`: only the
+    jobs started in that span."""
+    page = list_jobs_page(
+        tasks, offset, limit, actor, hidden=hidden, by_use=by_use, created=created
+    )
     next_offset = offset + limit
     return GalleryJobs(
         jobs=[_signed(job, reader) for job in page.jobs],

@@ -34,8 +34,8 @@ second sweep at the same time does nothing), per owner:
    Folders are found by name before one is made, then kept by id: a new
    owner name renames the folder, a folder renamed by hand is renamed back.
 2. tallies (`_tally`): lists every account folder and its POSTED folder, in
-   parallel, records each file seen in POSTED for the first time (Drive
-   keeps no time a file was moved, so "posted today" comes from this), and
+   parallel, records each file seen in POSTED for the first time (the
+   Sync summary's "newly posted"), and
    heals what it finds broken -- an account folder gone, a POSTED folder
    trashed, renamed or dragged elsewhere -- in the same pass.
 
@@ -96,12 +96,12 @@ from ofmhelpers.schemas import (
     StoredFolder,
     SyncReport,
 )
+from ofmhelpers.schemas.drive import UploadedToday
 from ofmhelpers.telemetry import in_this_trace
 lazy from ofmhelpers.schemas.drive import StoredFolders
 
 logger = get_logger(__name__)
 
-_WEEK_DAYS = 7
 # The root folder in each owner's Drive.
 _ROOT_NAME = "ALL ACCOUNTS"
 _DEV_PREFIX = "DEV - "
@@ -371,15 +371,13 @@ def now() -> datetime.datetime:
     return datetime.datetime.now(ZoneInfo(settings.gdrive.timezone))
 
 
-def _period_starts(at: datetime.datetime) -> list[float]:
-    """[start of today, start of the last 7 days] in the Drive timezone, as
-    timestamps: what "Posted today / Last 7 days" count from. By the local
-    calendar day, not the posting window -- the team posts in the evening, so
-    a window starting mid-evening would count those posts as yesterday's."""
+def _today_start(at: datetime.datetime) -> datetime.datetime:
+    """The start of today in the Drive timezone: what "Uploaded to Drive
+    today" counts from. By the local calendar day, not the posting window
+    -- the team works in the evening, so a window starting mid-evening
+    would count those files as yesterday's."""
     local = at.astimezone(ZoneInfo(settings.gdrive.timezone))
-    today = local.replace(hour=0, minute=0, second=0, microsecond=0)
-    first = today - datetime.timedelta(days=_WEEK_DAYS - 1)
-    return [today.timestamp(), first.timestamp()]
+    return local.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _is_posted(name: str) -> bool:
@@ -960,7 +958,7 @@ def board(
     ]
     if not live:
         _saved_board(result, folders)
-        _count_posted(result, at)
+        _count_uploaded(result, at)
         return result
     known = {f.folder_id for f in folders.folders}
     seen_at = at.timestamp()
@@ -969,14 +967,29 @@ def board(
         grouped[card.target.device.user_id].append(card)
     for user_id, cards in grouped.items():
         _list_owner(result, user_id, cards, known, seen_at, others=user_id == viewer)
-    _count_posted(result, at)
+    _count_uploaded(result, at)
     return result
 
 
-def _count_posted(result: DriveBoard, at: datetime.datetime) -> None:
-    counts = {c.login_id: c.counts for c in store.posted_counts(_period_starts(at))}
+def _uploaded_since(card: DriveCard, start: datetime.datetime) -> list[str]:
+    """The card's files Drive got at or after `start`, waiting or posted."""
+    return [
+        f.id
+        for f in (*card.scan.waiting, *card.scan.posted)
+        if f.created_time is not None and f.created_time >= start
+    ]
+
+
+def _count_uploaded(result: DriveBoard, at: datetime.datetime) -> None:
+    """Each card's files uploaded today, split by who put them there: ours
+    (`drive_uploads`: /clone's "Upload to Drive") or a person, by hand."""
+    start = _today_start(at)
+    today = {c.target.login_id: _uploaded_since(c, start) for c in result.cards}
+    ours = set(upload_store.made_here([i for ids in today.values() for i in ids]))
     for card in result.cards:
-        card.posted_today, card.posted_week = counts.get(card.target.login_id, [0, 0])
+        ids = today[card.target.login_id]
+        clone = sum(1 for file_id in ids if file_id in ours)
+        card.uploaded_today = UploadedToday(clone=clone, manual=len(ids) - clone)
 
 
 def _thumb_cache(file_id: str, px: int) -> Path:
