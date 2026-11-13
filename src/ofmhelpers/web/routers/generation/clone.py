@@ -129,15 +129,17 @@ def form(
     user: CurrentUser,
     api_keys: ApiKeys,
     assets_root: AssetsRoot,
+    query: GalleryParams,
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
-    first = gallery.page(viewer)
+    first = gallery.page(viewer, query)
     return render(
         request,
         "clone.html",
         gallery=cards(first.jobs),
         next_offset=first.next_offset,
         hidden_count=gallery.hidden_count(viewer),
+        dates=query,
         api_keys=api_keys,
         **dict(form_view(actor, assets_root, video or [])),
         **dict(drive_picker(user.id)),
@@ -164,13 +166,15 @@ def gallery_page(
 
 
 @router.get("/gallery/latest")
-def gallery_latest(request: Request, viewer: Viewing, user: CurrentUser) -> Response:
+def gallery_latest(
+    request: Request, viewer: Viewing, user: CurrentUser, query: GalleryParams
+) -> Response:
     """The newest page of cards, no sentinel: what live-gallery.js polls to
     show runs started in other sessions."""
     return render_polled(
         request,
         "clone_gallery_fragment.html",
-        gallery=cards(gallery.page(viewer).jobs),
+        gallery=cards(gallery.page(viewer, query.newest()).jobs),
         next_offset=None,
         **dict(drive_picker(user.id)),
     )

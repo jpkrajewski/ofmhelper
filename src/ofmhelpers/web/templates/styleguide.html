@@ -53,6 +53,7 @@
         {{ ui.button("3:4", attrs={"aria-pressed": "false"}) }}
         {{ ui.button("1:1", attrs={"aria-pressed": "false"}) }}
     {% endcall %}
+    {{ ui.date_range("/styleguide") }}
     {% call ui.chip_row() %}
         {{ ui.chip("Off chip") }}
         {{ ui.chip("On chip", pressed=true) }}

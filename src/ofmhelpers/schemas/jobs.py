@@ -28,8 +28,13 @@ class AssetCard(BaseModel):
     source: str | None = None
     # A download whose video the retention sweep removed: the card shows
     # what was kept of it (`poster_url`, an image's `preview_url`; neither:
-    # its name) and its Download fetches it again.
+    # its name) and its Download fetches it again. `removed_reason`: why the
+    # last such fetch got nothing, short (`schemas.errors.error_reason`),
+    # and `removed_error` the downloader's own words; None: not tried, or
+    # it is back.
     removed: bool = False
+    removed_reason: str | None = None
+    removed_error: str | None = None
 
 
 class FailedSource(BaseModel):

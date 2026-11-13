@@ -177,6 +177,16 @@ class JobPage(BaseModel):
     total: int
 
 
+class Created(BaseModel):
+    """When the jobs asked for were started: from `since` (included) to
+    `until` (not included), as timestamps; None = no limit on that side."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: float | None = None
+    until: float | None = None
+
+
 class GalleryJobs(BaseModel):
     """One page of jobs. No `next_offset` is what ends the infinite scroll."""
 

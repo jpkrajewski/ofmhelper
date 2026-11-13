@@ -15,7 +15,6 @@ from ofmhelpers.db.stores.devices import list_devices
 from ofmhelpers.db.stores.users import list_users
 from ofmhelpers.schemas import AccountScan, DriveTarget, StoredFolder
 from ofmhelpers.schemas.drive import StoredFolders
-lazy from ofmhelpers.schemas.drive import PostedCount
 lazy from ofmhelpers.schemas.gdrive import DriveFile
 
 _SERVICE = "instagram"
@@ -96,11 +95,6 @@ def record_posted(
     `folder_id`; how many are new."""
     rows = [(f.id, f.name, f.kind) for f in files]
     return _repository().record_posted(login_id, folder_id, rows, seen_at)
-
-
-def posted_counts(since: list[float]) -> list[PostedCount]:
-    """Per login, the files first seen posted since each of `since`."""
-    return _repository().posted_counts(sorted(set(_roots().values())), since)
 
 
 def save_scans(scans: dict[int, AccountScan], at: float) -> None:

@@ -105,11 +105,23 @@ class TaskCard(JobCard):
         ]
 
 
+class CloneSource(BaseModel):
+    """The video a /clone run is made from, as its card shows it while it
+    runs and once it failed: a first frame (`/refs/thumb`); `name`, the
+    file's own, is only the picture's alt text."""
+
+    name: str
+    thumb_url: str
+
+
 class CloneCard(TaskCard):
-    """A /clone run's card: the shared card, plus where its video was
-    uploaded in Drive (features/drive/uploads.py)."""
+    """A /clone run's card: the shared card, plus the video it clones
+    (`source`: ten runs side by side, some failing, were told apart by
+    nothing, owner 2026-11-12) and where its result was uploaded in Drive
+    (features/drive/uploads.py)."""
 
     drive_uploads: list[DriveUpload] = []
+    source: CloneSource | None = None
 
 
 class CloneLinksCard(TaskCard):

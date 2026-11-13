@@ -276,6 +276,14 @@ def test_clone_with_a_wrong_key_queues_a_card_per_video_and_fails_cleanly(
     expect(failed).to_have_count(len(source_videos), timeout=RESULT_TIMEOUT_MS)
     expect(failed.first).to_have_attribute("data-reason", "Wrong API key")
 
+    # Each failed card shows the video it was cloning, on top: drawn by
+    # clone.js `showSource` on the page that watched it fail (generation.js
+    # rebuilt the card), by the server on the coworker's, which got the cards
+    # from the live poll. Ten runs side by side are told apart.
+    for page in (va.page, coworker.page):
+        pictures = page.locator(f":is({cards}) > img[data-clone-source]:first-child")
+        expect(pictures).to_have_count(len(source_videos), timeout=LIVE_TIMEOUT_MS)
+
     # A failed card's action is Recreate (its ⋯ menu only hides it): the
     # images and its video back, without re-uploading.
     first = va.page.locator(f'#clone-gallery > [data-job-id="{body["job_ids"][0]}"]')
@@ -950,7 +958,7 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     assert preview.value.ok
     assert live.value.ok
     ann_card = cards.filter(has_text="ann.ig")
-    expect(ann_card.locator(".dr-count")).to_have_text("Waiting:1 video")
+    expect(ann_card.locator(".dr-count")).to_have_text("Waiting: 1")
     expect(ann_card.locator(".dr-file img")).to_be_visible()
 
     # Posted: a person moves it into POSTED; the next Sync counts it.
@@ -958,7 +966,9 @@ def test_drive_page_lists_accounts_searches_and_syncs(
     with admin.page.expect_navigation():
         admin.page.click("#dr-sync")
     assert reports.pop()["newly_posted"] == 1
-    expect(ann_card.locator(".dr-posted")).to_contain_text("Posted today: 1")
+    expect(ann_card.locator(".dr-uploaded")).to_contain_text(
+        "Uploaded to Drive today: 1"
+    )
 
     # Nothing more was written: the move was the person's, the app only read.
     assert fake_drive.writes == ["create"] * 5

@@ -100,6 +100,18 @@ class DriveUploadRepository(CachedRepository):
             ).scalars()
             return [_upload(r) for r in rows]
 
+    def made_here(self, file_ids: list[str]) -> list[str]:
+        """Which of these Drive files an upload of ours made."""
+        if not file_ids:
+            return []
+        with session_scope() as s:
+            found = s.execute(
+                select(DriveUploadRow.drive_file_id).where(
+                    DriveUploadRow.drive_file_id.in_(file_ids)
+                )
+            ).scalars()
+            return [file_id for file_id in found if file_id]
+
     def remove(self, upload_id: int, reason: str) -> None:
         """No longer in its folder (trashed from /clone, or gone in Drive)."""
         with session_scope() as s:

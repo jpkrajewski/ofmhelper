@@ -36,22 +36,27 @@ class Gallery(BaseModel, frozen=True):
     fragment: str
     task: str
     # The toolbar row's opening tag with a card hidden, and with none: the
-    # row goes then, unless the page has a button of its own in it.
-    row: str = '<div class="ph-toolbar">'
-    idle_row: str = '<div class="ph-toolbar" hidden>'
+    # row goes then, unless the page has something of its own in it (the
+    # date filter, test_gallery_dates.py: the row stays, only the button goes).
+    row: str = '<div class="ph-toolbar" data-keep data-zone-times>'
+    idle_row: str = '<div class="ph-toolbar" data-keep data-zone-times>'
 
 
 GALLERIES = [
     Gallery(page="/generate", fragment="/generate/gallery", task="fake_ai"),
     Gallery(page="/clone", fragment="/clone/gallery", task="clone"),
-    Gallery(page="/clone-long", fragment="/clone-long/gallery", task="clone_long"),
+    Gallery(
+        page="/clone-long",
+        fragment="/clone-long/gallery",
+        task="clone_long",
+        # No date filter there: the row goes with the last hidden card.
+        row='<div class="ph-toolbar">',
+        idle_row='<div class="ph-toolbar" hidden>',
+    ),
     Gallery(
         page="/download-assets",
         fragment="/download-assets/gallery",
         task="download_media",
-        # "Download from Drive sheet" keeps the row (test_download_sheet.py).
-        row='<div class="ph-toolbar" data-keep>',
-        idle_row='<div class="ph-toolbar" data-keep>',
     ),
 ]
 
@@ -108,7 +113,7 @@ def _tools(html: str) -> str:
     """The toolbar row under the page title (like /phones' Export, Add
     phone), "Show hidden" at its right -- not inside the gallery."""
     found = re.search(
-        r'<div class="ph-toolbar"[^>]*>\s*<div class="toolbar-actions">.*?</div>\s*</div>',
+        r'<div class="ph-toolbar"[^>]*>.*?<div class="toolbar-actions">.*?</div>\s*</div>',
         html,
         re.DOTALL,
     )

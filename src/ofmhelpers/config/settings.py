@@ -1862,8 +1862,7 @@ class GDriveSettings(BaseSettings):
     )
     # When the team posts, in UTC (fixed all year: no daylight saving shift).
     # Posting runs from `posting_window_before_h` before it to
-    # `posting_window_after_h` after it; a posting day -- what "Posted today"
-    # counts -- starts at the window's start (2026-10-22: 19:45 UTC, so
+    # `posting_window_after_h` after it (2026-10-22: 19:45 UTC, so
     # 18:45-00:45 UTC, every day).
     posting_time_utc: datetime.time = Field(
         default=datetime.time(19, 45), validation_alias="OFM_GDRIVE_POSTING_TIME_UTC"

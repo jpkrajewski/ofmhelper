@@ -38,7 +38,7 @@
 
 <div id="results-panel">
     <div class="generation-status"></div>
-    <div class="results" data-gallery-endpoint="/download-assets/gallery">
+    <div class="results" data-gallery-endpoint="/download-assets/gallery{{ dates.dates }}">
         {% for job in gallery %}{% include "_download_gallery_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}
     </div>
@@ -113,5 +113,6 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
 <script src="{{ static_url('js/generation.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/hidden-cards.js') }}"></script>
+<script src="{{ static_url('js/autosubmit.js') }}"></script>
 <script src="{{ static_url('js/download.js') }}"></script>
 {% endblock %}

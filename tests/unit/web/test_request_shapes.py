@@ -3,6 +3,7 @@
 what telemetry keeps of either."""
 
 import os
+from datetime import date
 
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
@@ -154,7 +155,23 @@ def test_a_form_is_logged_field_by_field_and_its_key_stays_hidden():
 def test_a_gallerys_query_is_logged_field_by_field():
     logged = _logged(query=GalleryQuery(offset=20, hidden=True))
 
-    assert logged == {"offset": 20, "hidden": True}
+    assert logged == {
+        "offset": 20,
+        "hidden": True,
+        "date_from": None,
+        "date_to": None,
+    }
+
+
+def test_a_gallerys_date_filter_is_logged():
+    asked = GalleryQuery(date_from=date(2026, 11, 1), date_to=date(2026, 11, 12))
+
+    assert _logged(query=asked) == {
+        "offset": 0,
+        "hidden": False,
+        "date_from": date(2026, 11, 1),
+        "date_to": date(2026, 11, 12),
+    }
 
 
 def test_every_route_says_what_it_returns():

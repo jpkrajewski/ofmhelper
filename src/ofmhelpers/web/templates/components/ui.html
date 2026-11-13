@@ -163,6 +163,25 @@
 </div>
 {%- endmacro %}
 
+{# The date filter of a toolbar row: two buttons, "From" and "To", each with
+   a calendar icon; nothing to type (owner 2026-11-12). A click opens the
+   calendar, the day picked shows on the button ("From: 01 Nov 2026") and
+   the filter is sent at once (static/js/autosubmit.js); Clear takes both
+   off. A GET form to `action` sending `date_from` and `date_to` (ISO
+   days); `start` / `end`: the days picked now (dates); `today`: the last
+   day a calendar offers (none: no limit). #}
+{% macro date_range(action, start=None, end=None, today=None, hook="") -%}
+<form method="get" action="{{ action }}" class="date-range{{ ' ' ~ hook if hook }}" data-submit-on-change>
+    {% for name, label, day, first, last in [("date_from", "From", start, None, end or today), ("date_to", "To", end, start, today)] %}
+    <span class="date-pick">
+        {{ button(label ~ (": " ~ day.strftime("%d %b %Y") if day else ""), icon="calendar", hook="date-pick-btn") }}
+        <input type="date" name="{{ name }}" aria-label="{{ label }}" tabindex="-1" value="{{ day or '' }}"{% if first %} min="{{ first }}"{% endif %}{% if last %} max="{{ last }}"{% endif %}>
+    </span>
+    {% endfor %}
+    {% if start or end %}{{ button("Clear", icon="x", href=action) }}{% endif %}
+</form>
+{%- endmacro %}
+
 {# A link back to the page this one belongs to ("‹ Accounts"). #}
 {% macro back_link(href, label) -%}
 <a class="btn btn-ghost back-link" href="{{ href }}">{{ ic.icon("arrow-left") }} {{ label }}</a>

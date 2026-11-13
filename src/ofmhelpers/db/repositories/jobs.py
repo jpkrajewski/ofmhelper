@@ -71,8 +71,14 @@ def _page_filter(
     user_ids: tuple[int, ...] | None,
     status: str | None,
     hidden: bool | None,
+    since: float | None = None,
+    until: float | None = None,
 ) -> list[ColumnElement[bool]]:
     where: list[ColumnElement[bool]] = [JobRow.task.in_(tasks)]
+    if since is not None:
+        where.append(JobRow.created_at >= since)
+    if until is not None:
+        where.append(JobRow.created_at < until)
     if user_ids is not None:
         where.append(JobRow.user_id.in_(user_ids))
     if status is not None:
@@ -357,6 +363,8 @@ class JobRepository(CachedRepository):
         limit: int,
         status: str | None = None,
         hidden: bool | None = None,
+        since: float | None = None,
+        until: float | None = None,
     ) -> JobPage:
         """One page of the jobs whose task is in `tasks` (and that one of
         `user_ids` ran, unless None), newest first, plus how many match in
@@ -364,8 +372,10 @@ class JobRepository(CachedRepository):
         not the history.
         `hidden`: only the jobs hidden from the galleries (True), only the
         others (False), or both (None).
+        `since` / `until`: only the jobs started from `since` on and before
+        `until` (a gallery's date filter).
         `tasks` and `user_ids` are sorted tuples: a stable cache key."""
-        where = _page_filter(tasks, user_ids, status, hidden)
+        where = _page_filter(tasks, user_ids, status, hidden, since, until)
         return _page(where, [JobRow.created_at.desc()], offset, limit)
 
     def page_by_use(
@@ -375,6 +385,8 @@ class JobRepository(CachedRepository):
         offset: int,
         limit: int,
         hidden: bool | None = None,
+        since: float | None = None,
+        until: float | None = None,
     ) -> JobPage:
         """`list_page`, the job whose download was asked for or used last
         first (`downloads.last_used_at`, the newest of the job's files; a
@@ -387,7 +399,7 @@ class JobRepository(CachedRepository):
             .correlate(JobRow)
             .scalar_subquery()
         )
-        where = _page_filter(tasks, user_ids, None, hidden)
+        where = _page_filter(tasks, user_ids, None, hidden, since, until)
         order = [
             func.coalesce(used, JobRow.created_at).desc(),
             JobRow.created_at.desc(),

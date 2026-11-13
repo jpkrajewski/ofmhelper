@@ -48,6 +48,12 @@ def file_id(upload_id: int) -> str | None:
     return _repository().file_id(upload_id)
 
 
+def made_here(file_ids: list[str]) -> list[str]:
+    """Which of these Drive files /clone's "Upload to Drive" put there (the
+    rest were put in Drive by hand)."""
+    return _repository().made_here(file_ids)
+
+
 def remove(upload_id: int, reason: str = "Removed from Drive") -> None:
     _repository().remove(upload_id, reason)
 

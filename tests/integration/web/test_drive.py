@@ -6,7 +6,7 @@ new owner renames, deleted / trashed / renamed / dragged-out folders come
 back, concurrent sweeps never duplicate, the live folder is refused outside
 production, nothing in Drive is ever moved or deleted. The page shows what
 waits in each folder (previews proxied through the app, and only those) and
-how much was posted: now, today, in 7 days."""
+how many files were uploaded today: by /clone, and by hand."""
 
 import datetime
 import os
@@ -24,6 +24,7 @@ from signin import sign_in_agency
 
 from ofmhelpers.db.stores import devices, users
 from ofmhelpers.db.stores import drive_folders as store
+from ofmhelpers.db.stores import drive_uploads as upload_store
 from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import posting
@@ -387,7 +388,6 @@ def test_deleting_the_login_forgets_its_folders_and_history(drive):
     drive_folders.sync()
     devices.remove_login(phone, login)
     assert store.account_folders().folders == []
-    assert store.posted_counts([0.0]) == []
     # Drive keeps the folder and what is in it.
     assert drive.named("ann.ig - Anna", ROOT)
 
@@ -406,11 +406,13 @@ def test_a_video_moved_into_posted_counts_once(drive):
     assert drive_folders.sync().newly_posted == 0
 
     card = drive_folders.board().cards[0]
-    assert (card.posted_total, card.posted_today, card.posted_week) == (1, 1, 1)
+    assert card.posted_total == 1
     assert card.waiting == []
+    # Moved to POSTED it is still a file uploaded today.
+    assert card.uploaded_today.total == 1
 
 
-def test_a_file_moved_back_out_keeps_its_history(drive):
+def test_a_file_moved_back_out_waits_again_and_counts_once(drive):
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     reel = drive.add_file(_posted(drive, "ann.ig"), "reel.mp4", "video/mp4")
@@ -421,25 +423,54 @@ def test_a_file_moved_back_out_keeps_its_history(drive):
 
     card = drive_folders.board().cards[0]
     assert card.posted_total == 0
-    assert card.posted_today == 1
+    assert card.uploaded_today.total == 1
     assert [f.id for f in card.waiting] == [reel]
 
 
-def test_a_new_account_folder_starts_its_posted_history_at_zero(drive):
-    """Posted counts follow the folder the files were seen in: a dev copy of
-    the prod database must not show prod's history on its own new folders."""
+def test_a_new_account_folder_starts_its_counts_at_zero(drive):
+    """Counts follow the folder the files are in: a dev copy of the prod
+    database must not show prod's files on its own new folders."""
     login = _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     drive.add_file(_posted(drive, "ann.ig"), "reel.mp4", "video/mp4")
     drive_folders.sync()
-    assert drive_folders.board().cards[0].posted_today == 1
+    assert drive_folders.board().cards[0].uploaded_today.total == 1
 
     store.forget_account_folder(login)
     drive.rename_by_hand(drive.named("ann.ig - Anna", ROOT)[0], "old ann")
     assert drive_folders.sync().created == ["ann.ig - Anna"]
 
     card = drive_folders.board().cards[0]
-    assert (card.posted_total, card.posted_today, card.posted_week) == (0, 0, 0)
+    assert (card.posted_total, card.uploaded_today.total) == (0, 0)
+
+
+def test_uploaded_today_tells_clone_uploads_from_files_put_there_by_hand(drive):
+    """A file /clone's "Upload to Drive" made (`drive_uploads`) is a clone
+    upload, any other one a person put there; one from another day is
+    neither, and one already moved to POSTED still counts."""
+    login = _login(_phone("Phone 01"), "instagram", "ann.ig")
+    _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
+    drive_folders.sync()
+    account = _account(drive, "ann.ig")
+    ours = drive.add_file(account, "clone.mp4", "video/mp4")
+    drive.add_file(account, "hand.mp4", "video/mp4")
+    moved = drive.add_file(account, "posted.mp4", "video/mp4")
+    drive.move(moved, _posted(drive, "ann.ig"))
+    before = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=2)
+    drive.add_file(account, "old.mp4", "video/mp4", created=before)
+    upload = upload_store.queue("job1", 0, login, users.agency_id(), "ann.ig - Anna")
+    assert upload is not None
+    upload_store.finish(upload, drive_file_id=ours, drive_url="https://drive/x")
+    drive_folders.sync()
+
+    cards = {c.target.handle: c.uploaded_today for c in drive_folders.board().cards}
+
+    ann, bob = cards["ann.ig"], cards["bob.ig"]
+    assert (ann.clone, ann.manual, ann.total) == (1, 2, 3)
+    assert (bob.clone, bob.manual, bob.total) == (0, 0, 0)
+    # The saved read (/drive without a Drive call) counts the same.
+    saved = drive_folders.board(live=False).cards
+    assert {c.target.handle: c.uploaded_today for c in saved} == cards
 
 
 def test_a_second_posted_folder_counts_and_is_flagged(drive):
@@ -460,15 +491,15 @@ def test_a_second_posted_folder_counts_and_is_flagged(drive):
     assert drive.item(extra).name == "posted"
 
 
-def test_posted_today_turns_at_local_midnight_in_the_drive_timezone(drive):
-    """Posted today / last 7 days turn at midnight in the Drive timezone
+def test_uploaded_today_turns_at_local_midnight_in_the_drive_timezone(drive):
+    """Uploaded today turns at midnight in the Drive timezone
     (Europe/Warsaw), the team's calendar day -- not the posting window, which
-    starts mid-evening and would count an evening's posts as yesterday's."""
+    starts mid-evening and would count an evening's files as yesterday's."""
     _login(_phone("Phone 01"), "instagram", "ann.ig")
     drive_folders.sync()
     posted = _posted(drive, "ann.ig")
     tz = ZoneInfo("Europe/Warsaw")
-    # Two posted yesterday evening (the posting window would call "today"),
+    # Two uploaded yesterday evening (the posting window would call "today"),
     # one this morning: only the last is today by the calendar day.
     for at, name in (
         (datetime.datetime(2026, 10, 21, 21, 0, tzinfo=tz), "y1.mp4"),
@@ -480,7 +511,7 @@ def test_posted_today_turns_at_local_midnight_in_the_drive_timezone(drive):
             drive_folders.sync()
             card = drive_folders.board().cards[0]
 
-    assert (card.posted_today, card.posted_week, card.posted_total) == (1, 3, 3)
+    assert (card.uploaded_today.manual, card.posted_total) == (1, 3)
 
 
 @pytest.mark.parametrize(
@@ -677,7 +708,13 @@ def test_page_shows_what_waits_and_what_was_posted(drive):
 
     # No page-level summary: each card says what waits and what was posted.
     assert "waiting to post in" not in html
-    assert "Posted today: <strong>1</strong>" in html
+    assert "Posted today" not in html
+    # reel1.mp4, notes.txt and old.mp4 (in POSTED), all put there by hand.
+    assert "Uploaded to Drive today: <strong>3</strong>" in html
+    # One number each: no split by kind or by who uploaded (owner 2026-11-12).
+    assert "Waiting: <strong>2</strong>" in html
+    assert "Clone:" not in html
+    assert "Manual:" not in html
     assert f'src="/drive/thumb/{ann}/{video}"' in html
     assert "notes.txt" in html
     assert "Nothing waiting to post" in html

@@ -16,7 +16,7 @@ from ofmhelpers.db.repositories.cached_repository import (
     invalidates_cache,
 )
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.schemas.drive import AccountScan, PostedCount, StoredFolder
+from ofmhelpers.schemas.drive import AccountScan, StoredFolder
 
 # pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
 _SYNC_LOCK_KEY = 0x0D21_5E00
@@ -54,30 +54,6 @@ class DriveFolderRepository(CachedRepository):
                     scanned_at=r.scanned_at,
                 )
                 for r in rows
-            ]
-
-    @cached
-    def posted_counts(self, roots: list[str], since: list[float]) -> list[PostedCount]:
-        """Per login with a folder in `roots`, the files first seen posted
-        at or after each of `since`; only files seen in that folder."""
-        with session_scope() as s:
-            columns = [
-                func.count().filter(DrivePostedFileRow.first_seen_at >= t)
-                for t in since
-            ]
-            rows = s.execute(
-                select(DrivePostedFileRow.login_id, *columns)
-                .join(
-                    DriveAccountFolderRow,
-                    (DriveAccountFolderRow.login_id == DrivePostedFileRow.login_id)
-                    & (DriveAccountFolderRow.folder_id == DrivePostedFileRow.folder_id),
-                )
-                .where(DriveAccountFolderRow.root_folder_id.in_(roots))
-                .group_by(DrivePostedFileRow.login_id)
-            ).all()
-            return [
-                PostedCount(login_id=login_id, counts=list(counts))
-                for login_id, *counts in rows
             ]
 
     @contextmanager

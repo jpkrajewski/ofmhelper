@@ -37,6 +37,17 @@ from ofmhelpers.schemas.errors import FALLBACK, error_reason
             "Input out of range",
         ),
         ("abc123 failed: Internal Error, Please try again later.", "Provider error"),
+        # A downloader's words for a link asked for again (prod 2026-11-12,
+        # job 65a6bb46, a reel of a banned profile).
+        (
+            "ERROR: [Instagram] DdolTu_JpJ0: Instagram sent an empty media response. Check if this post is accessible in your browser without being logged-in.",
+            "Post deleted or profile banned",
+        ),
+        (
+            "ERROR: [Instagram] DdolTu_JpJ0: The webpage request was redirected to the login page. You have exceeded the rate-limit for accessing posts anonymously. Use --cookies-from-browser or --cookies for the authentication.",
+            "Needs login",
+        ),
+        ("ERROR: [youtube] abc: Video unavailable", "Post deleted or profile banned"),
         (
             "Higgsfield failed this generation: Your credit balance is too low to complete this request. Please top up your balance and try again.",
             "No credits",

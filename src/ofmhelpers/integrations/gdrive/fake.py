@@ -23,6 +23,7 @@ import fcntl
 import io
 import threading
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 lazy from collections.abc import Iterator
@@ -62,8 +63,11 @@ class FakeItem(BaseModel):
     mime_type: str = FOLDER_MIME
     parents: list[str] = Field(default_factory=list)
     owner: str = DEFAULT_OWNER
-    # Order of creation: Drive's createdTime, without a clock.
+    # Order of creation, without a clock.
     created: int = 0
+    # Drive's createdTime: when the item was made (`add_file(created=)` for
+    # one a person uploaded on another day).
+    created_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     trashed: bool = False
     has_thumbnail: bool = False
     # Who else may edit it (`grant`), besides the bot.
@@ -183,6 +187,7 @@ class FakeDrive:
                 "name": item.name,
                 "mimeType": item.mime_type,
                 "hasThumbnail": item.has_thumbnail,
+                "createdTime": item.created_time,
                 "parents": list(item.parents),
                 "thumbnailLink": (
                     f"fake://thumb/{item.id}=s220" if item.has_thumbnail else ""
@@ -402,6 +407,7 @@ class FakeDrive:
         *,
         owner: str = DEFAULT_OWNER,
         thumbnail: bool = False,
+        created: datetime | None = None,
     ) -> str:
         with self._state() as state:
             return self._new(
@@ -411,6 +417,7 @@ class FakeDrive:
                 parents=[parent],
                 owner=owner,
                 has_thumbnail=thumbnail,
+                created_time=created or datetime.now(UTC),
             ).id
 
     def add_sheet(

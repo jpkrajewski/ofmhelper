@@ -6,8 +6,9 @@ The team's daily posting window (2026-10-22): `settings.gdrive`
 `posting_window_after_h` (5 h) after -- 18:45 to 00:45 UTC, every day. All
 in UTC: no daylight saving change, server zone or browser zone moves it.
 
-A posting day starts at the window's start: /drive's "Posted today" counts
-from it (drive_folders.py). While the window is open every page shows
+/drive's "Uploaded to Drive today" does not follow this window: it counts
+by the calendar day of `OFM_GDRIVE_TIMEZONE` (features/drive/folders.py
+`_today_start`). While the window is open every page shows
 "Start posting content" (base.html; static/js/posting.js flips it at the
 window's edges on a page left open).
 """

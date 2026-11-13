@@ -40,6 +40,16 @@ REASONS = (
         r"|the video cannot)",
     ),
     ErrorReason(label="Needs login", pattern=r"^needs login"),
+    # A downloader's own words (yt-dlp, gallery-dl; prod 2026-11-12, job
+    # 65a6bb46). They cannot tell a deleted post from a banned or private
+    # profile, so the label names them together. Before "Rate limited":
+    # Instagram's login redirect speaks of its "rate-limit".
+    ErrorReason(
+        label="Post deleted or profile banned",
+        pattern=r"empty media response|video unavailable"
+        r"|content isn.t available|has been (removed|deleted|terminated)",
+    ),
+    ErrorReason(label="Needs login", pattern=r"redirect(ed)? to (the )?login page"),
     ErrorReason(label="Too long", pattern=r"^too long"),
     ErrorReason(label="Stopped", pattern=r"^stopped\b"),
     ErrorReason(label="Export failed", pattern=r"^export failed"),

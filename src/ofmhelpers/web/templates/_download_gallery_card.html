@@ -5,7 +5,8 @@
    and the card's file index; a card that finishes live has the same control
    cloned in). A card whose video the retention sweep removed shows its
    poster and one Download, which fetches it again (download.js); its Clone
-   control is back once the video is. #}
+   control is back once the video is. One that did not come back says why
+   under the poster (`removed_reason`: "Post deleted or profile banned"). #}
 {% extends "_gallery_card.html" %}
 {% import "components/ui.html" as ui %}
 {% import "_card_hide.html" as hide %}
@@ -30,4 +31,6 @@
     <div class="result-file result-failed fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">
         {{ job.failed_sources|length }} link{{ "s" if job.failed_sources|length != 1 }} failed
     </div>
+{% endif %}{% if job.assets and job.assets[0].removed_reason %}
+    <div class="result-file result-failed fail-note" data-removed-reason title="{{ job.assets[0].removed_error }}">{{ job.assets[0].removed_reason }}</div>
 {% endif %}{% endblock %}

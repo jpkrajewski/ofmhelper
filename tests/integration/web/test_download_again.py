@@ -16,7 +16,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from download_files import DAY, backdate, fake_downloads, fake_posters, row, rows
+from download_files import (
+    DAY,
+    GONE,
+    backdate,
+    fake_downloads,
+    fake_posters,
+    row,
+    rows,
+)
 from fastapi.testclient import TestClient
 from signin import sign_in
 
@@ -372,12 +380,48 @@ def test_a_video_gone_from_its_site_keeps_its_card_and_stays_removed(
     assert r.status_code == 202
     assert get_job(job).status == "done"
     assert row(job).stored is False
-    assert "download-again" in _card(client, job)
+    card = _card(client, job)
+    assert "download-again" in card
     status = client.get(f"/download-media/jobs/{job}/status").json()
     assert [(item["index"], item["removed"]) for item in status["result"]] == [
         (0, True)
     ]
     assert status["failed_sources"] == []
+    # The card and the live card say why it is not back (prod 2026-11-12,
+    # job 65a6bb46: five clicks on Download, each ending in the bare poster).
+    assert "data-removed-reason" in card
+    assert "Post deleted or profile banned" in card
+    (item,) = status["result"]
+    assert item["removed_reason"] == "Post deleted or profile banned"
+    assert item["removed_error"] == GONE
+    # A clone's Recreate asking for the file is told the same.
+    stored = client.get(f"/download-media/{job}/files/0/stored")
+    assert stored.status_code == 404
+    assert stored.json() == {"detail": "Post deleted or profile banned"}
+
+
+def test_a_removed_video_never_asked_for_again_has_no_reason(client):
+    job = _paste(client, A)["job_id"]
+    _remove_videos()
+
+    assert "data-removed-reason" not in _card(client, job)
+    stored = client.get(f"/download-media/{job}/files/0/stored")
+    assert stored.json() == {"detail": "Not on this server"}
+
+
+def test_a_video_that_comes_back_loses_its_reason(client, downloads, monkeypatch):
+    job = _paste(client, A)["job_id"]
+    _remove_videos()
+    with monkeypatch.context() as gone:
+        gone.setattr(downloads, "_one", downloads.failing)
+        assert client.post(f"/download-media/{job}/replays").status_code == 202
+    assert "data-removed-reason" in _card(client, job)
+
+    assert client.post(f"/download-media/{job}/replays").status_code == 202
+
+    assert row(job).stored is True
+    assert "data-removed-reason" not in _card(client, job)
+    assert [r.again_error for r in get_job(job).download_results()] == [None]
 
 
 # --- a clone's Recreate ----------------------------------------------------------

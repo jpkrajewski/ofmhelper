@@ -10,6 +10,7 @@ from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.schemas import AssetCard, FailedSource, Job
+from ofmhelpers.schemas.errors import error_reason
 
 
 class JobAssets(BaseModel):
@@ -28,6 +29,7 @@ def asset_card(
     local: bool = True,
     job_id: str = "",
     removed: bool = False,
+    again_error: str | None = None,
 ) -> AssetCard:
     """One entry for the generic asset grid / status page: what kind of
     preview to render, and the two URLs a client can already reach (never
@@ -50,11 +52,21 @@ def asset_card(
     not got: 4,637 answers 416 in 48 h, prod 2026-11-07).
 
     `removed`: a download whose video the retention sweep removed -- only
-    what was kept of it has a URL (a video's poster, an image's preview)."""
+    what was kept of it has a URL (a video's poster, an image's preview);
+    `again_error`: what the downloader said when it was last asked for
+    again and did not come."""
     local_url = f"{files_prefix}/{index}"
     kind = classify_kind(name)
     if removed:
-        return _removed_card(name, index, local_url, job_id, source)
+        card = _removed_card(name, index, local_url, job_id, source)
+        if again_error is None:
+            return card
+        return card.model_copy(
+            update={
+                "removed_reason": error_reason(again_error),
+                "removed_error": again_error,
+            }
+        )
     previewed = local and kind in ("image", "video")
     preview_url = f"{local_url}/preview" if previewed else None
     if (
@@ -143,6 +155,7 @@ def job_assets(job: Job, files_prefix: str) -> JobAssets:
                     r.url,
                     job_id=job.id,
                     removed=len(assets) in removed,
+                    again_error=r.again_error,
                 )
             )
     return JobAssets(assets=assets, failed_sources=failed_sources)

@@ -116,7 +116,10 @@
         const found = [];
         let offset = 0;
         for (let page = 0; page < PAGES && offset !== null; page++) {
-            const r = await fetch(`${endpoint}?offset=${offset}`);
+            // The endpoint may carry its own query (the date filter).
+            const url = new URL(endpoint, window.location.origin);
+            url.searchParams.set("offset", String(offset));
+            const r = await fetch(url);
             if (!r.ok) break;
             const box = document.createElement("div");
             box.innerHTML = await r.text();

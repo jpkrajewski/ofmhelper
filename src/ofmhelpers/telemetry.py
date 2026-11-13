@@ -39,6 +39,7 @@ import gc
 import os
 import threading
 import weakref
+from datetime import date
 from typing import Any
 lazy import logging
 lazy from collections.abc import Callable, Mapping
@@ -74,6 +75,8 @@ _LOGGED_ARGUMENTS = frozenset(
         "batch",
         "color",
         "copies",
+        "date_from",
+        "date_to",
         "device",
         "device_id",
         "dl",
@@ -279,7 +282,7 @@ def _logged_arguments(values: Mapping[str, Any]) -> dict[str, Any]:
 def _is_plain(value: Any) -> bool:
     if isinstance(value, list | tuple):
         return all(_is_plain(item) for item in value)
-    return value is None or isinstance(value, str | int | float)
+    return value is None or isinstance(value, str | int | float | date)
 
 
 def _masked(value: Any) -> Any:
