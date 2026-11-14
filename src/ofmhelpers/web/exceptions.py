@@ -11,13 +11,16 @@ and its traceback are in the logs and the request's trace.
 """
 
 from collections.abc import Callable, Coroutine
+from http import HTTPStatus
 from typing import Any
 
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ofmhelpers.db.repositories import DuplicateError
 from ofmhelpers.features.assets.store import AssetRefusedError
@@ -83,6 +86,18 @@ async def invalid_request(_request: Request, exc: RequestValidationError) -> Res
     return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
 
+async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
+    """FastAPI's own answer to an `HTTPException`, but for one case: an
+    address that is no page of this app, typed or clicked by someone signed
+    in, goes to their home instead of `{"detail":"Not Found"}` (owner
+    2026-11-14). Only a page load nothing matched: a route's own 404 (a job,
+    a file) and every script's call keep theirs."""
+    lost = exc.status_code == HTTPStatus.NOT_FOUND and "route" not in request.scope
+    if lost and request.method == "GET" and AuthMiddleware.is_page_load(request):
+        return RedirectResponse(AuthMiddleware.HOME, status_code=303)
+    return await http_exception_handler(request, exc)
+
+
 Handler = Callable[[Request, Any], Coroutine[Any, Any, Response]]
 
 
@@ -105,6 +120,7 @@ def exception_handlers() -> dict[int | type[Exception], Handler]:
     """`FastAPI(exception_handlers=...)`."""
     return {
         Exception: unhandled,
+        StarletteHTTPException: http_error,
         RequestValidationError: invalid_request,
         **{error: _refusal(status) for error, status in REFUSALS.items()},
     }

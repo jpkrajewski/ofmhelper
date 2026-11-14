@@ -1,0 +1,19 @@
+{# /clone's SOP dialog, filled by clone-sop.js from `GET /clone/examples`:
+   per example ONE video -- the original on the left, its clone on the right,
+   in step -- and the prompt that made it; "Use this prompt" puts that prompt
+   in the form. The examples are fixed (features/clone/examples.py): nothing
+   here edits one. #}
+{% import "components/ui.html" as ui %}
+{% for e in examples %}
+<article class="sop-example" data-example-id="{{ e.id }}" data-prompt="{{ e.prompt }}">
+    <h3>{{ e.title }}</h3>
+    <video src="{{ e.video_url }}" poster="{{ e.poster_url }}" preload="none" controls muted loop playsinline></video>
+    <div class="sop-example-sides"><span>Original</span><span>Clone</span></div>
+    <p class="sop-example-prompt">{{ e.prompt }}</p>
+    <div class="sop-example-actions">
+        {{ ui.button("Use this prompt", "primary", hook="sop-use") }}
+    </div>
+</article>
+{% else %}
+{{ ui.empty("No examples yet") }}
+{% endfor %}

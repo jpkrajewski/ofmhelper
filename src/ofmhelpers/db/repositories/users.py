@@ -6,6 +6,7 @@ never is: those must not reach Redis."""
 
 import hashlib
 import time
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -49,6 +50,9 @@ def _user(row: UserRow) -> User:
         is_password_account=row.is_password_account,
         owner_id=row.owner_id,
         credential_stamp=_credential_stamp(row.password_hash),
+        sessions_ended_at=(
+            row.sessions_ended_at.timestamp() if row.sessions_ended_at else None
+        ),
     )
 
 
@@ -148,6 +152,14 @@ class UserRepository(CachedRepository):
                 setattr(row, key, value)
             s.flush()
             return _user(row)
+
+    @invalidates_cache
+    def end_sessions(self, user_id: int) -> None:
+        """Logout: every session of theirs signed in before now is out."""
+        with session_scope() as s:
+            row = s.get(UserRow, user_id)
+            if row is not None:
+                row.sessions_ended_at = datetime.now(tz=UTC)
 
     @invalidates_cache
     def signed_in(self, user_id: int, name: str, refresh_token: str | None) -> None:

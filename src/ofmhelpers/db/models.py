@@ -91,6 +91,11 @@ class UserRow(Base):
     owner_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    # When they last pressed Logout: every session signed in before it is
+    # out, on every device (alembic c8d9e0f1a2b4). NULL = never.
+    sessions_ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class UserIdentityRow(Base):
@@ -1019,4 +1024,54 @@ class PicturePresetRow(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_picture_presets_owner_name"),
+    )
+
+
+class CloneExampleRow(Base):
+    """An example /clone's SOP shows (alembic a6b7c8d9e0f2): its title, the
+    prompt it shows and its place in the list; its files are in
+    `<uploads>/sop/<id>/`. Made from a finished clone (`job_id`, while that
+    run exists) and kept without it. Everyone's to read."""
+
+    __tablename__ = "clone_examples"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    job_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (UniqueConstraint("job_id", name="uq_clone_examples_job_id"),)
+
+
+class PhoneRevisionRow(Base):
+    """One person's phones after one change (alembic b7c8d9e0f1a3): the rows
+    of `devices`, `logins` and `device_logins` as stored, secrets still
+    encrypted. Written by the database's own trigger on those tables, never
+    by the app; a second trigger makes the table append-only. Mapped so the
+    schema check and the tests' wipe know it."""
+
+    __tablename__ = "phone_revisions"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    txid: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    change: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "txid", "created_at", name="uq_phone_revisions_transaction"
+        ),
+        Index("ix_phone_revisions_user_id_id", "user_id", "id"),
     )

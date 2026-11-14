@@ -11,11 +11,22 @@ role change applies at once. A session holds the user's `credential_stamp`
 from when it signed in: once the password changes, every other session of
 theirs is signed out (the one that changed it is re-remembered). A session
 from before users existed (it holds a role, no user) is sent back to /login.
+Logout ends every session of the person (`users.sessions_ended_at`): one
+signed in before it (`since`) is refused on any device.
+
+The session slides: Starlette re-sends the cookie only when the session is
+written, so every user action (a page opened, anything that is not a read)
+writes `seen` and the cookie lives `session_max_age_s` from that moment.
+Background polls (fetch GETs) do not count: a tab nobody touches signs out.
+static/js/session.js sends `PUT /session` while the person clicks or types
+on a page that makes no request of its own (prod 2026-11: the cookie ended
+5 h after sign-in whatever the person did).
 
 Once the session is good, the request's `Viewer` is built
 (`features/users/viewing.py`) and kept on `request.state.viewer`: who the
 request acts as -- the person signed in, or the person an admin is viewing
-as, in which case nothing but a read goes through (`_look_only`). Every
+as, in which case nothing but a read goes through (`_look_only`; the admin's
+own VA excepted, as whom they also act). Every
 "who" a route asks for (`web/dependencies.py`) and every "may they"
 (`require`, against `schemas/access.py`) is answered from it.
 
@@ -23,6 +34,7 @@ The allowlist is deployment config (`settings.web.public_paths` /
 `public_prefixes`), not literals in here.
 """
 
+import time
 from urllib.parse import quote, urlsplit
 
 from fastapi import HTTPException
@@ -50,12 +62,19 @@ logger = get_logger(__name__)
 
 _KEYS = ("user_id", "email", "role")
 _STAMP = "stamp"
+# When the person last did something (`_acted`): written to slide the cookie.
+_SEEN = "seen"
+# When this session signed in: one from before the person's last Logout
+# (`User.sessions_ended_at`) is out, wherever it is.
+_SINCE = "since"
+# The keep-alive session.js sends on a click or key press.
+SESSION_PATH = "/session"
 # The id of the person an admin is viewing as (`view_as` / `stop_viewing`).
 _VIEWING = "viewing"
 # What goes through while viewing as someone: reads, and the two ways out.
 _READS = frozenset({"GET", "HEAD", "OPTIONS"})
 STOP_VIEWING_PATH = "/viewing/delete"
-_WAYS_OUT = frozenset({STOP_VIEWING_PATH, "/logout"})
+_WAYS_OUT = frozenset({STOP_VIEWING_PATH, "/logout", SESSION_PATH})
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -84,10 +103,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return self._to_login(request)
         if user.role != current.role or user.email != current.email:
             self.remember(request, user)
+        if self._acted(request):
+            request.session[_SEEN] = int(time.time())
         viewer = await run_in_threadpool(
             viewer_for, user, request.session.get(_VIEWING)
         )
-        if not viewer.read_only:
+        if viewer.by is None:
             # Nobody viewed (any more: the person removed, the admin demoted).
             request.session.pop(_VIEWING, None)
         request.state.viewer = viewer
@@ -98,7 +119,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 "enduser.id": str(user.id),
                 "enduser.email": user.email,
                 "enduser.role": str(user.role),
-                **({"viewing.id": str(viewer.user.id)} if viewer.read_only else {}),
+                **({"viewing.id": str(viewer.user.id)} if viewer.by else {}),
             }
         )
         if (
@@ -109,10 +130,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return self._look_only(request, viewer)
         return await call_next(request)
 
+    @staticmethod
+    def _acted(request: Request) -> bool:
+        """Whether the person did this themselves: opened a page, or sent
+        anything that is not a read. A script's poll is neither."""
+        if request.method not in _READS:
+            return True
+        return request.headers.get("sec-fetch-mode") == "navigate"
+
     def _look_only(self, request: Request, viewer: Viewer) -> Response:
         """An admin viewing as someone changes nothing of theirs: every
-        write is refused here, in one place, whatever the route."""
-        detail = f"Viewing as {viewer.label}: look only"
+        write is refused here, in one place, whatever the route. (Their own
+        VA is not read only: `features/users/viewing.py`.)"""
+        detail = f"You are viewing as {viewer.label}. Go back to your view to do this."
         if self.is_fetch(request):
             return JSONResponse({"detail": detail}, status_code=403)
         return PlainTextResponse(detail, status_code=403)
@@ -130,6 +160,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return "deactivated"
         if request.session.get(_STAMP, "") != user.credential_stamp:
             return "password changed"
+        ended = user.sessions_ended_at
+        if ended is not None and request.session.get(_SINCE, 0) <= ended:
+            return "logged out"
         return None
 
     def _to_login(self, request: Request) -> Response:
@@ -226,6 +259,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         over (no session fixation)."""
         request.session.clear()
         cls.remember(request, user)
+        request.session[_SINCE] = time.time()
 
     @staticmethod
     def session_user(request: Request) -> SessionUser | None:
@@ -263,11 +297,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     @classmethod
     def require(cls, request: Request, what: Area | Action) -> None:
-        """403s a role the access map (`schemas/access.py`) does not let
+        """Refuses a role the access map (`schemas/access.py`) does not let
         open the area or do the action. Used through the `Access` / `Can`
-        dependencies of `web/dependencies.py`, never called by a route."""
-        if not allowed(cls.viewer(request).user.role, what):
-            raise HTTPException(status_code=403, detail="Not available to you")
+        dependencies of `web/dependencies.py`, never called by a route.
+
+        A page typed or clicked in the browser goes to the person's home
+        (303): a VA opening /accounts sees their own start page, not a line
+        of JSON saying the page exists and is not theirs (owner 2026-11-14).
+        A script's call, and anything that is not a page load, gets the 403."""
+        if allowed(cls.viewer(request).user.role, what):
+            return
+        if request.method == "GET" and cls.is_page_load(request):
+            raise HTTPException(status_code=303, headers={"Location": cls.HOME})
+        raise HTTPException(status_code=403, detail="Not available to you")
+
+    @staticmethod
+    def is_page_load(request: Request) -> bool:
+        """A browser loading a page into its tab says so itself."""
+        return request.headers.get("sec-fetch-mode") == "navigate"
 
     @classmethod
     def actor(cls, request: Request) -> str:

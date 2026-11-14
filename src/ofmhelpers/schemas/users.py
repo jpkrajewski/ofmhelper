@@ -41,6 +41,9 @@ class User(BaseModel):
     # Changes with the password: a session signed in under another one is
     # out (middleware/auth.py).
     credential_stamp: str = ""
+    # When they last pressed Logout (epoch seconds): a session signed in
+    # before it is out, wherever it is (middleware/auth.py). None = never.
+    sessions_ended_at: float | None = None
 
     @property
     def is_admin(self) -> bool:
@@ -75,7 +78,9 @@ class Viewer(BaseModel):
     (`features/users/viewing.py` `viewer_for`) and read by every dependency
     in `web/dependencies.py`. Normally the person signed in. An admin
     viewing as someone (`by` set) is that person for every read, and may
-    change nothing (`read_only`)."""
+    change nothing (`read_only`), unless that someone is the admin's own VA
+    (`acts`): the VA works for them on their keys, so what the admin does
+    there is done as the VA."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -90,10 +95,12 @@ class Viewer(BaseModel):
     by: SessionUser | None = None
     # The name the "Viewing as" banner shows.
     label: str = ""
+    # The admin viewing may also act: the person viewed is their own VA.
+    acts: bool = False
 
     @property
     def read_only(self) -> bool:
-        return self.by is not None
+        return self.by is not None and not self.acts
 
     @property
     def actors(self) -> frozenset[str]:

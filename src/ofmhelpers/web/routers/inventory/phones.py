@@ -21,12 +21,20 @@ from pydantic import BaseModel
 
 from ofmhelpers.features.phones import service
 from ofmhelpers.features.phones import workbook as phones_workbook
+from ofmhelpers.features.phones.revisions import Revisions
 from ofmhelpers.features.phones.service import LoginAdded
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DeviceFields, LoginFields, PhoneQuery
 from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.devices import AssignAccount
-from ofmhelpers.web.dependencies import Access, CurrentUser, OwnerId, Scope
+from ofmhelpers.schemas.phone_revisions import Restored
+from ofmhelpers.web.dependencies import (
+    Access,
+    CurrentUser,
+    OwnerId,
+    Scope,
+    Viewing,
+)
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.templates_config import render
 
@@ -45,6 +53,21 @@ def _vault_reason() -> Iterator[None]:
 
 
 VAULT_REASON = [Depends(_vault_reason)]
+
+
+def _own_eyes(viewer: Viewing) -> None:
+    """A password, a backup code and the export (all of them, in plaintext)
+    go to the person they belong to, never to an admin viewing as them:
+    "view as" shows the phones, not what opens the accounts on them (found
+    2026-11-14: it answered both)."""
+    if viewer.by is not None:
+        raise HTTPException(
+            status_code=403, detail="Passwords are shown only to their owner"
+        )
+
+
+# What reads a secret: its owner only, and a vault problem says why.
+SECRET = [Depends(_own_eyes), *VAULT_REASON]
 
 router = APIRouter(
     prefix="/phones", tags=["phones"], dependencies=[Access(Area.PHONES)]
@@ -92,7 +115,28 @@ def drawing(model: str = "", color: str = "") -> Response:
     )
 
 
-@router.get("/export.xlsx", dependencies=VAULT_REASON)
+@router.get("/revisions", summary="History: the phones after each change")
+def revisions(request: Request, scope: Scope) -> Response:
+    return render(
+        request, "_phone_revisions.html", revisions=Revisions(scope=scope).listed()
+    )
+
+
+@router.post(
+    "/revisions/{revision_id}/restoration",
+    status_code=201,
+    summary="Go back to the phones of a revision",
+)
+def restore_revision(revision_id: int, scope: Scope, user: CurrentUser) -> Restored:
+    """The person's phones, logins and passwords as that revision holds
+    them. Recorded as a new revision, so it can be undone. Logged: who and
+    which revision."""
+    done = Revisions(scope=scope).restore(revision_id)
+    logger.info("Phones restored to revision %s by %s", revision_id, user.email)
+    return done
+
+
+@router.get("/export.xlsx", dependencies=SECRET)
 def export(scope: Scope, user: CurrentUser) -> Response:
     """Every active phone and its logins, in plaintext (see
     features/phones/workbook.py). Logged: who, and how many -- never a value."""
@@ -111,7 +155,7 @@ def export(scope: Scope, user: CurrentUser) -> Response:
     )
 
 
-@router.get("/logins/{login_id}/secret", dependencies=VAULT_REASON)
+@router.get("/logins/{login_id}/secret", dependencies=SECRET)
 def secret(login_id: int, login: Login, user: CurrentUser) -> Response:
     """One login's password and backup codes, for Show / Copy / Edit.
     Logged: who and which login -- never the value."""

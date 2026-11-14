@@ -27,8 +27,10 @@ from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldP
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.schemas import Job, ResultFile
+from ofmhelpers.schemas.persistence import JobPreview
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.generation import clone
+from ofmhelpers.web.routers.task_helpers.responses import job_status_payload
 from ofmhelpers.web.templates_config import render_partial
 
 NEW = json.dumps([{"kind": "new"}])
@@ -259,6 +261,23 @@ def _job(job_id, status="running", **extra):
         },
         **extra,
     )
+
+
+def test_a_generated_clone_still_being_exported_says_what_for():
+    """Owner 2026-11-13: the card showed the generated video with nothing
+    telling it was still being encoded."""
+    hosted = JobPreview(remote_url="https://cdn/x.mp4", kind="video")
+    waiting = job_status_payload(_job("s1"), "/clone/files")
+    encoding = job_status_payload(_job("s2", preview=hosted), "/clone/files")
+    done = job_status_payload(_job("s3", "done", preview=hosted), "/clone/files")
+    plain = _job("s4", preview=hosted)
+    plain.params["export"] = "original"
+    saving = job_status_payload(plain, "/clone/files")
+
+    assert waiting.stage is None
+    assert encoding.stage == "Generated. Encoding: CapCut export…"
+    assert done.stage is None
+    assert saving.stage == "Generated. Saving…"
 
 
 def test_a_running_card_is_the_shared_card_with_no_timer():

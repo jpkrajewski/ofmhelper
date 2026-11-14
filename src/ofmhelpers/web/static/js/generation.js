@@ -220,9 +220,31 @@
     // the actual media playing straight from that remote URL. When the job
     // finally reports "done", pollJob's normal card.replaceWith(...) swaps
     // this out for the locally-served version -- no extra code needed here
-    // for that half of the swap.
-    function showPreview(card, preview, resultKind) {
-        if (card.dataset.previewUrl === preview.remote_url) return; // already showing it
+    // for that half of the swap. Under it, what the server is still making
+    // of the result (`stage`: "Generated. Encoding: CapCut export…").
+    function showStage(card, media, stage) {
+        let line = card.querySelector("[data-stage]");
+        if (!stage) {
+            line?.remove();
+            return;
+        }
+        if (!line) {
+            line = document.createElement("div");
+            line.className = "result-file";
+            line.dataset.stage = "";
+            line.append(document.createElement("span"), document.createTextNode(""));
+            line.firstChild.className = "spinner";
+            media.after(line);
+        }
+        line.lastChild.textContent = ` ${stage}`;
+    }
+
+    function showPreview(card, preview, resultKind, stage) {
+        if (card.dataset.previewUrl === preview.remote_url) {
+            // Already showing it: only its line may have changed.
+            showStage(card, card.querySelector("[data-preview]"), stage);
+            return;
+        }
         card.dataset.previewUrl = preview.remote_url;
 
         const kind = preview.kind || resultKind;
@@ -237,9 +259,22 @@
             media.alt = "generating… (showing hosted preview)";
         }
 
+        media.dataset.preview = "";
         const placeholder = card.querySelector(".result-file");
         if (placeholder) placeholder.replaceWith(media);
         else card.prepend(media);
+        showStage(card, media, stage);
+        // The result is on the card: a page takes away what stood in for it
+        // (clone.js: the first frame of the video being cloned).
+        card.dispatchEvent(new CustomEvent("gallery:card-preview", { bubbles: true }));
+    }
+
+    // A card of someone else's run (a VA's, read by the owner) keeps its
+    // "Done by VA: <name>" line when the run ends and the card is redrawn.
+    function keepMaker(from, cards) {
+        const maker = from.querySelector("[data-made-by]");
+        if (!maker) return;
+        cards.forEach((card) => card.querySelector(".source")?.after(maker.cloneNode(true)));
     }
 
     // job is optional: the "Not found" card (a job gone) has no params
@@ -301,7 +336,7 @@
             .then((job) => {
                 if (job.status === "running" || job.status === "queued") {
                     if (job.preview?.remote_url) {
-                        showPreview(card, job.preview, resultKind);
+                        showPreview(card, job.preview, resultKind, job.stage);
                     }
                     again(Math.min(interval * 1.4, POLL_MAX_MS));
                     return;
@@ -316,6 +351,7 @@
                     const failed = buildFailedCard(
                         label, job.error || "Generation failed.", job, job.error_line
                     );
+                    keepMaker(card, [failed]);
                     card.replaceWith(failed);
                     // For pages that add their own bits to a failed card
                     // (clone.js: the video it was cloning).
@@ -343,6 +379,7 @@
                 if (!cards.length) {
                     cards.push(buildFailedCard(label, "No output produced.", job, "No output"));
                 }
+                keepMaker(card, cards);
                 card.replaceWith(...cards);
                 // For pages that add their own bits to a finished card
                 // (clone.js: Drive).

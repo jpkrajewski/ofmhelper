@@ -5,8 +5,9 @@
    failed one Recreate and a ⋯ menu (Hide). A hidden card (`data-hidden`,
    Unhide instead of Hide) is only drawn in "Show hidden"'s view of only the
    hidden cards (_gallery_hidden.html). A card of someone else's job
-   (`job.made_by`: a VA's, read by the owner) names its maker at the end of
-   the meta line and has no Hide: hiding is the maker's.
+   (`job.made_by`: a VA's, read by the owner) names its maker on a line of
+   its own under the meta line ("Done by VA: <name>") and has no Hide:
+   hiding is the maker's.
    A page's card is `{% extends "_gallery_card.html" %}` overriding only
    its blocks (`lead`: above the media, /clone's picture of the video being
    cloned; `actions`: the whole row; /repurpose keeps only Recreate);
@@ -31,7 +32,8 @@
         <div class="result-file"><span class="spinner"></span> {% block pending_label %}generating…{% endblock %}</div>
     {% endif %}
     {% block notes %}{% endblock %}
-    <p class="source">{% block meta %}{{ job.task_label }}{% endblock %}{% if job.made_by %} · {{ job.made_by }}{% endif %}</p>
+    <p class="source">{% block meta %}{{ job.task_label }}{% endblock %}</p>
+    {% if job.made_by %}<p class="source" data-made-by>Done by VA: {{ job.made_by }}</p>{% endif %}
     {% block below %}{% endblock %}
     {% if job.status in ("done", "failed") %}
     <div class="result-actions">

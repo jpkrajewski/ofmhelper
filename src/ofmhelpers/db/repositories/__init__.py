@@ -26,6 +26,7 @@ by domain and a domain may grow a second module.
 from ofmhelpers.db.repositories.applications import ApplicationRepository
 from ofmhelpers.db.repositories.chats import ChatRepository
 from ofmhelpers.db.repositories.clone_ai_checks import CloneAiCheckRepository
+from ofmhelpers.db.repositories.clone_examples import CloneExampleRepository
 from ofmhelpers.db.repositories.clone_from_links import CloneFromLinkRepository
 from ofmhelpers.db.repositories.cookies import CookieRepository
 from ofmhelpers.db.repositories.database import DatabaseRepository
@@ -34,6 +35,7 @@ from ofmhelpers.db.repositories.downloads import DownloadRepository
 from ofmhelpers.db.repositories.drive_folders import DriveFolderRepository
 from ofmhelpers.db.repositories.drive_uploads import DriveUploadRepository
 from ofmhelpers.db.repositories.jobs import JobRepository
+from ofmhelpers.db.repositories.phone_revisions import PhoneRevisionRepository
 from ofmhelpers.db.repositories.picture_presets import PicturePresetRepository
 from ofmhelpers.db.repositories.report_runs import ReportRunRepository
 from ofmhelpers.db.repositories.self_links import SelfLinkRepository
@@ -46,6 +48,7 @@ __all__ = [
     "ApplicationRepository",
     "ChatRepository",
     "CloneAiCheckRepository",
+    "CloneExampleRepository",
     "CloneFromLinkRepository",
     "CookieRepository",
     "DatabaseRepository",
@@ -56,6 +59,7 @@ __all__ = [
     "DuplicateError",
     "JobRepository",
     "OwnsDataError",
+    "PhoneRevisionRepository",
     "PicturePresetRepository",
     "ReportRunRepository",
     "SelfLinkRepository",

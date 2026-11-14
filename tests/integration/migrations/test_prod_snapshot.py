@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from repo_paths import FIXTURES, REPO
 from sqlalchemy import Engine, create_engine, func, inspect, select, table, text
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import DBAPIError
 
 from alembic import command
 
@@ -713,3 +714,50 @@ def test_job_owners_downgrade_puts_actor_and_the_meta_cost_back(db):
     assert dict(_rows(db, "SELECT id, actor FROM jobs")) == owners
     assert dict(_rows(db, "SELECT id, meta FROM jobs")) == metas
     assert not {"user_id", "cost_usd", "cost_estimated"} & _columns(db, "jobs")
+
+
+CLONE_EXAMPLES = "a6b7c8d9e0f2"
+PHONE_REVISIONS = "b7c8d9e0f1a3"
+
+_PHONE_OWNERS = """
+    SELECT count(*) FROM (
+        SELECT user_id FROM devices UNION SELECT user_id FROM logins
+    ) AS owners
+"""
+_IN_SNAPSHOTS = """
+    SELECT coalesce(sum(jsonb_array_length(snapshot -> '{table}')), 0)::int
+    FROM phone_revisions WHERE change = 'baseline'
+"""
+
+
+def test_clone_examples_adds_an_empty_table_and_changes_no_row(db):
+    needs(CLONE_EXAMPLES)(db)
+    before = _row_counts(db)
+    command.upgrade(_alembic(), CLONE_EXAMPLES)
+    after = _row_counts(db)
+    assert after["clone_examples"] == 0
+    assert {t: n for t, n in after.items() if t in before} == before
+
+
+def test_phone_revisions_start_with_every_owners_phones_and_then_record(db):
+    """Each owner of a phone or a login gets one "baseline" revision holding
+    every row of theirs; no phone row changes; from then on the database
+    records a change by itself, and refuses a change to what it recorded."""
+    needs(PHONE_REVISIONS)(db)
+    before = _row_counts(db)
+    owners = _scalar(db, _PHONE_OWNERS)
+    with_phones = _scalar(db, "SELECT count(DISTINCT user_id) FROM devices")
+
+    command.upgrade(_alembic(), PHONE_REVISIONS)
+
+    after = _row_counts(db)
+    assert after["phone_revisions"] == owners
+    for name in ("devices", "logins", "device_logins"):
+        assert _scalar(db, _IN_SNAPSHOTS.format(table=name)) == before[name]
+    assert {t: n for t, n in after.items() if t in before} == before
+
+    with db.begin() as conn:
+        conn.execute(text("UPDATE devices SET notes = notes"))
+    assert _count(db, "phone_revisions") == owners + with_phones
+    with pytest.raises(DBAPIError, match="append-only"), db.begin() as conn:
+        conn.execute(text("DELETE FROM phone_revisions"))

@@ -11,17 +11,19 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.stores import devices, users
+from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.account.keys import Keys, keep_used
 from ofmhelpers.features.assets.store import assets_root_for_user
 from ofmhelpers.features.users import service
 from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.signin.passwords import hash_password
-from ofmhelpers.schemas import Role
+from ofmhelpers.schemas import DeviceFields, LoginFields, Role
 from ofmhelpers.schemas.access import RETIRED, Area, areas_of
 from ofmhelpers.web.main import app
 
@@ -101,6 +103,43 @@ def test_a_va_is_refused_every_other_page(path):
     r = _client(VA, Role.VA).get(path, follow_redirects=False)
 
     assert r.status_code == 403
+
+
+def test_a_page_that_is_not_theirs_sends_the_browser_home():
+    """Owner 2026-11-14: a VA typing /accounts read
+    {"detail":"Not available to you"}. A page load goes to their home; a
+    script's call still gets the 403."""
+    _va_of()
+    va = _client(VA, Role.VA)
+
+    page = va.get(
+        "/accounts", headers={"sec-fetch-mode": "navigate"}, follow_redirects=False
+    )
+    call = va.get("/accounts", headers={"sec-fetch-mode": "cors"})
+    write = va.post(
+        "/accounts/delete", headers={"sec-fetch-mode": "navigate"}, json={"ids": []}
+    )
+
+    assert (page.status_code, page.headers["location"]) == (303, "/home")
+    assert "Not available" not in page.text
+    assert (call.status_code, write.status_code) == (403, 403)
+    assert va.get("/home", headers={"sec-fetch-mode": "navigate"}).status_code == 200
+
+
+@pytest.mark.parametrize("role", [Role.VA, Role.USER, Role.ADMIN])
+def test_an_address_that_is_no_page_sends_the_browser_home(role):
+    """Owner 2026-11-14: /logs answered {"detail":"Not Found"}."""
+    person = _client(OTHER, role)
+    load = {"sec-fetch-mode": "navigate"}
+
+    lost = person.get("/logs", headers=load, follow_redirects=False)
+    call = person.get("/logs", headers={"sec-fetch-mode": "cors"})
+    missing_job = person.get("/clone/jobs/no-such-job", headers=load)
+
+    assert (lost.status_code, lost.headers["location"]) == (303, "/home")
+    assert (call.status_code, call.json()) == (404, {"detail": "Not Found"})
+    # A page that exists and says "not found" about a thing keeps saying so.
+    assert missing_job.status_code == 404
 
 
 def test_a_vas_menu_lists_only_what_they_may_open():
@@ -239,6 +278,9 @@ def test_an_owner_picked_for_a_user_is_ignored():
 # --- an admin's "View as" ------------------------------------------------------------
 
 
+_LOOK_ONLY = "You are viewing as {name}. Go back to your view to do this."
+
+
 def _viewing(target_email: str = OWNER, role: Role = Role.USER):
     """An admin's client, viewing as `target_email`."""
     admin = TestClient(app)
@@ -271,7 +313,7 @@ def test_view_as_changes_nothing():
 
     saved = admin.post("/account/keys", data={"key_kie": "k" * 20})
     assert saved.status_code == 403
-    assert "look only" in saved.text
+    assert saved.text == _LOOK_ONLY.format(name=target.label)
     assert users.api_keys(target.id).keys == []
     fetch = admin.post(
         "/jobs/whatever/hidden",
@@ -279,7 +321,78 @@ def test_view_as_changes_nothing():
         headers={"sec-fetch-mode": "cors"},
     )
     assert fetch.status_code == 403
-    assert fetch.json() == {"detail": f"Viewing as {target.label}: look only"}
+    assert fetch.json() == {"detail": _LOOK_ONLY.format(name=target.label)}
+
+
+def test_an_admin_viewing_as_their_own_va_also_acts_as_the_va():
+    """Owner 2026-11-13: "Viewing as noelyn: look only" on a click in the
+    VA's Download page. The VA works on the admin's keys and files, so the
+    admin may do there what the VA may; what is made is the VA's."""
+    admin = TestClient(app)
+    me = sign_in_admin(admin)
+    va = make_user(VA, Role.VA)
+    users.set_owner(va.id, me.id)
+    vas_job = create_job("download_media", {}, actor=str(va.id))
+    admin.post(f"/users/{va.id}/viewing", follow_redirects=False)
+
+    viewer = viewer_for(users.get_user(me.id), va.id)
+    hidden = admin.post(
+        f"/jobs/{vas_job}/hidden",
+        json={"hidden": True},
+        headers={"sec-fetch-mode": "cors"},
+    )
+
+    assert (viewer.acts, viewer.read_only, viewer.keys_of) == (True, False, me.id)
+    # Only a job's maker hides it: the request was the VA's.
+    assert hidden.status_code == 200
+    assert get_job(vas_job).hidden_at is not None
+    # Still inside the view, with the way back.
+    assert f"Viewing as {va.label}" in admin.get("/home").text
+
+
+def test_another_owners_va_is_look_only():
+    _owner, va = _va_of()
+    admin = TestClient(app)
+    sign_in_admin(admin)
+    admin.post(f"/users/{va.id}/viewing", follow_redirects=False)
+
+    r = admin.post(
+        "/jobs/whatever/hidden",
+        json={"hidden": True},
+        headers={"sec-fetch-mode": "cors"},
+    )
+
+    assert r.status_code == 403
+    assert r.json() == {"detail": _LOOK_ONLY.format(name=va.label)}
+
+
+def test_an_owner_reads_done_by_va_on_their_vas_card():
+    owner, va = _va_of()
+    create_job("download_media", {}, actor=str(va.id))
+    create_job("download_media", {}, actor=str(owner.id))
+
+    page = _client(OWNER).get("/download-assets").text
+
+    assert page.count(f"Done by VA: {va.label}") == 1
+
+
+def test_view_as_never_shows_a_phone_password_or_the_export(monkeypatch):
+    """An admin viewing as someone sees their phones, not what opens the
+    accounts on them (2026-11-14: Show and Export both answered)."""
+    monkeypatch.setenv("OFM_VAULT_KEY", Fernet.generate_key().decode())
+    admin, target = _viewing()
+    phone = devices.add_device(DeviceFields(label="Phone 01"), target.id)
+    fields = LoginFields(service="gmail", username="them", password="pw-secret")
+    login = devices.add_login(phone, fields, target.id)
+
+    shown = admin.get(f"/phones/logins/{login.id}/secret")
+    exported = admin.get("/phones/export.xlsx")
+    own = _client(OWNER).get(f"/phones/logins/{login.id}/secret")
+
+    assert "Phone 01" in admin.get("/phones").text
+    assert (shown.status_code, exported.status_code) == (403, 403)
+    assert "pw-secret" not in shown.text
+    assert own.json()["password"] == "pw-secret"
 
 
 def test_back_to_my_view_gives_the_admin_their_own_pages_again():

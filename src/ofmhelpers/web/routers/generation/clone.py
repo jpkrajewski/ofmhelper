@@ -13,10 +13,11 @@ the submit's checks, cards, Drive picker, export; `run.py`: the worker's
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import Field
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.clone import examples
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
     ExportFailedError,
@@ -51,6 +52,7 @@ from ofmhelpers.schemas import (
     UploadsQueued,
 )
 from ofmhelpers.schemas.access import Action, Area
+from ofmhelpers.schemas.clone_examples import ExamplePart
 from ofmhelpers.web.dependencies import (
     Access,
     Actor,
@@ -229,6 +231,25 @@ def run(
     )
     job_ids = submit.start(form)
     return CloneQueued(job_ids=job_ids, html=_rendered_cards(job_ids, actor, user.id))
+
+
+# --- SOP: the fixed examples (features/clone/examples.py) ---------------------
+
+
+@router.get("/examples", summary="The SOP dialog's examples")
+def examples_list(request: Request) -> Response:
+    return render(request, "_clone_examples.html", examples=examples.shown())
+
+
+@router.get(
+    "/examples/{example_id}/{part}",
+    summary="An example's side-by-side video or its poster",
+)
+def example_file(example_id: int, part: ExamplePart) -> Response:
+    return FileResponse(
+        examples.file(example_id, part),
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
 
 
 add_job_routes(

@@ -12,7 +12,10 @@
 
    /download-assets also sets `sheet_cooldown_s` (seconds its button still
    rests, 0 = ready): "Download from Drive sheet" comes first and keeps the
-   row too (static/js/download.js). #}
+   row too (static/js/download.js).
+
+   /clone sets `sop`: the "SOP" button, which opens its examples dialog
+   (static/js/clone-sop.js). #}
 {% import "components/ui.html" as ui %}
 {% set sheet_button = sheet_cooldown_s is defined %}
 {% set dated = dates is defined %}
@@ -20,6 +23,7 @@
 <div class="ph-toolbar"{% if kept %} data-keep{% elif not hidden_count %} hidden{% endif %}{% if dated %} data-zone-times{% endif %}>
     {% if dated %}{{ ui.date_range(request.url.path, dates.date_from, dates.date_to, dates.today) }}{% endif %}
     <div class="toolbar-actions">
+        {% if sop is defined %}{{ ui.button("SOP", icon="list", hook="sop-open") }}{% endif %}
         {% if sheet_button %}{{ ui.button("Download from Drive sheet", icon="download", hook="sheet-download", attrs={"data-cooldown-s": sheet_cooldown_s}) }}{% endif %}
         {{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": kept and not hidden_count}) }}
     </div>

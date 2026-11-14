@@ -572,6 +572,9 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 /* A /clone card that runs or failed: the video it clones on top, its
    "generating…" or failure line under it at its own height. */
 [data-clone-source] ~ .result-file { min-height: 0; }
+/* What is still being made of a result already shown (generation.js
+   `showStage`): one line under it. */
+.result-file[data-stage] { min-height: 0; }
 /* A hidden card (Show hidden's view): faded, its actions not. */
 .result-item[data-hidden] > :not(.result-actions) { opacity: 0.5; }
 /* What static/js/gallery-scroll.js watches for: spans the grid so it is only

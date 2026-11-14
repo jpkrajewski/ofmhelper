@@ -13,6 +13,7 @@ looks signed in. The fix has two halves, both covered here:
 """
 
 import os
+import time
 from urllib.parse import parse_qs, urlsplit
 
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
@@ -185,3 +186,119 @@ def test_a_session_that_ends_says_why(caplog):
         signed_in.get(PROTECTED_PAGE, follow_redirects=False)
 
     assert "refused (no session)" in caplog.text
+
+
+# --- the session slides on what the person does -------------------------------
+
+_HOUR = 3600
+
+
+def _signed_in() -> TestClient:
+    person = TestClient(app)
+    person.post(
+        "/login", data={"password": "test-admin", "next": "/"}, follow_redirects=False
+    )
+    return person
+
+
+def _slid(response) -> bool:
+    """Whether the answer carried the session cookie again."""
+    return "ofm_session=" in response.headers.get("set-cookie", "")
+
+
+def test_what_the_person_does_slides_the_cookie_and_a_poll_does_not():
+    """Starlette re-sends the cookie only when the session is written: the
+    middleware writes it on a page opened and on anything that is not a
+    read, never on a script's GET."""
+    person = _signed_in()
+
+    page = person.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "navigate"})
+    poll = person.get("/clone/gallery/latest", headers={"sec-fetch-mode": "cors"})
+    kept = person.put("/session", headers={"sec-fetch-mode": "cors"})
+
+    assert (page.status_code, _slid(page)) == (200, True)
+    assert (poll.status_code, _slid(poll)) == (200, False)
+    assert (kept.status_code, kept.content, _slid(kept)) == (204, b"", True)
+
+
+def test_keeping_the_session_needs_one():
+    r = client.put("/session", headers={"sec-fetch-mode": "cors"})
+
+    assert r.status_code == 401
+
+
+def test_a_session_lasts_from_the_last_action_not_from_sign_in(monkeypatch):
+    """Prod 2026-11: signed out 5 h after sign-in in the middle of work."""
+    clock = [time.time()]
+    monkeypatch.setattr(time, "time", lambda: clock[0])
+    person = _signed_in()
+
+    clock[0] += 4 * _HOUR
+    person.put("/session", headers={"sec-fetch-mode": "cors"})
+    clock[0] += 4 * _HOUR
+    r = person.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "cors"})
+
+    assert r.status_code == 200
+
+
+def test_a_tab_that_only_polls_is_signed_out(monkeypatch):
+    clock = [time.time()]
+    monkeypatch.setattr(time, "time", lambda: clock[0])
+    person = _signed_in()
+
+    clock[0] += 4 * _HOUR
+    poll = person.get("/clone/gallery/latest", headers={"sec-fetch-mode": "cors"})
+    clock[0] += 2 * _HOUR
+    r = person.get("/clone/gallery/latest", headers={"sec-fetch-mode": "cors"})
+
+    assert (poll.status_code, r.status_code) == (200, 401)
+
+
+# --- Logout ends the session everywhere ----------------------------------------
+
+
+def test_logout_ends_a_copy_of_the_cookie_and_every_other_device():
+    """Found 2026-11-14: the cookie is the whole session, so one copied
+    before Logout (stolen, or another device) went on working."""
+    here = _signed_in()
+    elsewhere = _signed_in()
+    stolen = TestClient(app)
+    stolen.cookies.set("ofm_session", here.cookies.get("ofm_session"))
+
+    here.post("/logout", follow_redirects=False)
+    answers = [
+        c.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "cors"}).status_code
+        for c in (here, stolen, elsewhere)
+    ]
+
+    assert answers == [401, 401, 401]
+
+
+def test_signing_in_again_after_logout_works(caplog):
+    person = _signed_in()
+    person.post("/logout", follow_redirects=False)
+    copy = TestClient(app)
+
+    again = _signed_in()
+    copy.cookies.set("ofm_session", again.cookies.get("ofm_session"))
+
+    assert (
+        again.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "cors"}).status_code == 200
+    )
+    assert (
+        copy.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "cors"}).status_code == 200
+    )
+
+
+def test_one_persons_logout_ends_nobody_elses_session():
+    from signin import sign_in
+
+    other = TestClient(app)
+    sign_in(other, "someone@example.com")
+    person = _signed_in()
+
+    person.post("/logout", follow_redirects=False)
+
+    assert (
+        other.get(PROTECTED_PAGE, headers={"sec-fetch-mode": "cors"}).status_code == 200
+    )

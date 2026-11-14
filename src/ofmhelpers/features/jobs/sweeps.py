@@ -35,6 +35,7 @@ from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
 from ofmhelpers.features.jobs import raw_files, recovery
 from ofmhelpers.features.links import sync as link_sync
+from ofmhelpers.features.phones import backup as phones_backup
 from ofmhelpers.features.previews import backfill as preview_backfill
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.features.reports import asks as report_asks
@@ -191,6 +192,16 @@ def sweeps() -> list[Sweep]:
             run=raw_files.remove_old,
             interval_s=lambda: settings.aigen.raw_sweep_s,
             queue=QueueName.PREVIEWS,
+        ),
+        # The whole phones History as one encrypted JSON file a day
+        # (features/phones/backup.py), written again within minutes of any
+        # change, never when nothing changed. Reads rows, writes one file.
+        # Not without the vault key: a backup is never written in plain.
+        Sweep(
+            name="phones backup",
+            run=phones_backup.dump,
+            interval_s=lambda: settings.vault.backup_sweep_s,
+            enabled=lambda: bool(settings.vault.key_list()),
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),

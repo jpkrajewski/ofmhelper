@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 
 from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.features.viral import service as viral_service
 from ofmhelpers.features.viral.media import add_audio, has_audio
 from ofmhelpers.features.viral.models import ApifyReel
 from ofmhelpers.features.viral.service import most_played
@@ -27,6 +28,7 @@ from ofmhelpers.integrations.apify.fake import (
     WRONG_KEY,
     fake_apify,
 )
+from ofmhelpers.integrations.apify.models import DatasetItem
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.main import app
@@ -208,3 +210,16 @@ def test_a_picture_only_reel_gets_its_sound_back(tmp_path):
     add_audio(video, audio)
 
     assert has_audio(video)
+
+
+def test_an_age_restricted_profile_says_so():
+    """Prod 2026-11-13, @bigboylazar: the actor answered "Restricted
+    profile" and the card said "No reels" about a profile full of them."""
+    item = DatasetItem.model_validate(
+        {"url": "https://www.instagram.com/shy", "error": "Restricted profile"}
+    )
+
+    with pytest.raises(viral_service.ViralError) as refused:
+        viral_service.parse("shy", [item])
+
+    assert error_reason(str(refused.value)) == "Age-restricted profile"
