@@ -290,6 +290,37 @@ docker compose -f docker-compose.yml exec -T postgres \
 Copy the dump off the server. A full restore needs four things: this dump,
 `.env` (above all `OFM_VAULT_KEY`), `uploads/`, and `kieai_out/`.
 
+### Phones: history and backup
+
+Every change to a phone, a login or a password is recorded by the database
+itself (table `phone_revisions`, written by a trigger, append-only: nothing
+can change or delete a stored revision). /phones "History" lists them;
+Restore on a line puts the phones, accounts and passwords back as they were.
+A restore is itself a line, so it is undone the same way.
+
+A copy of the whole History leaves the database as one encrypted file a
+day: `uploads/backups/phones/phones-YYYY-MM-DD.json.enc`, written again
+within 5 minutes of any change (`OFM_PHONES_BACKUP_SWEEP_S`), the newest 30
+days kept (`OFM_PHONES_BACKUP_KEEP`). It holds every user's revisions, each
+under its owner. It is encrypted with `OFM_VAULT_KEY` (Fernet); the
+passwords inside are encrypted a second time with the same key. Without the
+key the file is useless, to you too: keep the key off the server.
+
+The file is on the server's own disk. Copy it off the server like the dump
+above (`scp ubuntu@<server>:ofmhelper/uploads/backups/phones/*.enc .`).
+
+To get the History back (the key in the server's `.env`):
+
+```bash
+cd ~/ofmhelper
+docker compose -f docker-compose.yml exec ofmhelpers \
+  python -m ofmhelpers.features.phones.backup load uploads/backups/phones/phones-2026-11-14.json.enc
+```
+
+That adds the revisions the database lacks, each under its owner, and
+changes no phone. Each person then opens /phones, History, Restore.
+`... backup dump` writes today's file now.
+
 ## 12. Moving to a new server
 
 1. Steps 1–8 on the new box.

@@ -3,6 +3,7 @@
 retried and how long it waits, and every failure as the error the caller
 gets -- never a raw SDK exception."""
 
+import importlib
 import time
 from pathlib import Path
 
@@ -52,6 +53,12 @@ def clock(fake_externals, monkeypatch) -> _Clock:
     """Gemini on its fake, on a clock that never waits (only the llm
     modules': ffmpeg's own waits are real)."""
     monkeypatch.setenv("GEMINI_API_KEY", FAKE_KEY)
+    # Google's client is loaded on first use (a lazy import, 0.63 s on an
+    # idle machine, 2026-11-14): inside the first ask of a test process it
+    # ate over a second of the deadline these tests measure to the second
+    # (298.777 of 300, 28.951 of 30 in full parallel runs). Loaded here.
+    importlib.import_module("google.genai.errors")
+    importlib.import_module("google.genai.types")
     found = _Clock()
     monkeypatch.setattr(llm_base, "time", found)
     monkeypatch.setattr(gemini_provider, "time", found)

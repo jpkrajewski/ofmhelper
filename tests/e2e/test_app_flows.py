@@ -60,12 +60,12 @@ def test_va_sees_only_its_pages_and_none_of_the_admin_ones(va: Session):
     for path in VA_PAGES:
         assert va.goto(path) == 200, path
         expect(va.page.locator(".site-header nav")).to_be_visible()
-    # Checked before the admin pages: the browser logs each 403 below as a
-    # console error of its own.
-    assert va.js_errors == []
-
+    # A page that is not theirs sends them home (owner 2026-11-14: no
+    # "Not available to you" to read).
     for path in ADMIN_ONLY_PAGES:
-        assert va.goto(path) == 403, path
+        assert va.goto(path) == 200, path
+        assert va.page.url.endswith("/home"), path
+    assert va.js_errors == []
 
 
 def test_an_admin_adds_a_user_who_signs_in_with_google_and_with_a_password(

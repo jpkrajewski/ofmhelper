@@ -245,6 +245,9 @@ def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
 
     tables = ", ".join(Base.metadata.tables)
     with get_engine().begin() as conn:
+        # As the root wipe does: `phone_revisions` refuses a TRUNCATE by a
+        # trigger of its own (alembic b7c8d9e0f1a3), which this role skips.
+        conn.execute(text("SET LOCAL session_replication_role = replica"))
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     redis = get_redis()
     stale = [k for k in redis.scan_iter("*") if not k.startswith(b"rq:")]
@@ -332,6 +335,8 @@ def auth_states(
     root = tmp_path_factory.mktemp("e2e-auth")
     states = {}
     with create_engine(e2e_backend.database_url).begin() as conn:
+        # `phone_revisions` hangs on users and refuses a TRUNCATE itself.
+        conn.execute(text("SET LOCAL session_replication_role = replica"))
         conn.execute(text("TRUNCATE users RESTART IDENTITY CASCADE"))
     _seed_users(e2e_backend.database_url)
     for role, (email, password) in ACCOUNTS.items():

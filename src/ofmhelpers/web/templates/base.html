@@ -111,7 +111,7 @@
             {{ ui.button("Buy more space", href="https://one.google.com/storage", hook="drive-full-buy", attrs={"target": "_blank", "rel": "noopener"}) }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-full-dismiss") }}
         {% endcall %}
-        {% if viewer is not none and viewer.read_only %}
+        {% if viewer is not none and viewer.by %}
         {% call ui.notice(kind="warn", hook="viewing-as") %}
             <span>Viewing as {{ viewer.label }}</span>
             <form method="post" action="/viewing/delete">{{ ui.button("Back to my view", type="submit") }}</form>

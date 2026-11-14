@@ -14,6 +14,7 @@ from ofmhelpers.features.assets import cards
 from ofmhelpers.features.assets.cards import asset_card
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
+from ofmhelpers.features.jobs.stage import stage_of
 from ofmhelpers.schemas import (
     AssetCard,
     FailedSource,
@@ -113,4 +114,5 @@ def job_status_payload(job: Job | None, files_prefix: str) -> JobStatusPayload:
         # instead of blocking on the download. Only ever read while
         # "running"; once the job finishes the real result takes over.
         preview=job.preview if job.status == "running" else None,
+        stage=stage_of(job),
     )

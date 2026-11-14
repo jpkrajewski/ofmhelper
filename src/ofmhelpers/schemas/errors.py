@@ -55,6 +55,7 @@ REASONS = (
     ErrorReason(label="Export failed", pattern=r"^export failed"),
     # /viral searches (ofmhelpers.features.viral).
     ErrorReason(label="Profile not found", pattern=r"^profile not found"),
+    ErrorReason(label="Age-restricted profile", pattern=r"^age-restricted profile"),
     ErrorReason(label="No reels", pattern=r"^no reels"),
     ErrorReason(label="No Apify credit", pattern=r"^no apify credit"),
     # The provider could not fetch our reference link (APIYI: nothing made,

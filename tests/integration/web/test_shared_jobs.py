@@ -98,7 +98,9 @@ def test_an_owner_sees_their_vas_card_with_the_vas_name(
     for url in (page, fragment, latest):
         html = owner.get(url).text
         assert set(_ids(html)) == {theirs, mine}, url
-        assert f"· {VA_NAME}</p>" in _card(html, theirs), url
+        assert f'<p class="source" data-made-by>Done by VA: {VA_NAME}</p>' in _card(
+            html, theirs
+        ), url
         assert VA_NAME not in _card(html, mine), url
 
 

@@ -109,9 +109,10 @@ class SessionSettings(BaseSettings):
 
     session_secret: str
     session_https_only: bool = False
-    # Cookie lifetime, and the deadline static/js/session.js counts down to
-    # so an idle tab logs itself out instead of sitting there looking signed
-    # in. Shared admin/VA passwords, so keep it short.
+    # How long a session lasts after the person's last action (a page
+    # opened, a click, a key press: middleware/auth.py slides the cookie),
+    # and the deadline static/js/session.js counts down to so an idle tab
+    # logs itself out instead of sitting there looking signed in.
     session_max_age_s: int = 60 * 60 * 5  # 5 hours
 
 
@@ -1418,6 +1419,21 @@ class VaultSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     keys: SecretStr | None = Field(default=None, validation_alias="OFM_VAULT_KEY")
+    # /phones History (features/phones/revisions.py): the newest revisions
+    # the dialog lists. Every revision stays in the database.
+    history_limit: int = Field(
+        default=200, ge=1, le=1000, validation_alias="OFM_PHONES_HISTORY_LIMIT"
+    )
+    # The phones backup (features/phones/backup.py): one encrypted JSON
+    # file a day in <uploads>/backups/phones holding the whole History, the
+    # newest `backup_keep` days kept. Looked at every `backup_sweep_s`:
+    # today's file is written again only when a phone changed since.
+    backup_keep: int = Field(
+        default=30, ge=1, validation_alias="OFM_PHONES_BACKUP_KEEP"
+    )
+    backup_sweep_s: int = Field(
+        default=300, ge=10, validation_alias="OFM_PHONES_BACKUP_SWEEP_S"
+    )
 
     def key_list(self) -> list[str]:
         if self.keys is None:

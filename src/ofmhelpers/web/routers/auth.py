@@ -27,7 +27,7 @@ from ofmhelpers.features.signin.state import (
 from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.middleware import AuthMiddleware
-from ofmhelpers.web.middleware.auth import STOP_VIEWING_PATH
+from ofmhelpers.web.middleware.auth import SESSION_PATH, STOP_VIEWING_PATH
 from ofmhelpers.web.responses import see_other
 from ofmhelpers.web.templates_config import render
 
@@ -119,11 +119,22 @@ def stop_viewing(request: Request) -> Response:
     return see_other("/users")
 
 
+@router.put(
+    SESSION_PATH,
+    status_code=204,
+    summary="Keep the session: the person is still here",
+    dependencies=[Access(Area.SESSION)],
+)
+def keep_session() -> None:
+    """Sent by session.js while the person clicks or types. The auth
+    middleware slides the cookie on every request that is not a read."""
+
+
 @router.post("/logout", dependencies=[Access(Area.SESSION)])
 def logout(request: Request) -> Response:
     user = AuthMiddleware.session_user(request)
     if user is not None:
-        signed_out(user.actor)  # capture before clearing
+        signed_out(user.id)  # before the session is cleared
     request.session.clear()
     return see_other("/login")
 

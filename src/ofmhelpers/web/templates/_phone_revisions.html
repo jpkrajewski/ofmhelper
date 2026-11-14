@@ -1,0 +1,15 @@
+{# /phones History dialog, filled by phones-history.js from
+   `GET /phones/revisions`: the person's phones after each change, newest
+   first. Restore goes back to that line (asked first). The script prints
+   each <time> in the reader's zone. #}
+{% import "components/ui.html" as ui %}
+{% for r in revisions %}
+<li class="ph-revision" data-revision-id="{{ r.id }}">
+    <time datetime="{{ r.created_at.isoformat() }}">{{ r.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</time>
+    <span class="ph-revision-what">{{ r.change }}</span>
+    <span>{{ r.phones }} phone{{ "" if r.phones == 1 else "s" }} · {{ r.accounts }} account{{ "" if r.accounts == 1 else "s" }}</span>
+    {% if loop.first %}<span class="ph-revision-now">Now</span>{% else %}{{ ui.button("Restore", hook="ph-revision-restore") }}{% endif %}
+</li>
+{% else %}
+<li>{{ ui.empty("No changes yet") }}</li>
+{% endfor %}

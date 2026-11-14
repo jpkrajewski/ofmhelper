@@ -1884,3 +1884,23 @@ a.ph-login-user:hover { text-decoration: underline; }
 #server-body { display: grid; gap: var(--gap-stack); margin-top: var(--gap-stack); }
 #server-body .stat-grid { margin-bottom: 0; }
 .server-title { margin: var(--s-3) 0 0; font-size: var(--step-0); }
+
+/* /clone SOP: the examples dialog -- per example one video (the original
+   on the left, its clone on the right) and the prompt that made it. Wide:
+   two examples side by side. Every video sits in a box of one shape, so an
+   example looks the same before and after it loads, whatever the videos'
+   own shape (a 16:9 pair next to 9:16 ones). */
+.sop-dialog { width: min(1280px, calc(100vw - 2 * var(--s-4))); }
+.sop-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: var(--gap-stack); max-height: 76vh; overflow-y: auto; margin-bottom: var(--gap-stack); }
+.sop-example { display: grid; align-content: start; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.sop-example h3 { margin: 0; font-size: var(--step-0); }
+.sop-example video { display: block; width: 100%; aspect-ratio: 9 / 8; object-fit: contain; border-radius: var(--radius-control); background: var(--surface-2); }
+.sop-example-sides { display: grid; grid-template-columns: 1fr 1fr; text-align: center; color: var(--text-muted); font-size: var(--step--1); }
+.sop-example-prompt { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: var(--step--1); }
+.sop-example-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
+/* /phones History: one line per change, newest first. */
+.ph-history { width: min(720px, calc(100vw - 2 * var(--s-4))); }
+.ph-revisions { list-style: none; display: grid; gap: var(--gap-inline); max-height: 60vh; overflow-y: auto; margin: 0 0 var(--gap-stack); padding: 0; }
+.ph-revision { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--step--1); }
+.ph-revision-what { flex: 1; min-width: 0; color: var(--text-muted); word-break: break-word; }
+.ph-revision-now { color: var(--text-muted); }

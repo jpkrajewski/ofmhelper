@@ -46,7 +46,8 @@ class FailedSource(BaseModel):
 
 class JobStatusPayload(BaseModel):
     """`GET /<tool>/jobs/{id}/status`: what generation.js polls. `preview` is
-    kie.ai's hosted result while the local download is still running."""
+    kie.ai's hosted result while the local download is still running, and
+    `stage` what is being made of it meanwhile (`features/jobs/stage.py`)."""
 
     job_id: str
     task: str
@@ -56,6 +57,7 @@ class JobStatusPayload(BaseModel):
     result: list[AssetCard]
     failed_sources: list[FailedSource]
     preview: JobPreview | None = None
+    stage: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

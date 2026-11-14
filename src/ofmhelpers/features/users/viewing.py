@@ -1,7 +1,9 @@
 """Who a request acts as (`schemas.users.Viewer`): the person signed in, or,
 for an admin who chose "View as" on /users, that person, looked at and never
-changed. Built once per request by the auth middleware; everything a route
-knows about "who" comes from it (`web/dependencies.py`)."""
+changed -- except the admin's own VA, as whom the admin may also act (owner
+2026-11-13: the VA's runs are the admin's keys and files anyway). Built once
+per request by the auth middleware; everything a route knows about "who"
+comes from it (`web/dependencies.py`)."""
 
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
@@ -38,7 +40,8 @@ def viewer_for(user: User, viewing: int | None) -> Viewer:
     viewed = users.get_user(viewing)
     if viewed is None or not viewed.active:
         return _own(user)
-    return _own(viewed).model_copy(update={"by": _as_session(user)})
+    theirs = viewed.role == Role.VA and viewed.owner_id == user.id
+    return _own(viewed).model_copy(update={"by": _as_session(user), "acts": theirs})
 
 
 def viewable(user_id: int, me_id: int) -> User:

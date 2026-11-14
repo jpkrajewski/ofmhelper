@@ -396,6 +396,11 @@
         const gallery = document.getElementById("clone-gallery");
         gallery.addEventListener("gallery:card-ready", (e) => decorateFinished(e.target));
         gallery.addEventListener("gallery:card-failed", (e) => showSource(e.target));
+        // The generated video is on the card: the frame of the video it
+        // clones would be a second picture above it.
+        gallery.addEventListener("gallery:card-preview", (e) => {
+            e.target.querySelector("[data-clone-source]")?.remove();
+        });
         initSubmit(form, gallery);
         initRecreate(form, gallery);
         initPrefill(form);

@@ -146,7 +146,7 @@ def test_a_hanging_chat_platform_does_not_hold_up_the_next(monkeypatch):
     assert stacked_saw == [True]
 
 
-def test_the_web_process_runs_all_seventeen_sweeps():
+def test_the_web_process_runs_all_eighteen_sweeps():
     assert {sweep.name for sweep in sweeps.sweeps()} == {
         "recovery",
         "reel watch",
@@ -164,6 +164,7 @@ def test_the_web_process_runs_all_seventeen_sweeps():
         "trials cleanup",
         "downloads cleanup",
         "raw files",
+        "phones backup",
         "preview backfill",
     }
 

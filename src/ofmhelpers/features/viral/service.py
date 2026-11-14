@@ -32,6 +32,10 @@ logger = get_logger(__name__)
 # The actor's error code for a profile that does not exist; anything else
 # ("no_items") is a private, empty or age-restricted one.
 _NOT_FOUND = "not_found"
+# A profile Instagram shows only to a signed-in account (age-restricted):
+# the actor reads signed out (prod 2026-11-13, @bigboylazar: the item's
+# `error` was "Restricted profile", no description).
+_RESTRICTED = "restricted profile"
 # What the actor charges for: one event per run, one per reel it stores.
 _START_EVENT = "actor-start"
 _REEL_EVENT = "reel"
@@ -81,6 +85,12 @@ def parse(username: str, items: list[DatasetItem]) -> list[ApifyReel]:
         logger.info("viral @%s: %s %s", username, error.error, error.description)
     if any(e.error == _NOT_FOUND for e in errors):
         msg = f"Profile not found: @{username}"
+        raise ViralError(msg)
+    if any(e.error.strip().casefold() == _RESTRICTED for e in errors):
+        msg = (
+            f"Age-restricted profile @{username}: Instagram shows it only to a "
+            "signed-in account, and the search reads signed out"
+        )
         raise ViralError(msg)
     msg = f"No reels on @{username}: private, empty or age-restricted"
     raise ViralError(msg)

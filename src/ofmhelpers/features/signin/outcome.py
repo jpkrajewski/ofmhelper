@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel
 
+from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.jobs import log_event
 from ofmhelpers.features.signin.state import HOME, safe_next
 from ofmhelpers.schemas import User
@@ -18,9 +19,13 @@ class Outcome(BaseModel):
     status_code: int = 200
 
 
-def signed_out(actor: str) -> None:
-    """`actor` signed out: audited here; the session is the route's to clear."""
-    log_event("logout", actor=actor)
+def signed_out(user_id: int) -> None:
+    """They pressed Logout: audited, and every session of theirs is ended,
+    not only this browser's -- the cookie is the whole session, so a copy of
+    it (another device, a stolen one) would otherwise go on working
+    (2026-11-14). This browser's cookie is the route's to clear."""
+    log_event("logout", actor=str(user_id))
+    users.end_sessions(user_id)
 
 
 def signed_in(user: User, next_url: str, how: str) -> Outcome:

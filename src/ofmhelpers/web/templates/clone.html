@@ -5,6 +5,7 @@
 {% macro addon_chip(a) %}{{ ui.chip(a.label, hook="addon-chip", attrs={"data-text": a.text, "data-pattern": a.pattern}) }}{% endmacro %}
 {% block content %}
 {{ ui.page_header("Clone") }}
+{% set sop = true %}
 {% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
@@ -126,6 +127,16 @@
     </form>
 </dialog>
 
+{# SOP: the fixed examples, fetched when it opens (clone-sop.js,
+   `GET /clone/examples`). #}
+<dialog class="accounts-dialog sop-dialog" id="sop-dialog">
+    <h2>SOP</h2>
+    <div class="sop-examples" id="sop-examples"></div>
+    <div class="accounts-dialog-actions">
+        {{ ui.button("Close", "ghost", hook="sop-close") }}
+    </div>
+</dialog>
+
 <script src="{{ static_url('js/file-picker.js') }}"></script>
 {% include "_card_actions.html" %}
 <script src="{{ static_url('js/generation.js') }}"></script>
@@ -134,6 +145,7 @@
 <script src="{{ static_url('js/clone-return.js') }}"></script>
 <script src="{{ static_url('js/clone.js') }}"></script>
 <script src="{{ static_url('js/clone-cost.js') }}"></script>
+<script src="{{ static_url('js/clone-sop.js') }}"></script>
 <script src="{{ static_url('js/gallery-scroll.js') }}"></script>
 <script src="{{ static_url('js/live-gallery.js') }}"></script>
 <script src="{{ static_url('js/hidden-cards.js') }}"></script>

@@ -29,6 +29,7 @@
         {{ ui.icon_button("list", "List", attrs={"data-layout": "list", "aria-pressed": "false"}) }}
     </div>
     <div class="toolbar-actions">
+        {{ ui.button("History", icon="restore", attrs={"id": "ph-history-open"}) }}
         {{ ui.button("Export", href="/phones/export.xlsx", icon="download", attrs={"download": true}) }}
         {% if can_edit %}{{ ui.button("Add phone", "primary", icon="plus", attrs={"id": "ph-add-open"}) }}{% endif %}
     </div>
@@ -280,5 +281,26 @@
 {% endif %}
 
 <script src="{{ static_url('js/layout.js') }}"></script>
+{# History: the phones after each change (the database records every
+   one); Restore goes back, after a confirm (phones-history.js). #}
+<dialog class="accounts-dialog ph-history" id="ph-history">
+    <h2>History</h2>
+    <p class="generation-error" id="ph-history-error" hidden></p>
+    <ul class="ph-revisions" id="ph-revisions"></ul>
+    <div class="accounts-dialog-actions">
+        {{ ui.button("Close", "ghost", attrs={"id": "ph-history-close"}) }}
+    </div>
+</dialog>
+<dialog class="accounts-dialog" id="ph-restore-confirm">
+    <form method="dialog">
+        <h2>Restore phones</h2>
+        <p id="ph-restore-question"></p>
+        <div class="accounts-dialog-actions">
+            {{ ui.button("Cancel", "ghost", type="submit", attrs={"value": "cancel"}) }}
+            {{ ui.button("Restore", "primary", type="submit", attrs={"value": "confirm"}) }}
+        </div>
+    </form>
+</dialog>
 <script src="{{ static_url('js/phones.js') }}"></script>
+<script src="{{ static_url('js/phones-history.js') }}"></script>
 {% endblock %}

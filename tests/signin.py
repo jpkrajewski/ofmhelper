@@ -7,6 +7,7 @@ Apple, password, links) are covered in tests/integration/web/test_signin.py.
 """
 
 import json
+import time
 from base64 import b64encode
 
 from itsdangerous import TimestampSigner
@@ -50,6 +51,7 @@ def session_cookie(user: User) -> str:
         "email": user.email,
         "role": str(user.role),
         "stamp": user.credential_stamp,
+        "since": time.time(),
     }
     payload = b64encode(json.dumps(data).encode())
     signer = TimestampSigner(str(settings.session.session_secret))
@@ -61,6 +63,10 @@ def sign_in(
 ) -> User:
     """Signs `client` in as that user (made when missing) and returns it."""
     user = make_user(email, role)
+    # The one session cookie, as a browser keeps it: the app sets its own
+    # copy again on every action (the session slides), and a second cookie
+    # of the same name next to it would be sent first.
+    client.cookies.delete(SESSION_COOKIE)
     client.cookies.set(SESSION_COOKIE, session_cookie(user))
     return user
 

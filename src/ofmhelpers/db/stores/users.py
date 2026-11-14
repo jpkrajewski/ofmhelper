@@ -269,3 +269,8 @@ def api_keys(user_id: int) -> SavedKeys:
 
 def set_api_key(user_id: int, provider: str, api_key: str) -> None:
     _repository().set_api_key(user_id, provider, api_key)
+
+
+def end_sessions(user_id: int) -> None:
+    """Logout: every session of theirs, on every device, is out."""
+    _repository().end_sessions(user_id)

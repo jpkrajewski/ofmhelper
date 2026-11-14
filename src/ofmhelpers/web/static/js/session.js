@@ -1,8 +1,9 @@
 /*
  * Session-expiry handling for every background request in the app.
  *
- * The problem this solves: the session cookie lasts 5 hours (see
- * SessionMiddleware in web/main.py). Leave a tab open longer than that and
+ * The problem this solves: the session cookie lasts 5 hours after the
+ * person's last action (middleware/auth.py slides it on every page opened
+ * and every write). Leave a tab untouched longer than that and
  * the page is still fully interactive -- nav links, buttons, forms -- but
  * every fetch() behind them is unauthenticated. AuthMiddleware now answers
  * those with 401 + {"login_url": ...} instead of a 303 to the login page
@@ -24,6 +25,12 @@
     // Wall-clock check interval for the idle-expiry deadline. Coarse on
     // purpose: it only needs to notice an expiry within ~30s of it happening.
     const IDLE_CHECK_MS = 30000;
+
+    // A click or key press tells the server the person is still here, at
+    // most this often: the answer slides the cookie, and the deadline below
+    // with it.
+    const KEEP_EVERY_MS = 60000;
+    const KEEP_URL = "/session";
 
     // Multiple in-flight requests can 401 together (the poller plus a
     // submit). The first one wins; the rest are swallowed so we don't stack
@@ -82,7 +89,8 @@
     // Expire the session on schedule too, not only when a request happens to
     // fail: an idle tab left open past the cookie's lifetime otherwise keeps
     // showing a logged-in UI until something is clicked. The deadline comes
-    // from the server (base.html), so it stays in step with max_age.
+    // from the server (base.html), so it stays in step with max_age, and
+    // moves each time the server slides the cookie (`keepOnActivity`).
     function scheduleIdleExpiry() {
         const seconds = Number(document.body.dataset.sessionMaxAge || 0);
         if (!seconds) return;
@@ -90,7 +98,10 @@
         // Wall-clock, not a plain setTimeout: a laptop asleep for 5h fires
         // timers late/not at all, and "the machine was suspended" is exactly
         // the case that produces a stale tab.
-        const deadline = Date.now() + seconds * 1000;
+        let deadline = Date.now() + seconds * 1000;
+        keepOnActivity(() => {
+            deadline = Date.now() + seconds * 1000;
+        });
         const loginUrl = `/login?next=${encodeURIComponent(
             window.location.pathname + window.location.search
         )}`;
@@ -100,6 +111,26 @@
             else setTimeout(tick, IDLE_CHECK_MS);
         }
         setTimeout(tick, IDLE_CHECK_MS);
+    }
+
+    // The person working on one page for hours (typing a prompt, watching
+    // cards) makes no request the server counts as theirs: polls are not.
+    // Their clicks and key presses are, through one small PUT. A 401 here
+    // takes the tab like any other (the fetch wrap above).
+    function keepOnActivity(slid) {
+        let last = Date.now();
+        function keep() {
+            if (expiring || Date.now() - last < KEEP_EVERY_MS) return;
+            last = Date.now();
+            window
+                .fetch(KEEP_URL, { method: "PUT" })
+                .then((response) => {
+                    if (response.ok) slid();
+                })
+                .catch(() => {});
+        }
+        document.addEventListener("pointerdown", keep, { passive: true });
+        document.addEventListener("keydown", keep, { passive: true });
     }
 
     document.addEventListener("DOMContentLoaded", scheduleIdleExpiry);
