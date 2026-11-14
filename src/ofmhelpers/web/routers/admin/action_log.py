@@ -9,9 +9,9 @@ only: no summary (a prompt, URLs, file names are their work) and no link
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.jobs import audit
 from ofmhelpers.schemas import Job
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Actor
 from ofmhelpers.web.routers.registry import TOOLS
 from ofmhelpers.web.templates_config import render

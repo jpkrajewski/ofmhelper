@@ -18,12 +18,13 @@
     <script src="{{ static_url('js/theme.js') }}" defer></script>
     <script src="{{ static_url('js/notify.js') }}" defer></script>
     <script src="{{ static_url('js/posting.js') }}" defer></script>
-    <script src="{{ static_url('js/drive-alert.js') }}" defer></script>
+    {# The Drive pop-ups ask /account/drive-space: only for who has an account page (not a VA). #}
+    {% if can(request, "account") %}<script src="{{ static_url('js/drive-alert.js') }}" defer></script>{% endif %}
     <script src="{{ static_url('js/chats-alert.js') }}" defer></script>
     <script src="{{ static_url('js/time-zone.js') }}" defer></script>
     <script src="{{ static_url('js/upload-guard.js') }}" defer></script>
 </head>
-<body data-session-max-age="{{ session_max_age() }}">
+<body data-session-max-age="{{ session_max_age(request) }}">
     <a class="skip-link" href="#main">Skip to content</a>
 
     {# Who the page is for: the person signed in, or the one an admin views as. #}
@@ -47,18 +48,25 @@
                     {% for item in pages if item.place == "bar" %}
                     <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
                     {% endfor %}
+                    {% set more_pages = pages | selectattr("place", "equalto", "more") | list %}
                     {% set more = namespace(current=false) %}
-                    {% for item in pages if item.place == "more" and item.is_current(here) %}{% set more.current = true %}{% endfor %}
+                    {% for item in more_pages if item.is_current(here) %}{% set more.current = true %}{% endfor %}
+                    {# One page under "More" (a VA's Edit) is a plain link: no menu of one. #}
+                    {% if more_pages | length == 1 %}
+                    {% set item = more_pages[0] %}
+                    <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
+                    {% elif more_pages %}
                     <li class="nav-more">
                         <details>
                             <summary {% if more.current %}data-current{% endif %}>More</summary>
                             <ul class="nav-more-links">
-                                {% for item in pages if item.place == "more" %}
+                                {% for item in more_pages %}
                                 <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
                                 {% endfor %}
                             </ul>
                         </details>
                     </li>
+                    {% endif %}
                     {# On a phone the bar has no room: the clock is in the menu. #}
                     {% if signed_in_as %}
                     <li class="clock-drawer">{{ ui.clock_now(chosen_zone) }}</li>
@@ -72,7 +80,7 @@
                not a destination, and on a phone it must not be hidden
                behind the menu toggle. #}
             <form method="post" action="/logout" class="logout-form">
-                {% if signed_in_as %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% endif %}
+                {% if signed_in_as and can(request, "account") %}<a class="signed-in-as" href="/account">{{ signed_in_as }}</a>{% elif signed_in_as %}<span class="signed-in-as">{{ signed_in_as }}</span>{% endif %}
                 {{ ui.button("Log out", "ghost", type="submit") }}
             </form>
 
@@ -105,12 +113,14 @@
             {{ ui.icon_button("x", "Dismiss", hook="posting-dismiss") }}
         {% endcall %}
         {% if signed_in_as %}
+        {% if can(request, "account") %}
         {% call ui.notice(kind="fail", hook="drive-full-banner", attrs={"hidden": true}) %}
             <span class="drive-full-text">Google Drive is full. Check the folder.</span>
             {{ ui.button("Open folder", href="https://drive.google.com/drive/my-drive", hook="drive-full-folder", attrs={"target": "_blank", "rel": "noopener"}) }}
             {{ ui.button("Buy more space", href="https://one.google.com/storage", hook="drive-full-buy", attrs={"target": "_blank", "rel": "noopener"}) }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-full-dismiss") }}
         {% endcall %}
+        {% endif %}
         {% if viewer is not none and viewer.by %}
         {% call ui.notice(kind="warn", hook="viewing-as") %}
             <span>Viewing as {{ viewer.label }}</span>
@@ -119,11 +129,13 @@
         {% endif %}
         {# While images/videos still go up (static/js/upload-guard.js). #}
         {{ ui.notice("Images/videos are still uploading to server. Wait till they are uploaded.", "warn", hook="upload-wait", attrs={"hidden": true}) }}
+        {% if can(request, "account") %}
         {% call ui.notice(kind="fail", hook="drive-reconnect-banner", attrs={"hidden": true}) %}
             <span>Google Drive disconnected</span>
             {{ ui.button("Reconnect Google Drive", href="/account", hook="drive-reconnect-link") }}
             {{ ui.icon_button("x", "Dismiss", hook="drive-reconnect-dismiss") }}
         {% endcall %}
+        {% endif %}
         {% endif %}
         {% if is_admin %}
         {% for kind in ("info", "warn") %}

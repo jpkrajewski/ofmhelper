@@ -1,8 +1,8 @@
 """
 A VA's jobs are their owner's to see (`jobs.user_id`, `Viewer.actors`): the
 owner's galleries show them with the VA's name, and their status page and
-files open. Reading only: hiding a card stays its maker's own choice, so the
-owner's card of a VA's job offers no Hide and the route answers 404. The VA
+files open. A VA hides nothing; the owner hides a card of their own or of a
+VA's, which only changes what the owner looks at. The VA
 sees nothing of the owner's, a third person nothing of either, and a job
 with no owner is nobody's.
 """
@@ -156,28 +156,49 @@ def test_another_owners_va_is_not_shared(team, tmp_path):
     assert owner.get(f"/clone/jobs/{job}").status_code == 404
 
 
-def test_hiding_is_the_makers_own_choice(team, tmp_path):
-    """The owner cannot hide the VA's job (404, nothing changes) and their
-    card of it offers no Hide; the VA hides it, and it leaves the owner's
-    gallery too, counted under the owner's Show hidden."""
+def test_a_va_hides_nothing_and_the_owner_hides_the_vas_card(team, tmp_path):
+    """Owner 2026-11-14: "what if VA hides clones from me? dont give them
+    this posibilty". The VA's card has no Hide, their page no "Show hidden",
+    and the route refuses them; the owner hides and unhides the VA's card
+    like their own, and the VA keeps seeing a card the owner hid."""
     job = _done("clone", team.va, tmp_path / "va.png")
     mine = _done("clone", team.owner, tmp_path / "owner.png")
     owner, va = _client(OWNER), _client(VA, Role.VA)
 
-    refused = owner.post(f"/jobs/{job}/hidden", json={"hidden": True})
-    assert refused.status_code == 404
+    refused = va.post(f"/jobs/{job}/hidden", json={"hidden": True})
+    assert refused.status_code == 403
     assert get_job(job).hidden_at is None
-    html = owner.get("/clone/gallery").text
-    assert "hide-btn" not in _card(html, job)
-    assert "hide-btn" in _card(html, mine)
+    va_page = va.get("/clone").text
+    assert "hide-btn" not in va_page
+    assert "hidden-toggle" not in va_page
 
-    assert va.post(f"/jobs/{job}/hidden", json={"hidden": True}).status_code == 200
+    html = owner.get("/clone/gallery").text
+    assert "hide-btn" in _card(html, job)
+    assert "hide-btn" in _card(html, mine)
+    assert owner.post(f"/jobs/{job}/hidden", json={"hidden": True}).status_code == 200
     html = owner.get("/clone").text
     assert _ids(html) == [mine]
     assert "Show hidden (1)" in html
     assert _ids(owner.get("/clone/gallery?hidden=1").text) == [job]
-    assert owner.post(f"/jobs/{job}/hidden", json={"hidden": False}).status_code == 404
-    assert get_job(job).hidden_at is not None
+
+    # The owner's choice of what they look at: the VA still has their card,
+    # never marked hidden, also when asking for the hidden view.
+    assert _ids(va.get("/clone").text) == [job]
+    assert _ids(va.get("/clone/gallery?hidden=1").text) == [job]
+    assert "data-hidden" not in va.get("/clone/gallery").text
+
+    assert owner.post(f"/jobs/{job}/hidden", json={"hidden": False}).status_code == 200
+    assert get_job(job).hidden_at is None
+    assert set(_ids(owner.get("/clone").text)) == {job, mine}
+
+
+def test_a_stranger_hides_nobodys_card(team, tmp_path):
+    job = _done("clone", team.va, tmp_path / "va.png")
+
+    refused = _client(OTHER).post(f"/jobs/{job}/hidden", json={"hidden": True})
+
+    assert refused.status_code == 404
+    assert get_job(job).hidden_at is None
 
 
 def test_a_job_with_no_owner_is_nobodys(team):

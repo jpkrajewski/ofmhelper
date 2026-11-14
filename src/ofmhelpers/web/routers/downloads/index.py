@@ -12,10 +12,10 @@ tool's existing /run endpoint.
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.downloads import sheet
 from ofmhelpers.schemas import Job, TaskCard
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, task_card

@@ -55,6 +55,7 @@ PAGES = [
     Shot(name="repurpose", path="/repurpose"),
     Shot(name="account", path="/account"),
     Shot(name="cookies", path="/cookies"),
+    Shot(name="vas", path="/vas"),
     Shot(name="users", path="/users"),
     Shot(name="character-sheet", path="/character-sheet"),
     Shot(name="chatting", path="/chatting"),

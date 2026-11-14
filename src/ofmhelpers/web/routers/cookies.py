@@ -9,9 +9,9 @@ whose cookies each background scan and download uses).
 from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.cookies import service
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, OwnerId
 from ofmhelpers.web.responses import NO_STORE, see_other
 from ofmhelpers.web.templates_config import render

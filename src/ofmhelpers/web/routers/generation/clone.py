@@ -16,6 +16,7 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import Field
 
+from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone import examples
 from ofmhelpers.features.clone.export import (
@@ -51,7 +52,6 @@ from ofmhelpers.schemas import (
     UploadRequest,
     UploadsQueued,
 )
-from ofmhelpers.schemas.access import Action, Area
 from ofmhelpers.schemas.clone_examples import ExamplePart
 from ofmhelpers.web.dependencies import (
     Access,
@@ -114,11 +114,13 @@ def _video_seconds(path: str) -> float:
     return video_seconds(path, duration_s)
 
 
-def _rendered_cards(job_ids: list[str], actor: str, user_id: int) -> str:
+def _rendered_cards(
+    request: Request, job_ids: list[str], actor: str, user_id: int
+) -> str:
     """These jobs' cards, newest first like the gallery."""
     picker = dict(drive_picker(user_id))
     return "".join(
-        render_partial("_clone_card.html", job=card, **picker)
+        render_partial("_clone_card.html", request=request, job=card, **picker)
         for card in cards_of(job_ids, actor)
     )
 
@@ -143,7 +145,7 @@ def form(
         hidden_count=gallery.hidden_count(viewer),
         dates=query,
         api_keys=api_keys,
-        **dict(form_view(actor, assets_root, video or [])),
+        **dict(form_view(actor, viewer.team, assets_root, video or [])),
         **dict(drive_picker(user.id)),
     )
 
@@ -213,6 +215,7 @@ def drive_upload_states(
 
 @router.post("/run", status_code=202)
 def run(
+    request: Request,
     form: Annotated[CloneForm, Form()],
     actor: Actor,
     owner: OwnerId,
@@ -230,7 +233,9 @@ def run(
         probe=_video_seconds,
     )
     job_ids = submit.start(form)
-    return CloneQueued(job_ids=job_ids, html=_rendered_cards(job_ids, actor, user.id))
+    return CloneQueued(
+        job_ids=job_ids, html=_rendered_cards(request, job_ids, actor, user.id)
+    )
 
 
 # --- SOP: the fixed examples (features/clone/examples.py) ---------------------

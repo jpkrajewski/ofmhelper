@@ -19,9 +19,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.cache import JobQueue, QueueName, enqueue
 from ofmhelpers.features.trials import folder
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, CurrentUser, Scope
 from ofmhelpers.web.templates_config import render
 

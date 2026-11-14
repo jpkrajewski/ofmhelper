@@ -274,3 +274,20 @@ def set_api_key(user_id: int, provider: str, api_key: str) -> None:
 def end_sessions(user_id: int) -> None:
     """Logout: every session of theirs, on every device, is out."""
     _repository().end_sessions(user_id)
+
+
+def seen(user_id: int, at: float) -> None:
+    """Their last action was at `at` (`features/users/presence.py` decides
+    how often this is written)."""
+    _repository().seen(user_id, at)
+
+
+def end_idle_sessions(user_id: int) -> bool:
+    """Ends their sessions unless already ended since their last action;
+    True for the one caller that did it."""
+    return _repository().end_idle_sessions(user_id)
+
+
+def idle_vas(before: float) -> list[User]:
+    """Active VAs last seen before `before` and not logged out since."""
+    return _repository().idle_vas(before)

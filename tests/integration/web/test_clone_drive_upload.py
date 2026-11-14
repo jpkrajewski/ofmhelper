@@ -581,3 +581,163 @@ def test_an_owner_posts_their_vas_clone_and_the_va_cannot(drive, tmp_path):
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
     assert len(_files_in(drive, "ann.ig - Anna")) == 1
+
+
+# --- /clone's filters: made by, not uploaded to Drive (owner 2026-11-14) ---------
+
+
+def _va_of(owner_email: str, email: str = "va@example.com") -> int:
+    va = sign_in(TestClient(app), email, Role.VA)
+    users.set_owner(va.id, users.by_email(owner_email).id)
+    return va.id
+
+
+def _cards(html: str) -> list[str]:
+    return list(dict.fromkeys(re.findall(r'data-job-id="([^"]+)"', html)))
+
+
+def test_the_owner_opens_drive_with_their_vas_video_to_upload(drive, tmp_path):
+    """Upload to Drive on a VA's card opened /drive with no video: the pick
+    looked the run up as the owner's own."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    _va_of("ann@example.com")
+    job = _finished_run("va@example.com", tmp_path, "va.mp4")
+
+    page = ann.get("/drive", params={"upload": job}).text
+
+    assert f'data-job="{job}"' in page
+    assert 'id="dr-pick"' in page
+    assert _upload(ann, job, login)["status"] == "done"
+
+
+def test_made_by_shows_one_persons_clones(drive, tmp_path):
+    ann = _client("ann@example.com")
+    owner = users.by_email("ann@example.com").id
+    va = _va_of("ann@example.com")
+    mine = _finished_run("ann@example.com", tmp_path, "mine.mp4")
+    theirs = _finished_run("va@example.com", tmp_path, "va.mp4")
+
+    assert set(_cards(ann.get("/clone/gallery").text)) == {mine, theirs}
+    assert _cards(ann.get("/clone/gallery", params={"va": va}).text) == [theirs]
+    assert _cards(ann.get("/clone/gallery", params={"va": owner}).text) == [mine]
+    page = ann.get("/clone", params={"va": va}).text
+    assert _cards(page) == [theirs]
+    # The "VAs" button now names who is picked; its list links each choice.
+    button = page[page.index('class="menu menu-button made-by"') :]
+    assert (
+        "</svg> va@example.com</summary>" in button[: button.index("</summary>") + 10]
+    )
+    assert f'href="/clone?va={va}" aria-current="true"' in page
+    assert f'<a class="menu-item menu-choice" href="/clone?va={owner}">' in page
+    assert '<a class="menu-item menu-choice" href="/clone">' in page  # Everyone
+    # The scroll and the live poll stay inside the filter.
+    assert f'data-gallery-endpoint="/clone/gallery?va={va}"' in page
+    assert f'data-live-endpoint="/clone/gallery/latest?va={va}"' in page
+    assert _cards(ann.get("/clone/gallery/latest", params={"va": va}).text) == [theirs]
+
+
+def test_made_by_takes_only_someone_whose_clones_the_reader_sees(drive, tmp_path):
+    ann = _client("ann@example.com")
+    bob = _client("bob@example.com")
+    va = _va_of("ann@example.com")
+    stranger = users.by_email("bob@example.com").id
+    _finished_run("va@example.com", tmp_path, "va.mp4")
+
+    assert ann.get("/clone", params={"va": stranger}).status_code == 404
+    assert ann.get("/clone/gallery", params={"va": 999_999}).status_code == 404
+    assert bob.get("/clone/gallery", params={"va": va}).status_code == 404
+    assert ann.get("/clone/gallery", params={"va": "x"}).status_code == 422
+
+
+def test_not_uploaded_leaves_only_finished_videos_in_no_drive_folder(drive, tmp_path):
+    """Queued, failed or taken out again is still to post; in a folder is
+    not. Right after the upload ends the card is gone (no stale cache)."""
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    va = _va_of("ann@example.com")
+    posted = _finished_run("va@example.com", tmp_path, "posted.mp4")
+    waiting = _finished_run("va@example.com", tmp_path, "waiting.mp4")
+    taken_out = _finished_run("ann@example.com", tmp_path, "out.mp4")
+    failed = create_job("clone", {}, actor=str(va))
+    run_job(failed, _raises, {})
+    left = {"not_uploaded": 1}
+
+    assert set(_cards(ann.get("/clone/gallery", params=left).text)) == {
+        posted,
+        waiting,
+        taken_out,
+    }
+    _upload(ann, posted, login)
+    state = _upload(ann, taken_out, login)
+    ann.post(f"/clone/drive-uploads/{state['id']}/remove")
+
+    assert set(_cards(ann.get("/clone/gallery", params=left).text)) == {
+        waiting,
+        taken_out,
+    }
+    both = {"not_uploaded": 1, "va": va}
+    assert _cards(ann.get("/clone/gallery", params=both).text) == [waiting]
+    page = ann.get("/clone", params=both).text
+    # The switch is on, and a click on it takes only that filter off.
+    assert f'class="btn not-uploaded" href="/clone?va={va}" aria-pressed="true"' in page
+    assert f"/clone/gallery?va={va}&amp;not_uploaded=1" in page
+    off = ann.get("/clone", params={"va": va}).text
+    assert (
+        f'class="btn not-uploaded" href="/clone?va={va}&amp;not_uploaded=1"'
+        ' aria-pressed="false"' in off
+    )
+    # A date picked next keeps both: they ride in the dates' form.
+    assert f'<input type="hidden" name="va" value="{va}">' in page
+    assert '<input type="hidden" name="not_uploaded" value="1">' in page
+
+
+def _raises():
+    msg = "provider refused"
+    raise RuntimeError(msg)
+
+
+def test_a_va_and_a_person_without_vas_get_no_made_by(drive, tmp_path):
+    ann = _client("ann@example.com")
+    solo = _client("bob@example.com")
+    _va_of("ann@example.com")
+    va = TestClient(app)
+    sign_in(va, "va@example.com", Role.VA)
+
+    with_vas = ann.get("/clone").text
+    assert "made-by" in with_vas
+    assert "</svg> VAs</summary>" in with_vas
+    solo_page = solo.get("/clone").text
+    assert "made-by" not in solo_page
+    assert "not-uploaded" in solo_page
+    va_page = va.get("/clone").text
+    assert "made-by" not in va_page
+    assert "not-uploaded" not in va_page
+
+
+@pytest.mark.parametrize(
+    ("page", "fragment", "task"),
+    [
+        ("/generate", "/generate/gallery", "ai"),
+        ("/download-assets", "/download-assets/gallery", "download_media"),
+    ],
+)
+def test_the_vas_button_filters_gen_ai_and_download_too(page, fragment, task):
+    """Owner 2026-11-14: "why VAs is missing from gen ai ... from download".
+    The Drive switch stays /clone's: only clones go to Drive."""
+    ann = _client("ann@example.com")
+    owner = users.by_email("ann@example.com").id
+    va = _va_of("ann@example.com")
+    mine = create_job(task, {}, actor=str(owner))
+    theirs = create_job(task, {}, actor=str(va))
+
+    html = ann.get(page).text
+
+    assert "</svg> VAs</summary>" in html
+    assert f'<a class="menu-item menu-choice" href="{page}?va={va}">' in html
+    assert "not-uploaded" not in html
+    assert set(_cards(ann.get(fragment).text)) == {mine, theirs}
+    assert _cards(ann.get(fragment, params={"va": va}).text) == [theirs]
+    assert f'data-gallery-endpoint="{fragment}?va={va}"' in (
+        ann.get(page, params={"va": va}).text
+    )

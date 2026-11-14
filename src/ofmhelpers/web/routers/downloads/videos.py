@@ -2,11 +2,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.downloads import videos
 
 # Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.downloads.videos import run_downloads as _run_downloads
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.downloads import DownloadsQueued
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import add_job_routes

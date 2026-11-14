@@ -4,11 +4,13 @@
    by every page that loads generation.js. #}
 {% import "components/ui.html" as ui %}
 {% import "_card_hide.html" as hide %}
+{# Hide only for who may hide (not a VA). #}
+{% set may_hide = can(request, "hide") %}
 <template id="card-actions-done"><div class="result-actions">
     {{ ui.button("Download", href="#", icon="download", hook="download-btn") }}
-    {% call ui.menu("More actions") %}{{ ui.menu_item("Recreate", "restore", "recreate-btn") }}{{ hide.items() }}{% endcall %}
+    {% call ui.menu("More actions") %}{{ ui.menu_item("Recreate", "restore", "recreate-btn") }}{% if may_hide %}{{ hide.items() }}{% endif %}{% endcall %}
 </div></template>
 <template id="card-actions-failed"><div class="result-actions">
     {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
-    {% call ui.menu("More actions") %}{{ hide.items() }}{% endcall %}
+    {% if may_hide %}{% call ui.menu("More actions") %}{{ hide.items() }}{% endcall %}{% endif %}
 </div></template>

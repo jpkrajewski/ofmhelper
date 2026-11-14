@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from ofmhelpers.auth.access import Area, retired
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
 from ofmhelpers.features.accounts import tracker as account_tracker
@@ -41,8 +42,8 @@ from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.features.trials import cleanup as trials_cleanup
+from ofmhelpers.features.users import idle as va_idle
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.access import Area, retired
 
 logger = get_logger(__name__)
 
@@ -87,7 +88,7 @@ def sweeps() -> list[Sweep]:
             name="reel watch",
             run=reel_watch.queue_due_scans,
             interval_s=lambda: settings.instagram.rescan_check_interval_s,
-            # /reels is retired (schemas/access.py `RETIRED`): no scan runs.
+            # /reels is retired (auth/access.py `RETIRED`): no scan runs.
             enabled=lambda: not retired(Area.REELS),
         ),
         # Rescans /accounts' tracked social accounts when due (production
@@ -202,6 +203,13 @@ def sweeps() -> list[Sweep]:
             run=phones_backup.dump,
             interval_s=lambda: settings.vault.backup_sweep_s,
             enabled=lambda: bool(settings.vault.key_list()),
+        ),
+        # Logs out a VA idle past their limit and records when they
+        # stopped (features/users/idle.py). Reads a few rows.
+        Sweep(
+            name="va idle",
+            run=va_idle.end_idle,
+            interval_s=lambda: settings.web.va_idle_sweep_s,
         ),
         # Gallery previews for jobs older than previews: one pass.
         Sweep(name="preview backfill", run=preview_backfill.backfill),

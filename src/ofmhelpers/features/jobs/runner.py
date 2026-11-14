@@ -20,6 +20,7 @@ from ofmhelpers.db.stores import jobs as store
 from ofmhelpers.features.account.keys import keep_used, key_tail
 from ofmhelpers.features.jobs.cost import cost_of
 from ofmhelpers.features.previews.render import warm_previews
+from ofmhelpers.features.vas import notices as va_notices
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
 from ofmhelpers.log import get_logger
@@ -71,6 +72,7 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
             _keep_cost(job_id)
             _keep_key(job_id, header.actor)
             tasks.forget(job_id)
+            va_notices.after_job(job_id)
         except Exception as exc:
             # The status pages show this directly to whoever is running the
             # job -- a raw traceback isn't useful to them, just the
@@ -81,6 +83,7 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
                 # Paid for and then failed (its export, its upload): still a cost.
                 _keep_cost(job_id)
                 tasks.forget(job_id)
+                va_notices.after_job(job_id)
             span.record_exception(exc)
             span.set_level("error")
             logger.exception("job %s failed", job_id)

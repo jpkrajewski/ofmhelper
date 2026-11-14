@@ -14,11 +14,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import page
 from ofmhelpers.schemas import SyncReport
-from ofmhelpers.schemas.access import Area
-from ofmhelpers.web.dependencies import Access, Actor, CurrentUser, Scope
+from ofmhelpers.web.dependencies import Access, Actors, CurrentUser, Scope
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
 from ofmhelpers.web.routers.generation.clone import FILES_PREFIX as CLONE_FILES
 from ofmhelpers.web.routers.generation.clone import TASK as CLONE_TASK
@@ -35,12 +35,16 @@ _CLONE = page.Source(task=CLONE_TASK, files_prefix=CLONE_FILES)
 
 @router.get("")
 def drive_page(
-    request: Request, scope: Scope, user: CurrentUser, actor: Actor, upload: str = ""
+    request: Request,
+    scope: Scope,
+    user: CurrentUser,
+    actors: Actors,
+    upload: str = "",
 ) -> Response:
     """At once, from each folder's last read: no Drive call. drive.js then
     swaps in `/drive/live`. `upload`: a /clone run whose video goes into
     the account card clicked (drive.js)."""
-    view = page.page_view(scope, user.id, actor, upload, _CLONE)
+    view = page.page_view(scope, user.id, actors, upload, _CLONE)
     return render(request, "drive.html", **dict(view))
 
 

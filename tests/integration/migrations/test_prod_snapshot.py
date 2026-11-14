@@ -761,3 +761,39 @@ def test_phone_revisions_start_with_every_owners_phones_and_then_record(db):
     assert _count(db, "phone_revisions") == owners + with_phones
     with pytest.raises(DBAPIError, match="append-only"), db.begin() as conn:
         conn.execute(text("DELETE FROM phone_revisions"))
+
+
+LAST_SEEN = "d9e0f1a2b3c5"
+_HIDDEN_VA_JOBS = """
+    SELECT count(*) FROM jobs JOIN users ON users.id = jobs.user_id
+    WHERE users.role = 'va' AND jobs.hidden_at IS NOT NULL
+"""
+_HIDDEN_OTHER_JOBS = """
+    SELECT count(*) FROM jobs LEFT JOIN users ON users.id = jobs.user_id
+    WHERE users.role IS DISTINCT FROM 'va' AND jobs.hidden_at IS NOT NULL
+"""
+
+
+def test_last_seen_starts_empty_and_every_card_a_va_hid_is_shown_again(db):
+    """No person has a last action yet (nobody is logged out as idle by the
+    first sweep); a VA's hidden jobs are shown again, everyone else's stay
+    hidden, and no row is lost."""
+    needs(LAST_SEEN)(db)
+    command.upgrade(_alembic(), "c8d9e0f1a2b4")
+    with db.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE jobs SET hidden_at = 1 WHERE id IN ("
+                "SELECT jobs.id FROM jobs JOIN users ON users.id = jobs.user_id "
+                "WHERE users.role = 'va' LIMIT 3)"
+            )
+        )
+    before = _row_counts(db)
+    others = _scalar(db, _HIDDEN_OTHER_JOBS)
+
+    command.upgrade(_alembic(), LAST_SEEN)
+
+    assert _row_counts(db) == before
+    assert _scalar(db, _HIDDEN_VA_JOBS) == 0
+    assert _scalar(db, _HIDDEN_OTHER_JOBS) == others
+    assert _scalar(db, "SELECT count(*) FROM users WHERE last_seen_at IS NOT NULL") == 0

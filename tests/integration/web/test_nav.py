@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from repo_paths import SRC
 from signin import sign_in, sign_in_admin
 
-from ofmhelpers.schemas.access import RETIRED
+from ofmhelpers.auth.access import RETIRED
 from ofmhelpers.schemas.nav import NAV, NavPlace, nav
 from ofmhelpers.schemas.users import Role
 from ofmhelpers.web.main import app
@@ -51,13 +51,12 @@ def test_a_user_never_gets_an_admin_page():
     assert len(nav(Role.USER)) == len(live) - len(admin_pages)
 
 
-def test_a_va_gets_the_five_pages_they_work_in():
+def test_a_va_gets_the_four_pages_they_work_in():
     assert [item.label for item in nav(Role.VA)] == [
         "Gen AI",
         "Clone",
         "Download",
         "Edit",
-        "Account",
     ]
 
 
@@ -70,9 +69,8 @@ def test_header_and_home_render_only_a_vas_pages():
         "/clone",
         "/download-assets",
         "/edit",
-        "/account",
     ]
-    assert html.count('class="link-card"') == 5
+    assert html.count('class="link-card"') == 4
 
 
 @pytest.mark.parametrize(

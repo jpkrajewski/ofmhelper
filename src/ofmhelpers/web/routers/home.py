@@ -7,8 +7,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
+from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.features.server.status import duration, server_status
-from ofmhelpers.schemas.access import Action, Area
 from ofmhelpers.web.dependencies import Access, Can
 from ofmhelpers.web.templates_config import render
 

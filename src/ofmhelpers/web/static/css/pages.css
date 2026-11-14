@@ -1904,3 +1904,6 @@ a.ph-login-user:hover { text-decoration: underline; }
 .ph-revision { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); padding: var(--pad-inset); border: 1px solid var(--border); border-radius: var(--radius-control); font-size: var(--step--1); }
 .ph-revision-what { flex: 1; min-width: 0; color: var(--text-muted); word-break: break-word; }
 .ph-revision-now { color: var(--text-muted); }
+
+/* /vas: the days table is its own section under the money tables. */
+.vas-days-title { margin-top: var(--gap-section); }

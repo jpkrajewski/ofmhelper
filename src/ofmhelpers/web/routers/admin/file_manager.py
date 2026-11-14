@@ -21,11 +21,11 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
 from ofmhelpers.features.files import disk, library
 from ofmhelpers.features.files.disk import DEFAULT_ROOT
 from ofmhelpers.features.files.library import UPLOADS, Library, Section
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.forms import FormModel
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY, see_other

@@ -1,14 +1,14 @@
 """The site's pages as navigation knows them: the header bar, its "More"
 menu and the home page's tool cards all render from `NAV`, so a new page
 is one `NavItem` here, never an edit to three templates. Who sees an item
-is the access map's answer for its `area` (`schemas/access.py`): the menu
+is the access map's answer for its `area` (`auth/access.py`): the menu
 never lists a page its reader cannot open."""
 
 from enum import StrEnum
 
 from pydantic import BaseModel
 
-from ofmhelpers.schemas.access import Area, allowed
+from ofmhelpers.auth.access import Area, allowed
 from ofmhelpers.schemas.users import Role
 
 
@@ -171,11 +171,11 @@ NAV = (
         area=Area.COOKIES,
     ),
     NavItem(
-        href="/spending",
-        label="Spending",
+        href="/vas",
+        label="VAs",
         icon="chart",
         place=NavPlace.MORE,
-        area=Area.SPENDING,
+        area=Area.VAS,
     ),
     NavItem(
         href="/users",

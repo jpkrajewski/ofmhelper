@@ -75,6 +75,22 @@
 <button type="button" class="menu-item{{ ' menu-item-danger' if danger else '' }}{{ ' ' ~ hook if hook else '' }}"{{ _attrs(attrs) }}>{{ ic.icon(icon) }} {{ label }}</button>
 {%- endmacro %}
 
+{# A button that opens a list to pick one from (a toolbar filter): the same
+   button as every other, its `menu_choice`s as the call body. `label` is
+   what it shows: the name of the filter, or what is picked.
+   {% call ui.menu_button("VAs", "users") %}{{ ui.menu_choice("Everyone", "/clone", current=true) }}{% endcall %} #}
+{% macro menu_button(label, icon=None, hook="") -%}
+<details class="menu menu-button{{ ' ' ~ hook if hook else '' }}">
+    <summary class="btn">{% if icon %}{{ ic.icon(icon) }} {% endif %}{{ label }}</summary>
+    <div class="menu-list">{{ caller() }}</div>
+</details>
+{%- endmacro %}
+
+{# One choice of a `menu_button`: a link, checked when it is the one picked. #}
+{% macro menu_choice(label, href, current=false) -%}
+<a class="menu-item menu-choice" href="{{ href }}"{% if current %} aria-current="true"{% endif %}>{{ ic.icon("check") }} {{ label }}</a>
+{%- endmacro %}
+
 {# The top of every page: title, an optional data line under it (counts,
    who you are -- never an explanation), and its actions on the right:
    {% call ui.page_header("Phones", "11 phones") %}...buttons...{% endcall %} #}
@@ -130,10 +146,12 @@
 </span>
 {%- endmacro %}
 
-{# The globe's menu: the zones to choose from, a check on the chosen one
-   (static/js/time-zone.js). #}
+{# The globe's menu: "Automatic" (the person's own zone, from their
+   browser: where it starts) and the team's zones to choose from, a check on
+   the one in use (static/js/time-zone.js). #}
 {% macro time_zone_menu(zones, current) -%}
 {% call menu("Time zone", hook="time-zone-menu", icon="globe") %}
+{{ menu_item("Automatic", "check", "time-zone-choice", attrs={"data-zone": ""}) }}
 {% for tz in zones %}{{ menu_item(tz.label, "check", "time-zone-choice", attrs={"data-zone": tz.zone, "aria-current": "true" if tz.zone == current.zone else none}) }}{% endfor %}
 {% endcall %}
 {%- endmacro %}
@@ -169,17 +187,38 @@
    the filter is sent at once (static/js/autosubmit.js); Clear takes both
    off. A GET form to `action` sending `date_from` and `date_to` (ISO
    days); `start` / `end`: the days picked now (dates); `today`: the last
-   day a calendar offers (none: no limit). #}
-{% macro date_range(action, start=None, end=None, today=None, hook="") -%}
+   day a calendar offers (none: no limit). `keep`: the page's other filters
+   (name -> value), sent along as they are; `clear`: where Clear goes (the
+   page without its dates; default `action`). #}
+{% macro date_range(action, start=None, end=None, today=None, hook="", keep={}, clear=None) -%}
 <form method="get" action="{{ action }}" class="date-range{{ ' ' ~ hook if hook }}" data-submit-on-change>
+    {% for name, value in keep.items() if value %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
     {% for name, label, day, first, last in [("date_from", "From", start, None, end or today), ("date_to", "To", end, start, today)] %}
     <span class="date-pick">
         {{ button(label ~ (": " ~ day.strftime("%d %b %Y") if day else ""), icon="calendar", hook="date-pick-btn") }}
         <input type="date" name="{{ name }}" aria-label="{{ label }}" tabindex="-1" value="{{ day or '' }}"{% if first %} min="{{ first }}"{% endif %}{% if last %} max="{{ last }}"{% endif %}>
     </span>
     {% endfor %}
-    {% if start or end %}{{ button("Clear", icon="x", href=action) }}{% endif %}
+    {% if start or end %}{{ button("Clear", icon="x", href=clear or action) }}{% endif %}
 </form>
+{%- endmacro %}
+
+{# A page's guided tour (static/js/tour.js): the page dims, one control at a
+   time is lit and this tip next to it says what to do there, Next goes on.
+   `steps`: (CSS selector of the control, what to do) pairs, in order, written
+   by the page. `signed_in_at`: when this session signed in; `auto`: the
+   tour starts by itself on the page's first opening after that sign-in (a
+   VA). A button with the hook `tour-open` starts it for anyone. #}
+{% macro tour(steps, signed_in_at=None, auto=false) -%}
+<div class="tour-tip" id="tour-tip" role="dialog" aria-live="polite" data-login="{{ signed_in_at or '' }}"{% if auto %} data-auto{% endif %} hidden>
+    <ol hidden>{% for target, text in steps %}<li data-target="{{ target }}">{{ text }}</li>{% endfor %}</ol>
+    <p class="tour-count"></p>
+    <p class="tour-text"></p>
+    <div class="tour-actions">
+        {{ button("Skip", "ghost", hook="tour-skip") }}
+        {{ button("Next", "primary", hook="tour-next") }}
+    </div>
+</div>
 {%- endmacro %}
 
 {# A link back to the page this one belongs to ("‹ Accounts"). #}

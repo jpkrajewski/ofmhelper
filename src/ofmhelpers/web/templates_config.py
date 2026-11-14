@@ -9,12 +9,15 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 lazy from fastapi import Request
 
+from ofmhelpers.auth.access import Action, Area, allowed
 from ofmhelpers.config import settings
 from ofmhelpers.features.drive.posting import window as posting_window
-from ofmhelpers.schemas.access import Action, Area, allowed
+from ofmhelpers.features.users.presence import idle_limit_s
+from ofmhelpers.features.users.viewing import makers
 from ofmhelpers.schemas.accounts import ago
 from ofmhelpers.schemas.nav import nav
 from ofmhelpers.schemas.time_zones import TIME_ZONES, time_zone
+lazy from ofmhelpers.features.users.viewing import Maker
 lazy from ofmhelpers.schemas.users import Viewer
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -74,6 +77,28 @@ def _viewer_of(request: Request) -> Viewer | None:
     return getattr(request.state, "viewer", None)
 
 
+def _session_max_age(request: Request) -> int:
+    """Seconds the page's tab may sit idle before session.js signs it out:
+    the limit of who is signed in (a VA's is shorter; an admin viewing as
+    someone keeps their own)."""
+    viewer = _viewer_of(request)
+    signed_in = (viewer.by or viewer.user) if viewer is not None else None
+    return idle_limit_s(signed_in.role if signed_in is not None else None)
+
+
+def _signed_in_at(request: Request) -> int | None:
+    """When the request's session signed in (whole epoch seconds); None for
+    none."""
+    since = request.session.get("since") if "session" in request.scope else None
+    return int(since) if since else None
+
+
+def _makers(request: Request) -> list[Maker]:
+    """The choices of a gallery's "VAs" filter for the page's reader."""
+    viewer = _viewer_of(request)
+    return makers(viewer) if viewer is not None else []
+
+
 def _can(request: Request, what: str) -> bool:
     """Whether the page's reader may do an `Action` or open an `Area`, by
     its value (`can(request, "drive-upload")`). While an admin views as
@@ -106,9 +131,7 @@ def get_templates() -> Jinja2Templates:
     # access by design (see config/__init__.py), so reading it here would both
     # cache it across test monkeypatches and require SESSION_SECRET to be set
     # merely to build the environment.
-    templates.env.globals["session_max_age"] = lambda: (
-        settings.session.session_max_age_s
-    )
+    templates.env.globals["session_max_age"] = _session_max_age
     templates.env.globals["static_url"] = static_url
     # The header, its More menu and the home cards all read schemas.nav.NAV.
     templates.env.globals["nav"] = nav
@@ -116,8 +139,12 @@ def get_templates() -> Jinja2Templates:
     # do: templates never read the session themselves.
     templates.env.globals["viewer_of"] = _viewer_of
     templates.env.globals["can"] = _can
+    templates.env.globals["makers_of"] = _makers
     templates.env.globals["time_zones"] = TIME_ZONES
     templates.env.globals["time_zone"] = time_zone
+    # When this session signed in: a page's tour starts by itself once per
+    # sign-in (static/js/tour.js).
+    templates.env.globals["signed_in_at"] = _signed_in_at
     # The daily posting window: base.html's "Start posting content".
     templates.env.globals["posting_window"] = posting_window
     templates.env.filters["utc"] = utc

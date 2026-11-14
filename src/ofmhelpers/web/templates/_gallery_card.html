@@ -6,8 +6,10 @@
    Unhide instead of Hide) is only drawn in "Show hidden"'s view of only the
    hidden cards (_gallery_hidden.html). A card of someone else's job
    (`job.made_by`: a VA's, read by the owner) names its maker on a line of
-   its own under the meta line ("Done by VA: <name>") and has no Hide:
-   hiding is the maker's.
+   its own under the meta line ("Done by VA: <name>"). Hide / Unhide only for
+   who may hide (`can(request, "hide")`: not a VA, whose cards are never
+   marked hidden either); a card rendered outside a page is handed `request`
+   (/clone/run).
    A page's card is `{% extends "_gallery_card.html" %}` overriding only
    its blocks (`lead`: above the media, /clone's picture of the video being
    cloned; `actions`: the whole row; /repurpose keeps only Recreate);
@@ -17,8 +19,9 @@
 {% import "components/ui.html" as ui %}
 {% import "_asset_media.html" as am %}
 {% import "_card_hide.html" as hide %}
+{% set may_hide = request is not defined or can(request, "hide") %}
 <div class="result-item" data-job-id="{{ job.job_id }}" data-task="{{ job.task }}"{% if job.assets %} data-file-index="{{ job.assets[0].index }}"{% endif %}
-     data-params='{{ job.params_json }}'{% if job.hidden %} data-hidden{% endif %}
+     data-params='{{ job.params_json }}'{% if job.hidden and may_hide %} data-hidden{% endif %}
      {% if job.status not in ("done", "failed") %}data-pending data-poll-prefix="{{ job.poll_prefix }}" data-poll-kind="{{ job.result_kind }}"{% endif %}>
     {% block lead %}{% endblock %}
     {% if job.status == "done" and job.assets %}
@@ -43,11 +46,11 @@
         {% call ui.menu("More actions") %}
             {{ ui.menu_item("Recreate", "restore", "recreate-btn") }}
             {% block menu_items %}{% endblock %}
-            {% if not job.made_by %}{{ hide.items(job.hidden) }}{% endif %}
+            {% if may_hide %}{{ hide.items(job.hidden) }}{% endif %}
         {% endcall %}
         {% else %}
         {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
-        {% if not job.made_by %}{% call ui.menu("More actions") %}{{ hide.items(job.hidden) }}{% endcall %}{% endif %}
+        {% if may_hide %}{% call ui.menu("More actions") %}{{ hide.items(job.hidden) }}{% endcall %}{% endif %}
         {% endif %}
         {% endblock %}
     </div>

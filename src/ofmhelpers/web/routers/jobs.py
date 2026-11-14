@@ -7,14 +7,16 @@ job, only the session's own; a view choice only, the job and its files stay.
 
 from fastapi import APIRouter
 
+from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.features.jobs import own
 from ofmhelpers.schemas import JobVisibility
-from ofmhelpers.schemas.access import Area
-from ofmhelpers.web.dependencies import Access, Actor
+from ofmhelpers.web.dependencies import Access, Actors, Can
 
 router = APIRouter(prefix="/jobs", tags=["jobs"], dependencies=[Access(Area.JOBS)])
 
 
-@router.post("/{job_id}/hidden")
-def set_hidden(job_id: str, body: JobVisibility, actor: Actor) -> JobVisibility:
-    return own.set_hidden(job_id, actor, body.hidden)
+# Their own job or one of their VAs' (`Actors`); a VA hides nothing
+# (`Action.HIDE`: the owner must see everything a VA made).
+@router.post("/{job_id}/hidden", dependencies=[Can(Action.HIDE)])
+def set_hidden(job_id: str, body: JobVisibility, actors: Actors) -> JobVisibility:
+    return own.set_hidden(job_id, actors, body.hidden)

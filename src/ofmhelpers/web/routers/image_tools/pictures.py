@@ -22,6 +22,7 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.pictures import service
 from ofmhelpers.features.pictures.service import LABEL, TASK, run_picture
 from ofmhelpers.features.pictures.targets import (
@@ -35,7 +36,6 @@ from ofmhelpers.features.pictures.targets import (
 )
 from ofmhelpers.features.pictures.targets import resolution as _resolution
 from ofmhelpers.schemas import Job, JobsQueued, PicturePreset, TaskCard
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import (
     Access,
     Actor,

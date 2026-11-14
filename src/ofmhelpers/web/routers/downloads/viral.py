@@ -15,10 +15,10 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.viral import page as viral_page
 from ofmhelpers.features.viral.page import run_viral
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Actor
 from ofmhelpers.web.routers.task_helpers import (
     add_job_routes,

@@ -13,8 +13,8 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.links import self_page
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.self_links import SelfDomainForm, SelfRange
 from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render

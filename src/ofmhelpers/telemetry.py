@@ -77,6 +77,8 @@ _LOGGED_ARGUMENTS = frozenset(
         "copies",
         "date_from",
         "date_to",
+        "not_uploaded",
+        "va",
         "device",
         "device_id",
         "dl",

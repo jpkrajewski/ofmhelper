@@ -39,6 +39,7 @@ RANK = {
     "db": 1,
     "cache": 1,
     "schemas": 1,
+    "auth": 1,
     "config": 1,
     "utils": 1,
 }
