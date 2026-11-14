@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from pydantic import StringConstraints
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets import refs
 from ofmhelpers.features.assets.store import strip_asset_hash_prefix
 from ofmhelpers.schemas import MissingRefs, RefEntry, StoredRefs
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import media_response
 

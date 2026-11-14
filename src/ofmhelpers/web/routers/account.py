@@ -12,11 +12,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 
+from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.features.account import service
 from ofmhelpers.features.account.service import Notice
 from ofmhelpers.features.drive.space import DriveSpace, drive_space
 from ofmhelpers.schemas import ApiKeysForm
-from ofmhelpers.schemas.access import Action, Area
 from ofmhelpers.web.dependencies import Access, Can, CurrentUser
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import NO_STORE, see_other

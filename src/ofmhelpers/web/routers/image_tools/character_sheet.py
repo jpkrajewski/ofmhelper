@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.character_sheet import service
 from ofmhelpers.features.character_sheet.service import (
@@ -21,7 +22,6 @@ from ofmhelpers.features.character_sheet.service import (
 # Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.character_sheet.service import run_combine as _run_combine
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render

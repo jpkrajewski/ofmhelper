@@ -54,6 +54,11 @@
         {{ ui.button("1:1", attrs={"aria-pressed": "false"}) }}
     {% endcall %}
     {{ ui.date_range("/styleguide") }}
+    {% call ui.menu_button("VAs", "users") %}
+        {{ ui.menu_choice("Everyone", "#", current=true) }}
+        {{ ui.menu_choice("noelyn", "#") }}
+    {% endcall %}
+    <div class="toolbar-actions">{{ ui.button("A switch, on", icon="folder", attrs={"aria-pressed": "true"}) }}</div>
     {% call ui.chip_row() %}
         {{ ui.chip("Off chip") }}
         {{ ui.chip("On chip", pressed=true) }}
@@ -117,6 +122,12 @@
             <p class="source">Seedream 5.0</p>
         </div>
     </div>
+    {% endcall %}
+
+    {% call ui.card("Tour") %}
+    {{ ui.button("How to", icon="play", hook="tour-open") }}
+    {{ ui.tour([(".sg-results", "One control is lit, the rest dims."), (".tour-open", "Next goes on, Skip ends it.")]) }}
+    <script src="{{ static_url('js/tour.js') }}" defer></script>
     {% endcall %}
 
     {% call ui.card("Time zone") %}

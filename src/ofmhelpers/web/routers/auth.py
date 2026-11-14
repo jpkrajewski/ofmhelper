@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.signin import consent, flow, password_link, passwords
 from ofmhelpers.features.signin.outcome import Outcome, signed_out
@@ -24,7 +25,6 @@ from ofmhelpers.features.signin.state import (
     drop_state,
     safe_next,
 )
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.middleware.auth import SESSION_PATH, STOP_VIEWING_PATH

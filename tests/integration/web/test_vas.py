@@ -1,5 +1,5 @@
 """
-/spending: what each VA's runs cost today, in the last 7 days and this month,
+/vas: what each VA's runs cost today, in the last 7 days and this month,
 summed in SQL from `jobs.cost_usd` per `jobs.user_id`. A run is a job that
 made a provider request; its cost is what the provider reported, else the
 app's clone price (marked "est."), else unknown ("N runs without a price",
@@ -25,11 +25,11 @@ from sqlalchemy import update
 from ofmhelpers.db.models import JobRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, keep_cost
+from ofmhelpers.db.stores.jobs import create_job, get_job, keep_cost, log_event
 from ofmhelpers.features.jobs.cost import cost_of
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.spending import service
-from ofmhelpers.features.spending.models import Amount, Period
+from ofmhelpers.features.vas import service
+from ofmhelpers.features.vas.models import Amount, Period
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.schemas import Role, User, UserForm
 from ofmhelpers.schemas.persistence import GenerationRecord, JobCost, JobMeta
@@ -160,9 +160,7 @@ def test_reported_estimated_and_unpriced_runs_are_told_apart():
     assert today == Amount(
         runs=4, usd=Decimal("1.75"), estimated_usd=Decimal("0.5"), unpriced=2
     )
-    assert today.dollars == "$1.75"
-    assert today.estimate_label == "$0.50 est."
-    assert today.unpriced_label == "2 runs without a price"
+    assert (today.dollars, today.runs_label) == ("$1.75", "4 runs")
 
 
 def test_runs_without_any_price_show_no_amount_never_zero():
@@ -173,8 +171,7 @@ def test_runs_without_any_price_show_no_amount_never_zero():
     today = _amounts(_view(owner, va), va)[Period.TODAY]
 
     assert (today.runs, today.unpriced, today.priced) == (1, 1, False)
-    assert today.dollars == "—"
-    assert today.unpriced_label == "1 run without a price"
+    assert (today.dollars, today.runs_label) == ("—", "1 run")
 
 
 def test_a_job_that_asked_no_provider_is_not_a_run():
@@ -298,29 +295,29 @@ def test_a_user_sees_only_their_own_vas_with_money_and_marks():
     _run(mine, _today(), None)
     _run(theirs, _today(), "99")
 
-    r = _client(OWNER).get("/spending")
+    r = _client(OWNER).get("/vas")
 
     assert r.status_code == 200
     assert _rows(r.text) == [str(mine.id)]
     assert "Vera" in r.text
     assert "Theo" not in r.text
     assert "$99" not in r.text
-    assert (
-        _cell(r.text, mine, Period.TODAY)
-        == "$3.50 $1.00 est. 3 runs · 1 run without a price"
-    )
+    # Two facts a cell, nothing else: what it cost, how many runs.
+    assert _cell(r.text, mine, Period.TODAY) == "$3.50 3 runs"
+    assert "est." not in r.text
+    assert "without a price" not in r.text
     assert _cell(r.text, mine, Period.MONTH).startswith("$3.50")
     assert "Days in Warsaw time" in r.text
 
 
-def test_an_all_estimated_amount_is_marked_est():
+def test_an_estimated_amount_reads_like_any_other():
     owner = make_user(OWNER)
     va = _va("va@example.com", owner)
     _run(va, _today(), "4", estimated=True)
 
-    r = _client(OWNER).get("/spending")
+    r = _client(OWNER).get("/vas")
 
-    assert _cell(r.text, va, Period.TODAY) == "$4.00 est. 1 run"
+    assert _cell(r.text, va, Period.TODAY) == "$4.00 1 run"
 
 
 def test_the_time_zone_cookie_names_the_days():
@@ -329,7 +326,7 @@ def test_the_time_zone_cookie_names_the_days():
     client = _client(OWNER)
     client.cookies.set("ofm_timezone", "Asia/Kolkata")
 
-    assert "Days in Ambala time" in client.get("/spending").text
+    assert "Days in Ambala time" in client.get("/vas").text
 
 
 def test_an_admin_sees_every_va_under_its_owner():
@@ -339,7 +336,7 @@ def test_an_admin_sees_every_va_under_its_owner():
     _run(a, _today(), "1")
     _run(b, _today(), "2")
 
-    r = _client("boss@example.com", Role.ADMIN).get("/spending")
+    r = _client("boss@example.com", Role.ADMIN).get("/vas")
 
     assert r.status_code == 200
     assert _rows(r.text) == [str(a.id), str(b.id)]
@@ -355,7 +352,7 @@ def test_a_va_cannot_open_spending():
     owner = make_user(OWNER)
     _va("va@example.com", owner)
 
-    r = _client("va@example.com", Role.VA).get("/spending")
+    r = _client("va@example.com", Role.VA).get("/vas")
 
     assert r.status_code == 403
 
@@ -363,7 +360,7 @@ def test_a_va_cannot_open_spending():
 def test_a_user_with_no_va_sees_the_empty_state():
     make_user(OWNER)
 
-    r = _client(OWNER).get("/spending")
+    r = _client(OWNER).get("/vas")
 
     assert r.status_code == 200
     assert re.search(r'<p class="empty-state">No VAs yet</p>', r.text)
@@ -374,7 +371,89 @@ def test_spending_is_in_the_more_menu_of_users_not_of_vas():
     owner = make_user(OWNER)
     _va("va@example.com", owner)
 
-    assert 'href="/spending"' in _client(OWNER).get("/home").text
-    assert (
-        'href="/spending"' not in _client("va@example.com", Role.VA).get("/home").text
-    )
+    assert 'href="/vas"' in _client(OWNER).get("/home").text
+    assert 'href="/vas"' not in _client("va@example.com", Role.VA).get("/home").text
+
+
+# --- a VA's days (owner 2026-11-14) --------------------------------------------------
+
+
+def _reel(va: User, at: datetime, usd: str | None = None, *, status: str = "done"):
+    job_id = _run(va, at, usd)
+    with session_scope() as s:
+        s.execute(update(JobRow).where(JobRow.id == job_id).values(status=status))
+
+
+def _event(va: User, task: str, at: datetime) -> None:
+    log_event(task, actor=str(va.id), at=at.timestamp())
+
+
+def _days(view, va: User) -> list:
+    return [day for day in view.days if day.user_id == va.id]
+
+
+def test_a_day_says_when_the_va_logged_in_and_out_the_reels_and_the_money():
+    owner = make_user(OWNER)
+    va = _va("va@example.com", owner, "Vera")
+    _event(va, "login", _at(14, 9, 2))
+    _event(va, "logout", _at(14, 12, 0))
+    _event(va, "login", _at(14, 13, 0))
+    _event(va, "logout", _at(14, 17, 40))
+    _reel(va, _at(14, 10), "1.25")
+    _reel(va, _at(14, 11), "2")
+    _reel(va, _at(14, 15), None, status="failed")  # not a reel
+    _run(va, _at(14, 16), "0.5", task="ai")  # money, not a reel
+
+    (day,) = _days(_view(owner, va), va)
+
+    assert (day.day_label, day.name) == ("Sat 14 Nov", "Vera")
+    assert (day.logged_in, day.logged_out) == ("09:02", "17:40")
+    assert (day.reels, day.spent) == (2, "$3.75")
+
+
+def test_an_idle_logout_is_marked_and_a_va_still_in_today_is_active():
+    owner = make_user(OWNER)
+    va = _va("va@example.com", owner)
+    _event(va, "login", _at(14, 9, 0))
+    _event(va, "idle_logout", _at(14, 11, 30))
+    _event(va, "login", _at(15, 8, 0))
+    users.seen(va.id, _at(15, 11, 45).timestamp())
+
+    today, yesterday = _days(_view(owner, va), va)
+
+    assert (yesterday.logged_in, yesterday.logged_out) == ("09:00", "11:30 · idle")
+    assert (today.logged_in, today.logged_out) == ("08:00", "Active 11:45")
+    assert (today.reels, today.spent) == (0, "—")
+
+
+def test_days_are_the_readers_zone_newest_first_and_only_this_month():
+    """21:00 on the 14th in Warsaw is 04:00 on the 15th in Manila."""
+    owner = make_user(OWNER)
+    va = _va("va@example.com", owner)
+    _event(va, "login", _at(14, 21, 0))
+    _reel(va, _at(13, 12), "1")
+    _reel(va, _at(31, 12, month=10), "9")
+
+    warsaw = _days(_view(owner, va), va)
+    manila = _days(_view(owner, va, zone="Asia/Manila"), va)
+
+    assert [(d.day.day, d.logged_in) for d in warsaw] == [(14, "21:00"), (13, "—")]
+    assert [(d.day.day, d.logged_in) for d in manila] == [(15, "04:00"), (13, "—")]
+
+
+def test_the_page_lists_the_days_of_the_readers_vas_only():
+    owner, other = make_user(OWNER), make_user("other@example.com")
+    mine = _va("va@example.com", owner, "Vera")
+    theirs = _va("their-va@example.com", other, "Theo")
+    _event(mine, "login", _today())
+    _reel(mine, _today(), "2")
+    _event(theirs, "login", _today())
+
+    page = _client(OWNER).get("/vas").text
+
+    table = page[page.index('class="vas-days"') :]
+    assert ">Days this month</h2>" in page
+    assert re.findall(r'<tr data-day="[^"]+" data-va="(\d+)">', table) == [str(mine.id)]
+    assert '<td class="num" data-reels>1</td>' in table
+    assert '<td class="num" data-spent>$2.00</td>' in table
+    assert "Theo" not in page

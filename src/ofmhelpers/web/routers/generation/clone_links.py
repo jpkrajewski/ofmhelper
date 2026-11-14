@@ -38,6 +38,7 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone.targets import DEFAULT_RESOLUTION
 from ofmhelpers.features.clone_links import service
@@ -61,7 +62,6 @@ from ofmhelpers.features.clone_links.service import (
     Sent,
 )
 from ofmhelpers.schemas import CloneQueued
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import (
     Access,
     Actor,

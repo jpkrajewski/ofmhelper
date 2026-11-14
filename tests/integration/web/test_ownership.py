@@ -186,9 +186,9 @@ def test_an_admin_does_not_see_or_change_a_users_account(ann):
 
 
 # --- reels watch list ------------------------------------------------------------
-# /reels is retired (schemas/access.py `RETIRED`, owner 2026-11-13): its routes
+# /reels is retired (auth/access.py `RETIRED`, owner 2026-11-13): its routes
 # answer 403, so these are kept and not run. Back with the page: marker off.
-REELS_PARKED = pytest.mark.skip(reason="/reels is retired: schemas/access.py RETIRED")
+REELS_PARKED = pytest.mark.skip(reason="/reels is retired: auth/access.py RETIRED")
 
 
 @REELS_PARKED

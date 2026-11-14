@@ -8,15 +8,19 @@ import os
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
+import re
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
+from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.clone.service import subject_picks
+from ofmhelpers.features.users.viewing import viewer_for
+from ofmhelpers.schemas import Role, User
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import assets_root_for_user
 
@@ -128,3 +132,74 @@ def test_a_person_with_no_runs_gets_no_tile_rows():
     sign_in(client)
 
     assert "subject-tile" not in client.get("/clone").text
+
+
+# --- a team: the owner and their VAs (owner 2026-11-14) -------------------------
+
+
+def _team(owner_email: str, *va_emails: str) -> list[User]:
+    owner = make_user(owner_email)
+    vas = [
+        users.set_owner(make_user(email, Role.VA).id, owner.id) for email in va_emails
+    ]
+    return [owner, *(va for va in vas if va is not None)]
+
+
+def _tiles(html: str) -> list[str]:
+    return re.findall(r'class="photo-tile subject-tile"[^>]*data-path="([^"]+)"', html)
+
+
+def test_a_va_gets_the_owners_and_the_other_vas_subjects_and_their_uses_count():
+    """ "va should get the same most used images on clone and lates litterlay
+    the same, and their coutn shousl be also included in the most used"."""
+    owner, va, other_va = _team(
+        "boss@example.com", "va1@example.com", "va2@example.com"
+    )
+    root = assets_root_for_user(owner.id)
+    a, b, c = (_picture(root, d, d) for d in "abc")
+    _run(str(owner.id), a)
+    _run(str(va.id), b)
+    _run(str(va.id), b)
+    _run(str(other_va.id), c)
+
+    team = viewer_for(va, None).team
+    picks = subject_picks(team, root)
+
+    assert team == {str(owner.id), str(va.id), str(other_va.id)}
+    assert viewer_for(owner, None).team == team
+    assert picks.last_used == [str(c), str(b), str(a)]
+    # b: the VA's two runs put it first on everyone's row, the owner's too.
+    assert picks.most_used == [str(b), str(c), str(a)]
+
+
+def test_the_owner_and_the_va_see_the_same_tiles_on_the_page():
+    owner, va = _team("boss@example.com", "va1@example.com")
+    root = assets_root_for_user(owner.id)
+    a, b = (_picture(root, d, d) for d in "ab")
+    _run(str(owner.id), a)
+    _run(str(va.id), b)
+    as_owner, as_va = TestClient(app), TestClient(app)
+    sign_in(as_owner, owner.email)
+    sign_in(as_va, va.email, Role.VA)
+
+    seen_by_owner = _tiles(as_owner.get("/clone").text)
+
+    assert seen_by_owner == [str(b), str(a), str(b), str(a)]  # last, then most used
+    assert _tiles(as_va.get("/clone").text) == seen_by_owner
+
+
+def test_another_owners_va_shares_nothing():
+    _owner, va = _team("boss@example.com", "va1@example.com")
+    theirs, their_va = _team("second@example.com", "va2@example.com")
+    picture = _picture(assets_root_for_user(theirs.id), "a", "theirs")
+    _run(str(their_va.id), picture)
+
+    picks = subject_picks(viewer_for(va, None).team, assets_root_for_user(va.id))
+
+    assert (picks.last_used, picks.most_used) == ([], [])
+
+
+def test_a_va_nobody_owns_is_a_team_of_one():
+    va = make_user("lone-va@example.com", Role.VA)
+
+    assert viewer_for(va, None).team == {str(va.id)}

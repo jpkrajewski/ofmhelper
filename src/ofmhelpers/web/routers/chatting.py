@@ -10,12 +10,12 @@ from typing import Annotated
 from fastapi import APIRouter, Cookie, Request
 from fastapi.responses import Response
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.chatting.alerts import chat_alerts
 from ofmhelpers.features.chatting.fanvue_connect import can_connect, connect_url, finish
 from ofmhelpers.features.chatting.recent import recent_models
 from ofmhelpers.features.chatting.service import accounts_to_reconnect, open_model
 from ofmhelpers.features.chatting.service import platform_models as models_of
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.chatting import ChatAlerts, ChatPlatform
 from ofmhelpers.schemas.time_zones import time_zone
 from ofmhelpers.web.dependencies import Access, OwnerId

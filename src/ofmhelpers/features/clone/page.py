@@ -44,9 +44,13 @@ class FormView(BaseModel):
     default_mirror: bool
 
 
-def form_view(actor: str, assets_root: Path, videos: list[str]) -> FormView:
+def form_view(
+    actor: str, team: frozenset[str], assets_root: Path, videos: list[str]
+) -> FormView:
     """`videos`: the `?video=` paths /reels or a download hands over; a stale
-    link just opens with fewer videos picked."""
+    link just opens with fewer videos picked. `team`: whose runs the subject
+    tiles come from (the owner and their VAs, `Viewer.team`); the provider
+    the form starts on stays the person's own last one (`actor`)."""
     targets = clone_targets()
     return FormView(
         providers=provider_choices(targets.names()),
@@ -61,7 +65,7 @@ def form_view(actor: str, assets_root: Path, videos: list[str]) -> FormView:
         max_images=settings.web.clone_max_images,
         live_poll_s=settings.web.gallery_live_poll_s,
         prefill_videos=keep_videos(videos, assets_root),
-        subjects=subject_picks(actor, assets_root),
+        subjects=subject_picks(team, assets_root),
         addons=prompt_addons(),
         max_reference_s=min(t.max_reference_s for t in targets.all()),
         exports=exports().all(),

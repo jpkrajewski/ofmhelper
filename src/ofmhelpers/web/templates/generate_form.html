@@ -2,6 +2,13 @@
 {% import "components/ui.html" as ui %}
 {% block content %}
 {{ ui.page_header("Gen AI") }}
+{# The guided tour ("How to", static/js/tour.js). #}
+{% set tour = [
+    ("#model-select", "Choose the model."),
+    ("#prompt-field", "Write what the picture or video should show."),
+    ("#model-fields", "Add the pictures or videos it needs, and set its options."),
+    ('#generate-form button[type="submit"]', "Press Generate. The result shows on the right."),
+] %}
 {% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
@@ -41,8 +48,8 @@
 
 <div id="results-panel">
     <div class="generation-status"></div>
-    <div class="results" data-gallery-endpoint="/generate/gallery{{ dates.dates }}"
-         data-live-endpoint="/generate/gallery/latest{{ dates.dates }}" data-live-key="jobId"
+    <div class="results" data-gallery-endpoint="/generate/gallery{{ dates.filters }}"
+         data-live-endpoint="/generate/gallery/latest{{ dates.filters }}" data-live-key="jobId"
          data-live-interval="{{ live_poll_s }}">
         {% for job in gallery %}{% include "_generate_gallery_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}

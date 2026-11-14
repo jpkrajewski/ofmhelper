@@ -223,7 +223,7 @@ def _kind(item: pytest.Item) -> str:
 
 
 # Parked, not deleted (owner 2026-11-13): /clone-links, /reels and /repurpose are
-# retired (schemas/access.py `RETIRED`) because nobody uses them; their
+# retired (auth/access.py `RETIRED`) because nobody uses them; their
 # code stays. Their own tests are not collected in any preset, nor those of
 # what only they use: /clone-links' AI check (clone_ai_check) and its GOOD /
 # TRIAL REELS review folders, the feed's kept thumbnails. To bring a page

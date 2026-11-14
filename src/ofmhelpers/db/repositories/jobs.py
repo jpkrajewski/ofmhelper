@@ -7,6 +7,7 @@ lazy from decimal import Decimal
 
 from sqlalchemy import (
     ColumnElement,
+    Date,
     Float,
     Text,
     and_,
@@ -23,7 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array_agg
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.models import DownloadRow, JobRow
+from ofmhelpers.db.models import DownloadRow, DriveUploadRow, JobRow
 from ofmhelpers.db.repositories.cached_repository import (
     CachedRepository,
     cached,
@@ -36,8 +37,10 @@ from ofmhelpers.schemas.persistence import (
     JobPage,
     JobParams,
     Named,
+    RecordedJob,
     Spend,
     SpendPeriod,
+    UserDay,
 )
 
 # Sentinel so update_status can tell "leave this column alone" apart from
@@ -64,6 +67,10 @@ def _job(row: JobRow) -> Job:
             "cost_estimated": row.cost_estimated,
         }
     )
+
+
+# The shortest id prefix `delete_like` takes (`seed-`): never every job.
+_MIN_DELETE_PREFIX = 4
 
 
 def _page_filter(
@@ -119,8 +126,11 @@ class JobRepository(CachedRepository):
         params: dict,
         user_id: int | None = None,
         status: str = "running",
+        created_at: float | None = None,
     ) -> str:
-        """`user_id`: whose job it is; None = nobody's (a system event)."""
+        """`user_id`: whose job it is; None = nobody's (a system event).
+        `created_at`: when it happened, for an event recorded afterwards
+        (an idle logout); None = now."""
         job_id = str(uuid.uuid4())[:8]
         with session_scope() as s:
             s.add(
@@ -132,13 +142,53 @@ class JobRepository(CachedRepository):
                     status=status,
                     result=None,
                     error=None,
-                    created_at=time.time(),
+                    created_at=created_at if created_at is not None else time.time(),
                     preview=None,
                 )
             )
             s.flush()
             self._enforce_cap(s, task_name, user_id)
         return job_id
+
+    @invalidates_cache
+    def add_recorded(self, rows: list[RecordedJob]) -> None:
+        """`rows` as job rows, each with its own id, moment and ending. No
+        cap is enforced: they are few and removed again (`delete_like`)."""
+        with session_scope() as s:
+            s.add_all(
+                JobRow(
+                    id=row.id,
+                    task=row.task,
+                    user_id=row.user_id,
+                    status=row.status,
+                    created_at=row.created_at,
+                    finished_at=row.finished_at,
+                    params=row.params,
+                    result=row.result,
+                    error=row.error,
+                    preview=None,
+                    meta=row.meta.model_dump(mode="json"),
+                    cost_usd=row.cost_usd,
+                    cost_estimated=row.cost_estimated,
+                )
+                for row in rows
+            )
+
+    @invalidates_cache
+    def delete_like(self, prefix: str) -> int:
+        """Deletes the jobs whose id starts with `prefix`; how many went.
+        A prefix too short to mean one batch is refused: an empty one would
+        match every job."""
+        if len(prefix) < _MIN_DELETE_PREFIX:
+            msg = f"refusing to delete jobs by the prefix {prefix!r}"
+            raise ValueError(msg)
+        with session_scope() as s:
+            gone = s.execute(
+                delete(JobRow)
+                .where(JobRow.id.startswith(prefix, autoescape=True))
+                .returning(JobRow.id)
+            )
+            return len(gone.all())
 
     def _enforce_cap(self, session, task: str, user_id: int | None) -> None:
         """Keep each person's history of each task from growing forever: past
@@ -406,6 +456,33 @@ class JobRepository(CachedRepository):
         ]
         return _page(where, order, offset, limit)
 
+    def page_not_uploaded(
+        self,
+        tasks: tuple[str, ...],
+        user_ids: tuple[int, ...] | None,
+        offset: int,
+        limit: int,
+        hidden: bool | None = None,
+        since: float | None = None,
+        until: float | None = None,
+    ) -> JobPage:
+        """`list_page`, only the finished jobs none of whose files is in a
+        Drive folder (`drive_uploads`, status done; one queued, failed or
+        taken out again does not count): what is left to post. Uncached:
+        `drive_uploads` changes without a job write."""
+        uploaded = (
+            select(DriveUploadRow.id)
+            .where(
+                DriveUploadRow.job_id == JobRow.id,
+                DriveUploadRow.status == "done",
+            )
+            .correlate(JobRow)
+            .exists()
+        )
+        where = _page_filter(tasks, user_ids, "done", hidden, since, until)
+        where.append(~uploaded)
+        return _page(where, [JobRow.created_at.desc()], offset, limit)
+
     @cached
     def list_batch(self, task: str, user_id: int, batch: str) -> list[Job]:
         """`user_id`'s jobs of `task` queued by one submit (params `batch`),
@@ -453,6 +530,71 @@ class JobRepository(CachedRepository):
                 .where(JobRow.id == job_id)
                 .values(meta=meta, cost_usd=cost_usd, cost_estimated=cost_estimated)
             )
+
+    def days(
+        self,
+        user_ids: tuple[int, ...],
+        from_ts: float,
+        to_ts: float,
+        zone: str,
+        reel_tasks: tuple[str, ...],
+    ) -> list[UserDay]:
+        """Each of `user_ids`' days from `from_ts` to `to_ts` (days of
+        `zone`, an IANA name), newest first, one row per person and day
+        with any job row: when they first and last signed in, last pressed
+        Logout, were last logged out as idle (the `login` / `logout` /
+        `idle_logout` events), how many jobs of `reel_tasks` they finished
+        and what the day's jobs cost. Grouped here; uncached like `spend`."""
+        if not user_ids:
+            return []
+        day = cast(
+            func.timezone(zone, func.to_timestamp(JobRow.created_at)), Date
+        ).label("day")
+        at = JobRow.created_at
+
+        def moment(task: str, pick: Any) -> Any:
+            return pick(at).filter(JobRow.task == task)
+
+        query = (
+            select(
+                JobRow.user_id,
+                day,
+                moment("login", func.min),
+                moment("login", func.max),
+                moment("logout", func.max),
+                moment("idle_logout", func.max),
+                func.count().filter(
+                    JobRow.task.in_(reel_tasks), JobRow.status == "done"
+                ),
+                func.sum(JobRow.cost_usd),
+            )
+            .where(JobRow.user_id.in_(user_ids), at >= from_ts, at < to_ts)
+            .group_by(JobRow.user_id, day)
+            .order_by(day.desc(), JobRow.user_id)
+        )
+        with session_scope() as s:
+            return [
+                UserDay(
+                    user_id=user_id,
+                    day=on,
+                    first_login_at=first_login,
+                    last_login_at=last_login,
+                    logout_at=logout,
+                    idle_logout_at=idle,
+                    reels=reels,
+                    usd=usd,
+                )
+                for (
+                    user_id,
+                    on,
+                    first_login,
+                    last_login,
+                    logout,
+                    idle,
+                    reels,
+                    usd,
+                ) in s.execute(query)
+            ]
 
     def spend(
         self, user_ids: tuple[int, ...], periods: tuple[SpendPeriod, ...]
@@ -529,16 +671,23 @@ class JobRepository(CachedRepository):
 
     @cached
     def last_param(
-        self, tasks: tuple[str, ...], user_id: int, field: str, among: tuple[str, ...]
+        self,
+        tasks: tuple[str, ...],
+        user_ids: tuple[int, ...],
+        field: str,
+        among: tuple[str, ...],
     ) -> str | None:
-        """Param `field` of `user_id`'s newest job of `tasks` whose value is
-        one of `among` (sorted tuples: stable cache key), else None."""
+        """Param `field` of the newest job of `tasks` one of `user_ids` ran
+        whose value is one of `among` (sorted tuples: stable cache key),
+        else None."""
         value = JobRow.params[field].astext
         with session_scope() as s:
             return s.execute(
                 select(value)
                 .where(
-                    JobRow.task.in_(tasks), JobRow.user_id == user_id, value.in_(among)
+                    JobRow.task.in_(tasks),
+                    JobRow.user_id.in_(user_ids),
+                    value.in_(among),
                 )
                 .order_by(JobRow.created_at.desc())
                 .limit(1)
@@ -546,24 +695,25 @@ class JobRepository(CachedRepository):
 
     @cached
     def last_used_firsts(
-        self, tasks: tuple[str, ...], user_id: int, field: str, limit: int
+        self, tasks: tuple[str, ...], user_ids: tuple[int, ...], field: str, limit: int
     ) -> list[str]:
         """The first file of the list param `field` (`reference_images`: the
-        subject) of `user_id`'s jobs of `tasks` (sorted tuple: stable cache
-        key), last used first, one path per file (`_firsts`)."""
+        subject) of the jobs of `tasks` that `user_ids` ran (one person, or
+        a team: sorted tuples, a stable cache key), last used first, one
+        path per file (`_firsts`)."""
         return self._firsts(
-            tasks, user_id, field, limit, [func.max(JobRow.created_at).desc()]
+            tasks, user_ids, field, limit, [func.max(JobRow.created_at).desc()]
         )
 
     @cached
     def most_used_firsts(
-        self, tasks: tuple[str, ...], user_id: int, field: str, limit: int
+        self, tasks: tuple[str, ...], user_ids: tuple[int, ...], field: str, limit: int
     ) -> list[str]:
         """As `last_used_firsts`, the one in the most jobs first (a tie: the
-        last used)."""
+        last used). A team's runs are counted together."""
         return self._firsts(
             tasks,
-            user_id,
+            user_ids,
             field,
             limit,
             [func.count().desc(), func.max(JobRow.created_at).desc()],
@@ -572,7 +722,7 @@ class JobRepository(CachedRepository):
     def _firsts(
         self,
         tasks: tuple[str, ...],
-        user_id: int,
+        user_ids: tuple[int, ...],
         field: str,
         limit: int,
         order: list[Any],
@@ -593,7 +743,7 @@ class JobRepository(CachedRepository):
                     )
                     .where(
                         JobRow.task.in_(tasks),
-                        JobRow.user_id == user_id,
+                        JobRow.user_id.in_(user_ids),
                         first.is_not(None),
                     )
                     .group_by(content)

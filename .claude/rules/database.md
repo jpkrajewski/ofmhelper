@@ -29,5 +29,5 @@ Sources: PostgreSQL wiki "Don't Do This" (https://wiki.postgresql.org/wiki/Don%2
 ## Migrations
 - Alembic only, one head (`alembic-single-head` hook). Data moves go in the revision, never a separate script.
 - Old code never sees the new schema (the app is stopped first), so a revision may drop or rename in one step.
-- Every revision runs on the prod snapshot before it ships: `tests/migrations/` upgrade, downgrade, upgrade; then the flow on dev with `scripts/prod_to_dev.sh`.
+- Every revision runs on the prod snapshot before it ships: `tests/integration/migrations/` upgrade, downgrade, upgrade; then the flow on dev with `scripts/prod_to_dev.sh`.
 - Never touch prod data without the owner's word.

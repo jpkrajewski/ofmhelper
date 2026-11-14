@@ -8,7 +8,7 @@ its answers to a route as typed parameters, so a route declares
 what it passes on to a store or service is a plain value -- never the
 request. Each is also the seam a test overrides (`app.dependency_overrides`).
 
-Who may open what is `schemas/access.py`, asked here: every router names its
+Who may open what is `auth/access.py`, asked here: every router names its
 area (`APIRouter(dependencies=[Access(Area.CLONE)])`), a route fewer roles
 may use adds `dependencies=[Can(Action.DRIVE_UPLOAD)]`.
 `tests/unit/architecture/` fails on a route with neither a public path nor
@@ -25,8 +25,8 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 from pydantic import BaseModel
 
+from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.schemas import SessionUser
-from ofmhelpers.schemas.access import Action, Area
 from ofmhelpers.schemas.users import Viewer
 from ofmhelpers.web.api_keys import get_api_keys
 from ofmhelpers.web.middleware import AuthMiddleware

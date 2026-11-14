@@ -3,6 +3,12 @@
 {% import "_file_picker.html" as fp %}
 {% block content %}
 {{ ui.page_header("Download") }}
+{# The guided tour ("How to", static/js/tour.js). #}
+{% set tour = [
+    ("#dl-urls", "Paste the link here and press Run."),
+    ("#results-panel", "When the video is downloaded, press Clone on it."),
+    (".sheet-download", "Every hour press this. Then clone every new video."),
+] %}
 {% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
@@ -38,7 +44,7 @@
 
 <div id="results-panel">
     <div class="generation-status"></div>
-    <div class="results" data-gallery-endpoint="/download-assets/gallery{{ dates.dates }}">
+    <div class="results" data-gallery-endpoint="/download-assets/gallery{{ dates.filters }}">
         {% for job in gallery %}{% include "_download_gallery_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}
     </div>
@@ -107,7 +113,7 @@ document.querySelector('#results-panel .results').addEventListener('click', (e) 
    for one that is still removed when its job finishes on the page). #}
 <template id="card-actions-removed">{% import "_card_hide.html" as hide %}<div class="result-actions">
     {{ ui.button("Download", icon="download", hook="download-again") }}
-    {% call ui.menu("More actions") %}{{ ui.menu_item("Recreate", "restore", "recreate-btn") }}{{ hide.items() }}{% endcall %}
+    {% call ui.menu("More actions") %}{{ ui.menu_item("Recreate", "restore", "recreate-btn") }}{% if can(request, "hide") %}{{ hide.items() }}{% endif %}{% endcall %}
 </div></template>
 <script src="{{ static_url('js/file-picker.js') }}"></script>
 <script src="{{ static_url('js/generation.js') }}"></script>

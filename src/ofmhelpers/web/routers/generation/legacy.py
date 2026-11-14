@@ -16,9 +16,9 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.generate.legacy import legacy_tools
 from ofmhelpers.schemas import Job
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 

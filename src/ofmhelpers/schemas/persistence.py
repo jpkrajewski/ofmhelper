@@ -16,6 +16,7 @@ job's `result` payload (a list of `ResultFile` dumps, a grouped list of
 `Job.download_results()` read them back as models.
 """
 
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -228,6 +229,44 @@ class Spend(BaseModel):
     usd: Decimal
     estimated_usd: Decimal
     unpriced: int
+
+
+class UserDay(BaseModel):
+    """One person's one day, read off the job log: sign-ins and logouts as
+    epoch seconds (None: none that day), `reels` finished that day and the
+    dollars its jobs cost (None: none had a price)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: int
+    day: date
+    first_login_at: float | None = None
+    last_login_at: float | None = None
+    logout_at: float | None = None
+    idle_logout_at: float | None = None
+    reels: int = 0
+    usd: Decimal | None = None
+
+
+class RecordedJob(BaseModel):
+    """A job row written whole, as it ended, at a moment of the writer's
+    choosing: what development's made-up history is stored as
+    (`features/vas/seed.py`). Never a running job: nothing runs it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    task: str
+    user_id: int
+    status: str = "done"
+    created_at: float
+    finished_at: float | None = None
+    params: dict[str, Any] = {}
+    result: list[Any] | dict[str, Any] | str | None = None
+    error: str | None = None
+    meta: JobMeta = JobMeta()
+    cost_usd: Decimal | None = None
+    cost_estimated: bool = False
 
 
 class JobParams(BaseModel):

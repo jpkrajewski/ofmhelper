@@ -3,9 +3,11 @@ asks -- the routers' guard (`web/dependencies.py` `Access` / `Can`), the menu
 (`schemas/nav.py`), the templates (`can(...)`) and the tests' page lists.
 
 An `Area` is a page with its routes (every router names one); an `Action`
-is one thing inside an area that fewer roles may do. A page switched off
-whole is in `RETIRED`. A new page: one `Area`
-member + its line in `ACCESS`; a new role: one more name in the sets below.
+is one thing inside an area that fewer roles may do. What each role opens is
+written out below, one list per role: `VA`, `USER` (a VA's + its own),
+`ADMIN` (a user's + its own). A page switched off whole is in `RETIRED`.
+A new page: one `Area` member + its name in the list of the lowest role that
+gets it; a new role: one more list and its line in `PAGES`.
 `tests/unit/architecture/` fails on a route that names no area.
 """
 
@@ -18,7 +20,6 @@ class Area(StrEnum):
     # Everyone signed in.
     SESSION = "session"  # signing out, leaving "view as"
     HOME = "home"
-    ACCOUNT = "account"
     JOBS = "jobs"
     REFS = "refs"
     # The tools a VA works in.
@@ -27,6 +28,7 @@ class Area(StrEnum):
     DOWNLOAD = "download"
     EDIT = "edit"
     # Everything else a user has.
+    ACCOUNT = "account"
     CLONE_LONG = "clone-long"
     CLONE_LINKS = "clone-links"
     LEGACY = "legacy"
@@ -43,7 +45,7 @@ class Area(StrEnum):
     REPURPOSE = "repurpose"
     TRIALS = "trials"
     COOKIES = "cookies"
-    SPENDING = "spending"
+    VAS = "vas"  # what each VA did and spent, per day
     # Admins.
     CHATTING = "chatting"
     CHARACTER_SHEET = "character-sheet"
@@ -60,16 +62,17 @@ class Action(StrEnum):
     # /account; an admin sets a VA's.
     CHANGE_PASSWORD = "change-password"  # noqa: S105 -- an action's name
     SERVER_STATUS = "server-status"  # /home Server section
+    HIDE = "hide"  # a gallery card's Hide / Unhide and "Show hidden"
 
 
 EVERYONE = frozenset(Role)
 MEMBERS = frozenset({Role.ADMIN, Role.USER})
 ADMINS = frozenset({Role.ADMIN})
 
-_EVERYONE = (
+# What a VA opens: the tools they work in, nothing else.
+VA = (
     Area.SESSION,
     Area.HOME,
-    Area.ACCOUNT,
     Area.JOBS,
     Area.REFS,
     Area.GENERATE,
@@ -77,7 +80,31 @@ _EVERYONE = (
     Area.DOWNLOAD,
     Area.EDIT,
 )
-_ADMINS = (
+# What a user opens: a VA's pages and their own business.
+USER = (
+    *VA,
+    Area.ACCOUNT,
+    Area.CLONE_LONG,
+    Area.CLONE_LINKS,
+    Area.LEGACY,
+    Area.DOWNLOAD_OLD,
+    Area.REELS,
+    Area.VIRAL,
+    Area.ACCOUNTS,
+    Area.LINKS,
+    Area.SELF_LINKS,
+    Area.PHONES,
+    Area.DRIVE,
+    Area.PICTURES,
+    Area.UNIQIFY,
+    Area.REPURPOSE,
+    Area.TRIALS,
+    Area.COOKIES,
+    Area.VAS,
+)
+# What an admin opens: a user's pages and the admin tools.
+ADMIN = (
+    *USER,
     Area.CHATTING,
     Area.CHARACTER_SHEET,
     Area.USERS,
@@ -85,6 +112,9 @@ _ADMINS = (
     Area.STYLEGUIDE,
     Area.FILES,
     Area.ACTION_LOG,
+)
+PAGES: frozendict[Role, tuple[Area, ...]] = frozendict(
+    {Role.VA: VA, Role.USER: USER, Role.ADMIN: ADMIN}
 )
 
 # Switched off, not deleted (owner 2026-11-13: nobody uses them). A retired
@@ -102,13 +132,11 @@ RETIRED = frozenset({Area.CLONE_LINKS, Area.PICTURES, Area.REELS, Area.REPURPOSE
 def _roles(area: Area) -> frozenset[Role]:
     if area in RETIRED:
         return frozenset()
-    if area in _EVERYONE:
-        return EVERYONE
-    return ADMINS if area in _ADMINS else MEMBERS
+    return frozenset(role for role, pages in PAGES.items() if area in pages)
 
 
-# Area -> the roles that may open it. An area in neither list above is
-# every member's (admin and user), not a VA's; a retired one is nobody's.
+# Area -> the roles that may open it, read off the three lists above; a
+# retired one is nobody's.
 ACCESS: frozendict[Area, frozenset[Role]] = frozendict(
     {area: _roles(area) for area in Area}
 )
@@ -119,6 +147,7 @@ ACTIONS: frozendict[Action, frozenset[Role]] = frozendict(
         Action.SAVE_KEYS: MEMBERS,
         Action.CHANGE_PASSWORD: MEMBERS,
         Action.SERVER_STATUS: ADMINS,
+        Action.HIDE: MEMBERS,
     }
 )
 

@@ -96,6 +96,12 @@ class UserRow(Base):
     sessions_ended_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Their last action (a page opened, anything sent), written at most once
+    # a minute (features/users/presence.py); a VA idle past the limit is
+    # logged out at this moment (alembic d9e0f1a2b3c5). NULL = not seen yet.
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class UserIdentityRow(Base):
@@ -340,7 +346,7 @@ class JobRow(Base):
     __table_args__ = (
         # Every read (list_jobs, pruning) sorts/filters by created_at.
         Index("ix_jobs_created_at", "created_at"),
-        # One person's jobs, newest first: galleries, /spending.
+        # One person's jobs, newest first: galleries, /vas.
         Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
     )
 

@@ -1,7 +1,9 @@
-"""What /spending shows: one amount per VA and period, as `spending.html`
-reads it. Money is `Decimal` to the cent on the page; a period whose runs
-have no known price shows no amount, never $0."""
+"""What /vas shows: one amount per VA and period, and one row per VA and
+day (when they logged in and out, the reels they made, what the day cost),
+as `vas.html` reads it. Money is `Decimal` to the cent on the page; a period
+whose runs have no known price shows no amount, never $0."""
 
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
@@ -59,22 +61,6 @@ class Amount(BaseModel):
     def runs_label(self) -> str:
         return f"{self.runs} run{'' if self.runs == 1 else 's'}"
 
-    @property
-    def estimate_label(self) -> str | None:
-        """ "est." when the whole amount is estimated, "$3.00 est." when
-        part of it is; None when the providers reported all of it."""
-        if not self.estimated_usd:
-            return None
-        if self.estimated_usd == self.usd:
-            return "est."
-        return f"{_dollars(self.estimated_usd)} est."
-
-    @property
-    def unpriced_label(self) -> str | None:
-        if not self.unpriced:
-            return None
-        return f"{self.unpriced} run{'' if self.unpriced == 1 else 's'} without a price"
-
     def plus(self, other: Amount) -> Amount:
         return Amount(
             runs=self.runs + other.runs,
@@ -113,13 +99,36 @@ class OwnerSpend(BaseModel):
     vas: list[VaSpend]
 
 
-class SpendingView(BaseModel):
-    """/spending: each field is a name `spending.html` reads. `grouped`: an
-    admin's page, every VA under its owner. `zone`: whose days these are."""
+class VaDay(BaseModel):
+    """One VA's one day, worded for the page. `logged_in` / `logged_out`:
+    clock times in the reader's zone ("09:02"; "17:40 · idle" when the app
+    logged them out for doing nothing; "Active 14:05" while they are still
+    in today, the time being their last action; "—" for none)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: int
+    name: str
+    day: date
+    logged_in: str
+    logged_out: str
+    reels: int
+    spent: str
+
+    @property
+    def day_label(self) -> str:
+        return self.day.strftime("%a %d %b")
+
+
+class VasView(BaseModel):
+    """/vas: each field is a name `vas.html` reads. `grouped`: an
+    admin's page, every VA under its owner. `zone`: whose days these are.
+    `days`: this month's days, newest first, VAs by name within a day."""
 
     model_config = ConfigDict(frozen=True)
 
     owners: list[OwnerSpend]
     totals: list[Column]
+    days: list[VaDay]
     grouped: bool
     zone: str

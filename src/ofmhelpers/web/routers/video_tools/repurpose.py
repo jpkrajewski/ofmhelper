@@ -12,6 +12,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import Response
 from pydantic import Field, field_validator
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.repurpose import service
 from ofmhelpers.features.repurpose.service import (
@@ -26,7 +27,6 @@ from ofmhelpers.features.repurpose.service import (
 from ofmhelpers.features.repurpose.service import run_repurpose as _run_repurpose
 from ofmhelpers.media.repurpose.presets import Preset
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import Files, FormModel, at_most
 from ofmhelpers.web.routers.task_helpers import add_job_routes

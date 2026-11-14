@@ -4,7 +4,7 @@ board with the /clone video waiting for its folder, and one file's preview."""
 from pydantic import BaseModel
 
 from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.stores.jobs import Readers, get_job
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.drive import folders
 from ofmhelpers.features.refusals import NotFoundError
@@ -37,10 +37,11 @@ class Thumb(BaseModel):
     media_type: str
 
 
-def _upload_pick(actor: str, job_id: str, source: Source) -> UploadPick | None:
-    """The video `?upload=` names, when it is the session's own finished
-    run."""
-    job = get_job(job_id, actor)
+def _upload_pick(readers: Readers, job_id: str, source: Source) -> UploadPick | None:
+    """The video `?upload=` names, when it is a finished run the session
+    reads: their own, or one of their VAs' (the owner uploads what the VA
+    made: `uploads.queue_uploads` takes the same readers)."""
+    job = get_job(job_id, readers)
     if job is None or job.task != source.task or job.status != "done":
         return None
     assets = job_assets(job, source.files_prefix).assets
@@ -61,13 +62,14 @@ def _upload_pick(actor: str, job_id: str, source: Source) -> UploadPick | None:
 
 
 def page_view(
-    scope: int, viewer: int, actor: str, upload: str, source: Source
+    scope: int, viewer: int, readers: Readers, upload: str, source: Source
 ) -> PageView:
     """At once, from each folder's last read: no Drive call. `upload`: a run
-    whose video goes into the account card clicked."""
+    whose video goes into the account card clicked; `readers`: whose runs
+    that may be (the session's own and their VAs')."""
     return PageView(
         board=folders.board(owner=scope, viewer=viewer, live=False),
-        pick=_upload_pick(actor, upload, source) if upload else None,
+        pick=_upload_pick(readers, upload, source) if upload else None,
     )
 
 

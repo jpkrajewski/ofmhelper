@@ -5,6 +5,8 @@ changed -- except the admin's own VA, as whom the admin may also act (owner
 per request by the auth middleware; everything a route knows about "who"
 comes from it (`web/dependencies.py`)."""
 
+from pydantic import BaseModel
+
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.schemas.users import Role, SessionUser, User, Viewer
@@ -14,22 +16,53 @@ def _as_session(user: User) -> SessionUser:
     return SessionUser(id=user.id, email=user.email, role=user.role)
 
 
+def _team(owner_id: int) -> frozenset[int]:
+    """An owner and every VA of theirs."""
+    vas = [va.id for va in users.vas_of(owner_id)]
+    return frozenset([owner_id, *vas])
+
+
 def _own(user: User) -> Viewer:
     """`user` acting as themselves. A VA sees their own jobs and runs on
-    their owner's keys; anyone else also sees their VAs' jobs."""
+    their owner's keys; anyone else also sees their VAs' jobs. The team is
+    the owner's, the same for the owner and each VA (a VA nobody owns: only
+    themselves)."""
     if user.role == Role.VA:
         return Viewer(
             user=_as_session(user),
             user_ids=frozenset({user.id}),
+            team_ids=_team(user.owner_id) if user.owner_id else frozenset({user.id}),
             keys_of=user.owner_id,
             label=user.label,
         )
+    team = _team(user.id)
     return Viewer(
         user=_as_session(user),
-        user_ids=frozenset({user.id, *(va.id for va in users.vas_of(user.id))}),
+        user_ids=team,
+        team_ids=team,
         keys_of=user.id,
         label=user.label,
     )
+
+
+class Maker(BaseModel):
+    """One choice of a gallery's "VAs" filter."""
+
+    id: int
+    label: str
+
+
+def makers(viewer: Viewer) -> list[Maker]:
+    """Whose runs the reader can pick out of a gallery: "Me", then their
+    VAs by name. Empty without a VA (a VA's own page too): nothing to pick
+    between."""
+    if viewer.user.role == Role.VA:
+        return []
+    vas = sorted(users.vas_of(viewer.user.id), key=lambda va: va.label.lower())
+    if not vas:
+        return []
+    me = Maker(id=viewer.user.id, label="Me")
+    return [me, *[Maker(id=va.id, label=va.label) for va in vas]]
 
 
 def viewer_for(user: User, viewing: int | None) -> Viewer:

@@ -1,6 +1,6 @@
 """The VA role (a few tools, the owner's keys and store, nothing of the
 owner's seen) and an admin's "View as" (another person's pages, read only).
-Who may open what is `schemas/access.py`; who a request acts as is the
+Who may open what is `auth/access.py`; who a request acts as is the
 `Viewer` the auth middleware builds (`features/users/viewing.py`)."""
 
 import os
@@ -15,6 +15,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin
 
+from ofmhelpers.auth.access import RETIRED, Area, areas_of
 from ofmhelpers.db.stores import devices, users
 from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.account.keys import Keys, keep_used
@@ -24,7 +25,6 @@ from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.signin.passwords import hash_password
 from ofmhelpers.schemas import DeviceFields, LoginFields, Role
-from ofmhelpers.schemas.access import RETIRED, Area, areas_of
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"
@@ -32,8 +32,10 @@ VA = "va@example.com"
 OTHER = "other@example.com"
 KIE = "kie:nano-banana-pro"
 
-VA_OPENS = ["/home", "/generate", "/clone", "/download-assets", "/edit", "/account"]
+VA_OPENS = ["/home", "/generate", "/clone", "/download-assets", "/edit"]
 VA_REFUSED = [
+    "/account",
+    "/vas",
     "/clone-long",
     "/clone-links",
     "/accounts",
@@ -77,7 +79,6 @@ def test_the_map_gives_a_va_only_their_tools():
     assert set(areas_of(Role.VA)) == {
         Area.SESSION,
         Area.HOME,
-        Area.ACCOUNT,
         Area.JOBS,
         Area.REFS,
         Area.GENERATE,
@@ -147,10 +148,48 @@ def test_a_vas_menu_lists_only_what_they_may_open():
 
     page = _client(VA, Role.VA).get("/home").text
 
-    for href in ("/generate", "/clone", "/download-assets", "/edit", "/account"):
+    for href in ("/generate", "/clone", "/download-assets", "/edit"):
         assert f'href="{href}"' in page
-    for href in ("/clone-links", "/phones", "/drive", "/users", "/cookies"):
+    for href in (
+        "/clone-links",
+        "/phones",
+        "/drive",
+        "/users",
+        "/cookies",
+        "/account",
+        "/vas",
+    ):
         assert f'href="{href}"' not in page
+
+
+def test_a_va_has_no_account_page():
+    """Owner 2026-11-14: "they dont need a account page". The page load goes
+    home, the header names them without a link, and no page of theirs asks
+    for the Drive space (`drive-alert.js` reads /account/drive-space)."""
+    _va_of()
+    va = _client(VA, Role.VA)
+
+    load = va.get(
+        "/account", headers={"sec-fetch-mode": "navigate"}, follow_redirects=False
+    )
+    space = va.get("/account/drive-space")
+    home = va.get("/home").text
+
+    assert (load.status_code, load.headers["location"]) == (303, "/home")
+    assert space.status_code == 403
+    assert f'<span class="signed-in-as">{VA}</span>' in home
+    assert "drive-alert.js" not in home
+    assert "drive-full-banner" not in home
+    assert "drive-alert.js" in _client(OWNER).get("/home").text
+
+
+def test_a_vas_edit_is_a_link_in_the_bar_not_a_menu_of_one():
+    _va_of()
+
+    home = _client(VA, Role.VA).get("/home").text
+
+    assert '<li><a href="/edit" >Edit</a></li>' in home
+    assert 'class="nav-more"' not in home
 
 
 def test_a_va_cannot_save_keys_or_upload_to_drive():
@@ -162,7 +201,7 @@ def test_a_va_cannot_save_keys_or_upload_to_drive():
     assert users.api_keys(owner.id).keys == []
     r = client.post("/clone/drive-upload", json={"job_id": "x", "logins": [1]})
     assert r.status_code == 403
-    assert "API keys" not in client.get("/account").text
+    assert client.get("/account").status_code == 403
 
 
 def test_a_vas_run_goes_out_on_the_owners_key_which_the_va_never_sees():
@@ -342,10 +381,19 @@ def test_an_admin_viewing_as_their_own_va_also_acts_as_the_va():
         headers={"sec-fetch-mode": "cors"},
     )
 
+    started = admin.post(
+        "/download-media/run", data={"urls": ""}, headers={"sec-fetch-mode": "cors"}
+    )
+
     assert (viewer.acts, viewer.read_only, viewer.keys_of) == (True, False, me.id)
-    # Only a job's maker hides it: the request was the VA's.
-    assert hidden.status_code == 200
-    assert get_job(vas_job).hidden_at is not None
+    # The request is the VA's: a VA hides nothing (the access map's refusal,
+    # not "look only"), and what a VA may send gets past the view.
+    assert (hidden.status_code, hidden.json()) == (
+        403,
+        {"detail": "Not available to you"},
+    )
+    assert get_job(vas_job).hidden_at is None
+    assert started.status_code != 403
     # Still inside the view, with the way back.
     assert f"Viewing as {va.label}" in admin.get("/home").text
 
@@ -641,9 +689,7 @@ def test_a_va_changes_no_password_and_links_no_account():
     client = TestClient(app)
     _va_login(client, OWNER, VA_PASSWORD)
 
-    account = client.get("/account").text
-    assert 'action="/account/password"' not in account
-    assert "/auth/google/start" not in account
+    assert client.get("/account").status_code == 403
     r = client.post(
         "/account/password",
         data={"current": VA_PASSWORD, "password": "y" * 20, "confirm": "y" * 20},

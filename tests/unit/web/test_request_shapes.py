@@ -161,6 +161,8 @@ def test_a_gallerys_query_is_logged_field_by_field():
         "hidden": True,
         "date_from": None,
         "date_to": None,
+        "va": None,
+        "not_uploaded": False,
     }
 
 
@@ -172,6 +174,21 @@ def test_a_gallerys_date_filter_is_logged():
         "hidden": False,
         "date_from": date(2026, 11, 1),
         "date_to": date(2026, 11, 12),
+        "va": None,
+        "not_uploaded": False,
+    }
+
+
+def test_clones_own_filters_are_logged():
+    asked = GalleryQuery(va=7, not_uploaded=True)
+
+    assert _logged(query=asked) == {
+        "offset": 0,
+        "hidden": False,
+        "date_from": None,
+        "date_to": None,
+        "va": 7,
+        "not_uploaded": True,
     }
 
 

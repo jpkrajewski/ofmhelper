@@ -18,6 +18,11 @@ The session slides: Starlette re-sends the cookie only when the session is
 written, so every user action (a page opened, anything that is not a read)
 writes `seen` and the cookie lives `session_max_age_s` from that moment.
 Background polls (fetch GETs) do not count: a tab nobody touches signs out.
+A role may sit idle only so long (`features/users/presence.py`
+`idle_limit_s`: a VA 2 h, everyone else the cookie's own 5 h): a session
+whose last action is older is refused ("idle"), whatever the cookie says.
+Each action is also kept on the person, to the minute (`users.last_seen_at`),
+which is what records a VA's idle logout (`features/users/idle.py`).
 static/js/session.js sends `PUT /session` while the person clicks or types
 on a page that makes no request of its own (prod 2026-11: the cookie ended
 5 h after sign-in whatever the person did).
@@ -28,7 +33,7 @@ request acts as -- the person signed in, or the person an admin is viewing
 as, in which case nothing but a read goes through (`_look_only`; the admin's
 own VA excepted, as whom they also act). Every
 "who" a route asks for (`web/dependencies.py`) and every "may they"
-(`require`, against `schemas/access.py`) is answered from it.
+(`require`, against `auth/access.py`) is answered from it.
 
 The allowlist is deployment config (`settings.web.public_paths` /
 `public_prefixes`), not literals in here.
@@ -49,13 +54,14 @@ from starlette.responses import (
 )
 lazy from starlette.requests import Request
 
+from ofmhelpers.auth.access import Action, Area, allowed
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.users import get_user
 from ofmhelpers.features.signin import state as signin_state
+from ofmhelpers.features.users import presence
 from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import SessionUser, User
-from ofmhelpers.schemas.access import Action, Area, allowed
 lazy from ofmhelpers.schemas.users import Viewer
 
 logger = get_logger(__name__)
@@ -104,7 +110,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if user.role != current.role or user.email != current.email:
             self.remember(request, user)
         if self._acted(request):
-            request.session[_SEEN] = int(time.time())
+            now = time.time()
+            request.session[_SEEN] = int(now)
+            await run_in_threadpool(presence.seen, user, now)
         viewer = await run_in_threadpool(
             viewer_for, user, request.session.get(_VIEWING)
         )
@@ -163,6 +171,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         ended = user.sessions_ended_at
         if ended is not None and request.session.get(_SINCE, 0) <= ended:
             return "logged out"
+        # A session from before `since` existed carries neither: it ends
+        # with its cookie, as before.
+        last = request.session.get(_SEEN) or request.session.get(_SINCE)
+        if last and time.time() - last > presence.idle_limit_s(user.role):
+            return "idle"
         return None
 
     def _to_login(self, request: Request) -> Response:
@@ -262,6 +275,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.session[_SINCE] = time.time()
 
     @staticmethod
+    def signed_in_at(request: Request) -> float | None:
+        """When this session signed in; None for none (or one from before
+        that was kept)."""
+        return request.session.get(_SINCE)
+
+    @staticmethod
     def session_user(request: Request) -> SessionUser | None:
         session = request.session
         if not all(k in session for k in _KEYS):
@@ -297,7 +316,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     @classmethod
     def require(cls, request: Request, what: Area | Action) -> None:
-        """Refuses a role the access map (`schemas/access.py`) does not let
+        """Refuses a role the access map (`auth/access.py`) does not let
         open the area or do the action. Used through the `Access` / `Can`
         dependencies of `web/dependencies.py`, never called by a route.
 

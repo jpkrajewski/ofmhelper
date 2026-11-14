@@ -345,10 +345,12 @@ class SubjectPicks(BaseModel):
     most_used: list[str]
 
 
-def subject_picks(actor: str, assets_root: Path) -> SubjectPicks:
-    """`actor`'s subjects (first subject image of a run) from their /clone
-    and /clone-links runs, `clone_last_subjects` last used then
-    `clone_top_subjects` most used."""
+def subject_picks(actor: str | frozenset[str], assets_root: Path) -> SubjectPicks:
+    """The subjects (first subject image of a run) of `actor`'s /clone and
+    /clone-links runs, `clone_last_subjects` last used then
+    `clone_top_subjects` most used. `actor`: one person, or a team (an
+    owner and their VAs, `Viewer.team`): then every one of them gets the
+    same tiles and the uses are counted together (owner 2026-11-14)."""
     web = settings.web
     subjects = ParamHistory(
         tasks=frozenset(SUBJECT_TASKS), actor=actor, field="reference_images"

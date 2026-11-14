@@ -15,6 +15,12 @@ from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 DEV_ROOT = "DEV - ALL ACCOUNTS"
 
 
+# The browsers sit where the app's first zone is (schemas/time_zones.py):
+# the page takes its zone from the browser, and one drawn in another zone
+# reloads itself once to follow (static/js/time-zone.js).
+TIME_ZONE = "Europe/Warsaw"
+
+
 def connect_google(session: Session, email: str) -> None:
     """Links a Google account (the fake consent screen) to the signed-in
     session on /account: their Drive is connected from then on."""
@@ -37,7 +43,7 @@ def log_in(
 ) -> None:
     """Signs in once through the login form and saves the cookies to
     `state`: every test of that role starts from them."""
-    context = browser.new_context(base_url=base_url)
+    context = browser.new_context(base_url=base_url, timezone_id=TIME_ZONE)
     page = context.new_page()
     page.goto("/login")
     page.fill("#email", email)
@@ -82,7 +88,10 @@ class Session:
 
     def __init__(self, browser: Browser, base_url: str, state: Path) -> None:
         self.context = browser.new_context(
-            base_url=base_url, storage_state=state, accept_downloads=True
+            base_url=base_url,
+            storage_state=state,
+            accept_downloads=True,
+            timezone_id=TIME_ZONE,
         )
         self.context.tracing.start(screenshots=True, snapshots=True)
         # Pages load reel videos and thumbnails straight from Instagram's

@@ -12,9 +12,11 @@ Not a Postgres table: this is picker ordering, not a noun the app owns.
 Losing it (a flushed Redis, a fresh deploy) degrades the picker to
 "most recently uploaded", which is exactly what it did before.
 
-Kept per user (one key each): with per-user asset roots, one user's picks
+Kept per store (one key each): with per-user asset roots, one user's picks
 would otherwise push everyone else's out of the window the picker reads.
-An admin's list is their own picks, like anyone's.
+An admin's list is their own picks, like anyone's. A VA works in their
+owner's part of the store (`features/assets/store.py`), so a VA's picks and
+the owner's are one list, the same for all of them (owner 2026-11-14).
 
 Redis failures are swallowed, like ratelimit.py's: a broker that can't record
 "you picked this file" is no reason to fail a generation that has every file
@@ -30,6 +32,7 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores.users import get_user
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +41,10 @@ _KEY_PREFIX = "refs:used:"
 
 
 def _key(user_id: int) -> str:
-    return f"{_KEY_PREFIX}{user_id}"
+    """The list of the store `user_id` works in: a VA's is their owner's."""
+    user = get_user(user_id)
+    owner = user.owner_id if user is not None and user.owner_id else user_id
+    return f"{_KEY_PREFIX}{owner}"
 
 
 def record_use(user_id: int, path: Path) -> None:

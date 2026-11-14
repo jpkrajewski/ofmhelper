@@ -1,6 +1,6 @@
 """Every page of the header, in header order: the bar, then "More" (Uniqify,
 Account, Cookies, then the admin pages). Read from the menu (`schemas/nav.py`)
-and the access map behind it (`schemas/access.py`): a new page = one `NavItem`
+and the access map behind it (`auth/access.py`): a new page = one `NavItem`
 there, nothing here."""
 
 from ofmhelpers.schemas.nav import NavPlace, nav

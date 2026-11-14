@@ -14,17 +14,47 @@
    rests, 0 = ready): "Download from Drive sheet" comes first and keeps the
    row too (static/js/download.js).
 
+   A dated page of someone with VAs gets a "VAs" button next to the dates
+   (`makers_of(request)`: the reader and their VAs): one picked, only that
+   person's runs show and the button names them (`GalleryQuery.va`).
+
    /clone sets `sop`: the "SOP" button, which opens its examples dialog
-   (static/js/clone-sop.js). #}
+   (static/js/clone-sop.js). It also sets `drive_filter`: at the right "Not
+   uploaded to Drive" is a button that stays pressed while only finished
+   videos in no Drive folder show (only clones go to Drive; not for a VA).
+   Both filters are links (`GalleryQuery.link`): no script.
+
+   A page that sets `tour` (/generate, /clone, /download-assets) gets "How to" first in
+   the row: the guided tour of the page (static/js/tour.js). #}
 {% import "components/ui.html" as ui %}
 {% set sheet_button = sheet_cooldown_s is defined %}
 {% set dated = dates is defined %}
 {% set kept = sheet_button or dated %}
+{% set here = request.url.path if request is defined else "" %}
+{% set makers = makers_of(request) if dated and request is defined else [] %}
+{% set drive_switch = dated and drive_filter is defined and can(request, "drive-upload") %}
 <div class="ph-toolbar"{% if kept %} data-keep{% elif not hidden_count %} hidden{% endif %}{% if dated %} data-zone-times{% endif %}>
-    {% if dated %}{{ ui.date_range(request.url.path, dates.date_from, dates.date_to, dates.today) }}{% endif %}
+    {% if dated %}
+    {{ ui.date_range(here, dates.date_from, dates.date_to, dates.today, keep={"va": dates.va, "not_uploaded": 1 if dates.not_uploaded else none}, clear=here ~ dates.link(date_from=none, date_to=none)) }}
+    {% if makers %}
+    {% set picked = makers | selectattr("id", "equalto", dates.va) | first %}
+    {% call ui.menu_button(picked.label if picked else "VAs", "users", hook="made-by") %}
+        {{ ui.menu_choice("Everyone", here ~ dates.link(va=none), current=not picked) }}
+        {% for maker in makers %}{{ ui.menu_choice(maker.label, here ~ dates.link(va=maker.id), current=maker.id == dates.va) }}{% endfor %}
+    {% endcall %}
+    {% endif %}
+    {% endif %}
     <div class="toolbar-actions">
+        {% if tour is defined %}{{ ui.button("How to", icon="play", hook="tour-open") }}{% endif %}
+        {% if drive_switch %}{{ ui.button("Show not uploaded to Drive", href=here ~ dates.link(not_uploaded=not dates.not_uploaded), icon="folder", hook="not-uploaded", attrs={"aria-pressed": "true" if dates.not_uploaded else "false"}) }}{% endif %}
         {% if sop is defined %}{{ ui.button("SOP", icon="list", hook="sop-open") }}{% endif %}
         {% if sheet_button %}{{ ui.button("Download from Drive sheet", icon="download", hook="sheet-download", attrs={"data-cooldown-s": sheet_cooldown_s}) }}{% endif %}
-        {{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": kept and not hidden_count}) }}
+        {# Not for a VA: they hide nothing (`Action.HIDE`). #}
+        {% if request is not defined or can(request, "hide") %}{{ ui.button("Show hidden (" ~ hidden_count ~ ")", icon="eye", hook="hidden-toggle", attrs={"data-hidden-count": hidden_count, "aria-pressed": "false", "hidden": kept and not hidden_count}) }}{% endif %}
     </div>
 </div>
+{% if tour is defined %}
+{% set reader = viewer_of(request) %}
+{{ ui.tour(tour, signed_in_at(request), auto=reader is not none and reader.by is none and reader.user.role == "va") }}
+<script src="{{ static_url('js/tour.js') }}" defer></script>
+{% endif %}

@@ -6,6 +6,15 @@
 {% block content %}
 {{ ui.page_header("Clone") }}
 {% set sop = true %}
+{% set drive_filter = true %}
+{# The guided tour ("How to", static/js/tour.js): the VA's job here, one
+   control at a time (owner 2026-11-14). #}
+{% set tour = [
+    ('.file-picker[data-field="image"]', "Pick the picture of our model."),
+    ('.file-picker[data-field="videos"]', "Add the video you want to clone."),
+    ("#clone-form .chip-row", "Text on the video? Press Remove text overlay. Tattoos? Press No tattoos."),
+    ('#clone-form button[type="submit"]', "Press Start. Then do the next video while this one is made."),
+] %}
 {% include "_gallery_hidden.html" %}
 
 <div class="generate-layout">
@@ -83,8 +92,8 @@
 {% endif %}
 
 <div id="results-panel">
-    <div class="results" id="clone-gallery" data-gallery-endpoint="/clone/gallery{{ dates.dates }}"
-         data-live-endpoint="/clone/gallery/latest{{ dates.dates }}" data-live-key="jobId"
+    <div class="results" id="clone-gallery" data-gallery-endpoint="/clone/gallery{{ dates.filters }}"
+         data-live-endpoint="/clone/gallery/latest{{ dates.filters }}" data-live-key="jobId"
          data-live-interval="{{ live_poll_s }}" data-live-empty="clone-empty">
         {% for job in gallery %}{% include "_clone_card.html" %}{% endfor %}
         {% include "_generate_gallery_sentinel.html" %}

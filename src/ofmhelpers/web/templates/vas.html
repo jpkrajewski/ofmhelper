@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% block title %}VAs — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("VAs", "Days in " ~ zone ~ " time") }}
+
+{% macro amount(a) -%}
+{# Two facts only (owner 2026-11-14): what it cost, and how many runs. #}
+{% if a.runs %}<strong>{{ a.dollars }}</strong> <span class="pending">{{ a.runs_label }}</span>
+{%- else %}<span class="pending">—</span>{% endif %}
+{%- endmacro %}
+
+{% if owners %}
+<div class="stat-grid" data-zone-times>
+    {% for column in totals %}
+    {{ ui.stat(column.period.label, column.amount.dollars, column.amount.runs_label) }}
+    {% endfor %}
+</div>
+
+{% for group in owners %}
+{% if grouped %}<h2 data-owner>{{ group.owner or "No owner" }}</h2>{% endif %}
+{% call ui.table(hook="vas-table") %}
+        <thead>
+            <tr>
+                <th scope="col">VA</th>
+                {% for column in totals %}<th scope="col">{{ column.period.label }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for va in group.vas %}
+            <tr data-va="{{ va.user_id }}">
+                <td><strong>{{ va.name }}</strong>{% if not va.active %} {{ ui.badge("Deactivated") }}{% endif %}</td>
+                {% for column in va.columns %}<td data-period="{{ column.period.value }}">{{ amount(column.amount) }}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+{% endcall %}
+{% endfor %}
+
+{# Each VA's days this month, newest first: when they logged in and out
+   (by Logout, or by the app after 2 idle hours: "· idle"), the reels they
+   finished, what the day cost (features/vas/service.py). #}
+{% if days %}
+<h2 class="vas-days-title">Days this month</h2>
+{% call ui.table(hook="vas-days", attrs={"data-zone-times": ""}) %}
+        <thead>
+            <tr>
+                <th scope="col">Day</th>
+                <th scope="col">VA</th>
+                <th scope="col">Logged in</th>
+                <th scope="col">Logged out</th>
+                <th scope="col" class="num">Reels</th>
+                <th scope="col" class="num">Spent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for day in days %}
+            <tr data-day="{{ day.day }}" data-va="{{ day.user_id }}">
+                <td>{{ day.day_label }}</td>
+                <td><strong>{{ day.name }}</strong></td>
+                <td data-logged-in>{{ day.logged_in }}</td>
+                <td data-logged-out>{{ day.logged_out }}</td>
+                <td class="num" data-reels>{{ day.reels }}</td>
+                <td class="num" data-spent>{{ day.spent }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+{% endcall %}
+{% endif %}
+{% else %}
+{{ ui.empty("No VAs yet") }}
+{% endif %}
+{% endblock %}

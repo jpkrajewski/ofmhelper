@@ -8,7 +8,7 @@ import hashlib
 import time
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
@@ -53,6 +53,7 @@ def _user(row: UserRow) -> User:
         sessions_ended_at=(
             row.sessions_ended_at.timestamp() if row.sessions_ended_at else None
         ),
+        last_seen_at=row.last_seen_at.timestamp() if row.last_seen_at else None,
     )
 
 
@@ -160,6 +161,54 @@ class UserRepository(CachedRepository):
             row = s.get(UserRow, user_id)
             if row is not None:
                 row.sessions_ended_at = datetime.now(tz=UTC)
+
+    @invalidates_cache
+    def seen(self, user_id: int, at: float) -> None:
+        """Their last action was at `at` (epoch seconds)."""
+        with session_scope() as s:
+            row = s.get(UserRow, user_id)
+            if row is not None:
+                row.last_seen_at = datetime.fromtimestamp(at, tz=UTC)
+
+    @invalidates_cache
+    def end_idle_sessions(self, user_id: int) -> bool:
+        """Ends their sessions unless they were already ended since their
+        last action; whether this call was the one that did. One statement:
+        of two callers at the same moment (the idle sweep, a sign-in) only
+        one gets True."""
+        with session_scope() as s:
+            ended = s.execute(
+                update(UserRow)
+                .where(
+                    UserRow.id == user_id,
+                    or_(
+                        UserRow.sessions_ended_at.is_(None),
+                        UserRow.sessions_ended_at < UserRow.last_seen_at,
+                    ),
+                )
+                .values(sessions_ended_at=datetime.now(tz=UTC))
+                .returning(UserRow.id)
+            )
+            return ended.first() is not None
+
+    def idle_vas(self, before: float) -> list[User]:
+        """Active VAs whose last action is older than `before` (epoch
+        seconds) and who have not been logged out since it: still signed in
+        as far as anyone recorded. Not cached: the idle sweep's own read."""
+        cutoff = datetime.fromtimestamp(before, tz=UTC)
+        with session_scope() as s:
+            rows = s.scalars(
+                select(UserRow).where(
+                    UserRow.role == Role.VA.value,
+                    UserRow.active,
+                    UserRow.last_seen_at < cutoff,
+                    or_(
+                        UserRow.sessions_ended_at.is_(None),
+                        UserRow.sessions_ended_at < UserRow.last_seen_at,
+                    ),
+                )
+            ).all()
+            return [_user(row) for row in rows]
 
     @invalidates_cache
     def signed_in(self, user_id: int, name: str, refresh_token: str | None) -> None:

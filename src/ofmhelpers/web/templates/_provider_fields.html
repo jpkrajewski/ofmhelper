@@ -82,7 +82,8 @@
     });
     for (const choice of zoneChoices) {
         choice.addEventListener("click", () => {
-            zone = choice.dataset.zone;
+            // "Automatic" names no zone: the browser's own (time-zone.js).
+            zone = choice.dataset.zone || Intl.DateTimeFormat().resolvedOptions().timeZone;
             apply();
         });
     }

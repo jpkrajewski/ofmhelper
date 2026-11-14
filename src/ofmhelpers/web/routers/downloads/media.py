@@ -7,13 +7,13 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Path
 from pydantic import Field
 
+from ofmhelpers.auth.access import Area
 from ofmhelpers.features.downloads import again, media, sheet
 
 # Jobs queued before 2026-11-11 name the run function by this module's path.
 from ofmhelpers.features.downloads.media import run_downloads as _run_downloads
 from ofmhelpers.features.downloads.service import Redirect
 from ofmhelpers.schemas import JobQueued
-from ofmhelpers.schemas.access import Area
 from ofmhelpers.schemas.downloads import DownloadsQueued, SheetQueued
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import FormModel

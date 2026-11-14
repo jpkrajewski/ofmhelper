@@ -43,8 +43,10 @@ from ofmhelpers.schemas.persistence import (
     JobPage,
     JobParams,
     Named,
+    RecordedJob,
     Spend,
     SpendPeriod,
+    UserDay,
 )
 lazy from ofmhelpers.schemas.persistence import JobCost, JobMeta
 
@@ -92,13 +94,23 @@ def create_job(task_name: str, params: dict, actor: str | None = None) -> str:
     return job_id
 
 
-def log_event(task_name: str, actor: str | None, params: dict | None = None) -> str:
+def log_event(
+    task_name: str,
+    actor: str | None,
+    params: dict | None = None,
+    at: float | None = None,
+) -> str:
     """For instantaneous audit events (login/logout) rather than background
     work -- recorded straight into the Action log already "done", no
     background task involved. `params`: what the log shows with it (who,
-    signed in how)."""
+    signed in how). `at`: when it happened, for one recorded afterwards (an
+    idle logout: at the person's last action); None = now."""
     return _repository().create(
-        task_name, params or {}, user_id=_user_id(actor), status="done"
+        task_name,
+        params or {},
+        user_id=_user_id(actor),
+        status="done",
+        created_at=at,
     )
 
 
@@ -149,6 +161,32 @@ def keep_cost(job_id: str, meta: JobMeta, cost: JobCost) -> None:
     what the run cost (`jobs.cost_usd`, `cost_estimated`)."""
     _repository().set_cost(
         job_id, meta.model_dump(mode="json"), cost.usd, cost.estimated
+    )
+
+
+def add_recorded(rows: list[RecordedJob]) -> None:
+    """Job rows written whole, as they ended (development's made-up
+    history: `features/vas/seed.py`)."""
+    _repository().add_recorded(rows)
+
+
+def delete_recorded(prefix: str) -> int:
+    """Deletes the jobs whose id starts with `prefix`; how many went."""
+    return _repository().delete_like(prefix)
+
+
+def days(
+    user_ids: Collection[int],
+    from_ts: float,
+    to_ts: float,
+    zone: str,
+    reel_tasks: Collection[str],
+) -> list[UserDay]:
+    """Each of `user_ids`' days in that span, as days of `zone`: sign-ins,
+    logouts, finished `reel_tasks` jobs and cost, grouped in SQL, newest
+    day first."""
+    return _repository().days(
+        tuple(sorted(user_ids)), from_ts, to_ts, zone, tuple(sorted(reel_tasks))
     )
 
 
@@ -282,6 +320,7 @@ def list_jobs_page(
     hidden: bool | None = None,
     by_use: bool = False,
     created: Created | None = None,
+    not_uploaded: bool = False,
 ) -> JobPage:
     """One page of the jobs whose task is in `tasks` (and, when `actor` is
     given, that one of them ran -- same meaning as get_job's), newest first, plus how
@@ -296,9 +335,20 @@ def list_jobs_page(
     page never writes: a job whose files are missing is left out of it, not
     deleted. `by_use`: the job whose download was asked for or used last
     first (/download-assets), not the newest. `created`: only the jobs
-    started in that span (a gallery's date filter)."""
+    started in that span (a gallery's date filter). `not_uploaded`: only
+    finished jobs with no file in a Drive folder (/clone's filter)."""
     span = created or Created()
-    if by_use:
+    if not_uploaded:
+        page = _repository().page_not_uploaded(
+            tuple(sorted(tasks)),
+            _user_ids(actor),
+            offset,
+            limit,
+            hidden,
+            span.since,
+            span.until,
+        )
+    elif by_use:
         page = _repository().page_by_use(
             tuple(sorted(tasks)),
             _user_ids(actor),
@@ -331,13 +381,21 @@ def gallery_page(
     reader: int | None = None,
     by_use: bool = False,
     created: Created | None = None,
+    not_uploaded: bool = False,
 ) -> GalleryJobs:
     """One page of a gallery (`list_jobs_page`) and the next page's offset
     (None after the last). `reader`: who looks at it -- a job someone else
     made (their VA) names its maker (`Job.made_by`). `created`: only the
     jobs started in that span."""
     page = list_jobs_page(
-        tasks, offset, limit, actor, hidden=hidden, by_use=by_use, created=created
+        tasks,
+        offset,
+        limit,
+        actor,
+        hidden=hidden,
+        by_use=by_use,
+        created=created,
+        not_uploaded=not_uploaded,
     )
     next_offset = offset + limit
     return GalleryJobs(
@@ -380,10 +438,11 @@ def redone_links(task: str, actor: str, links: list[str], after: float) -> set[s
 
 
 class ParamHistory(BaseModel, frozen=True):
-    """One param (`field`) across `actor`'s jobs of `tasks`."""
+    """One param (`field`) across the jobs of `tasks` that `actor` ran: one
+    person, or several counted together (a team: /clone's subject tiles)."""
 
     tasks: frozenset[str]
-    actor: str
+    actor: str | frozenset[str]
     field: str
 
     @property
@@ -392,16 +451,17 @@ class ParamHistory(BaseModel, frozen=True):
         return tuple(sorted(self.tasks))
 
     @property
-    def _user_id(self) -> int | None:
-        return _user_id(self.actor)
+    def _user_ids(self) -> tuple[int, ...]:
+        """Sorted ids; empty when `actor` names nobody."""
+        return _user_ids(self.actor) or ()
 
     def last(self, among: list[str]) -> str | None:
         """The param of the newest job with one of the values `among` (a
         provider the page offers), else None."""
-        if self._user_id is None:
+        if not self._user_ids:
             return None
         return _repository().last_param(
-            self._tasks, self._user_id, self.field, tuple(sorted(among))
+            self._tasks, self._user_ids, self.field, tuple(sorted(among))
         )
 
     def last_used_firsts(self, limit: int) -> list[str]:
@@ -409,18 +469,18 @@ class ParamHistory(BaseModel, frozen=True):
         `reference_images`), last used first, one path per picture (same
         content = same file). The path may be gone since: the caller
         checks."""
-        if self._user_id is None:
+        if not self._user_ids:
             return []
         return _repository().last_used_firsts(
-            self._tasks, self._user_id, self.field, limit
+            self._tasks, self._user_ids, self.field, limit
         )
 
     def most_used_firsts(self, limit: int) -> list[str]:
         """As `last_used_firsts`, the one in the most jobs first."""
-        if self._user_id is None:
+        if not self._user_ids:
             return []
         return _repository().most_used_firsts(
-            self._tasks, self._user_id, self.field, limit
+            self._tasks, self._user_ids, self.field, limit
         )
 
 
@@ -430,9 +490,9 @@ def count_hidden_jobs(tasks: set[str], actor: str | Collection[str]) -> int:
     return _repository().count_hidden(tuple(sorted(tasks)), _user_ids(actor) or ())
 
 
-def hide_job(job_id: str, actor: str, hidden: bool) -> Job | None:
-    """Hides `actor`'s job from its galleries, or shows it again; None when
-    it is not theirs (or gone). A view choice only: the job, its files and
+def hide_job(job_id: str, actor: Readers, hidden: bool) -> Job | None:
+    """Hides a job `actor` reads (their own, a VA's) from its galleries, or
+    shows it again; None when it is not theirs (or gone). A view choice only: the job, its files and
     the action log stay as they are."""
     job = get_job(job_id, actor)
     if job is None or hidden == (job.hidden_at is not None):

@@ -13,7 +13,7 @@ class Role(StrEnum):
     """Everyone sees only what is theirs; an admin also manages /users and
     the admin-only tools; a VA works in a few tools for their owner
     (`User.owner_id`), who sees what the VA makes. What each role may open:
-    `schemas/access.py`."""
+    `auth/access.py`."""
 
     ADMIN = "admin"
     USER = "user"
@@ -44,6 +44,9 @@ class User(BaseModel):
     # When they last pressed Logout (epoch seconds): a session signed in
     # before it is out, wherever it is (middleware/auth.py). None = never.
     sessions_ended_at: float | None = None
+    # Their last action (epoch seconds), to the minute
+    # (features/users/presence.py). None = not seen yet.
+    last_seen_at: float | None = None
 
     @property
     def is_admin(self) -> bool:
@@ -88,6 +91,11 @@ class Viewer(BaseModel):
     user: SessionUser
     # Whose jobs they see: their own, and their VAs'.
     user_ids: frozenset[int]
+    # The people they work with: an owner and all of that owner's VAs, the
+    # same set for each of them. What a team shares on purpose: /clone's
+    # Last used / Most used subjects (owner 2026-11-14: a VA gets the same
+    # ones). Never whose jobs they see: that is `user_ids`.
+    team_ids: frozenset[int]
     # Whose saved keys their runs go out on (a VA: the owner's; a VA with
     # no owner: nobody's).
     keys_of: int | None
@@ -107,6 +115,11 @@ class Viewer(BaseModel):
         """`user_ids` as the job reads take them (`db/stores/jobs.py`
         `Readers`): text, like the `actor` a job is started under."""
         return frozenset(str(user_id) for user_id in self.user_ids)
+
+    @property
+    def team(self) -> frozenset[str]:
+        """`team_ids` as text, like `actors`."""
+        return frozenset(str(user_id) for user_id in self.team_ids)
 
     @property
     def types_key(self) -> bool:

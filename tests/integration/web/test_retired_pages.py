@@ -1,4 +1,4 @@
-"""Retired pages (`schemas/access.py` `RETIRED`; owner 2026-11-13: /reels,
+"""Retired pages (`auth/access.py` `RETIRED`; owner 2026-11-13: /reels,
 /clone-links, /repurpose and /pictures, nobody uses them): switched off whole, code and data kept.
 Nobody opens one, no menu lists it, and nothing of it runs in the
 background."""
@@ -12,10 +12,10 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
 
+from ofmhelpers.auth.access import RETIRED, Area, areas_of
 from ofmhelpers.db.stores.jobs import list_jobs
 from ofmhelpers.features.cookies.service import UNLOCK_TASK
 from ofmhelpers.features.jobs.sweeps import sweeps
-from ofmhelpers.schemas.access import RETIRED, Area, areas_of
 from ofmhelpers.schemas.nav import NAV, nav
 from ofmhelpers.schemas.users import Role
 from ofmhelpers.web.main import app

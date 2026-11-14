@@ -73,7 +73,7 @@ def test_bar_links_then_the_rest_under_more(client):
         "/self-links",
         "/account",
         "/cookies",
-        "/spending",
+        "/vas",
         "/users",
         "/character-sheet",
         "/applications",
@@ -97,7 +97,7 @@ def test_a_users_more_has_no_admin_pages():
         "/self-links",
         "/account",
         "/cookies",
-        "/spending",
+        "/vas",
     ]
 
 

@@ -1,7 +1,7 @@
 """Who may open what, as checks on the app's own routes.
 
 Every route is either public on purpose (`settings.web.public_paths` /
-`public_prefixes`) or names an area of the access map (`schemas/access.py`):
+`public_prefixes`) or names an area of the access map (`auth/access.py`):
 `APIRouter(dependencies=[Access(Area.X)])`, read here off each route's
 dependency tree (`web/dependencies.py` `Allowed`). No baseline: a route with
 neither fails, so does an area or an action no route uses, and a menu entry
@@ -16,7 +16,7 @@ os.environ.setdefault("SESSION_SECRET", "test-secret")
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, RouteContext, iter_route_contexts
 
-from ofmhelpers.schemas.access import ACTIONS, Action, Area
+from ofmhelpers.auth.access import ACTIONS, Action, Area
 from ofmhelpers.schemas.nav import NAV
 from ofmhelpers.web.dependencies import Allowed
 from ofmhelpers.web.main import app

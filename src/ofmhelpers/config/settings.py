@@ -198,6 +198,32 @@ class WebSettings(BaseSettings):
     gallery_live_poll_s: int = Field(
         default=5, ge=1, validation_alias="OFM_GALLERY_LIVE_POLL_S"
     )
+    # A VA is logged out after this long without an action (a page opened,
+    # a click, a run started): owner 2026-11-14, 2 hours. Everyone else
+    # keeps `SessionSettings.session_max_age_s`. Here, not there: the sweeps
+    # process reads it and has no session secret.
+    va_session_max_age_s: int = Field(
+        default=60 * 60 * 2, ge=60, validation_alias="OFM_VA_SESSION_MAX_AGE_S"
+    )
+    # `users.last_seen_at` is written at most this often per person
+    # (features/users/presence.py).
+    seen_write_every_s: int = Field(
+        default=60, ge=1, validation_alias="OFM_SEEN_WRITE_EVERY_S"
+    )
+    # How often the sweep looks for VAs idle past their limit
+    # (features/users/idle.py).
+    va_idle_sweep_s: int = Field(
+        default=60, ge=5, validation_alias="OFM_VA_IDLE_SWEEP_S"
+    )
+    # The owner is told each time a VA's day reaches another this many
+    # finished reels, and another this many dollars
+    # (features/vas/notices.py): 10, 20, 30, ...
+    va_reels_notice_every: int = Field(
+        default=10, ge=1, validation_alias="OFM_VA_REELS_NOTICE_EVERY"
+    )
+    va_spend_notice_every_usd: int = Field(
+        default=10, ge=1, validation_alias="OFM_VA_SPEND_NOTICE_EVERY_USD"
+    )
     # Downloaded results are saved camera-roll style -- prefix + 4 random
     # digits (IMG_4821.png, VID_0193.mp4) -- not under the generator's name.
     image_download_prefix: str = Field(
