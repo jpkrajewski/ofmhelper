@@ -248,6 +248,22 @@ class UserDay(BaseModel):
     usd: Decimal | None = None
 
 
+class SessionSpan(BaseModel):
+    """One sign-in of a person, read off the job log (epoch seconds):
+    `end_at` the Logout or idle logout that ended it (None: the next thing
+    was another sign-in, or nothing yet); `next_at` that next event's moment
+    (None: none since); `last_job_at` their last job inside it (None:
+    none)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: int
+    start_at: float
+    end_at: float | None = None
+    next_at: float | None = None
+    last_job_at: float | None = None
+
+
 class RecordedJob(BaseModel):
     """A job row written whole, as it ended, at a moment of the writer's
     choosing: what development's made-up history is stored as

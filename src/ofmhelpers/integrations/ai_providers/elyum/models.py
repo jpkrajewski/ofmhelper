@@ -82,7 +82,7 @@ def raise_for(status: int, text: str) -> NoReturn:
     if error.code in _NO_MONEY or status == _HTTP_PAYMENT_REQUIRED:
         # Worded so the card reads "No credits" for a cap or budget too.
         no_money = f"{PROVIDER}: insufficient balance. {message}"
-        raise ProviderNoCreditsError(no_money)
+        raise ProviderNoCreditsError(no_money, provider=PROVIDER)
     if error.code in _TRY_AGAIN or status == _HTTP_TOO_MANY:
         raise ProviderRateLimitError(message, retry_after_s=error.retry_after)
     failure: type[ProviderError] = ProviderInputError

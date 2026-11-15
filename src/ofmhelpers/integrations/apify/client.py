@@ -47,7 +47,10 @@ class ApifyAuthError(ApifyError):
 
 
 class ApifyCreditError(ApifyError):
-    """The account has no credit left for this run."""
+    """The account has no credit left for this run. `provider`: whose account,
+    as `ProviderNoCreditsError` names it (`features/jobs/notices.py`)."""
+
+    provider = "Apify"
 
 
 _ITEMS: TypeAdapter[list[DatasetItem]] = TypeAdapter(list[DatasetItem])

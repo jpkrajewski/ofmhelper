@@ -112,6 +112,8 @@ class VaDay(BaseModel):
     day: date
     logged_in: str
     logged_out: str
+    # The sum of the day's sessions ("7 h 42 m", "—"): features/vas/hours.py.
+    hours: str
     reels: int
     spent: str
 

@@ -88,7 +88,42 @@ def test_one_file_is_one_card(client, tmp_path):
 def test_what_failed_shows_once(client, tmp_path):
     _download(client, tmp_path, "a.mp4", "b.mp4", failed="https://x/2")
 
-    assert client.get("/download-assets").text.count("1 link failed") == 1
+    assert client.get("/download-assets").text.count("x/2 · gone") == 1
+
+
+def test_a_failed_link_says_why_on_the_card_not_in_a_tooltip(client, tmp_path):
+    """Owner 2026-11-15: "1 link failed" with the reason in a tooltip nobody
+    hovers over. The link, short, and the reason are on the card."""
+    reel = "https://www.instagram.com/reel/Dc_a7TBJZ1L/?utm_source=ig_web_copy_link"
+    folder = tmp_path / "downloads"
+    folder.mkdir()
+    (folder / "a.mp4").write_bytes(b"a")
+    result = [
+        DownloadResult(
+            url="https://x/1", success=True, output_paths=[folder / "a.mp4"]
+        ),
+        DownloadResult(
+            url=reel,
+            success=False,
+            error="video: ERROR: [Instagram] Dc_a7TBJZ1L: Video unavailable",
+        ),
+    ]
+    job_id = create_job(
+        "download_media", {"urls": ["https://x/1", reel]}, actor=str(client.user.id)
+    )
+    run_job(job_id, lambda r=result: r, {})
+
+    page = client.get("/download-assets").text
+    status = client.get(f"/download-media/jobs/{job_id}/status").json()
+
+    line = "instagram.com/reel/Dc_a7TBJZ1L · Post deleted or profile banned"
+    assert f'<span title="{reel}">{line}</span>' in page.replace("&amp;", "&")
+    assert "link failed" not in page
+    (failed,) = status["failed_sources"]
+    assert (failed["link"], failed["reason"]) == (
+        "instagram.com/reel/Dc_a7TBJZ1L",
+        "Post deleted or profile banned",
+    )
 
 
 def test_only_a_video_card_can_be_sent_to_clone(client, tmp_path):

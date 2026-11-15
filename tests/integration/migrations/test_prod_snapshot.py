@@ -797,3 +797,26 @@ def test_last_seen_starts_empty_and_every_card_a_va_hid_is_shown_again(db):
     assert _scalar(db, _HIDDEN_VA_JOBS) == 0
     assert _scalar(db, _HIDDEN_OTHER_JOBS) == others
     assert _scalar(db, "SELECT count(*) FROM users WHERE last_seen_at IS NOT NULL") == 0
+
+
+VA_FOLDERS = "e0f1a2b3c4d6"
+_VA_FOLDER_DELETE_RULE = """
+    SELECT rc.delete_rule FROM information_schema.referential_constraints rc
+    JOIN information_schema.table_constraints tc
+      ON tc.constraint_name = rc.constraint_name
+    WHERE tc.table_name = 'drive_va_folders'
+"""
+
+
+def test_va_folders_start_empty_and_follow_their_va(db):
+    """The table comes empty (the first sweep makes every VA's folder), no
+    other row changes, and a VA deleted takes their row with them."""
+    needs(VA_FOLDERS)(db)
+    before = _row_counts(db)
+
+    command.upgrade(_alembic(), VA_FOLDERS)
+
+    after = _row_counts(db)
+    assert after["drive_va_folders"] == 0
+    assert {t: n for t, n in after.items() if t in before} == before
+    assert _scalar(db, _VA_FOLDER_DELETE_RULE) == "CASCADE"

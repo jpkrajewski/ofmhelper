@@ -52,7 +52,7 @@ def raise_for(code: int, message: str) -> NoReturn:
     if code in _AUTH or code == _HTTP_UNAUTHORIZED:
         raise ProviderAuthError(PROVIDER, text)
     if code in _NO_CREDITS:
-        raise ProviderNoCreditsError(text)
+        raise ProviderNoCreditsError(text, provider=PROVIDER)
     if code in _RATE_LIMITED or code == _HTTP_RATE_LIMITED:
         raise ProviderRateLimitError(text)
     if code in _REFUSED:

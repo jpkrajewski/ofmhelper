@@ -70,6 +70,11 @@ def _due(uid: int, login_id: int, state: FolderState, now: float) -> dict[str, i
         copy = at(uid, login_id, reel.out)
         if not reel.stored or copy is None or _busy(uid, reel.job_id):
             continue
+        # Picked for Drive: kept until uploaded, so Upload sends it at once
+        # instead of making it again (prod 2026-11-14, job 96a3fa9c: three
+        # copies made again took 19 of its 20 minutes, Drive 4 seconds).
+        if reel.approved:
+            continue
         # Its source is not known to be in Drive: the copy is all there is.
         if reel.posted is not True:
             continue

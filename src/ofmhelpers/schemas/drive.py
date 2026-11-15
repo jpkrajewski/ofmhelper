@@ -48,6 +48,10 @@ class UploadPick(BaseModel):
     poster_url: str | None = None
     # Logins whose folder has it already (or it is on its way there).
     already: list[int] = Field(default_factory=list)
+    # VAs whose own folder has it already (or it is on its way there).
+    already_vas: list[int] = Field(default_factory=list)
+    # The page the picker goes back to once it went up (its card).
+    back_url: str = "/clone"
 
 
 class UploadTarget(BaseModel):
@@ -75,12 +79,14 @@ class UploadTarget(BaseModel):
 
 
 class DriveUpload(BaseModel):
-    """A result file's upload into an account folder (`drive_uploads`)."""
+    """A result file's upload into an account folder (`login_id`) or a VA's
+    own folder (`va_id`) (`drive_uploads`)."""
 
     id: int
     job_id: str
     file_index: int
-    login_id: int
+    login_id: int | None = None
+    va_id: int | None = None
     folder_name: str
     status: str
     drive_url: str | None = None
@@ -92,7 +98,9 @@ class UploadRequest(BaseModel):
     logins' folders."""
 
     job_ids: list[str] = Field(min_length=1, max_length=200)
-    login_ids: list[int] = Field(min_length=1, max_length=50)
+    login_ids: list[int] = Field(default_factory=list, max_length=50)
+    # VAs whose own folder it goes into (/handmade, owner 2026-11-15).
+    va_ids: list[int] = Field(default_factory=list, max_length=50)
 
 
 class UploadsQueued(BaseModel):
@@ -110,6 +118,20 @@ class StoredFolder(BaseModel):
     # The folder's last read, and when (/drive opens with it).
     scan: AccountScan | None = None
     scanned_at: float | None = None
+
+
+class VaFolder(BaseModel):
+    """A VA's own folder in their owner's root (`drive_va_folders`): where
+    their handmade reels land (/handmade); /drive shows it by their name."""
+
+    user_id: int
+    folder_id: str
+    name: str
+    root_folder_id: str
+
+    @property
+    def url(self) -> str:
+        return folder_url(self.folder_id)
 
 
 class StoredFolders(BaseModel):
@@ -205,6 +227,8 @@ class DriveBoard(BaseModel):
     # Today in the Drive timezone: what "uploaded today" means.
     day: datetime.date
     cards: list[DriveCard] = Field(default_factory=list)
+    # The viewer's VAs' own folders, by name (`features/drive/va_folders.py`).
+    va_folders: list[VaFolder] = Field(default_factory=list)
     # Folders in the root no login owns: hand-made, old, misspelt.
     other_folders: list[DriveFile] = Field(default_factory=list)
     # Why nothing can be shown (not set up, not shared); None when fine.

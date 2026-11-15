@@ -9,14 +9,18 @@ lazy from collections.abc import Iterator
 from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from ofmhelpers.db.models import DriveAccountFolderRow, DrivePostedFileRow
+from ofmhelpers.db.models import (
+    DriveAccountFolderRow,
+    DrivePostedFileRow,
+    DriveVaFolderRow,
+)
 from ofmhelpers.db.repositories.cached_repository import (
     CachedRepository,
     cached,
     invalidates_cache,
 )
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.schemas.drive import AccountScan, StoredFolder
+from ofmhelpers.schemas.drive import AccountScan, StoredFolder, VaFolder
 
 # pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
 _SYNC_LOCK_KEY = 0x0D21_5E00
@@ -55,6 +59,46 @@ class DriveFolderRepository(CachedRepository):
                 )
                 for r in rows
             ]
+
+    @cached
+    def va_folders(self, user_ids: list[int]) -> list[VaFolder]:
+        """The stored folders of the VAs `user_ids`, whatever root (the
+        caller checks it is the owner's current one)."""
+        with session_scope() as s:
+            rows = (
+                s.execute(
+                    select(DriveVaFolderRow).where(
+                        DriveVaFolderRow.user_id.in_(user_ids)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return [
+                VaFolder(
+                    user_id=r.user_id,
+                    folder_id=r.folder_id,
+                    name=r.name,
+                    root_folder_id=r.root_folder_id,
+                )
+                for r in rows
+            ]
+
+    @invalidates_cache
+    def save_va_folder(self, folder: VaFolder) -> None:
+        """The VA's folder, made, found or renamed: one row per VA."""
+        values = {
+            "folder_id": folder.folder_id,
+            "name": folder.name,
+            "root_folder_id": folder.root_folder_id,
+            "updated_at": func.now(),
+        }
+        with session_scope() as s:
+            s.execute(
+                insert(DriveVaFolderRow)
+                .values(user_id=folder.user_id, **values)
+                .on_conflict_do_update(index_elements=["user_id"], set_=values)
+            )
 
     @contextmanager
     def sync_lock(self) -> Iterator[bool]:

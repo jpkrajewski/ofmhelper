@@ -176,3 +176,51 @@ def test_a_click_on_the_picture_plays_and_keeps_the_last_cut(va: Session, clip: 
     expect(va.page.locator(".edit-pause")).to_be_visible()
     expect(download).to_be_visible()
     assert va.js_errors == []
+
+
+def _mark(va: Session, start: float, end: float) -> None:
+    va.page.evaluate(
+        """([a, b]) => {
+            const s = document.getElementById('edit-start');
+            const e = document.getElementById('edit-end');
+            s.value = String(a); s.dispatchEvent(new Event('input'));
+            e.value = String(b); e.dispatchEvent(new Event('input'));
+        }""",
+        [start, end],
+    )
+
+
+def _labels(va: Session) -> list[str]:
+    return va.page.locator(".edit-label span").all_inner_texts()
+
+
+def test_the_timeline_is_the_result_delete_undo_add_and_cut(
+    va: Session, clip: Path, tmp_path: Path
+):
+    """Owner 2026-11-15: a deleted part disappears from the timeline (one
+    video stays one label), Undo puts it back, Add video joins another on
+    this same page, Cut makes what the timeline shows."""
+    _open(va, clip)
+    page_url = va.page.url
+    length = va.page.locator("#edit-length")
+
+    _mark(va, 1.0, 2.0)
+    va.page.click(".edit-delete")
+
+    assert _labels(va) == ["clip.mp4 · 3.0 s"]
+    expect(length).to_have_text("3.0 s")
+    assert va.page.locator(".edit-seg").count() == 2  # cut where the part was
+    va.page.click(".edit-undo")
+    assert _labels(va) == ["clip.mp4 · 4.0 s"]
+
+    va.page.click(".edit-add-video")
+    second = _make_clip(tmp_path / "second.mp4", 2)
+    va.page.locator("#edit-add .file-add-input").set_input_files(str(second))
+    expect(va.page.locator(".edit-label")).to_have_count(2, timeout=JOB_TIMEOUT_MS)
+    assert va.page.url == page_url  # no new page
+    assert _labels(va) == ["clip.mp4 · 4.0 s", "second.mp4 · 2.0 s"]
+    expect(length).to_have_text("6.0 s")
+
+    va.page.click("#edit-cut")
+    expect(va.page.locator("#edit-download")).to_be_visible(timeout=JOB_TIMEOUT_MS)
+    assert va.js_errors == []

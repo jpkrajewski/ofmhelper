@@ -581,6 +581,13 @@ def test_an_owner_posts_their_vas_clone_and_the_va_cannot(drive, tmp_path):
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
     assert len(_files_in(drive, "ann.ig - Anna")) == 1
+    # The VA sees where it went, never a link into Drive (owner 2026-11-15:
+    # "cutting VAs from direct google drive access"); the owner keeps it.
+    vas_page, owners_page = va.get("/clone").text, ann.get("/clone").text
+    assert "In Drive: ann.ig - Anna" in vas_page
+    assert state["drive_url"] not in vas_page
+    assert 'id="card-drive-remove"' not in vas_page
+    assert f'href="{state["drive_url"]}"' in owners_page
 
 
 # --- /clone's filters: made by, not uploaded to Drive (owner 2026-11-14) ---------

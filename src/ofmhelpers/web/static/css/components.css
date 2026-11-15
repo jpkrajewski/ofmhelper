@@ -560,7 +560,8 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 /* A failure: who refused, the reason and what they said (schemas/errors.py
    `error_line`), in red, on the card itself. */
 .result-failed { color: var(--fail); background: var(--fail-wash); font-weight: 500; }
-.fail-note { min-height: 0; }
+/* One line per thing that failed (a download's links: "<link> · <reason>"). */
+.fail-note { min-height: 0; flex-direction: column; word-break: break-word; }
 .drive-states:empty { display: none; }
 /* ui.date_range: the toolbar's date filter -- a "From" and a "To" button,
    the day picked on each. The date box itself is never seen: it only holds

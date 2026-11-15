@@ -18,6 +18,7 @@ from http import HTTPStatus
 from typing import Any
 lazy from pathlib import Path
 
+import logfire
 lazy import httplib2
 lazy from google.auth.credentials import Credentials
 lazy from google.auth.exceptions import GoogleAuthError, RefreshError
@@ -553,15 +554,20 @@ class Drive:
         media = MediaFileUpload(
             str(path), mimetype=mime_type, resumable=True, chunksize=_UPLOAD_CHUNK
         )
-        made = self._run(
-            self._files.create(
-                body={"name": name, "parents": [parent_id]},
-                media_body=media,
-                fields=f"{_FILE_FIELDS}, parents",
-                supportsAllDrives=True,
-            ),
-            f"Uploading {name!r}",
-        )
+        # httplib2 is not instrumented: its own span, or the upload's time
+        # hides inside its job's (prod 2026-11-14, /trials job 96a3fa9c).
+        with logfire.span(
+            "drive upload {name}", name=name, size_bytes=path.stat().st_size
+        ):
+            made = self._run(
+                self._files.create(
+                    body={"name": name, "parents": [parent_id]},
+                    media_body=media,
+                    fields=f"{_FILE_FIELDS}, parents",
+                    supportsAllDrives=True,
+                ),
+                f"Uploading {name!r}",
+            )
         logger.info("drive: uploaded %r (%s)", name, made["id"])
         return DriveFile.model_validate(made)
 

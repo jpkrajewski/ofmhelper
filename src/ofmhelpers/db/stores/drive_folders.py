@@ -14,8 +14,9 @@ from ofmhelpers.db.repositories import DriveFolderRepository
 from ofmhelpers.db.stores.devices import list_devices
 from ofmhelpers.db.stores.users import list_users
 from ofmhelpers.schemas import AccountScan, DriveTarget, StoredFolder
-from ofmhelpers.schemas.drive import StoredFolders
+from ofmhelpers.schemas.drive import StoredFolders, VaFolder
 lazy from ofmhelpers.schemas.gdrive import DriveFile
+lazy from ofmhelpers.schemas.users import User
 
 _SERVICE = "instagram"
 
@@ -68,6 +69,28 @@ def account_folders() -> StoredFolders:
         if owner is not None and roots.get(owner) == row.root_folder_id:
             found[row.login_id] = row
     return StoredFolders(folders=list(found.values()))
+
+
+def va_folders(vas: list[User], *, any_root: bool = False) -> list[VaFolder]:
+    """Each of `vas`' folder in their owner's current root; one of any other
+    root (the VA moved to another owner, prod's in a dev copy) is left out,
+    so the next sweep finds or makes it there. `any_root`: every stored one
+    (dev reading the live folders keeps its VA folders in its own DEV root,
+    never the owner's stored one)."""
+    if not vas:
+        return []
+    roots = _roots()
+    owner_of = {va.id: va.owner_id for va in vas}
+    return [
+        f
+        for f in _repository().va_folders(sorted(owner_of))
+        if (owner := owner_of.get(f.user_id)) is not None
+        and (any_root or roots.get(owner) == f.root_folder_id)
+    ]
+
+
+def save_va_folder(folder: VaFolder) -> None:
+    _repository().save_va_folder(folder)
 
 
 def save_account_folder(login_id: int, folder_id: str, name: str, root: str) -> None:

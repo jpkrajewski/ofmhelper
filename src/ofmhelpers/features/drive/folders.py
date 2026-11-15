@@ -68,6 +68,7 @@ from ofmhelpers.db.stores import drive_folders as store
 from ofmhelpers.db.stores import drive_uploads as upload_store
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.clone_links.folders import review_folders
+from ofmhelpers.features.drive import va_folders
 from ofmhelpers.features.previews.render import previews_dir, write_atomic
 from ofmhelpers.integrations.gdrive import (
     DriveApi,
@@ -101,6 +102,10 @@ from ofmhelpers.telemetry import in_this_trace
 lazy from ofmhelpers.schemas.drive import StoredFolders
 
 logger = get_logger(__name__)
+
+# The job a person's Drive sync runs as when queued by hand (a login put on a
+# phone, a VA added): `features/phones/service.py`, `features/users/service.py`.
+SYNC_TASK = "drive_sync"
 
 # The root folder in each owner's Drive.
 _ROOT_NAME = "ALL ACCOUNTS"
@@ -688,6 +693,7 @@ def _sync_owner(user_id: int, targets: list[DriveTarget], report: SyncReport) ->
                 "drive: %s not synced: %s", target.handle, exc, exc_info=True
             )
             report.failed.append(f"{target.folder_name}: {exc}")
+    va_folders.sync(drive, root, user_id, report)
     _tally(user_id, targets, report)
 
 
@@ -707,7 +713,11 @@ def sync(owner: int | None = None) -> SyncReport:
             report.busy = True
             return report
         # Read inside the lock: a sweep that just finished is seen.
-        for user_id, targets in _by_owner(store.targets(owner)).items():
+        by_owner = _by_owner(store.targets(owner))
+        # An owner with VAs and no phone still gets their VAs' folders.
+        for va_owner in va_folders.owners(owner):
+            by_owner.setdefault(va_owner, [])
+        for user_id, targets in by_owner.items():
             _sync_owner(user_id, targets, report)
     logger.info(
         "drive: synced -- %d created, %d found, %d renamed, %d POSTED folders,"
@@ -955,6 +965,7 @@ def board(
         )
         result.connect_drive = True
     folders = store.account_folders()
+    result.va_folders = va_folders.of_owner(viewer) if viewer is not None else []
     result.cards = [
         DriveCard(
             target=t,
@@ -968,6 +979,7 @@ def board(
         _count_uploaded(result, at)
         return result
     known = {f.folder_id for f in folders.folders}
+    known |= {f.folder_id for f in result.va_folders}
     seen_at = at.timestamp()
     grouped: dict[int, list[DriveCard]] = defaultdict(list)
     for card in result.cards:

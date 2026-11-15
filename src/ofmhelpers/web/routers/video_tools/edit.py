@@ -9,17 +9,18 @@ Nothing it makes is kept past a day. The work behind each route:
 `features.edit.service`, `run_cut` and `run_prepare` included: jobs queued
 before 2026-11-11 name them by this module's path, so they stay importable here."""
 
-from typing import Annotated
+from typing import Annotated, Self
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.clone.targets import clone_targets
 from ofmhelpers.features.edit import service
+from ofmhelpers.features.edit.clips import Clip
 from ofmhelpers.features.edit.options import SPEEDS, Aspect, Framing, Size, Speed
 from ofmhelpers.features.edit.service import (
     PREFIX,
@@ -39,10 +40,21 @@ _PREPARED_CACHE = {"Cache-Control": "private, max-age=86400"}
 
 
 class CutRequest(Framing):
-    video: str
-    start: float = Field(ge=0, allow_inf_nan=False)
-    end: float = Field(gt=0, allow_inf_nan=False)
+    """One part (`video`, `start`, `end`: what the page always sent), or
+    `clips`, joined one after another (features/edit/clips.py)."""
+
+    video: str = ""
+    start: float = Field(default=0, ge=0, allow_inf_nan=False)
+    end: float = Field(default=0, ge=0, allow_inf_nan=False)
+    clips: list[Clip] = Field(default_factory=list)
     speed: Speed = 1.0
+
+    @model_validator(mode="after")
+    def _one_clip_at_least(self) -> Self:
+        if not self.clips and self.video:
+            one = Clip(video=self.video, start=self.start, end=self.end)
+            self.clips = [one]
+        return self
 
 
 class FrameQuery(Framing):
@@ -66,10 +78,13 @@ def page(
     return render(
         request,
         "edit.html",
-        page=service.page(video, assets_root, actor, run_prepare),
+        page=service.Asked(
+            video=video or "", assets_root=assets_root, actor=actor
+        ).page(run_prepare),
         limit_s=_limit_s(),
         min_s=settings.web.edit_min_s,
         max_part_s=settings.web.edit_max_part_s,
+        max_clips=settings.web.edit_max_clips,
         aspects=list(Aspect),
         speeds=SPEEDS,
         sizes=list(Size),
@@ -85,11 +100,21 @@ def upload(
     return service.upload(file, assets_root, actor, run_prepare)
 
 
+@router.get("/video")
+def video_to_add(
+    assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
+) -> EditVideo:
+    """A stored video to put on the timeline of the page open (Add video)."""
+    return service.Asked(video=video, assets_root=assets_root, actor=actor).add(
+        run_prepare
+    )
+
+
 @router.get("/prepared")
 def prepared(
     assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
 ) -> Prepared:
-    return service.prepared_state(video, assets_root, actor)
+    return service.Asked(video=video, assets_root=assets_root, actor=actor).prepared()
 
 
 @router.get("/proxy")
@@ -133,14 +158,7 @@ def frame(assets_root: AssetsRoot, query: Annotated[FrameQuery, Query()]) -> Res
 def cut(assets_root: AssetsRoot, actor: Actor, body: CutRequest) -> JobQueued:
     return JobQueued(
         job_id=service.queue_cut(
-            body.video,
-            body.start,
-            body.end,
-            body,
-            body.speed,
-            assets_root,
-            actor,
-            run_cut,
+            body.clips, body, body.speed, assets_root, actor, run_cut
         )
     )
 

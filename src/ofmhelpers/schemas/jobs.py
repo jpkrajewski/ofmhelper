@@ -3,10 +3,11 @@ generation.js / clone.js. Field names are contract with both, so they match
 what the dict versions of these shapes used to carry."""
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, computed_field
 
-from ofmhelpers.schemas.errors import error_line, error_reason
+from ofmhelpers.schemas.errors import download_reason, error_line, error_reason
 from ofmhelpers.schemas.persistence import JobPreview
 
 
@@ -38,10 +39,31 @@ class AssetCard(BaseModel):
 
 
 class FailedSource(BaseModel):
-    """A source URL a grouped download job could not fetch."""
+    """A source URL a grouped download job could not fetch. The card shows
+    each one as `link` · `reason` (owner 2026-11-15: "1 link failed" with the
+    why in a tooltip nobody hovers over)."""
 
     source: str
     error: str
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def link(self) -> str:
+        """The address as a person reads it: host and path, no scheme, no
+        `www.`, no tracking query ("instagram.com/reel/Dc_a7TBJZ1L")."""
+        parts = urlsplit(self.source)
+        if not parts.netloc:
+            return self.source
+        host = parts.netloc.removeprefix("www.")
+        return f"{host}{parts.path.rstrip('/')}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def reason(self) -> str:
+        """Why, worded for the card (`schemas/errors.py` `download_reason`:
+        "Private account: only its followers can see it"; one no reason
+        knows: the downloader's own words)."""
+        return download_reason(self.error)
 
 
 class JobStatusPayload(BaseModel):

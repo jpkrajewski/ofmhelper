@@ -23,6 +23,7 @@ from ofmhelpers.features.downloads import media as download_media
 from ofmhelpers.features.downloads import videos as download_videos
 from ofmhelpers.features.edit import service as edit_service
 from ofmhelpers.features.generate import service as generate
+from ofmhelpers.features.handmade import service as handmade
 from ofmhelpers.features.jobs.restart import COUNT, Restart
 from ofmhelpers.features.pictures import service as pictures
 from ofmhelpers.features.repurpose import service as repurpose
@@ -110,13 +111,18 @@ RESTARTS = frozendict(
             run=edit_service.run_cut,
             kwargs=_with_assets_root,
             queue=QueueName.EDIT,
-            job_timeout=lambda _params: settings.web.edit_cut_timeout_s + 60,
+            job_timeout=edit_service.cut_timeout_s,
         ),
         edit_service.PREPARE_TASK: Restart(
             run=edit_service.run_prepare,
             kwargs=_with_assets_root,
             queue=QueueName.EDIT,
             job_timeout=lambda _params: settings.web.edit_prepare_timeout_s + 60,
+        ),
+        # Free and the same when run twice: the reel is already on disk.
+        handmade.TASK: Restart(
+            run=handmade.run_handmade,
+            kwargs=lambda job: {**_in_its_folder(job), "job_id": job.id},
         ),
         download_media.TASK: Restart(
             run=download_media.run_downloads, kwargs=_download

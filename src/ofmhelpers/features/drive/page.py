@@ -18,11 +18,13 @@ logger = get_logger(__name__)
 
 
 class Source(BaseModel):
-    """The tool whose finished video `/drive?upload=<job>` may name: its task
-    and where its files are served (the routers know both)."""
+    """A tool whose finished video `/drive?upload=<job>` may name: its task,
+    where its files are served (the routers know both) and the page the
+    picker goes back to once it went up (/clone, /handmade)."""
 
     task: str
     files_prefix: str
+    page: str
 
 
 class PageView(BaseModel):
@@ -37,39 +39,43 @@ class Thumb(BaseModel):
     media_type: str
 
 
-def _upload_pick(readers: Readers, job_id: str, source: Source) -> UploadPick | None:
+def _upload_pick(
+    readers: Readers, job_id: str, sources: list[Source]
+) -> UploadPick | None:
     """The video `?upload=` names, when it is a finished run the session
     reads: their own, or one of their VAs' (the owner uploads what the VA
     made: `uploads.queue_uploads` takes the same readers)."""
     job = get_job(job_id, readers)
-    if job is None or job.task != source.task or job.status != "done":
+    source = next((s for s in sources if job and s.task == job.task), None)
+    if job is None or source is None or job.status != "done":
         return None
     assets = job_assets(job, source.files_prefix).assets
     if not assets:
         return None
     first = assets[0]
+    uploads = [
+        u for u in upload_store.for_jobs([job.id]) if u.status in ("done", "queued")
+    ]
     return UploadPick(
         job_id=job.id,
         name=first.download_name,
         preview_url=first.preview_url or first.view_url,
         poster_url=first.poster_url,
-        already=[
-            u.login_id
-            for u in upload_store.for_jobs([job.id])
-            if u.status in ("done", "queued")
-        ],
+        back_url=f"{source.page}#job-{job.id}",
+        already=[u.login_id for u in uploads if u.login_id is not None],
+        already_vas=[u.va_id for u in uploads if u.va_id is not None],
     )
 
 
 def page_view(
-    scope: int, viewer: int, readers: Readers, upload: str, source: Source
+    scope: int, viewer: int, readers: Readers, upload: str, sources: list[Source]
 ) -> PageView:
     """At once, from each folder's last read: no Drive call. `upload`: a run
     whose video goes into the account card clicked; `readers`: whose runs
     that may be (the session's own and their VAs')."""
     return PageView(
         board=folders.board(owner=scope, viewer=viewer, live=False),
-        pick=_upload_pick(readers, upload, source) if upload else None,
+        pick=_upload_pick(readers, upload, sources) if upload else None,
     )
 
 

@@ -190,7 +190,7 @@ def drive_upload(
 ) -> UploadsQueued:
     """These runs' videos (the clicker's own or their VAs') into each picked
     account's Drive folder, on the worker, as the clicker's Google account."""
-    uploads = queue_uploads(user, body.job_ids, body.login_ids, actors)
+    uploads = queue_uploads(user, body.job_ids, body.login_ids, actors, body.va_ids)
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
     )
@@ -199,9 +199,12 @@ def drive_upload(
 @router.post(
     "/drive-uploads/{upload_id}/remove", dependencies=[Can(Action.DRIVE_UPLOAD)]
 )
-def drive_upload_remove(user: CurrentUser, upload_id: int) -> DriveUpload:
-    """Takes an uploaded video back out of its account folder (Drive trash)."""
-    return remove_upload(user, upload_id)
+def drive_upload_remove(
+    user: CurrentUser, actors: Actors, upload_id: int
+) -> DriveUpload:
+    """Takes an uploaded video back out of its account folder (Drive trash):
+    the clicker's own runs' and their VAs' (/clone, /handmade)."""
+    return remove_upload(user, upload_id, actors)
 
 
 @router.get("/drive-uploads")

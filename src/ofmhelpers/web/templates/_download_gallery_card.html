@@ -28,8 +28,8 @@
         {% endcall %}
 {% else %}{{ super() }}{% endif %}{% endblock %}
 {% block notes %}{% if job.failed_sources %}
-    <div class="result-file result-failed fail-note" title="{% for f in job.failed_sources %}{{ f.source }}: {{ f.error }}&#10;{% endfor %}">
-        {{ job.failed_sources|length }} link{{ "s" if job.failed_sources|length != 1 }} failed
+    <div class="result-file result-failed fail-note" data-failed-sources>
+        {% for f in job.failed_sources %}<span title="{{ f.source }}">{{ f.link }} · {{ f.reason }}</span>{% endfor %}
     </div>
 {% endif %}{% if job.assets and job.assets[0].removed_reason %}
     <div class="result-file result-failed fail-note" data-removed-reason title="{{ job.assets[0].removed_error }}">{{ job.assets[0].removed_reason }}</div>

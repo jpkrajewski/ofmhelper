@@ -19,14 +19,19 @@ def _repository() -> DriveUploadRepository:
 
 
 def queue(
-    job_id: str, file_index: int, login_id: int, user_id: int, folder_name: str
+    job_id: str,
+    file_index: int,
+    login_id: int | None,
+    user_id: int,
+    folder_name: str,
+    va_id: int | None = None,
 ) -> int | None:
     """The new upload's id; None when the file is already there or on its
     way (a failed one is queued again, and one queued longer than
     `settings.gdrive.upload_stale_s` ago: stranded)."""
     stale_before = time.time() - settings.gdrive.upload_stale_s
     return _repository().queue(
-        job_id, file_index, login_id, user_id, folder_name, stale_before
+        job_id, file_index, login_id, user_id, folder_name, stale_before, va_id
     )
 
 

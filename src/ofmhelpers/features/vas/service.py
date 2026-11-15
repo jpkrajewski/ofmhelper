@@ -1,8 +1,8 @@
 """What /vas does behind its route (web/routers/vas.py): what each
 VA's runs cost today, in the last 7 days and this month, and each VA's days
 this month: when they logged in, when they logged out (by Logout, or by the
-app after 2 idle hours: `features/users/idle.py`), how many reels they
-finished and what the day cost. The days are one SQL query over the job log
+app after 2 idle hours: `features/users/idle.py`), the hours they worked
+(`hours.py`), how many reels they finished and what the day cost. The days are one SQL query over the job log
 (`db/stores/jobs.py` `days`); a reel is a finished clone (`REEL_TASKS`).
 
 Whose VAs: the reader's own (`Viewer.user_ids` minus themselves); an admin
@@ -18,7 +18,8 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import days, spend
+from ofmhelpers.db.stores.jobs import days, sessions, spend
+from ofmhelpers.features.vas.hours import day_hours, worded
 from ofmhelpers.features.vas.models import (
     Amount,
     Column,
@@ -132,7 +133,7 @@ def _logged_out(day: UserDay, va: User, zone: ZoneInfo, today: date) -> str:
     return _clock(out, zone) + (" · idle" if out == day.idle_logout_at else "")
 
 
-def _day(day: UserDay, va: User, zone: ZoneInfo, today: date) -> VaDay:
+def _day(day: UserDay, va: User, zone: ZoneInfo, today: date, worked_s: float) -> VaDay:
     first = day.first_login_at
     return VaDay(
         user_id=va.id,
@@ -140,6 +141,7 @@ def _day(day: UserDay, va: User, zone: ZoneInfo, today: date) -> VaDay:
         day=day.day,
         logged_in=_clock(first, zone) if first is not None else _NONE,
         logged_out=_logged_out(day, va, zone, today),
+        hours=worded(worked_s),
         reels=day.reels,
         spent=f"${day.usd.quantize(_CENT):,}" if day.usd is not None else _NONE,
     )
@@ -153,8 +155,19 @@ def _days(vas: list[User], month: SpendPeriod, at: datetime) -> list[VaDay]:
         return []
     by_id = {va.id: (index, va) for index, va in enumerate(vas)}
     found = days(list(by_id), month.from_ts, month.to_ts, zone.key, REEL_TASKS)
+    spans = sessions(list(by_id), month.from_ts, month.to_ts)
+    worked = {(h.user_id, h.day): h.seconds for h in day_hours(spans, vas, zone)}
     rows = sorted(found, key=lambda d: (-d.day.toordinal(), by_id[d.user_id][0]))
-    return [_day(d, by_id[d.user_id][1], zone, at.date()) for d in rows]
+    return [
+        _day(
+            d,
+            by_id[d.user_id][1],
+            zone,
+            at.date(),
+            worked.get((d.user_id, d.day), 0.0),
+        )
+        for d in rows
+    ]
 
 
 def page_view(

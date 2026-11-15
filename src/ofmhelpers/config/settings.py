@@ -224,6 +224,20 @@ class WebSettings(BaseSettings):
     va_spend_notice_every_usd: int = Field(
         default=10, ge=1, validation_alias="OFM_VA_SPEND_NOTICE_EVERY_USD"
     )
+    # A provider out of money (no credits, no balance) is told on Telegram at
+    # most once in this long per provider, while jobs keep failing on it
+    # (features/jobs/notices.py).
+    no_credits_notice_every_s: int = Field(
+        default=3600, ge=1, validation_alias="OFM_NO_CREDITS_NOTICE_EVERY_S"
+    )
+    # /handmade: a VA's handmade reels, sent to their own Drive folder
+    # (features/handmade): how big one may be, how many at once.
+    handmade_max_upload_mb: int = Field(
+        default=1024, ge=1, validation_alias="OFM_HANDMADE_MAX_UPLOAD_MB"
+    )
+    handmade_max_files: int = Field(
+        default=20, ge=1, validation_alias="OFM_HANDMADE_MAX_FILES"
+    )
     # Downloaded results are saved camera-roll style -- prefix + 4 random
     # digits (IMG_4821.png, VID_0193.mp4) -- not under the generator's name.
     image_download_prefix: str = Field(
@@ -331,6 +345,8 @@ class WebSettings(BaseSettings):
     edit_max_part_s: float = Field(
         default=60, gt=0, validation_alias="OFM_EDIT_MAX_PART_S"
     )
+    # Clips one Cut joins (features/edit/clips.py): one track, one after another.
+    edit_max_clips: int = Field(default=10, ge=1, validation_alias="OFM_EDIT_MAX_CLIPS")
     edit_max_input_s: float = Field(
         default=600, gt=0, validation_alias="OFM_EDIT_MAX_INPUT_S"
     )
@@ -2015,6 +2031,9 @@ class TrialsSettings(BaseSettings):
     # after it was made (`trials/cleanup.py`): its poster and recipe stay, and
     # an upload makes it again. Prod 2026-11-11: 922 copies, 13 GB of 72.
     keep_s: int = Field(default=86400, ge=1, validation_alias="OFM_TRIALS_KEEP_S")
+    # About how long making one deleted copy again takes before an upload: the
+    # page's "about N min" (prod 2026-11-14, job 96a3fa9c: 520, 317, 345 s).
+    remake_s: int = Field(default=400, ge=1, validation_alias="OFM_TRIALS_REMAKE_S")
     sweep_s: int = Field(default=3600, ge=1, validation_alias="OFM_TRIALS_SWEEP_S")
 
 

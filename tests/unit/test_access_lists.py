@@ -35,6 +35,7 @@ def test_a_va_has_exactly_the_tools_they_work_in():
         Area.CLONE,
         Area.DOWNLOAD,
         Area.EDIT,
+        Area.HANDMADE,
     )
 
 
@@ -46,6 +47,13 @@ def test_the_map_is_read_off_the_lists_and_a_retired_page_is_nobodys():
     assert ACCESS[Area.CLONE] == frozenset(Role)
     assert ACCESS[Area.VAS] == frozenset({Role.USER, Role.ADMIN})
     assert ACCESS[Area.USERS] == frozenset({Role.ADMIN})
+
+
+def test_only_a_va_uploads_handmade_reels():
+    """Their own Drive folder; the owner sees what went up, uploads nothing."""
+    assert allowed(Role.VA, Action.UPLOAD_HANDMADE)
+    assert not allowed(Role.USER, Action.UPLOAD_HANDMADE)
+    assert not allowed(Role.ADMIN, Action.UPLOAD_HANDMADE)
 
 
 def test_a_va_hides_nothing():

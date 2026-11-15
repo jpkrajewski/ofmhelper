@@ -266,6 +266,137 @@ def frame(
     )
 
 
+# Every part of a join carries its sound so, and the join too: one stream
+# shape from the first part to the last.
+_JOIN_AUDIO = ("-c:a", "aac", "-ar", "48000", "-ac", "2")
+
+
+def part(
+    src: Path,
+    start: float,
+    end: float,
+    dest: Path,
+    *,
+    short_side: int,
+    frame: Size | None,
+    fps: float,
+    sound: bool,
+    threads: int,
+    timeout_s: int,
+    picture: str | None = None,
+    speed: float = 1.0,
+) -> Path:
+    """One clip of a joined cut (`join`): as `cut`, then fitted into exactly
+    `frame` (scaled, bars where its shape differs; None: `short_side`, the
+    first clip, whose size the others take) at `fps` frames a second, the
+    sound AAC 48 kHz stereo; a clip without sound (`sound` False) gets
+    silence. Every part is then the same stream, so the join never has to
+    change size, rate or sound on the way."""
+    faster = speed != 1.0
+    fit = (
+        f"scale={frame.width}:{frame.height}:force_original_aspect_ratio=decrease"
+        f":flags=lanczos,pad={frame.width}:{frame.height}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+        if frame is not None
+        else scaled_to(short_side)
+    )
+    silence = [
+        "-f",
+        "lavfi",
+        "-t",
+        f"{(end - start) / speed:.3f}",
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=48000",
+    ]
+    return _write(
+        [
+            "-threads",
+            str(threads),
+            "-ss",
+            f"{start:.3f}",
+            "-t",
+            f"{end - start:.3f}",
+            "-i",
+            str(src),
+            *([] if sound else silence),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0" if sound else "1:a:0",
+            "-vf",
+            _filters(
+                picture,
+                f"setpts=PTS/{speed:g}" if faster else None,
+                fit,
+                f"fps={fps:g}",
+            ),
+            *(["-af", f"atempo={speed:g}"] if faster and sound else []),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-threads",
+            str(threads),
+            *_JOIN_AUDIO,
+            "-shortest",
+            "-movflags",
+            "+faststart",
+        ],
+        dest,
+        timeout_s,
+    )
+
+
+def _quoted(path: Path) -> str:
+    """`path` for a concat listing's `file '...'` line: absolute (a relative
+    one is read from the listing's folder), its quotes escaped."""
+    return str(path.resolve()).replace("'", "'\\''")
+
+
+def join(parts: list[Path], dest: Path, *, threads: int, timeout_s: int) -> Path:
+    """`parts` (each made by `part`: one size, frame rate and sound) one
+    after another into `dest`, read one at a time (the concat demuxer: the
+    concat filter opens every part at once) and encoded once more. A copy
+    instead failed on the seams ("Error muxing a packet", the AAC packets'
+    times, 2026-11-15). `-xerror`: a part that cannot be read fails the join
+    instead of ending the video early."""
+    listing = dest.with_name(f".join-{uuid.uuid4().hex}.txt")
+    listing.parent.mkdir(parents=True, exist_ok=True)
+    listing.write_text("".join(f"file '{_quoted(p)}'\n" for p in parts))
+    try:
+        return _write(
+            [
+                "-xerror",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(listing),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                "-threads",
+                str(threads),
+                *_JOIN_AUDIO,
+                "-movflags",
+                "+faststart",
+            ],
+            dest,
+            timeout_s,
+        )
+    finally:
+        listing.unlink(missing_ok=True)
+
+
 def _write(args: list[str], dest: Path, timeout_s: int) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(f".part-{uuid.uuid4().hex}-{dest.name}")

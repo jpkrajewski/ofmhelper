@@ -5,6 +5,7 @@ checks and takes its reels in one locked write: ten clicks at once start one
 job, the rest do nothing. What encodes waits its turn on the media queue, the
 rest runs beside it; a reel being made or uploaded is the only thing blocked."""
 
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Self
@@ -193,7 +194,7 @@ class FolderView(BaseModel):
             failed = len(self.state.failed)
             return f"{made}, {failed} failed" if failed else made
         if self.uploading:
-            return f"Uploading {len(self.uploading)} to Drive…"
+            return self._upload_status()
         waiting = [
             ahead
             for r in self.state.reels
@@ -204,6 +205,24 @@ class FolderView(BaseModel):
         if self.busy:
             return f"Making {len(self.busy)}…"
         return self.state.note or ""
+
+    def _upload_status(self) -> str:
+        """An upload as it is: waiting for the encoder, making deleted copies
+        again (minutes each), or sending to Drive (seconds)."""
+        reels = [r for r in self.state.reels if r.key in self.uploading]
+        ahead = [
+            a
+            for r in reels
+            if r.job_id and (a := self.line.ahead(r.job_id)) is not None
+        ]
+        if ahead:
+            return _in_line(min(ahead))
+        remade = sum(not r.stored for r in reels)
+        if remade:
+            minutes = math.ceil(remade * settings.trials.remake_s / 60)
+            copies = "copy" if remade == 1 else "copies"
+            return f"Making {remade} {copies} again for Drive · about {minutes} min"
+        return f"Uploading {len(reels)} to Drive…"
 
     def stamp(self, reel: ReelState) -> str:
         """Changes whenever the reel's card would look different."""

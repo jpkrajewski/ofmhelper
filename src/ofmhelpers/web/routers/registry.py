@@ -10,6 +10,7 @@ from ofmhelpers.web.routers.downloads import clean_image, images, media, videos,
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
 from ofmhelpers.web.routers.image_tools import character_sheet, pictures
+from ofmhelpers.web.routers.inventory import handmade
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
 
@@ -53,6 +54,7 @@ TOOLS = frozendict(
         "character_sheet": Tool(label="Character sheet", router=character_sheet.router),
         "uniqify": Tool(label="Uniqify", router=uniqify.router),
         viral.TASK: Tool(label=viral.LABEL, router=viral.router),
+        handmade.TASK: Tool(label="Handmade", router=handmade.router),
         pictures.TASK: Tool(
             label=pictures.LABEL,
             router=pictures.router,

@@ -60,7 +60,7 @@
 {% if failed_sources %}
 <ul class="fail-list">
     {% for f in failed_sources %}
-    <li class="fail">{{ f.source }}: {{ f.error }}</li>
+    <li class="fail" title="{{ f.error }}">{{ f.link }} · {{ f.reason }}</li>
     {% endfor %}
 </ul>
 {% endif %}

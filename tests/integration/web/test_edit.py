@@ -30,8 +30,11 @@ from ofmhelpers.web.routers.task_helpers import assets_root_for_user
 pytestmark = pytest.mark.heavy  # real ffmpeg encodes
 
 
-def _video(dest: Path, seconds: float = 4, size: str = "640x360") -> Path:
+def _video(
+    dest: Path, seconds: float = 4, size: str = "640x360", *, sound: bool = True
+) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
+    tone = ["-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}"]
     subprocess.run(
         [
             "ffmpeg",
@@ -42,10 +45,7 @@ def _video(dest: Path, seconds: float = 4, size: str = "640x360") -> Path:
             "lavfi",
             "-i",
             f"testsrc=size={size}:duration={seconds}:rate=25",
-            "-f",
-            "lavfi",
-            "-i",
-            f"sine=frequency=440:duration={seconds}",
+            *(tone if sound else []),
             "-pix_fmt",
             "yuv420p",
             "-shortest",
@@ -572,3 +572,93 @@ def test_frame_grabs_wait_their_turn_briefly_then_say_busy(client, mine, monkeyp
 
     assert busy.status_code == 400
     assert busy.json() == {"detail": "Busy saving frames: try again"}
+
+
+# --- clips: one track, joined one after another (features/edit/clips.py) ----
+
+
+def _streams(path: str) -> list[str]:
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            path,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return out.split()
+
+
+def _clips(client, *clips: tuple[str, float, float], **picked: object):
+    body = {
+        "clips": [{"video": v, "start": a, "end": b} for v, a, b in clips],
+        **picked,
+    }
+    return client.post("/edit/cut", json=body)
+
+
+def test_removing_the_middle_keeps_the_part_before_and_the_part_after(client, mine):
+    """Owner 2026-11-15: "cut a selected piece ... inverse": the page sends
+    what is left, the two parts around the selection."""
+    video = _clip(mine)
+
+    queued = _clips(client, (video, 0, 1), (video, 3, 4), size="720")
+    state = client.get(f"/edit/cut/{queued.json()['job_id']}").json()
+
+    assert state["status"] == "done", state
+    width, height, seconds = _shape(state["video"]["path"])
+    assert (width, height) == (1280, 720)
+    assert seconds == pytest.approx(2, abs=0.15)
+    job = get_job(queued.json()["job_id"])
+    assert job is not None
+    assert [c["start"] for c in job.params["clips"]] == [0, 3]
+
+
+def test_clips_of_other_videos_join_in_the_first_ones_frame_even_without_sound(
+    client, mine
+):
+    upright = _video(mine / f"{'b' * 64}__upright.mp4", 3, "360x640", sound=False)
+
+    queued = _clips(client, (_clip(mine), 0, 2), (str(upright), 0, 1.5), size="720")
+    path = client.get(f"/edit/cut/{queued.json()['job_id']}").json()["video"]["path"]
+
+    width, height, seconds = _shape(path)
+    assert (width, height) == (1280, 720)  # the first clip's; the upright one fitted in
+    assert seconds == pytest.approx(3.5, abs=0.15)
+    assert sorted(_streams(path)) == ["audio", "video"]  # silence where it had none
+
+
+def test_too_many_clips_or_too_long_together_is_refused(client, mine, monkeypatch):
+    monkeypatch.setenv("OFM_EDIT_MAX_CLIPS", "2")
+    monkeypatch.setenv("OFM_EDIT_MAX_PART_S", "3")
+    video = _clip(mine)
+
+    many = _clips(client, (video, 0, 1), (video, 1, 2), (video, 2, 3))
+    long = _clips(client, (video, 0, 2), (video, 2, 4))
+
+    assert many.json() == {"detail": "At most 2 clips"}
+    assert long.json() == {"detail": "Pick at most 3 s"}
+
+
+def test_add_video_opens_a_stored_one_for_the_timeline_and_refuses_anothers(
+    client, mine
+):
+    """Add video on the page open: the video's times, its light copy queued;
+    another person's video is refused like the page refuses it."""
+    other = assets_root_for_user(make_user("other@example.com").id)
+    theirs = _video(other / f"{'c' * 64}__theirs.mp4")
+
+    added = client.get("/edit/video", params={"video": _clip(mine)})
+    refused = client.get("/edit/video", params={"video": str(theirs)})
+
+    assert added.status_code == 200
+    assert added.json()["name"] == "clip.mp4"
+    assert added.json()["seconds"] == pytest.approx(4, abs=0.1)
+    assert refused.status_code == 400

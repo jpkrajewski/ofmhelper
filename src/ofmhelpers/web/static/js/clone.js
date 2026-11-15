@@ -243,19 +243,23 @@
         li.dataset.login = upload.login_id;
         if (upload.status === "done") {
             li.append("In Drive: ");
+            // Only who may upload gets the link and x (clone.html renders
+            // that template for them alone): a VA never opens Drive.
+            const remove = document.getElementById("card-drive-remove")
+                ?.content.firstElementChild.cloneNode(true);
+            if (!remove) {
+                li.append(upload.folder_name);
+                return li;
+            }
             const a = document.createElement("a");
             a.href = upload.drive_url;
             a.target = "_blank";
             a.rel = "noopener";
             a.textContent = upload.folder_name;
             li.appendChild(a);
-            const remove = document.getElementById("card-drive-remove")
-                ?.content.firstElementChild.cloneNode(true);
-            if (remove) {
-                remove.dataset.upload = upload.id;
-                remove.setAttribute("aria-label", `Remove from ${upload.folder_name}`);
-                li.append(" ", remove);
-            }
+            remove.dataset.upload = upload.id;
+            remove.setAttribute("aria-label", `Remove from ${upload.folder_name}`);
+            li.append(" ", remove);
         } else if (upload.status === "failed") {
             const span = document.createElement("span");
             // The reason on the card itself: Safari shows no hover text.

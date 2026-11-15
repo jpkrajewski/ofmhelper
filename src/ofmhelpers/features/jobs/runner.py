@@ -18,6 +18,7 @@ from rq.timeouts import JobTimeoutException
 from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.db.stores import jobs as store
 from ofmhelpers.features.account.keys import keep_used, key_tail
+from ofmhelpers.features.jobs import notices
 from ofmhelpers.features.jobs.cost import cost_of
 from ofmhelpers.features.previews.render import warm_previews
 from ofmhelpers.features.vas import notices as va_notices
@@ -78,7 +79,10 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
             # job -- a raw traceback isn't useful to them, just the
             # exception's own message (e.g. "Wrong API Key"). Full detail
             # goes to the logs and the trace for whoever is debugging it.
-            store.record_failure(job_id, str(exc) or exc.__class__.__name__)
+            error = str(exc) or exc.__class__.__name__
+            store.record_failure(job_id, error)
+            if (provider := notices.money_provider(exc)) is not None:
+                notices.out_of_money(job_id, provider, error)
             if not resumable(exc):
                 # Paid for and then failed (its export, its upload): still a cost.
                 _keep_cost(job_id)
