@@ -144,3 +144,93 @@ def _reasoned(reason: str, said: str) -> str:
 
 def _capped(text: str) -> str:
     return text if len(text) <= _SAID_MAX else f"{text[: _SAID_MAX - 1].rstrip()}…"
+
+
+# A link a download could not fetch (/download-assets' failed links,
+# `schemas/jobs.py` `FailedSource`), from the downloaders' own words
+# (yt-dlp, gallery-dl, the saver sites), first match wins. Owner 2026-11-15:
+# "wtf could not download mean ... just give reason that is correct": every
+# failed link in the prod snapshot of that day matched one of these, the AI
+# providers' `REASONS` read an Instagram 401 as "Wrong API key".
+DOWNLOAD_REASONS = (
+    ErrorReason(
+        label="Private account: only its followers can see it",
+        pattern=r"only available for registered users who follow"
+        r"|this account is private|private account",
+    ),
+    ErrorReason(
+        label="No video in this post (photos only)",
+        pattern=r"there is no video in this post",
+    ),
+    ErrorReason(
+        label="Instagram gave no video (private, age-restricted or blocked)",
+        pattern=r"no video formats found",
+    ),
+    ErrorReason(
+        label="Post deleted or profile banned",
+        pattern=r"empty media response|video unavailable|this video is (private|unavailable)"
+        r"|content isn.t available|has been (removed|deleted|terminated)",
+    ),
+    ErrorReason(
+        label="Not found: the post is gone or the link is wrong",
+        pattern=r"\b404\b|not found",
+    ),
+    ErrorReason(
+        label="Not a link we can download",
+        pattern=r"unsupported url|is not a valid url|no connection adapters",
+    ),
+    ErrorReason(
+        label="Instagram wants a login: upload fresh cookies on Cookies",
+        pattern=r"needs a login|redirect(ed)? to (the )?login page"
+        r"|redirect to home page|\b401\b",
+    ),
+    ErrorReason(
+        label="YouTube wants a login (bot check): upload YouTube cookies on Cookies",
+        pattern=r"sign in to confirm you.re not a bot",
+    ),
+    ErrorReason(
+        label="The site refused us (403)",
+        pattern=r"\b403\b|forbidden",
+    ),
+    ErrorReason(
+        label="Instagram blocked the download for now: try again later",
+        pattern=r"\b400\b|bad request|unable to extract|video info extraction failed",
+    ),
+    ErrorReason(
+        label="Connection failed (proxy or site down): try again",
+        pattern=r"proxyerror|connect tunnel failed|\b50[0-4]\b|bad gateway"
+        r"|cipher list|timed? ?out",
+    ),
+)
+# The downloader's own first words when no reason knows them: its tool and
+# post id prefixes off ("video: ERROR: [Instagram] DesPz...: "), cut at its
+# advice ("; please report", ". Use --cookies").
+_DOWNLOADER_PREFIX = re.compile(
+    r"^(?:\w+: )?(?:ERROR: )?(?:\[[\w:.-]+\](?:\[error\])? )?(?:[\w-]+: )?",
+    re.IGNORECASE,
+)
+_ADVICE = re.compile(r";\s*please report|\.\s*use --|\s*\(caused by", re.IGNORECASE)
+_DOWNLOAD_SAID_MAX = 120
+
+
+@lru_cache(maxsize=1)
+def _download_compiled() -> tuple[tuple[re.Pattern[str], str], ...]:
+    return tuple(
+        (re.compile(r.pattern, re.IGNORECASE), r.label) for r in DOWNLOAD_REASONS
+    )
+
+
+def download_reason(error: str | None) -> str:
+    """Why a link was not downloaded, worded for the card: the reason, else
+    what the downloader itself said (its first part, shortened)."""
+    if not error:
+        return "Could not download"
+    for pattern, label in _download_compiled():
+        if pattern.search(error):
+            return label
+    first = " ".join(error.split(" | ")[0].split())
+    said = _ADVICE.split(_DOWNLOADER_PREFIX.sub("", first), maxsplit=1)[0].strip()
+    if not said:
+        return "Could not download"
+    capped = said[: _DOWNLOAD_SAID_MAX - 1].rstrip() + "…"
+    return said if len(said) <= _DOWNLOAD_SAID_MAX else capped

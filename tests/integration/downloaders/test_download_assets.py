@@ -90,7 +90,12 @@ def test_download_videos_json_run_and_grouped_status(client, monkeypatch, tmp_pa
     assert status["result"][0]["kind"] == "video"
     assert status["result"][0]["source"] == "https://a.example/1"
     assert status["failed_sources"] == [
-        {"source": "https://b.example/2", "error": "404 not found"}
+        {
+            "source": "https://b.example/2",
+            "error": "404 not found",
+            "link": "b.example/2",
+            "reason": "Not found: the post is gone or the link is wrong",
+        }
     ]
 
     # the file behind the card's view_url actually serves

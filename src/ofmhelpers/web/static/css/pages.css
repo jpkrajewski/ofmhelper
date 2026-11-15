@@ -1261,6 +1261,11 @@ a.ph-login-user:hover { text-decoration: underline; }
 .dr-others summary { cursor: pointer; }
 .dr-others ul { display: grid; gap: var(--s-1); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .dr-others a { display: inline-flex; align-items: center; gap: var(--s-2); }
+/* The VAs' own folders: one line each, their name. */
+.dr-vas { margin-top: var(--gap-section); }
+.dr-vas h2 { margin: 0 0 var(--s-3); font-size: var(--step-0); }
+.dr-vas ul { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); margin: 0; padding: 0; list-style: none; }
+.dr-vas a { display: inline-flex; align-items: center; gap: var(--s-2); }
 
 /* ---------------------------------------------------------------------
    /users, /account
@@ -1776,8 +1781,50 @@ a.ph-login-user:hover { text-decoration: underline; }
     cursor: pointer;
     touch-action: none;
 }
-.edit-strip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
-.edit-timeline-bare :is(.edit-strip, .edit-shade) { display: none; }
+/* The clips one after another, each showing its own stretch of its video's
+   strip (`--strip`, sized and moved by edit.js), a gap of paper between. */
+.edit-segs { position: absolute; inset: 0; }
+.edit-seg {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--seg-from);
+    width: var(--seg-width);
+    border-inline-start: 2px solid var(--paper);
+    background-color: var(--surface-2);
+    background-image: var(--strip, none);
+    background-repeat: no-repeat;
+    background-size: var(--strip-w, 100%) 100%;
+    background-position: var(--strip-x, 0) 0;
+}
+.edit-seg:first-child { border-inline-start: 0; }
+.edit-timeline-bare .edit-shade { display: none; }
+/* Each clip's label over its frames: its name and length; dragged, the
+   clip moves. */
+.edit-track { position: relative; height: var(--control-h-sm); }
+.edit-label {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--seg-from);
+    width: var(--seg-width);
+    display: flex;
+    align-items: center;
+    gap: var(--s-1);
+    min-width: 0;
+    padding-inline: var(--s-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    font-size: var(--step--1);
+    font-variant-numeric: tabular-nums;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.edit-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edit-label[data-dragging] { z-index: 1; opacity: 0.85; cursor: grabbing; }
+.edit-label .icon-btn { margin-inline-start: auto; }
 .edit-wait {
     position: absolute;
     inset: 0;
@@ -1864,6 +1911,9 @@ a.ph-login-user:hover { text-decoration: underline; }
 .edit-bar-middle { display: flex; align-items: baseline; gap: var(--gap-inline); font-variant-numeric: tabular-nums; }
 .edit-times { color: var(--text-muted); }
 .edit-length-over { color: var(--fail); }
+/* Delete selection, Undo, Add video (and its picker when asked). */
+.edit-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
+.edit-add { max-width: 480px; }
 .edit-options { display: flex; flex-wrap: wrap; gap: 0 var(--gap-section); }
 .edit-options > .field { min-width: 0; max-width: 100%; margin-bottom: 0; }
 .edit-size { color: var(--text-muted); }

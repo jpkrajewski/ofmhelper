@@ -35,7 +35,9 @@ def test_grouped_result_numbers_files_across_groups(tmp_path):
         ("b.jpg", "u3"),
     ]
     assert assets[1].view_url == "/dl/files/j1/1"
-    assert [f.model_dump() for f in failed] == [{"source": "u2", "error": "404"}]
+    assert [(f.source, f.error, f.reason) for f in failed] == [
+        ("u2", "404", "Not found: the post is gone or the link is wrong")
+    ]
 
 
 def test_grouped_file_index_serves_the_same_file(tmp_path):

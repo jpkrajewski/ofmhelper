@@ -85,6 +85,7 @@ def test_the_map_gives_a_va_only_their_tools():
         Area.CLONE,
         Area.DOWNLOAD,
         Area.EDIT,
+        Area.HANDMADE,
     }
     assert set(areas_of(Role.ADMIN)) == set(Area) - RETIRED
     assert Area.USERS not in areas_of(Role.USER)
@@ -183,12 +184,14 @@ def test_a_va_has_no_account_page():
     assert "drive-alert.js" in _client(OWNER).get("/home").text
 
 
-def test_a_vas_edit_is_a_link_in_the_bar_not_a_menu_of_one():
+def test_a_vas_edit_and_handmade_are_links_in_the_bar_not_a_more_menu():
+    """Owner 2026-11-15: "why va has more in nav? just make this in main nav"."""
     _va_of()
 
     home = _client(VA, Role.VA).get("/home").text
 
     assert '<li><a href="/edit" >Edit</a></li>' in home
+    assert '<li><a href="/handmade" >Handmade</a></li>' in home
     assert 'class="nav-more"' not in home
 
 

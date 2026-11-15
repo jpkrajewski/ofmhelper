@@ -6,7 +6,7 @@ import pytest
 
 from ofmhelpers.features.clone_links import run as clone_link_run
 from ofmhelpers.schemas import JobStatusPayload
-from ofmhelpers.schemas.errors import FALLBACK, error_reason
+from ofmhelpers.schemas.errors import FALLBACK, download_reason, error_reason
 
 
 @pytest.mark.parametrize(
@@ -186,3 +186,81 @@ def test_status_payload_carries_the_reason_for_the_polling_cards():
         failed_sources=[],
     )
     assert payload.model_dump()["error_reason"] == "No credits"
+
+
+# What the downloaders really said, from the prod snapshot of 2026-11-15
+# (ids shortened): each failed link says why on its card.
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (
+            (
+                "video: ERROR: [Instagram] DesPzbYsp: This content is only available for"
+                " registered users who follow this account. Use --cookies-from-browser"
+                " | images: [instagram][error] HttpError: '400 Bad Request'"
+            ),
+            "Private account: only its followers can see it",
+        ),
+        (
+            (
+                "images: [instagram][error] HttpError: '401 Unauthorized' for 'https://"
+                "www.instagram.com/api/v1/media/1/info/' | video: ERROR: [Instagram] Dc1:"
+                " There is no video in this post"
+            ),
+            "No video in this post (photos only)",
+        ),
+        (
+            "ERROR: [Instagram] Dc1: No video formats found!; please report this issue",
+            "Instagram gave no video (private, age-restricted or blocked)",
+        ),
+        (
+            "video: ERROR: [Instagram] Dc1: Video unavailable",
+            "Post deleted or profile banned",
+        ),
+        (
+            "video: ERROR: Unsupported URL: https://xhamster19.com/gay/creators/x/shorts",
+            "Not a link we can download",
+        ),
+        (
+            (
+                "video: x: The server may not support the current cipher list. | images:"
+                " This post needs a login: upload your fresh cookies.txt at /cookies"
+            ),
+            "Instagram wants a login: upload fresh cookies on Cookies",
+        ),
+        (
+            "video: ERROR: [youtube] abc: Sign in to confirm you're not a bot.",
+            "YouTube wants a login (bot check): upload YouTube cookies on Cookies",
+        ),
+        (
+            (
+                "video: ERROR: [PornHub] 1: Unable to download webpage: HTTP Error 403:"
+                " Forbidden"
+            ),
+            "The site refused us (403)",
+        ),
+        (
+            (
+                "ERROR: [Instagram] Dc1: Video info extraction failed: HTTP Error 400: Bad"
+                " Request (caused by <HTTPError 400: Bad Request>)"
+            ),
+            "Instagram blocked the download for now: try again later",
+        ),
+        (
+            (
+                "video: ERROR: [Instagram] Dc1: Unable to download webpage: Failed to"
+                " perform, curl: (7) CONNECT tunnel failed, response 502."
+            ),
+            "Connection failed (proxy or site down): try again",
+        ),
+        (
+            (
+                "video: ERROR: [Instagram] Dc1: Something nobody knew yet; please report"
+                " this issue"
+            ),
+            "Something nobody knew yet",
+        ),
+    ],
+)
+def test_a_failed_link_says_the_real_reason(error, reason):
+    assert download_reason(error) == reason

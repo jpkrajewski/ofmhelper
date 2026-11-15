@@ -11,6 +11,7 @@ from sqlalchemy import (
     Float,
     Text,
     and_,
+    case,
     cast,
     column,
     delete,
@@ -38,6 +39,7 @@ from ofmhelpers.schemas.persistence import (
     JobParams,
     Named,
     RecordedJob,
+    SessionSpan,
     Spend,
     SpendPeriod,
     UserDay,
@@ -71,6 +73,9 @@ def _job(row: JobRow) -> Job:
 
 # The shortest id prefix `delete_like` takes (`seed-`): never every job.
 _MIN_DELETE_PREFIX = 4
+# How far past a window `sessions` pairs sign-ins with what ended them: a
+# session signed in the evening before the month, or open at its end.
+_SESSION_REACH_S = 86400
 
 
 def _page_filter(
@@ -594,6 +599,73 @@ class JobRepository(CachedRepository):
                     reels,
                     usd,
                 ) in s.execute(query)
+            ]
+
+    def sessions(
+        self, user_ids: tuple[int, ...], from_ts: float, to_ts: float
+    ) -> list[SessionSpan]:
+        """Each sign-in of `user_ids` whose session reaches into `from_ts` ..
+        `to_ts`, oldest first, with what came next: the next `login` /
+        `logout` / `idle_logout` event (a Logout or idle logout ends it) and
+        their last job before it. The events are paired over a day more on
+        each side (review 2026-11-15): a session signed in before the window
+        keeps its part inside it, one open at its end sees the event that
+        ended it. One query; uncached like `days`."""
+        if not user_ids:
+            return []
+        events = ("login", "logout", "idle_logout")
+        by, at = JobRow.user_id, JobRow.created_at
+        ev = (
+            select(
+                JobRow.user_id,
+                JobRow.task,
+                JobRow.created_at,
+                func.lead(at).over(partition_by=by, order_by=at).label("next_at"),
+                func.lead(JobRow.task)
+                .over(partition_by=by, order_by=at)
+                .label("next_task"),
+            )
+            .where(
+                JobRow.user_id.in_(user_ids),
+                JobRow.task.in_(events),
+                JobRow.created_at >= from_ts - _SESSION_REACH_S,
+                JobRow.created_at < to_ts + _SESSION_REACH_S,
+            )
+            .subquery()
+        )
+        work = JobRow.__table__.alias("work")
+        last_job = (
+            select(func.max(work.c.created_at))
+            .where(
+                work.c.user_id == ev.c.user_id,
+                work.c.created_at > ev.c.created_at,
+                or_(ev.c.next_at.is_(None), work.c.created_at < ev.c.next_at),
+                work.c.task.not_in(events),
+            )
+            .scalar_subquery()
+        )
+        ended = case(
+            (ev.c.next_task.in_(("logout", "idle_logout")), ev.c.next_at), else_=None
+        )
+        query = (
+            select(ev.c.user_id, ev.c.created_at, ended, ev.c.next_at, last_job)
+            .where(
+                ev.c.task == "login",
+                ev.c.created_at < to_ts,
+                or_(ev.c.next_at.is_(None), ev.c.next_at > from_ts),
+            )
+            .order_by(ev.c.user_id, ev.c.created_at)
+        )
+        with session_scope() as s:
+            return [
+                SessionSpan(
+                    user_id=user_id,
+                    start_at=start,
+                    end_at=end,
+                    next_at=after,
+                    last_job_at=last,
+                )
+                for user_id, start, end, after, last in s.execute(query)
             ]
 
     def spend(

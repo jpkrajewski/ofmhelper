@@ -241,7 +241,7 @@ def test_no_credits_fails_the_rest_of_its_generate_without_downloading(
     message = "kie.ai: credits insufficient (code 402)"
 
     def empty(*_a, **_k):
-        raise ProviderNoCreditsError(message)
+        raise ProviderNoCreditsError(message, provider="kie.ai")
 
     monkeypatch.setattr(clone_links_job, "run_clone", empty)
 

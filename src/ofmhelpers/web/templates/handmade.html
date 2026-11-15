@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{% import "_file_picker.html" as fp %}
+{# /handmade (web/routers/inventory/handmade.py): a VA picks the reels they
+   made by hand and Upload keeps them on the server, one card each. The
+   owner sees their VAs' reels (the toolbar: dates, VAs, Not uploaded to
+   Drive; "Done by VA" on a card) and sends one to an account folder with
+   Upload to Drive in its menu (static/js/handmade.js -> /drive); the card
+   then says where it is. Cards and the upload with its progress are the
+   shared gallery's (generation.js), like /download-assets. #}
+{% block content %}
+{{ ui.page_header("Handmade") }}
+{% include "_gallery_hidden.html" %}
+{% set may_upload = can(request, "upload-handmade") %}
+
+<div class="generate-layout">
+{% if may_upload %}
+<div class="generate-form-col">
+<h2 class="col-title">Upload reels</h2>
+<form id="handmade-form" method="post" action="/handmade/run" enctype="multipart/form-data"
+      data-prefix="/handmade" data-result-kind="video" data-tool-label="Handmade">
+    {{ fp.file_picker('files', 'video', 'Reels', max=max_files, multiple=true, reuse=false, required=true) }}
+    {{ ui.button("Upload", "primary", type="submit", icon="upload") }}
+</form>
+</div>
+{% endif %}
+
+<div class="generate-gallery-col">
+<div id="results-panel">
+    <div class="generation-status"></div>
+    <div class="results" data-gallery-endpoint="/handmade/gallery{{ dates.filters }}">
+        {% for job in gallery %}{% include "_handmade_card.html" %}{% endfor %}
+        {% include "_generate_gallery_sentinel.html" %}
+    </div>
+    {% if not gallery %}{{ ui.empty("No handmade reels yet") }}{% endif %}
+</div>
+</div>
+</div>
+
+{% include "_card_actions.html" %}
+<script src="{{ static_url('js/file-picker.js') }}"></script>
+<script src="{{ static_url('js/generation.js') }}"></script>
+<script src="{{ static_url('js/gallery-scroll.js') }}"></script>
+<script src="{{ static_url('js/hidden-cards.js') }}"></script>
+<script src="{{ static_url('js/autosubmit.js') }}"></script>
+<script src="{{ static_url('js/handmade.js') }}"></script>
+{% endblock %}

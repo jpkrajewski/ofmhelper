@@ -51,10 +51,12 @@
                     {% set more_pages = pages | selectattr("place", "equalto", "more") | list %}
                     {% set more = namespace(current=false) %}
                     {% for item in more_pages if item.is_current(here) %}{% set more.current = true %}{% endfor %}
-                    {# One page under "More" (a VA's Edit) is a plain link: no menu of one. #}
-                    {% if more_pages | length == 1 %}
-                    {% set item = more_pages[0] %}
+                    {# A few pages under "More" (a VA's Edit and Handmade) are plain
+                       links in the bar: no menu for two (owner 2026-11-15). #}
+                    {% if more_pages | length <= 2 %}
+                    {% for item in more_pages %}
                     <li><a href="{{ item.href }}" {% if item.is_current(here) %}aria-current="page"{% endif %}>{{ item.label }}</a></li>
+                    {% endfor %}
                     {% elif more_pages %}
                     <li class="nav-more">
                         <details>

@@ -408,6 +408,7 @@ def test_a_day_says_when_the_va_logged_in_and_out_the_reels_and_the_money():
 
     assert (day.day_label, day.name) == ("Sat 14 Nov", "Vera")
     assert (day.logged_in, day.logged_out) == ("09:02", "17:40")
+    assert day.hours == "7 h 38 m"  # 2 h 58 m + 4 h 40 m: the break is not worked
     assert (day.reels, day.spent) == (2, "$3.75")
 
 
@@ -423,6 +424,8 @@ def test_an_idle_logout_is_marked_and_a_va_still_in_today_is_active():
 
     assert (yesterday.logged_in, yesterday.logged_out) == ("09:00", "11:30 · idle")
     assert (today.logged_in, today.logged_out) == ("08:00", "Active 11:45")
+    # The idle logout is dated at the last action: the 2 idle hours are not worked.
+    assert (yesterday.hours, today.hours) == ("2 h 30 m", "3 h 45 m")
     assert (today.reels, today.spent) == (0, "—")
 
 
@@ -455,5 +458,45 @@ def test_the_page_lists_the_days_of_the_readers_vas_only():
     assert ">Days this month</h2>" in page
     assert re.findall(r'<tr data-day="[^"]+" data-va="(\d+)">', table) == [str(mine.id)]
     assert '<td class="num" data-reels>1</td>' in table
+    assert '<td class="num" data-hours>' in table
     assert '<td class="num" data-spent>$2.00</td>' in table
     assert "Theo" not in page
+
+
+def test_a_sign_in_with_no_logout_counts_until_the_last_job_before_the_next():
+    """Two devices, or a day before idle logouts were recorded (2026-11-14):
+    a sign-in followed by another sign-in worked until its last job."""
+    owner = make_user(OWNER)
+    va = _va("va@example.com", owner)
+    _event(va, "login", _at(14, 9, 0))
+    _reel(va, _at(14, 10, 30), "1")
+    _event(va, "login", _at(14, 13, 0))
+    _event(va, "logout", _at(14, 14, 0))
+
+    (day,) = _days(_view(owner, va), va)
+
+    assert day.hours == "2 h 30 m"
+
+
+def test_a_session_over_midnight_is_split_between_its_days():
+    owner = make_user(OWNER)
+    va = _va("va@example.com", owner)
+    _event(va, "login", _at(13, 23, 0))
+    _event(va, "logout", _at(14, 1, 30))
+
+    fourteenth, thirteenth = _days(_view(owner, va), va)
+
+    assert (thirteenth.hours, fourteenth.hours) == ("1 h 00 m", "1 h 30 m")
+
+
+def test_a_session_signed_in_before_the_month_keeps_its_part_inside_it():
+    """Review 2026-11-15: the events were paired only inside the month, so
+    a sign-in on the 31st with its logout on the 1st gave the 1st nothing."""
+    owner = make_user(OWNER)
+    va = _va("va@example.com", owner)
+    _event(va, "login", _at(31, 22, 0, month=10))
+    _event(va, "logout", _at(1, 2, 30))
+
+    (first,) = _days(_view(owner, va), va)
+
+    assert (first.day.day, first.hours) == (1, "2 h 30 m")

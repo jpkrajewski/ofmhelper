@@ -40,7 +40,13 @@ class ProviderInputError(ProviderError):
 
 class ProviderNoCreditsError(ProviderInputError):
     """The account has no credits left: nothing more can run on this key
-    until it is topped up (a batch stops asking, /clone-links)."""
+    until it is topped up (a batch stops asking, /clone-links). `provider`:
+    whose account it is (its label), for the owner's Telegram notice
+    (`features/jobs/notices.py`)."""
+
+    def __init__(self, message: str, *, provider: str) -> None:
+        super().__init__(message)
+        self.provider = provider
 
 
 class ProviderGenerationError(ProviderError):

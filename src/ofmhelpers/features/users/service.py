@@ -8,13 +8,20 @@ the admin's own row."""
 
 from pydantic import BaseModel, ConfigDict, SkipValidation, ValidationError
 
+from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
 from ofmhelpers.db.repositories import OwnsDataError
 from ofmhelpers.db.stores import users
+from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.signin import credentials
 from ofmhelpers.integrations.signin import Provider, configured
+from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import Role, User, UserForm
+
+logger = get_logger(__name__)
 
 NO_USER = "No such user"
 
@@ -113,6 +120,22 @@ def _va_signs_in(va: User) -> str:
     )
 
 
+def _make_va_folder(va: User) -> None:
+    """A VA added, or moved to another employer: their folder in the
+    employer's Drive (`features/drive/va_folders.py`) is made now, on the
+    worker, not at the next sweep. Never raises: the VA is saved already; a
+    failure is logged and the sweep makes the folder."""
+    if va.owner_id is None or not drive_folders.enabled():
+        return
+    owner = va.owner_id
+    job_id = create_job(drive_folders.SYNC_TASK, {"owner": owner}, actor=str(owner))
+    try:
+        enqueue(run_job, job_id, drive_folders.sync, {"owner": owner})
+    except Exception:
+        logger.exception("queueing the Drive sync for VA %s failed", va.id)
+        fail_job(job_id, "Could not queue the Drive sync")
+
+
 def add(
     email: str,
     role: Role,
@@ -141,6 +164,7 @@ def add(
         return Shown(error=f"{form.email} is already a user", status_code=409)
     if user.role == Role.VA and user.owner_id is not None:
         credentials.set_va_password(user.id, user.owner_id, password)
+        _make_va_folder(user)
         return Shown(message=_va_signs_in(user))
     return _with_link(user, site)
 
@@ -178,7 +202,9 @@ def set_owner(user: User, owner_id: int | None) -> None:
     if picked is None:
         msg = "A VA needs an employer: pick one"
         raise RefusedError(msg)
-    users.set_owner(user.id, picked)
+    moved = users.set_owner(user.id, picked)
+    if moved is not None:
+        _make_va_folder(moved)
 
 
 def set_active(user: User, active: bool) -> None:

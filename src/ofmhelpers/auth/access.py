@@ -27,6 +27,7 @@ class Area(StrEnum):
     CLONE = "clone"
     DOWNLOAD = "download"
     EDIT = "edit"
+    HANDMADE = "handmade"  # a VA's handmade reels into their Drive folder
     # Everything else a user has.
     ACCOUNT = "account"
     CLONE_LONG = "clone-long"
@@ -63,10 +64,13 @@ class Action(StrEnum):
     CHANGE_PASSWORD = "change-password"  # noqa: S105 -- an action's name
     SERVER_STATUS = "server-status"  # /home Server section
     HIDE = "hide"  # a gallery card's Hide / Unhide and "Show hidden"
+    # /handmade's Upload: a VA's own folder; the owner sees what went up.
+    UPLOAD_HANDMADE = "upload-handmade"
 
 
 EVERYONE = frozenset(Role)
 MEMBERS = frozenset({Role.ADMIN, Role.USER})
+VAS = frozenset({Role.VA})
 ADMINS = frozenset({Role.ADMIN})
 
 # What a VA opens: the tools they work in, nothing else.
@@ -79,6 +83,7 @@ VA = (
     Area.CLONE,
     Area.DOWNLOAD,
     Area.EDIT,
+    Area.HANDMADE,
 )
 # What a user opens: a VA's pages and their own business.
 USER = (
@@ -148,6 +153,7 @@ ACTIONS: frozendict[Action, frozenset[Role]] = frozendict(
         Action.CHANGE_PASSWORD: MEMBERS,
         Action.SERVER_STATUS: ADMINS,
         Action.HIDE: MEMBERS,
+        Action.UPLOAD_HANDMADE: VAS,
     }
 )
 

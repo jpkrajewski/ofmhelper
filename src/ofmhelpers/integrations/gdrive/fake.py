@@ -74,6 +74,8 @@ class FakeItem(BaseModel):
     editors: list[str] = Field(default_factory=list)
     # A Google Sheet's cells (`add_sheet`).
     sheet: DriveSheet | None = None
+    # Bytes, as Drive lists a file's `size` (an upload's; None for the rest).
+    size: int | None = None
 
 
 class FakeDriveState(BaseModel):
@@ -193,6 +195,7 @@ class FakeDrive:
                     f"fake://thumb/{item.id}=s220" if item.has_thumbnail else ""
                 ),
                 "ownedByMe": item.owner == FAKE_BOT_EMAIL,
+                "size": item.size,
             }
         )
 
@@ -362,9 +365,9 @@ class FakeDrive:
                 mime_type=mime_type,
                 parents=[parent_id],
                 owner=owner,
+                size=size,
             )
-            found = self._as_file(made)
-        return found.model_copy(update={"size": size})
+            return self._as_file(made)
 
     def grant(self, item_id: str, email: str) -> None:
         with self._state("grant") as state:

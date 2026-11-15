@@ -1,9 +1,10 @@
-"""Read a video's length, frame rate and frame times with ffprobe."""
+"""Read a video's length, frame rate, size and frame times with ffprobe."""
 
 from fractions import Fraction
 from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run
+from ofmhelpers.media.size import Size
 
 
 def duration_s(src: Path | str, timeout_s: int) -> float:
@@ -50,6 +51,28 @@ def frame_rate(src: Path | str, timeout_s: int) -> float | None:
     except ValueError, ZeroDivisionError:
         return None
     return float(rate) if rate > 0 else None
+
+
+def video_size(src: Path | str, timeout_s: int) -> Size:
+    """The first video stream's stored width and height (a file this app
+    encoded: upright, no rotation to apply)."""
+    out = run(
+        [
+            binary("ffprobe"),
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0:s=x",
+            str(src),
+        ],
+        timeout_s,
+    )
+    width, height = out.strip().splitlines()[0].split("x")
+    return Size(width=int(width), height=int(height))
 
 
 def frame_times(src: Path | str, timeout_s: int) -> list[float]:

@@ -101,26 +101,31 @@
     // a click asks to confirm, then the video goes there and /clone shows it.
     const pick = $("dr-pick");
     if (pick) {
-        const already = new Set((pick.dataset.already || "").split(",").filter(Boolean));
+        const ids = (value) => new Set((value || "").split(",").filter(Boolean));
+        const already = ids(pick.dataset.already);
+        const alreadyVas = ids(pick.dataset.alreadyVas);
         const confirmBox = $("dr-pick-confirm");
         const submit = $("dr-pick-submit");
         const error = $("dr-pick-error");
         let target = null;
 
+        // An account card, or a VA's own folder (the VAs list): both targets.
+        const isIn = (el) =>
+            el.dataset.vaFolder ? alreadyVas.has(el.dataset.vaFolder) : already.has(el.dataset.login);
         const markCards = () => {
-            for (const card of document.querySelectorAll(".dr-card")) {
+            for (const card of document.querySelectorAll(".dr-card, [data-va-folder]")) {
                 card.classList.add("dr-pickable");
-                card.classList.toggle("dr-picked", already.has(card.dataset.login));
+                card.classList.toggle("dr-picked", isIn(card));
             }
         };
         markCards();
         new MutationObserver(markCards).observe(board, { childList: true });
 
         board.addEventListener("click", (event) => {
-            const card = event.target.closest(".dr-card");
+            const card = event.target.closest(".dr-card, [data-va-folder]");
             if (!card) return;
             event.preventDefault();
-            if (already.has(card.dataset.login)) return;
+            if (isIn(card)) return;
             target = card;
             $("dr-pick-file").textContent = pick.dataset.name;
             $("dr-pick-folder").textContent = card.dataset.folder;
@@ -139,12 +144,13 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         job_ids: [pick.dataset.job],
-                        login_ids: [Number(target.dataset.login)],
+                        login_ids: target.dataset.vaFolder ? [] : [Number(target.dataset.login)],
+                        va_ids: target.dataset.vaFolder ? [Number(target.dataset.vaFolder)] : [],
                     }),
                 });
                 const data = await response.json().catch(() => null);
                 if (!response.ok) throw new Error(data?.detail || `Upload refused (${response.status})`);
-                window.location.href = `/clone#job-${pick.dataset.job}`;
+                window.location.href = pick.dataset.back || `/clone#job-${pick.dataset.job}`;
             } catch (err) {
                 error.textContent = err.message;
                 error.hidden = false;

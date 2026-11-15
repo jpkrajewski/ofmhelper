@@ -17,6 +17,7 @@ from fastapi import APIRouter, Path, Request, Response
 from ofmhelpers.auth.access import Area
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import page
+from ofmhelpers.features.handmade import service as handmade
 from ofmhelpers.schemas import SyncReport
 from ofmhelpers.web.dependencies import Access, Actors, CurrentUser, Scope
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
@@ -30,7 +31,12 @@ router = APIRouter(prefix="/drive", tags=["drive"], dependencies=[Access(Area.DR
 FileId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{10,128}$")]
 
 # `?upload=` names a finished /clone run.
-_CLONE = page.Source(task=CLONE_TASK, files_prefix=CLONE_FILES)
+_SOURCES = [
+    page.Source(task=CLONE_TASK, files_prefix=CLONE_FILES, page="/clone"),
+    page.Source(
+        task=handmade.TASK, files_prefix=handmade.FILES_PREFIX, page=handmade.PREFIX
+    ),
+]
 
 
 @router.get("")
@@ -44,7 +50,7 @@ def drive_page(
     """At once, from each folder's last read: no Drive call. drive.js then
     swaps in `/drive/live`. `upload`: a /clone run whose video goes into
     the account card clicked (drive.js)."""
-    view = page.page_view(scope, user.id, actors, upload, _CLONE)
+    view = page.page_view(scope, user.id, actors, upload, _SOURCES)
     return render(request, "drive.html", **dict(view))
 
 

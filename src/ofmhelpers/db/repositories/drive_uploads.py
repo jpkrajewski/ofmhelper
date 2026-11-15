@@ -18,6 +18,7 @@ def _upload(row: DriveUploadRow) -> DriveUpload:
         job_id=row.job_id,
         file_index=row.file_index,
         login_id=row.login_id,
+        va_id=row.va_id,
         folder_name=row.folder_name,
         status=row.status,
         drive_url=row.drive_url,
@@ -32,14 +33,16 @@ class DriveUploadRepository(CachedRepository):
         self,
         job_id: str,
         file_index: int,
-        login_id: int,
+        login_id: int | None,
         user_id: int,
         folder_name: str,
         stale_before: float,
+        va_id: int | None = None,
     ) -> int | None:
         """The upload's id, queued; None when this file is already in that
-        folder or on its way. A failed one is queued again, and so is one
-        still queued since before `stale_before` (stranded)."""
+        folder (an account's `login_id`, or a VA's own `va_id`) or on its way.
+        A failed one is queued again, and so is one still queued since before
+        `stale_before` (stranded)."""
         row = DriveUploadRow
         with session_scope() as s:
             found = s.execute(
@@ -48,13 +51,18 @@ class DriveUploadRepository(CachedRepository):
                     job_id=job_id,
                     file_index=file_index,
                     login_id=login_id,
+                    va_id=va_id,
                     user_id=user_id,
                     folder_name=folder_name,
                     status="queued",
                     created_at=time.time(),
                 )
                 .on_conflict_do_update(
-                    constraint="uq_drive_uploads_file_folder",
+                    constraint=(
+                        "uq_drive_uploads_file_va"
+                        if va_id is not None
+                        else "uq_drive_uploads_file_folder"
+                    ),
                     set_={
                         "status": "queued",
                         "user_id": user_id,

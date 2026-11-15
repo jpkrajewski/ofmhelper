@@ -1409,6 +1409,41 @@ def test_an_upload_of_copies_on_disk_does_not_wait_behind_encodes(
     assert get_queue(QueueName.MEDIA).count == 0
 
 
+def test_a_copy_picked_for_drive_is_kept_past_a_day(drive, made, posters):
+    """Prod 2026-11-14 (job 96a3fa9c): Upload made three day-old copies again,
+    19 of its 20 minutes. A picked copy stays until it is uploaded."""
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    picked, other = _state(login).reels
+    client.post(f"/trials/{login}/reel/{picked.key}/select", data={"selected": "true"})
+
+    _a_day_later(login)
+
+    assert [r.stored for r in _state(login).reels] == [True, False]
+    assert f"{picked.key}.mp4" in _files(login)
+    assert f"{other.key}.mp4" not in _files(login)
+
+
+def test_an_upload_says_it_waits_then_how_long_making_copies_again_takes(
+    drive, made, posters, real_queue
+):
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    first, second = _state(login).reels
+    _a_day_later(login)
+    real_queue()
+    keys = [first.key, second.key]
+
+    client.post(f"/trials/{login}/upload", data={"approved": keys})
+
+    assert client.get(f"/trials/{login}/live").json()["status"] == "In queue · next"
+    get_queue(QueueName.MEDIA).empty()  # the encoder took it: no longer in line
+    status = client.get(f"/trials/{login}/live").json()["status"]
+    assert status == "Making 2 copies again for Drive · about 14 min"
+
+
 def test_regenerate_and_a_caption_work_on_a_deleted_copy(drive, made, posters):
     login = _login(drive, "a.mp4")
     client = _client()

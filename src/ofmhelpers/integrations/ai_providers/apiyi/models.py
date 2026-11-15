@@ -153,7 +153,7 @@ def raise_for(
         status == _HTTP_FORBIDDEN and _NO_MONEY.search(said)
     ):
         no_money = f"{PROVIDER}: insufficient balance. {message}"
-        raise ProviderNoCreditsError(no_money)
+        raise ProviderNoCreditsError(no_money, provider=PROVIDER)
     if _NO_CHANNEL.search(said):
         _no_channel(message, said)
     if status == _HTTP_FORBIDDEN and forbidden_is_refusal:

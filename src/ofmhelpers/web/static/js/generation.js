@@ -297,6 +297,23 @@
         return div;
     }
 
+    // The links a download could not fetch, one line each ("<link> ·
+    // <reason>"), as _download_gallery_card.html draws them.
+    function buildFailedSources(label, job) {
+        const div = buildFailedCard(label, "", job, "");
+        const box = div.querySelector(".result-failed");
+        box.classList.add("fail-note");
+        box.dataset.failedSources = "";
+        box.textContent = "";
+        for (const f of job.failed_sources) {
+            const line = document.createElement("span");
+            line.title = f.source;
+            line.textContent = `${f.link} · ${f.reason}`;
+            box.appendChild(line);
+        }
+        return div;
+    }
+
     // Runs `fn` once the hidden tab is shown again.
     function onceShown(fn) {
         document.addEventListener("visibilitychange", function shown() {
@@ -370,11 +387,7 @@
                 // failed -- surface those as their own card so partial
                 // failures don't vanish silently.
                 if (job.failed_sources?.length) {
-                    const msg = job.failed_sources
-                        .map((f) => `${f.source}: ${f.error}`)
-                        .join("\n");
-                    const n = job.failed_sources.length;
-                    cards.push(buildFailedCard(label, msg, job, `${n} link${n === 1 ? "" : "s"} failed`));
+                    cards.push(buildFailedSources(label, job));
                 }
                 if (!cards.length) {
                     cards.push(buildFailedCard(label, "No output produced.", job, "No output"));

@@ -334,6 +334,10 @@ _LOCAL_JOBS = {
         {"video": "/a/in.mp4"},
         {"video": "/a/in.mp4", "assets_root": "ASSETS"},
     ),
+    "handmade_upload": (
+        {"dir": "/u/handmade/ab12", "files": ["a.mp4"]},
+        {"job_dir": "/u/handmade/ab12", "files": ["a.mp4"], "job_id": "JOB"},
+    ),
     "download_media": (
         {"urls": ["https://example.com/v/1"]},
         {

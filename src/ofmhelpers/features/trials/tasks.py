@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 lazy from collections.abc import Callable
 
+import logfire
 from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.features.drive.folders import ReviewPlace, review_target
@@ -420,8 +421,12 @@ class Folder(BaseModel, frozen=True):
         for key in keys:
             reel = state.reel(key)
             path = at(self.user_id, self.login_id, reel.out) if reel else None
-            if (path is not None and path.is_file()) or self.make(key, restore=True):
+            if path is not None and path.is_file():
                 ready.append(key)
+                continue
+            with logfire.span("trials remake {key}", key=key, login_id=self.login_id):
+                if self.make(key, restore=True):
+                    ready.append(key)
         return ready
 
     def upload_trials(self, account_folder_id: str, keys: list[str]) -> Uploaded:

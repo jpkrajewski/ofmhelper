@@ -53,7 +53,7 @@ def raise_for(code: int, message: str, retry_after_s: float | None = None) -> No
     if code in _AUTH_CODES:
         raise ProviderAuthError(PROVIDER, text)
     if code == _NO_CREDITS:
-        raise ProviderNoCreditsError(text)
+        raise ProviderNoCreditsError(text, provider=PROVIDER)
     if code == _RATE_LIMITED:
         raise ProviderRateLimitError(text, retry_after_s)
     error: type[ProviderError] = ProviderInputError

@@ -77,6 +77,19 @@
 {% call ui.empty() %}No Instagram logins yet. <a href="/phones">Add one on Phones</a>{% endcall %}
 {% endif %}
 
+{# Each VA's own folder (features/drive/va_folders.py), by their name: where
+   their handmade reels land from /handmade. #}
+{% if board.va_folders %}
+<section class="dr-vas" data-va-folders>
+    <h2>VAs</h2>
+    <ul>
+        {% for f in board.va_folders %}
+        <li><a href="{{ f.url }}" target="_blank" rel="noopener" data-va-folder="{{ f.user_id }}" data-folder="{{ f.name }}">{{ ic.icon("folder") }} {{ f.name }}</a></li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 {% if board.other_folders %}
 <details class="dr-others">
     <summary>{{ board.other_folders|length }} other folder{{ "" if board.other_folders|length == 1 else "s" }} in the Drive folder, not linked to any phone</summary>

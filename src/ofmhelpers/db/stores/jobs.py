@@ -44,6 +44,7 @@ from ofmhelpers.schemas.persistence import (
     JobParams,
     Named,
     RecordedJob,
+    SessionSpan,
     Spend,
     SpendPeriod,
     UserDay,
@@ -188,6 +189,14 @@ def days(
     return _repository().days(
         tuple(sorted(user_ids)), from_ts, to_ts, zone, tuple(sorted(reel_tasks))
     )
+
+
+def sessions(
+    user_ids: Collection[int], from_ts: float, to_ts: float
+) -> list[SessionSpan]:
+    """Each sign-in of `user_ids` in that span with what ended it, oldest
+    first (/vas hours)."""
+    return _repository().sessions(tuple(sorted(user_ids)), from_ts, to_ts)
 
 
 def spend(user_ids: Collection[int], periods: list[SpendPeriod]) -> list[Spend]:

@@ -40,6 +40,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import fail_job, get_job, reopen_job, running_jobs
 from ofmhelpers.features.assets.store import assets_root_for_actor
 from ofmhelpers.features.clone_links.review import resume_reviews
+from ofmhelpers.features.jobs import notices
 from ofmhelpers.features.jobs.registry import JOB_TIMEOUTS, QUEUES, RESUMABLE
 from ofmhelpers.features.jobs.registry import RESTARTS as LOCAL_RESTARTS
 from ofmhelpers.features.jobs.runner import run_job
@@ -101,7 +102,10 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
         state = provider.status(task.task_id)
         if state.state == "failed":
             tasks.forget(job_id)
-            fail_job(job.id, f"{provider.label} failed this generation: {state.error}")
+            error = f"{provider.label} failed this generation: {state.error}"
+            fail_job(job.id, error)
+            if state.no_credits:
+                notices.out_of_money(job.id, provider.label, error)
             return "failed"
         pending = pending or state.state == "pending"
     if pending:

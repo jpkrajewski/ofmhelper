@@ -23,6 +23,7 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -734,6 +735,25 @@ class DriveAccountFolderRow(Base):
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
+class DriveVaFolderRow(Base):
+    """A VA's own folder in their owner's "ALL ACCOUNTS" (/drive, /handmade:
+    alembic e0f1a2b3c4d6). Kept by id, so a renamed VA renames it; a row of
+    another root is ignored and the folder made again there. Deleted with
+    the VA; the Drive folder never is."""
+
+    __tablename__ = "drive_va_folders"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    folder_id: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    root_folder_id: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class DriveUploadRow(Base):
     """A clone result uploaded (or on its way) into an account's Drive
     folder, as the uploader's Google account (features/drive/uploads.py).
@@ -745,8 +765,13 @@ class DriveUploadRow(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     file_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    login_id: Mapped[int] = mapped_column(
-        ForeignKey("logins.id", ondelete="CASCADE"), nullable=False
+    # The folder: an account's (`login_id`) or a VA's own (`va_id`, alembic
+    # f1a2b3c4d5e7), exactly one.
+    login_id: Mapped[int | None] = mapped_column(
+        ForeignKey("logins.id", ondelete="CASCADE"), nullable=True
+    )
+    va_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
@@ -762,6 +787,12 @@ class DriveUploadRow(Base):
     __table_args__ = (
         UniqueConstraint(
             "job_id", "file_index", "login_id", name="uq_drive_uploads_file_folder"
+        ),
+        UniqueConstraint(
+            "job_id", "file_index", "va_id", name="uq_drive_uploads_file_va"
+        ),
+        CheckConstraint(
+            "(login_id IS NULL) <> (va_id IS NULL)", name="ck_drive_uploads_one_folder"
         ),
     )
 

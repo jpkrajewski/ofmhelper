@@ -202,7 +202,7 @@ def _refuse_if_halted(job_id: str, batch: str | None, provider: str) -> None:
     logger.info("clone-links %s: batch %s halted (%s)", job_id, batch, halt.kind)
     if halt.kind == "auth":
         raise ProviderAuthError(provider_class(provider).label)
-    raise ProviderNoCreditsError(halt.message)
+    raise ProviderNoCreditsError(halt.message, provider=provider_class(provider).label)
 
 
 def _why_not(error: str, *, has_cookies: bool) -> str:

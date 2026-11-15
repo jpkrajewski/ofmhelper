@@ -182,7 +182,7 @@ def generate(
             if state.unfetched:
                 msg = f"{state.error}. Tried {sent} times, nothing was charged"
             if state.no_credits:
-                raise ProviderNoCreditsError(msg)
+                raise ProviderNoCreditsError(msg, provider=provider.label)
             raise ProviderGenerationError(msg)
         if on_result_urls is not None:
             on_result_urls(state.urls)

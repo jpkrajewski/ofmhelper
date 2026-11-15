@@ -109,7 +109,7 @@
 {% if drive_targets %}
 {# What clone.js adds to a card that finishes while the page is open. #}
 <template id="card-drive-item">{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}</template>
-<template id="card-drive-remove">{{ ui.icon_button("x", "Remove from Drive", hook="drive-remove") }}</template>
+{% if can(request, "drive-upload") %}<template id="card-drive-remove">{{ ui.icon_button("x", "Remove from Drive", hook="drive-remove") }}</template>{% endif %}
 {% endif %}
 
 {# Start asks first (clone-picks.js): on the left the subject, the prompt,

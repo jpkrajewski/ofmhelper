@@ -156,7 +156,7 @@ def _refused(action: str, exc: HiggsfieldClientError) -> ProviderError:
         return ProviderAuthError(HiggsfieldProvider.label, message)
     if api and code in _NO_BALANCE:
         msg = f"Higgsfield {action}: insufficient balance -- {exc} (HTTP {code})"
-        return ProviderNoCreditsError(msg)
+        return ProviderNoCreditsError(msg, provider=HiggsfieldProvider.label)
     if response is not None and code == _RATE_LIMITED:
         return ProviderRateLimitError(message, retry_after_s=_retry_after(response))
     if code == _TIMED_OUT or code >= _SERVER_ERROR or not code:

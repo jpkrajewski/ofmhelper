@@ -22,13 +22,16 @@ file, marks the upload failed with a reason: nothing stays `queued` silently.
 import mimetypes
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores import drive_folders
 from ofmhelpers.db.stores import drive_uploads as store
 from ofmhelpers.db.stores.jobs import Readers, create_job, fail_job, get_job
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.stores.users import get_user, refresh_token
 from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.features.drive import va_folders
 from ofmhelpers.features.drive.folders import root_name, usable_root
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import UnavailableError
@@ -37,6 +40,10 @@ from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import get_platform
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DriveUpload, SessionUser, StoredFolder, UploadTarget
+from ofmhelpers.schemas.drive import VaFolder
+
+# An account's folder or a VA's own: both have `folder_id`, `root_folder_id`.
+type Folder = StoredFolder | VaFolder
 
 logger = get_logger(__name__)
 
@@ -109,34 +116,61 @@ def _files(job_id: str, readers: Readers) -> list[tuple[int, Path]]:
     ]
 
 
+def _va_folders(user_id: int, va_ids: list[int]) -> list[VaFolder]:
+    """The clicker's VAs' own folders asked for; one that is not their VA's
+    or has no folder in their root is refused."""
+    theirs = {f.user_id: f for f in va_folders.of_owner(user_id)}
+    if not set(va_ids) <= set(theirs):
+        msg = "That VA has no Drive folder you can upload into: Sync on /drive"
+        raise UploadRefusedError(msg)
+    return [theirs[va] for va in dict.fromkeys(va_ids)]
+
+
 def queue_uploads(
     user: SessionUser,
     job_ids: list[str],
     login_ids: list[int],
     readers: Readers = None,
+    va_ids: list[int] | None = None,
 ) -> list[DriveUpload]:
-    """Queues every result of `job_ids` into each of `login_ids`' folders,
-    all or nothing. Raises `UploadRefusedError`. `readers`: whose runs the
-    clicker may take videos from -- their own and their VAs' (a VA makes
-    the clone, the owner posts it); default: their own."""
+    """Queues every result of `job_ids` into each of `login_ids`' folders
+    and each of `va_ids`' own folders, all or nothing. Raises
+    `UploadRefusedError`. `readers`: whose runs the clicker may take videos
+    from -- their own and their VAs' (a VA makes the clone, the owner posts
+    it); default: their own."""
     readers = readers if readers is not None else user.actor
+    va_ids = va_ids or []
+    if not login_ids and not va_ids:
+        msg = "Pick a folder"
+        raise UploadRefusedError(msg)
     mine = {t.login_id for t in drive_folders.targets(user.id)}
-    if mine & set(login_ids) and not refresh_token(user.id):
+    if (va_ids or mine & set(login_ids)) and not refresh_token(user.id):
         msg = "Connect Google Drive on your Account page first"
         raise UploadRefusedError(msg)
     usable = {t.login_id: t for t in targets(user.id)}
     if not set(login_ids) <= mine or not set(login_ids) <= set(usable):
         msg = "That account has no Drive folder you can upload into: Sync on /drive"
         raise UploadRefusedError(msg)
+    vas = _va_folders(user.id, va_ids)
     actor = user.actor
+    files = [(job, index) for job in job_ids for index, _path in _files(job, readers)]
     ids = [
         upload_id
         for login_id in dict.fromkeys(login_ids)
-        for job_id in job_ids
-        for index, _path in _files(job_id, readers)
+        for job_id, index in files
         if (
             upload_id := store.queue(
                 job_id, index, login_id, user.id, usable[login_id].folder_name
+            )
+        )
+        is not None
+    ] + [
+        upload_id
+        for folder in vas
+        for job_id, index in files
+        if (
+            upload_id := store.queue(
+                job_id, index, None, user.id, folder.name, va_id=folder.user_id
             )
         )
         is not None
@@ -160,7 +194,7 @@ def _enqueue(upload_ids: list[int], actor: str) -> None:
             store.finish(upload_id, error=f"Could not queue the upload: {exc}")
 
 
-def _upload_one(upload: DriveUpload, owner_id: int, folder: StoredFolder) -> None:
+def _upload_one(upload: DriveUpload, owner_id: int, folder: Folder) -> None:
     """Into `folder` only while it sits in the owner's usable root (a dev
     copy of the prod database holds the live root's id: refused)."""
     files = dict(_files(upload.job_id, None))
@@ -201,14 +235,18 @@ def _upload_one(upload: DriveUpload, owner_id: int, folder: StoredFolder) -> Non
     logger.info("drive upload %s: %s -> %s", upload.id, path.name, upload.folder_name)
 
 
-def remove_upload(user: SessionUser, upload_id: int) -> DriveUpload:
+def remove_upload(
+    user: SessionUser, upload_id: int, readers: Readers = None
+) -> DriveUpload:
     """Takes one uploaded video back out of its account folder: into the
-    uploader's Drive trash (restorable there), then off the card. Only the
-    run's owner may; already gone in Drive counts as removed. Raises
-    `UploadRefusedError` (not theirs, not uploaded) or `UnavailableError`
-    (Drive failed)."""
+    uploader's Drive trash (restorable there), then off the card. Only who
+    may see the run (`readers`: the clicker's own runs and their VAs', as
+    `queue_uploads`; default: their own); already gone in Drive counts as
+    removed. Raises `UploadRefusedError` (not theirs, not uploaded) or
+    `UnavailableError` (Drive failed)."""
     found = store.get(upload_id)
-    if found is None or get_job(found.job_id, user.actor) is None:
+    readers = readers if readers is not None else user.actor
+    if found is None or get_job(found.job_id, readers) is None:
         msg = "No such upload"
         raise UploadRefusedError(msg)
     if found.status != "done":
@@ -237,6 +275,23 @@ def remove_upload(user: SessionUser, upload_id: int) -> DriveUpload:
     return found.model_copy(update={"status": "removed"})
 
 
+class VaTarget(BaseModel):
+    """Where an upload into a VA's own folder goes: the owner whose Drive
+    it is, and the folder."""
+
+    owner_id: int
+    folder: VaFolder
+
+
+def _va_target(va_id: int) -> VaTarget | None:
+    """A VA's own folder and its owner; None when either is gone."""
+    va = get_user(va_id)
+    if va is None or va.owner_id is None:
+        return None
+    folder = next(iter(drive_folders.va_folders([va])), None)
+    return VaTarget(owner_id=va.owner_id, folder=folder) if folder else None
+
+
 def upload_files(upload_ids: list[int]) -> None:
     """Worker job: each queued upload, one after another (a phone's Drive
     gets them in the order clicked). One failing never stops the rest."""
@@ -245,12 +300,17 @@ def upload_files(upload_ids: list[int]) -> None:
         found = store.get(upload_id)
         if found is None or found.status != "queued":
             continue
-        upload, owner_id = found, _folder_owner(found.login_id)
-        folder = folders.get(upload.login_id)
+        upload = found
+        owner_id: int | None = None
+        folder: Folder | None = None
+        if upload.va_id is not None:
+            if (target := _va_target(upload.va_id)) is not None:
+                owner_id, folder = target.owner_id, target.folder
+        elif upload.login_id is not None:
+            owner_id = _folder_owner(upload.login_id)
+            folder = folders.get(upload.login_id)
         if folder is None or owner_id is None:
-            store.finish(
-                upload_id, error="The account's Drive folder is gone: Sync on /drive"
-            )
+            store.finish(upload_id, error="The Drive folder is gone: Sync on /drive")
             continue
         try:
             _upload_one(upload, owner_id, folder)

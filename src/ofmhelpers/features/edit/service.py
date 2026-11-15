@@ -5,7 +5,7 @@ hands over, or one just uploaded) if it is at most `edit_max_input_s` long.
 Opening it (and an upload) queues `edit_prepare` on the edit worker: a light
 copy the page plays (`media/trim.py` `proxy`) and the strip of its frames,
 made once per video and kept a day with the previews (`prepared_dir`); the
-page plays the original until they are there (`prepared_state`). Nothing
+page plays the original until they are there (`Asked.prepared`). Nothing
 ffmpeg does runs in a page request but a frame grab (one frame). Cut queues
 a job on the edit worker (`QueueName.EDIT`: one at a time, its own CPU and
 RAM cap): a part of at most `edit_max_part_s`, cropped and sped up or down
@@ -50,12 +50,21 @@ from ofmhelpers.db.stores.jobs import drop_job, get_job, list_jobs_page
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import keep_files
 from ofmhelpers.features.assets.store import register_generated_asset, save_asset
+from ofmhelpers.features.edit.clips import Clip, checked
+from ofmhelpers.features.edit.errors import EditRefusedError
 from ofmhelpers.features.edit.options import Framing
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.previews.render import previews_dir
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import trim
-from ofmhelpers.media.video_probe import duration_s, frame_rate, frame_times
+from ofmhelpers.media.uniqify import has_audio
+from ofmhelpers.media.video_probe import (
+    duration_s,
+    frame_rate,
+    frame_times,
+    video_size,
+)
+lazy from ofmhelpers.media.size import Size
 lazy from ofmhelpers.schemas import Job
 
 logger = get_logger(__name__)
@@ -76,11 +85,11 @@ _NOT_PREPARED = "Could not make the light copy: open the video again"
 _NO_FRAME = "Could not save this frame: try again"
 _BUSY = "Busy saving frames: try again"
 _REPLACED = "Another video was opened"
+# A joined cut runs at its first clip's frame rate, within these (an unknown
+# rate: the first; a 120 fps phone clip: 60).
+_JOIN_FPS = 30.0
+_JOIN_MAX_FPS = 60.0
 _SHA256 = re.compile(r"[0-9a-f]{64}")
-
-
-class EditRefusedError(Exception):
-    """Nothing was opened or cut; the message says why (shown on the page)."""
 
 
 class EditVideo(BaseModel):
@@ -208,22 +217,6 @@ def _opened(path: Path) -> EditVideo:
 
 def open_video(video: str, assets_root: Path) -> EditVideo:
     return _opened(_stored_video(video, assets_root))
-
-
-def page(
-    video: str | None, assets_root: Path, actor: str, run: Callable[..., Any]
-) -> EditPage:
-    """The page for `?video=`: a gone, unreadable or too long one opens the
-    page empty with the reason, never an error page. An opened one has its
-    light copy and strip queued (`run`: the worker's entry point)."""
-    if not video:
-        return EditPage()
-    try:
-        opened = open_video(video, assets_root)
-    except EditRefusedError as exc:
-        return EditPage(problem=str(exc))
-    prepared = _queue_prepare_quietly(Path(opened.path), assets_root, actor, run)
-    return EditPage(video=opened, prepared=prepared)
 
 
 def upload(
@@ -369,17 +362,50 @@ def _queue_prepare_quietly(
         return Prepared(status="failed")
 
 
-def prepared_state(video: str, assets_root: Path, actor: str) -> Prepared:
-    """What the page polls: there, being made, or failed (no job makes it)."""
-    path = _stored_video(video, assets_root)
-    ready = _ready(path)
-    if ready is not None:
-        return ready
-    job = _running_prepare(path, actor)
-    if job is not None:
-        return _in_line(job.id)
-    # The job may have just finished between the two looks.
-    return _ready(path) or Prepared(status="failed")
+class Asked(BaseModel, frozen=True):
+    """A stored video one person asks /edit about (`video`: its path as the
+    page sends it; `assets_root`: their part of the store): the page opened
+    with it, Add video, the light copy's poll."""
+
+    video: str
+    assets_root: Path
+    actor: str
+
+    def page(self, run: Callable[..., Any]) -> EditPage:
+        """The page for `?video=`: a gone, unreadable or too long one opens
+        the page empty with the reason, never an error page. An opened one
+        has its light copy and strip queued (`run`: the worker's entry
+        point)."""
+        if not self.video:
+            return EditPage()
+        try:
+            opened = open_video(self.video, self.assets_root)
+        except EditRefusedError as exc:
+            return EditPage(problem=str(exc))
+        path = Path(opened.path)
+        prepared = _queue_prepare_quietly(path, self.assets_root, self.actor, run)
+        return EditPage(video=opened, prepared=prepared)
+
+    def add(self, run: Callable[..., Any]) -> EditVideo:
+        """Another video for the timeline, on the page already open (Add
+        video, a stored one): refused as `page` would, its light copy and
+        strip queued (`run`, as for `page`)."""
+        opened = open_video(self.video, self.assets_root)
+        _queue_prepare_quietly(Path(opened.path), self.assets_root, self.actor, run)
+        return opened
+
+    def prepared(self) -> Prepared:
+        """What the page polls: there, being made, or failed (no job makes
+        it)."""
+        path = _stored_video(self.video, self.assets_root)
+        ready = _ready(path)
+        if ready is not None:
+            return ready
+        job = _running_prepare(path, self.actor)
+        if job is not None:
+            return _in_line(job.id)
+        # The job may have just finished between the two looks.
+        return _ready(path) or Prepared(status="failed")
 
 
 def prepared_file(video: str, assets_root: Path, kind: PreparedKind) -> Path | None:
@@ -521,40 +547,33 @@ def _grab(path: Path, at: float, framing: Framing) -> FrameGrab:
     return FrameGrab(data=data, name=_frame_name(path, at))
 
 
-def _part(start: float, end: float, seconds: float) -> tuple[float, float]:
-    """The asked part within the video, refused when too short or long."""
-    web = settings.web
-    end = min(end, seconds)
-    if end - start < web.edit_min_s:
-        msg = f"Pick at least {web.edit_min_s:g} s"
-        raise EditRefusedError(msg)
-    if end - start > web.edit_max_part_s:
-        msg = f"Pick at most {web.edit_max_part_s:g} s"
-        raise EditRefusedError(msg)
-    return start, end
-
-
 def queue_cut(
-    video: str,
-    start: float,
-    end: float,
+    clips: list[Clip],
     framing: Framing,
     speed: float,
     assets_root: Path,
     actor: str,
     run: Callable[..., Any],
 ) -> str:
-    """The cut's job on the edit worker. `run`: the worker's entry point
+    """The cut's job on the edit worker: one clip, or several joined one
+    after another (`features/edit/clips.py`). `run`: the worker's entry point
     (routers/video_tools/edit.py `run_cut`, a path RQ can import)."""
-    path = _stored_video(video, assets_root)
-    start, end = _part(start, end, _seconds(path))
+    paths = [_stored_video(clip.video, assets_root) for clip in clips]
+    fitted = checked(
+        [
+            c.model_copy(update={"video": str(p)})
+            for c, p in zip(clips, paths, strict=True)
+        ],
+        [_seconds(path) for path in paths],
+    )
     if list_jobs_page({TASK}, 0, 1, actor, status="running").total:
         msg = "Your last cut is still running: wait for it"
         raise EditRefusedError(msg)
-    params = {
-        "video": str(path),
-        "start": start,
-        "end": end,
+    first = fitted[0]
+    params: dict[str, Any] = {
+        "video": first.video,
+        "start": first.start,
+        "end": first.end,
         "turn": framing.turn,
         "mirror": framing.mirror,
         "aspect": framing.aspect.value,
@@ -564,6 +583,8 @@ def queue_cut(
         "y": framing.y,
         "speed": speed,
     }
+    if len(fitted) > 1:
+        params["clips"] = [clip.model_dump() for clip in fitted]
     return start_job(
         TASK,
         params,
@@ -571,11 +592,17 @@ def queue_cut(
         {**params, "assets_root": str(assets_root)},
         actor=actor,
         queue=QueueName.EDIT,
-        job_timeout=settings.web.edit_cut_timeout_s + 60,
+        job_timeout=cut_timeout_s(params),
         # Someone watches "Cutting…": ahead of the pages' light copies on
         # the one edit worker, it waits at most for the job being run.
         at_front=True,
     )
+
+
+def cut_timeout_s(params: dict[str, Any]) -> int:
+    """A cut's RQ time limit: each clip's ffmpeg limit, and a minute."""
+    clips = len(params.get("clips") or [params])
+    return settings.web.edit_cut_timeout_s * clips + 60
 
 
 def _make_cut(
@@ -605,6 +632,46 @@ def _make_cut(
     return stored
 
 
+def _make_join(clips: list[Clip], framing: Framing, speed: float, root: Path) -> Path:
+    """The clips one after another, as one video in `.edit/`: each cut to the
+    first one's size and frame rate (`trim.part`), then joined (`trim.join`),
+    in a work folder of the run's own."""
+    web = settings.web
+    limit = web.edit_cut_timeout_s
+    paths = [_stored_video(clip.video, root) for clip in clips]
+    work = Path(settings.infra.uploads_root) / STAGING
+    work.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=work) as tmp:
+        fps = min(_fps(paths[0]) or _JOIN_FPS, _JOIN_MAX_FPS)
+        frame: Size | None = None
+        parts: list[Path] = []
+        for index, (clip, path) in enumerate(zip(clips, paths, strict=True)):
+            dest = Path(tmp) / f"part{index:02d}.mp4"
+            trim.part(
+                path,
+                clip.start,
+                clip.end,
+                dest,
+                short_side=framing.size.short_side,
+                frame=frame,
+                fps=fps,
+                sound=has_audio(path, limit),
+                threads=web.edit_threads,
+                timeout_s=limit,
+                picture=_picture(framing),
+                speed=speed,
+            )
+            frame = frame or video_size(dest, limit)
+            parts.append(dest)
+        made = Path(tmp) / f"{Path(_shown_name(paths[0])).stem}_cut.mp4"
+        trim.join(parts, made, threads=web.edit_threads, timeout_s=limit)
+        stored = register_generated_asset(made, staging(root))
+    if stored is None:
+        msg = "could not store the cut"
+        raise OSError(msg)
+    return stored
+
+
 def run_cut(
     video: str,
     start: float,
@@ -619,6 +686,7 @@ def run_cut(
     y: float = 0.5,
     speed: float = 1.0,
     job_id: str | None = None,  # noqa: ARG001 -- start_job hands every run its job id
+    clips: list[dict[str, Any]] | None = None,
 ) -> EditVideo:
     """The cut itself (on the edit worker), as `<name>_cut.mp4` in `.edit/`.
     Any failure is one sentence for the page; the cause goes to the log."""
@@ -636,7 +704,11 @@ def run_cut(
         }
     )
     try:
-        stored = _make_cut(path, start, end, framing, speed, root)
+        if clips:
+            joined = [Clip.model_validate(clip) for clip in clips]
+            stored = _make_join(joined, framing, speed, root)
+        else:
+            stored = _make_cut(path, start, end, framing, speed, root)
         _touch(stored)
         return _video(stored, _seconds(stored))
     except EditRefusedError:

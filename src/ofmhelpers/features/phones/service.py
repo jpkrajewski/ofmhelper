@@ -44,7 +44,7 @@ lazy from ofmhelpers.schemas.devices import DeviceLogin
 logger = get_logger(__name__)
 
 # The job row of the Drive sync a login put on a phone starts.
-DRIVE_SYNC_TASK = "drive_sync"
+DRIVE_SYNC_TASK = drive_folders.SYNC_TASK
 
 
 class SecretsUnreadableError(RuntimeError):
