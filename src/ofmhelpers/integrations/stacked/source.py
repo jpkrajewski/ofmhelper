@@ -1,8 +1,10 @@
-"""Stacked as a chat source (`integrations/chat_source.py`): API keys in `.env`."""
+"""Stacked as a chat source (`integrations/chat_source.py`): its API keys come
+from a `KeyRing` (the app's: `.env` lines and keys saved on /account,
+`features/chatting/stacked_keys.py`)."""
 
+from typing import Protocol
 lazy from collections.abc import Iterator, Mapping
 
-from ofmhelpers.config import settings
 from ofmhelpers.integrations.stacked import history, webhooks
 from ofmhelpers.integrations.stacked.client import reach
 from ofmhelpers.schemas.chatting import (
@@ -17,6 +19,10 @@ from ofmhelpers.schemas.chatting import (
 )
 
 
+class KeyRing(Protocol):
+    def keys(self) -> list[str]: ...
+
+
 class StackedSource:
     platform = ChatPlatform.STACKED
     # Expected from the spec's `message.created`; not yet seen on a real mass send.
@@ -25,11 +31,14 @@ class StackedSource:
     bulk_sends_unflagged = True
     events = webhooks.EVENTS
 
+    def __init__(self, keys: KeyRing) -> None:
+        self._keys = keys
+
     def configured(self) -> bool:
-        return bool(settings.stacked.api_keys)
+        return bool(self._keys.keys())
 
     def models(self) -> ChatModels:
-        reached = reach(k.key for k in settings.stacked.api_keys)
+        reached = reach(self._keys.keys())
         return ChatModels(
             found=[
                 ChatModel(

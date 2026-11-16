@@ -49,7 +49,9 @@ def get_text(key: str) -> str | None:
     try:
         raw = get_redis().get(key)
     except RedisError:
-        logger.warning("cache read unavailable for %s, treating as miss", key)
+        logger.warning(
+            "cache read unavailable for %s, treating as miss", key, exc_info=True
+        )
         return None
     if raw is None:
         return None
@@ -60,11 +62,11 @@ def set_text(key: str, value: str, ttl_s: int) -> None:
     try:
         get_redis().set(key, value, ex=ttl_s)
     except RedisError:
-        logger.warning("cache write unavailable for %s, not stored", key)
+        logger.warning("cache write unavailable for %s, not stored", key, exc_info=True)
 
 
 def delete_text(key: str) -> None:
     try:
         get_redis().delete(key)
     except RedisError:
-        logger.warning("cache delete unavailable for %s", key)
+        logger.warning("cache delete unavailable for %s", key, exc_info=True)

@@ -239,7 +239,7 @@ def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
     final_path = assets_root / f"{digest}__{stored_name}"
     try:
         tmp_path.rename(final_path)
-    except FileExistsError:
+    except FileExistsError:  # silent: a concurrent upload of the same content won
         # Lost a race with a concurrent upload of the same content -- fine,
         # that copy is just as good.
         tmp_path.unlink()
@@ -280,7 +280,7 @@ def register_generated_asset(
         dest = assets_root / f"{digest}__{path.name}"
         try:
             os.link(path, dest)
-        except OSError:
+        except OSError:  # silent: no hard links here: copied instead
             # cross-device or a filesystem without hardlinks -- copy instead.
             # A failure here still falls through to the outer handler.
             path.copy(dest, preserve_metadata=True)

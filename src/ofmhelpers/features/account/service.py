@@ -7,17 +7,30 @@ from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict, SkipValidation
 
+from ofmhelpers.auth.access import Area, allowed
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import users
+from ofmhelpers.features.account import telegram
 from ofmhelpers.features.account.keys import KEY_TAIL
+from ofmhelpers.features.chatting import stacked_keys
 from ofmhelpers.features.links.sync import sync_now
-from ofmhelpers.features.refusals import NotFoundError
+from ofmhelpers.features.refusals import NotFoundError, UnavailableError
+from ofmhelpers.features.reports import asks
 from ofmhelpers.features.signin import credentials
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.integrations.signin import Provider, linkable, providers
+from ofmhelpers.integrations.stacked import (
+    StackedAuthError,
+    StackedClient,
+    StackedError,
+    StackedForbiddenError,
+)
+from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import ApiKeysForm, User
 from ofmhelpers.schemas.users import LinkedAccount
+
+logger = get_logger(__name__)
 
 UNKNOWN_PROVIDER = "Unknown provider"
 # What /account says after a provider's consent: the outcome in the query
@@ -37,6 +50,19 @@ class Notice(BaseModel):
     status_code: int = 200
 
 
+class TelegramCard(BaseModel):
+    """/account's Telegram card: whether this person linked their chat."""
+
+    linked: bool
+
+
+class TelegramConnect(BaseModel):
+    """Connect Telegram: the bot's one-time link, or why there is none."""
+
+    url: str | None = None
+    notice: Notice = Notice()
+
+
 class PageView(BaseModel):
     """/account: each field is a name `account.html` reads."""
 
@@ -50,6 +76,8 @@ class PageView(BaseModel):
     min_length: int
     message: str | None
     error: str | None
+    # None: no bot is read on this server (dev), no card.
+    telegram: TelegramCard | None = None
 
 
 class PasswordChange(BaseModel):
@@ -80,19 +108,61 @@ def keyed_providers() -> list[KeyedProvider]:
     return [KeyedProvider(name=name, label=label) for name, label in labels.items()]
 
 
+def _stacked() -> KeyedProvider:
+    return KeyedProvider(name=stacked_keys.SLOT, label="Stacked")
+
+
+def keyed_for(user: User | None) -> list[KeyedProvider]:
+    """The key slots `user` saves: every provider's, and Stacked for who may
+    open the chats (they are the agency's: `features/chatting/stacked_keys.py`)."""
+    found = keyed_providers()
+    if user is not None and allowed(user.role, Area.CHATTING):
+        found.append(_stacked())
+    return found
+
+
+def _stacked_refusal(api_key: str) -> str | None:
+    """Why Stacked will not read chats with `api_key`, or None."""
+    try:
+        StackedClient(api_key).me()
+    except StackedAuthError, StackedForbiddenError:  # silent: shown on the page
+        return "Stacked did not accept that key: check it in Stacked."
+    except StackedError:
+        logger.warning("stacked: key check failed", exc_info=True)
+        return "Stacked did not answer: try again in a minute."
+    return None
+
+
 def page_view(user_id: int, notice: Notice) -> PageView:
     saved = users.api_keys(user_id)
+    user = users.get_user(user_id)
     return PageView(
-        user=users.get_user(user_id),
+        user=user,
         linked={a.provider: a for a in users.linked_accounts(user_id)},
         providers=linkable(),
         keys={
-            p.name: (p.label, saved.get(p.name)[-KEY_TAIL:]) for p in keyed_providers()
+            p.name: (p.label, saved.get(p.name)[-KEY_TAIL:]) for p in keyed_for(user)
         },
         min_length=settings.signin.password_min_length,
         message=notice.message,
         error=notice.error,
+        telegram=TelegramCard(linked=telegram.linked(user_id))
+        if asks.enabled()
+        else None,
     )
+
+
+def connect_telegram(user_id: int) -> TelegramConnect:
+    """The bot's link for this person (`features/account/telegram.py`)."""
+    try:
+        return TelegramConnect(url=telegram.connect_url(user_id))
+    except UnavailableError as exc:  # silent: logged in connect_url, shown here
+        return TelegramConnect(notice=Notice(error=str(exc), status_code=502))
+
+
+def disconnect_telegram(user_id: int) -> None:
+    """Their events go back to nobody's chat (an admin's: the agency's)."""
+    telegram.unlink(user_id)
 
 
 def link_notice(google: str, apple: str) -> Notice:
@@ -113,7 +183,7 @@ def change_password(
 ) -> PasswordChange:
     try:
         credentials.change_password(user_id, current, password, confirm)
-    except credentials.PasswordRejectedError as exc:
+    except credentials.PasswordRejectedError as exc:  # silent: shown on the page
         return PasswordChange(notice=Notice(error=str(exc), status_code=400))
     return PasswordChange(
         notice=Notice(message="Password saved."), user=users.get_user(user_id)
@@ -123,7 +193,7 @@ def change_password(
 def keys_form(fields: Mapping[str, object]) -> ApiKeysForm:
     """The keys form: its fields come from data (`key_<provider>` per keyed
     provider; a Remove button posts `remove=<provider>`)."""
-    known = [p.name for p in keyed_providers()]
+    known = [p.name for p in (*keyed_providers(), _stacked())]
     form = ApiKeysForm(
         keys={name: str(fields.get(f"key_{name}", "")) for name in known},
         remove=str(fields.get("remove") or "") or None,
@@ -135,12 +205,17 @@ def keys_form(fields: Mapping[str, object]) -> ApiKeysForm:
 
 def save_keys(user_id: int, form: ApiKeysForm) -> Notice:
     """One form, one Save for every provider's key."""
-    known = {p.name: p.label for p in keyed_providers()}
+    known = {p.name: p.label for p in keyed_for(users.get_user(user_id))}
+    if (set(form.keys) | {form.remove} - {None}) - set(known):
+        raise NotFoundError(UNKNOWN_PROVIDER)
     if form.remove is not None:
         users.set_api_key(user_id, form.remove, "")
         return Notice(message=f"{known[form.remove]} key removed.")
     if not form.keys:
         return Notice(error="Nothing to save: paste a key first.", status_code=400)
+    typed = form.keys.get(stacked_keys.SLOT)
+    if typed is not None and (refused := _stacked_refusal(typed)):
+        return Notice(error=refused, status_code=400)
     for name, key in form.keys.items():
         users.set_api_key(user_id, name, key)
     if set(form.keys) & set(link_providers().names()):

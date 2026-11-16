@@ -167,6 +167,7 @@ def _allow(request: Request) -> bool:
         if count == 1:
             redis.expire(key, 120)
     except RedisError:
+        logger.warning("bridge: rate limit unavailable (Redis), allowed", exc_info=True)
         return True
     return count <= limit
 
@@ -229,7 +230,9 @@ class BridgeMiddleware:
     async def _track(self, request: Request, host: str) -> Response:
         try:
             body = await request.json()
-        except Exception:
+        except ValueError:
+            # A visitor's body that is not JSON: the hit is not recorded.
+            logger.info("bridge: track body not JSON", exc_info=True)
             body = {}
         slug = str(body.get("slug") or "").strip("/")
         if slug and "/" not in slug and _SLUG.match(slug) and _allow(request):

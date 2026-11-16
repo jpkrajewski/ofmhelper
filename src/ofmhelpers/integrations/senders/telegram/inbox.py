@@ -1,4 +1,6 @@
-"""What people type to the bot: one word asks for something (`money`).
+"""What people type to the bot: one word asks for something (`money`), and
+`/start <token>` in a private chat links that chat to a person (the link
+/account hands out: `features/account/telegram.py`).
 
 `read(words)` waits for new messages (getUpdates, long polling) and keeps the
 asks: a message whose first word is one of `words` (`money`, `Money`, `/money`,
@@ -37,8 +39,16 @@ class Ask(BaseModel):
     word: str
 
 
+class Start(BaseModel):
+    """Someone opened the bot from /account's link: `token` says who."""
+
+    chat_id: str
+    token: str
+
+
 class Inbox(BaseModel):
     asks: list[Ask]
+    starts: list[Start] = []
     # Where the next read starts; None: nothing was read.
     next_offset: int | None = None
 
@@ -75,6 +85,15 @@ def _ask(
     return Ask(chat_id=chat, word=word)
 
 
+def _start(message: Message) -> Start | None:
+    """`/start <token>` in a private chat (Telegram sends it when someone
+    opens `t.me/<bot>?start=<token>`), else None."""
+    command, _, token = message.text.strip().partition(" ")
+    if message.chat.type != "private" or command != "/start" or not token.strip():
+        return None
+    return Start(chat_id=str(message.chat.id), token=token.strip())
+
+
 def read(client: TelegramClient, words: set[str], bot_name: str) -> Inbox:
     """The asks typed since the last `confirm`, waiting up to `ask_wait_s` for
     one. `bot_name`: this bot's username (`/money@<it>`)."""
@@ -84,13 +103,18 @@ def read(client: TelegramClient, words: set[str], bot_name: str) -> Inbox:
     if not updates:
         return Inbox(asks=[])
     allowed = set(s.chat_id_list())
-    asks = []
+    asks, starts = [], []
     for update in updates:
         message = update.message or update.channel_post
-        found = _ask(message, words, allowed, bot_name) if message is not None else None
-        if found is not None:
+        if message is None:
+            continue
+        if (start := _start(message)) is not None:
+            starts.append(start)
+        elif (found := _ask(message, words, allowed, bot_name)) is not None:
             asks.append(found)
-    return Inbox(asks=asks, next_offset=max(u.update_id for u in updates) + 1)
+    return Inbox(
+        asks=asks, starts=starts, next_offset=max(u.update_id for u in updates) + 1
+    )
 
 
 def confirm(inbox: Inbox) -> None:

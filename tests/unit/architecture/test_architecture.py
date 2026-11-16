@@ -13,6 +13,11 @@ what it stands for (`Payload = dict[str, Any]`, `type X = ...`, a class built
 on `dict` / `NamedTuple` / `TypedDict`), also through an import. What it
 cannot see: a private function, a model field.
 
+The failure rule ("NOTHING FAILS SILENTLY", `silent_excepts`, 2026-11-15)
+scans every package: an `except` re-raises or leaves its trace, and a
+deliberate quiet one says why on its `except` line (`# silent: <reason>`).
+Its baseline lines are `path::function`, `path::function xN` for N of them.
+
 `ast` and not import-linter: this code uses Python 3.15 `lazy import`.
 """
 
@@ -61,6 +66,10 @@ FUNCTION_RULES = (
     "utils/",
     "config/",
 )
+# An `except` leaves a trace by one of these calls; a log call by `exc_info=`.
+TRACE_CALLS = {"exception", "record_exception"}
+LOG_LEVELS = {"debug", "info", "warning", "error", "critical", "log"}
+SILENT = "# silent:"
 
 
 class Baseline(BaseModel):
@@ -73,6 +82,7 @@ class Baseline(BaseModel):
     unrecorded_jobs: set[str]
     loose_returns: set[str]
     repeated_parameters: set[str]
+    silent_excepts: set[str]
 
 
 @cache
@@ -251,6 +261,58 @@ def queued_function(call: ast.Call) -> ast.expr | None:
     return None
 
 
+def leaves_a_trace(handler: ast.ExceptHandler) -> bool:
+    """It raises (again or anew), logs with the trace (`logger.exception`,
+    `exc_info=`) or puts it on the span (`span.record_exception`)."""
+    for node in ast.walk(ast.Module(body=handler.body, type_ignores=[])):
+        match node:
+            case ast.Raise():
+                return True
+            case ast.Call(func=ast.Attribute(attr=attr)) if attr in TRACE_CALLS:
+                return True
+            case ast.Call(func=ast.Attribute(attr=attr), keywords=keywords) if (
+                attr in LOG_LEVELS and any(k.arg == "exc_info" for k in keywords)
+            ):
+                return True
+    return False
+
+
+def quiet(node: ast.AST, lines: list[str]) -> bool:
+    """An `except` that leaves no trace, or a `with suppress(...)`, not
+    marked `# silent: <reason>` on its header lines."""
+    match node:
+        case ast.ExceptHandler():
+            unmarked = not leaves_a_trace(node)
+        case ast.With() | ast.AsyncWith():
+            unmarked = any(
+                isinstance(item.context_expr, ast.Call)
+                and ast.unparse(item.context_expr.func).split(".")[-1] == "suppress"
+                for item in node.items
+            )
+        case _:
+            return False
+    header = lines[node.lineno - 1 : max(node.body[0].lineno - 1, node.lineno)]
+    return unmarked and not any(SILENT in line for line in header)
+
+
+def silent_excepts(name: str, tree: ast.Module, lines: list[str]) -> set[str]:
+    """`name::func` (`Class.func`, `func.inner`, `<module>`) of each quiet
+    handler, with ` xN` when a function has N of them."""
+    found: Counter[str] = Counter()
+
+    def visit(node: ast.AST, where: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                visit(child, f"{where}.{child.name}" if where else child.name)
+                continue
+            if quiet(child, lines):
+                found[f"{name}::{where or '<module>'}"] += 1
+            visit(child, where)
+
+    visit(tree, "")
+    return {key if n == 1 else f"{key} x{n}" for key, n in found.items()}
+
+
 def check(found: set[str], known: set[str]) -> None:
     assert sorted(found - known) == [], (
         "breaks the rule: fix the code, not the baseline"
@@ -364,6 +426,52 @@ def test_the_return_rule_follows_a_name_to_the_dict_behind_it():
     assert [w for w in here if not is_loose(w, "a.py")] == []
     assert [w for w in imported if not is_loose(w, "b/c.py")] == []
     assert [w for w in models if is_loose(w, "b/c.py")] == []
+
+
+def test_failures_leave_a_trace():
+    """Every `except` raises, logs with `exc_info` / `.exception(...)` or
+    records on the span; `suppress(...)` is quiet too. A deliberate quiet one
+    (gone already, a parser's None, a refusal shown on the page) is marked
+    `# silent: <reason>` on its `except` line; a real failure gets a log."""
+    found = set()
+    for name, tree in trees().items():
+        lines = (SRC / name).read_text("utf-8").splitlines()
+        found |= silent_excepts(name, tree, lines)
+    check(found, baseline().silent_excepts)
+
+
+def test_the_trace_rule_reads_each_handler():
+    source = dedent("""
+        def traced():
+            try: pass
+            except A: raise
+            try: pass
+            except B: logger.exception("x")
+            try: pass
+            except C as exc: logger.warning("x", exc_info=True)
+            try: pass
+            except D as exc: span.record_exception(exc)
+            try: pass
+            except E: return None  # silent: a parser's None
+            try: pass
+            except (
+                F
+            ):  # silent: header spread over lines
+                pass
+        class Box:
+            def quiet(self):
+                try: pass
+                except G: logger.warning("no trace")
+                try: pass
+                except H: pass
+                def inner():
+                    with suppress(I): pass
+        try: pass
+        except J: pass
+        with contextlib.suppress(K): pass  # silent: marked
+    """)
+    found = silent_excepts("m.py", ast.parse(source), source.splitlines())
+    assert found == {"m.py::Box.quiet x2", "m.py::Box.quiet.inner", "m.py::<module>"}
 
 
 def test_functions_sharing_their_parameters_are_one_class():

@@ -113,7 +113,7 @@ def test_one_transaction_names_every_table_it_touched_once(owner):
     login = _login(phone, owner)
 
     with session_scope() as s:
-        s.execute(text("UPDATE device_logins SET linked_at = linked_at"))
+        s.execute(text("UPDATE device_logins SET created_at = created_at"))
         s.execute(text("UPDATE logins SET notes = notes WHERE id = :id"), {"id": login})
         s.execute(text("UPDATE logins SET notes = notes WHERE id = :id"), {"id": login})
 

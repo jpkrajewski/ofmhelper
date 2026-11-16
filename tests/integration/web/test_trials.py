@@ -23,11 +23,11 @@ from signin import sign_in, sign_in_agency
 
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.stores.jobs import create_job, get_job, history
 from ofmhelpers.features.drive import folders as drive_folders
-from ofmhelpers.features.jobs import recovery, sweeps
+from ofmhelpers.features.jobs import recovery, runner, sweeps
 from ofmhelpers.features.previews.render import write_video_thumb
-from ofmhelpers.features.trials import cleanup, media, tasks
+from ofmhelpers.features.trials import cleanup, folder, media, tasks
 from ofmhelpers.features.trials import state as trial_state
 from ofmhelpers.features.trials.captions import ReelNotes
 from ofmhelpers.integrations.gdrive import DriveError, DriveFile
@@ -507,7 +507,7 @@ def test_cards_answers_only_the_cards_asked_for(drive, made):
     assert f'data-key="{second.key}"' in html
     assert f'data-key="{first.key}"' not in html
     live = client.get(f"/trials/{login}/live").json()
-    assert [c["key"] for c in live["cards"]] == [first.key, second.key]
+    assert [c["key"] for c in live["cards"]] == [second.key, first.key]  # newest made
     assert live["running"] is False
 
 
@@ -586,9 +586,7 @@ def test_drive_refusing_says_connect_again_and_still_makes_what_is_on_disk(drive
     assert "Connect Google Drive" in page
 
 
-def test_a_copy_that_fails_is_left_out_of_the_page_without_the_error(
-    drive, made, monkeypatch
-):
+def test_a_copy_that_fails_gets_a_failed_card_in_short_words(drive, made, monkeypatch):
     login = _login(drive, "a.mp4")
 
     def pipeline(src, out, *, caption, seed):
@@ -599,11 +597,15 @@ def test_a_copy_that_fails_is_left_out_of_the_page_without_the_error(
     client = _client()
     client.post(f"/trials/{login}/generate")
 
-    assert _state(login).reels[0].error == tasks.MAKE_FAILED  # logged in full
+    (reel,) = _state(login).reels
+    assert reel.error == tasks.MAKE_FAILED  # logged in full
     page = client.get(f"/trials/{login}").text
     assert "Invalid argument" not in page
-    assert tasks.MAKE_FAILED not in page
-    assert "No trials yet" in page
+    assert f'data-key="failed-{reel.key}"' in page
+    assert tasks.MAKE_FAILED in page
+    assert "a.mp4" in page
+    cards = client.get(f"/trials/{login}/cards", params={"key": f"failed-{reel.key}"})
+    assert tasks.MAKE_FAILED in cards.text
 
 
 def test_a_video_gone_from_posted_leaves_unless_its_copy_was_made(drive, made):
@@ -735,21 +737,64 @@ def test_posted_unreadable_asks_to_connect_and_never_says_nothing_new(
     assert made == ["caption 0"]
 
 
-def test_the_grid_shows_the_newest_in_posted_first(drive, made):
+def _card_keys(client, login: int) -> list[str]:
+    return [c["key"] for c in client.get(f"/trials/{login}/live").json()["cards"]]
+
+
+def test_the_grid_shows_the_newest_made_first(drive, made):
+    """Owner 2026-11-15: "why are done trials showing at the end": the newest
+    made copies first, a copy made again goes back to the top."""
     login = _login(drive, "old.mp4")
     client = _client()
     client.post(f"/trials/{login}/generate")
     for name in ("middle.mp4", "new.mp4"):
         drive.add_file(_posted(drive), name, "video/mp4")
-    client.post(f"/trials/{login}/generate")
+    client.post(f"/trials/{login}/generate")  # new.mp4, then middle.mp4
 
-    state = _state(login)
-    assert [r.name for r in state.ready] == ["new.mp4", "middle.mp4", "old.mp4"]
-    keys = [r.key for r in state.ready]
+    key = {r.name: r.key for r in _state(login).reels}
+    newest_made = [key["middle.mp4"], key["new.mp4"], key["old.mp4"]]
     page = client.get(f"/trials/{login}").text
-    assert re.findall(r'id="reel-([^"]+)"', page) == keys
-    live = client.get(f"/trials/{login}/live").json()
-    assert [c["key"] for c in live["cards"]] == keys
+    assert re.findall(r'id="reel-([^"]+)"', page) == newest_made
+    assert _card_keys(client, login) == newest_made
+
+    client.post(f"/trials/{login}/reel/{key['old.mp4']}/regenerate")
+
+    again = [key["old.mp4"], key["middle.mp4"], key["new.mp4"]]
+    assert _card_keys(client, login) == again
+    page = client.get(f"/trials/{login}").text
+    assert re.findall(r'id="reel-([^"]+)"', page) == again
+
+
+def test_made_copies_come_first_then_what_is_being_made_then_what_failed(
+    drive, made, monkeypatch
+):
+    login = _login(drive, "good.mp4", "bad.mp4")
+    pipeline = tasks.pipeline_run
+
+    def breaks_on_bad(src, out, *, caption, seed):
+        if "bad" in src.name:
+            msg = "ffmpeg failed: -9"
+            raise RuntimeError(msg)
+        pipeline(src, out, caption=caption, seed=seed)
+
+    monkeypatch.setattr(tasks, "pipeline_run", breaks_on_bad)
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    drive.add_file(_posted(drive), "fresh.mp4", "video/mp4")
+    drive_folders.sync()
+    client.get(f"/trials/{login}")  # the page knows fresh.mp4
+    job_id = _running_job()
+    trial_state.change(users.agency_id(), login, lambda s: setattr(s, "job_id", job_id))
+
+    key = {r.name: r.key for r in _state(login).reels}
+    assert _card_keys(client, login) == [
+        key["good.mp4"],
+        f"pending-{key['fresh.mp4']}",
+        f"failed-{key['bad.mp4']}",
+    ]
+    page = client.get(f"/trials/{login}").text
+    cards = re.findall(r'data-key="([^"]+)"', page)
+    assert cards == _card_keys(client, login)
 
 
 def test_a_folder_made_before_the_order_is_put_in_order_and_a_stale_read_keeps_it():
@@ -1663,3 +1708,102 @@ def test_a_folder_nobody_read_since_the_update_keeps_its_copies(drive, made, pos
     _a_day_later(login)
 
     assert _state(login).reels[0].stored is True
+
+
+# --- one media worker: Generate lets the line in, waited-for work goes first --
+
+
+def test_a_generate_lets_a_waiting_job_in_after_each_reel_and_goes_on(
+    drive, made, monkeypatch
+):
+    """Prod 2026-11-15: an upload of 3 waited 26 min behind a Generate of 5
+    (one RQ job for every reel). Now the Generate goes back to the end of
+    the line after a reel when someone waits, and goes on where it stopped."""
+    login = _login(drive, "a.mp4", "b.mp4", "c.mp4")
+    waits = iter([True, False])
+    monkeypatch.setattr(tasks, "_someone_waits", lambda: next(waits, False))
+    requeued: list[str] = []
+    real_requeue = runner._requeue
+
+    def requeue(job_id, fn, kwargs):
+        requeued.append(job_id)
+        real_requeue(job_id, fn, kwargs)  # synchronous mode: runs it again here
+
+    monkeypatch.setattr(runner, "_requeue", requeue)
+    client = _client()
+
+    client.post(f"/trials/{login}/generate")
+
+    (job_id,) = requeued  # once, after the first reel
+    assert len(made) == 3  # every reel made once
+    assert len(_state(login).ready) == 3
+    job = get_job(job_id)
+    assert job.status == "done"
+    assert job.result == {"generated": 2, "failed": 0}  # the last run's
+
+
+def test_a_requeued_job_waits_at_the_back_of_its_line_and_stays_running(
+    real_queue,
+):
+    job_id = create_job("trials", {}, actor=str(users.agency_id()))
+    real_queue()
+    JobQueue(name=QueueName.DEFAULT).put(worker_tasks.note_down, "before")
+
+    runner.run_job(job_id, worker_tasks.requeue_once, {"note": "x"})
+
+    queued = get_queue(QueueName.DEFAULT).get_jobs()
+    assert [j.func_name for j in queued][-1].endswith("run_job")
+    assert queued[-1].args == (job_id, worker_tasks.requeue_once, {"note": "x"})
+    assert get_job(job_id).status == "running"
+
+
+def test_regenerate_and_an_upload_go_before_a_waiting_generate(
+    drive, made, posters, real_queue
+):
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    first, second = _state(login).reels
+    _a_day_later(login)  # the upload has to make its copy again: media queue
+    drive.add_file(_posted(drive), "c.mp4", "video/mp4")
+    drive_folders.sync()
+    client.get(f"/trials/{login}")
+    real_queue()
+    client.post(f"/trials/{login}/generate")  # c.mp4: waits in line
+
+    client.post(f"/trials/{login}/reel/{first.key}/regenerate")
+    client.post(f"/trials/{login}/upload", data={"approved": [second.key]})
+
+    line = JobQueue(name=QueueName.MEDIA).line().waiting
+    labels = [get_job(job_id).params["label"] for job_id in line]
+    assert labels == [folder.UPLOAD, folder.REMAKE, folder.GENERATE]
+
+
+def test_a_trials_job_runs_again_from_its_row_alone(drive, made, posters):
+    login = _login(drive, "a.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    (reel,) = _state(login).reels
+    client.post(f"/trials/{login}/reel/{reel.key}/caption", data={"caption": "mine"})
+    job = next(j for j in _jobs_of(login) if j.params["label"] == folder.REMAKE)
+
+    run = folder.replay_run(job)
+
+    assert run is not None
+    kwargs = run.model_dump()
+    assert kwargs == {
+        "user_id": users.agency_id(),
+        "login_id": login,
+        "keys": [reel.key],
+        "refresh_token": f"fake-refresh:{AGENCY}",
+    }
+    assert "refresh_token" not in job.params["args"]  # never in the row
+    before = len(made)
+    folder.RUNS[job.params["label"]](**kwargs)  # runs again from the row
+    assert made[before:] == ["mine"]
+
+
+def _jobs_of(login: int) -> list:
+    return [
+        j for j in history() if j.task == "trials" and j.params.get("login") == login
+    ]

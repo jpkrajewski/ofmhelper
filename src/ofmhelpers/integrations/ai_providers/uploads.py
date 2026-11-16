@@ -66,6 +66,7 @@ def remote_file_exists(url: str, timeout_s: float) -> bool:
     try:
         response = outbound.head(url, timeout=timeout_s, allow_redirects=True)
     except requests.RequestException:
+        logger.warning("uploaded file not checked: uploading again", exc_info=True)
         return False
     return response.status_code < _HTTP_ERROR
 

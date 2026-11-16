@@ -219,7 +219,7 @@ def _unpack(data: str) -> str:
     try:
         offset, radix = int(offset_s), int(radix_s)
         delimiter = charset[radix]
-    except ValueError, IndexError:
+    except ValueError, IndexError:  # silent: not packed: the page as it is
         return data
     out: list[str] = []
     for block in packed.split(delimiter):
@@ -230,6 +230,6 @@ def _unpack(data: str) -> str:
             for ch in block:
                 value = value * radix + charset.index(ch)
             out.append(chr(value - offset))
-        except ValueError, OverflowError:
+        except ValueError, OverflowError:  # silent: not packed: the page as it is
             return data
     return unquote("".join(out))

@@ -109,6 +109,7 @@ def _submit(provider: Provider, spec: ModelSpec, payload: Payload, key: str) -> 
                 key,
                 exc,
                 wait_s,
+                exc_info=True,
             )
             _sleep(wait_s)
 
@@ -180,6 +181,7 @@ def _submit_noted(
             provider.label,
             key,
             lost,
+            exc_info=True,
         )
         # Noted still when nothing came: a later callback finishes the job
         # through recovery.
@@ -265,11 +267,19 @@ def _ours(cls: type[Provider], api_key: str, task_id: str, key: str) -> bool:
     except ProviderError as exc:
         if exc.retryable:
             logger.warning(
-                "%s callback for job %s: %s not checked now", cls.name, key, task_id
+                "%s callback for job %s: %s not checked now",
+                cls.name,
+                key,
+                task_id,
+                exc_info=True,
             )
             return True
         logger.warning(
-            "%s callback for job %s names %s, not ours", cls.name, key, task_id
+            "%s callback for job %s names %s, not ours",
+            cls.name,
+            key,
+            task_id,
+            exc_info=True,
         )
         return False
     return True

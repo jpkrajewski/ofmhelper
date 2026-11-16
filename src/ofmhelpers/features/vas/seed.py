@@ -289,7 +289,7 @@ def _priced_providers() -> list[str]:
     for name, price in clone_pricing().entries.items():
         try:
             price.per_second(RESOLUTION)
-        except UnpricedError:
+        except UnpricedError:  # silent: an unpriced provider is skipped
             continue
         found.append(name)
     return found

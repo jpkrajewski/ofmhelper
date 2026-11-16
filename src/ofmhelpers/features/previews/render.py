@@ -215,7 +215,11 @@ class ResultPreview(BaseModel, frozen=True):
                 return 0
             stamp, _, count = marker.read_text(encoding="utf-8").rpartition(":")
             return int(count) if stamp == _stamp(self.source) else 0
+        except FileNotFoundError:
+            logger.debug("preview %s never failed", marker.name, exc_info=True)
+            return 0
         except OSError, ValueError:
+            logger.warning("preview marker %s unreadable", marker.name, exc_info=True)
             return 0
 
     def failed_before(self) -> bool:

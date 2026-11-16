@@ -41,7 +41,7 @@ def _code(response: requests.Response) -> str | None:
     """Bouncy's machine-readable error code, top level or nested."""
     try:
         body = response.json()
-    except ValueError:
+    except ValueError:  # silent: not JSON: no code
         return None
     error = body.get("error") if isinstance(body, dict) else None
     if isinstance(error, dict):
@@ -56,7 +56,7 @@ def _timestamp(value: Any) -> float | None:
     if isinstance(value, str):
         try:
             return datetime.fromisoformat(value).timestamp()
-        except ValueError:
+        except ValueError:  # silent: not a date
             return None
     return None
 
@@ -125,7 +125,9 @@ class BouncyProvider(LinkProvider):
         try:
             self.enable_adult(made["id"])
         except LinkError:
-            logger.warning("bouncy %s: no 18+ gate, deleting it", made["id"])
+            logger.warning(
+                "bouncy %s: no 18+ gate, deleting it", made["id"], exc_info=True
+            )
             try:
                 self.delete(made["id"])
             except LinkError as exc:

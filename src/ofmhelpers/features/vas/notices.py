@@ -51,6 +51,7 @@ def logged_in(user: User) -> None:
             title=f"{user.label} logged in",
             text=_whose(user),
             url=PAGE,
+            owner_id=user.owner_id,
         )
     )
 
@@ -74,6 +75,7 @@ def _reels(va: User, day: UserDay) -> Event | None:
         text=_whose(va),
         url=PAGE,
         key=f"vas.reels:{va.id}:{day.day}:{reached}",
+        owner_id=va.owner_id,
     )
 
 
@@ -88,6 +90,7 @@ def _spend(va: User, day: UserDay) -> Event | None:
         text=f"{_whose(va)} · ${day.usd:,.2f} so far",
         url=PAGE,
         key=f"vas.spend:{va.id}:{day.day}:{reached}",
+        owner_id=va.owner_id,
     )
 
 

@@ -48,7 +48,7 @@ def frame_rate(src: Path | str, timeout_s: int) -> float | None:
     text = out.strip().splitlines()[0] if out.strip() else ""
     try:
         rate = Fraction(text)
-    except ValueError, ZeroDivisionError:
+    except ValueError, ZeroDivisionError:  # silent: not a rate
         return None
     return float(rate) if rate > 0 else None
 

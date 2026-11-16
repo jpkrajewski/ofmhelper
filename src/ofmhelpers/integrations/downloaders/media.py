@@ -126,7 +126,9 @@ def _broken_video(result: DownloadResult) -> str | None:
         try:
             duration_s(path, settings.downloaders.probe_timeout_s)
         except OSError, RuntimeError, ValueError, subprocess.SubprocessError:
-            logger.warning("download %s: %s is not a video", result.url, path.name)
+            logger.warning(
+                "download %s: %s is not a video", result.url, path.name, exc_info=True
+            )
             path.unlink(missing_ok=True)
             broken.append(path.name)
     if not broken:

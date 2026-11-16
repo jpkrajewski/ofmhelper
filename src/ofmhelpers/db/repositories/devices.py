@@ -6,7 +6,7 @@ import time
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
-from sqlalchemy import delete, exists, select, update
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import undefer_group
@@ -72,8 +72,8 @@ def _device(row: DeviceRow, logins: list[DeviceLogin]) -> Device:
         id=row.id,
         user_id=row.user_id,
         **{f: getattr(row, f) for f in _DEVICE_FIELDS},
-        added_at=row.added_at,
-        updated_at=row.updated_at,
+        added_at=row.created_at.timestamp(),
+        updated_at=row.updated_at.timestamp(),
         retired_at=row.retired_at,
         logins=logins,
     )
@@ -90,7 +90,7 @@ def _login_columns() -> tuple:
         LoginRow.provider,
         LoginRow.username,
         LoginRow.notes,
-        LoginRow.updated_at,
+        func.extract("epoch", LoginRow.updated_at).label("updated_at"),
         (password != "").label("has_password"),
         (codes != "").label("has_codes"),
     )
@@ -114,7 +114,7 @@ def _devices(
         (device_id, login_id)
         for device_id, login_id in s.execute(
             select(DeviceLoginRow.device_id, DeviceLoginRow.login_id).order_by(
-                DeviceLoginRow.linked_at, DeviceLoginRow.login_id
+                DeviceLoginRow.created_at, DeviceLoginRow.login_id
             )
         ).all()
         if device_id in labels and login_id in logins
@@ -131,10 +131,14 @@ def _devices(
     return [_device(d, per_device.get(d.id, [])) for d in devices]
 
 
-def _touch(s: Session, device_ids: list[int], now: float) -> None:
+def _touch(s: Session, device_ids: list[int]) -> None:
+    """The phones changed with their logins (`updated_at` set on purpose:
+    the stamp trigger takes it as a change)."""
     if device_ids:
         s.execute(
-            update(DeviceRow).where(DeviceRow.id.in_(device_ids)).values(updated_at=now)
+            update(DeviceRow)
+            .where(DeviceRow.id.in_(device_ids))
+            .values(updated_at=func.now())
         )
 
 
@@ -187,7 +191,7 @@ class DeviceRepository(CachedRepository):
                     DeviceLoginRow.device_id == device_id,
                     LoginRow.archived_at.is_(None),
                 )
-                .order_by(DeviceLoginRow.linked_at, DeviceLoginRow.login_id)
+                .order_by(DeviceLoginRow.created_at, DeviceLoginRow.login_id)
             ).mappings()
             return _device(row, [DeviceLogin(**r) for r in logins])
 
@@ -198,7 +202,7 @@ class DeviceRepository(CachedRepository):
                 r.id: DeviceLogin(
                     id=r.id,
                     **{f: getattr(r, f) for f in (*_LOGIN_FIELDS, *_SECRETS)},
-                    updated_at=r.updated_at,
+                    updated_at=r.updated_at.timestamp(),
                     has_password=bool(r.password),
                     has_codes=bool(r.backup_codes),
                 )
@@ -225,9 +229,8 @@ class DeviceRepository(CachedRepository):
             return row.user_id if row else None
 
     def add_device(self, fields: dict, user_id: int) -> int:
-        now = time.time()
         with _writing(fields), session_scope() as s:
-            row = DeviceRow(**fields, user_id=user_id, added_at=now, updated_at=now)
+            row = DeviceRow(**fields, user_id=user_id)
             s.add(row)
             s.flush()
             return row.id
@@ -239,7 +242,7 @@ class DeviceRepository(CachedRepository):
             updated = s.execute(
                 update(DeviceRow)
                 .where(DeviceRow.id == device_id, *mine(DeviceRow.user_id, owner))
-                .values(**fields, updated_at=time.time())
+                .values(**fields)
                 .returning(DeviceRow.id)
             )
             return updated.scalar_one_or_none() is not None
@@ -252,7 +255,7 @@ class DeviceRepository(CachedRepository):
             updated = s.execute(
                 update(DeviceRow)
                 .where(DeviceRow.id == device_id, *mine(DeviceRow.user_id, owner))
-                .values(retired_at=now if retired else None, updated_at=now)
+                .values(retired_at=now if retired else None)
                 .returning(DeviceRow.id)
             )
             return updated.scalar_one_or_none() is not None
@@ -278,7 +281,6 @@ class DeviceRepository(CachedRepository):
         must match the saved ones (or fill them when it has none). Another
         owner's login of the same account is never touched. None when the
         phone does not exist (or is not `owner`'s)."""
-        now = time.time()
         with _writing(fields), session_scope() as s:
             device = s.get(DeviceRow, device_id)
             if device is None or (owner is not None and device.user_id != owner):
@@ -292,9 +294,7 @@ class DeviceRepository(CachedRepository):
             if row is not None:
                 row.archived_at = None
             if row is None:
-                row = LoginRow(
-                    **fields, user_id=device.user_id, added_at=now, updated_at=now
-                )
+                row = LoginRow(**fields, user_id=device.user_id)
                 s.add(row)
                 s.flush()
             else:
@@ -306,17 +306,16 @@ class DeviceRepository(CachedRepository):
                         raise DuplicateError(msg)
                     if typed and not saved:
                         setattr(row, name, typed)
-                        row.updated_at = now
             linked = s.execute(
                 insert(DeviceLoginRow)
-                .values(device_id=device_id, login_id=row.id, linked_at=now)
+                .values(device_id=device_id, login_id=row.id)
                 .on_conflict_do_nothing()
                 .returning(DeviceLoginRow.login_id)
             ).scalar_one_or_none()
             if linked is None and not revived:
                 msg = f"{row.username} is already on this phone"
                 raise DuplicateError(msg)
-            _touch(s, [device_id], now)
+            _touch(s, [device_id])
             return AddedLogin(id=row.id, existed=existed)
 
     def archive_logins(self, login_ids: list[int], owner: int | None = None) -> int:
@@ -338,7 +337,7 @@ class DeviceRepository(CachedRepository):
             ).scalars()
             ids = list(done)
             for login_id in ids:
-                _touch(s, _phones_of(s, login_id), now)
+                _touch(s, _phones_of(s, login_id))
             return len(ids)
 
     def restore_login(
@@ -346,7 +345,6 @@ class DeviceRepository(CachedRepository):
     ) -> ArchivedLogin | None:
         """Back on its phones; the login (service, username), or None when
         it is not an archived one of `owner`'s."""
-        now = time.time()
         with session_scope() as s:
             row = s.get(LoginRow, login_id)
             if (
@@ -356,7 +354,7 @@ class DeviceRepository(CachedRepository):
             ):
                 return None
             row.archived_at = None
-            _touch(s, _phones_of(s, login_id), now)
+            _touch(s, _phones_of(s, login_id))
             return ArchivedLogin(
                 id=login_id, service=row.service, username=row.username
             )
@@ -397,16 +395,14 @@ class DeviceRepository(CachedRepository):
     ) -> bool:
         """Changes the account on every phone it is on; False when it does
         not exist (or is not `owner`'s)."""
-        now = time.time()
         with _writing(fields), session_scope() as s:
             row = s.get(LoginRow, login_id)
             if row is None or (owner is not None and row.user_id != owner):
                 return False
             for name, value in fields.items():
                 setattr(row, name, value)
-            row.updated_at = now
             s.flush()
-            _touch(s, _phones_of(s, login_id), now)
+            _touch(s, _phones_of(s, login_id))
             return True
 
     def unlink_login(
@@ -415,7 +411,6 @@ class DeviceRepository(CachedRepository):
         """Removes the login from the phone; deleted for good when no other
         phone has it. False when it was not on the phone (or the phone is
         not `owner`'s)."""
-        now = time.time()
         with session_scope() as s:
             device = s.get(DeviceRow, device_id)
             if device is None or (owner is not None and device.user_id != owner):
@@ -431,5 +426,5 @@ class DeviceRepository(CachedRepository):
             if removed is None:
                 return False
             _drop_orphans(s)
-            _touch(s, [device_id], now)
+            _touch(s, [device_id])
             return True

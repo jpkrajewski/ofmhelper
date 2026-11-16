@@ -259,6 +259,7 @@ def preview_all(
                 sum(not f.done() for f in late),
                 len(futures),
                 deadline_s,
+                exc_info=True,
             )
             for future in late:
                 url = futures[future]

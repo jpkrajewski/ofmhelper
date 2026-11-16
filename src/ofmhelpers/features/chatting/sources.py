@@ -3,6 +3,7 @@
 from functools import lru_cache
 
 from ofmhelpers.features.chatting.fanvue_tokens import FanvueTokens
+from ofmhelpers.features.chatting.stacked_keys import StackedKeys
 from ofmhelpers.integrations.fanvue import FanvueSource
 from ofmhelpers.integrations.stacked.source import StackedSource
 from ofmhelpers.schemas.chatting import ChatPlatform
@@ -12,7 +13,7 @@ lazy from ofmhelpers.integrations.chat_source import ChatSource
 @lru_cache(maxsize=1)
 def _all() -> dict[ChatPlatform, ChatSource]:
     return {
-        ChatPlatform.STACKED: StackedSource(),
+        ChatPlatform.STACKED: StackedSource(StackedKeys()),
         ChatPlatform.FANVUE: FanvueSource(FanvueTokens()),
     }
 

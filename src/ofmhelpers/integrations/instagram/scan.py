@@ -71,7 +71,9 @@ def _bulk_media(
         # Instagram throttles the logged-out posts query on its own (2026-10-23:
         # refused while the reels tab and single posts answered): the rest go
         # reel by reel, and a refusal there is the scan's.
-        logger.warning("@%s: posts refused, reading reels one by one", username)
+        logger.warning(
+            "@%s: posts refused, reading reels one by one", username, exc_info=True
+        )
     return found
 
 

@@ -12,12 +12,19 @@ _EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 class Role(StrEnum):
     """Everyone sees only what is theirs; an admin also manages /users and
     the admin-only tools; a VA works in a few tools for their owner
-    (`User.owner_id`), who sees what the VA makes. What each role may open:
-    `auth/access.py`."""
+    (`User.owner_id`), who sees what the VA makes; a manager looks at their
+    employer's (`User.owner_id`, an admin) pages and runs nothing. What each
+    role may open: `auth/access.py`."""
 
     ADMIN = "admin"
     USER = "user"
     VA = "va"
+    MANAGER = "manager"
+
+    @property
+    def has_employer(self) -> bool:
+        """Works for someone (`User.owner_id`): a VA, a manager."""
+        return self in (Role.VA, Role.MANAGER)
 
 
 class User(BaseModel):
@@ -105,10 +112,23 @@ class Viewer(BaseModel):
     label: str = ""
     # The admin viewing may also act: the person viewed is their own VA.
     acts: bool = False
+    # Whose page list applies when it is not `user`'s role: a manager (`by`)
+    # looks at their employer's pages through the manager's list.
+    pages: Role | None = None
 
     @property
     def read_only(self) -> bool:
         return self.by is not None and not self.acts
+
+    @property
+    def access_role(self) -> Role:
+        """The role whose pages and actions apply (`auth/access.py`)."""
+        return self.pages or self.user.role
+
+    @property
+    def managing(self) -> bool:
+        """A manager looking at their employer's pages (not "view as")."""
+        return self.pages == Role.MANAGER
 
     @property
     def actors(self) -> frozenset[str]:

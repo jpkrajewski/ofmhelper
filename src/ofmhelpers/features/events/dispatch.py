@@ -39,6 +39,7 @@ from rq import Retry, get_current_job
 
 from ofmhelpers.cache import JobQueue, QueueName, get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores import event_targets, users
 from ofmhelpers.integrations.senders import SendError, senders
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.events import Event
@@ -66,6 +67,25 @@ def _retry() -> Retry | None:
     return Retry(max=len(waits), interval=waits) if waits else None
 
 
+def _targets(sender: Sender, event: Event) -> list[str]:
+    """Where `event` goes on `sender`: the agency's event (no owner) to every
+    target the sender has; a person's to the one they linked (/account), an
+    admin's with none to the agency's; anyone else's with none nowhere (the
+    agency's chats are not theirs, owner 2026-11-15)."""
+    if event.owner_id is None:
+        return sender.targets()
+    own = event_targets.of(event.owner_id, sender.name)
+    if own:
+        return [own]
+    owner = users.get_user(event.owner_id)
+    if owner is not None and owner.is_admin:
+        return sender.targets()
+    logger.info(
+        "event %s: user %s linked no %s", event.name, event.owner_id, sender.name
+    )
+    return []
+
+
 def dispatch(event: dict[str, Any]) -> None:
     """RQ job: `event` (an `Event` as JSON) to each sender's targets."""
     found = Event.model_validate(event)
@@ -73,7 +93,7 @@ def dispatch(event: dict[str, Any]) -> None:
     for sender in senders().all():
         if sender.name in off:
             continue
-        for target in sender.targets():
+        for target in _targets(sender, found):
             try:
                 deliver_to(sender.name, target, found)
             except Exception:

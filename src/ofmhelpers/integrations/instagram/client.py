@@ -295,7 +295,9 @@ class InstagramClient:
         try:
             jar = load_jar(self._cookies)
         except CookieFileError:
-            logger.warning("the Instagram login is not a readable cookies.txt")
+            logger.warning(
+                "the Instagram login is not a readable cookies.txt", exc_info=True
+            )
             return None
         session = _retrying(requests.Session())
         session.cookies = jar  # type: ignore[assignment]

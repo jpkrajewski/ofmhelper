@@ -64,7 +64,9 @@ def ensure(drive: DriveApi, root: str, va: User, stored: VaFolder | None) -> VaF
         try:
             current = drive.folder(stored.folder_id)
         except FolderGoneError:
-            logger.warning("drive: folder of VA %s is gone: made again", va.id)
+            logger.warning(
+                "drive: folder of VA %s is gone: made again", va.id, exc_info=True
+            )
         else:
             if current.name != name:
                 drive.rename(current.id, name)

@@ -72,13 +72,19 @@ def stale(now: float) -> list[Path]:
     keep_s = settings.aigen.raw_keep_s
     try:
         files = [p for p in out.iterdir() if classify_kind(p.name) in _MEDIA]
-    except OSError:
+    except FileNotFoundError:
+        # No download yet. Any other OSError (unreadable) fails the sweep.
+        logger.debug("raw-file sweep: %s not made yet", out, exc_info=True)
         return []
     old = []
     for path in files:
         try:
             st = path.stat()
+        except FileNotFoundError:
+            logger.debug("raw file %s gone meanwhile", path.name, exc_info=True)
+            continue
         except OSError:
+            logger.warning("raw file %s not read", path.name, exc_info=True)
             continue
         if path.info.is_file() and now - st.st_mtime > keep_s:
             old.append(path)

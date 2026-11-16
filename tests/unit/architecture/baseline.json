@@ -11,5 +11,6 @@
     "features/signin/flow.py::drive_folders.sync"
   ],
   "loose_returns": [],
-  "repeated_parameters": []
+  "repeated_parameters": [],
+  "silent_excepts": []
 }

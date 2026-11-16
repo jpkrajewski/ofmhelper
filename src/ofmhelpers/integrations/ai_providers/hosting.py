@@ -103,7 +103,7 @@ def hosted_file(token: str) -> Path | None:
         found = get_redis().get(f"{_PREFIX}{token}")
     except RedisError:
         # Not `cache.get_text`: its warning would log the key, the token in it.
-        logger.warning("hosted file lookup unavailable (Redis)")
+        logger.warning("hosted file lookup unavailable (Redis)", exc_info=True)
         return None
     if found is None:
         return None

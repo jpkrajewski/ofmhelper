@@ -33,9 +33,9 @@
                 {% for r in roles %}<option value="{{ r }}"{% if r == "user" %} selected{% endif %}>{{ "VA" if r == "va" else r|capitalize }}</option>{% endfor %}
             </select>
         </div>
-        {# Only a VA has an owner: shown once VA is picked. #}
+        {# Only a VA or a manager has an employer: shown once one is picked. #}
         <div class="field users-add-owner" id="users-owner-field" hidden>
-            <label for="users-owner">VA's employer</label>
+            <label for="users-owner">Employer</label>
             <select name="owner_id" id="users-owner">
                 {% for o in owners %}<option value="{{ o.id }}">{{ o.label }}</option>{% endfor %}
             </select>
@@ -72,11 +72,11 @@
                 <td>
                     <span class="users-role-text">{{ "VA" if u.role == "va" else u.role|capitalize }}</span>
                     {% if u.email in env_admins %}<span class="pending users-note">always admin</span>{% endif %}
-                    {% if u.role == "va" %}
+                    {% if u.role in ("va", "manager") %}
                     <form method="post" action="/users/{{ u.id }}/owner">
                         <select name="owner_id" class="users-role" aria-label="Owner of {{ u.email }}" onchange="this.form.submit()">
                             {% if not u.owner_id %}<option value="" selected>No employer</option>{% endif %}
-                            {% for o in owners %}<option value="{{ o.id }}"{% if o.id == u.owner_id %} selected{% endif %}>VA of {{ o.label }}</option>{% endfor %}
+                            {% for o in owners %}<option value="{{ o.id }}"{% if o.id == u.owner_id %} selected{% endif %}>{{ "VA of" if u.role == "va" else "Manager of" }} {{ o.label }}</option>{% endfor %}
                         </select>
                     </form>
                     {% endif %}
@@ -149,9 +149,10 @@
     const password = document.getElementById("users-password");
     function showOwner() {
         const va = role.value === "va";
-        ownerField.hidden = !va;
-        owner.disabled = !va;
-        owner.required = va;
+        const employed = va || role.value === "manager";
+        ownerField.hidden = !employed;
+        owner.disabled = !employed;
+        owner.required = employed;
         passwordField.hidden = !va;
         password.disabled = !va;
         password.required = va;

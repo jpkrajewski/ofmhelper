@@ -272,11 +272,11 @@ def _seed_users(database_url: str) -> None:
     with create_engine(database_url).begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO users (id, email, name, role, active, created_at,"
+                "INSERT INTO users (id, email, name, role, active,"
                 " google_refresh_token, password_hash, is_password_account)"
                 " VALUES"
-                " (1, 'admin', 'Admin (password)', 'admin', true, 0, '', '', true),"
-                " (2, :va, '', 'user', true, 0, '', :hash, false)"
+                " (1, 'admin', 'Admin (password)', 'admin', true, '', '', true),"
+                " (2, :va, '', 'user', true, '', :hash, false)"
                 " ON CONFLICT (id) DO NOTHING"
             ),
             {"va": va_email, "hash": _va_password_hash()},

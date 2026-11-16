@@ -89,7 +89,7 @@ class _Dotenv:
             return checked[1]
         try:
             mtime: int | None = Path(path).stat().st_mtime_ns
-        except OSError:
+        except OSError:  # silent: no .env file is a valid setup
             mtime = None
         self._seen[path] = (now, mtime)
         return mtime

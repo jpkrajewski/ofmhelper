@@ -43,7 +43,7 @@ def _account(row: TrackedAccountRow, creator: str | None) -> TrackedAccount:
         handle=row.handle,
         creator=creator,
         notes=row.notes,
-        added_at=row.added_at,
+        added_at=row.created_at.timestamp(),
         scanned_at=row.scanned_at,
         claimed_at=row.claimed_at,
         untracked_at=row.untracked_at,
@@ -61,7 +61,7 @@ def _creator_id(s: Session, name: str | None, user_id: int) -> int | None:
         return None
     s.execute(
         insert(CreatorRow)
-        .values(name=name, user_id=user_id, created_at=time.time())
+        .values(name=name, user_id=user_id)
         .on_conflict_do_nothing(constraint="uq_creators_owner_name")
     )
     return s.execute(
@@ -298,7 +298,6 @@ class TrackedAccountRepository(CachedRepository):
                     handle=handle,
                     creator_id=creator_id,
                     notes="",
-                    added_at=time.time(),
                 )
                 .on_conflict_do_nothing(
                     constraint="uq_tracked_accounts_platform_handle"
@@ -333,7 +332,7 @@ class TrackedAccountRepository(CachedRepository):
                     TrackedAccountRow.untracked_at.is_(None),
                     *mine(TrackedAccountRow.user_id, owner),
                 ).order_by(
-                    TrackedAccountRow.added_at.desc(), TrackedAccountRow.id.desc()
+                    TrackedAccountRow.created_at.desc(), TrackedAccountRow.id.desc()
                 )
             ).all()
             return _with_baselines(s, rows, periods_days, None)

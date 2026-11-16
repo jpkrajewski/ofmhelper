@@ -110,7 +110,9 @@ _LOAD = text(
 def _put_back(name: str, owned: str) -> str:
     """The SQL writing table `name`'s rows of the revision over the table's:
     inserted when gone, set to every stored value when there. Table and
-    column names are the mapped model's own, never a caller's."""
+    column names are the mapped model's own, never a caller's. A revision
+    from before the row stamps (alembic a1b2c3d4e5f8) is read in today's
+    shape (`phone_snapshot_current`): stored revisions are never rewritten."""
     table = Base.metadata.tables[name]
     columns = [c.name for c in table.columns]
     keys = [c.name for c in table.primary_key.columns]
@@ -118,7 +120,9 @@ def _put_back(name: str, owned: str) -> str:
     return f"""
         INSERT INTO {name} ({", ".join(columns)})
         SELECT {", ".join(f"r.{c}" for c in columns)}
-        FROM jsonb_populate_recordset(NULL::{name}, {_SNAPSHOT}->'{name}') r
+        FROM jsonb_populate_recordset(
+            NULL::{name}, phone_snapshot_current({_SNAPSHOT})->'{name}'
+        ) r
         WHERE {owned}
         ON CONFLICT ({", ".join(keys)}) DO UPDATE SET {changed}
         """  # noqa: S608 -- identifiers from the mapped tables only

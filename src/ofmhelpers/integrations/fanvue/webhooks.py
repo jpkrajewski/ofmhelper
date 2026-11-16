@@ -65,7 +65,7 @@ def is_probe(raw: bytes, headers: Mapping[str, str]) -> bool:
         return False
     try:
         return json.loads(raw).get("type") == _PROBE
-    except ValueError, AttributeError:
+    except ValueError, AttributeError:  # silent: not JSON: not a probe
         return False
 
 
@@ -90,7 +90,7 @@ def _signature_parts(header: str) -> tuple[str, list[str]]:
 def _fresh(timestamp: str) -> bool:
     try:
         age_s = abs(time.time() - int(timestamp))
-    except ValueError, OverflowError:
+    except ValueError, OverflowError:  # silent: not a timestamp: not fresh
         return False
     return age_s <= settings.chatting.webhook_tolerance_s
 

@@ -49,7 +49,7 @@ def upload_cookies(request: Request, owner_id: OwnerId, file: UploadFile) -> Res
     event loop."""
     try:
         service.upload(owner_id, file.file, file.filename, file.size)
-    except RefusedError as exc:
+    except RefusedError as exc:  # silent: shown on the page
         return _page(request, owner_id, error=str(exc), status_code=400)
     return see_other("/cookies?note=uploaded")
 

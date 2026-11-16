@@ -91,7 +91,7 @@ class LinkProvider(ABC):
         """The provider's own words for a failed call."""
         try:
             body = response.json()
-        except ValueError:
+        except ValueError:  # silent: not JSON: the text is the error
             return response.text[:200] or response.reason
         if isinstance(body, dict):
             error = body.get("error")

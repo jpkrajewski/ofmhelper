@@ -223,6 +223,7 @@ class LLMProvider(ABC):
                     self.label,
                     self.model,
                     exc,
+                    exc_info=True,
                 )
         msg = "unreachable"  # the loop returns or raises
         raise AssertionError(msg)
@@ -265,6 +266,7 @@ class LLMProvider(ABC):
                     exc,
                     tried + 1,
                     wait,
+                    exc_info=True,
                 )
                 time.sleep(wait)
         msg = "unreachable"  # the loop returns or raises

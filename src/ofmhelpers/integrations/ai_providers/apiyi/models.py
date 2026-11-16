@@ -110,7 +110,7 @@ def _read_error(status: int, text: str) -> tuple[str, str]:
     """(message for us, the provider's words) of an error answer."""
     try:
         error = ApiyiErrorBody.model_validate_json(text).as_error()
-    except ValueError:
+    except ValueError:  # silent: not JSON: the text is the message
         error = ApiyiError(message=text[:200])
     detail = error.message or "error"
     code = error.code or error.type or "error"

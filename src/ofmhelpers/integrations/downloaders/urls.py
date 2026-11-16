@@ -15,7 +15,7 @@ class NotALinkError(ValueError):
 def _is_web_address(url: str) -> bool:
     try:
         parts = urlsplit(url)
-    except ValueError:
+    except ValueError:  # silent: not a web address
         return False
     return parts.scheme in {"http", "https"} and bool(parts.netloc)
 

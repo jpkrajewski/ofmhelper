@@ -165,7 +165,7 @@ def serve_job_preview(
         )
     try:
         dest = previews.ResultPreview(source=path, job_id=job.id, index=index).make()
-    except previews.FailedBeforeError:
+    except previews.FailedBeforeError:  # silent: failed before: the original
         return media_response(path)
     except previews.PREVIEW_ERRORS:
         logger.warning("could not preview %s", path, exc_info=True)

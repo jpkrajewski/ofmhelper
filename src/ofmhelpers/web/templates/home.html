@@ -6,7 +6,7 @@
 {# Every page this person may open (schemas/nav.py): on a phone the nav
    sits behind a toggle, so home keeps every tool one tap away. #}
 <div class="card-grid">
-    {% for item in nav(viewer_of(request).user.role) %}
+    {% for item in nav_of(viewer_of(request)) %}
     {{ ui.link_card(item.href, item.label, item.icon) }}
     {% endfor %}
 </div>

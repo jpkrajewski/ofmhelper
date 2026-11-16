@@ -7,7 +7,7 @@ writes (/accounts) would not invalidate them. Only the sync state, which
 nothing else writes, is."""
 
 import time
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import delete, or_, select, update
@@ -71,7 +71,7 @@ def _link(
             "status": row.status,
             "adult": row.adult,
             "error": row.error,
-            "created_at": row.created_at,
+            "created_at": row.created_at.timestamp(),
             "days": days or [],
         }
     )
@@ -173,7 +173,7 @@ class ShortLinkRepository(CachedRepository):
                     destination=r.destination,
                     active=r.status == "active",
                     adult=r.adult,
-                    created_at=r.created_at,
+                    created_at=r.created_at.timestamp(),
                     id=r.id,
                 )
                 for r in rows
@@ -194,7 +194,6 @@ class ShortLinkRepository(CachedRepository):
     ) -> list[int]:
         """New links, still to be made (status "creating"); each takes its
         account's creator, or `creator` (a name of `user_id`'s)."""
-        now = time.time()
         with session_scope() as s:
             ids = []
             for link in links:
@@ -217,8 +216,6 @@ class ShortLinkRepository(CachedRepository):
                     account_id=link.account_id,
                     creator_id=creator_id,
                     status="creating",
-                    created_at=now,
-                    updated_at=now,
                 )
                 s.add(row)
                 s.flush()
@@ -239,7 +236,6 @@ class ShortLinkRepository(CachedRepository):
                     status="active" if remote["active"] else "inactive",
                     adult=remote["adult"],
                     error=None,
-                    updated_at=time.time(),
                 )
             )
 
@@ -248,15 +244,13 @@ class ShortLinkRepository(CachedRepository):
             s.execute(
                 update(ShortLinkRow)
                 .where(ShortLinkRow.id.in_(ids))
-                .values(status=status, error=error, updated_at=time.time())
+                .values(status=status, error=error)
             )
 
     def set_slug(self, link_id: int, slug: str) -> None:
         with session_scope() as s:
             s.execute(
-                update(ShortLinkRow)
-                .where(ShortLinkRow.id == link_id)
-                .values(slug=slug, updated_at=time.time())
+                update(ShortLinkRow).where(ShortLinkRow.id == link_id).values(slug=slug)
             )
 
     def set_adult(self, ids: list[int]) -> None:
@@ -264,7 +258,7 @@ class ShortLinkRepository(CachedRepository):
             s.execute(
                 update(ShortLinkRow)
                 .where(ShortLinkRow.id.in_(ids))
-                .values(adult=True, error=None, updated_at=time.time())
+                .values(adult=True, error=None)
             )
 
     def set_creator(
@@ -288,9 +282,7 @@ class ShortLinkRepository(CachedRepository):
                         )
                     ).scalar_one_or_none()
                 s.execute(
-                    update(link)
-                    .where(link.id == link_id)
-                    .values(creator_id=creator_id, updated_at=time.time())
+                    update(link).where(link.id == link_id).values(creator_id=creator_id)
                 )
             return len(rows)
 
@@ -316,7 +308,10 @@ class ShortLinkRepository(CachedRepository):
         "deleting" ones it still lists after `create_ttl_s` (their job was
         lost) go back to their status. `days` (remote id -> days) replace the
         stored ones."""
-        now = time.time()
+        # A row's own stamps are the database's: `updated_at` moves with each
+        # real change (the stamp trigger), so a "deleting" one keeps the time
+        # its delete started.
+        cutoff = datetime.now(UTC) - timedelta(seconds=create_ttl_s)
         link = ShortLinkRow
         with session_scope() as s:
             rows = list(
@@ -335,6 +330,7 @@ class ShortLinkRepository(CachedRepository):
                 )
                 if row is None:
                     account_id = accounts.get(remote["slug"])
+                    made = remote["created_at"]
                     row = ShortLinkRow(
                         user_id=user_id,
                         provider=provider,
@@ -344,12 +340,16 @@ class ShortLinkRepository(CachedRepository):
                         target=remote["target"],
                         account_id=account_id,
                         creator_id=_creator_of_account(s, account_id),
-                        created_at=remote["created_at"] or now,
+                        **(
+                            {"created_at": datetime.fromtimestamp(made, UTC)}
+                            if made
+                            else {}
+                        ),
                     )
                     s.add(row)
                 elif row.status == "deleting":
                     seen.add(row.id)
-                    if row.updated_at >= now - create_ttl_s:
+                    if row.updated_at >= cutoff:
                         continue
                     # Its delete job was lost (a deploy): the link is still
                     # there, back to what it is with the reason.
@@ -363,7 +363,6 @@ class ShortLinkRepository(CachedRepository):
                     row.adult = remote["adult"]
                 if row.error != "Delete interrupted: delete it again":
                     row.error = None
-                row.updated_at = now
                 s.flush()
                 seen.add(row.id)
                 self._replace_days(s, row.id, days.get(remote["remote_id"], []))
@@ -373,12 +372,11 @@ class ShortLinkRepository(CachedRepository):
                 if row.status in (*LIVE, "deleting"):
                     # Gone from the provider (a delete that went through).
                     s.delete(row)
-                elif row.status == "creating" and row.created_at < now - create_ttl_s:
+                elif row.status == "creating" and row.created_at < cutoff:
                     row.status = "failed"
                     row.error = (
                         "Interrupted while being made: remove it and generate again"
                     )
-                    row.updated_at = now
 
     @staticmethod
     def _replace_days(s: Session, link_id: int, days: list[dict]) -> None:

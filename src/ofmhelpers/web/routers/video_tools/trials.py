@@ -85,6 +85,7 @@ def cards(
         view=view,
         reels=view.made_among(wanted),
         pending=view.pending_among(wanted),
+        failed=view.failed_among(wanted),
     )
 
 

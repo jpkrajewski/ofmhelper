@@ -182,7 +182,7 @@ def _chat(raw: dict[str, Any]) -> FanvueChat | None:
     cost the rest of the page."""
     try:
         return FanvueChat.model_validate(raw)
-    except ValidationError as exc:
+    except ValidationError as exc:  # silent: the error quotes a chat, a fan's words
         logger.warning("fanvue chat skipped: %d fields", exc.error_count())
         return None
 
@@ -198,7 +198,7 @@ def _retry_wait(r: requests.Response) -> float:
     """What a 429 or a database-timeout 503 asks for (capped), else the plain pause."""
     try:
         return min(float(r.headers["Retry-After"]), settings.fanvue.max_wait_s)
-    except KeyError, ValueError:
+    except KeyError, ValueError:  # silent: no Retry-After number: the plain pause
         return settings.fanvue.retry_wait_s
 
 

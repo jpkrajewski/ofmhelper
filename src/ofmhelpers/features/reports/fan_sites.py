@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
+from ofmhelpers.features.chatting.stacked_keys import StackedKeys
 from ofmhelpers.integrations.stacked import StackedClient, StackedError, reachable
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import ChatPlatform, DeliveryKind
@@ -48,7 +49,7 @@ class StackedSite:
         self._end = datetime.fromtimestamp(until, UTC)
         self._reach: dict[str, tuple[StackedClient, str]] = {
             r.creator.username: (r.client, r.creator.user_id)
-            for r in reachable(k.key for k in settings.stacked.api_keys)
+            for r in reachable(StackedKeys().keys())
         }
 
     def models(self) -> list[str]:

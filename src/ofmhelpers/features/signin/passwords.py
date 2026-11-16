@@ -80,7 +80,7 @@ def owner_consent(request: Request, state: str, password: str) -> Outcome:
         return Outcome(error=_TOO_MANY, status_code=429)
     try:
         carried = unseal(request.cookies.get(STATE_COOKIE, ""), "owner", state)
-    except SignInError as exc:
+    except SignInError as exc:  # silent: shown on the page
         return Outcome(error=str(exc), status_code=400)
     if not password_ok(password):
         record_failed_login(request)

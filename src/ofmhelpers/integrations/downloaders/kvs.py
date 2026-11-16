@@ -91,6 +91,7 @@ def download(url: str, output_dir: Path | None = None) -> DownloadResult:
         page = outbound.get(url, headers=headers, timeout=timeout)
         page.raise_for_status()
     except requests.RequestException as exc:
+        logger.warning("kvs: page of %s not read", url, exc_info=True)
         return DownloadResult(url=url, success=False, error=f"KVS page: {exc}")
     kvs = KvsPage.parse(page.text)
     if kvs is None:
@@ -107,6 +108,7 @@ def download(url: str, output_dir: Path | None = None) -> DownloadResult:
     try:
         _save(real, dest, {**headers, "Referer": url}, timeout)
     except requests.RequestException as exc:
+        logger.warning("kvs: video of %s not saved", url, exc_info=True)
         return DownloadResult(url=url, success=False, error=f"KVS video: {exc}")
     logger.info("kvs: %s -> %s (%d bytes)", url, dest.name, dest.stat().st_size)
     return DownloadResult(url=url, success=True, output_paths=[dest])

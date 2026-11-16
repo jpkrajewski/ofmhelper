@@ -48,7 +48,7 @@ def _readable(user_id: int) -> StoredCookies | None:
     try:
         return _repository().get(user_id)
     except VaultError as exc:
-        logger.warning("user %s: cookies unreadable: %s", user_id, exc)
+        logger.warning("user %s: cookies unreadable: %s", user_id, exc, exc_info=True)
         return None
 
 

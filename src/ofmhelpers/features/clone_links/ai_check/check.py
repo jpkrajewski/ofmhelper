@@ -250,11 +250,15 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
             except LLMQuotaError as exc:
                 said.append(_said(entry, exc))
                 unavailable = True
-                logger.warning("AI check: %s out of quota (%s)", entry, exc)
+                logger.warning(
+                    "AI check: %s out of quota (%s)", entry, exc, exc_info=True
+                )
             except LLMUnavailableError as exc:
                 said.append(_said(entry, exc))
                 unavailable = True
-                logger.warning("AI check: %s unavailable (%s)", entry, exc)
+                logger.warning(
+                    "AI check: %s unavailable (%s)", entry, exc, exc_info=True
+                )
                 break
             except LLMAuthError as exc:
                 if number == len(keys):
@@ -271,6 +275,7 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
                 break
             except LLMError as exc:
                 said.append(_said(entry, exc))
+                logger.warning("AI check: %s failed", entry, exc_info=True)
                 return none_answered(exc, _reason(exc))
     if time.monotonic() >= deadline:
         return none_answered(LLMUnavailableError(TOO_LONG), TOO_LONG)

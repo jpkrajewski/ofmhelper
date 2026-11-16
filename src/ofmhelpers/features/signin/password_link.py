@@ -29,7 +29,7 @@ def set_password(token: str, password: str, confirm: str) -> Outcome | LinkPage:
     try:
         form = PasswordForm(password=password, confirm=confirm)
         user = credentials.set_password_with_link(token, form.password, form.confirm)
-    except (ValueError, ValidationError) as exc:
+    except (ValueError, ValidationError) as exc:  # silent: shown on the page
         message = (
             str(exc)
             if isinstance(exc, credentials.PasswordRejectedError)

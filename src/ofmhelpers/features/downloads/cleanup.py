@@ -191,7 +191,11 @@ def _size(path: Path) -> int:
     hard link in the asset store) still holds them."""
     try:
         st = path.stat()
+    except FileNotFoundError:
+        logger.debug("download %s gone meanwhile", path, exc_info=True)
+        return 0
     except OSError:
+        logger.warning("download %s not read", path, exc_info=True)
         return 0
     return st.st_size if st.st_nlink == 1 else 0
 

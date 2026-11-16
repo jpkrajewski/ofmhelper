@@ -33,7 +33,7 @@ def _fresh(timestamp: str) -> bool:
     sane number is simply not fresh."""
     try:
         age_s = abs(time.time() - int(timestamp))
-    except ValueError, OverflowError:
+    except ValueError, OverflowError:  # silent: not a timestamp: not fresh
         return False
     return age_s <= settings.chatting.webhook_tolerance_s
 
@@ -46,7 +46,7 @@ def verified(secret: str, raw: bytes, headers: Mapping[str, str]) -> bool:
         return False
     try:
         key = base64.b64decode(secret.removeprefix("whsec_"))
-    except binascii.Error:
+    except binascii.Error:  # silent: not a secret: not verified
         return False
     signed = f"{message_id}.{timestamp}.".encode() + raw
     expected = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest())

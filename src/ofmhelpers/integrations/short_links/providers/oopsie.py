@@ -35,7 +35,7 @@ def _timestamp(value: str | None) -> float | None:
         return None
     try:
         return datetime.fromisoformat(value).timestamp()
-    except ValueError:
+    except ValueError:  # silent: not a date
         return None
 
 

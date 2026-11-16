@@ -62,7 +62,11 @@ def _written(folder: Path) -> int:
     the marker is unreadable: the next round then writes)."""
     try:
         return int((folder / _MARKER).read_text(encoding="ascii"))
+    except FileNotFoundError:
+        logger.debug("phones backup: none written in %s yet", folder, exc_info=True)
+        return -1
     except OSError, ValueError:
+        logger.warning("phones backup: marker in %s unreadable", folder, exc_info=True)
         return -1
 
 

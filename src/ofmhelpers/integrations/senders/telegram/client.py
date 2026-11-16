@@ -11,6 +11,7 @@ How a refusal is told apart (Bot API "Making requests"): 429 carries
 answers with `parameters.migrate_to_chat_id`; any other 4xx (chat not found, bot
 removed or blocked) cannot succeed on a retry; 5xx and network errors can."""
 
+from functools import lru_cache
 from http import HTTPStatus
 from typing import Any
 
@@ -121,7 +122,7 @@ def _update(raw: Any) -> Update | None:
     without even an id."""
     try:
         return Update.model_validate(raw)
-    except ValidationError:
+    except ValidationError:  # silent: the error quotes someone's words
         update_id = raw.get("update_id") if isinstance(raw, dict) else None
         if not isinstance(update_id, int):
             return None
@@ -142,3 +143,10 @@ def _refusal(method: str, reply: Reply) -> TelegramError:
     return TelegramError(
         msg, permanent=permanent and code != HTTPStatus.TOO_MANY_REQUESTS
     )
+
+
+@lru_cache(maxsize=2)
+def bot_name(token: str) -> str:
+    """The bot's username (`t.me/<it>`, `/money@<it>`), asked once per
+    token. Raises `TelegramError`."""
+    return TelegramClient(token).me().username

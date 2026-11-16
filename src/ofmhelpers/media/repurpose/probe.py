@@ -14,7 +14,7 @@ def _rate(fraction: str) -> float | None:
     num, _, den = fraction.partition("/")
     try:
         value = float(num) / float(den or 1)
-    except ValueError, ZeroDivisionError:
+    except ValueError, ZeroDivisionError:  # silent: not a rate (0/0)
         return None
     return value if value > 0 else None
 

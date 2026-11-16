@@ -42,7 +42,7 @@ def _user(row: UserRow) -> User:
         name=row.name,
         role=Role(row.role),
         active=row.active,
-        created_at=row.created_at,
+        created_at=row.created_at.timestamp(),
         last_login_at=row.last_login_at,
         drive_connected=row.drive_connected,
         has_password=bool(row.password_hash),
@@ -62,7 +62,7 @@ def _linked_account(row: UserIdentityRow) -> LinkedAccount:
         provider=row.provider,
         subject=row.subject,
         email=row.email,
-        linked_at=row.linked_at,
+        linked_at=row.created_at.timestamp(),
     )
 
 
@@ -131,7 +131,6 @@ class UserRepository(CachedRepository):
                     name=name,
                     role=role,
                     active=True,
-                    created_at=time.time(),
                     google_refresh_token="",
                     password_hash="",
                     is_password_account=password_account,
@@ -258,6 +257,19 @@ class UserRepository(CachedRepository):
                 keys=[SavedKey(provider=r.provider, api_key=r.api_key) for r in rows]
             )
 
+    def keys_in_slot(self, slot: str) -> list[str]:
+        """Every active admin's saved key of `slot`, decrypted (the agency's
+        chat logins: a Stacked key saved on /account). Never cached."""
+        key, user = UserApiKeyRow, UserRow
+        with session_scope() as s:
+            rows = s.execute(
+                select(key)
+                .join(user, user.id == key.user_id)
+                .where(key.provider == slot, user.active, user.role == Role.ADMIN.value)
+                .order_by(key.user_id)
+            ).scalars()
+            return [r.api_key for r in rows if r.api_key]
+
     def set_api_key(self, user_id: int, provider: str, api_key: str) -> None:
         """Stores the key; "" removes it."""
         with session_scope() as s:
@@ -273,7 +285,6 @@ class UserRepository(CachedRepository):
                         user_id=user_id,
                         provider=provider,
                         api_key=api_key,
-                        updated_at=time.time(),
                     )
                 )
 
@@ -310,7 +321,6 @@ class UserRepository(CachedRepository):
                     subject=subject,
                     user_id=user_id,
                     email=email,
-                    linked_at=time.time(),
                 )
                 .on_conflict_do_nothing(
                     index_elements=[UserIdentityRow.provider, UserIdentityRow.subject]

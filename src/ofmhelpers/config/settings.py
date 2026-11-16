@@ -2421,6 +2421,11 @@ class TelegramSettings(BaseSettings):
     ask_max_age_s: float = Field(
         default=300, gt=0, validation_alias="OFM_TELEGRAM_ASK_MAX_AGE_S"
     )
+    # How long /account's "Connect Telegram" link to the bot works
+    # (features/account/telegram.py): opened later, it links nothing.
+    link_ttl_s: int = Field(
+        default=900, ge=60, validation_alias="OFM_TELEGRAM_LINK_TTL_S"
+    )
 
     def chat_id_list(self) -> list[str]:
         return _names(self.chat_ids)

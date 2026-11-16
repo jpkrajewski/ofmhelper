@@ -68,7 +68,7 @@ def _link(
                 s.query(CreatorRow).filter_by(user_id=owner, name=creator).one_or_none()
             )
             if row is None:
-                row = CreatorRow(user_id=owner, name=creator, created_at=NOW)
+                row = CreatorRow(user_id=owner, name=creator)
                 s.add(row)
                 s.flush()
             creator_id = row.id
@@ -82,8 +82,6 @@ def _link(
             target=target,
             creator_id=creator_id,
             status="active",
-            created_at=NOW,
-            updated_at=NOW,
         )
         s.add(link)
         s.flush()

@@ -271,7 +271,7 @@ def _chat(raw: dict[str, Any]) -> ChatSummary | None:
     cost the rest of the page."""
     try:
         return ChatSummary.model_validate(raw)
-    except ValidationError as exc:
+    except ValidationError as exc:  # silent: the error quotes a chat, a fan's words
         logger.warning(
             "stacked chat %s skipped: %d fields",
             raw.get("channelUrl"),
@@ -291,7 +291,7 @@ def _retry_wait(r: requests.Response) -> float:
     """What a 429 asks for (capped), else the plain pause."""
     try:
         return min(float(r.headers["Retry-After"]), settings.stacked.max_wait_s)
-    except KeyError, ValueError:
+    except KeyError, ValueError:  # silent: no Retry-After number: the plain pause
         return settings.stacked.retry_wait_s
 
 
@@ -306,7 +306,7 @@ def _ok(r: requests.Response) -> Any:
             raise StackedError(msg) from exc
     try:
         detail = ErrorReply.model_validate_json(r.content).error
-    except ValidationError:
+    except ValidationError:  # silent: not Stacked's error body: the reason
         detail = r.reason
     logger.warning(
         "stacked %s %s: %s %s (request id %s)",

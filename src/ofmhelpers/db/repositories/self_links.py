@@ -71,7 +71,7 @@ class SelfLinkRepository(CachedRepository):
         where = [(dom.owner_id == owner) | (dom.owner_id.is_(None))] if owner else []
         with session_scope() as s:
             rows = s.execute(
-                select(dom).where(*where).order_by(dom.added_at.desc(), dom.id.desc())
+                select(dom).where(*where).order_by(dom.created_at.desc(), dom.id.desc())
             ).scalars()
             return [
                 SelfDomain(
@@ -79,7 +79,7 @@ class SelfLinkRepository(CachedRepository):
                     host=r.host,
                     owner_id=r.owner_id,
                     status=r.status,
-                    added_at=r.added_at,
+                    added_at=r.created_at.timestamp(),
                 )
                 for r in rows
             ]
@@ -91,7 +91,6 @@ class SelfLinkRepository(CachedRepository):
                 host=host.strip().lower(),
                 owner_id=owner_id,
                 status=status,
-                added_at=time.time(),
             )
             s.add(row)
             s.flush()

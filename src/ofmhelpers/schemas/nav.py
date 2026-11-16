@@ -8,8 +8,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
-from ofmhelpers.auth.access import Area, allowed
+from ofmhelpers.auth.access import Area, allowed, opens
 from ofmhelpers.schemas.users import Role
+lazy from ofmhelpers.schemas.users import Viewer
 
 
 class NavPlace(StrEnum):
@@ -233,3 +234,12 @@ def nav(role: Role | None) -> list[NavItem]:
     """Every page someone of `role` may open, in menu order. None (nobody
     signed in: a public page's header) lists what a user has."""
     return [item for item in NAV if allowed(role or Role.USER, item.area)]
+
+
+def nav_of(viewer: Viewer | None) -> list[NavItem]:
+    """The menu of a request's person (`auth.access.opens`: a manager's is
+    their list cut to what their employer opens); nobody signed in: a
+    user's."""
+    if viewer is None:
+        return nav(None)
+    return [item for item in NAV if opens(viewer, item.area)]

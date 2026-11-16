@@ -2,8 +2,6 @@
 every read returns or derives from the decrypted cookies, which must never
 reach Redis."""
 
-import time
-
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -22,7 +20,7 @@ class CookieRepository:
             return StoredCookies(
                 cookies=row.cookies,
                 file_name=row.file_name,
-                uploaded_at=row.uploaded_at,
+                uploaded_at=row.updated_at.timestamp(),
             )
 
     def first_holder(self, user_ids: list[int]) -> int | None:
@@ -40,19 +38,17 @@ class CookieRepository:
         return next((u for u in user_ids if u in holders), None)
 
     def save(self, user_id: int, cookies: str, file_name: str) -> float:
-        """Stores or replaces `user_id`'s cookies; returns `uploaded_at`."""
-        values: dict = {
-            "cookies": cookies,
-            "file_name": file_name,
-            "uploaded_at": time.time(),
-        }
+        """Stores or replaces `user_id`'s cookies; returns when (the row's
+        `updated_at`, the database's clock)."""
+        values: dict = {"cookies": cookies, "file_name": file_name}
         with session_scope() as s:
-            s.execute(
+            saved = s.execute(
                 insert(UserCookiesRow)
                 .values(user_id=user_id, **values)
                 .on_conflict_do_update(index_elements=["user_id"], set_=values)
-            )
-        return values["uploaded_at"]
+                .returning(UserCookiesRow.updated_at)
+            ).scalar_one()
+        return saved.timestamp()
 
     def delete(self, user_id: int) -> bool:
         with session_scope() as s:

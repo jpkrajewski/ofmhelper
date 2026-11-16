@@ -26,6 +26,11 @@ Keys: one `.env` line per account, `STACKED_API_KEY_<NAME>` (`settings.stacked.a
 - Every chat call needs `creatorUserId` (query) or `X-Stacked-Creator-User-Id` (header). Scope for reading chats: `chat:read`. Webhooks: `webhooks:manage`.
 - OAuth ("Connect Stacked") = PKCE S256, access token 1 h, one live token per grant, refresh token 90 days from last use. Owner-scoped app works immediately but still needs approved API access.
 - Rate limit: 600 req/min per key, fixed window. 429 carries `Retry-After`. Reads and 429/502 are safe to retry. Errors: `{"error": "message"}`; branch on status, not text.
+- Keys saved on /account (2026-11-15, owner: "is it easy for new users to connect ... stacked?"):
+  - An admin, or whoever may open /chatting, pastes a Stacked key in the API keys card (slot `stacked`, `user_api_keys`, encrypted). It is checked with `GET me` first: a refused key is not saved ("Stacked did not accept that key").
+  - `features/chatting/stacked_keys.py` `StackedKeys` reads the `.env` lines and every active admin's saved key, each once. `StackedSource(keys)` and the daily report use it, so no container restart is needed.
+  - The chats stay the agency's: a non-admin's own chats would need owner columns on `chat_*`. Not built.
+
 
 ## Chats
 - `GET /external-service/v1/chats` -> `{chats: [ChatSummary], nextCursor}`, newest last message first, `limit` max 100, stop when `nextCursor` is absent; a page can be short with more pages left. Filters: `unreadOnly`, `memberUserId`, `search`, `showEmpty` (default true).

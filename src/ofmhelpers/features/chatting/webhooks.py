@@ -287,7 +287,7 @@ def _named(raw: bytes) -> str:
     only (the values may be a fan's words)."""
     try:
         top = _Top.model_validate_json(raw).root
-    except ValidationError:
+    except ValidationError:  # silent: told as "not a JSON object"
         return "not a JSON object"
     kind = top.get("type")
     kind = kind[:_NAME_MAX] if isinstance(kind, str) else "-"
@@ -346,7 +346,7 @@ def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
                     "1",
                     settings.chatting.webhook_quiet_s,
                 )
-    except ValidationError as exc:
+    except ValidationError as exc:  # silent: may quote a fan's words
         # No exc_info: the error text quotes the input, which may be a fan's words.
         logger.warning(
             "%s delivery not understood: %d fields (%s) of %s",
@@ -355,7 +355,7 @@ def receive(source: ChatSource, raw: bytes, headers: Mapping[str, str]) -> bool:
             _failed_fields(exc),
             _named(raw),
         )
-    except DataError:
+    except DataError:  # silent: the database's text may quote a fan's words
         # Retries would not change it, and a failing address gets disabled.
         logger.warning("%s delivery not storable", platform.value)
     return True

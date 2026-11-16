@@ -65,9 +65,29 @@ def makers(viewer: Viewer) -> list[Maker]:
     return [me, *[Maker(id=va.id, label=va.label) for va in vas]]
 
 
+def _managing(manager: User) -> Viewer:
+    """A manager: their employer's pages through the manager's page list,
+    looked at, never changed (a manager runs nothing). No employer (or one
+    gone): only themselves, which shows nothing."""
+    employer = users.get_user(manager.owner_id) if manager.owner_id else None
+    seen = employer if employer is not None and employer.active else manager
+    return _own(seen).model_copy(
+        update={
+            "by": _as_session(manager),
+            "acts": False,
+            "pages": Role.MANAGER,
+            "keys_of": None,
+            "label": manager.label,
+        }
+    )
+
+
 def viewer_for(user: User, viewing: int | None) -> Viewer:
-    """`user`'s request: as themselves, or (an admin with "view as" on, the
-    person still there and active) as `viewing`."""
+    """`user`'s request: as themselves, a manager as their employer, or (an
+    admin with "view as" on, the person still there and active) as
+    `viewing`."""
+    if user.role == Role.MANAGER:
+        return _managing(user)
     if viewing is None or not user.is_admin or viewing == user.id:
         return _own(user)
     viewed = users.get_user(viewing)

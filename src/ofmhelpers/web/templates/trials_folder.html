@@ -33,9 +33,9 @@
 {% endif %}
 
 <div class="tr-grid" id="tr-grid" data-live="/trials/{{ t.login_id }}/live" data-cards="/trials/{{ t.login_id }}/cards"{% if view.active %} data-running{% endif %}>
-{% with reels=state.ready, pending=view.pending %}{% include "_trials_cards.html" %}{% endwith %}
+{% with reels=view.made, pending=view.pending, failed=view.failed %}{% include "_trials_cards.html" %}{% endwith %}
 </div>
-{{ ui.empty("No trials yet", attrs={"id": "tr-empty", "hidden": (state.ready|length + view.pending|length) > 0}) }}
+{{ ui.empty("No trials yet", attrs={"id": "tr-empty", "hidden": (state.ready|length + view.pending|length + view.failed|length) > 0}) }}
 
 <dialog class="accounts-dialog" id="tr-replace">
     <form method="dialog">

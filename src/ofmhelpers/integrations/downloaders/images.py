@@ -8,6 +8,9 @@ from ofmhelpers.config import settings
 from ofmhelpers.integrations.downloaders import fake
 from ofmhelpers.integrations.downloaders.cookies import cookie_file
 from ofmhelpers.integrations.downloaders.models import DownloadResult
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 # gallery-dl errors that mean "this site wants a login", as the message the
 # person downloading can act on. Instagram shows a logged-out visitor only a
@@ -88,8 +91,10 @@ def download(
             timeout=settings.downloaders.image_download_timeout_s,
         )
     except subprocess.TimeoutExpired:
+        logger.warning("gallery-dl: %s timed out", url, exc_info=True)
         return DownloadResult(url=url, success=False, error="Download timed out")
     except FileNotFoundError:
+        logger.warning("gallery-dl: not installed", exc_info=True)
         return DownloadResult(
             url=url,
             success=False,

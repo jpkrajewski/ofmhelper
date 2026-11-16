@@ -380,7 +380,7 @@ class Asked(BaseModel, frozen=True):
             return EditPage()
         try:
             opened = open_video(self.video, self.assets_root)
-        except EditRefusedError as exc:
+        except EditRefusedError as exc:  # silent: shown on the page
             return EditPage(problem=str(exc))
         path = Path(opened.path)
         prepared = _queue_prepare_quietly(path, self.assets_root, self.actor, run)
@@ -480,7 +480,7 @@ def _why_not_prepared(path: Path, exc: BaseException) -> str:
         return _UNREADABLE
     try:
         _seconds(path)
-    except EditRefusedError:
+    except EditRefusedError:  # silent: unreadable is the answer
         return _UNREADABLE
     return _NOT_PREPARED
 

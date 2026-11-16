@@ -103,7 +103,7 @@ class WatchedProfileRepository(CachedRepository):
         with session_scope() as s:
             s.execute(
                 insert(ProfileGroupRow)
-                .values(user_id=user_id, name=name, created_at=time.time())
+                .values(user_id=user_id, name=name)
                 .on_conflict_do_nothing(index_elements=["user_id", "name"])
             )
 

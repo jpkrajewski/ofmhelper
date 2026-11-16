@@ -57,6 +57,13 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        # Data a revision moves is the migration's in audit_log (a1b2c3d4e5f8):
+        # for the whole session, every revision's transaction.
+        connection.exec_driver_sql(
+            "SELECT set_config('ofm.via', 'migration', false), "
+            "set_config('ofm.ref', 'alembic', false)"
+        )
+        connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

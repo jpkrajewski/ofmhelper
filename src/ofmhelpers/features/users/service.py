@@ -75,7 +75,7 @@ def page_view(me_id: int, shown: Shown) -> PageView:
 
 
 def owners() -> list[User]:
-    return [u for u in users.list_users() if u.active and u.role != Role.VA]
+    return [u for u in users.list_users() if u.active and not u.role.has_employer]
 
 
 def _owner(owner_id: int | None) -> int | None:
@@ -83,7 +83,7 @@ def _owner(owner_id: int | None) -> int | None:
     if owner_id is None:
         return None
     if owner_id not in {u.id for u in owners()}:
-        msg = "Pick an active user, not a VA, as the owner"
+        msg = "Pick an active user, not a VA or a manager, as the owner"
         raise RefusedError(msg)
     return owner_id
 
@@ -150,15 +150,17 @@ def add(
     for the VA to set up."""
     try:
         form = UserForm(email=email, role=role, name=name, owner_id=_owner(owner_id))
-    except ValidationError:
+    except ValidationError:  # silent: shown on the page
         return Shown(error=f"{email!r} is not an email address", status_code=400)
     if form.role == Role.VA:
         if form.owner_id is None:
             return Shown(error="Pick the VA's employer", status_code=400)
         try:
             credentials.check_va_password(form.owner_id, password)
-        except credentials.PasswordRejectedError as exc:
+        except credentials.PasswordRejectedError as exc:  # silent: shown on the page
             return Shown(error=str(exc), status_code=400)
+    if form.role == Role.MANAGER and form.owner_id is None:
+        return Shown(error="Pick the manager's employer", status_code=400)
     user = users.add_user(form)
     if user is None:
         return Shown(error=f"{form.email} is already a user", status_code=409)
@@ -176,7 +178,7 @@ def set_va_password(user: User, password: str) -> Shown:
         raise RefusedError(msg)
     try:
         credentials.set_va_password(user.id, user.owner_id, password)
-    except credentials.PasswordRejectedError as exc:
+    except credentials.PasswordRejectedError as exc:  # silent: shown on the page
         return Shown(error=str(exc), status_code=400)
     return Shown(message=f"Password saved. {_va_signs_in(user)}")
 
@@ -192,18 +194,20 @@ def new_link(user_id: int, site: str) -> Shown:
 
 
 def set_owner(user: User, owner_id: int | None) -> None:
-    """Whose VA `user` is (their employer): the owner sees what the VA
-    makes, the VA's runs go out on the owner's saved API keys, and the VA
-    signs in with the owner's email. A VA always has one."""
-    if user.role != Role.VA:
-        msg = "Only a VA has an owner"
+    """Whose VA or manager `user` is (their employer). A VA's owner sees
+    what the VA makes, the VA's runs go out on the owner's saved API keys,
+    and the VA signs in with the owner's email; a manager looks at the
+    employer's pages (any user's or admin's; the chats only an admin's:
+    `auth.access.opens`). Both always have one."""
+    if not user.role.has_employer:
+        msg = "Only a VA or a manager has an employer"
         raise RefusedError(msg)
     picked = _owner(owner_id)
     if picked is None:
-        msg = "A VA needs an employer: pick one"
+        msg = "Pick an employer"
         raise RefusedError(msg)
     moved = users.set_owner(user.id, picked)
-    if moved is not None:
+    if moved is not None and moved.role == Role.VA:
         _make_va_folder(moved)
 
 
@@ -217,7 +221,7 @@ def remove(user: User) -> Shown | None:
     accounts or watched profiles: deactivating keeps those."""
     try:
         users.delete_user(user.id)
-    except OwnsDataError:
+    except OwnsDataError:  # silent: shown on the page
         return Shown(
             error=f"{user.email} still owns jobs, phones, accounts or watched"
             " profiles: deactivate them instead (nothing of theirs is lost).",
