@@ -61,7 +61,13 @@ def _regate(found: LinkProvider, user_id: int, provider: str) -> None:
         try:
             found.enable_adult(link.remote_id)
         except LinkError as exc:
-            logger.warning("%s: 18+ gate on %s failed: %s", provider, link.address, exc)
+            logger.warning(
+                "%s: 18+ gate on %s failed: %s",
+                provider,
+                link.address,
+                exc,
+                exc_info=True,
+            )
             continue
         store.gated([link.id])
 
@@ -119,7 +125,7 @@ def _make(provider: LinkProvider, link: ShortLink, taken: set[str]) -> None:
                     title=f"@{link.account_handle}" if link.account_handle else slug,
                 )
             )
-        except SlugTakenError:
+        except SlugTakenError:  # silent: taken: the next number is tried
             taken.add(slug)
             while slug in taken:
                 n += 1
@@ -128,6 +134,7 @@ def _make(provider: LinkProvider, link: ShortLink, taken: set[str]) -> None:
             taken.add(slug)
             continue
         except UngatedError as exc:
+            logger.warning("%s: live without the 18+ gate", link.address, exc_info=True)
             store.created(link.id, exc.remote)
             store.set_status([link.id], "active", str(exc))
             return
@@ -162,7 +169,13 @@ def create_links(user_id: int, provider: str, link_ids: list[int]) -> None:
                 store.failed([x.id for x in links[done:]], str(exc))
                 break
             except LinkError as exc:
-                logger.warning("%s: making %s failed: %s", provider, link.address, exc)
+                logger.warning(
+                    "%s: making %s failed: %s",
+                    provider,
+                    link.address,
+                    exc,
+                    exc_info=True,
+                )
                 store.failed([link.id], str(exc))
             except Exception as exc:
                 logger.exception("%s: making %s failed", provider, link.address)
@@ -194,7 +207,9 @@ def enable_adult(user_id: int, link_ids: list[int]) -> None:
         try:
             found.enable_adult(link.remote_id)
         except LinkError as exc:
-            logger.warning("adult gate of %s failed: %s", link.address, exc)
+            logger.warning(
+                "adult gate of %s failed: %s", link.address, exc, exc_info=True
+            )
             store.set_status([link.id], link.status, str(exc))
             continue
         store.gated([link.id])
@@ -217,7 +232,9 @@ def delete_links(user_id: int, link_ids: list[int]) -> None:
             try:
                 found.delete(link.remote_id)
             except LinkError as exc:
-                logger.warning("deleting %s failed: %s", link.address, exc)
+                logger.warning(
+                    "deleting %s failed: %s", link.address, exc, exc_info=True
+                )
                 store.set_status([link.id], "active", str(exc))
                 continue
             store.removed([link.id])

@@ -167,6 +167,21 @@
         return holder;
     }
 
+    // The cards in page order (a copy made again moves to the top); a card
+    // in use stays where it is: moving a playing video pauses it.
+    function order(wanted) {
+        let at = grid.firstElementChild;
+        for (const key of wanted) {
+            const card = cardOf(key);
+            if (!card) continue;
+            if (card === at) {
+                at = card.nextElementSibling;
+            } else if (!inUse(card)) {
+                grid.insertBefore(card, at);
+            }
+        }
+    }
+
     async function apply(live) {
         status.textContent = live.status;
         generate.disabled = live.making;
@@ -188,14 +203,12 @@
             .map((c) => c.key);
         if (missing.length || changed.length) {
             const holder = await swap([...missing, ...changed]);
-            // New cards go in page order.
             for (const key of missing) {
                 const fresh = holder?.content.querySelector(`.tr-reel[data-key="${CSS.escape(key)}"]`);
-                if (!fresh) continue;
-                const next = wanted.slice(wanted.indexOf(key) + 1).map(cardOf).find(Boolean);
-                grid.insertBefore(fresh, next || null);
+                if (fresh) grid.append(fresh);
             }
         }
+        order(wanted);
         empty.hidden = grid.children.length > 0;
         countPicks();
     }

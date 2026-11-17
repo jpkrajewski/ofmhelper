@@ -71,7 +71,7 @@ def raise_for(status: int, text: str) -> NoReturn:
     """An HTTP error answer (`text`: its body) as the shared error."""
     try:
         error = ElyumErrorBody.model_validate_json(text).error or ElyumError()
-    except ValueError:
+    except ValueError:  # silent: not JSON: the text is the message
         error = ElyumError(message=text[:200])
     detail = error.message or "error"
     if error.param:

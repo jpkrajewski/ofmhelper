@@ -90,8 +90,8 @@ def stored_files(root: Path, kind: str | None) -> list[StoredFile]:
             path = Path(dirpath, name)
             try:
                 found.append(StoredFile(path=str(path), mtime=path.stat().st_mtime))
-            except OSError:
-                continue  # deleted mid-walk, or a dangling link
+            except OSError:  # silent: deleted mid-walk, or a dangling link
+                continue
     return found
 
 

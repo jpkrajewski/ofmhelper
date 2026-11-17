@@ -43,7 +43,7 @@ def _clone_estimate(params: dict) -> float | None:
     priced clone run (another model, no price, no resolution or length)."""
     try:
         run = _PricedRun.model_validate(params)
-    except ValidationError:
+    except ValidationError:  # silent: not a priced clone run
         return None
     target = clone_targets().get(run.provider)
     if target is None or target.model != run.model:
@@ -51,7 +51,7 @@ def _clone_estimate(params: dict) -> float | None:
     try:
         price = clone_price(run.provider)
         return price.per_second(run.resolution) * price.usd_per_credit * run.seconds
-    except UnpricedError:
+    except UnpricedError:  # silent: no price: unknown, never 0
         return None
 
 

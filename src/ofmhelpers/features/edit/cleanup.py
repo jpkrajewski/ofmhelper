@@ -62,7 +62,11 @@ def _in_use() -> set[Path]:
 def _old(path: Path, now: float, age_s: float) -> bool:
     try:
         return now - path.stat().st_mtime > age_s
+    except FileNotFoundError:
+        logger.debug("edit file %s gone meanwhile", path, exc_info=True)
+        return False
     except OSError:
+        logger.warning("edit file %s not read", path, exc_info=True)
         return False
 
 

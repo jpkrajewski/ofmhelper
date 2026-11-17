@@ -48,18 +48,30 @@ def _who(job_id: str) -> str:
     return f"{who} · {job.task}"
 
 
+def _key_owner(job_id: str) -> int | None:
+    """Whose saved key the job ran on: a VA's runs are their employer's
+    keys; None for the agency's."""
+    job = get_job(job_id)
+    user = users.get_user(job.user_id) if job and job.user_id else None
+    if user is None:
+        return None
+    return user.owner_id if user.role.has_employer else user.id
+
+
 def out_of_money(job_id: str, provider: str, error: str) -> None:
     """`provider` refused `job_id` for want of money: told once per provider
     per `no_credits_notice_every_s`. Never raises."""
     try:
         every = settings.web.no_credits_notice_every_s
+        owner = _key_owner(job_id)
         emit(
             Event(
                 name="provider.no_credits",
                 title=f"{provider}: no credits",
                 text=f"{_who(job_id)}: {error_line(error)}",
                 url=PAGE,
-                key=f"provider.no_credits:{provider}:{int(time.time() // every)}",
+                key=f"provider.no_credits:{provider}:{owner}:{int(time.time() // every)}",
+                owner_id=owner,
             )
         )
     except Exception:

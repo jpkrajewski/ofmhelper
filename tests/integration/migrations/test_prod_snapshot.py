@@ -820,3 +820,103 @@ def test_va_folders_start_empty_and_follow_their_va(db):
     assert after["drive_va_folders"] == 0
     assert {t: n for t, n in after.items() if t in before} == before
     assert _scalar(db, _VA_FOLDER_DELETE_RULE) == "CASCADE"
+
+
+AUDIT = "a1b2c3d4e5f8"
+# (table, column before, column after) of every float that becomes a time.
+_STAMPED = (
+    ("users", "created_at", "created_at"),
+    ("user_identities", "linked_at", "created_at"),
+    ("user_api_keys", "updated_at", "updated_at"),
+    ("user_cookies", "uploaded_at", "updated_at"),
+    ("devices", "added_at", "created_at"),
+    ("devices", "updated_at", "updated_at"),
+    ("logins", "added_at", "created_at"),
+    ("logins", "updated_at", "updated_at"),
+    ("device_logins", "linked_at", "created_at"),
+    ("tracked_accounts", "added_at", "created_at"),
+    ("creators", "created_at", "created_at"),
+    ("watched_profile_groups", "created_at", "created_at"),
+    ("short_links", "created_at", "created_at"),
+    ("short_links", "updated_at", "updated_at"),
+    ("picture_presets", "created_at", "created_at"),
+    ("picture_presets", "updated_at", "updated_at"),
+    ("self_link_domains", "added_at", "created_at"),
+)
+_EPOCHS = "SELECT {column}::float8 FROM {table} ORDER BY 1"
+_EPOCHS_AFTER = "SELECT extract(epoch FROM {column})::float8 FROM {table} ORDER BY 1"
+
+
+def _column(db: Engine, sql: str) -> list[float]:
+    with db.connect() as conn:
+        return list(conn.execute(text(sql)).scalars())
+
+
+def test_audit_keeps_every_time_to_the_microsecond_and_records_from_then_on(db):
+    """Every float epoch becomes the same moment (to the microsecond), no row
+    is lost, the log starts empty, the oldest phone revision (stored in the
+    old shape) still restores, and from then on a change is recorded."""
+    needs(AUDIT)(db)
+    command.upgrade(_alembic(), "f1a2b3c4d5e7")
+    epochs = {
+        (t, old): _column(db, _EPOCHS.format(table=t, column=old))
+        for t, old, _new in _STAMPED
+    }
+    before = _row_counts(db)
+
+    command.upgrade(_alembic(), AUDIT)
+
+    assert {t: n for t, n in _row_counts(db).items() if t in before} == before
+    assert _count(db, "audit_log") == 0
+    for t, old, new in _STAMPED:
+        after = _column(db, _EPOCHS_AFTER.format(table=t, column=new))
+        was = epochs[(t, old)]
+        assert len(after) == len(was), (t, old)
+        # timestamptz keeps microseconds: each moment within one of its float.
+        assert all(abs(a - b) <= 1e-6 for a, b in zip(after, was, strict=True)), (
+            t,
+            old,
+        )
+    oldest = _scalar(
+        db,
+        "SELECT min(id) FROM phone_revisions WHERE snapshot -> 'devices' -> 0 ? 'added_at'",
+    )
+    assert oldest is not None  # production's revisions predate the stamps
+    with db.begin() as conn:
+        restored = conn.execute(
+            text(
+                "SELECT count(*) FROM jsonb_populate_recordset(NULL::devices, "
+                "phone_snapshot_current((SELECT snapshot FROM phone_revisions "
+                "WHERE id = :id)) -> 'devices') r WHERE r.created_at IS NOT NULL"
+            ),
+            {"id": oldest},
+        ).scalar_one()
+    assert restored > 0
+    with db.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE devices SET notes = notes || '' WHERE id = (SELECT min(id) FROM devices)"
+            )
+        )
+        conn.execute(
+            text(
+                "UPDATE devices SET notes = 'audited' WHERE id = (SELECT min(id) FROM devices)"
+            )
+        )
+    assert _count(db, "audit_log") == 1
+
+
+EVENT_TARGETS = "b2c3d4e5f6a9"
+
+
+def test_event_targets_start_empty_and_change_no_row(db):
+    """Nobody has linked a chat yet: every event goes where it went."""
+    needs(EVENT_TARGETS)(db)
+    command.upgrade(_alembic(), AUDIT)
+    before = _row_counts(db)
+
+    command.upgrade(_alembic(), EVENT_TARGETS)
+
+    after = _row_counts(db)
+    assert after["user_event_targets"] == 0
+    assert {t: n for t, n in after.items() if t in before} == before

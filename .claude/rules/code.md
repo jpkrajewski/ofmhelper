@@ -38,5 +38,6 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 
 ## Logging
 - `logger = get_logger(__name__)` (`ofmhelpers.log`), module scope; lazy `%s` args; `exc_info=True` in `except`.
+- Every `except` raises, or logs with its trace (`logger.exception`, `exc_info=True`, `span.record_exception`); `contextlib.suppress` is quiet too. A deliberate quiet one (gone already, a parser's None, a refusal shown on the page) says why on its `except` line: `# silent: <reason>`. A gone-meanwhile `FileNotFoundError` is `logger.debug(..., exc_info=True)`, any other `OSError` a warning. Checked by `tests/unit/architecture/` `test_failures_leave_a_trace` (baseline `silent_excepts`).
 - No `print()` in library code (report CLIs excepted); only `web/main.py`/`worker.py`/`sweeps.py` call `configure_logging()`.
 - Tune: `OFM_LOG_LEVEL`, `OFM_LOG_FORMAT=json`, `OFM_LOG_ACCESS`.

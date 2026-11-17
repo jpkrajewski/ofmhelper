@@ -69,7 +69,7 @@ def verify_password(password: str, stored: str) -> bool:
     try:
         n, r, p = int(parts[1]), int(parts[2]), int(parts[3])
         salt, key = base64.b64decode(parts[4]), base64.b64decode(parts[5])
-    except ValueError:
+    except ValueError:  # silent: an unreadable hash verifies nothing
         return False
     return hmac.compare_digest(_derive(password, salt, n, r, p), key)
 

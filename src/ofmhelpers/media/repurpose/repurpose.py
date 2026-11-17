@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Self
 from zoneinfo import ZoneInfo
 
+import logfire
 from pydantic import BaseModel
 
 from ofmhelpers.media.ffmpeg import run
@@ -205,14 +206,16 @@ class Repurpose:
             if edited:
                 recorder_input = Path(work) / "master.mp4"
                 master = load_device(_MASTER_DEVICE)
-                step = self._encode(source, master, recorder_input, rng)
-            record(
-                recorder_input,
-                self.dst,
-                load_profile(recorder.profile),
-                recording,
-                self.timeout_s,
-            )
+                with logfire.span("repurpose master encode"):
+                    step = self._encode(source, master, recorder_input, rng)
+            with logfire.span("repurpose record {profile}", profile=recorder.profile):
+                record(
+                    recorder_input,
+                    self.dst,
+                    load_profile(recorder.profile),
+                    recording,
+                    self.timeout_s,
+                )
         return step, recording
 
     def _recording(self, recorder: Recorder, rng: random.Random) -> Recording:

@@ -23,7 +23,9 @@ def saved(user_id: int) -> SavedCookies | None:
     except CookieFileError:
         # Only a file stored before uploads were checked (the old shared
         # one, moved by alembic) can get here.
-        logger.warning("stored cookies of user %s are not readable", user_id)
+        logger.warning(
+            "stored cookies of user %s are not readable", user_id, exc_info=True
+        )
         return None
     return SavedCookies(
         file_name=found.file_name, uploaded_at=found.uploaded_at, summary=summary

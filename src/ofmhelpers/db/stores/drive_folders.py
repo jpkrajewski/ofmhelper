@@ -89,13 +89,15 @@ def va_folders(vas: list[User], *, any_root: bool = False) -> list[VaFolder]:
     ]
 
 
-def save_va_folder(folder: VaFolder) -> None:
-    _repository().save_va_folder(folder)
+def save_va_folder(folder: VaFolder) -> bool:
+    """False: the VA was deleted meanwhile, nothing saved."""
+    return _repository().save_va_folder(folder)
 
 
-def save_account_folder(login_id: int, folder_id: str, name: str, root: str) -> None:
-    """A different folder than the stored one drops its POSTED id too."""
-    _repository().save_account_folder(login_id, folder_id, name, root)
+def save_account_folder(login_id: int, folder_id: str, name: str, root: str) -> bool:
+    """A different folder than the stored one drops its POSTED id too. False:
+    the login was deleted meanwhile, nothing saved."""
+    return _repository().save_account_folder(login_id, folder_id, name, root)
 
 
 def forget_account_folder(login_id: int) -> None:
@@ -113,9 +115,9 @@ def forget_posted_folder(login_id: int) -> None:
 
 def record_posted(
     login_id: int, folder_id: str, files: list[DriveFile], seen_at: float
-) -> int:
+) -> int | None:
     """Remembers when each file was first seen posted, in the account folder
-    `folder_id`; how many are new."""
+    `folder_id`; how many are new. None: the login was deleted meanwhile."""
     rows = [(f.id, f.name, f.kind) for f in files]
     return _repository().record_posted(login_id, folder_id, rows, seen_at)
 

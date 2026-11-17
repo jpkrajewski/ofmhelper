@@ -62,6 +62,7 @@ def task_id(raw: bytes, headers: Mapping[str, str]) -> str | None:
     try:
         callback = KieCallback.model_validate_json(raw)
     except ValidationError:
+        logger.warning("kie.ai callback not understood: refused", exc_info=True)
         return None
     named = callback.data.task_id
     key = settings.kieai.webhook_hmac_key

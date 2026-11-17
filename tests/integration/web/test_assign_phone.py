@@ -17,6 +17,7 @@ from signin import sign_in_agency
 
 from ofmhelpers.db.stores import devices, users
 from ofmhelpers.db.stores.tracked_accounts import list_accounts
+from ofmhelpers.features.phones import service as phones_service
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.schemas import DeviceFields
 from ofmhelpers.web.main import app
@@ -113,6 +114,35 @@ def test_a_phone_that_has_an_account_refuses_until_replace(client, drive):
     assert _on(phone) == ["yuki_kanasiva"]
     assert _tracked() == {"yuki_kanasiva"}
     assert len(drive.named("yuki_kanasiva - Anna", ROOT)) == 1
+
+
+def test_a_replace_queues_the_drive_sync_once_after_the_old_account_left(
+    client, monkeypatch
+):
+    # Prod job drive_sync 9e928539 (2026-11-15): the sync was queued with the
+    # new login, before the old one was deleted, read it and failed on its FK.
+    phone = _phone("Phone 07")
+    old = _account(client, "sheep_love33")
+    assert _assign(client, phone, old).status_code == 201
+    new = _account(client, "yuki_kanasiva")
+    steps: list[str] = []
+    real_leaving = phones_service.logins_leaving
+    real_folder = phones_service._make_drive_folder
+
+    def leaving(*args, **kwargs):
+        steps.append("old account leaves")
+        return real_leaving(*args, **kwargs)
+
+    def folder(*args, **kwargs):
+        steps.append("drive sync queued")
+        return real_folder(*args, **kwargs)
+
+    monkeypatch.setattr(phones_service, "logins_leaving", leaving)
+    monkeypatch.setattr(phones_service, "_make_drive_folder", folder)
+
+    assert _assign(client, phone, new, replace=True).status_code == 201
+
+    assert steps == ["old account leaves", "drive sync queued"]
 
 
 def test_a_replaced_account_still_on_another_phone_stays_everywhere(client):

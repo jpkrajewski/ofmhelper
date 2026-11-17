@@ -60,7 +60,7 @@ def _retry_after_s(response: requests.Response) -> float | None:
     value = response.headers.get("Retry-After")
     try:
         return float(value) if value is not None else None
-    except TypeError, ValueError:
+    except TypeError, ValueError:  # silent: not a number
         return None
 
 

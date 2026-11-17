@@ -13,6 +13,9 @@ import time
 from pathlib import Path
 
 from ofmhelpers.features.server.models import Folder, Host, Usage
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 PROC = Path("/proc")
 
@@ -20,7 +23,7 @@ PROC = Path("/proc")
 def _read(name: str) -> str:
     try:
         return (PROC / name).read_text()
-    except OSError:
+    except OSError:  # silent: no /proc outside Linux: reads 0
         return ""
 
 
@@ -101,7 +104,7 @@ def _size(path: Path) -> tuple[int, int]:
         for name in names:
             try:
                 size += os.lstat(os.path.join(dirpath, name)).st_size  # noqa: PTH118
-            except OSError:
+            except OSError:  # silent: gone mid-walk
                 continue
             files += 1
     return size, files
@@ -115,6 +118,7 @@ def folders(root: Path) -> list[Folder]:
     try:
         entries = list(os.scandir(root))
     except OSError:
+        logger.warning("server: %s not listed", root, exc_info=True)
         return []
     for entry in entries:
         try:
@@ -125,7 +129,7 @@ def folders(root: Path) -> list[Folder]:
             elif entry.is_file(follow_symlinks=False):
                 loose_bytes += entry.stat(follow_symlinks=False).st_size
                 loose_files += 1
-        except OSError:
+        except OSError:  # silent: gone mid-walk
             continue
     if loose_files:
         found.append(Folder(name="(files)", bytes=loose_bytes, files=loose_files))

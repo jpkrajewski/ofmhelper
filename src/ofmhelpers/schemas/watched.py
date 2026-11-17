@@ -143,7 +143,7 @@ class WatchForm(BaseModel):
                 continue
             try:
                 handles.append(ProfileHandle(username=first).username)
-            except ValidationError:
+            except ValidationError:  # silent: a bad line is listed back
                 bad.append(line.strip())
         if bad:
             msg = "Not an Instagram profile: " + ", ".join(bad[:5])

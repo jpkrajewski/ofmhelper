@@ -19,6 +19,13 @@ def always_fails():
     raise ValueError(msg)
 
 
+def requeue_once(note):
+    """A long batch letting the line in (`runner.Requeued`)."""
+    from ofmhelpers.features.jobs.runner import Requeued
+
+    return Requeued()
+
+
 def note_down(name):
     """Leaves its name in Redis, in the order the jobs ran."""
     get_redis().rpush("ran", name)

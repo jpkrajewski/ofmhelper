@@ -9,7 +9,10 @@ from pydantic import BaseModel, ConfigDict, create_model
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
+from ofmhelpers.log import get_logger
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec
+
+logger = get_logger(__name__)
 
 # The shapes a preset may fix every run to ("" in the form: the picture's
 # own); a model without one gets its nearest.
@@ -75,7 +78,7 @@ def _ratio(value: str) -> float | None:
     width, _, height = value.partition(":")
     try:
         return float(width) / float(height)
-    except ValueError, ZeroDivisionError:
+    except ValueError, ZeroDivisionError:  # silent: not a ratio
         return None
 
 
@@ -101,6 +104,7 @@ def aspect_of(path: str, spec: ModelSpec, field: str) -> str:
         with Image.open(path) as image:
             width, height = ImageOps.exif_transpose(image).size
     except OSError, UnidentifiedImageError:
+        logger.warning("picture %s unreadable: default shape", path, exc_info=True)
         return _fallback(spec, field)
     return (
         nearest_aspect(width / height, spec, field)

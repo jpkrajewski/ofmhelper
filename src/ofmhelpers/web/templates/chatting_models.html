@@ -3,7 +3,7 @@
 {% block title %}Chatting: {{ platform.label }}{% endblock %}
 {% block content %}
 {{ ui.back_link("/chatting", "Chatting") }}
-{% if can_connect %}
+{% if can_connect and can(request, "connect-chats") %}
 {% call ui.page_header(platform.label) %}
 {{ ui.button("Connect Fanvue", "primary", href="/chatting/fanvue/connect") }}
 {% endcall %}

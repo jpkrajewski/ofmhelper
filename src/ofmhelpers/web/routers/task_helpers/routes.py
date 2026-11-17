@@ -32,7 +32,7 @@ def _pending_text(pending_message: Callable[[Job], str], job: Job) -> str:
     what the wording reads (a job of an older release)."""
     try:
         return pending_message(job)
-    except KeyError:
+    except KeyError:  # silent: a job of an older release: plain wording
         return "Working…"
 
 

@@ -55,6 +55,17 @@
         {% endif %}
     {% endcall %}
 
+    {% if telegram is not none %}
+    {% call ui.card("Telegram") %}
+        <p>{{ "Connected" if telegram.linked else "Not connected" }}</p>
+        {% if telegram.linked %}
+        <form method="post" action="/account/telegram/delete">{{ ui.button("Disconnect Telegram", type="submit") }}</form>
+        {% else %}
+        <form method="post" action="/account/telegram">{{ ui.button("Connect Telegram", type="submit") }}</form>
+        {% endif %}
+    {% endcall %}
+    {% endif %}
+
     {% if can(request, "save-keys") or viewer_of(request).read_only %}
     {% call ui.card("API keys") %}
         <form method="post" action="/account/keys" class="account-key">

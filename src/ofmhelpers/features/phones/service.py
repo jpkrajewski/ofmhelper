@@ -39,7 +39,6 @@ from ofmhelpers.schemas.phone_catalog import (
 from ofmhelpers.schemas.phone_catalog.models import Catalog, LoginService
 from ofmhelpers.utils.registry import Registry
 lazy from ofmhelpers.schemas import DeviceFields
-lazy from ofmhelpers.schemas.devices import DeviceLogin
 
 logger = get_logger(__name__)
 
@@ -213,14 +212,20 @@ class Phone(BaseModel, frozen=True):
         logins_leaving(self.scope, self.device_id)
         _require(store.delete_device(self.device_id, self.scope), "Phone")
 
-    @_vault()
     def add_login(self, body: LoginFields) -> LoginAdded:
+        added = self._saved(body)
+        _make_drive_folder(added.id, body.service)
+        return added
+
+    @_vault()
+    def _saved(self, body: LoginFields) -> LoginAdded:
+        """The login saved on this phone and tracked; its Drive folder is
+        the caller's to queue."""
         added = store.add_login(self.device_id, body, self.scope)
         if added is None:
             msg = "Phone not found"
             raise NotFoundError(msg)
         _track(added.id, body, revive=True)
-        _make_drive_folder(added.id, body.service)
         return LoginAdded(id=added.id, linked=added.existed)
 
     def assign(self, body: AssignAccount) -> LoginAdded:
@@ -231,7 +236,9 @@ class Phone(BaseModel, frozen=True):
         Drive, password deleted); without it they refuse. The new account
         goes on first: a failure half way leaves the phone with both, never
         with none, and the same request sent again finishes it (an account
-        already on the phone is no error)."""
+        already on the phone is no error). Its Drive folder is queued after
+        the others left: a sync started before would read logins being
+        deleted under it (prod job drive_sync 9e928539, 2026-11-15)."""
         found = _assigning(body.account_id, self.scope)
         phone = store.get_device(self.device_id, self.scope)
         if found is None or phone is None:
@@ -248,16 +255,12 @@ class Phone(BaseModel, frozen=True):
             names = ", ".join(f"@{name}" for name in others)
             msg = f"{phone.label} already has {names}"
             raise ConflictError(msg)
-        added = self._keep(already) if already else self.add_login(new)
+        added = LoginAdded(id=already.id, linked=True) if already else self._saved(new)
         for name in others:
             self.remove_login(on_phone[name].id)
+        # Also for an account on the phone already: the point of Assign phone.
+        _make_drive_folder(added.id, found.service)
         return added
-
-    def _keep(self, login: DeviceLogin) -> LoginAdded:
-        """The account is on this phone already: nothing saved again, its
-        Drive folder still made (the point of Assign phone)."""
-        _make_drive_folder(login.id, login.service)
-        return LoginAdded(id=login.id, linked=True)
 
     def remove_login(self, login_id: int) -> None:
         """Off its last phone, the account leaves /accounts and Drive too."""

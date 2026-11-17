@@ -144,7 +144,7 @@ class ApifyClient:
             return r.json()
         try:
             error = ErrorEnvelope.model_validate_json(r.content).error
-        except ValidationError:
+        except ValidationError:  # silent: not Apify's error envelope
             error = None
         detail = error.message if error and error.message else r.reason
         logger.warning(

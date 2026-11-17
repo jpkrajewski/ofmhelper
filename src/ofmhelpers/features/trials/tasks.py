@@ -19,7 +19,9 @@ lazy from collections.abc import Callable
 import logfire
 from pydantic import BaseModel, SkipValidation
 
+from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.features.drive.folders import ReviewPlace, review_target
+from ofmhelpers.features.jobs.runner import Requeued
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.trials import media
 from ofmhelpers.features.trials.captions import captions_for, understand
@@ -72,6 +74,11 @@ class Captioned(BaseModel):
 
 class Uploaded(BaseModel):
     uploaded: int
+
+
+def _someone_waits() -> bool:
+    """Another job waits for the media worker (the one this runs on)."""
+    return bool(JobQueue(name=QueueName.MEDIA).line().waiting)
 
 
 def _not_made(count: int) -> str:
@@ -170,8 +177,8 @@ def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
     for file_id in file_ids:
         try:
             drive.trash_file(file_id)
-        except FolderGoneError:
-            continue  # gone already: what was wanted
+        except FolderGoneError:  # silent: gone already, what was wanted
+            continue
         except DriveError:
             logger.warning("trials: trashing %s failed", file_id, exc_info=True)
             fine = False
@@ -279,13 +286,19 @@ class Folder(BaseModel, frozen=True):
         self._change(lambda s: merge_posted(s, videos))
         return True
 
-    def make_trials(self) -> Made:
+    def make_trials(self) -> Made | Requeued:
         """Generate trials: POSTED read again, the reels not on disk downloaded,
         then every reel with no copy yet is made; a copy already made is left
         alone. Drive unreachable: what is on disk is still made, and the page
         says to connect Drive again. The status line says what it left: nothing
         new in POSTED, or how many it could not make (the next click tries them
-        again)."""
+        again).
+
+        One media worker makes every copy (minutes each): after each reel,
+        when another job waits for it (an upload, a caption, another folder's
+        Generate), this one goes back to the end of the line (`Requeued`) and
+        goes on where it stopped (prod 2026-11-15: an upload of 3 waited 26
+        min behind a Generate of 5). `Made` counts the last run's copies."""
         found = self._drive()
         read = found is not None and self._list_posted(found.drive)
         if found is not None:
@@ -294,10 +307,20 @@ class Folder(BaseModel, frozen=True):
         keys = [r.key for r in state.todo if self._on_disk(r)]
         if read and not state.todo:
             self._change(lambda s: s.tell(NOTHING_NEW))
-        done = self.generate_reels(keys)
+        made: list[bool] = []
+        for i, key in enumerate(keys):
+            made.append(self.make(key))
+            if i + 1 < len(keys) and _someone_waits():
+                logger.info(
+                    "trials: Generate of %s lets the line in after %d of %d",
+                    self.login_id,
+                    i + 1,
+                    len(keys),
+                )
+                return Requeued()
         if left := len(self._load().todo):
             self._change(lambda s: s.tell(_not_made(left)))
-        return done
+        return Made(generated=made.count(True), failed=made.count(False))
 
     def generate_reels(self, keys: list[str] | None = None) -> Made:
         """The snapchat pipeline on each downloaded reel (`keys`: only those),
@@ -335,11 +358,15 @@ class Folder(BaseModel, frozen=True):
                     pipeline=PIPELINE,
                 )
             making.parent.mkdir(parents=True, exist_ok=True)
-            ran = pipeline_run(src, making, caption=recipe.caption, seed=recipe.seed)
+            with logfire.span("trials pipeline {key}", key=key):
+                ran = pipeline_run(
+                    src, making, caption=recipe.caption, seed=recipe.seed
+                )
             if not restore:
                 recipe = recipe.model_copy(update={"draws": _draws(ran)})
             making.replace(out)
-            _page_media(out)
+            with logfire.span("trials page media {key}", key=key):
+                _page_media(out)
         except Exception as exc:  # one bad reel must not sink the batch
             logger.warning("trials: making %s failed", key, exc_info=True)
             making.unlink(missing_ok=True)
@@ -478,7 +505,7 @@ class Folder(BaseModel, frozen=True):
 # --- the jobs: what RQ imports by name, each one a step of `Folder` -----------
 
 
-def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> Made:
+def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> Made | Requeued:
     """Generate trials (`Folder.make_trials`)."""
     return Folder(
         user_id=user_id, login_id=login_id, refresh_token=refresh_token

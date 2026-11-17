@@ -56,7 +56,7 @@ def available() -> bool:
         return False
     try:
         import torch  # noqa: F401 - optional, lab only
-    except ImportError:
+    except ImportError:  # silent: optional, lab only
         return False
     return True
 

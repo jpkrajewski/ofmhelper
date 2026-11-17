@@ -18,6 +18,7 @@ from pydantic import Field
 
 from ofmhelpers.auth.access import Action, Area
 from ofmhelpers.config import settings
+from ofmhelpers.features.assets import send as sending
 from ofmhelpers.features.clone import examples
 from ofmhelpers.features.clone.export import (
     EXPORT_FAILURES,
@@ -44,6 +45,7 @@ from ofmhelpers.features.clone.targets import (
     clone_targets,
 )
 from ofmhelpers.features.clone.targets import clone_values as _clone_values
+from ofmhelpers.features.downloads.service import Redirect
 from ofmhelpers.features.drive.uploads import queue_uploads, remove_upload
 from ofmhelpers.media.video_probe import duration_s
 from ofmhelpers.schemas import (
@@ -194,6 +196,19 @@ def drive_upload(
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
     )
+
+
+@router.post("/{job_id}/handoffs", summary="Open this run's video in another tool")
+def handoff(
+    job_id: str,
+    target: Annotated[str, Form()],
+    actors: Actors,
+    assets_root: AssetsRoot,
+    index: Annotated[int | None, Form(ge=0)] = None,
+) -> Redirect:
+    """A finished run's video (the asker's own or their VA's) to /edit or
+    /clone-long: answers the URL that opens it there, already picked."""
+    return sending.send(job_id, target, index, actors, assets_root)
 
 
 @router.post(

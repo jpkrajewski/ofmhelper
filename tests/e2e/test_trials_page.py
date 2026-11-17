@@ -6,6 +6,7 @@ form was read, so the upload went out empty), a click spammed starts one job."""
 import re
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -256,3 +257,30 @@ def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
     # comes back by itself, with its short reason.
     expect(card.locator(".tr-video")).to_be_visible(timeout=15_000)
     expect(button).to_be_enabled()
+
+
+def test_a_copy_made_while_the_page_is_open_moves_to_the_top(
+    va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
+):
+    """Owner 2026-11-15: done trials showed at the end. The open page puts
+    the newest made copy first on its next poll, no reload."""
+    login = _folder_with_copies(va, app_dir, jobs_idle, 3)
+    va.goto(f"/trials/{login}")
+    page = va.page
+    page.evaluate("window.notReloaded = true")
+    cards = page.locator(".tr-reel")
+    expect(cards.first).to_have_attribute("data-key", "key0")
+    work = app_dir / "uploads" / "trials" / str(VA_ID) / str(login)
+    state = FolderState.model_validate_json((work / "state.json").read_text())
+    state.reels[2].made_at = datetime.now(UTC)  # key2 made just now
+    (work / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
+
+    # Any job starts the page's polling.
+    page.locator('.tr-reel[data-key="key1"] form[action$="/regenerate"] button').click()
+
+    expect(cards.first).to_have_attribute("data-key", "key2", timeout=15_000)
+    jobs_idle()
+    keys = [cards.nth(i).get_attribute("data-key") for i in range(3)]
+    assert keys == ["key2", "key0", "key1"]
+    assert page.evaluate("window.notReloaded") is True
+    assert va.js_errors == []

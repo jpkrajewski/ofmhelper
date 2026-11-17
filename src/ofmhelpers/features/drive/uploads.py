@@ -69,7 +69,7 @@ def _creators(owner: int | None) -> dict[str, str]:
 def _handle(username: str) -> str:
     try:
         return get_platform(_PLATFORM).handle(username)
-    except KeyError, ValueError:
+    except KeyError, ValueError:  # silent: not a handle: kept as typed
         return username
 
 
@@ -260,10 +260,12 @@ def remove_upload(
         raise UploadRefusedError(msg)
     try:
         connect_as(token).trash_file(file_id)
-    except FolderGoneError:
+    except FolderGoneError:  # silent: already gone in Drive
         logger.info("drive upload %s was already gone in Drive", upload_id)
     except SignInError as exc:
-        logger.warning("drive upload %s: sign-in refused: %s", upload_id, exc)
+        logger.warning(
+            "drive upload %s: sign-in refused: %s", upload_id, exc, exc_info=True
+        )
         msg = "Connect Google Drive on your Account page first"
         raise UploadRefusedError(msg) from exc
     except DriveError as exc:

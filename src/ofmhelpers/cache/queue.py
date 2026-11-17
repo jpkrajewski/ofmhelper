@@ -27,7 +27,7 @@ lazy from collections.abc import Callable
 import logfire
 from pydantic import BaseModel
 from rq import Queue, Retry, Worker
-from rq.job import Job, JobStatus
+from rq.job import Job, JobStatus, get_current_job
 
 from ofmhelpers.cache.redis import get_redis
 from ofmhelpers.config import settings
@@ -297,6 +297,24 @@ def queue_loads() -> list[QueueLoad]:
         logger.warning("could not read the queues", exc_info=True)
         return []
     return loads
+
+
+class RunningJob(BaseModel, frozen=True):
+    """The RQ job this process runs now: the queue it came from and its time
+    limit, so it can be put back in the same line (`runner.Requeued`)."""
+
+    queue: QueueName
+    timeout: int | None = None
+
+
+def running_job() -> RunningJob | None:
+    """The RQ job being run here; None outside a worker (the web app, the
+    synchronous test mode)."""
+    job = get_current_job()
+    if job is None:
+        return None
+    timeout = None if job.timeout is None else int(job.timeout)
+    return RunningJob(queue=QueueName(job.origin), timeout=timeout)
 
 
 def enqueue(fn, *args, job_timeout: int | None = None, **kwargs):

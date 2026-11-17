@@ -120,7 +120,7 @@ def scan_watched(username: str, proxy: str | None = None) -> ProfileReels | None
         if _is_new(username):
             _reject(username, "private")
         else:
-            logger.warning("@%s not scanned: %s", username, exc)
+            logger.warning("@%s not scanned: %s", username, exc, exc_info=True)
             record_scan(username, None, str(exc))
         return None
     except InstagramError as exc:
@@ -200,6 +200,7 @@ def scan_all(usernames: list[str]) -> None:
                 "rate-limited after %d of %d profiles; the rest retry later",
                 done,
                 len(usernames),
+                exc_info=True,
             )
             return
         except _OfflineError:

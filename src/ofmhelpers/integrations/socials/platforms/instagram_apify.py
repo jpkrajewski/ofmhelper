@@ -20,7 +20,7 @@ sizing their share from the same credit figure would spend it several times
 over. A handle two users track is read once."""
 
 import time
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 lazy from collections.abc import Generator
 
 import requests
@@ -99,7 +99,7 @@ def _handle_of(profile: ApifyProfile, asked: set[str]) -> str | None:
         return name
     try:
         old = ProfileHandle(username=profile.input_url).username
-    except ValueError:
+    except ValueError:  # silent: not a profile address
         return None
     return old if old in asked else None
 
@@ -170,8 +170,10 @@ def _one_at_a_time(keys: int, wait_s: float | None = None) -> Generator[bool]:
     try:
         yield True
     finally:
-        with suppress(RedisError, LockError):
+        try:
             lock.release()
+        except RedisError, LockError:
+            logger.warning("apify: batch lock not released", exc_info=True)
 
 
 class ApifyInstagramSource(AccountSource):
@@ -219,6 +221,7 @@ class ApifyInstagramSource(AccountSource):
                     client.key_hint,
                     len(group),
                     exc,
+                    exc_info=True,
                 )
                 got, gave_up = {}, set()
             read.update(got)
@@ -300,6 +303,7 @@ class ApifyInstagramSource(AccountSource):
                 client.key_hint,
                 exc,
                 len(public),
+                exc_info=True,
             )
             return None, 0.0
         reels: dict[str, list[ApifyReel]] = {h: [] for h in public}

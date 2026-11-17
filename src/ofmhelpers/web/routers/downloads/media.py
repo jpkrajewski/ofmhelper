@@ -8,6 +8,7 @@ from fastapi import APIRouter, Form, Path
 from pydantic import Field
 
 from ofmhelpers.auth.access import Area
+from ofmhelpers.features.assets import send as sending
 from ofmhelpers.features.downloads import again, media, sheet
 
 # Jobs queued before 2026-11-11 name the run function by this module's path.
@@ -15,7 +16,7 @@ from ofmhelpers.features.downloads.media import run_downloads as _run_downloads
 from ofmhelpers.features.downloads.service import Redirect
 from ofmhelpers.schemas import JobQueued
 from ofmhelpers.schemas.downloads import DownloadsQueued, SheetQueued
-from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
+from ofmhelpers.web.dependencies import Access, Actor, Actors, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import FormModel
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 
@@ -59,11 +60,12 @@ def sheet_downloads(
 
 @router.post("/send")
 def send(
-    form: Annotated[SendForm, Form()], actor: Actor, assets_root: AssetsRoot
+    form: Annotated[SendForm, Form()], actors: Actors, assets_root: AssetsRoot
 ) -> Redirect:
-    """Hand a finished download's video to /clone or /clone-long: answers the
-    URL to open with it already picked."""
-    return media.send(form.job_id, form.target, form.index, actor, assets_root)
+    """Hand a finished download's video (the asker's own or their VA's) to
+    /clone, /clone-long or /edit: answers the URL to open with it already
+    picked."""
+    return sending.send(form.job_id, form.target, form.index, actors, assets_root)
 
 
 @router.post("/{job_id}/replays", status_code=202, summary="Download it again")

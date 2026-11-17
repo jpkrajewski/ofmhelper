@@ -10,7 +10,9 @@
 - `source.py` — `StackedSource`, this platform's `ChatSource` (`integrations/chat_source.py`): how /chatting, its webhook route and its sync use all of the above.
 - `fake.py` — `api.stacked.com` under OFM_FAKE_EXTERNALS: `CREATOR_KEY`, `AGENCY_KEY`, chats via `add_chat`/`add_message`, `fail_next`, `calls`.
 
-Keys: one `.env` line per account, `STACKED_API_KEY_<NAME>` (`settings.stacked.api_keys`), creator or agency alike; `GET /me` says which. A creator key may hold all scopes incl. writes: treat it as able to message fans. Contract tests: `tests/contract/test_stacked_contract.py` (real half under `live`; the agency half skips until an agency key exists).
+Keys: one `.env` line per account, `STACKED_API_KEY_<NAME>` (`settings.stacked.api_keys`), creator or agency alike; `GET /me` says which.
+
+**Which key serves a creator (owner 2026-11-16).** An agency key serves every creator it reaches; a creator key only a creator no agency key reaches ("agency with A and B plus a key for A: A's key is never called again; plus a key for C: C on its own key"). `StackedClient.info()` asks `me` + `creators` once and keeps the answer in Redis under a hash of the key (`stacked:key:<sha256[:24]>`): an agency key's for `OFM_STACKED_AGENCY_REFRESH_S` (600: a creator newly linked to the agency shows on /chatting within 10 min), a creator key's for `OFM_STACKED_CREATOR_KEY_KEEP_S` (7 d). A round then costs no call for it (test `test_what_a_key_is_is_asked_once_not_every_round`). A destination belongs to the key that made it, so when a creator moves to another key the destination its old key made at this server's address is deleted once (`StackedSource._retire_elsewhere`, only while a new one is made): left, it would deliver with a secret no longer held, and 30 failed signatures from one address turn Stacked away. /chatting lists every creator the keys reach, chats or not (`features/chatting/reached.py`, written by each sync round). Seen on dev 2026-11-16: `admin_agency` reaches clarkwayne + danewalkerjohnson, `dane` danewalkerjohnson; both now on `admin_agency`. A new `.env` line needs the containers recreated (compose `env_file` is read at start; a deploy does it); a key saved on /account is read every round. A creator key may hold all scopes incl. writes: treat it as able to message fans. Contract tests: `tests/contract/test_stacked_contract.py` (real half under `live`; the agency half skips until an agency key exists).
 
 ## Seen on the real API (2026-11-04, one creator's key)
 - 700 chats, 7 pages, 7.4 s. Sorted as documented, every `customType` `DIRECT`.
@@ -26,6 +28,11 @@ Keys: one `.env` line per account, `STACKED_API_KEY_<NAME>` (`settings.stacked.a
 - Every chat call needs `creatorUserId` (query) or `X-Stacked-Creator-User-Id` (header). Scope for reading chats: `chat:read`. Webhooks: `webhooks:manage`.
 - OAuth ("Connect Stacked") = PKCE S256, access token 1 h, one live token per grant, refresh token 90 days from last use. Owner-scoped app works immediately but still needs approved API access.
 - Rate limit: 600 req/min per key, fixed window. 429 carries `Retry-After`. Reads and 429/502 are safe to retry. Errors: `{"error": "message"}`; branch on status, not text.
+- Keys saved on /account (2026-11-15, owner: "is it easy for new users to connect ... stacked?"):
+  - An admin, or whoever may open /chatting, pastes a Stacked key in the API keys card (slot `stacked`, `user_api_keys`, encrypted). It is checked with `GET me` first: a refused key is not saved ("Stacked did not accept that key").
+  - `features/chatting/stacked_keys.py` `StackedKeys` reads the `.env` lines and every active admin's saved key, each once. `StackedSource(keys)` and the daily report use it, so no container restart is needed.
+  - The chats stay the agency's: a non-admin's own chats would need owner columns on `chat_*`. Not built.
+
 
 ## Chats
 - `GET /external-service/v1/chats` -> `{chats: [ChatSummary], nextCursor}`, newest last message first, `limit` max 100, stop when `nextCursor` is absent; a page can be short with more pages left. Filters: `unreadOnly`, `memberUserId`, `search`, `showEmpty` (default true).

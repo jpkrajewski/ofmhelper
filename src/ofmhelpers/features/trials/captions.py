@@ -76,7 +76,7 @@ def _ask[A: BaseModel](
             return llm.ask(prompt, answer)
         except LLMError as exc:
             errors.append(f"{entry}: {type(exc).__name__}: {exc}")
-            logger.warning("trials captions: %s failed: %s", entry, exc)
+            logger.warning("trials captions: %s failed: %s", entry, exc, exc_info=True)
     msg = "no model answered: " + "; ".join(errors)
     raise RuntimeError(msg)
 

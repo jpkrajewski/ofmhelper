@@ -94,7 +94,9 @@ class FanvueSource:
                     )
             except FanvueRefusedError:
                 # Lost its seat, say: a full round every minute would not bring it back.
-                logger.warning("fanvue agency %s refused", account.username)
+                logger.warning(
+                    "fanvue agency %s refused", account.username, exc_info=True
+                )
             except FanvueError:
                 logger.warning(
                     "fanvue agency %s not read", account.username, exc_info=True
@@ -213,7 +215,7 @@ def _new_reads(model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
                 )
             except FanvueRefusedError:
                 # Seen: 400 "Invalid user UUID". Not asked again until the chat changes.
-                logger.warning("fanvue chat %s cannot be read", channel)
+                logger.warning("fanvue chat %s cannot be read", channel, exc_info=True)
                 messages = []
             except FanvueError:
                 logger.warning("fanvue chat %s not read", channel, exc_info=True)

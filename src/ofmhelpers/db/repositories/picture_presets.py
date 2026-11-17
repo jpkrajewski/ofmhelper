@@ -1,7 +1,6 @@
 """/pictures presets (`picture_presets`). Nothing cached: a handful of rows,
 read once per page."""
 
-import time
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
@@ -64,15 +63,12 @@ class PicturePresetRepository:
         images: list[str],
         aspect_ratio: str | None = None,
     ) -> PicturePreset:
-        now = time.time()
         row = PicturePresetRow(
             user_id=owner,
             name=name,
             prompt=prompt,
             images=images,
             aspect_ratio=aspect_ratio,
-            created_at=now,
-            updated_at=now,
         )
         with _unique_name(name), session_scope() as s:
             s.add(row)
@@ -101,7 +97,6 @@ class PicturePresetRepository:
                     prompt=prompt,
                     images=images,
                     aspect_ratio=aspect_ratio,
-                    updated_at=time.time(),
                 )
                 .returning(PicturePresetRow)
             ).scalar_one_or_none()

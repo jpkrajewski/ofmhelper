@@ -49,7 +49,7 @@ def _handle(platform: str, username: str) -> str:
     as typed when it takes no such form."""
     try:
         return names_of(platform).handle(username)
-    except KeyError, ValueError:
+    except KeyError, ValueError:  # silent: not a handle: kept as typed
         return username
 
 

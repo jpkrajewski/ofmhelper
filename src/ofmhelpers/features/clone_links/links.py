@@ -170,7 +170,7 @@ class PastedLinks(BaseModel):
 def _link(token: str) -> str | None:
     try:
         return SourceLink(url=token).url
-    except ValueError:
+    except ValueError:  # silent: not a link
         return None
 
 

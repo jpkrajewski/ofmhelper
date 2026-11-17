@@ -32,6 +32,7 @@ from ofmhelpers.integrations.gdrive import FolderGoneError
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.schemas import DeviceFields, LoginFields, UserForm
 from ofmhelpers.schemas.devices import AddedLogin
+from ofmhelpers.schemas.drive import VaFolder
 from ofmhelpers.web.main import app
 
 # The agency's Google account (the password admin's, who owns the phones
@@ -369,6 +370,47 @@ def test_one_failing_login_does_not_stop_the_others(drive):
     # Retried on the next sweep.
     drive.fail_on()
     assert drive_folders.sync().created == ["ann.ig - Anna"]
+
+
+def test_a_login_deleted_while_its_folder_is_made_is_skipped_and_nothing_is_deleted(
+    drive, monkeypatch
+):
+    # Prod job drive_sync 9e928539 (2026-11-15): the login went between the
+    # sync reading it and saving its folder; the FK violation failed the run,
+    # the other logins, the VA folders and the tally with it.
+    gone_phone = _phone("Phone 01")
+    gone = _login(gone_phone, "instagram", "ann.ig")
+    _login(_phone("Phone 02", owner="Bob"), "instagram", "bob.ig")
+    real_create = drive.create_folder
+
+    def create_then_lose_the_login(parent: str, name: str, **who):
+        made = real_create(parent, name, **who)
+        if name == "ann.ig - Anna":
+            devices.remove_login(gone_phone, gone)
+        return made
+
+    monkeypatch.setattr(drive, "create_folder", create_then_lose_the_login)
+
+    report = drive_folders.sync()
+
+    assert report.failed == []
+    assert report.created == ["bob.ig - Bob"]
+    assert _posted(drive, "bob.ig", owner="Bob")
+    assert [t.handle for t in store.targets()] == ["bob.ig"]
+    # Left in Drive, never trashed; the account added again adopts it.
+    (kept,) = drive.named("ann.ig - Anna", ROOT)
+    _login(_phone("Phone 03"), "instagram", "ann.ig")
+    assert drive_folders.sync().adopted == ["ann.ig - Anna"]
+    assert _stored("ann.ig").folder_id == kept
+
+
+def test_a_folder_saved_for_a_login_or_va_that_is_gone_saves_nothing(drive):
+    assert store.save_account_folder(987_654_321, "f-1", "x - y", ROOT) is False
+    assert store.account_folders().folders == []
+    va = VaFolder(
+        user_id=987_654_321, folder_id="f-2", name="Gone", root_folder_id=ROOT
+    )
+    assert store.save_va_folder(va) is False
 
 
 def test_a_login_on_two_phones_gets_one_folder(drive):

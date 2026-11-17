@@ -694,7 +694,7 @@ class AddAccounts(BaseModel):
                 continue
             try:
                 handles.append(platform.handle(words[0]))
-            except ValueError:
+            except ValueError:  # silent: a bad line is listed back
                 bad.append(line.strip())
         if bad:
             msg = f"Not a {platform.label} account: " + ", ".join(bad[:5])

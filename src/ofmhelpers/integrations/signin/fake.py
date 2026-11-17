@@ -49,7 +49,7 @@ def _account(code: str) -> FakeAccount | None:
     try:
         decoded = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
         return FakeAccount.model_validate_json(decoded)
-    except ValueError, ValidationError:
+    except ValueError, ValidationError:  # silent: not a fake code
         return None
 
 

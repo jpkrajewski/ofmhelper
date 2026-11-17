@@ -13,10 +13,12 @@ from ofmhelpers.cache.queue import (
     Line,
     QueueJob,
     QueueName,
+    RunningJob,
     active_job_ids,
     enqueue,
     enqueue_to,
     get_queue,
+    running_job,
 )
 from ofmhelpers.cache.redis import delete_text, get_redis, get_text, set_text
 
@@ -26,6 +28,7 @@ __all__ = [
     "Line",
     "QueueJob",
     "QueueName",
+    "RunningJob",
     "active_job_ids",
     "delete_text",
     "enqueue",
@@ -33,5 +36,6 @@ __all__ = [
     "get_queue",
     "get_redis",
     "get_text",
+    "running_job",
     "set_text",
 ]

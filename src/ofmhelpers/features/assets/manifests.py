@@ -19,6 +19,9 @@ from ofmhelpers.features.assets.store import (
     in_asset_root,
     save_asset,
 )
+from ofmhelpers.log import get_logger
+
+logger = get_logger(__name__)
 
 
 def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
@@ -49,7 +52,7 @@ def keep_files(raw_paths: Sequence[str], allowed_root: Path, kind: str) -> list[
     for raw in raw_paths:
         try:
             resolved = resolve_existing_ref(raw, allowed_root)
-        except AssetRefusedError:
+        except AssetRefusedError:  # silent: a stale path, the page offers fewer
             continue
         if classify_kind(resolved.name) == kind:
             kept.append(str(resolved))
@@ -85,11 +88,15 @@ def build_ordered_paths(
     [{"kind": "new"}, {"kind": "existing", "path": "..."}]. Genuinely new
     uploads go through save_asset (content-deduped); existing refs are
     resolved by path, never re-uploaded -- together this is what prevents
-    duplicate files on disk. Each file counts as used by `user_id`."""
+    duplicate files on disk. Each file counts as used by `user_id`. A manifest
+    that does not parse is refused (`AssetRefusedError`): taking every entry
+    as new would drop the picked files before a paid run."""
     try:
         manifest = _manifest_adapter().validate_json(manifest_json)
-    except ValidationError:
-        manifest = [ManifestEntry() for _ in new_files]
+    except ValidationError as exc:
+        logger.warning("file picker manifest unreadable", exc_info=True)
+        msg = "The picked files could not be read: pick them again"
+        raise AssetRefusedError(msg) from exc
 
     new_files_iter = iter(new_files)
     paths: list[str] = []

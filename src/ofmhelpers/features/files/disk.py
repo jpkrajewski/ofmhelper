@@ -110,8 +110,8 @@ def folder(root_name: str, rel_dir: str) -> Folder:
         rel = str(entry.relative_to(root)).replace("\\", "/")
         try:
             st = entry.stat()
-        except OSError:
-            continue  # deleted while listing, or a broken symlink
+        except OSError:  # silent: deleted while listing, or a broken symlink
+            continue
         if entry.info.is_dir():
             dirs.append(DirEntry(name=entry.name, rel_path=rel, mtime=st.st_mtime))
         else:

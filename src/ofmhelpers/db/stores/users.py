@@ -67,13 +67,13 @@ def add_user(form: UserForm) -> User | None:
         form.email,
         form.role,
         form.name,
-        owner_id=form.owner_id if form.role == Role.VA else None,
+        owner_id=form.owner_id if form.role.has_employer else None,
     )
 
 
 def set_role(user_id: int, role: Role) -> User | None:
-    """Only a VA has an owner: any other role drops it."""
-    if role == Role.VA:
+    """Only a VA or a manager has an owner: any other role drops it."""
+    if role.has_employer:
         return _repository().update(user_id, role=role)
     return _repository().update(user_id, role=role, owner_id=None)
 
@@ -253,7 +253,9 @@ def refresh_token(user_id: int) -> str:
     try:
         return _repository().refresh_token(user_id)
     except VaultError as exc:
-        logger.warning("user %s: Google token unreadable: %s", user_id, exc)
+        logger.warning(
+            "user %s: Google token unreadable: %s", user_id, exc, exc_info=True
+        )
         return ""
 
 
@@ -263,12 +265,24 @@ def api_keys(user_id: int) -> SavedKeys:
     try:
         return _repository().api_keys(user_id)
     except VaultError as exc:
-        logger.warning("user %s: saved API keys unreadable: %s", user_id, exc)
+        logger.warning(
+            "user %s: saved API keys unreadable: %s", user_id, exc, exc_info=True
+        )
         return SavedKeys()
 
 
 def set_api_key(user_id: int, provider: str, api_key: str) -> None:
     _repository().set_api_key(user_id, provider, api_key)
+
+
+def keys_in_slot(slot: str) -> list[str]:
+    """The admins' saved keys of `slot`; none when the vault key cannot read
+    them (logged), never a crash."""
+    try:
+        return _repository().keys_in_slot(slot)
+    except VaultError:
+        logger.warning("saved %s keys unreadable: vault key", slot, exc_info=True)
+        return []
 
 
 def end_sessions(user_id: int) -> None:

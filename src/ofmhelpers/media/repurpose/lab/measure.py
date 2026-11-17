@@ -23,6 +23,7 @@ import numpy as np
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
+from ofmhelpers.log import get_logger
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.repurpose import Repurpose
 from ofmhelpers.media.repurpose.checker import check
@@ -34,6 +35,8 @@ from ofmhelpers.media.repurpose.transformations.video import (
     VideoTransformer,
 )
 lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep, RunResult
+
+logger = get_logger(__name__)
 
 DEVICE = "strip"
 _TIMEOUT_S = 900
@@ -280,6 +283,7 @@ def measure(
                 keep.parent.mkdir(parents=True, exist_ok=True)
                 keep.write_bytes(copy.read_bytes())
     except Exception as exc:
+        logger.warning("lab: %s on %s not measured", trial, sample.name, exc_info=True)
         out.error = f"{type(exc).__name__}: {exc}"[:500]
     out.seconds = round(time.monotonic() - started, 1)
     return out

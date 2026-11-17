@@ -5,7 +5,9 @@ asks -- the routers' guard (`web/dependencies.py` `Access` / `Can`), the menu
 An `Area` is a page with its routes (every router names one); an `Action`
 is one thing inside an area that fewer roles may do. What each role opens is
 written out below, one list per role: `VA`, `USER` (a VA's + its own),
-`ADMIN` (a user's + its own). A page switched off whole is in `RETIRED`.
+`ADMIN` (a user's + its own), `MANAGER` (a user's pages but their own
+business, + chatting: an employer's, looked at; of those, only what the
+employer may open: `opens`). A page switched off whole is in `RETIRED`.
 A new page: one `Area` member + its name in the list of the lowest role that
 gets it; a new role: one more list and its line in `PAGES`.
 `tests/unit/architecture/` fails on a route that names no area.
@@ -14,6 +16,7 @@ gets it; a new role: one more list and its line in `PAGES`.
 from enum import StrEnum
 
 from ofmhelpers.schemas.users import Role
+lazy from ofmhelpers.schemas.users import Viewer
 
 
 class Area(StrEnum):
@@ -66,6 +69,9 @@ class Action(StrEnum):
     HIDE = "hide"  # a gallery card's Hide / Unhide and "Show hidden"
     # /handmade's Upload: a VA's own folder; the owner sees what went up.
     UPLOAD_HANDMADE = "upload-handmade"
+    # /chatting's Connect Fanvue (GETs that save a login: look-only cannot
+    # stop them).
+    CONNECT_CHATS = "connect-chats"
 
 
 EVERYONE = frozenset(Role)
@@ -118,8 +124,16 @@ ADMIN = (
     Area.FILES,
     Area.ACTION_LOG,
 )
+# What a manager opens: a user's pages but their own account and cookies,
+# and the chats; all of it their employer's, looked at (owner 2026-11-15:
+# "can not generate anything ... see everything a normal user can see ...
+# also chatting and /vas spending"; read only: `features/users/viewing.py`).
+MANAGER = (
+    *(area for area in USER if area not in {Area.ACCOUNT, Area.COOKIES}),
+    Area.CHATTING,
+)
 PAGES: frozendict[Role, tuple[Area, ...]] = frozendict(
-    {Role.VA: VA, Role.USER: USER, Role.ADMIN: ADMIN}
+    {Role.VA: VA, Role.USER: USER, Role.ADMIN: ADMIN, Role.MANAGER: MANAGER}
 )
 
 # Switched off, not deleted (owner 2026-11-13: nobody uses them). A retired
@@ -154,6 +168,7 @@ ACTIONS: frozendict[Action, frozenset[Role]] = frozendict(
         Action.SERVER_STATUS: ADMINS,
         Action.HIDE: MEMBERS,
         Action.UPLOAD_HANDMADE: VAS,
+        Action.CONNECT_CHATS: ADMINS,
     }
 )
 
@@ -162,6 +177,15 @@ def allowed(role: Role, what: Area | Action) -> bool:
     """Whether someone of `role` may open the area or do the action."""
     roles = ACTIONS[what] if isinstance(what, Action) else ACCESS[what]
     return role in roles
+
+
+def opens(viewer: Viewer, what: Area | Action) -> bool:
+    """Whether a request's person may open the area or do the action: what
+    their role's list allows; a manager, of that, only what their employer
+    may open too (the chats are an admin's: a user's manager has none)."""
+    if not allowed(viewer.access_role, what):
+        return False
+    return not viewer.managing or allowed(viewer.user.role, what)
 
 
 def retired(area: Area) -> bool:

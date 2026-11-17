@@ -275,6 +275,7 @@ def download(
     try:
         import yt_dlp
     except ImportError:
+        logger.warning("yt-dlp: not installed", exc_info=True)
         return DownloadResult(
             url=url,
             success=False,
@@ -364,7 +365,9 @@ def video_info(
         try:
             seconds = duration_s(stream, settings.downloaders.probe_timeout_s)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            logger.warning("video info %s: length not probed: %s", url, exc)
+            logger.warning(
+                "video info %s: length not probed: %s", url, exc, exc_info=True
+            )
             return VideoInfo(url=url, error=f"The video's length is unreadable: {exc}")
     return VideoInfo(url=url, seconds=seconds, thumbnail=entry.thumbnail)
 

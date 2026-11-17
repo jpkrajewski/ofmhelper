@@ -41,6 +41,11 @@ class Event(BaseModel):
     replaces: str | None = Field(default=None, min_length=1, max_length=64)
     # When it was made: an older one arriving late never replaces a newer one.
     at: float = Field(default_factory=time.time)
+    # Whose business it is (a VA's notice: their employer's): it goes to where
+    # that person linked their own (`user_event_targets`, /account), an
+    # admin's with none to the agency's; None = the agency's, to every target
+    # a sender has (`features/events/dispatch.py` `_targets`).
+    owner_id: int | None = None
 
     @field_validator("title")
     @classmethod

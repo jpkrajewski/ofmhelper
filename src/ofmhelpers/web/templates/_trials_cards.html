@@ -3,12 +3,8 @@
 {# /trials/{login} cards: the folder page renders them all, GET .../cards
    the ones trials.js asks for (it swaps each by data-key when its
    data-stamp moved). Expects `view` (`trials.folder.FolderView`), `reels`
-   (made copies), `pending` (reels Generate trials is still making). #}
-{% for reel in pending %}
-{% call ui.card(hook="tr-reel", attrs={"data-key": "pending-" ~ reel.key, "data-stamp": view.pending_stamp, "data-busy": true}) %}
-    <div class="result-file tr-pending"><span class="spinner"></span> {{ "in queue…" if view.pending_stamp else "generating…" }}</div>
-{% endcall %}
-{% endfor %}
+   (made copies, newest made first), `pending` (reels Generate trials is
+   still making), `failed` (reels it could not make), in that order. #}
 {% for reel in reels %}
 {% set busy = reel.key in view.busy %}
 {% call ui.card(hook="tr-reel", attrs={"id": "reel-" ~ reel.key, "data-key": reel.key, "data-stamp": view.stamp(reel), "data-busy": busy}) %}
@@ -55,6 +51,18 @@
         <span class="tr-pick-on">{{ ic.icon("check") }} Selected</span>
     </label>
     {% endif %}
+    {% if reel.error %}<p class="dr-note dr-error">{{ reel.error }}</p>{% endif %}
+{% endcall %}
+{% endfor %}
+{% for reel in pending %}
+{% call ui.card(hook="tr-reel", attrs={"data-key": "pending-" ~ reel.key, "data-stamp": view.pending_stamp, "data-busy": true}) %}
+    <div class="result-file tr-pending"><span class="spinner"></span> {{ "in queue…" if view.pending_stamp else "generating…" }}</div>
+{% endcall %}
+{% endfor %}
+{% for reel in failed %}
+{% call ui.card(hook="tr-reel", attrs={"data-key": "failed-" ~ reel.key, "data-stamp": reel.error or ""}) %}
+    <div class="result-file tr-pending">{{ ui.badge("Failed", "fail") }}</div>
+    <p class="dr-note">{{ reel.name }}</p>
     {% if reel.error %}<p class="dr-note dr-error">{{ reel.error }}</p>{% endif %}
 {% endcall %}
 {% endfor %}

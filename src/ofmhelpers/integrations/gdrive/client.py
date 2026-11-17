@@ -223,6 +223,7 @@ def service_account_email() -> str | None:
     try:
         return _credentials(_key()).service_account_email
     except DriveError:
+        logger.warning("drive: service account not usable", exc_info=True)
         return None
 
 

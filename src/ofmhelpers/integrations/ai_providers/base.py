@@ -265,4 +265,6 @@ def upload_lock(cache_key: str) -> Iterator[None]:
             except RedisError, LockError:
                 # Expired mid-upload (longer than OFM_UPLOAD_LOCK_S) or
                 # Redis lost it: the upload itself went through.
-                logger.warning("upload lock for %s not released", cache_key)
+                logger.warning(
+                    "upload lock for %s not released", cache_key, exc_info=True
+                )

@@ -117,7 +117,7 @@ class _Client(SyncClient):
 def _seconds(value: str) -> float | None:
     try:
         seconds = float(value)
-    except ValueError:
+    except ValueError:  # silent: not a number
         return None
     return seconds if math.isfinite(seconds) and seconds >= 0 else None
 
@@ -130,7 +130,7 @@ def _retry_after(response: httpx.Response) -> float | None:
         return header
     try:
         detail = HiggsfieldRefusal.model_validate(response.json()).detail
-    except ValueError:
+    except ValueError:  # silent: no detail given
         return None
     if isinstance(detail, HiggsfieldRefusalDetail):
         return detail.retry_after_seconds
@@ -293,6 +293,7 @@ class HiggsfieldProvider(Provider):
                     idempotency_key,
                     exc,
                     key,
+                    exc_info=True,
                 )
             raise
 

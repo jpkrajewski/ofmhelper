@@ -9,13 +9,13 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 lazy from fastapi import Request
 
-from ofmhelpers.auth.access import Action, Area, allowed
+from ofmhelpers.auth.access import Action, Area, opens
 from ofmhelpers.config import settings
 from ofmhelpers.features.drive.posting import window as posting_window
 from ofmhelpers.features.users.presence import idle_limit_s
 from ofmhelpers.features.users.viewing import makers
 from ofmhelpers.schemas.accounts import ago
-from ofmhelpers.schemas.nav import nav
+from ofmhelpers.schemas.nav import nav, nav_of
 from ofmhelpers.schemas.time_zones import TIME_ZONES, time_zone
 lazy from ofmhelpers.features.users.viewing import Maker
 lazy from ofmhelpers.schemas.users import Viewer
@@ -107,8 +107,8 @@ def _can(request: Request, what: str) -> bool:
     if viewer is None:
         return False
     if what in Action:
-        return not viewer.read_only and allowed(viewer.user.role, Action(what))
-    return allowed(viewer.user.role, Area(what))
+        return not viewer.read_only and opens(viewer, Action(what))
+    return opens(viewer, Area(what))
 
 
 @lru_cache(maxsize=1)
@@ -135,6 +135,7 @@ def get_templates() -> Jinja2Templates:
     templates.env.globals["static_url"] = static_url
     # The header, its More menu and the home cards all read schemas.nav.NAV.
     templates.env.globals["nav"] = nav
+    templates.env.globals["nav_of"] = nav_of
     # Who the page is rendered for (None on a public page) and what they may
     # do: templates never read the session themselves.
     templates.env.globals["viewer_of"] = _viewer_of

@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 from ofmhelpers.auth.access import Area, retired
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.config import settings
+from ofmhelpers.db.acting import Acting, Via, acting
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.features.chatting import sources as chat_sources
 from ofmhelpers.features.chatting import sync as chat_history
@@ -217,15 +218,18 @@ def sweeps() -> list[Sweep]:
 
 
 async def _loop(sweep: Sweep) -> None:
-    while True:
-        try:
-            if sweep.enabled():
-                await asyncio.to_thread(sweep.round)
-        except Exception:
-            logger.exception("%s sweep failed", sweep.name)
-        if sweep.interval_s is None:
-            return
-        await asyncio.sleep(sweep.interval_s())
+    # Its writes are the system's (audit_log `via` sweep, `ref` its name);
+    # each round's thread inherits it.
+    with acting(Acting(via=Via.SWEEP, ref=sweep.name)):
+        while True:
+            try:
+                if sweep.enabled():
+                    await asyncio.to_thread(sweep.round)
+            except Exception:
+                logger.exception("%s sweep failed", sweep.name)
+            if sweep.interval_s is None:
+                return
+            await asyncio.sleep(sweep.interval_s())
 
 
 @asynccontextmanager

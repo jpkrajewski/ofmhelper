@@ -36,13 +36,22 @@ def test_a_va_is_toured_through_clone_once_per_sign_in(va: Session):
     expect(shade).to_be_visible()
     expect(tip.locator(".tour-count")).to_have_text("1 / 4")
     expect(tip.locator(".tour-text")).to_have_text("Pick the picture of our model.")
-    # The shade sits on the control the step is about.
-    lit = shade.bounding_box()
-    subject = va.page.locator('.file-picker[data-field="image"]').bounding_box()
-    assert lit is not None
-    assert subject is not None
-    assert abs(lit["x"] - subject["x"]) < 10
-    assert abs(lit["y"] - subject["y"]) < 10
+    # The shade sits on the control the step is about. Read in one go, and
+    # again until it holds: the page scrolls the control into view and fills
+    # in above it after the tour opened (the control moved ~16 px), and the
+    # light follows on scroll and every 250 ms (tour.js). Two separate reads
+    # caught it in between: 16 and 35 px off on CI (2026-11-15, 11-17), 2 of
+    # 20 locally.
+    va.page.wait_for_function(
+        """() => {
+            const lit = document.querySelector('.tour-shade').getBoundingClientRect();
+            const it = document
+                .querySelector('.file-picker[data-field="image"]')
+                .getBoundingClientRect();
+            return Math.abs(lit.x - it.x) < 10 && Math.abs(lit.y - it.y) < 10;
+        }""",
+        timeout=5000,
+    )
     login = tip.get_attribute("data-login")
     assert login
     assert va.page.evaluate("key => localStorage.getItem(key)", KEY) == login

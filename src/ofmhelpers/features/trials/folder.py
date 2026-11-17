@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.cache import JobQueue, Line, QueueName
 from ofmhelpers.config import settings
@@ -45,6 +45,19 @@ logger = get_logger(__name__)
 
 TASK = "trials"
 GENERATE = "Making trials"
+REMAKE = "Making one trial"
+CAPTIONS = "Writing captions"
+UPLOAD = "Uploading"
+# What each trials job runs, by the label its row keeps: with the row's
+# `args` it runs again from the row alone (`replay_kwargs`).
+RUNS: frozendict[str, Callable[..., object]] = frozendict(
+    {
+        GENERATE: tasks.make_trials,
+        REMAKE: tasks.generate_reels,
+        CAPTIONS: tasks.write_captions,
+        UPLOAD: tasks.upload_trials,
+    }
+)
 # A Generate cut off by restarts this often is failed: something kills it.
 _RESTARTS_MAX = 2
 
@@ -162,11 +175,21 @@ class FolderView(BaseModel):
         return self.state.login_id
 
     @property
+    def made(self) -> list[ReelState]:
+        """The made copies, the newest made first (the page's first cards)."""
+        return sorted(self.state.ready, key=ReelState.made_or_posted, reverse=True)
+
+    @property
     def pending(self) -> list[ReelState]:
         """The reels Generate trials is still making (shown as generating)."""
         if not self.making:
             return []
         return [r for r in self.state.todo if r.status != ReelStatus.FAILED]
+
+    @property
+    def failed(self) -> list[ReelState]:
+        """The reels with no copy that could not be made (the last cards)."""
+        return self.state.failed
 
     @property
     def ahead(self) -> int | None:
@@ -238,18 +261,25 @@ class FolderView(BaseModel):
         )
 
     def made_among(self, keys: set[str]) -> list[ReelState]:
-        return [r for r in self.state.ready if r.key in keys]
+        return [r for r in self.made if r.key in keys]
 
     def pending_among(self, keys: set[str]) -> list[ReelState]:
         return [r for r in self.pending if f"pending-{r.key}" in keys]
 
+    def failed_among(self, keys: set[str]) -> list[ReelState]:
+        return [r for r in self.failed if f"failed-{r.key}" in keys]
+
     def live(self) -> FolderLive:
-        """Cards in page order: what is being made is the newest in POSTED."""
-        cards = [
+        """Cards in page order: made copies (newest made first), then what
+        Generate is still making, then what it could not make."""
+        cards = [CardStamp(key=r.key, stamp=self.stamp(r)) for r in self.made]
+        cards += [
             CardStamp(key=f"pending-{r.key}", stamp=self.pending_stamp)
             for r in self.pending
         ]
-        cards += [CardStamp(key=r.key, stamp=self.stamp(r)) for r in self.state.ready]
+        cards += [
+            CardStamp(key=f"failed-{r.key}", stamp=r.error or "") for r in self.failed
+        ]
         return FolderLive(
             running=bool(self.active),
             making=self.making,
@@ -301,7 +331,7 @@ def read_posted(uid: int, login_id: int) -> None:
     any more: nothing is read."""
     try:
         _sync_state(uid, uid, login_id)
-    except NotFoundError:
+    except NotFoundError:  # silent: a login with no card any more has nothing to read
         logger.info("trials: no folder card for login %s", login_id)
 
 
@@ -351,16 +381,60 @@ class _Claim:
         return self.job_id
 
     def launch(
-        self, enqueue: Callable[..., object], fn: Callable, reels: int, **kwargs
+        self,
+        enqueue: Callable[..., object],
+        fn: Callable,
+        reels: int,
+        *,
+        at_front: bool = False,
+        **kwargs,
     ) -> None:
+        """The job on `enqueue`'s queue, `at_front` for work someone waits
+        for (an upload, a caption, Regenerate): it waits at most for the copy
+        being made. Its arguments but the Drive token go into the row's
+        params first (`args`), so the row alone can run it again."""
         trials = settings.trials
+        if self.job_id is None:
+            return
+        args = {k: v for k, v in kwargs.items() if k != "refresh_token"}
+        merge_params(self.job_id, {"args": args})
         enqueue(
             run_job,
             self.job_id,
             fn,
             {"user_id": self.uid, "login_id": self.login_id, **kwargs},
             job_timeout=trials.job_grace_s + trials.per_reel_s * max(1, reels),
+            at_front=at_front,
         )
+
+
+class TrialsRun(BaseModel):
+    """A trials job's run rebuilt from its row: `model_dump()` is what its
+    run function (`RUNS[label]`) takes; the row's `args` ride along as they
+    were kept."""
+
+    model_config = ConfigDict(extra="allow")
+
+    user_id: int
+    login_id: int
+    refresh_token: str = ""
+
+
+def replay_run(job: Job) -> TrialsRun | None:
+    """What a trials job ran with, from its row (the Drive token read again
+    for its person); None for one from before rows kept their `args`."""
+    args = job.params.get("args")
+    if job.actor is None or not isinstance(args, dict):
+        return None
+    uid = int(job.actor)
+    return TrialsRun.model_validate(
+        {
+            "user_id": uid,
+            "login_id": int(job.params["login"]),
+            **args,
+            "refresh_token": refresh_token(uid) or "",
+        }
+    )
 
 
 def restart(job: Job) -> bool:
@@ -457,7 +531,7 @@ class Trials(BaseModel, frozen=True):
         at once would delete each other's. A copy deleted since (`cleanup`) is
         made again by the upload first, so that one waits its turn to encode."""
         wanted = set(approved or [])
-        claim = self.claim("Uploading")
+        claim = self.claim(UPLOAD)
         claimed: list[str] = []
 
         def take(state: FolderState) -> None:
@@ -478,6 +552,7 @@ class Trials(BaseModel, frozen=True):
                 self.encode if remade else self.enqueue,
                 tasks.upload_trials,
                 len(claimed),
+                at_front=True,
                 refresh_token=self.token(),
                 account_folder_id=state.account_folder_id,
                 keys=claimed,
@@ -501,7 +576,7 @@ class Reel(BaseModel, frozen=True):
     def remake(self, caption: str | None = None) -> Started:
         """One reel made again as its own job, alongside whatever else runs
         (with `caption` first, when given)."""
-        claim = self.trials.claim("Making one trial")
+        claim = self.trials.claim(REMAKE)
 
         def take(reel: ReelState) -> None:
             if not self.trials.busy(reel.job_id):
@@ -513,6 +588,7 @@ class Reel(BaseModel, frozen=True):
                 self.trials.encode,
                 tasks.generate_reels,
                 1,
+                at_front=True,
                 keys=[self.key],
                 refresh_token=self.trials.token(),
             )
@@ -522,7 +598,7 @@ class Reel(BaseModel, frozen=True):
         """A reel made before there were captions to choose from gets them, as
         its own job (a click on one that has them does nothing: it would cost
         quota)."""
-        claim = self.trials.claim("Writing captions")
+        claim = self.trials.claim(CAPTIONS)
 
         def take(reel: ReelState) -> None:
             if not reel.captions and not self.trials.busy(reel.job_id):

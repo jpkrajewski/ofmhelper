@@ -54,8 +54,10 @@ from starlette.responses import (
 )
 lazy from starlette.requests import Request
 
-from ofmhelpers.auth.access import Action, Area, allowed
+from ofmhelpers.auth.access import Action, Area, opens
 from ofmhelpers.config import settings
+from ofmhelpers.db.acting import Acting, Via, acting
+from ofmhelpers.db.stores.jobs import log_event
 from ofmhelpers.db.stores.users import get_user
 from ofmhelpers.features.signin import state as signin_state
 from ofmhelpers.features.users import presence
@@ -83,6 +85,17 @@ STOP_VIEWING_PATH = "/viewing/delete"
 _WAYS_OUT = frozenset({STOP_VIEWING_PATH, "/logout", SESSION_PATH})
 
 
+def _request(request: Request) -> Acting:
+    """A request's `Acting`: what it is and its trace, nobody yet."""
+    context = trace.get_current_span().get_span_context()
+    trace_id = format(context.trace_id, "032x") if context.is_valid else ""
+    return Acting(
+        via=Via.REQUEST,
+        ref=f"{request.method} {request.url.path}",
+        trace_id=trace_id,
+    )
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     # Where a signed-in person lands without a page to return to: the app's
     # home ("/" is the public landing page, never shown to them).
@@ -90,7 +103,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if self.is_public(request.url.path):
-            return await call_next(request)
+            with acting(_request(request)):
+                return await call_next(request)
         current = self.session_user(request)
         user = await run_in_threadpool(get_user, current.id) if current else None
         reason = self._refused(request, current, user)
@@ -136,7 +150,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
             and request.url.path not in _WAYS_OUT
         ):
             return self._look_only(request, viewer)
-        return await call_next(request)
+        # Who acts for this request's writes (audit_log, row stamps): the
+        # person signed in, and whom they view as.
+        who = _request(request).model_copy(
+            update={
+                "actor_id": (viewer.by or viewer.user).id,
+                "viewing_id": viewer.user.id if viewer.by else None,
+            }
+        )
+        with acting(who):
+            return await call_next(request)
 
     @staticmethod
     def _acted(request: Request) -> bool:
@@ -151,6 +174,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         write is refused here, in one place, whatever the route. (Their own
         VA is not read only: `features/users/viewing.py`.)"""
         detail = f"You are viewing as {viewer.label}. Go back to your view to do this."
+        if viewer.managing:
+            detail = "A manager looks only: nothing can be changed here."
         if self.is_fetch(request):
             return JSONResponse({"detail": detail}, status_code=403)
         return PlainTextResponse(detail, status_code=403)
@@ -292,12 +317,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
     @staticmethod
     def view_as(request: Request, user: User) -> None:
         """From the next request on this admin's pages are `user`'s, read
-        only (`viewer_for` checks the admin and the person each time)."""
+        only (`viewer_for` checks the admin and the person each time). The
+        action log keeps who looked as whom, and when."""
         request.session[_VIEWING] = user.id
+        admin = AuthMiddleware.session_user(request)
+        log_event(
+            "viewing",
+            actor=str(admin.id) if admin else None,
+            params={"viewing": user.id, "email": user.email},
+        )
 
     @staticmethod
     def stop_viewing(request: Request) -> None:
-        request.session.pop(_VIEWING, None)
+        viewed = request.session.pop(_VIEWING, None)
+        admin = AuthMiddleware.session_user(request)
+        if viewed is not None:
+            log_event(
+                "viewing_end",
+                actor=str(admin.id) if admin else None,
+                params={"viewing": viewed},
+            )
 
     @staticmethod
     def viewer(request: Request) -> Viewer:
@@ -324,7 +363,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         (303): a VA opening /accounts sees their own start page, not a line
         of JSON saying the page exists and is not theirs (owner 2026-11-14).
         A script's call, and anything that is not a page load, gets the 403."""
-        if allowed(cls.viewer(request).user.role, what):
+        if opens(cls.viewer(request), what):
             return
         if request.method == "GET" and cls.is_page_load(request):
             raise HTTPException(status_code=303, headers={"Location": cls.HOME})

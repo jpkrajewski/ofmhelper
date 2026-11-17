@@ -132,15 +132,17 @@ def test_build_ordered_paths_mixed_manifest_preserves_order(tmp_path):
     assert len(list(assets_root.iterdir())) == 2  # first.png + second.png, no dupes
 
 
-def test_build_ordered_paths_malformed_manifest_treats_everything_as_new(tmp_path):
+def test_build_ordered_paths_refuses_a_malformed_manifest(tmp_path):
+    """Taking every entry as new would drop the picked files before a paid run."""
     assets_root = tmp_path / "assets"
 
-    paths = build_ordered_paths(
-        "not json", [make_upload("a.png")], assets_root, user_id=USER
-    )
+    with pytest.raises(HTTPException) as exc_info:
+        build_ordered_paths(
+            "not json", [make_upload("a.png")], assets_root, user_id=USER
+        )
 
-    assert len(paths) == 1
-    assert paths[0].endswith("__a.png")
+    assert exc_info.value.status_code == 400
+    assert not assets_root.exists()
 
 
 def test_resolve_existing_ref_rejects_path_outside_allowed_root(tmp_path):

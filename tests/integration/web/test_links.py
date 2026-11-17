@@ -8,12 +8,12 @@ import os
 os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
 os.environ.setdefault("SESSION_SECRET", "test-secret")
 
-import time
 from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
+from sqlalchemy import func, text
 
 from ofmhelpers.db.models import ShortLinkRow
 from ofmhelpers.db.session import session_scope
@@ -342,7 +342,11 @@ def test_a_link_its_job_lost_is_found_by_address_or_failed(client, admin, monkey
     ]  # fmt: skip
     short_links.add_creating(admin.id, "bouncy", planned)
     with session_scope() as s:
-        s.query(ShortLinkRow).update({ShortLinkRow.created_at: time.time() - 3600})
+        # An hour old: the stamp trigger owns the stamps, so it is off here.
+        s.execute(text("SET LOCAL session_replication_role = replica"))
+        s.query(ShortLinkRow).update(
+            {ShortLinkRow.created_at: func.now() - text("interval '1 hour'")}
+        )
     # The job made the first one, then died.
     fake_bouncy().add_link("dane-walker", FANVUE)
     link_sync.sync_now(admin.id)
@@ -598,7 +602,11 @@ def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
     links = {x.slug: x for x in short_links.list_links(admin.id) if x.account_id}
     short_links.set_status([x.id for x in links.values()], "deleting")
     with session_scope() as s:
-        s.query(ShortLinkRow).update({ShortLinkRow.updated_at: time.time() - 3600})
+        # An hour old: the stamp trigger owns the stamps, so it is off here.
+        s.execute(text("SET LOCAL session_replication_role = replica"))
+        s.query(ShortLinkRow).update(
+            {ShortLinkRow.updated_at: func.now() - text("interval '1 hour'")}
+        )
     fake_bouncy().remove("b-two")  # its delete went through, the job then died
 
     link_sync.sync_now(admin.id)

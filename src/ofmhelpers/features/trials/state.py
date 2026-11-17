@@ -73,6 +73,9 @@ class ReelState(BaseModel):
     local: str | None = None  # downloaded source, relative to the work dir
     out: str | None = None  # the generated copy, relative to the work dir
     made: int = 0  # times the copy was made: the page's cache buster
+    # When the copy on the page was made (None: one made before this was
+    # kept): the page shows the newest first.
+    made_at: datetime | None = None
     approved: bool = False
     error: str | None = None
     # The job making or uploading this reel now (busy while it runs).
@@ -91,6 +94,11 @@ class ReelState(BaseModel):
 
     def posted_or_never(self) -> datetime:
         return self.posted_at or _NEVER
+
+    def made_or_posted(self) -> datetime:
+        """The page's order of made copies: when made, else (made before
+        that was kept) when posted."""
+        return self.made_at or self.posted_or_never()
 
     def claim_remake(self, job_id: str, caption: str | None = None) -> None:
         """Taken by a job making it again (with `caption`, when given)."""
@@ -118,6 +126,7 @@ class ReelState(BaseModel):
     def mark_made(self, out: str, captions: list[str], recipe: Recipe) -> None:
         """Its new copy is not the one in Drive, if one is."""
         self.caption, self.out, self.made = recipe.caption, out, self.made + 1
+        self.made_at = datetime.now(UTC)
         self.captions, self.recipe, self.stored = captions, recipe, True
         self.status, self.error = ReelStatus.GENERATED, None
         self.approved, self.job_id, self.uploaded_as = False, None, None
@@ -264,7 +273,10 @@ def locked(
                 lock.release()
             except RedisError, LockError:
                 logger.warning(
-                    "trials: state lock of %s/%s not released", user_id, login_id
+                    "trials: state lock of %s/%s not released",
+                    user_id,
+                    login_id,
+                    exc_info=True,
                 )
 
 

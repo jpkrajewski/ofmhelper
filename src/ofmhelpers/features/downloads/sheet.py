@@ -67,7 +67,7 @@ def _cell_links(cell: date | str | None) -> list[str] | None:
         return None
     try:
         return read_links(cell)
-    except NotALinkError:
+    except NotALinkError:  # silent: a cell without a link
         return None
 
 

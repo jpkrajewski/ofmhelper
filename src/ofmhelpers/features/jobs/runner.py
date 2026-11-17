@@ -12,10 +12,13 @@ from typing import Any
 lazy from collections.abc import Callable
 
 import logfire
+from opentelemetry import trace
+from pydantic import BaseModel
 from redis.exceptions import RedisError
 from rq.timeouts import JobTimeoutException
 
-from ofmhelpers.cache import QueueName, enqueue_to
+from ofmhelpers.cache import QueueName, enqueue_to, running_job
+from ofmhelpers.db.acting import Acting, Via, acting
 from ofmhelpers.db.stores import jobs as store
 from ofmhelpers.features.account.keys import keep_used, key_tail
 from ofmhelpers.features.jobs import notices
@@ -28,6 +31,13 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.persistence import GenerationRecord, JobMeta
 
 logger = get_logger(__name__)
+
+
+class Requeued(BaseModel):
+    """What a long batch returns to let the others in its line go first: the
+    same job, kwargs and time limit go back to the end of the line it came
+    from, and its row stays `running` (a /trials Generate after each reel,
+    while someone waits for the one media worker)."""
 
 
 def resumable(exc: BaseException) -> bool:
@@ -64,9 +74,16 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
         "function": fn.__qualname__,
         "enduser.id": header.actor,
     }
-    with logfire.span("job {task} {job_id}", **attributes) as span:
+    with (
+        logfire.span("job {task} {job_id}", **attributes) as span,
+        acting(_job_acting(job_id, header.task, header.actor)),
+    ):
         try:
             result = fn(**kwargs)
+            if isinstance(result, Requeued):
+                span.set_attributes({"requeued": True})
+                _requeue(job_id, fn, kwargs)
+                return
             store.finish_job(job_id, result)
             _record_outcome(span, job_id, result)
             # Saved: its provider request (if any) needs no resuming.
@@ -141,6 +158,29 @@ def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None
         len(items),
         [getattr(item, "error", None) for item in failed],
     )
+
+
+def _job_acting(job_id: str, task: str, actor: str | None) -> Acting:
+    """Who acts for the job's writes (audit_log, row stamps): the person it
+    is for; a job of nobody's (the agency's sweeps) is the system. Made
+    inside the job's span: its trace."""
+    context = trace.get_current_span().get_span_context()
+    return Acting(
+        via=Via.JOB,
+        actor_id=int(actor) if actor and actor.isdigit() else None,
+        ref=f"{task} {job_id}",
+        trace_id=format(context.trace_id, "032x") if context.is_valid else "",
+    )
+
+
+def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
+    """`run_job` of the same job at the end of the line it came from, with
+    its time limit. A queue failure is raised: the run records it as failed."""
+    running = running_job()
+    queue = running.queue if running else QueueName.DEFAULT
+    timeout = running.timeout if running else None
+    enqueue_to(queue, run_job, job_id, fn, kwargs, job_timeout=timeout)
+    logger.info("job %s back in line on %s", job_id, queue.value)
 
 
 def _queue_previews(job_id: str) -> None:

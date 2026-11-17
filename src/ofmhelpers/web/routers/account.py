@@ -84,6 +84,21 @@ def save_keys(
     return _page(request, me.id, service.save_keys(me.id, form))
 
 
+@router.post("/telegram")
+def connect_telegram(request: Request, me: CurrentUser) -> Response:
+    """To the bot with a one-time link: Start there makes that chat theirs."""
+    found = service.connect_telegram(me.id)
+    if found.url is not None:
+        return see_other(found.url)
+    return _page(request, me.id, found.notice)
+
+
+@router.post("/telegram/delete")
+def disconnect_telegram(me: CurrentUser) -> Response:
+    service.disconnect_telegram(me.id)
+    return see_other("/account")
+
+
 @router.post("/unlink/{provider}")
 def unlink(request: Request, me: CurrentUser, provider: str) -> Response:
     """Stops signing in with that account (and, for Google, Drive uploads

@@ -263,7 +263,7 @@ def _error(response: httpx.Response) -> tuple[str, str, str]:
     the body as the message when it is not that."""
     try:
         body = response.json()
-    except ValueError:
+    except ValueError:  # silent: not JSON: the body is the message
         body = None
     error = body.get("error") if isinstance(body, dict) else None
     if not (isinstance(error, dict) and error.get("message")):
@@ -278,5 +278,5 @@ def _error(response: httpx.Response) -> tuple[str, str, str]:
 def _seconds(value: str | None) -> float | None:
     try:
         return float(value) if value else None
-    except ValueError:
+    except ValueError:  # silent: not a number
         return None

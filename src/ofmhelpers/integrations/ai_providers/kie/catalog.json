@@ -10791,5 +10791,206 @@
     "fixed": {
       "nsfw_checker": false
     }
+  },
+  {
+    "model_id": "seedream/5-5-image-to-image",
+    "label": "Seedream5.5 · Image to Image",
+    "family": "Seedream",
+    "kind": "image",
+    "input_schema": {
+      "description": "Input parameters for the generation task",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "Required. Editing instruction, 5–5000 characters.",
+          "minLength": 5,
+          "maxLength": 5000
+        },
+        "image_urls": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "Required. Input image URLs (publicly accessible URLs, not file content). - 1–10 images - Supported formats: JPEG, PNG, WEBP - Max 10 MB per image - Each input image is billed separately; see kie.ai/pricing",
+          "x-media": "image"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "description": "Aspect ratio of the output image. Defaults to `auto` (decided by the model).",
+          "enum": [
+            "1:1",
+            "4:3",
+            "3:4",
+            "16:9",
+            "9:16",
+            "2:3",
+            "3:2",
+            "21:9",
+            "auto"
+          ],
+          "default": "auto"
+        },
+        "size": {
+          "type": "string",
+          "description": "Resolution tier of the output image. Affects the credit cost. Defaults to `2K`.",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K"
+        },
+        "output_format": {
+          "type": "string",
+          "description": "Output image format. Defaults to `png`.",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        },
+        "background": {
+          "type": "string",
+          "description": "Background of the output image. Defaults to `auto`. - `auto`: decided by the model - `transparent`: transparent background - `opaque`: opaque background `transparent` is available only when `output_format` is `png`.",
+          "enum": [
+            "auto",
+            "transparent",
+            "opaque"
+          ],
+          "default": "auto"
+        }
+      },
+      "required": [
+        "prompt",
+        "image_urls"
+      ],
+      "type": "object",
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/5-5-layer-decomposition",
+    "label": "Seedream5.5 · Layer Decomposition",
+    "family": "Seedream",
+    "kind": "image",
+    "input_schema": {
+      "properties": {
+        "image_url": {
+          "type": "string",
+          "format": "uri",
+          "x-media": "image"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 2000
+        },
+        "size": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "auto"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        },
+        "max_images": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100,
+          "default": 30
+        },
+        "text_recognition": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "image_url"
+      ],
+      "type": "object",
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
+  },
+  {
+    "model_id": "seedream/5-5-text-to-image",
+    "label": "Seedream5.5 · Text to Image",
+    "family": "Seedream",
+    "kind": "image",
+    "input_schema": {
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5000
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "4:3",
+            "3:4",
+            "16:9",
+            "9:16",
+            "2:3",
+            "3:2",
+            "21:9"
+          ]
+        },
+        "size": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png"
+        },
+        "background": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "transparent",
+            "opaque"
+          ],
+          "default": "auto"
+        }
+      },
+      "required": [
+        "prompt",
+        "aspect_ratio"
+      ],
+      "type": "object",
+      "additionalProperties": false
+    },
+    "fixed": {
+      "nsfw_checker": false
+    }
   }
 ]

@@ -50,7 +50,35 @@ class Base(DeclarativeBase):
     pass
 
 
-class UserRow(Base):
+class Timestamps:
+    """When the row was made and last changed, by the database's clock
+    (UTC), never the app's: `created_at` by its default, `updated_at` by the
+    `stamp_row` trigger whenever a column that is not quiet changes (alembic
+    a1b2c3d4e5f8, which also records the change in `audit_log`)."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class Authored:
+    """Who made the row and who changed it last: the person acting in that
+    transaction (`db/acting.py`), set by the `stamp_row` trigger. NULL: the
+    system (a sweep, a migration) or a row from before 2026-11-15. SET NULL:
+    a user removed leaves the history (`audit_log`) and the rows."""
+
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class UserRow(Timestamps, Authored, Base):
     """Someone who may sign in (ofmhelpers.integrations.signin): with Google or Apple
     (`UserIdentityRow`), or their email + password (`password_hash`,
     scrypt; "" = none set). An admin adds them on /users (or their email is
@@ -66,7 +94,6 @@ class UserRow(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[float] = mapped_column(Float, nullable=False)
     last_login_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Deferred: this row is read on every request, and decrypting it there would
     # turn a changed OFM_VAULT_KEY into every page answering 500.
@@ -105,7 +132,7 @@ class UserRow(Base):
     )
 
 
-class UserIdentityRow(Base):
+class UserIdentityRow(Timestamps, Authored, Base):
     """A Google or Apple account linked to a user, by the provider's stable
     id (`subject`): an Apple private-relay address or a changed Gmail still
     finds its user."""
@@ -118,7 +145,6 @@ class UserIdentityRow(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False, default="")
-    linked_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class PasswordLinkRow(Base):
@@ -134,7 +160,7 @@ class PasswordLinkRow(Base):
     expires_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-class UserApiKeyRow(Base):
+class UserApiKeyRow(Timestamps, Authored, Base):
     """A user's own key for a generation provider (kie.ai, Higgsfield...):
     what their forms pre-fill, so their runs bill their account."""
 
@@ -145,10 +171,9 @@ class UserApiKeyRow(Base):
     )
     provider: Mapped[str] = mapped_column(String(32), primary_key=True)
     api_key: Mapped[str] = mapped_column(EncryptedText, nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-class UserCookiesRow(Base):
+class UserCookiesRow(Timestamps, Authored, Base):
     """A user's own cookies.txt (alembic b1c2d3e4f5a7): the logins their
     downloads and their accounts' scans send. Never shared with another
     user, except the shared watched-profile scan (db/stores/cookies.py)."""
@@ -160,7 +185,6 @@ class UserCookiesRow(Base):
     )
     cookies: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
-    uploaded_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class ChatThreadRow(Base):
@@ -449,7 +473,7 @@ class WatchedProfileRow(Base):
     __table_args__ = (Index("ix_watched_profiles_group_name", "group_name"),)
 
 
-class ProfileGroupRow(Base):
+class ProfileGroupRow(Timestamps, Authored, Base):
     """A /reels group created on its own ("+ New group"), so it is in every
     dropdown before any profile is in it. Groups in use also come from
     `watched_profiles.group_name`; this table only adds the empty ones."""
@@ -460,7 +484,6 @@ class ProfileGroupRow(Base):
         ForeignKey("users.id", ondelete="RESTRICT"), primary_key=True, index=True
     )
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
-    created_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class ProfileScanStatRow(Base):
@@ -489,7 +512,7 @@ class ProfileScanStatRow(Base):
     )
 
 
-class CreatorRow(Base):
+class CreatorRow(Timestamps, Authored, Base):
     """A creator /accounts assigns accounts to (any platform). Created the
     first time a name is assigned; the name is how the page refers to it."""
 
@@ -501,14 +524,13 @@ class CreatorRow(Base):
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_creators_owner_name"),
     )
 
 
-class TrackedAccountRow(Base):
+class TrackedAccountRow(Timestamps, Authored, Base):
     """A social account /accounts tracks (features/accounts/tracker.py rescans it
     every `rescan_interval_s`), with its latest scan: `profile` is a
     `socials.AccountProfile` dump, `metrics` an `AccountMetrics` one (what
@@ -532,7 +554,6 @@ class TrackedAccountRow(Base):
         ForeignKey("creators.id", ondelete="SET NULL"), nullable=True
     )
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    added_at: Mapped[float] = mapped_column(Float, nullable=False)
     scanned_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     claimed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Set by "Remove": no longer scanned or listed, every record kept;
@@ -614,7 +635,7 @@ class AccountSnapshotRow(Base):
     )
 
 
-class DeviceRow(Base):
+class DeviceRow(Timestamps, Authored, Base):
     """A physical phone of the agency (/phones). `model_id`/`color_id` are
     `ofmhelpers.schemas.phone_catalog.catalog()` ids (`custom_model` for a phone the
     catalog does not list). Its logins are linked through
@@ -636,8 +657,6 @@ class DeviceRow(Base):
     owner: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     phone_number: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    added_at: Mapped[float] = mapped_column(Float, nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
     retired_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
@@ -645,7 +664,7 @@ class DeviceRow(Base):
     )
 
 
-class LoginRow(Base):
+class LoginRow(Timestamps, Authored, Base):
     """One account: an iCloud, a Gmail, an Instagram, a website... `service`
     is an `ofmhelpers.schemas.phone_catalog.services()` key; `provider` names it for a
     custom service ("Acme Corp"), "" otherwise. Stored once, signed in on
@@ -680,8 +699,6 @@ class LoginRow(Base):
         deferred_group="secret",
     )
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    added_at: Mapped[float] = mapped_column(Float, nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
     # Set: the account was removed everywhere (/accounts, or its Drive folder
     # deleted by hand) -- hidden from every phone, password kept, restorable
     # (alembic e5f6a7b8c9d1). Its phone links stay for the restore.
@@ -694,7 +711,7 @@ class LoginRow(Base):
     )
 
 
-class DeviceLoginRow(Base):
+class DeviceLoginRow(Timestamps, Authored, Base):
     """A login signed in on a phone. Deleted with either side; a login no
     phone links any more is deleted with its last link (repository)."""
 
@@ -706,7 +723,6 @@ class DeviceLoginRow(Base):
     login_id: Mapped[int] = mapped_column(
         ForeignKey("logins.id", ondelete="CASCADE"), primary_key=True
     )
-    linked_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (Index("ix_device_logins_login_id", "login_id"),)
 
@@ -823,7 +839,7 @@ class DrivePostedFileRow(Base):
     )
 
 
-class ShortLinkRow(Base):
+class ShortLinkRow(Timestamps, Authored, Base):
     """A link on a link provider (/links): one we made ("Generate links":
     one per Instagram account, `account_id`) or one the provider listed on
     a sync. `remote_id` is the provider's id for it (NULL while still
@@ -853,8 +869,6 @@ class ShortLinkRow(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     adult: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[float] = mapped_column(Float, nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (
         UniqueConstraint(
@@ -906,7 +920,7 @@ class LinkSyncRow(Base):
     usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
 
-class SelfLinkDomainRow(Base):
+class SelfLinkDomainRow(Timestamps, Authored, Base):
     """A custom domain we serve our own bridge pages on (provider "self").
     `owner_id` NULL = shared by everyone; otherwise one user's own. `status`:
     pending (added, not serving yet) | active (bridge serves it) | disabled."""
@@ -919,7 +933,6 @@ class SelfLinkDomainRow(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
-    added_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class SelfLinkClickRow(Base):
@@ -1038,7 +1051,7 @@ class CloneFromLinkRow(Base):
     )
 
 
-class PicturePresetRow(Base):
+class PicturePresetRow(Timestamps, Authored, Base):
     """A /pictures preset (alembic 9c1d2e3f4a5b): a name, the prompt and up
     to 10 reference images (paths in the owner's part of the asset store, in
     order) every run of it sends. Its owner's; the agency's are everyone's
@@ -1056,15 +1069,13 @@ class PicturePresetRow(Base):
     # Every run's output shape ("3:4"); NULL = the picture's own (alembic
     # 4e5f6a7b8c9d).
     aspect_ratio: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    created_at: Mapped[float] = mapped_column(Float, nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_picture_presets_owner_name"),
     )
 
 
-class CloneExampleRow(Base):
+class CloneExampleRow(Timestamps, Authored, Base):
     """An example /clone's SOP shows (alembic a6b7c8d9e0f2): its title, the
     prompt it shows and its place in the list; its files are in
     `<uploads>/sop/<id>/`. Made from a finished clone (`job_id`, while that
@@ -1076,9 +1087,6 @@ class CloneExampleRow(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
     job_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
     )
@@ -1112,3 +1120,55 @@ class PhoneRevisionRow(Base):
         ),
         Index("ix_phone_revisions_user_id_id", "user_id", "id"),
     )
+
+
+class AuditLogRow(Base):
+    """One change to a row people edit (alembic a1b2c3d4e5f8): who, as whom,
+    from where, which row, what changed. Written by the database's own
+    trigger on the audited tables (`db/audit.py`), never by the app; a
+    second trigger makes the table append-only. Read by
+    `db/repositories/audit_log.py`."""
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    row_id: Mapped[str] = mapped_column(Text, nullable=False)
+    op: Mapped[str] = mapped_column(Text, nullable=False)
+    # No foreign keys: the log outlives any row and any person.
+    owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    viewing_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    via: Mapped[str] = mapped_column(Text, nullable=False)
+    ref: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    trace_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    txid: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default=text("txid_current()")
+    )
+    changes: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("op IN ('INSERT', 'UPDATE', 'DELETE')", name="ck_audit_log_op"),
+        Index("ix_audit_log_table_name_row_id_id", "table_name", "row_id", "id"),
+        Index("ix_audit_log_actor_id_id", "actor_id", "id"),
+        Index("ix_audit_log_owner_id_id", "owner_id", "id"),
+    )
+
+
+class UserEventTargetRow(Timestamps, Authored, Base):
+    """Where one person's events go on one sender (alembic b2c3d4e5f6a9):
+    their own Telegram chat, linked from /account (the bot's /start link).
+    An event of theirs (`Event.owner_id`) goes there instead of the agency's
+    chats (`features/events/dispatch.py`). `target` is where a message goes:
+    never logged, masked in `audit_log`."""
+
+    __tablename__ = "user_event_targets"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    sender: Mapped[str] = mapped_column(Text, primary_key=True)
+    target: Mapped[str] = mapped_column(Text, nullable=False)

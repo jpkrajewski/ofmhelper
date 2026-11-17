@@ -21,14 +21,18 @@
     // Pages of the gallery read to find the cards of jobs asked for again.
     const PAGES = 5;
 
+    const SEND_TO = ".send-to-clone, .send-to-long, .send-to-edit";
+
     function targetOf(btn) {
-        return btn.classList.contains("send-to-long") ? "clone-long" : "clone";
+        if (btn.classList.contains("send-to-long")) return "clone-long";
+        if (btn.classList.contains("send-to-edit")) return "edit";
+        return "clone";
     }
 
     async function send(btn) {
         const card = btn.closest(".result-item[data-job-id]");
         if (!card) return;
-        const buttons = card.querySelectorAll(".send-to-clone, .send-to-long");
+        const buttons = card.querySelectorAll(SEND_TO);
         buttons.forEach((b) => {
             b.disabled = true;
         });
@@ -240,7 +244,7 @@
         if (!panel) return;
         const gallery = panel.querySelector(".results");
         panel.addEventListener("click", (e) => {
-            const btn = e.target.closest(".send-to-clone, .send-to-long");
+            const btn = e.target.closest(SEND_TO);
             if (btn) send(btn);
             const again = e.target.closest(".download-again");
             if (again && gallery) downloadAgain(gallery, again);

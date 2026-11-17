@@ -199,6 +199,13 @@ button:disabled,
    right after it drops its own auto and just sits under it. */
 .send-to { margin-top: auto; }
 .send-to + .result-actions { margin-top: var(--gap-inline); }
+/* Clone | Clone long | Edit in a card's narrow foot (~190 px): tighter sides,
+   and a button may shrink, so the row never runs past the card. */
+.send-to > .btn-segmented > .btn {
+    min-width: 0;
+    overflow: hidden;
+    padding-inline: var(--s-2);
+}
 
 /* Segmented control (file-manager roots, and anything else that is a set
    of mutually exclusive links). */

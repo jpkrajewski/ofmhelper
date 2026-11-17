@@ -22338,5 +22338,557 @@
       ],
       "additionalProperties": false
     }
+  },
+  {
+    "model_id": "dola-Seedream-5.5/image-to-image",
+    "label": "Dola-Seedream-5.5 · image-to-image",
+    "family": "Dola",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5000,
+          "description": "Edit or fusion instruction"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Width, 240 to 8595. The product with height must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Height, 240 to 8595. The product with width must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "imageUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "maxItems": 10,
+          "description": "Reference images, 1 to 10 Supported file formats: PNG, JPEG, WEBP.",
+          "x-media": "image"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K",
+          "description": "Takes priority over width and height. Values are 1K, 1.5K, and 2K. Default 2K."
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png",
+          "description": "Output image format, png or jpeg. Default png."
+        },
+        "watermark": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Add a watermark. true or false. Default false. Omitted requests are still sent as false."
+        },
+        "background": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "transparent",
+            "opaque"
+          ],
+          "default": "auto",
+          "description": "Background. auto follows the prompt and output format. jpeg with auto is opaque. jpeg with transparent is rejected. opaque is an opaque background. Default auto."
+        },
+        "optimizePromptMode": {
+          "type": "string",
+          "enum": [
+            "standard"
+          ],
+          "default": "standard",
+          "description": "Prompt optimization. Only standard is allowed. Omitted requests are still sent as standard. fast is rejected upstream."
+        },
+        "safetyIdentifier": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Stable English identifier of the end user, at most 64 characters. A hash such as sha256_user_abc123 is recommended. Empty values are not sent."
+        }
+      },
+      "required": [
+        "prompt",
+        "imageUrls"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "dola-Seedream-5.5/text-to-image",
+    "label": "Dola-Seedream-5.5 · text-to-image",
+    "family": "Dola",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5000,
+          "description": "Prompt used to generate the image"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Width, 240 to 8595. The product with height must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Height, 240 to 8595. The product with width must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K",
+          "description": "Takes priority over width and height. Values are 1K, 1.5K, and 2K. Default 2K."
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png",
+          "description": "Output image format, png or jpeg. Default png."
+        },
+        "watermark": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Add a watermark. true or false. Default false. Omitted requests are still sent as false."
+        },
+        "background": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "transparent",
+            "opaque"
+          ],
+          "default": "auto",
+          "description": "Background. auto follows the prompt and output format. jpeg with auto is opaque. jpeg with transparent is rejected. opaque is an opaque background. Default auto."
+        },
+        "optimizePromptMode": {
+          "type": "string",
+          "enum": [
+            "standard"
+          ],
+          "default": "standard",
+          "description": "Prompt optimization. Only standard is allowed. Omitted requests are still sent as standard. fast is rejected upstream."
+        },
+        "safetyIdentifier": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Stable English identifier of the end user, at most 64 characters. A hash such as sha256_user_abc123 is recommended. Empty values are not sent."
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "dola-Seedream-5.5/layer-decomposition",
+    "label": "Dola-Seedream-5.5 · layer-decomposition",
+    "family": "Dola Seedream 5.5",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Single image to decompose Supported file formats: PNG, JPEG, WEBP, BMP, TIFF, GIF.",
+          "x-media": "image"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 2000,
+          "description": "Optional. Describe elements to split. Leave empty to detect major elements."
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "auto",
+          "description": "Tier only, no pixel width and height. Values are auto, 1K, 1.5K, and 2K. Default auto."
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png",
+          "description": "Base image format, png or jpeg. Default png. Layers are always png."
+        },
+        "watermark": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Add a watermark. true or false. Default false. Omitted requests are still sent as false."
+        },
+        "optimizePromptMode": {
+          "type": "string",
+          "enum": [
+            "standard"
+          ],
+          "default": "standard",
+          "description": "Prompt optimization. Only standard is allowed. Omitted requests are still sent as standard. fast is rejected upstream."
+        },
+        "safetyIdentifier": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Stable English identifier of the end user, at most 64 characters. A hash such as sha256_user_abc123 is recommended. Empty values are not sent."
+        },
+        "maxImages": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100,
+          "multipleOf": 1,
+          "default": 30,
+          "description": "Maximum output images including the base image. Range 2 to 100, default 30. Rate limit is prepaid by this value."
+        },
+        "textRecognition": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Whether to recognize text on layers. true or false, default false."
+        }
+      },
+      "required": [
+        "imageUrl"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "seedream-v5.5/layer-decomposition",
+    "label": "Seedream-v5.5 · layer-decomposition",
+    "family": "Seedream V5.5",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Single image to decompose Supported file formats: PNG, JPEG, WEBP, BMP, TIFF, GIF.",
+          "x-media": "image"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 2000,
+          "description": "Optional. Describe elements to split. Leave empty to detect major elements."
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "auto",
+          "description": "Tier only, no pixel width and height. Values are auto, 1K, 1.5K, and 2K. Default auto."
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png",
+          "description": "Base image format, png or jpeg. Default png. Layers are always png."
+        },
+        "watermark": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Add a watermark. true or false. Default false. Omitted requests are still sent as false."
+        },
+        "optimizePromptMode": {
+          "type": "string",
+          "enum": [
+            "standard"
+          ],
+          "default": "standard",
+          "description": "Prompt optimization. Only standard is allowed. Omitted requests are still sent as standard. fast is rejected upstream."
+        },
+        "safetyIdentifier": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Stable English identifier of the end user, at most 64 characters. A hash such as sha256_user_abc123 is recommended. Empty values are not sent."
+        },
+        "maxImages": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100,
+          "multipleOf": 1,
+          "default": 30,
+          "description": "Maximum output images including the base image. Range 2 to 100, default 30. Rate limit is prepaid by this value."
+        },
+        "textRecognition": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Whether to recognize text on layers. true or false, default false."
+        }
+      },
+      "required": [
+        "imageUrl"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "seedream-v5.5/image-to-image",
+    "label": "Seedream-v5.5 · image-to-image",
+    "family": "seedream",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5000,
+          "description": "Edit or fusion instruction"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Width, 240 to 8595. The product with height must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Height, 240 to 8595. The product with width must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "imageUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "maxItems": 10,
+          "description": "Reference images, 1 to 10 Supported file formats: PNG, JPEG, WEBP.",
+          "x-media": "image"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K",
+          "description": "Takes priority over width and height. Values are 1K, 1.5K, and 2K. Default 2K."
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png",
+          "description": "Output image format, png or jpeg. Default png."
+        },
+        "watermark": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Add a watermark. true or false. Default false. Omitted requests are still sent as false."
+        },
+        "background": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "transparent",
+            "opaque"
+          ],
+          "default": "auto",
+          "description": "Background. auto follows the prompt and output format. jpeg with auto is opaque. jpeg with transparent is rejected. opaque is an opaque background. Default auto."
+        },
+        "optimizePromptMode": {
+          "type": "string",
+          "enum": [
+            "standard"
+          ],
+          "default": "standard",
+          "description": "Prompt optimization. Only standard is allowed. Omitted requests are still sent as standard. fast is rejected upstream."
+        },
+        "safetyIdentifier": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Stable English identifier of the end user, at most 64 characters. A hash such as sha256_user_abc123 is recommended. Empty values are not sent."
+        }
+      },
+      "required": [
+        "prompt",
+        "imageUrls"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "model_id": "seedream-v5.5/text-to-image",
+    "label": "Seedream-v5.5 · text-to-image",
+    "family": "seedream",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5000,
+          "description": "Prompt used to generate the image"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Width, 240 to 8595. The product with height must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 8595,
+          "multipleOf": 1,
+          "default": 1024,
+          "description": "Height, 240 to 8595. The product with width must be 921600 to 4624220, and the aspect ratio must be 1/16 to 16. Ignored when resolution is set."
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K",
+          "description": "Takes priority over width and height. Values are 1K, 1.5K, and 2K. Default 2K."
+        },
+        "outputFormat": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "default": "png",
+          "description": "Output image format, png or jpeg. Default png."
+        },
+        "watermark": {
+          "type": "string",
+          "enum": [
+            "false",
+            "true"
+          ],
+          "default": "false",
+          "description": "Add a watermark. true or false. Default false. Omitted requests are still sent as false."
+        },
+        "background": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "transparent",
+            "opaque"
+          ],
+          "default": "auto",
+          "description": "Background. auto follows the prompt and output format. jpeg with auto is opaque. jpeg with transparent is rejected. opaque is an opaque background. Default auto."
+        },
+        "optimizePromptMode": {
+          "type": "string",
+          "enum": [
+            "standard"
+          ],
+          "default": "standard",
+          "description": "Prompt optimization. Only standard is allowed. Omitted requests are still sent as standard. fast is rejected upstream."
+        },
+        "safetyIdentifier": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Stable English identifier of the end user, at most 64 characters. A hash such as sha256_user_abc123 is recommended. Empty values are not sent."
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    }
   }
 ]

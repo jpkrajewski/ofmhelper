@@ -101,7 +101,7 @@ def _cached(key: str) -> _Read | None:
     try:
         return _Read.model_validate_json(raw)
     except ValidationError:
-        logger.warning("drive space: cached value of %s unreadable", key)
+        logger.warning("drive space: cached value of %s unreadable", key, exc_info=True)
         return None
 
 
@@ -121,10 +121,12 @@ def _ask(user_id: int, token: str) -> _Read:
     try:
         return _Read(storage=connect_as(token, interactive=True).storage())
     except DriveAuthError:
-        logger.warning("drive space of %s: Google refused the sign-in", user_id)
+        logger.warning(
+            "drive space of %s: Google refused the sign-in", user_id, exc_info=True
+        )
         return _Read(reconnect=True)
     except (DriveError, SignInError) as exc:
-        logger.warning("drive space of %s not read: %s", user_id, exc)
+        logger.warning("drive space of %s not read: %s", user_id, exc, exc_info=True)
         return _Read()
 
 

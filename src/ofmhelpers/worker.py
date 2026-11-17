@@ -32,6 +32,7 @@ lazy from rq.job import Job
 
 from ofmhelpers.cache import QueueJob, QueueName, get_redis
 from ofmhelpers.config import settings
+from ofmhelpers.db.acting import Acting, Via, acting
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
 lazy from ofmhelpers.integrations.ai_providers.base import provider_classes
@@ -176,10 +177,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="ofmhelpers.worker")
     parser.add_argument("queue", nargs="*", type=QueueName, choices=list(QueueName))
     queues = parser.parse_args().queue or [QueueName.DEFAULT]
-    if len(queues) == 1:
-        QueueWorkers(queues[0]).run()
-    else:
-        QueueGroup(queues).run()
+    # A job's own run says who it is for (`run_job`); anything else these
+    # processes write is the worker's (forked children inherit it).
+    names = ",".join(q.value for q in queues)
+    with acting(Acting(via=Via.WORKER, ref=f"worker {names}")):
+        if len(queues) == 1:
+            QueueWorkers(queues[0]).run()
+        else:
+            QueueGroup(queues).run()
 
 
 if __name__ == "__main__":

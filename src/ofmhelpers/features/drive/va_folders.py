@@ -55,28 +55,37 @@ def of_owner(owner_id: int) -> list[VaFolder]:
     return sorted(folders, key=lambda f: f.name.lower())
 
 
-def ensure(drive: DriveApi, root: str, va: User, stored: VaFolder | None) -> VaFolder:
+def ensure(
+    drive: DriveApi, root: str, va: User, stored: VaFolder | None
+) -> VaFolder | None:
     """`va`'s folder in `root`: the stored one, renamed when the VA's name
     changed; one of that name already there (made by hand); else a new one.
-    A stored folder gone from Drive is made again. Raises `DriveError`."""
+    A stored folder gone from Drive is made again. None: the VA was deleted
+    while this ran (a folder made for them stays: nothing in Drive is
+    deleted). Raises `DriveError`."""
     name = va.label
     if stored is not None:
         try:
             current = drive.folder(stored.folder_id)
         except FolderGoneError:
-            logger.warning("drive: folder of VA %s is gone: made again", va.id)
+            logger.warning(
+                "drive: folder of VA %s is gone: made again", va.id, exc_info=True
+            )
         else:
             if current.name != name:
                 drive.rename(current.id, name)
             folder = VaFolder(
                 user_id=va.id, folder_id=current.id, name=name, root_folder_id=root
             )
-            if stored != folder:
-                store.save_va_folder(folder)
+            if stored != folder and not store.save_va_folder(folder):
+                logger.info("drive: VA %s gone meanwhile, skipped", va.id)
+                return None
             return folder
     found = drive.find_folder(root, name) or drive.create_folder(root, name)
     folder = VaFolder(user_id=va.id, folder_id=found.id, name=name, root_folder_id=root)
-    store.save_va_folder(folder)
+    if not store.save_va_folder(folder):
+        logger.info("drive: VA %s gone meanwhile, folder left as it is", va.id)
+        return None
     logger.info("drive: folder of VA %s is %s (%s)", va.id, found.id, name)
     return folder
 
@@ -91,9 +100,10 @@ def sync(drive: DriveApi, root: str, owner_id: int, report: SyncReport) -> None:
         if folder is not None and folder.name == va.label:
             continue
         try:
-            ensure(drive, root, va, folder)
+            kept = ensure(drive, root, va, folder)
         except (DriveError, SignInError) as exc:
             logger.warning("drive: folder of VA %s failed", va.id, exc_info=True)
             report.failed.append(f"{va.label}: {exc}")
             continue
-        (report.renamed if folder is not None else report.created).append(va.label)
+        if kept is not None:
+            (report.renamed if folder is not None else report.created).append(va.label)

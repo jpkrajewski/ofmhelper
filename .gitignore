@@ -22,6 +22,8 @@ deploy.local.env
 /secrets/
 /cookies/
 backlog.txt
+# The server move notes: names the provider, region and host (public repo).
+/SERVER.md
 
 # Production database snapshot the migration tests run against: real
 # customer data, local only -- this repo is public.

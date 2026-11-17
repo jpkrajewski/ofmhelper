@@ -78,7 +78,9 @@ def tracked_handle(service: str, username: str) -> TrackedHandle | None:
             handle=get_platform(found.tracked_platform).handle(username),
         )
     except KeyError, ValueError:
-        logger.warning("%s login %r is not a trackable handle", service, username)
+        logger.warning(
+            "%s login %r is not a trackable handle", service, username, exc_info=True
+        )
         return None
 
 

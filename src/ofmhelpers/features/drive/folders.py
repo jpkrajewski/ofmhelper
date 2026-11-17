@@ -55,6 +55,7 @@ import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from typing import Never
 from zoneinfo import ZoneInfo
 lazy from collections.abc import Iterator
 lazy from pathlib import Path
@@ -187,7 +188,7 @@ def usable_root(drive: DriveApi, user_id: int) -> str | None:
     try:
         current = drive.folder(stored)
     except FolderGoneError:
-        logger.warning("drive: root of %s is gone", user_id)
+        logger.warning("drive: root of %s is gone", user_id, exc_info=True)
         return None
     if not _is_root(current):
         logger.warning(
@@ -313,7 +314,9 @@ def _review_lock(user_id: int) -> Iterator[None]:
             try:
                 lock.release()
             except RedisError, LockError:
-                logger.warning("drive: review lock of %s not released", user_id)
+                logger.warning(
+                    "drive: review lock of %s not released", user_id, exc_info=True
+                )
 
 
 def _folder_key(user_id: int, root: str, name: str) -> str:
@@ -328,7 +331,7 @@ def _remembered(drive: DriveApi, key: str, root: str, name: str) -> str | None:
         return None
     try:
         current = drive.folder(known)
-    except FolderGoneError:
+    except FolderGoneError:  # silent: deleted by hand: found again
         logger.info(
             "drive: review folder %s (%s) is gone: finding it again", name, known
         )
@@ -440,7 +443,7 @@ def trash_folders(user_id: int, login_ids: list[int]) -> None:
         try:
             if drive is not None:
                 drive.trash_file(folder.folder_id)
-        except FolderGoneError:
+        except FolderGoneError:  # silent: already gone
             pass
         except DriveError:
             logger.warning("drive: trashing %s failed", folder.folder_id, exc_info=True)
@@ -450,6 +453,19 @@ def trash_folders(user_id: int, login_ids: list[int]) -> None:
 
 class _RemovedByHandError(Exception):
     """The stored account folder was deleted in Drive (`_deleted_by_hand`)."""
+
+
+class _LoginGoneError(Exception):
+    """The login was deleted while this sync worked on it (Remove login, a
+    replace on /accounts, a phone deleted): its row is gone, so is the job."""
+
+
+def _gone_meanwhile(target: DriveTarget) -> Never:
+    """The login went while its folder was being found or made. The folder
+    stays as it is in Drive (nothing in Drive is deleted, not even an empty
+    one just made): the account added again adopts it by name."""
+    logger.info("drive: %s gone meanwhile, its folder left as it is", target.handle)
+    raise _LoginGoneError
 
 
 def _account_folder(
@@ -472,18 +488,20 @@ def _account_folder(
             if current.name != target.folder_name:
                 drive.rename(current.id, target.folder_name)
                 report.renamed.append(target.folder_name)
-            if stored.name != target.folder_name:
-                store.save_account_folder(
-                    target.login_id, current.id, target.folder_name, root
-                )
+            if stored.name != target.folder_name and not store.save_account_folder(
+                target.login_id, current.id, target.folder_name, root
+            ):
+                _gone_meanwhile(target)
             return current.id, True
     found = drive.find_folder(root, target.folder_name)
-    if found is not None:
-        report.adopted.append(target.folder_name)
-    else:
+    adopted = found is not None
+    if found is None:
         found = drive.create_folder(root, target.folder_name)
-        report.created.append(target.folder_name)
-    store.save_account_folder(target.login_id, found.id, target.folder_name, root)
+    if not store.save_account_folder(
+        target.login_id, found.id, target.folder_name, root
+    ):
+        _gone_meanwhile(target)
+    (report.adopted if adopted else report.created).append(target.folder_name)
     return found.id, False
 
 
@@ -511,7 +529,7 @@ def _posted_folder(
     if stored_id is not None:
         try:
             current = drive.folder(stored_id)
-        except FolderGoneError:
+        except FolderGoneError:  # silent: deleted by hand: made again
             current = None
         if current is not None and account_id in current.parents:
             if current.name != name:
@@ -547,7 +565,7 @@ def _sync_one(
 ) -> None:
     try:
         account_id, kept = _account_folder(drive, root, target, stored, report)
-    except _RemovedByHandError:
+    except _RemovedByHandError, _LoginGoneError:  # silent: handled where raised
         return
     posted_id = stored.posted_folder_id if kept and stored else None
     _posted_folder(drive, target, account_id, posted_id, report)
@@ -597,7 +615,7 @@ def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountSca
             posted_items.folders.append(
                 FolderItems(folder_id=d.id, items=drive.children(d.id))
             )
-        except FolderGoneError:
+        except FolderGoneError:  # silent: only that POSTED folder went
             # Only that POSTED folder went since the listing, not the
             # account: never taken as the account deleted by hand.
             logger.info("drive: POSTED folder %s gone mid-scan", d.id)
@@ -625,7 +643,7 @@ def _tally_one(
         return report
     try:
         scan = _scan(drive, stored.folder_id, stored.posted_folder_id)
-    except FolderGoneError:
+    except FolderGoneError:  # silent: deleted by hand: the account is removed
         _deleted_by_hand(target)
         return report
     if scan.name != target.folder_name:
@@ -633,9 +651,11 @@ def _tally_one(
         report.renamed.append(target.folder_name)
     if not _kept_posted_ok(scan, stored):
         _posted_folder(drive, target, stored.folder_id, stored.posted_folder_id, report)
-    report.newly_posted = store.record_posted(
-        target.login_id, stored.folder_id, scan.posted, seen_at
-    )
+    newly = store.record_posted(target.login_id, stored.folder_id, scan.posted, seen_at)
+    if newly is None:
+        logger.info("drive: %s gone meanwhile, not tallied", target.handle)
+        return report
+    report.newly_posted = newly
     store.save_scans({target.login_id: scan}, seen_at)
     # A video deleted (or dragged away) in Drive stops showing "In Drive".
     present = {f.id for f in (*scan.waiting, *scan.posted)}
@@ -744,7 +764,7 @@ def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
             return
         folder_id = card.account_folder_id
         card.scan = _scan(drive, folder_id, card.posted_folder_id)
-    except FolderGoneError:
+    except FolderGoneError:  # silent: deleted by hand: the account is removed
         _deleted_by_hand(card.target)
         card.account_folder_id = card.posted_folder_id = None
         card.error = "The account's folder was deleted: the account was removed"
@@ -838,7 +858,9 @@ def _list_root(
     try:
         listed = _root_folders(user_id, drive, root)
     except FolderGoneError:
-        logger.warning("drive: root of %s is gone, the sweep finds it", user_id)
+        logger.warning(
+            "drive: root of %s is gone, the sweep finds it", user_id, exc_info=True
+        )
         users.set_drive_root(user_id, None)  # the sweep finds or makes it
         return None
     except Exception:
@@ -1058,7 +1080,7 @@ def thumbnail(
         return None
     try:
         item = drive.file(file_id)
-    except FolderGoneError:
+    except FolderGoneError:  # silent: gone: no thumbnail
         return None
     if not set(item.parents) & {folder.folder_id, folder.posted_folder_id}:
         logger.warning("drive: preview of %s refused: not in that folder", file_id)

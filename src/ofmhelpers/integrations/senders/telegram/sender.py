@@ -6,6 +6,7 @@ from ofmhelpers.integrations.senders.telegram.client import (
     TelegramClient,
     TelegramError,
     TelegramMovedError,
+    telegram_client,
 )
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
 from ofmhelpers.log import get_logger
@@ -94,4 +95,4 @@ def _client() -> TelegramClient:
     if token is None:
         msg = "OFM_TELEGRAM_BOT_TOKEN is not set"
         raise TelegramError(msg, permanent=True)
-    return TelegramClient(token.get_secret_value())
+    return telegram_client(token.get_secret_value())

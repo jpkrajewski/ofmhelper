@@ -80,6 +80,7 @@ class ClientSource(AccountSource):
                     self.key,
                     done,
                     len(targets),
+                    exc_info=True,
                 )
                 break
             except _OfflineError:
@@ -118,10 +119,17 @@ class ClientSource(AccountSource):
                 if exc.dead_proxy:
                     pool.drop(proxy)
                 logger.warning(
-                    "%s @%s: try %d failed (%s)", self.key, handle, attempt + 1, exc
+                    "%s @%s: try %d failed (%s)",
+                    self.key,
+                    handle,
+                    attempt + 1,
+                    exc,
+                    exc_info=True,
                 )
             except SocialError as exc:
-                logger.warning("%s @%s: scan refused: %s", self.key, handle, exc)
+                logger.warning(
+                    "%s @%s: scan refused: %s", self.key, handle, exc, exc_info=True
+                )
                 return Refusal(message=str(exc))
         if all(isinstance(f, RateLimitedError) for f in failures):
             raise failures[-1]

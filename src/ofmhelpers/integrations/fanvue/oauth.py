@@ -137,5 +137,5 @@ def refresh(refresh_token: str) -> ChatTokens | None:
 def _error_field(r: requests.Response, name: str) -> str:
     try:
         return str(r.json().get(name, ""))
-    except ValueError, AttributeError:
+    except ValueError, AttributeError:  # silent: not JSON: no field
         return ""

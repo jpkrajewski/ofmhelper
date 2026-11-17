@@ -40,8 +40,12 @@ def _busy(uid: int, job_id: str | None) -> bool:
 def _old(path: Path, now: float) -> bool:
     try:
         return now - path.stat().st_mtime > settings.trials.keep_s
+    except FileNotFoundError:
+        logger.debug("trials: %s is gone already", path, exc_info=True)
+        return True  # nothing to keep
     except OSError:
-        return True  # gone already: nothing to keep
+        logger.warning("trials: cannot read %s", path, exc_info=True)
+        return True
 
 
 def _source_files(uid: int, login_id: int, reel: ReelState) -> list[Path]:
@@ -56,7 +60,11 @@ def _delete(paths: list[Path]) -> int:
         try:
             size = path.stat().st_size
             path.unlink()
+        except FileNotFoundError:
+            logger.debug("trials: %s is gone already", path, exc_info=True)
+            continue
         except OSError:
+            logger.warning("trials: could not delete %s", path, exc_info=True)
             continue
         freed += size
     return freed
