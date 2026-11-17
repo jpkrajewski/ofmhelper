@@ -24,5 +24,11 @@
         </li>
         {%- endfor -%}
     </ul>
+{# A done clone goes on to /edit or /clone-long with its video picked
+   (clone.js posts `/clone/{job}/handoffs`; a card that finishes live gets
+   the same control from clone.html's `card-send-to`). Not on /handmade. #}
+{% if job.task == "clone" and job.status == "done" and job.assets|selectattr("kind", "equalto", "video")|list %}
+    {% include "_clone_send_to.html" %}
+{% endif %}
 {% endblock %}
 {% block menu_items %}{% if drive_targets %}{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}{% endif %}{% endblock %}

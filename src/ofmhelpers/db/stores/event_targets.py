@@ -17,8 +17,9 @@ def of(user_id: int, sender: str) -> str | None:
     return _repository().of(user_id, sender)
 
 
-def save(user_id: int, sender: str, target: str) -> None:
-    _repository().save(user_id, sender, target)
+def save(user_id: int, sender: str, target: str) -> bool:
+    """False: the person was deleted meanwhile, nothing saved."""
+    return _repository().save(user_id, sender, target)
 
 
 def remove(user_id: int, sender: str) -> bool:

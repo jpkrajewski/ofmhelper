@@ -2181,6 +2181,11 @@ class ChattingSettings(BaseSettings):
     recent_models_shown: int = Field(
         default=3, ge=1, validation_alias="OFM_CHATTING_RECENT_MODELS"
     )
+    # How long the creators a sync round found the keys reach are kept for
+    # /chatting's list (each round writes them again, every minute).
+    reached_keep_s: int = Field(
+        default=3600, ge=60, validation_alias="OFM_CHATTING_REACHED_KEEP_S"
+    )
     # This many chats in a row that cannot be read end a sync round: the platform is
     # down, and each one costs its retries.
     sync_max_failed_chats: int = Field(
@@ -2268,6 +2273,15 @@ class StackedSettings(BaseSettings):
     # Rate limits are one-minute windows, so no real wait is longer.
     max_wait_s: float = Field(
         default=65.0, ge=0, validation_alias="OFM_STACKED_MAX_WAIT_S"
+    )
+    # What a key is and whom it reaches is asked once and kept: an agency's
+    # list again after this long (a creator newly linked shows within it), a
+    # creator key's (its one creator never changes) after the second.
+    agency_refresh_s: int = Field(
+        default=600, ge=60, validation_alias="OFM_STACKED_AGENCY_REFRESH_S"
+    )
+    creator_key_keep_s: int = Field(
+        default=604800, ge=60, validation_alias="OFM_STACKED_CREATOR_KEY_KEEP_S"
     )
 
     @property

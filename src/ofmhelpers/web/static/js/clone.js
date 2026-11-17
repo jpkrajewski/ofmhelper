@@ -353,12 +353,50 @@
         const states = document.createElement("ul");
         states.className = "drive-states";
         card.querySelector(".result-actions")?.before(states);
+        const sendTo = document.getElementById("card-send-to");
+        if (sendTo && card.querySelector("video.result-video")) {
+            card.querySelector(".result-actions")?.before(
+                sendTo.content.firstElementChild.cloneNode(true)
+            );
+        }
         const item = document.getElementById("card-drive-item");
         const list = card.querySelector(".menu-list");
         if (!item || !list) return;
         // Before Hide/Unhide, as on a reloaded card.
         const node = item.content.firstElementChild.cloneNode(true);
         list.insertBefore(node, list.querySelector(".hide-btn"));
+    }
+
+    // [Edit | Clone long] on a done card: the server registers the clone's
+    // video in this person's store and answers the page to open with it.
+    function initSendTo(gallery) {
+        gallery.addEventListener("click", async (e) => {
+            const btn = e.target.closest(".send-to-edit, .send-to-long");
+            const card = btn?.closest(".result-item[data-job-id]");
+            if (!card) return;
+            const buttons = card.querySelectorAll(".send-to-edit, .send-to-long");
+            buttons.forEach((b) => {
+                b.disabled = true;
+            });
+            const body = new URLSearchParams({
+                target: btn.classList.contains("send-to-long") ? "clone-long" : "edit",
+            });
+            if (card.dataset.fileIndex) body.set("index", card.dataset.fileIndex);
+            try {
+                const r = await fetch(`/clone/${encodeURIComponent(card.dataset.jobId)}/handoffs`, {
+                    method: "POST",
+                    body,
+                });
+                const answer = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(answer.detail || `failed (${r.status})`);
+                window.location = answer.redirect;
+            } catch (err) {
+                buttons.forEach((b) => {
+                    b.disabled = false;
+                });
+                window.alert(`Could not open it: ${err.message}`);
+            }
+        });
     }
 
     // --- the Drive picker ------------------------------------------------------
@@ -409,6 +447,7 @@
         initRecreate(form, gallery);
         initPrefill(form);
         initDriveUpload(gallery);
+        initSendTo(gallery);
         // Uploads still on their way when the page opened.
         const pending = [...gallery.querySelectorAll('.drive-states li[data-status="queued"]')]
             .map((li) => li.closest(".result-item").dataset.jobId);

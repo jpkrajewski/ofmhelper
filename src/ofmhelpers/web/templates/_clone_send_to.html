@@ -1,0 +1,9 @@
+{# A done clone's [Edit | Clone long] (`_clone_card.html`, clone.html's live
+   `card-send-to`; clone.js sends it). #}
+{% import "components/ui.html" as ui %}
+<div class="send-to">
+{% call ui.segmented("Send this clone") %}
+    {{ ui.button("Edit", hook="send-to-edit") }}
+    {{ ui.button("Clone long", hook="send-to-long") }}
+{% endcall %}
+</div>

@@ -199,19 +199,24 @@ def test_gpt_image_references_go_as_files_to_edits(provider, image, model, field
     assert fields["prompt"] == "her in red"
 
 
+@pytest.mark.parametrize(
+    "model",
+    # 5.5 marks its pictures unless told not to (docs.apiyi.com, 2026-11-16).
+    ["seedream-5-0-flash-260915", "seedream-5-5-261028"],
+)
 def test_seedream_sends_data_urls_without_a_watermark_and_saves_the_url(
-    provider, image
+    provider, image, model
 ):
     [saved] = _run(
         provider,
-        "apiyi:seedream-5-0-flash-260915",
+        f"apiyi:{model}",
         {"prompt": "outfit swap", "image_urls": [str(image)], "size": "2K"},
-        "sd-edit",
+        f"sd-edit-{model}",
     )
 
     assert saved.suffix == ".png"
     [(_, body, _)] = _calls("/v1/images/generations")
-    assert body["model"] == "seedream-5-0-flash-260915"
+    assert body["model"] == model
     assert body["watermark"] is False
     assert body["response_format"] == "url"
     [ref] = body["image"]

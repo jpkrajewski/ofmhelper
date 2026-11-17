@@ -6,6 +6,7 @@ an agency key every linked creator, and `creators()` lists them either way.
 The only writes are webhook destinations: nothing can message a fan or mark a
 chat read."""
 
+import hashlib
 import time
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -15,6 +16,7 @@ lazy from collections.abc import Iterable, Iterator
 import requests
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.stacked.errors import (
@@ -24,6 +26,7 @@ from ofmhelpers.integrations.stacked.errors import (
 )
 from ofmhelpers.integrations.stacked.models import (
     AccessibleCreator,
+    AccountType,
     ChatsPage,
     ChatSummary,
     CreatedWebhook,
@@ -44,6 +47,13 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 
+class KeyInfo(BaseModel):
+    """What one key is: an agency's or a creator's, and whom it reaches."""
+
+    agency: bool
+    creators: list[AccessibleCreator]
+
+
 class StackedClient:
     """One API key, of a creator or of an agency."""
 
@@ -57,9 +67,37 @@ class StackedClient:
         """The key's tail, for logs (never the key)."""
         return f"...{self._api_key[-4:]}"
 
+    def same_key(self, other: StackedClient) -> bool:
+        return self._api_key == other._api_key
+
     def me(self) -> Me:
         """The account this key acts as."""
         return _parsed(Me, self._get("me"))
+
+    def info(self) -> KeyInfo:
+        """What this key is and whom it reaches, asked of Stacked once and kept
+        in Redis under a hash of the key (never the key): an agency's for
+        `agency_refresh_s` (a creator newly linked shows within it), a creator
+        key's for `creator_key_keep_s`. Redis down = asked every time."""
+        kept_at = (
+            "stacked:key:" + hashlib.sha256(self._api_key.encode()).hexdigest()[:24]
+        )
+        raw = get_text(kept_at)
+        if raw is not None:
+            try:
+                return KeyInfo.model_validate_json(raw)
+            except ValidationError:
+                logger.warning(
+                    "stacked key %s: kept info unreadable", self.key_hint, exc_info=True
+                )
+        info = KeyInfo(
+            agency=self.me().account.type is AccountType.AGENCY,
+            creators=self.creators(),
+        )
+        keep = settings.stacked
+        ttl = keep.agency_refresh_s if info.agency else keep.creator_key_keep_s
+        set_text(kept_at, info.model_dump_json(), ttl)
+        return info
 
     def creators(self) -> list[AccessibleCreator]:
         """Every creator this key can act on."""
@@ -215,25 +253,42 @@ class Reach(BaseModel):
     failed: bool
 
 
+class _KeyReach(BaseModel):
+    """One key's client and what it is."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    client: StackedClient
+    info: KeyInfo
+
+
 def reach(api_keys: Iterable[str]) -> Reach:
     """A creator key gives its creator, an agency key each linked one. A creator
-    two keys reach stays with the first. A key that cannot be read is skipped
-    (logged), so one revoked key does not take the others down."""
-    found: dict[str, Reached] = {}
+    an agency key reaches is served by it, whatever order the keys come in,
+    and a creator key only for a creator no agency key reaches (owner
+    2026-11-16: agency with A and B plus a key for A = A's own key is never
+    called again; plus a key for C = C on its own key). Between two keys of
+    one kind, the first. What a key is comes from `StackedClient.info`, asked
+    once and kept, so a round costs no call for that. A key that cannot be
+    read is skipped (logged), so one revoked key does not take the others
+    down."""
+    read: list[_KeyReach] = []
     failed = False
     for api_key in api_keys:
         client = StackedClient(api_key)
         try:
-            creators = client.creators()
+            read.append(_KeyReach(client=client, info=client.info()))
         except StackedAuthError, StackedForbiddenError:
             logger.warning("stacked key %s refused", client.key_hint, exc_info=True)
-            continue
         except StackedError:
             logger.warning("stacked key %s unusable", client.key_hint, exc_info=True)
             failed = True
-            continue
-        for creator in creators:
-            found.setdefault(creator.user_id, Reached(client=client, creator=creator))
+    found: dict[str, Reached] = {}
+    for key in sorted(read, key=lambda k: not k.info.agency):
+        for creator in key.info.creators:
+            found.setdefault(
+                creator.user_id, Reached(client=key.client, creator=creator)
+            )
     return Reach(found=list(found.values()), failed=failed)
 
 

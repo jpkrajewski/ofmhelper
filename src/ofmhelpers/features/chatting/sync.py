@@ -22,6 +22,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
 from ofmhelpers.errors import AppError
 from ofmhelpers.features.chatting import rechecks
+from ofmhelpers.features.chatting.reached import remember_reached
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.webhooks import (
     cover_models,
@@ -82,6 +83,9 @@ def sync(
     reached = source.models()
     cover_models(source, reached.found)
     failed = reached.failed
+    if not failed:
+        # Only a full answer: a key that did not answer would hide its creators.
+        remember_reached(platform, [model.username for model in reached.found])
     read = 0
     changed = 0
     for model in reached.found:

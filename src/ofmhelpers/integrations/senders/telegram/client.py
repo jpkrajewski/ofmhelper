@@ -11,6 +11,7 @@ How a refusal is told apart (Bot API "Making requests"): 429 carries
 answers with `parameters.migrate_to_chat_id`; any other 4xx (chat not found, bot
 removed or blocked) cannot succeed on a retry; 5xx and network errors can."""
 
+import os
 from functools import lru_cache
 from http import HTTPStatus
 from typing import Any
@@ -46,10 +47,14 @@ class TelegramMovedError(TelegramError):
 
 
 class TelegramClient:
-    """One bot (its token)."""
+    """One bot (its token), over one kept-alive connection: a new one per call
+    was ~7,600 TCP+TLS handshakes a day, each with a small chance of a reset
+    in the handshake (prod, 2026-11-08 to 11-16). Shared through
+    `telegram_client`."""
 
     def __init__(self, token: str) -> None:
         self._base = f"{settings.telegram.api_url.rstrip('/')}/bot{token}"
+        self._session = outbound.mount(requests.Session())
 
     def me(self) -> Bot:
         return Bot.model_validate(self._call("getMe", {}))
@@ -96,12 +101,11 @@ class TelegramClient:
         self, method: str, payload: dict[str, Any], extra_wait_s: float = 0
     ) -> Any:
         try:
-            with outbound.mount(requests.Session()) as session:
-                response = session.post(
-                    f"{self._base}/{method}",
-                    json=payload,
-                    timeout=settings.telegram.timeout_s + extra_wait_s,
-                )
+            response = self._session.post(
+                f"{self._base}/{method}",
+                json=payload,
+                timeout=settings.telegram.timeout_s + extra_wait_s,
+            )
         except requests.RequestException as exc:
             # str(exc) quotes the URL, and the URL holds the token.
             msg = f"Telegram {method} failed: {type(exc).__name__}"
@@ -145,8 +149,20 @@ def _refusal(method: str, reply: Reply) -> TelegramError:
     )
 
 
+def telegram_client(token: str) -> TelegramClient:
+    """This process's client of `token`: its connection is kept between calls.
+    Keyed by process too: a forked RQ work horse must not share its parent's
+    socket."""
+    return _client(token, os.getpid())
+
+
+@lru_cache(maxsize=4)
+def _client(token: str, pid: int) -> TelegramClient:  # noqa: ARG001 -- pid keys the cache
+    return TelegramClient(token)
+
+
 @lru_cache(maxsize=2)
 def bot_name(token: str) -> str:
     """The bot's username (`t.me/<it>`, `/money@<it>`), asked once per
     token. Raises `TelegramError`."""
-    return TelegramClient(token).me().username
+    return telegram_client(token).me().username

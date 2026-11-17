@@ -492,11 +492,13 @@
             document.getElementById("edit-size").textContent = outSize();
         }
 
-        // The last cut's Clone it / Download, or none.
+        // The last cut's Clone it / Clone long / Download, or none.
         function done(made) {
             const clone = document.getElementById("edit-clone");
+            const cloneLong = document.getElementById("edit-clone-long");
             const download = document.getElementById("edit-download");
             clone.hidden = !made;
+            cloneLong.hidden = !made;
             download.hidden = !made;
             if (!made) return;
             // `from`: the video this cut replaces, so /clone puts back the
@@ -504,6 +506,7 @@
             clone.href =
                 `/clone?video=${encodeURIComponent(made.path)}` +
                 `&from=${encodeURIComponent(first)}`;
+            cloneLong.href = `/clone-long?video=${encodeURIComponent(made.path)}`;
             download.href = made.url;
             download.setAttribute("download", made.name);
         }

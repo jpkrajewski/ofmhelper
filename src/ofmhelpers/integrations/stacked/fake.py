@@ -223,8 +223,13 @@ class FakeStacked:
     def _webhooks(
         self, request: requests.PreparedRequest, creator: str, parts: list[str]
     ) -> FakeReply:
-        """One destination per creator, its secret only in the answer that made it."""
-        mine = self.webhooks.setdefault(creator, [])
+        """Destinations per key and creator, as Stacked keeps them: another key
+        of the same creator sees none of them (kept under the creator's id for
+        its own key, `<key>:<creator>` for any other). A secret is only in the
+        answer that made it."""
+        token = str(request.headers.get("Authorization") or "").removeprefix("Bearer ")
+        held = creator if token == CREATOR_KEY else f"{token}:{creator}"
+        mine = self.webhooks.setdefault(held, [])
         if request.method == "GET":
             return FakeReply.json_body({"webhooks": mine})
         if request.method == "DELETE":

@@ -55,6 +55,7 @@ import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from typing import Never
 from zoneinfo import ZoneInfo
 lazy from collections.abc import Iterator
 lazy from pathlib import Path
@@ -454,6 +455,19 @@ class _RemovedByHandError(Exception):
     """The stored account folder was deleted in Drive (`_deleted_by_hand`)."""
 
 
+class _LoginGoneError(Exception):
+    """The login was deleted while this sync worked on it (Remove login, a
+    replace on /accounts, a phone deleted): its row is gone, so is the job."""
+
+
+def _gone_meanwhile(target: DriveTarget) -> Never:
+    """The login went while its folder was being found or made. The folder
+    stays as it is in Drive (nothing in Drive is deleted, not even an empty
+    one just made): the account added again adopts it by name."""
+    logger.info("drive: %s gone meanwhile, its folder left as it is", target.handle)
+    raise _LoginGoneError
+
+
 def _account_folder(
     drive: DriveApi,
     root: str,
@@ -474,18 +488,20 @@ def _account_folder(
             if current.name != target.folder_name:
                 drive.rename(current.id, target.folder_name)
                 report.renamed.append(target.folder_name)
-            if stored.name != target.folder_name:
-                store.save_account_folder(
-                    target.login_id, current.id, target.folder_name, root
-                )
+            if stored.name != target.folder_name and not store.save_account_folder(
+                target.login_id, current.id, target.folder_name, root
+            ):
+                _gone_meanwhile(target)
             return current.id, True
     found = drive.find_folder(root, target.folder_name)
-    if found is not None:
-        report.adopted.append(target.folder_name)
-    else:
+    adopted = found is not None
+    if found is None:
         found = drive.create_folder(root, target.folder_name)
-        report.created.append(target.folder_name)
-    store.save_account_folder(target.login_id, found.id, target.folder_name, root)
+    if not store.save_account_folder(
+        target.login_id, found.id, target.folder_name, root
+    ):
+        _gone_meanwhile(target)
+    (report.adopted if adopted else report.created).append(target.folder_name)
     return found.id, False
 
 
@@ -549,7 +565,7 @@ def _sync_one(
 ) -> None:
     try:
         account_id, kept = _account_folder(drive, root, target, stored, report)
-    except _RemovedByHandError:  # silent: deleted by hand, handled where raised
+    except _RemovedByHandError, _LoginGoneError:  # silent: handled where raised
         return
     posted_id = stored.posted_folder_id if kept and stored else None
     _posted_folder(drive, target, account_id, posted_id, report)
@@ -635,9 +651,11 @@ def _tally_one(
         report.renamed.append(target.folder_name)
     if not _kept_posted_ok(scan, stored):
         _posted_folder(drive, target, stored.folder_id, stored.posted_folder_id, report)
-    report.newly_posted = store.record_posted(
-        target.login_id, stored.folder_id, scan.posted, seen_at
-    )
+    newly = store.record_posted(target.login_id, stored.folder_id, scan.posted, seen_at)
+    if newly is None:
+        logger.info("drive: %s gone meanwhile, not tallied", target.handle)
+        return report
+    report.newly_posted = newly
     store.save_scans({target.login_id: scan}, seen_at)
     # A video deleted (or dragged away) in Drive stops showing "In Drive".
     present = {f.id for f in (*scan.waiting, *scan.posted)}

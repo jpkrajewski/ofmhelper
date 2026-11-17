@@ -13,10 +13,12 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
+from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.downloaders.models import DownloadResult
+from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 
@@ -135,7 +137,29 @@ def test_only_a_video_card_can_be_sent_to_clone(client, tmp_path):
     assert "send-to-clone" not in image
 
 
-@pytest.mark.parametrize("target", ["clone", "clone-long"])
+def test_the_owner_sends_a_vas_download_on_to_edit(client, tmp_path, assets):
+    # Owner 2026-11-17 on /download-assets: "where is my clone long and edit".
+    va = sign_in(TestClient(app), "va@example.com", Role.VA)
+    users.set_owner(va.id, client.user.id)
+    folder = tmp_path / "downloads"
+    folder.mkdir()
+    (folder / "a.mp4").write_bytes(b"a.mp4")
+    result = [
+        DownloadResult(url="https://x/1", success=True, output_paths=[folder / "a.mp4"])
+    ]
+    job = create_job("download_media", {"urls": ["https://x/1"]}, actor=str(va.id))
+    run_job(job, lambda: result, {})
+
+    (card,) = _cards(client.get("/download-assets/gallery").text, job)
+    r = client.post("/download-media/send", data={"job_id": job, "target": "edit"})
+
+    assert "send-to-edit" in card
+    assert r.status_code == 200, r.text
+    assert urlsplit(r.json()["redirect"]).path == "/edit"
+    assert len(_sent(r)) == 1
+
+
+@pytest.mark.parametrize("target", ["clone", "clone-long", "edit"])
 def test_a_card_sends_its_own_video_and_stores_only_that(
     client, tmp_path, assets, target
 ):
@@ -178,7 +202,7 @@ def test_an_image_card_or_a_missing_file_has_no_video_to_send(client, tmp_path):
             data={"job_id": job, "target": "clone", "index": index},
         )
         assert r.status_code == 400
-        assert r.json() == {"detail": "This download has no video"}
+        assert r.json() == {"detail": "This run has no video"}
 
 
 def test_a_negative_index_is_refused(client, tmp_path):

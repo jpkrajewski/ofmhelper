@@ -12,13 +12,16 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
+from ofmhelpers.cache import get_redis
 from ofmhelpers.db.stores import audit_log, event_targets
 from ofmhelpers.features.events import Event
 from ofmhelpers.features.events.dispatch import dispatch
 from ofmhelpers.features.reports import asks
+from ofmhelpers.integrations.senders.telegram import client as telegram_client_module
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
 from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
@@ -77,6 +80,41 @@ def test_a_link_works_once():
 
     assert event_targets.of(owner.id, "telegram") == "555"
     assert _sent_to() == [("555", "Connected"), ("777", "This link is used or too old")]
+
+
+def test_a_link_of_a_person_deleted_since_is_refused_and_read_once():
+    # Before: the row's FK failed inside the read, the update was never
+    # confirmed, and every read (20 s apart) failed on it again.
+    get_redis().set("telegram:link:gone-person", "987654321")
+    fake_telegram().wrote(555, text="/start gone-person")
+
+    asks.answer_asks()
+    asks.answer_asks()
+
+    assert event_targets.of(987_654_321, "telegram") is None
+    assert _sent_to() == [("555", "This link is used or too old")]
+
+
+def test_the_bot_keeps_one_connection_for_its_calls(monkeypatch):
+    # A new Session per call was ~7,600 handshakes a day to Telegram, each a
+    # chance of a reset (prod, 2026-11-08..16).
+    made: list[requests.Session] = []
+    real_session = requests.Session
+
+    def counted() -> requests.Session:
+        session = real_session()
+        made.append(session)
+        return session
+
+    monkeypatch.setattr(telegram_client_module.requests, "Session", counted)
+    client = telegram_client_module.telegram_client(TOKEN)
+
+    client.me()
+    client.send_message(AGENCY_CHAT, "one")
+    telegram_client_module.telegram_client(TOKEN).send_message(AGENCY_CHAT, "two")
+
+    assert len(made) == 1
+    assert [m.text for m in fake_telegram().sent] == ["one", "two"]
 
 
 def test_disconnect_takes_it_back():

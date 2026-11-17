@@ -511,6 +511,15 @@ def seedream(
 
 
 SEEDREAM = [
+    # 5.5 (ByteDance 2026-11-09; docs.apiyi.com seedream overview, read
+    # 2026-11-16): $0.020 an image at 1K/1.5K, $0.035 at 2K, $0.008 a reference;
+    # up to 10 references; PNG by default, so JPEG is offered first as on 5.0.
+    seedream(
+        "seedream-5-5-261028",
+        "Seedream 5.5",
+        ["1K", "1.5K", "2K"],
+        ["jpeg", "png"],
+    ),
     seedream(
         "seedream-5-0-flash-260915",
         "Seedream 5.0 Flash",

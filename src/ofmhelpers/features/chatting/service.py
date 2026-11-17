@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import chats
+from ofmhelpers.features.chatting.reached import reached_names
 from ofmhelpers.features.chatting.recent import remember
 from ofmhelpers.schemas.chatting import (
     ChatPlatform,
@@ -82,16 +83,18 @@ def open_model(
     user_id: int, platform: ChatPlatform, username: str, zone: str
 ) -> ModelReport:
     """A model's page. Opening it makes them one of this person's recent ones,
-    unless that name has no chats: a typo is not offered back."""
-    if username in chats.models(platform):
+    unless that name is no model there: a typo is not offered back."""
+    if username in platform_models(platform):
         remember(user_id, platform, username)
     return model_report(platform, username, zone)
 
 
 def platform_models(platform: ChatPlatform) -> list[str]:
-    """Every model with chats read, and anyone just connected before their first read."""
+    """Every model with chats read, anyone just connected, and every creator the
+    platform's keys reach, all before their first read."""
     connected = {a.username for a in chats.accounts(platform) if not a.is_agency}
-    return sorted(set(chats.models(platform)) | connected)
+    reached = set(reached_names(platform))
+    return sorted(set(chats.models(platform)) | connected | reached)
 
 
 def accounts_to_reconnect(platform: ChatPlatform) -> list[str]:

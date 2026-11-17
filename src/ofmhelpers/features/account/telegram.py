@@ -66,7 +66,11 @@ def link(start: Start) -> bool:
         return False
     user_id = int(raw)
     with acting(Acting(via=Via.TELEGRAM, actor_id=user_id, ref="telegram /start")):
-        event_targets.save(user_id, SENDER, start.chat_id)
+        saved = event_targets.save(user_id, SENDER, start.chat_id)
+    if not saved:
+        logger.info("telegram: a /start link of user %s, deleted since", user_id)
+        deliver_to(SENDER, start.chat_id, _old_link())
+        return False
     # Never the chat id: the app does not log where messages go.
     logger.info("telegram: user %s linked their chat", user_id)
     deliver_to(SENDER, start.chat_id, _connected())

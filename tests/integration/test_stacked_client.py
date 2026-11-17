@@ -79,12 +79,30 @@ def test_a_wrong_key_is_refused_and_never_shown():
     assert _WRONG_KEY not in str(refused.value)
 
 
-def test_reachable_gives_a_creator_two_keys_reach_once():
-    pairs = reachable([CREATOR_KEY, AGENCY_KEY])
+@pytest.mark.parametrize("keys", [[CREATOR_KEY, AGENCY_KEY], [AGENCY_KEY, CREATOR_KEY]])
+def test_the_agency_key_serves_every_creator_it_reaches(keys):
+    # Owner 2026-11-16: an agency with A and B plus a key of A's own = A's
+    # key is never called again, whatever order the keys come in.
+    pairs = reachable(keys)
 
-    assert [r.creator.user_id for r in pairs] == [CREATOR, OTHER_CREATOR]
-    assert pairs[0].client.key_hint == StackedClient(CREATOR_KEY).key_hint
-    assert pairs[1].client.key_hint == StackedClient(AGENCY_KEY).key_hint
+    assert sorted(r.creator.user_id for r in pairs) == [CREATOR, OTHER_CREATOR]
+    agency = StackedClient(AGENCY_KEY)
+    assert all(r.client.same_key(agency) for r in pairs)
+
+
+def test_a_creator_key_serves_a_creator_no_agency_key_reaches():
+    (pair,) = reachable([CREATOR_KEY])
+
+    assert pair.client.same_key(StackedClient(CREATOR_KEY))
+
+
+def test_what_a_key_is_is_asked_once_not_every_round():
+    reachable([CREATOR_KEY, AGENCY_KEY])
+    fake_stacked().calls.clear()
+
+    reachable([CREATOR_KEY, AGENCY_KEY])
+
+    assert fake_stacked().calls == []
 
 
 def test_reachable_skips_a_dead_key_and_keeps_the_others():

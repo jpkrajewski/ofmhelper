@@ -8,6 +8,7 @@ lazy from collections.abc import Iterator
 
 from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from ofmhelpers.db.models import (
     DriveAccountFolderRow,
@@ -24,6 +25,17 @@ from ofmhelpers.schemas.drive import AccountScan, StoredFolder, VaFolder
 
 # pg_advisory_lock key of a /drive sweep (any bigint no other lock uses).
 _SYNC_LOCK_KEY = 0x0D21_5E00
+
+# The foreign keys a sweep's write can lose a race against: the login or VA
+# deleted by a request between the sweep reading it and writing its row
+# (prod job drive_sync 9e928539, 2026-11-15).
+_LOGIN_FK = ("drive_account_folders_login_id_fkey", "drive_posted_files_login_id_fkey")
+_VA_FK = ("drive_va_folders_user_id_fkey",)
+
+
+def _parent_gone(exc: IntegrityError, constraints: tuple[str, ...]) -> bool:
+    text = str(exc.orig)
+    return any(name in text for name in constraints)
 
 
 class DriveFolderRepository(CachedRepository):
@@ -85,20 +97,27 @@ class DriveFolderRepository(CachedRepository):
             ]
 
     @invalidates_cache
-    def save_va_folder(self, folder: VaFolder) -> None:
-        """The VA's folder, made, found or renamed: one row per VA."""
+    def save_va_folder(self, folder: VaFolder) -> bool:
+        """The VA's folder, made, found or renamed: one row per VA. False:
+        the VA was deleted meanwhile, nothing saved."""
         values = {
             "folder_id": folder.folder_id,
             "name": folder.name,
             "root_folder_id": folder.root_folder_id,
             "updated_at": func.now(),
         }
-        with session_scope() as s:
-            s.execute(
-                insert(DriveVaFolderRow)
-                .values(user_id=folder.user_id, **values)
-                .on_conflict_do_update(index_elements=["user_id"], set_=values)
-            )
+        try:
+            with session_scope() as s:
+                s.execute(
+                    insert(DriveVaFolderRow)
+                    .values(user_id=folder.user_id, **values)
+                    .on_conflict_do_update(index_elements=["user_id"], set_=values)
+                )
+        except IntegrityError as exc:  # silent: the VA is gone, the caller logs it
+            if not _parent_gone(exc, _VA_FK):
+                raise
+            return False
+        return True
 
     @contextmanager
     def sync_lock(self) -> Iterator[bool]:
@@ -118,9 +137,10 @@ class DriveFolderRepository(CachedRepository):
     @invalidates_cache
     def save_account_folder(
         self, login_id: int, folder_id: str, name: str, root: str
-    ) -> None:
+    ) -> bool:
         """A changed folder id drops the POSTED id with it: that one was
-        inside the old folder."""
+        inside the old folder. False: the login was deleted meanwhile,
+        nothing saved."""
         values = {
             "folder_id": folder_id,
             "name": name,
@@ -129,18 +149,24 @@ class DriveFolderRepository(CachedRepository):
         }
         same = DriveAccountFolderRow.folder_id == folder_id
         kept_posted = case((same, DriveAccountFolderRow.posted_folder_id), else_=None)
-        with session_scope() as s:
-            s.execute(
-                insert(DriveAccountFolderRow)
-                .values(login_id=login_id, **values)
-                .on_conflict_do_update(
-                    index_elements=["login_id"],
-                    set_={
-                        **values,
-                        "posted_folder_id": kept_posted,
-                    },
+        try:
+            with session_scope() as s:
+                s.execute(
+                    insert(DriveAccountFolderRow)
+                    .values(login_id=login_id, **values)
+                    .on_conflict_do_update(
+                        index_elements=["login_id"],
+                        set_={
+                            **values,
+                            "posted_folder_id": kept_posted,
+                        },
+                    )
                 )
-            )
+        except IntegrityError as exc:  # silent: the login is gone, the caller logs it
+            if not _parent_gone(exc, _LOGIN_FK):
+                raise
+            return False
+        return True
 
     @invalidates_cache
     def save_scans(self, scans: dict[int, dict], at: float) -> None:
@@ -188,29 +214,34 @@ class DriveFolderRepository(CachedRepository):
         folder_id: str,
         files: list[tuple[str, str, str]],
         seen_at: float,
-    ) -> int:
+    ) -> int | None:
         """Adds the (id, name, kind) files not seen before, as seen in the
-        account folder `folder_id`; how many were new. A file already recorded keeps its first time (a re-run, or it
-        went out and back in, never counts twice)."""
+        account folder `folder_id`; how many were new. A file already
+        recorded keeps its first time (a re-run, or it went out and back in,
+        never counts twice). None: the login was deleted meanwhile."""
         if not files:
             return 0
-        with session_scope() as s:
-            added = s.execute(
-                insert(DrivePostedFileRow)
-                .values(
-                    [
-                        {
-                            "file_id": file_id,
-                            "login_id": login_id,
-                            "folder_id": folder_id,
-                            "name": name[:512],
-                            "kind": kind,
-                            "first_seen_at": seen_at,
-                        }
-                        for file_id, name, kind in files
-                    ]
-                )
-                .on_conflict_do_nothing(index_elements=["file_id"])
-                .returning(DrivePostedFileRow.file_id)
-            ).all()
+        rows = [
+            {
+                "file_id": file_id,
+                "login_id": login_id,
+                "folder_id": folder_id,
+                "name": name[:512],
+                "kind": kind,
+                "first_seen_at": seen_at,
+            }
+            for file_id, name, kind in files
+        ]
+        try:
+            with session_scope() as s:
+                added = s.execute(
+                    insert(DrivePostedFileRow)
+                    .values(rows)
+                    .on_conflict_do_nothing(index_elements=["file_id"])
+                    .returning(DrivePostedFileRow.file_id)
+                ).all()
+        except IntegrityError as exc:  # silent: the login is gone, the caller logs it
+            if not _parent_gone(exc, _LOGIN_FK):
+                raise
+            return None
         return len(added)

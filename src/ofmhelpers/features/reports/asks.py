@@ -27,9 +27,9 @@ from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.reports import daily
 from ofmhelpers.integrations.senders.telegram import inbox
 from ofmhelpers.integrations.senders.telegram.client import (
-    TelegramClient,
     TelegramError,
     bot_name,
+    telegram_client,
 )
 from ofmhelpers.log import get_logger
 lazy from ofmhelpers.schemas.events import Event
@@ -82,7 +82,7 @@ def answer_asks() -> None:
     state = _reading()
     try:
         secret = token.get_secret_value()
-        found = inbox.read(TelegramClient(secret), set(ASKS), bot_name(secret))
+        found = inbox.read(telegram_client(secret), set(ASKS), bot_name(secret))
         for ask in found.asks:
             _start(ask.chat_id, ask.word)
             # No chat id: the app never logs where a message goes (senders/CLAUDE.md).

@@ -359,10 +359,13 @@ def _quoted(path: Path) -> str:
 def join(parts: list[Path], dest: Path, *, threads: int, timeout_s: int) -> Path:
     """`parts` (each made by `part`: one size, frame rate and sound) one
     after another into `dest`, read one at a time (the concat demuxer: the
-    concat filter opens every part at once) and encoded once more. A copy
-    instead failed on the seams ("Error muxing a packet", the AAC packets'
-    times, 2026-11-15). `-xerror`: a part that cannot be read fails the join
-    instead of ending the video early."""
+    concat filter opens every part at once). The picture is copied, the
+    sound encoded once more: every part's H.264 comes out of `part` with the
+    same settings, and only the AAC packets' times broke a full copy on the
+    seams ("Error muxing a packet", 2026-11-15). Encoding the picture again
+    took as long as making the parts (3 x 15 s at 1080: 11.0 s parts + 11.1 s
+    join; copied: see the module notes). `-xerror`: a part that cannot be
+    read fails the join instead of ending the video early."""
     listing = dest.with_name(f".join-{uuid.uuid4().hex}.txt")
     listing.parent.mkdir(parents=True, exist_ok=True)
     listing.write_text("".join(f"file '{_quoted(p)}'\n" for p in parts))
@@ -377,13 +380,7 @@ def join(parts: list[Path], dest: Path, *, threads: int, timeout_s: int) -> Path
                 "-i",
                 str(listing),
                 "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "18",
-                "-pix_fmt",
-                "yuv420p",
+                "copy",
                 "-threads",
                 str(threads),
                 *_JOIN_AUDIO,

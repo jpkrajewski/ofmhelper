@@ -1750,6 +1750,55 @@
     }
   },
   {
+    "model_id": "seedream-5-5-261028",
+    "label": "Seedream 5.5",
+    "family": "Seedream",
+    "kind": "image",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Prompt"
+        },
+        "image_urls": {
+          "title": "Reference images",
+          "x-media": "image",
+          "x-role": "reference_image",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10
+        },
+        "size": {
+          "type": "string",
+          "enum": [
+            "1K",
+            "1.5K",
+            "2K"
+          ],
+          "default": "2K",
+          "title": "Size"
+        },
+        "output_format": {
+          "type": "string",
+          "enum": [
+            "jpeg",
+            "png"
+          ],
+          "default": "jpeg",
+          "title": "Format"
+        }
+      }
+    }
+  },
+  {
     "model_id": "seedream-5-0-flash-260915",
     "label": "Seedream 5.0 Flash",
     "family": "Seedream",
