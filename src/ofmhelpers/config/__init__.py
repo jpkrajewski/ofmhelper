@@ -59,6 +59,7 @@ from ofmhelpers.config.settings import (
     ReportsSettings,
     RepurposeSettings,
     RunningHubSettings,
+    SentrySettings,
     ServerSettings,
     SessionSettings,
     SignInSettings,
@@ -202,6 +203,10 @@ class Settings:
     @property
     def telemetry(self) -> TelemetrySettings:
         return self._group(TelemetrySettings)
+
+    @property
+    def sentry(self) -> SentrySettings:
+        return self._group(SentrySettings)
 
     @property
     def links(self) -> LinksSettings:

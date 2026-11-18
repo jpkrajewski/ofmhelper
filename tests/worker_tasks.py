@@ -19,6 +19,12 @@ def always_fails():
     raise ValueError(msg)
 
 
+def fails_with(argument, secret):
+    """A task that raises after being given values that must stay private."""
+    msg = "the job failed"
+    raise RuntimeError(msg)
+
+
 def requeue_once(note):
     """A long batch letting the line in (`runner.Requeued`)."""
     from ofmhelpers.features.jobs.runner import Requeued
