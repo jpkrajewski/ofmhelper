@@ -282,13 +282,32 @@
     // `line` is what the card shows (schemas/errors.py `error_line`, the
     // status payload's error_line): provider, reason and what it said, on
     // the card itself -- Safari shows no hover text.
+    // _gallery_card.html's failed box: who refused and why, what they said,
+    // and the /account link when the reader's own keys are the fix.
+    function fillFailure(box, text) {
+        const head = document.createElement("strong");
+        head.className = "result-failed-head";
+        head.textContent = text.head;
+        box.append(head);
+        if (text.said) {
+            const said = document.createElement("span");
+            said.className = "result-failed-said";
+            said.textContent = text.said;
+            box.append(said);
+        }
+        const keys = document.getElementById("card-failed-keys");
+        if (text.about_keys && keys) box.append(keys.content.firstElementChild.cloneNode(true));
+    }
+
     function buildFailedCard(label, error, job, line) {
         const div = document.createElement("div");
         div.className = "result-item";
         const box = document.createElement("div");
         box.className = "result-file result-failed";
         if (job?.error_reason) box.dataset.reason = job.error_reason;
-        box.textContent = line || error || "Failed";
+        const text = job?.error_text;
+        if (text) fillFailure(box, text);
+        else box.textContent = line || error || "Failed";
         div.append(box, buildSourceLabel(label));
         if (job) {
             attachJobData(div, job);

@@ -28,7 +28,12 @@
         {{ am.asset_media(job.assets[0]) }}
         {% if job.assets[0].kind == "audio" %}<p class="filename">{{ job.assets[0].name }}</p>{% endif %}
     {% elif job.status == "failed" %}
-        <div class="result-file result-failed" data-reason="{{ job.error_reason }}">{{ job.error_line }}</div>
+        {% set fail = job.error_text %}
+        <div class="result-file result-failed" data-reason="{{ job.error_reason }}">
+            <strong class="result-failed-head">{{ fail.head }}</strong>
+            {% if fail.said %}<span class="result-failed-said">{{ fail.said }}</span>{% endif %}
+            {% if fail.about_keys and request is defined and can(request, "account") %}<a class="result-failed-fix" href="/account">API keys</a>{% endif %}
+        </div>
     {% elif job.status == "done" %}
         {% block no_output %}<div class="result-file">No output</div>{% endblock %}
     {% else %}

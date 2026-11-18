@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: The bigger picture before code: where a new thing belongs in this app's layers and which pattern it follows (repository, service layer, adapter for an outside service, unit of work, events, commands), from "Architecture Patterns with Python" (cosmicpython) mapped to this repo. Use before adding a feature, a new integration, a new module or class, before moving logic between router, feature, integration and db, and when a change makes one layer reach into another.
+description: "The bigger picture before code: where a new thing belongs in this app's layers and which pattern it follows (repository, service layer, adapter for an outside service, unit of work, events, commands), from \"Architecture Patterns with Python\" (cosmicpython) mapped to this repo. Use before adding a feature, a new integration, a new module or class, before moving logic between router, feature, integration and db, and when a change makes one layer reach into another."
 ---
 
 # Architecture: decide where it goes before writing it

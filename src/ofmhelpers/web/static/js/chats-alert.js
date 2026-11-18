@@ -1,27 +1,32 @@
 /*
- * Every admin page's pop-ups for chats and sales (base.html,
- * features/chatting/alerts.py): asks /chatting/alerts on load and again as often as
- * the answer says. A failed ask is tried again, so a deploy does not silence an
- * open tab.
- * "Chats unanswered" is one pop-up per model; every other one is one event's own.
- * Closed (x), a pop-up stays away in this browser until one of its `event_ids` is
+ * The header's chats menu (components/ui.html `chats_menu`, features/chatting/alerts.py):
+ * asks /chatting/alerts on load and again as often as the answer says. A failed ask is
+ * tried again, so a deploy does not silence an open tab.
+ * "Chats unanswered" is one line per model; every other one is one event's own. The
+ * icon shows while there is any; the number on it counts the ones with something new.
+ * Opening the list marks them seen in this browser until one of their `event_ids` is
  * new: for a model, a new fan left waiting. Remembered per event, so one fan answered
- * and another waiting at the same moment brings it back though the number is the same.
+ * and another waiting at the same moment counts again though the number is the same.
  * Something new chimes once and notifies the desktop (notify.js), once per browser
  * however many tabs are open, and not again on the next page. Before the first
  * click allows sound, that waits for the click.
+ * (Until 2026-11-18 each was a pop-up over the page, closed with x: "seen" keeps
+ * the key those closes were remembered under.)
  */
 (() => {
-    const alerts = document.querySelector(".page-alerts");
-    if (!alerts || !document.getElementById("chat-popup-info") || !window.Notifier) return;
-    const closedKey = "ofm_popups_closed";
+    const menu = document.querySelector(".chats-menu");
+    const itemTemplate = document.getElementById("chats-item");
+    if (!menu || !itemTemplate || !window.Notifier) return;
+    const list = menu.querySelector(".chats-list");
+    const count = menu.querySelector(".chats-count");
+    const toggle = menu.querySelector("summary");
+    const seenKey = "ofm_popups_closed";
     const chimedKey = "ofm_chats_chimed";
     const notifiedKey = "ofm_chats_notified";
     // A browser refusing storage still remembers for as long as this page is open.
     const memory = {};
     const askTimeoutMs = 30000;
     let storageRefused = false;
-    const popups = new Map();
     let checkEveryS = 60;
     let latest = [];
 
@@ -39,7 +44,7 @@
         try {
             window.localStorage.setItem(key, JSON.stringify(ids));
         } catch {
-            // Reads may still work, and would bring back what this just closed.
+            // Reads may still work, and would bring back what this just marked.
             storageRefused = true;
         }
     }
@@ -48,15 +53,13 @@
         return popup.event_ids.some((id) => !seen.includes(id));
     }
 
-    function link(popup) {
-        const a = document.createElement("a");
-        a.href = popup.url;
-        a.textContent = `@${popup.username}`;
-        return a;
+    function fresh() {
+        const seen = remembered(seenKey);
+        return latest.filter((popup) => isNew(popup, seen));
     }
 
     function announce() {
-        const now = latest.filter((popup) => popups.has(popup.id));
+        const now = fresh();
         const chimed = remembered(chimedKey);
         if (now.some((popup) => isNew(popup, chimed)) && window.Notifier.chime()) {
             remember(chimedKey, [...new Set([...chimed, ...now.flatMap((popup) => popup.event_ids)])]);
@@ -68,47 +71,33 @@
         }
     }
 
-    function closePopup(id) {
-        const current = latest.find((popup) => popup.id === id);
-        remember(closedKey, [...new Set([...remembered(closedKey), ...(current ? current.event_ids : [])])]);
-        popups.get(id)?.remove();
-        popups.delete(id);
-    }
-
-    function popupNode(popup) {
-        const template = document.getElementById(`chat-popup-${popup.kind}`);
-        const node = template.content.firstElementChild.cloneNode(true);
-        node.querySelector(".chat-popup-link").replaceChildren(link(popup));
-        node.querySelector(".chat-popup-dismiss").addEventListener("click", () => closePopup(popup.id));
+    function itemNode(popup, isFresh) {
+        const node = itemTemplate.content.firstElementChild.cloneNode(true);
+        node.href = popup.url;
+        node.dataset.kind = popup.kind;
+        node.toggleAttribute("data-new", isFresh);
+        node.querySelector(".chats-item-who").textContent = `@${popup.username}`;
+        node.querySelector(".chats-item-text").textContent = popup.text;
         return node;
     }
 
-    /* In the answer's order; one already up stays put, so nothing flickers at each ask. */
-    function showPopups(found) {
-        const closed = remembered(closedKey);
-        const wanted = found.filter((popup) => isNew(popup, closed));
-        const wantedIds = new Set(wanted.map((popup) => popup.id));
-        for (const [id, node] of popups) {
-            if (!wantedIds.has(id)) {
-                node.remove();
-                popups.delete(id);
-            }
-        }
-        let next = alerts.querySelector(".chat-popup");
-        for (const popup of wanted) {
-            if (!popups.has(popup.id)) popups.set(popup.id, popupNode(popup));
-            const node = popups.get(popup.id);
-            // A model's number moves as fans wait and are answered.
-            node.querySelector(".chat-popup-text").textContent = popup.text;
-            if (node === next) next = next.nextElementSibling;
-            else alerts.insertBefore(node, next);
-        }
+    /* The number on the icon; the list itself is left alone while it is open. */
+    function showCount() {
+        const n = fresh().length;
+        count.textContent = n ? String(n) : "";
+        count.hidden = n === 0;
+        toggle.setAttribute("aria-label", n ? `Chats, ${n} new` : "Chats");
+    }
+
+    function showList() {
+        const now = new Set(fresh().map((popup) => popup.id));
+        list.replaceChildren(...latest.map((popup) => itemNode(popup, now.has(popup.id))));
     }
 
     /* Only what can still show needs remembering. */
     function forgetGone(found) {
         const current = found.flatMap((popup) => popup.event_ids);
-        for (const key of [closedKey, chimedKey, notifiedKey]) {
+        for (const key of [seenKey, chimedKey, notifiedKey]) {
             remember(
                 key,
                 remembered(key).filter((id) => current.includes(id)),
@@ -119,9 +108,22 @@
     function show(found) {
         latest = found;
         forgetGone(found);
-        showPopups(found);
+        menu.hidden = found.length === 0;
+        if (!menu.open) showList();
+        showCount();
         announce();
     }
+
+    /* Opened: what is new stays marked in the list in front of the reader, and
+       counts as seen from now on. */
+    menu.addEventListener("toggle", () => {
+        if (!menu.open) {
+            showList();
+            return;
+        }
+        remember(seenKey, [...new Set([...remembered(seenKey), ...latest.flatMap((popup) => popup.event_ids)])]);
+        showCount();
+    });
 
     function ask() {
         fetch("/chatting/alerts", { signal: AbortSignal.timeout(askTimeoutMs) })

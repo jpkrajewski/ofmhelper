@@ -115,12 +115,13 @@ def error_reason(error: str | None) -> str:
     return FALLBACK
 
 
-def error_line(error: str | None) -> str:
-    """The failure as a card shows it: "<Provider>: <Reason>, <what the
-    provider said>". One of our own messages already opens with its reason
-    ("Too long: ...", "Could not download ..."): shown as it is."""
-    if not error:
-        return FALLBACK
+class _Refusal(BaseModel):
+    who: str  # "APIYI", "kie.ai"; "" for one of our own messages
+    reason: str
+    said: str  # everything after "<who>: "
+
+
+def _refusal(error: str) -> _Refusal:
     reason = error_reason(error)
     text = " ".join(error.split())
     found = _WHO.match(text)
@@ -128,8 +129,46 @@ def error_line(error: str | None) -> str:
     if who.lower() == reason.lower():
         # Ours, "Too long: ...": the reason is its own first words.
         who, said = "", text
-    line = _reasoned(reason, said)
-    return _capped(f"{who}: {line}" if who else line)
+    return _Refusal(who=who, reason=reason, said=said)
+
+
+def error_line(error: str | None) -> str:
+    """The failure as one line: "<Provider>: <Reason>, <what the provider
+    said>". One of our own messages already opens with its reason ("Too
+    long: ...", "Could not download ..."): shown as it is."""
+    if not error:
+        return FALLBACK
+    refusal = _refusal(error)
+    line = _reasoned(refusal.reason, refusal.said)
+    return _capped(f"{refusal.who}: {line}" if refusal.who else line)
+
+
+# Fixed by the reader's own saved keys (/account): a key with no money left,
+# or one the provider does not know.
+_KEY_REASONS = frozenset({"No credits", "Wrong API key"})
+
+
+class ErrorText(BaseModel):
+    """`error_line` as a failed card lays it out (2026-11-18: twelve cards of
+    five red lines each read as one wall): who refused and why, bold; what
+    they said beyond that, under it; whether the fix is the reader's keys."""
+
+    head: str
+    said: str = ""
+    about_keys: bool = False
+
+
+def error_text(error: str | None) -> ErrorText:
+    if not error:
+        return ErrorText(head=FALLBACK)
+    refusal = _refusal(error)
+    said = refusal.said
+    if said.lower().startswith(refusal.reason.lower()):
+        said = said[len(refusal.reason) :].lstrip(" ,:;.-")
+    head = f"{refusal.who}: {refusal.reason}" if refusal.who else refusal.reason
+    return ErrorText(
+        head=head, said=_capped(said), about_keys=refusal.reason in _KEY_REASONS
+    )
 
 
 def _reasoned(reason: str, said: str) -> str:

@@ -1,6 +1,6 @@
 ---
 name: rq
-description: RQ (Redis Queue) guide for this app: how jobs are started, wrapped, recorded, retried, timed out, recovered and tested here, plus RQ's own docs for the pinned version, one page at a time. Use before writing or changing a background job, a task function, a queue, a worker setting, a retry or timeout, a sweep, job recovery, or when debugging a job that hung, vanished, ran twice or failed without a trace.
+description: "RQ (Redis Queue) guide for this app: how jobs are started, wrapped, recorded, retried, timed out, recovered and tested here, plus RQ's own docs for the pinned version, one page at a time. Use before writing or changing a background job, a task function, a queue, a worker setting, a retry or timeout, a sweep, job recovery, or when debugging a job that hung, vanished, ran twice or failed without a trace."
 ---
 
 # RQ in this app

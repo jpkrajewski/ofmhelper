@@ -43,8 +43,11 @@
     /* Primary actions, current state and links are ink. */
     --accent: var(--accent-hue);
     --accent-strong: color-mix(in srgb, var(--accent-hue) 85%, var(--ink));  /* hover */
-    --accent-soft: var(--accent-hue);
-    --accent-ink: var(--paper);
+    /* Orange as text (links, tags) is the hue darkened toward ink: the hue
+       itself is 3.0:1 on paper, this is >= 4.5:1 on paper and wash. */
+    --accent-soft: color-mix(in srgb, var(--accent-hue) 65%, var(--ink));
+    /* Text on an orange fill: ink is 5.9:1, paper was 3.0:1. */
+    --accent-ink: var(--ink);
     --accent-wash: var(--wash);
     --accent-ring: color-mix(in srgb, var(--accent-hue) 35%, transparent);
     /* Buttons. Light: one plain look, Download and Recreate included.
@@ -91,12 +94,14 @@
     --fail-wash: color-mix(in srgb, var(--red) 6%, var(--paper));
     --fail-border: color-mix(in srgb, var(--red) 25%, var(--paper));
     --warn: var(--ink);
-    --warn-ink: var(--accent-ink);
+    --warn-ink: var(--paper);
     --warn-wash: var(--wash);
 
     /* Overlay scrims (dialogs, hover captions on media). */
     --scrim: color-mix(in srgb, var(--ink) 45%, transparent);
     --scrim-strong: color-mix(in srgb, var(--ink) 72%, transparent);
+    /* Marks drawn over a video (/edit playhead, crop grips). */
+    --on-media: var(--paper);
 
     /* Glass: only the sticky header. */
     --glass-bg: color-mix(in srgb, var(--paper) 85%, transparent);
@@ -177,6 +182,7 @@
     --pad-inset: var(--s-3) var(--s-4);
     --pad-pill: 2px var(--s-2);
     --pad-cell: 14px var(--s-5);
+    --pad-cell-dense: 14px var(--s-3);  /* a wide table on a laptop (/accounts) */
     --gap-grid: var(--s-4);      /* between cards / tiles in a grid */
     --gap-stack: var(--s-3);     /* between blocks inside a card */
     --gap-inline: var(--s-2);    /* between controls / chips in a row */
@@ -241,6 +247,7 @@
 
     --scrim: rgba(4, 4, 8, 0.6);
     --scrim-strong: rgba(4, 4, 8, 0.85);
+    --on-media: #ffffff;
     --glass-bg: rgba(14, 14, 22, 0.72);
     --glass-border: rgba(255, 255, 255, 0.08);
 
