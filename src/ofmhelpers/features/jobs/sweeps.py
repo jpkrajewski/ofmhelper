@@ -46,6 +46,8 @@ from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.features.trials import cleanup as trials_cleanup
 from ofmhelpers.features.users import idle as va_idle
 from ofmhelpers.log import get_logger
+from ofmhelpers.sentry import HEARTBEAT_S
+from ofmhelpers.sentry import heartbeat as sentry_heartbeat
 
 logger = get_logger(__name__)
 
@@ -114,12 +116,17 @@ def sweeps() -> list[Sweep]:
             run=distribution_sweep.run_round,
             interval_s=lambda: settings.distribution.check_interval_s,
         ),
-        # Makes and reads /drive's folders in each owner's Google Drive.
+        # Makes and reads /drive's folders in each owner's Google Drive
+        # (production only unless OFM_DRIVE_SWEEP: a dev copy of the prod
+        # database would write into every customer's Drive).
         Sweep(
             name="drive",
             run=drive_folders.sync,
             interval_s=lambda: settings.gdrive.check_interval_s,
-            enabled=drive_folders.enabled,
+            enabled=lambda: (
+                drive_folders.enabled()
+                and settings.gdrive.sweeping(settings.infra.production)
+            ),
         ),
         # Each model's webhook destination, on a server with a public address.
         Sweep(
@@ -212,6 +219,14 @@ def sweeps() -> list[Sweep]:
             run=phones_backup.dump,
             interval_s=lambda: settings.vault.backup_sweep_s,
             enabled=lambda: bool(settings.vault.key_list()),
+        ),
+        # Sentry's `sweeps` cron monitor: alerts when the sweeps stop, and
+        # proves after a deploy that production reaches Sentry (ship step 8).
+        Sweep(
+            name="sentry heartbeat",
+            run=sentry_heartbeat,
+            interval_s=lambda: HEARTBEAT_S,
+            enabled=lambda: settings.sentry.dsn is not None,
         ),
         # Logs out a VA idle past their limit and records when they
         # stopped (features/users/idle.py). Reads a few rows.

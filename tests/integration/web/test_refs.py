@@ -4,12 +4,8 @@ and job-status "Inputs" section use instead of downloading full-res
 originals (see task_helpers.reference_asset, static/js/file-picker.js).
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
+import os
 import subprocess
 from pathlib import Path
 

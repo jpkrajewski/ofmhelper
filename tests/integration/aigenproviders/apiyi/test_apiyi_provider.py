@@ -7,8 +7,6 @@ reference-to-video as /clone sends it."""
 import os
 from pathlib import Path
 
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image

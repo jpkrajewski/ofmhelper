@@ -13,9 +13,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 import worker_tasks
 from fastapi.testclient import TestClient

@@ -20,17 +20,42 @@ from rq.timeouts import JobTimeoutException
 from ofmhelpers.cache import QueueName, enqueue_to, running_job
 from ofmhelpers.db.acting import Acting, Via, acting
 from ofmhelpers.db.stores import jobs as store
+from ofmhelpers.db.stores import users
 from ofmhelpers.features.account.keys import keep_used, key_tail
+from ofmhelpers.features.assets.store import AssetRefusedError
+from ofmhelpers.features.edit.errors import EditRefusedError
 from ofmhelpers.features.jobs import notices
 from ofmhelpers.features.jobs.cost import cost_of
 from ofmhelpers.features.previews.render import warm_previews
+from ofmhelpers.features.refusals import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    RefusedError,
+    TooSoonError,
+    TryAgainError,
+)
 from ofmhelpers.features.vas import notices as va_notices
 from ofmhelpers.integrations.ai_providers import tasks
-from ofmhelpers.integrations.ai_providers.errors import ProviderError
+from ofmhelpers.integrations.ai_providers.errors import (
+    InvalidInputError,
+    ProviderAuthError,
+    ProviderError,
+    ProviderGenerationError,
+    ProviderInputError,
+    ProviderRateLimitError,
+)
+from ofmhelpers.integrations.apify.client import ApifyCreditError
+from ofmhelpers.integrations.llm.errors import LLMAuthError
 from ofmhelpers.log import get_logger
+from ofmhelpers.redact import redact
 from ofmhelpers.schemas.persistence import GenerationRecord, JobMeta
+from ofmhelpers.sentry import user_scope
+lazy from ofmhelpers.features.clone.service import CloneRefusedError
 
 logger = get_logger(__name__)
+
+DEACTIVATED = "Not run: the account was deactivated"
 
 
 class Requeued(BaseModel):
@@ -53,6 +78,36 @@ def resumable(exc: BaseException) -> bool:
     )
 
 
+def refused(exc: BaseException) -> bool:
+    """Whether a job failing with `exc` was answered, not broken: a provider
+    refusing it (no credits, wrong key, flagged content, bad input, rate
+    limited) or one of our own refusals. The card says why; it is logged
+    as a warning, so Sentry makes no issue of it (owner 2026-11-18: "real
+    errors, not bs like this"). A provider that timed out, is down or said
+    something we do not know stays an error."""
+    return isinstance(
+        exc,
+        (
+            ProviderAuthError,
+            ProviderInputError,  # ProviderNoCreditsError included
+            ProviderGenerationError,
+            ProviderRateLimitError,
+            InvalidInputError,
+            ApifyCreditError,
+            LLMAuthError,
+            RefusedError,
+            ForbiddenError,
+            NotFoundError,
+            ConflictError,
+            TooSoonError,
+            TryAgainError,
+            AssetRefusedError,
+            CloneRefusedError,
+            EditRefusedError,
+        ),
+    )
+
+
 def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
     """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
     endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
@@ -67,6 +122,14 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
         logger.warning("job %s no longer exists: not run", job_id)
         tasks.forget(job_id)
         return
+    if _actor_deactivated(header.actor):
+        # security audit 2026-11-18: a deactivated account's queued work is not paid for.
+        logger.warning(
+            "job %s: actor %s was deactivated: not run", job_id, header.actor
+        )
+        store.record_failure(job_id, DEACTIVATED)
+        tasks.forget(job_id)
+        return
     attributes: dict[str, Any] = {
         "job_id": job_id,
         "task": header.task,
@@ -77,6 +140,7 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
     with (
         logfire.span("job {task} {job_id}", **attributes) as span,
         acting(_job_acting(job_id, header.task, header.actor)),
+        user_scope(header.actor),
     ):
         try:
             result = fn(**kwargs)
@@ -97,7 +161,8 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
             # exception's own message (e.g. "Wrong API Key"). Full detail
             # goes to the logs and the trace for whoever is debugging it.
             error = str(exc) or exc.__class__.__name__
-            store.record_failure(job_id, error)
+            # security audit 2026-11-18: an error can carry an API key.
+            store.record_failure(job_id, redact(error))
             if (provider := notices.money_provider(exc)) is not None:
                 notices.out_of_money(job_id, provider, error)
             if not resumable(exc):
@@ -107,9 +172,21 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
                 va_notices.after_job(job_id)
             span.record_exception(exc)
             span.set_level("error")
-            logger.exception("job %s failed", job_id)
+            if refused(exc):
+                logger.warning("job %s refused: %s", job_id, error, exc_info=True)
+            else:
+                logger.exception("job %s failed", job_id)
             return
     _queue_previews(job_id)
+
+
+def _actor_deactivated(actor: str | None) -> bool:
+    """Whether the person a job is for was deactivated since it was queued.
+    No actor (the agency) or a non-numeric one: not a user row, runs."""
+    if actor is None or not actor.isdecimal():
+        return False
+    user = users.get_user(int(actor))
+    return user is not None and not user.active
 
 
 def start_job(

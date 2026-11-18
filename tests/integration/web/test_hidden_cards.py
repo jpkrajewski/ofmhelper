@@ -8,11 +8,6 @@ gallery's fragment is the view of only the hidden cards, marked
 and a gallery only counts its own tasks' hidden jobs.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from pathlib import Path
 

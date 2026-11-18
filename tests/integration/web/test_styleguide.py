@@ -1,10 +1,6 @@
 """/styleguide renders every element of components/ui.html (so a macro
 that breaks shows up here first) and is for admins only."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
 

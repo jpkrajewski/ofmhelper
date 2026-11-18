@@ -26,6 +26,8 @@ class ViralReel(BaseModel):
     """One reel card: its file (play/preview/download URLs) and counts."""
 
     file: AssetCard
+    # The page links https://www.instagram.com/reel/{code}/, never `url`.
+    code: str
     url: str
     plays: int
     likes: int | None = None
@@ -69,7 +71,7 @@ class ViralSearch(BaseModel):
         )
 
 
-_COUNTS = {"url", "plays", "likes", "seconds", "posted_at"}
+_COUNTS = {"code", "url", "plays", "likes", "seconds", "posted_at"}
 
 
 def _stored(job: Job) -> list[ViralFile]:

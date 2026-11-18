@@ -9,11 +9,6 @@ previews in test_clone_links_previews.py.
 Runs here are held in the queue (`queued`): they stay `running`, nothing is
 downloaded or paid; finished runs are made with the job store."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import json
 import pickle
 import re

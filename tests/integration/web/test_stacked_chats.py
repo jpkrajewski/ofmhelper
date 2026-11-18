@@ -2,11 +2,8 @@
 destinations made here, one per creator. What every platform does is in
 test_chat_platforms.py."""
 
-import os
 import time
 from http import HTTPStatus
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 import requests

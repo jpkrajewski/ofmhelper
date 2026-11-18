@@ -1,11 +1,6 @@
 """/reels/clone and /reels/download leave no job folder behind, whether the
 downloads worked or not; the videos /clone opens with stay in the asset store."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit

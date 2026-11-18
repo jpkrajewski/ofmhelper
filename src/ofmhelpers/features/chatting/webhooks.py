@@ -243,10 +243,16 @@ def _keep(source: ChatSource, delivery: ChatDelivery, webhook: ChatWebhook) -> N
     username = webhook.model_username
     if delivery.kind == DeliveryKind.MESSAGE and delivery.read:
         read = delivery.read.model_copy(update={"model_username": username})
-        chats.record_events(platform, read)
+        if not chats.record_events(platform, read):
+            logger.warning(
+                "%s delivery signed for %s names another model's chat: ignored",
+                platform.value,
+                username,
+            )
+            return
         rechecks.plan(platform, read)
     elif delivery.kind == DeliveryKind.DELETED:
-        chats.forget_message(platform, delivery.message_id)
+        chats.forget_message(platform, delivery.message_id, username)
     elif delivery.kind == DeliveryKind.MASS:
         if not _already_noticed(source, username):
             chats.save_notification(platform, delivery, username)

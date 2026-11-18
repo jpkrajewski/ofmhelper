@@ -2,10 +2,7 @@
 folders to debug prod, with every write to Drive blocked so the live folders
 can never be changed from dev."""
 
-import os
 from pathlib import Path
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 

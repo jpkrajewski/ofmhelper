@@ -1,10 +1,7 @@
 """The header, its More menu and the home cards render from one list,
 schemas.nav.NAV: a page is one entry, shown only to who may open it."""
 
-import os
 import re
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

@@ -11,12 +11,12 @@ from ofmhelpers.auth.access import Area, allowed
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.account import telegram
-from ofmhelpers.features.account.keys import KEY_TAIL
+from ofmhelpers.features.account.keys import key_tail
 from ofmhelpers.features.chatting import stacked_keys
 from ofmhelpers.features.links.sync import sync_now
 from ofmhelpers.features.refusals import NotFoundError, UnavailableError
 from ofmhelpers.features.reports import asks
-from ofmhelpers.features.signin import credentials
+from ofmhelpers.features.signin import credentials, passwords
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.integrations.signin import Provider, linkable, providers
@@ -72,7 +72,7 @@ class PageView(BaseModel):
     linked: dict[str, LinkedAccount]
     providers: SkipValidation[list[Provider]]
     # provider -> (label, the saved key's last characters).
-    keys: dict[str, tuple[str, str]]
+    keys: dict[str, tuple[str, str | None]]
     min_length: int
     message: str | None
     error: str | None
@@ -141,7 +141,9 @@ def page_view(user_id: int, notice: Notice) -> PageView:
         linked={a.provider: a for a in users.linked_accounts(user_id)},
         providers=linkable(),
         keys={
-            p.name: (p.label, saved.get(p.name)[-KEY_TAIL:]) for p in keyed_for(user)
+            # security audit 2026-11-18: a short key must not show half itself.
+            p.name: (p.label, key_tail(saved.get(p.name) or ""))
+            for p in keyed_for(user)
         },
         min_length=settings.signin.password_min_length,
         message=notice.message,
@@ -182,7 +184,7 @@ def change_password(
     user_id: int, current: str, password: str, confirm: str
 ) -> PasswordChange:
     try:
-        credentials.change_password(user_id, current, password, confirm)
+        passwords.change_password(user_id, current, password, confirm)
     except credentials.PasswordRejectedError as exc:  # silent: shown on the page
         return PasswordChange(notice=Notice(error=str(exc), status_code=400))
     return PasswordChange(
@@ -224,17 +226,24 @@ def save_keys(user_id: int, form: ApiKeysForm) -> Notice:
     return Notice(message=f"{saved} {'key' if len(form.keys) == 1 else 'keys'} saved.")
 
 
-def unlink(user_id: int, provider: str) -> Notice | None:
+def unlink(user_id: int, provider: str) -> PasswordChange:
     """Stops signing in with that account (and, for Google, Drive uploads as
-    it). Refused (a `Notice`) when it is the only way left to sign in."""
+    it). Refused (`notice` with an error) when it is the only way left to
+    sign in; else `user` is the session to keep signed in (every other
+    session of theirs is out now)."""
     if provider not in providers() or not providers()[provider].linkable:
         raise NotFoundError(UNKNOWN_PROVIDER)
     user = users.get_user(user_id)
     others = [a for a in users.linked_accounts(user_id) if a.provider != provider]
     if user is not None and not user.has_password and not others:
-        return Notice(
-            error="Set a password or link another account first: this is your only way in.",
-            status_code=400,
+        return PasswordChange(
+            notice=Notice(
+                error="Set a password or link another account first: this is your only way in.",
+                status_code=400,
+            )
         )
     users.unlink_identity(user_id, provider)
-    return None
+    # security audit 2026-11-18: a session that came in with that account is
+    # out; the router keeps the requester's own.
+    users.end_sessions(user_id)
+    return PasswordChange(notice=Notice(), user=users.get_user(user_id))

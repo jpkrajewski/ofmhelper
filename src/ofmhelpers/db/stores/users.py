@@ -203,6 +203,12 @@ def set_password_hash(user_id: int, hashed: str) -> None:
     _repository().set_password_hash(user_id, hashed)
 
 
+def replace_password_hash(user_id: int, expected: str, hashed: str) -> bool:
+    """Sets the hash only while it is still `expected`; False when it
+    changed meanwhile."""
+    return _repository().replace_password_hash(user_id, expected, hashed)
+
+
 def add_password_link(user_id: int, token_hash: str, expires: float) -> None:
     """Keeps a one-time set-password link's hash (the previous one stops
     working)."""

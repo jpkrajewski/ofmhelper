@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SlugRules(BaseModel):
@@ -113,6 +113,17 @@ class RemoteLink(BaseModel):
     # Whether visitors confirm 18+ first; None: the provider does not say.
     adult: bool | None = None
     created_at: float | None = None
+
+    @field_validator("url", "destination")
+    @classmethod
+    def _http_only(cls, value: str) -> str:
+        """security audit 2026-11-18: both are shown as links, so a provider's
+        `javascript:` or `data:` value must never reach a page. A destination
+        may be empty (the provider does not say)."""
+        if value and urlsplit(value).scheme not in {"http", "https"}:
+            msg = "must be an http(s) URL"
+            raise ValueError(msg)
+        return value
 
 
 class DayStat(BaseModel):

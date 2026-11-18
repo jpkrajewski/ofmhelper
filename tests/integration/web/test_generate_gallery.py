@@ -13,11 +13,6 @@ demonstrates just as well. test_gallery_limit_still_comes_from_config keeps the
 real default honest.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 
 import pytest

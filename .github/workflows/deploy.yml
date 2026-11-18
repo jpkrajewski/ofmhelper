@@ -55,9 +55,8 @@ jobs:
       name: production
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+      # No checkout (security audit 2026-11-18): every step talks to the server
+      # over SSH, nothing reads the workspace.
 
       # Fail with a clear message now, rather than an opaque ssh error later.
       - name: Check required secrets are set
@@ -65,11 +64,15 @@ jobs:
           HOST: ${{ secrets.OFM_DEPLOY_HOST }}
           DIR: ${{ secrets.OFM_DEPLOY_DIR }}
           KEY: ${{ secrets.OFM_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OFM_DEPLOY_KNOWN_HOSTS }}
         run: |
           missing=""
           [ -n "$HOST" ] || missing="$missing OFM_DEPLOY_HOST"
           [ -n "$DIR" ]  || missing="$missing OFM_DEPLOY_DIR"
           [ -n "$KEY" ]  || missing="$missing OFM_DEPLOY_SSH_KEY"
+          # security audit 2026-11-18: the host key is always pinned; a deploy
+          # never trusts whatever answers on the first connection.
+          [ -n "$KNOWN_HOSTS" ] || missing="$missing OFM_DEPLOY_KNOWN_HOSTS (ssh-keyscan <host>)"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secret(s):$missing"
             echo "Add them under Settings > Secrets and variables > Actions."
@@ -88,28 +91,13 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
 
-          hostname="${HOST#*@}"
-          if [ -n "$KNOWN_HOSTS" ]; then
-            # Preferred: pin the host key so a MITM'd DNS entry can't
-            # silently receive a deploy.
-            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          else
-            echo "::warning::OFM_DEPLOY_KNOWN_HOSTS not set -- trusting the \
-            host key on first use. Add it (ssh-keyscan <host>) to pin it."
-            # Never `|| true` here: an empty known_hosts makes every later ssh
-            # fail with an unrelated host-key error. A keyscan that returns
-            # nothing means the server is unreachable -- which is exactly what
-            # happened when the old box went dark on 2026-09-20 and the job
-            # died on a bare `exit 1` with no explanation.
-            ssh-keyscan -H "$hostname" > ~/.ssh/known_hosts 2>/dev/null || true
-            if [ ! -s ~/.ssh/known_hosts ]; then
-              echo "::error::ssh-keyscan got no host key from '$hostname' -- \
-              the server is unreachable on port 22 (dead host? wrong \
-              OFM_DEPLOY_HOST? firewall?). Check the host, then set \
-              OFM_DEPLOY_KNOWN_HOSTS to pin its key."
-              exit 1
-            fi
+          # The server's host key is pinned, never trusted on first use
+          # (security audit 2026-11-18).
+          if [ -z "$KNOWN_HOSTS" ]; then
+            echo "::error::OFM_DEPLOY_KNOWN_HOSTS is empty: pin the host key (ssh-keyscan <host>)"
+            exit 1
           fi
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy
@@ -121,6 +109,9 @@ jobs:
           # otherwise ship an untested commit. On workflow_dispatch: the sha
           # typed in, or empty, where the remote falls back to origin/main.
           SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+          # A CI-triggered deploy only moves forward (security audit
+          # 2026-11-18); a manual run may roll back.
+          FORWARD_ONLY: ${{ github.event_name == 'workflow_run' && 'yes' || '' }}
         run: |
           set -euo pipefail
           # It goes into the ssh command line below: nothing but a sha.
@@ -139,6 +130,7 @@ jobs:
             set -eu
             cd "$1"
             target="${2:-}"
+            forward_only="${3:-}"
 
             # Always the production file only. A dev overlay must never take
             # effect here, whatever happens to be sitting in the checkout.
@@ -150,6 +142,12 @@ jobs:
             # Never a commit that is not on main (it did not go through CI).
             if ! git merge-base --is-ancestor "$target" origin/main; then
               echo "$target is not a commit of origin/main: not deployed" >&2
+              exit 1
+            fi
+            # A late CI run of an older commit must not roll production back.
+            current=$(git rev-parse HEAD)
+            if [ -n "$forward_only" ] && [ "$target" != "$current" ] && git merge-base --is-ancestor "$target" "$current"; then
+              echo "$target is older than the running $current: not deployed (roll back by running this workflow by hand)" >&2
               exit 1
             fi
             echo "deploying $target"
@@ -177,7 +175,9 @@ jobs:
             echo "== swapping in the new containers =="
             # --remove-orphans: a service taken out of the compose file (clone-links-worker,
             # events-worker, 2026-11-11) would run on with the old code, next to the new.
-            $compose up -d --remove-orphans postgres redis pot-provider
+            # Redis waits until the workers are down: a changed REDIS_PASSWORD
+            # recreates it, and the old workers draining their jobs would lose it.
+            $compose up -d --wait --remove-orphans postgres pot-provider
             # Old code never runs against the new schema: the app and workers
             # stop before `migrate` touches it (seconds of downtime; the build
             # is already done). Compose then runs `migrate` (alembic upgrade
@@ -196,6 +196,12 @@ jobs:
             $compose stop sweeps worker preview-worker media-worker edit-worker
             echo "== stopping the app =="
             $compose stop ofmhelpers
+            # The password of the database user is POSTGRES_PASSWORD from .env, every
+            # deploy (scripts/postgres_password.sh): a new value in .env is a
+            # rotation. The app is stopped, nothing logs in with the old one.
+            echo "== passwords from .env =="
+            $compose exec -T postgres sh -s < scripts/postgres_password.sh
+            $compose up -d --wait redis
             echo "== migrating, then starting the app =="
             $compose up -d --no-deps --force-recreate migrate ofmhelpers worker sweeps preview-worker media-worker edit-worker
             $compose logs migrate
@@ -243,7 +249,7 @@ jobs:
           # the remaining lines and bash exits 0 at EOF. That silently skipped
           # `up -d` on 2026-07-27 while the job reported success.
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$HOST" \
-            "cat > /tmp/ofm-deploy.sh && bash /tmp/ofm-deploy.sh '$DIR' '$SHA'; \
+            "cat > /tmp/ofm-deploy.sh && bash /tmp/ofm-deploy.sh '$DIR' '$SHA' '$FORWARD_ONLY'; \
              rc=\$?; rm -f /tmp/ofm-deploy.sh; exit \$rc" <<< "$remote_script"
 
       - name: Health check

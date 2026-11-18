@@ -6,11 +6,6 @@ and from recovery; the key names the provider and the hour, so a batch
 failing on one empty account goes out once; any other failure sends nothing.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from signin import make_user
 

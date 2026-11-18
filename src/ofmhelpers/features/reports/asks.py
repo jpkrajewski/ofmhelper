@@ -64,6 +64,7 @@ def enabled() -> bool:
     """A bot to read, on the server that talks to Telegram."""
     return (
         settings.telegram.bot_token is not None
+        and settings.events.sending(settings.infra.production)
         and _SENDER not in settings.events.senders_off_list()
     )
 

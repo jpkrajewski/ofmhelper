@@ -6,10 +6,6 @@ changed; secrets only as "changed"; nobody can edit the log. Owner
 actions"."""
 
 import asyncio
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from cryptography.fernet import Fernet

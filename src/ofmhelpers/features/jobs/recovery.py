@@ -153,8 +153,15 @@ def fail_cut_off(active: set[str] | None, remembered: set[str]) -> Registry[str]
     """Every cut-off running job with no request to resume started over
     (`RESTARTS`) or failed."""
     outcomes: dict[str, str] = {}
+    restarting = settings.web.restarting(settings.infra.production)
     for job in running_jobs():
         if job.id in remembered or not _cut_off(job, active):
+            continue
+        if job.task in RESTARTS and not restarting:
+            # A dev copy of prod: this job ran on prod at dump time. Started
+            # here it would use prod people's cookies and Drive (OFM_RECOVERY_RESTARTS).
+            logger.info("recovery: job %s left as copied (restarts off)", job.id)
+            outcomes[job.id] = "left"
             continue
         if _restarted(job):
             logger.warning(

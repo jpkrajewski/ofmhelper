@@ -94,7 +94,8 @@ def set_password(
 def change_owner(
     user: OtherUser, owner_id: Annotated[int | None, Form()] = None
 ) -> Response:
-    """Whose VA this is (blank: nobody's yet)."""
+    """Whose manager this is, or a VA's first employer (a VA's is never
+    changed afterwards: `service.set_owner`)."""
     service.set_owner(user, owner_id)
     return see_other("/users")
 

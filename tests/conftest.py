@@ -12,6 +12,21 @@ os.environ["OFM_DEBUG"] = "0"
 # OFM_ENV has no default (config/settings.py InfraSettings): the suite is
 # never production, whatever the shell that started it says.
 os.environ["OFM_ENV"] = "development"
+# The app keeps the session secret it was built with at `import
+# ofmhelpers.web.main`, so it is set here, before any test module is
+# collected: with it per file, one file that forgot it baked the .env secret
+# into the app and every other file's signed cookies stopped matching (200 =
+# the login page). The admin password likewise (2026-11-18).
+os.environ["SESSION_SECRET"] = "test-secret"
+os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
+# Outside production nothing is sent unless this is set (EventsSettings
+# `sending`); the suite sends, to the fakes, with every sender.
+os.environ["OFM_EVENTS_SENDERS_OFF"] = ""
+# Likewise recovery starts cut-off local jobs over in production only
+# (WebSettings `restarting`); the suite tests the restarts.
+os.environ["OFM_RECOVERY_RESTARTS"] = "true"
+# And the background Drive work (GDriveSettings `sweeping`), on the fake Drive.
+os.environ["OFM_DRIVE_SWEEP"] = "true"
 
 import pytest
 from cryptography.fernet import Fernet

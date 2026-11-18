@@ -5,11 +5,7 @@ point -- viewport meta, skip link, the labelled nav toggle, and
 aria-current on the active nav item.
 """
 
-import os
 import re
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

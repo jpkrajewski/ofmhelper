@@ -5,11 +5,6 @@ with its router) stay in the jobs table, so they must get no link rather than
 one pointing at a route that no longer exists.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 

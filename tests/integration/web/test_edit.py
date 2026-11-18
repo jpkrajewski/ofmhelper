@@ -4,11 +4,6 @@ turned, cropped, sped and sized as asked, queued on the edit worker (inline
 in the suite) and polled, the limits a request cannot get past, nothing kept
 in the Reuse pickers (the sweep: test_edit_sweep.py)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
 import subprocess

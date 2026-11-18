@@ -49,7 +49,8 @@ class ReelScraperInput(_Item):
 class ApifyReel(_Item):
     """One reel of a profile (the reel scraper)."""
 
-    code: str = Field(alias="shortCode")
+    # security audit 2026-11-18: it builds links and file names.
+    code: str = Field(alias="shortCode", pattern=r"^[A-Za-z0-9_-]{5,64}$")
     url: str
     owner: str = Field(default="", alias="ownerUsername")
     # Usually the progressive mp4 with sound; for a reel Instagram keeps as

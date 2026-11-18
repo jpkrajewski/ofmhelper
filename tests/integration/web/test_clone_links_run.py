@@ -4,11 +4,6 @@ Generate pays for nothing more, a run whose row is gone does nothing, a
 download leaves no folder behind and fails with a short fixed reason, a
 result only hosted is saved here after all, and a failed export is said."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from contextlib import contextmanager
 from pathlib import Path
 

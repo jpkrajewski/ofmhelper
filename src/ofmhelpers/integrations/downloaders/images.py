@@ -62,7 +62,8 @@ class ImageDownloadConfig(BaseModel):
             cmd += ["--cookies", cookiefile]
 
         cmd += self.extra_args
-        cmd.append(url)
+        # security audit 2026-11-18: "--" so a URL starting with "-" is no option.
+        cmd += ["--", url]
         return cmd
 
 

@@ -48,13 +48,18 @@ class ChatRepository:
             )
             return [ChatPosition.model_validate(dict(row)) for row in rows.mappings()]
 
-    def record_events(self, platform: str, read: ChatRead) -> None:
+    def record_events(self, platform: str, read: ChatRead) -> bool:
         """A chat's messages. Whatever order they come in, in however many
         calls, a fan message ends up answered by the first model message at or
         after it. One chat is written one call at a time, so a fan message
         and its reply landing together each see the other; other chats do
         not wait. Safe to repeat: a webhook delivered twice, or the sync
-        reading what one delivered, changes nothing."""
+        reading what one delivered, changes nothing.
+
+        False, and nothing kept, when the chat is another model's: a chat is
+        one fan and one model, so a read naming someone else's chat (a
+        delivery signed with one model's secret naming another's channel:
+        security audit 2026-11-18) is not believed."""
         with session_scope() as s:
             s.execute(
                 select(
@@ -63,11 +68,22 @@ class ChatRepository:
                     )
                 )
             )
+            owner = s.execute(
+                select(ChatFanMessageRow.model_username)
+                .where(
+                    ChatFanMessageRow.platform == platform,
+                    ChatFanMessageRow.channel_id == read.channel_id,
+                )
+                .limit(1)
+            ).scalar_one_or_none()
+            if owner is not None and owner != read.model_username:
+                return False
             for event in read.events:
                 if event.from_fan:
                     self._keep_fan_message(s, platform, read, event)
                 else:
                     self._keep_model_message(s, platform, read, event)
+            return True
 
     def _keep_fan_message(
         self, s: Session, platform: str, read: ChatRead, event: ChatEvent
@@ -157,13 +173,17 @@ class ChatRepository:
                 )
             )
 
-    def forget_message(self, platform: str, message_id: str) -> None:
-        """A message its sender deleted: nothing to answer, or to count as one."""
+    def forget_message(
+        self, platform: str, message_id: str, model_username: str
+    ) -> None:
+        """A message its sender deleted: nothing to answer, or to count as one.
+        Only in `model_username`'s chats: the deletion came signed for them."""
         with session_scope() as s:
             s.execute(
                 delete(ChatFanMessageRow).where(
                     ChatFanMessageRow.platform == platform,
                     ChatFanMessageRow.message_id == message_id,
+                    ChatFanMessageRow.model_username == model_username,
                 )
             )
 

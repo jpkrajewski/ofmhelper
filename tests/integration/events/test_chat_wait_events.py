@@ -9,12 +9,9 @@ And 5 minutes after each fan message, by webhook or sync (rechecks.py): the list
 at once if that fan still waits and nobody was told yet (prod 2026-11-06: three
 fans who wrote at 18:50-18:55 were told at 19:07, by the look)."""
 
-import os
 import threading
 import time
 from http import HTTPStatus
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from chat_platforms import StackedDriver

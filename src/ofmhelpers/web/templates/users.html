@@ -72,7 +72,9 @@
                 <td>
                     <span class="users-role-text">{{ "VA" if u.role == "va" else u.role|capitalize }}</span>
                     {% if u.email in env_admins %}<span class="pending users-note">always admin</span>{% endif %}
-                    {% if u.role in ("va", "manager") %}
+                    {% if u.role == "va" and u.owner_id %}
+                    {% for o in owners if o.id == u.owner_id %}<span class="pending users-note">VA of {{ o.label }}</span>{% endfor %}
+                    {% elif u.role in ("va", "manager") %}
                     <form method="post" action="/users/{{ u.id }}/owner">
                         <select name="owner_id" class="users-role" aria-label="Owner of {{ u.email }}" onchange="this.form.submit()">
                             {% if not u.owner_id %}<option value="" selected>No employer</option>{% endif %}

@@ -3,3 +3,15 @@
 src/ofmhelpers/web/static/media/videos/results1.mp4
 src/ofmhelpers/web/static/media/videos/*.MOV
 **/__pycache__
+
+# security audit 2026-11-18: secrets and customer data never enter the build
+# context (the Dockerfile copies only pyproject.toml, uv.lock, alembic*, src).
+tests/fixtures/prod_snapshot.sql
+.env
+.env.*
+deploy.local.env
+uploads/
+downloads/
+kieai_out/
+cookies/
+ops.local/

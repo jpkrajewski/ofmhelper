@@ -7,11 +7,6 @@ sees nothing of the owner's, a third person nothing of either, and a job
 with no owner is nobody's.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from pathlib import Path
 

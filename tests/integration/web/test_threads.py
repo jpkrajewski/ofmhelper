@@ -5,11 +5,7 @@ once start one set, a set never shares a folder, a rerun uploads nothing
 twice, a picture or a missing reel is refused, no Drive is refused before
 anything is queued. The photo writer itself: tests/unit/repurpose."""
 
-import os
 from concurrent.futures import ThreadPoolExecutor
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

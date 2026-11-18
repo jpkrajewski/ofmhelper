@@ -3,10 +3,7 @@
 exactly its file to anyone holding it, no session needed; an unknown,
 malformed or expired token is a 404; no public https address = no link."""
 
-import os
 from pathlib import Path
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

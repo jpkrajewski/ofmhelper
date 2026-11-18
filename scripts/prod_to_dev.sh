@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Production data into the dev database -- what every fix is checked on
-# (CLAUDE.md "Validation"). Read-only on the server: one pg_dump, its file
-# removed again; nothing of production changes.
+# (CLAUDE.md "Validation"). Read-only on the server: one pg_dump streamed
+# here over ssh, no file written there; nothing of production changes.
 #
 #   scripts/prod_to_dev.sh          dump prod, load it into dev, start dev
 #   scripts/prod_to_dev.sh --reuse  load the tests/fixtures/prod_snapshot.sql
@@ -40,17 +40,16 @@ if [ "${1:-}" != "--reuse" ]; then
   remote=(ssh -i "$OFM_DEPLOY_SSH_KEY" -o BatchMode=yes "$OFM_DEPLOY_HOST")
   # Always the production compose file on the server.
   prod_compose="cd '$OFM_DEPLOY_DIR' && docker compose -f docker-compose.yml exec -T postgres"
-  trap '"${remote[@]}" rm -f /tmp/prod_snapshot.sql || true' EXIT
 
   echo "== dumping prod =="
+  # Streamed over ssh into the local file: no copy of customer data is ever
+  # written on the server (a dropped connection left /tmp/prod_snapshot.sql
+  # behind; security audit 2026-11-18).
+  umask 077
   # shellcheck disable=SC2029  # the dir expands here, $POSTGRES_* on the server
-  "${remote[@]}" "$prod_compose sh -c 'pg_dump -U \$POSTGRES_USER -d \$POSTGRES_DB --no-owner --no-privileges' > /tmp/prod_snapshot.sql"
+  "${remote[@]}" "$prod_compose sh -c 'pg_dump -U \$POSTGRES_USER -d \$POSTGRES_DB --no-owner --no-privileges'" > "$snapshot.part"
   # shellcheck disable=SC2029
   prod_counts=$("${remote[@]}" "$prod_compose psql -U ofmhelpers -d ofmhelpers -At -c \"$counts_sql\"")
-
-  echo "== copying the snapshot =="
-  scp -q -i "$OFM_DEPLOY_SSH_KEY" -o BatchMode=yes \
-    "$OFM_DEPLOY_HOST:/tmp/prod_snapshot.sql" "$snapshot.part"
   mv "$snapshot.part" "$snapshot"
 fi
 

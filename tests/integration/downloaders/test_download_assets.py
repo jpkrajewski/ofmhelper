@@ -5,11 +5,6 @@ Clean images collapsed into one non-blocking page) and the Action log's
 downloaders are stubbed).
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
 import re

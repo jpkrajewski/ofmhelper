@@ -5,11 +5,6 @@ failed for a reason that may pass, or when a run never got its review --
 never a second check of a saved one, never a second copy in Drive; a card
 that names every failure in fixed words."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import time
 from pathlib import Path
 

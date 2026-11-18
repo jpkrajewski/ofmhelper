@@ -5,11 +5,6 @@ VA") and picks where one goes: Upload to Drive -> /drive -> an account
 folder, the upload /clone uses; the card then says where it is. A VA never
 sends to Drive and never gets a Drive link."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in

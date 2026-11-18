@@ -3,13 +3,8 @@ account's Drive folder as the clicker's Google account -- once per folder,
 only into folders they may use, only their own runs, and a failure is
 shown and may be retried."""
 
-import os
 import re
 import time
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 
 import pytest
@@ -588,6 +583,11 @@ def test_an_owner_posts_their_vas_clone_and_the_va_cannot(drive, tmp_path):
     assert state["drive_url"] not in vas_page
     assert 'id="card-drive-remove"' not in vas_page
     assert f'href="{state["drive_url"]}"' in owners_page
+    # The VA's card follows the owner's upload as it goes (clone.js polls),
+    # the same rows the page drew; a stranger's poll stays empty.
+    [polled] = va.get("/clone/drive-uploads", params={"job": job}).json()
+    assert (polled["id"], polled["status"]) == (state["id"], "done")
+    assert bob.get("/clone/drive-uploads", params={"job": job}).json() == []
 
 
 # --- /clone's filters: made by, not uploaded to Drive (owner 2026-11-14) ---------

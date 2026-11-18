@@ -2,11 +2,6 @@
 an 18+ gate with the destination inlined, a click beacon, byte-identical to a
 crawler, and inert on every other host."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user
@@ -75,6 +70,9 @@ def test_bridge_serves_the_gate_with_the_destination_inlined(bridge):
     assert '"https://onlyfans.com/dany"' in page.text
     assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
     assert page.headers["referrer-policy"] == "no-referrer"
+    # Never framed by another site (Kimi review 2026-11-18).
+    assert page.headers["x-frame-options"] == "DENY"
+    assert page.headers["content-security-policy"] == "frame-ancestors 'none'"
 
 
 def test_the_facebook_app_gets_the_open_in_browser_page(bridge):
@@ -122,6 +120,25 @@ def test_the_beacon_is_rate_limited_per_ip(bridge, monkeypatch):
         )
     # Over the cap the beacon still answers 204 but stops recording.
     assert len(_clicks("click")) == 3
+
+
+@pytest.mark.parametrize(
+    "body",
+    [b"not json", b"[1, 2]", b'"dany"', b"null", b'{"slug": "dany", "referrer": 5}'],
+)
+def test_a_beacon_body_that_is_not_ours_answers_204_and_records_nothing(
+    bridge, body, caplog
+):
+    _seed_link()
+    with caplog.at_level("INFO"):
+        response = bridge.post(
+            "/api/track-direct",
+            content=body,
+            headers={"user-agent": IG_UA, "content-type": "application/json"},
+        )
+    assert response.status_code == 204
+    assert _clicks("click") == []
+    assert not [r for r in caplog.records if r.levelno >= 20]
 
 
 def test_the_beacon_records_a_continue_through(bridge):

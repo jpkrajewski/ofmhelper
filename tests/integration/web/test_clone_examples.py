@@ -3,11 +3,6 @@ everyone who may open /clone (owner 2026-11-13/14). An example keeps its own
 copies of what it shows: a person's old runs are deleted past the job cap
 and source videos are swept, and an example must outlive both."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import subprocess
 from pathlib import Path
 

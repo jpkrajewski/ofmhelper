@@ -2,11 +2,6 @@
 status pages, files) and the reuse picker's asset store. The agency
 (password account) keeps the store root, minus everyone's `users/`."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
 

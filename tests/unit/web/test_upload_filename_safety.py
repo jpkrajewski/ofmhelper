@@ -5,12 +5,6 @@ and joining it onto an upload directory writes outside that directory. Every
 path built from an upload name goes through task_helpers.safe_filename.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
-
 import pytest
 from fastapi import HTTPException
 

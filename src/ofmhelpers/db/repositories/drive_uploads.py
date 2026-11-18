@@ -97,15 +97,15 @@ class DriveUploadRepository(CachedRepository):
             return row.drive_file_id if row else None
 
     def for_jobs(
-        self, job_ids: list[str], user_id: int | None = None
+        self, job_ids: list[str], uploaders: frozenset[int] | None = None
     ) -> list[DriveUpload]:
-        """Every upload of these jobs, oldest first; with `user_id`, only
-        the ones that person made (their Google account put them there)."""
+        """Every upload of these jobs, oldest first; with `uploaders`, only
+        the ones those people made (their Google account put them there)."""
         if not job_ids:
             return []
         query = select(DriveUploadRow).where(DriveUploadRow.job_id.in_(job_ids))
-        if user_id is not None:
-            query = query.where(DriveUploadRow.user_id == user_id)
+        if uploaders is not None:
+            query = query.where(DriveUploadRow.user_id.in_(uploaders))
         with session_scope() as s:
             rows = s.execute(query.order_by(DriveUploadRow.id)).scalars()
             return [_upload(r) for r in rows]

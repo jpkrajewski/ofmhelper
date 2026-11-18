@@ -73,7 +73,14 @@ def sync(scope: Scope) -> SyncReport:
 @router.get("/thumb/{login_id}/{file_id}")
 def thumb(login_id: int, file_id: FileId, scope: Scope) -> Response:
     found = page.preview(login_id, file_id, scope)
+    # security audit 2026-11-18: only ever an image, never sniffed into
+    # anything else (the bytes come from the owner's Drive).
+    media_type = (
+        found.media_type if found.media_type.startswith("image/") else "image/jpeg"
+    )
     # A file's preview never changes; the browser keeps it, nobody else.
     return Response(
-        content=found.content, media_type=found.media_type, headers=PRIVATE_FOR_A_DAY
+        content=found.content,
+        media_type=media_type,
+        headers={**PRIVATE_FOR_A_DAY, "X-Content-Type-Options": "nosniff"},
     )

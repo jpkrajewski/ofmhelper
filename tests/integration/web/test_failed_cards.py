@@ -4,11 +4,7 @@ refused and why in bold, what they said under it, and an "API keys" link to
 /account (a VA runs on its owner's keys). Owner 2026-11-18: twelve failed
 cards of five red lines each read as one wall."""
 
-import os
 import re
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from fastapi.testclient import TestClient
 from signin import sign_in

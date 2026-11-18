@@ -3,11 +3,6 @@ type. The fake provider runs real jobs end to end for free; kie.ai and
 Higgsfield are exercised with their single calls stubbed, so every request
 goes through the same router, runner and result handling as a paid run."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
 import re

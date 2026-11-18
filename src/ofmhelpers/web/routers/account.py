@@ -103,7 +103,10 @@ def disconnect_telegram(me: CurrentUser) -> Response:
 def unlink(request: Request, me: CurrentUser, provider: str) -> Response:
     """Stops signing in with that account (and, for Google, Drive uploads
     as it). Refused when it is the only way left to sign in."""
-    refused = service.unlink(me.id, provider)
-    if refused is not None:
-        return _page(request, me.id, refused)
+    unlinked = service.unlink(me.id, provider)
+    if unlinked.user is None:
+        return _page(request, me.id, unlinked.notice)
+    # security audit 2026-11-18: every other session is out (service); this
+    # one signs in again, as after a password change.
+    AuthMiddleware.sign_in(request, unlinked.user)
     return see_other("/account")

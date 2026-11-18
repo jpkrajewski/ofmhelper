@@ -2,11 +2,6 @@
 their viral reels, scans in the background (first on add, then every 12 h),
 and the picked reels handed to /clone."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
 import zipfile

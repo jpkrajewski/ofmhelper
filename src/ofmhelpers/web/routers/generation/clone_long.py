@@ -34,6 +34,7 @@ from ofmhelpers.web.dependencies import (
 )
 from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
 from ofmhelpers.web.gallery import Gallery, GalleryParams
+from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
 
@@ -70,7 +71,8 @@ def page(
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
     first = gallery.page(viewer)
-    return render(
+    # security audit 2026-11-18: the page pre-fills saved API keys.
+    response = render(
         request,
         "clone_long.html",
         gallery=clone_long.cards(first.jobs),
@@ -79,6 +81,8 @@ def page(
         api_keys=api_keys,
         **dict(clone_long.form_view(actor, assets_root, video or [])),
     )
+    response.headers.update(NO_STORE)
+    return response
 
 
 @router.get("/gallery")

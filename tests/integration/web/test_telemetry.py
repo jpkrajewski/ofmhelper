@@ -3,11 +3,6 @@ the task, job id and who started it, a failure marked as an error with its
 exception; each request carries the signed-in user. Without a token
 nothing is sent and the logging setup is unchanged."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import logging
 
 import pytest

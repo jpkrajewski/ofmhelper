@@ -598,10 +598,25 @@
                     // URL is the inline view, it only showed the picture.
                     const fallback = link.dataset.localFallbackUrl;
                     if (fallback) window.location.href = `${fallback}?dl=1`;
-                    else window.open(link.href, "_blank");
+                    else window.open(link.href, "_blank", "noopener,noreferrer");
                 });
         });
     }
+
+    // security audit 2026-11-18: a server-rendered <img>/<video>/<audio> whose
+    // hosted URL went stale swaps to our own copy (data-local-fallback-url,
+    // see _asset_media.html); "error" does not bubble, so listen on capture.
+    document.addEventListener(
+        "error",
+        (event) => {
+            const media = event.target;
+            const fallback = media.dataset?.localFallbackUrl;
+            if (!fallback) return;
+            delete media.dataset.localFallbackUrl;
+            media.src = fallback;
+        },
+        true
+    );
 
     document.addEventListener("DOMContentLoaded", () => {
         // data-manual-submit opts a form out of auto-wiring -- for pages that

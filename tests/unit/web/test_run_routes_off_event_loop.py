@@ -4,9 +4,6 @@ loop -- one big upload froze every other request (galleries, polling, pages).
 A plain `def` runs in FastAPI's threadpool instead."""
 
 import inspect
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from fastapi.routing import APIRoute
 

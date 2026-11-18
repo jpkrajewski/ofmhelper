@@ -3,11 +3,6 @@ faked at the wire (apify/fake.py: the Instagram fake's profiles, videos on
 its CDN); jobs run inline. sheep_love33's reels have 3M (pinned), 1.5M,
 900k, 620k, 260k, 130k, 61k and 21k plays."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import zipfile
 from pathlib import Path
@@ -179,13 +174,18 @@ def test_the_most_played_ignores_reels_without_video_and_repeats():
             videoPlayCount=plays,
         )
 
-    reels = [reel("a", 5), reel("b", 9, video=False), reel("c", 7), reel("a", 5)]
-    assert [r.code for r in most_played(reels, 30)] == ["c", "a"]
+    reels = [
+        reel("aaaaa", 5),
+        reel("bbbbb", 9, video=False),
+        reel("ccccc", 7),
+        reel("aaaaa", 5),
+    ]
+    assert [r.code for r in most_played(reels, 30)] == ["ccccc", "aaaaa"]
 
 
 def test_plays_fall_back_to_views_and_hidden_counts_are_unknown():
     reel = ApifyReel(
-        shortCode="x", url="u", videoViewCount=40, likesCount=-1, commentsCount=3
+        shortCode="xxxxx", url="u", videoViewCount=40, likesCount=-1, commentsCount=3
     )
     assert reel.plays == 40
     assert reel.likes is None

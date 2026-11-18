@@ -7,11 +7,6 @@ Rate limiting is off for the rest of the suite (see conftest) because every
 test shares one client host; these tests turn it back on explicitly.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from redis.exceptions import RedisError

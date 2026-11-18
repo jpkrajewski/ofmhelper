@@ -34,8 +34,9 @@ def last_read(platform: ChatPlatform) -> list[ChatPosition]:
     return _repository().last_read(platform)
 
 
-def record_events(platform: ChatPlatform, read: ChatRead) -> None:
-    _repository().record_events(platform, read)
+def record_events(platform: ChatPlatform, read: ChatRead) -> bool:
+    """False: the chat is another model's, nothing kept."""
+    return _repository().record_events(platform, read)
 
 
 def mark_read(platform: ChatPlatform, read: ChatRead) -> None:
@@ -46,8 +47,10 @@ def forget_open(platform: ChatPlatform, channel_id: str) -> None:
     _repository().forget_open(platform, channel_id)
 
 
-def forget_message(platform: ChatPlatform, message_id: str) -> None:
-    _repository().forget_message(platform, message_id)
+def forget_message(
+    platform: ChatPlatform, message_id: str, model_username: str
+) -> None:
+    _repository().forget_message(platform, message_id, model_username)
 
 
 def forget_model_messages(before: float) -> None:

@@ -91,13 +91,17 @@ class PinterestLoggedOutError(PinterestError):
         )
 
 
+def _is_pinterest(domain: str) -> bool:
+    # security audit 2026-11-18: dot boundary, "evilpinterest.com" is not ours.
+    host = domain.lower().lstrip(".")
+    return host == DOMAIN or host.endswith(f".{DOMAIN}")
+
+
 def only_pinterest(cookies: str) -> str:
     """The pinterest.com cookies of a cookies.txt (a whole browser's export
     holds every site's), as a cookies.txt again: all that is kept. Raises
     `CookieFileError`."""
-    return _as_txt(
-        c for c in load_jar(cookies) if c.domain.lstrip(".").endswith(DOMAIN)
-    )
+    return _as_txt(c for c in load_jar(cookies) if _is_pinterest(c.domain))
 
 
 def session_expires_at(cookies: str) -> float | None:

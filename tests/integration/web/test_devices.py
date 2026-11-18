@@ -5,10 +5,6 @@ in the page -- fetched one login at a time; everyone views, reveals and
 exports, only an admin changes anything."""
 
 import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from io import BytesIO
 
 import pytest

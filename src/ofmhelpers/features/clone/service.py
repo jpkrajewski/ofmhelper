@@ -402,10 +402,12 @@ def _stored_copy(path: str, assets_root: Path) -> str | None:
 
 
 def upload_states(
-    job_ids: list[str], actors: Readers, user_id: int
+    job_ids: list[str], actors: Readers, team: frozenset[int]
 ) -> list[DriveUpload]:
     """Where these runs' videos are in Drive; only the runs `actors` made
-    (the reader's own and their VAs') and only the uploads `user_id` made."""
+    (the reader's own and their VAs') and only uploads made inside the
+    reader's `team` (owner + VAs): a VA's card shows the owner's upload as
+    it goes, as the page drew it; nobody else's ever."""
     return upload_store.for_jobs(
-        [j for j in job_ids if get_job(j, actors) is not None], user_id
+        [j for j in job_ids if get_job(j, actors) is not None], team
     )

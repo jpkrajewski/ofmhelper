@@ -66,6 +66,9 @@ def safe_path(root_name: str, rel_path: str, *, allow_root: bool = True) -> Path
     `allow_root=False` (the deletes) refuses the root itself too: deleting it,
     or everything in it, would take every user's store and every running
     job's files with it."""
+    if "\0" in rel_path:  # security audit 2026-11-18: refusal, not a 500
+        msg = "Invalid path"
+        raise RefusedError(msg)
     root = _get_root(root_name)
     candidate = (root / rel_path).resolve()
     if not candidate.is_relative_to(root):
@@ -151,10 +154,14 @@ def upload(root_name: str, rel_dir: str, uploads: Sequence[UploadFile]) -> None:
     directory = _directory(root_name, rel_dir)
     for item in uploads:
         dest = directory / safe_filename(item.filename)
-        if dest.exists():
+        # security audit 2026-11-18: "xb" creates exclusively, so a file or a
+        # dangling symlink already there is refused with no check-then-open gap.
+        try:
+            out = dest.open("xb")
+        except FileExistsError:
             msg = f"{dest.name} already exists"
-            raise ConflictError(msg)
-        with dest.open("wb") as out:
+            raise ConflictError(msg) from None
+        with out:
             shutil.copyfileobj(item.file, out)
     logger.info(
         "file manager: %d upload(s) into %s/%s", len(uploads), root_name, rel_dir

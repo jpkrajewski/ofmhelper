@@ -2,10 +2,6 @@
 the one the person last ran there (the clone pages share it), if the page
 offers it; else OFM_DEFAULT_PROVIDER; else the page's first."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 
 import pytest

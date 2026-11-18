@@ -3,13 +3,9 @@ Banana Pro job per picture to recreate, the preset's images first, at the
 picture's aspect ratio. The agency's presets are everyone's to use, a
 user's own are theirs only. kie.ai is faked at the wire; jobs run inline."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
+import os
 from pathlib import Path
 
 import pytest

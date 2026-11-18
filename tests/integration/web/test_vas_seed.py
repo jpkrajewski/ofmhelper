@@ -6,11 +6,6 @@ copied from the team's real finished jobs; `clear` takes back exactly what
 `seed` wrote; production refuses both.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path

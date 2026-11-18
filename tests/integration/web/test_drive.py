@@ -9,13 +9,9 @@ waits in each folder (previews proxied through the app, and only those) and
 how many files were uploaded today: by /clone, and by hand."""
 
 import datetime
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from zoneinfo import ZoneInfo
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 import time_machine

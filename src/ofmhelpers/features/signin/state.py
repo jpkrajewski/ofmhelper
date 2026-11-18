@@ -15,6 +15,7 @@ STATE_COOKIE = "ofm_signin"
 _COOKIE_PATH = "/auth/"
 # Where a signed-in person lands without a page to return to.
 HOME = "/home"
+_SPACE = 0x20
 
 
 class SignInState(BaseModel):
@@ -36,6 +37,10 @@ def safe_next(next_url: str | None) -> str:
         or next_url == "/"
         or not next_url.startswith("/")
         or next_url.startswith("//")
+        # security audit 2026-11-18: browsers read a backslash as "/" and drop
+        # control characters (tab, newline), so those can leave the site.
+        or "\\" in next_url
+        or any(ord(c) < _SPACE for c in next_url)
     ):
         return HOME
     return next_url

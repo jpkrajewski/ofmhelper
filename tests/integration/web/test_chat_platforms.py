@@ -2,12 +2,9 @@
 words, for each. What one platform does differently lives in tests/chat_platforms.py;
 a test here failing for one platform only means the interface leaks."""
 
-import os
 import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from chat_platforms import PLATFORMS

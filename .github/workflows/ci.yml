@@ -29,6 +29,10 @@ env:
   # uv resolves from the lockfile; fail rather than silently re-resolving if
   # uv.lock and pyproject.toml have drifted apart.
   UV_FROZEN: "1"
+  # docker-compose.yml requires both (no default password since the
+  # 2026-11-18 audit). CI's throwaway stack only: never a real value.
+  POSTGRES_PASSWORD: ci-throwaway-postgres
+  REDIS_PASSWORD: ci-throwaway-redis
 
 # Runner image pinned (not ubuntu-latest, which moves to a new Ubuntu on
 # GitHub's schedule; 24.04 is what prod runs). Every action is pinned to a

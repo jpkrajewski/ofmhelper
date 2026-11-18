@@ -8,11 +8,6 @@ extension (require_upload_kind), and anything non-media already on disk is
 served as an octet-stream attachment with nosniff (media_response).
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 
 import pytest

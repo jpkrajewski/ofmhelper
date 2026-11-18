@@ -5,11 +5,6 @@ and every login/logout now gets recorded into the Action log so it's clear
 who was actually using the tool and when -- not just what jobs they ran.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user_with_password, sign_in

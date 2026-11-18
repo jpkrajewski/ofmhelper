@@ -1,10 +1,5 @@
 """/character-sheet: several images in, one side-by-side PNG out."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 
 import pytest

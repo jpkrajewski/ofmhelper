@@ -93,5 +93,5 @@ def get_ref_thumb(
     return FileResponse(
         refs.thumb(assets_root, path, size),
         media_type="image/webp",
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
     )

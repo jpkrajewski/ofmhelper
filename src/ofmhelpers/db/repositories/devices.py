@@ -150,12 +150,17 @@ def _phones_of(s: Session, login_id: int) -> list[int]:
     )
 
 
-def _drop_orphans(s: Session) -> None:
-    """Deletes every login no phone links any more."""
+def _drop_orphans(s: Session, owner_id: int) -> None:
+    """Deletes every login of `owner_id` no phone links any more (security
+    audit 2026-11-18: never another owner's)."""
     linked = exists().where(DeviceLoginRow.login_id == LoginRow.id)
     # An archived login is kept even with no phone left: its password is
     # what archiving keeps.
-    s.execute(delete(LoginRow).where(~linked, LoginRow.archived_at.is_(None)))
+    s.execute(
+        delete(LoginRow).where(
+            ~linked, LoginRow.archived_at.is_(None), LoginRow.user_id == owner_id
+        )
+    )
 
 
 class DeviceRepository(CachedRepository):
@@ -267,9 +272,10 @@ class DeviceRepository(CachedRepository):
             row = s.get(DeviceRow, device_id)
             if row is None or (owner is not None and row.user_id != owner):
                 return False
+            owner_id = row.user_id
             s.delete(row)
             s.flush()
-            _drop_orphans(s)
+            _drop_orphans(s, owner_id)
             return True
 
     def add_login(
@@ -425,6 +431,6 @@ class DeviceRepository(CachedRepository):
             ).scalar_one_or_none()
             if removed is None:
                 return False
-            _drop_orphans(s)
+            _drop_orphans(s, device.user_id)
             _touch(s, [device_id])
             return True

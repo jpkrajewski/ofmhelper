@@ -2,11 +2,6 @@
 parses, so a value smuggled into the ffmpeg filtergraph through `noise_flags`
 is refused before anything runs."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import json
 
 import pytest

@@ -51,8 +51,8 @@ def test_a_renamed_account_is_read_under_its_new_name():
         ],
         reels=[
             {
-                "shortCode": "A",
-                "url": "https://www.instagram.com/p/A/",
+                "shortCode": "AAAAA",
+                "url": "https://www.instagram.com/p/AAAAA/",
                 "ownerUsername": "new_name",
                 "videoPlayCount": 9,
                 "timestamp": _posted(1),
@@ -70,8 +70,8 @@ def test_a_renamed_account_is_read_under_its_new_name():
 
 def test_a_reel_listed_twice_is_one_post():
     reel = {
-        "shortCode": "A",
-        "url": "https://www.instagram.com/p/A/",
+        "shortCode": "AAAAA",
+        "url": "https://www.instagram.com/p/AAAAA/",
         "ownerUsername": "yuki",
         "videoPlayCount": 9,
         "timestamp": _posted(1),
@@ -82,16 +82,20 @@ def test_a_reel_listed_twice_is_one_post():
 
     read, _ = ApifyInstagramSource()._read(client, ["yuki"])  # type: ignore[arg-type]
 
-    assert [p.id for p in read["yuki"].posts] == ["A"]
+    assert [p.id for p in read["yuki"].posts] == ["AAAAA"]
 
 
 def test_a_dataset_item_reads_as_the_actors_fields_it_was_sent_with():
-    sent = {"shortCode": "A", "url": "https://www.instagram.com/p/A/", "likesCount": 3}
+    sent = {
+        "shortCode": "AAAAA",
+        "url": "https://www.instagram.com/p/AAAAA/",
+        "likesCount": 3,
+    }
     item = DatasetItem.model_validate(sent)
 
     assert not item.failed
     assert item.model_dump(exclude_unset=True) == sent
-    assert item.read(ApifyReel).code == "A"
+    assert item.read(ApifyReel).code == "AAAAA"
 
 
 def test_an_error_item_is_told_apart_by_its_error_key():

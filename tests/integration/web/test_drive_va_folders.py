@@ -5,11 +5,6 @@ access"): made when the VA is added or moved, named after them, kept by id,
 made again when gone; /drive lists it under VAs, not among the folders no
 phone owns; an owner without Google Drive gets nothing and no error."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in_admin, sign_in_agency
@@ -91,21 +86,6 @@ def test_a_folder_made_by_hand_is_adopted(drive):
     (folder,) = va_folders.of_owner(users.agency_id())
     assert folder.folder_id == by_hand
     assert drive.named("Noelyn", ROOT) == [by_hand]
-
-
-def test_a_va_moved_to_another_owner_gets_a_folder_in_that_root(drive):
-    va_id = _add_va("Noelyn", users.agency_id())
-    other = make_user("other@example.com")
-    users._repository().signed_in(other.id, "", "fake-refresh:other@example.com")
-    admin = TestClient(app)
-    sign_in_admin(admin)
-
-    admin.post(f"/users/{va_id}/owner", data={"owner_id": str(other.id)})
-
-    assert va_folders.of_owner(users.agency_id()) == []
-    (moved,) = va_folders.of_owner(other.id)
-    assert moved.root_folder_id == users.get_user(other.id).drive_root_id
-    assert drive.named("Noelyn", ROOT) != []  # the old one stays where it was
 
 
 def test_an_owner_without_google_drive_gets_nothing_and_no_error(drive):

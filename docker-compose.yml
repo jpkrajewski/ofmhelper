@@ -30,11 +30,15 @@ x-app-environment: &app-environment
   - OFM_KIEAI_OUT_DIR=/app/uploads/kieai_out
   # Postgres (durable job/application store) and Redis (RQ broker). The code
   # defaults these to the service names, but we set them explicitly so the same
-  # file documents the wiring on any host. The password: POSTGRES_PASSWORD
-  # from the environment or .env, the same value the postgres service is
-  # given below (the fallback is what every existing volume was made with).
-  - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:${POSTGRES_PASSWORD:-ofmhelpers}@postgres:5432/ofmhelpers
-  - OFM_REDIS_URL=redis://redis:6379/0
+  # file documents the wiring on any host. The passwords: POSTGRES_PASSWORD
+  # and REDIS_PASSWORD from the environment or .env, required (no default:
+  # a known one let any container on the network in; security audit
+  # 2026-11-18). `openssl rand -hex 32` each: hex, so they need no URL
+  # escaping. The deploy sets the database user's password to
+  # POSTGRES_PASSWORD every time (`ALTER ROLE`), so a new value in .env is
+  # all a rotation takes.
+  - OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/ofmhelpers
+  - OFM_REDIS_URL=redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
   # What is running, on every trace (telemetry.py): both deploy paths export
   # the deployed commit; anything else (dev, a manual `up`) says "dev".
   - OFM_RELEASE=${OFM_RELEASE:-dev}
@@ -81,6 +85,7 @@ services:
         condition: service_healthy
     networks:
       - internal
+      - pot
     security_opt:
       - no-new-privileges:true
     read_only: false   # set true if your app doesn't write outside ./uploads
@@ -138,6 +143,7 @@ services:
         condition: service_healthy
     networks:
       - internal
+      - pot
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -317,9 +323,9 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=ofmhelpers
-      # Only read when the volume is first made: on a server that already has
-      # one, setting POSTGRES_PASSWORD also needs an ALTER USER (README).
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ofmhelpers}
+      # Only read when the volume is first made; on a volume that already
+      # exists the deploy's `ALTER ROLE` makes it the user's password.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=ofmhelpers
     # No published port in production: nothing off the compose network needs to
     # reach the database, and `docker compose exec postgres psql -U ofmhelpers`
@@ -341,7 +347,15 @@ services:
     image: redis:7
     container_name: ofmhelpers-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    environment:
+      # redis-cli (the healthcheck, `exec redis redis-cli`) signs in with it.
+      - REDISCLI_AUTH=${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
     # Same as postgres: published only by the dev overlay, for host-run tests.
     volumes:
       - redis_data:/data
@@ -368,8 +382,11 @@ services:
     restart: unless-stopped
     expose:
       - "4416"
+    # A third-party image: on its own network with only the two services
+    # that call it (yt-dlp in the app and the default worker), never next to
+    # Postgres and Redis (security audit 2026-11-18).
     networks:
-      - internal
+      - pot
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -385,4 +402,6 @@ volumes:
 
 networks:
   internal:
+    driver: bridge
+  pot:
     driver: bridge
