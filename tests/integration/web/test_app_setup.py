@@ -34,6 +34,7 @@ def test_development_serves_the_docs():
 
 def test_production_serves_no_docs(monkeypatch):
     monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("SESSION_SECRET", "a" * 64)
 
     assert not DOCS & _paths()
 
@@ -63,6 +64,22 @@ def test_production_refuses_debug(monkeypatch):
 
     with pytest.raises(ValidationError, match="OFM_DEBUG"):
         _ = settings.infra
+
+
+def test_production_refuses_a_short_session_secret(monkeypatch):
+    """Prod ran on a 6-character one until 2026-11-18."""
+    monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("SESSION_SECRET", "short1")
+
+    with pytest.raises(ValidationError, match="SESSION_SECRET"):
+        _ = settings.session
+
+
+def test_production_starts_with_a_long_session_secret(monkeypatch):
+    monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("SESSION_SECRET", "a" * 64)
+
+    assert settings.session.session_secret == "a" * 64
 
 
 def test_the_app_says_which_release_it_is(monkeypatch):

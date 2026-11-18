@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ofmhelpers.cache import enqueue
 from ofmhelpers.db.stores import cookies as login_cookies
 from ofmhelpers.db.stores import downloads as store
+from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.store import register_generated_asset
@@ -20,6 +21,7 @@ from ofmhelpers.features.downloads import again
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.integrations.downloaders.urls import read_links
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.downloads import (
@@ -100,16 +102,25 @@ def _on_disk(result: DownloadResult | None) -> bool:
     return all(path.is_file() for path in result.output_paths)
 
 
-def _already_here(urls: list[str]) -> dict[str, DownloadResult]:
-    """`urls` someone's download still has whole on disk, as this job's own
-    result for that link (dev 2026-11-11: a VA pasted a reel their owner
-    had downloaded five hours before and it was fetched again). The asker
-    gets a card and a copy in their own asset store; they never see whose
-    download it was."""
+def _team_of(user_id: int | None) -> frozenset[int]:
+    """`user_id`, their employer and that employer's VAs: whose downloads
+    may stand in for a fetch of theirs (the same set a viewer sees). A
+    stranger's file may have been fetched with a login the asker lacks."""
+    user = users.get_user(user_id) if user_id is not None else None
+    return viewer_for(user, None).team_ids if user is not None else frozenset()
+
+
+def _already_here(user_id: int | None, urls: list[str]) -> dict[str, DownloadResult]:
+    """`urls` a download of `user_id`'s team still has whole on disk, as this
+    job's own result for that link (dev 2026-11-11: a VA pasted a reel their
+    owner had downloaded five hours before and it was fetched again). The
+    asker gets a card and a copy in their own asset store; they never see
+    whose download it was. Anyone outside the team is fetched with the
+    asker's own cookies."""
     if not urls:
         return {}
     found: dict[str, list[Path]] = {}
-    for file in store.stored_anywhere(urls):
+    for file in store.stored_by(_team_of(user_id), urls):
         found.setdefault(file.url, []).append(Path(file.file_path))
     return {
         url: DownloadResult(url=url, success=True, output_paths=paths)
@@ -127,8 +138,9 @@ def fetch(
 ) -> list[DownloadResult]:
     """A download job's run, the same on its first run and on every replay
     (a restart, the card's Download, the link pasted again): a link whose
-    files are on disk -- this job's, or anyone's download of it -- is
-    not fetched, the rest are, logged in as `user_id`
+    files are on disk -- this job's, or a download of it by someone of the
+    asker's team (`_already_here`) -- is not fetched, the rest are, logged
+    in as `user_id`
     (their own cookies.txt, read here: never in the queued job). Every file
     then goes into the asset store and gets its `downloads` row. A link
     that had been downloaded and cannot be fetched again keeps its entry:
@@ -138,10 +150,10 @@ def fetch(
     before = {r.url: r for r in job.download_results() if r.success} if job else {}
     missing = [url for url in urls if not _on_disk(before.get(url))]
     if job is not None:
-        # A link the server already holds, whoever downloaded it, is that
-        # file, not a second download. (A job from before `downloads`
-        # existed keeps no rows and looks nothing up.)
-        before |= _already_here(missing)
+        # A link the asker's team already holds is that file, not a second
+        # download. (A job from before `downloads` existed keeps no rows and
+        # looks nothing up.)
+        before |= _already_here(job.user_id or user_id, missing)
     wanted = [url for url in missing if not _on_disk(before.get(url))]
     fetched = iter(
         download_all(wanted, cookies=login_cookies.for_user(user_id)) if wanted else []

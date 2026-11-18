@@ -41,10 +41,10 @@ def newest_of(user_id: int, urls: list[str]) -> list[Download]:
     return _repository().newest_of(user_id, urls)
 
 
-def stored_anywhere(urls: list[str]) -> list[Download]:
-    """What the server already holds of `urls`, whoever downloaded it: for
-    each, the files of the newest job that still has them all."""
-    return _repository().stored_anywhere(urls)
+def stored_by(user_ids: frozenset[int], urls: list[str]) -> list[Download]:
+    """What the server holds of `urls` downloaded by one of `user_ids` (a
+    team): for each, the files of the newest job that still has them all."""
+    return _repository().stored_by(user_ids, urls)
 
 
 def file_shared(download_id: int, file_path: str) -> bool:

@@ -17,6 +17,7 @@ lazy from sqlalchemy.orm import Session
 from ofmhelpers.db.models import (
     CreatorRow,
     LinkSyncRow,
+    SelfLinkDomainRow,
     ShortLinkDayRow,
     ShortLinkRow,
     TrackedAccountRow,
@@ -129,16 +130,24 @@ class ShortLinkRepository(CachedRepository):
 
     def active_self_link(self, host: str, slug: str) -> BridgeTarget | None:
         """The live self-hosted bridge link on `host` with `slug` (the bridge
-        serves it); None when there is no active one."""
-        link = ShortLinkRow
+        serves it); None when there is no active one. The host must be an
+        active domain that is shared (no owner) or the link's owner's own, so
+        a removed host re-added by someone else never serves the old links."""
+        link, dom = ShortLinkRow, SelfLinkDomainRow
         with session_scope() as s:
             row = s.execute(
-                select(link.id, link.destination, link.slug, link.domain).where(
+                select(link.id, link.destination, link.slug, link.domain)
+                .join(dom, dom.host == link.domain)
+                .where(
                     link.provider == "self",
                     link.domain == host,
                     link.slug == slug,
                     link.status == "active",
+                    dom.status == "active",
+                    or_(dom.owner_id.is_(None), dom.owner_id == link.user_id),
                 )
+                .order_by(link.id)
+                .limit(1)
             ).first()
             if row is None:
                 return None
@@ -188,6 +197,18 @@ class ShortLinkRepository(CachedRepository):
                 )
             ).all()
             return [LinkAddress(domain=d, slug=slug) for d, slug in rows]
+
+    def slugs_on_domain(self, provider: str, domain: str) -> list[str]:
+        """Every owner's slugs on `domain` of `provider`."""
+        with session_scope() as s:
+            return list(
+                s.execute(
+                    select(ShortLinkRow.slug).where(
+                        ShortLinkRow.provider == provider,
+                        ShortLinkRow.domain == domain,
+                    )
+                ).scalars()
+            )
 
     def add_creating(
         self, user_id: int, provider: str, links: list[PlannedLink]

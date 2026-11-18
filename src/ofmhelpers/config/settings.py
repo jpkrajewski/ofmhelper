@@ -99,6 +99,9 @@ class QueueConfig(BaseModel):
     priority: QueuePriority
 
 
+SESSION_SECRET_MIN_LENGTH = 32
+
+
 class SessionSettings(BaseSettings):
     """Only ever constructed by web/main.py, at app-construction time.
     Deliberately its own class -- SESSION_SECRET is the one truly-required
@@ -115,6 +118,23 @@ class SessionSettings(BaseSettings):
     # and the deadline static/js/session.js counts down to so an idle tab
     # logs itself out instead of sitting there looking signed in.
     session_max_age_s: int = 60 * 60 * 5  # 5 hours
+    # Read here too (InfraSettings owns it) only for the check below.
+    environment: str = Field(default="development", validation_alias="OFM_ENV")
+
+    @model_validator(mode="after")
+    def _a_real_secret_in_production(self) -> SessionSettings:
+        """Every session cookie is signed with it: one short enough to guess
+        from a single cookie lets anyone sign a session as anybody. Prod ran
+        on a 6-character one, the same as dev's, until 2026-11-18."""
+        short = len(self.session_secret) < SESSION_SECRET_MIN_LENGTH
+        if self.environment == "production" and short:
+            msg = (
+                f"SESSION_SECRET is shorter than {SESSION_SECRET_MIN_LENGTH}"
+                " characters: refused with OFM_ENV=production"
+                " (openssl rand -hex 32)"
+            )
+            raise ValueError(msg)
+        return self
 
 
 class WebSettings(BaseSettings):

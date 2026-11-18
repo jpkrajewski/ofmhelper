@@ -179,7 +179,11 @@ def set_status(link_ids: list[int], status: str, error: str | None = None) -> No
 
 def taken_slugs(user_id: int, provider: str, domain: str) -> set[str]:
     """Slugs of `user_id`'s links a new one on `domain` must not take: on
-    that domain, or anywhere on a provider whose slugs are provider-wide."""
+    that domain, or anywhere on a provider whose slugs are provider-wide. A
+    self link's address is public, so there every owner's slugs on the domain
+    count."""
+    if provider == "self":
+        return set(_repository().slugs_on_domain(provider, domain))
     per_domain = provider_infos()[provider].slug.unique_per == "domain"
     return {
         taken.slug

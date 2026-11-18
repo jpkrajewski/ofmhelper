@@ -224,11 +224,11 @@ def drive_upload_remove(
 
 @router.get("/drive-uploads")
 def drive_upload_states(
-    actors: Actors, job: Annotated[list[str], Query(max_length=200)]
+    user: CurrentUser, actors: Actors, job: Annotated[list[str], Query(max_length=200)]
 ) -> list[DriveUpload]:
     """Where these runs' videos are in Drive: what clone.js polls while
-    uploads run. Only runs this session may see."""
-    return upload_states(job, actors)
+    uploads run. Only runs this session may see, uploads it made."""
+    return upload_states(job, actors, user.id)
 
 
 @router.post("/run", status_code=202)

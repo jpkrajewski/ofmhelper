@@ -422,6 +422,36 @@ def test_an_env_admin_gets_in_on_a_fresh_install_and_stays_admin(client):
 
 
 @pytest.mark.usefixtures("providers_on")
+@pytest.mark.parametrize("address", ["owner@example.com", "second@example.com"])
+def test_a_deactivated_agency_account_stays_out_for_google(client, address):
+    """Audit 2026-11-18: any OFM_ADMIN_EMAILS address signing in with Google
+    reactivated the agency account another admin had deactivated. Only the
+    admin password restores it."""
+    _consent(client, "google", "owner@example.com")  # claims the account
+    agency = users.by_email("owner@example.com")
+    users.set_active(agency.id, active=False)
+
+    r = _consent(TestClient(app), "google", address)
+
+    assert r.status_code == 403
+    assert not users.get_user(agency.id).active
+
+
+@pytest.mark.usefixtures("providers_on")
+def test_the_admin_password_restores_a_deactivated_agency_account(client):
+    _consent(client, "google", "owner@example.com")
+    agency = users.by_email("owner@example.com")
+    users.set_active(agency.id, active=False)
+
+    r = _password_login(TestClient(app), "second@example.com", "test-admin")
+
+    assert r.status_code == 303
+    restored = users.get_user(agency.id)
+    assert restored.active
+    assert restored.is_admin
+
+
+@pytest.mark.usefixtures("providers_on")
 def test_a_google_sign_in_without_drive_goes_straight_on_to_connecting_it(client):
     """Prod, 2026-10-22: the VA signed in with the admin Google account and
     then had to find "Connect Google Drive". Sign-in asks only who you are;
@@ -522,6 +552,66 @@ def test_account_links_google_for_drive_and_refuses_a_taken_one(client):
     sign_in(other, "other@example.com")
     r = _consent(other, "google", "my.gmail@example.com", link="1")
     assert r.headers["location"] == "/account?google=taken"
+
+
+def _link_start(client: TestClient):
+    return client.get(
+        "/auth/google/start",
+        params={"link": "1", "next": "/account"},
+        follow_redirects=False,
+    )
+
+
+def _copy_of(client: TestClient) -> TestClient:
+    """Another browser holding a copy of this one's session cookie."""
+    copy = TestClient(app)
+    copy.cookies.set("ofm_session", client.cookies.get("ofm_session"))
+    return copy
+
+
+@pytest.mark.usefixtures("providers_on")
+@pytest.mark.parametrize("ended_by", ["logout", "deactivation", "password change"])
+def test_a_session_already_ended_links_no_account(client, ended_by):
+    """Audit 2026-11-18: /auth/ is public, so the gate never looked at the
+    link start; a copy of a cookie ended by Logout still linked the holder's
+    own Google account, a lasting way into the person's account."""
+    me = make_user_with_password(password=PASSWORD)
+    _password_login(client, me.email, PASSWORD)
+    stolen = _copy_of(client)
+    if ended_by == "logout":
+        client.post("/logout")
+    elif ended_by == "deactivation":
+        users.set_active(me.id, active=False)
+    else:
+        new = "another long password"
+        credentials.change_password(me.id, PASSWORD, new, new)
+    assert stolen.get("/account", follow_redirects=False).status_code == 303
+
+    started = _link_start(stolen)
+
+    assert (started.status_code, started.headers["location"]) == (303, "/login")
+    assert users.linked_accounts(me.id) == []
+
+
+@pytest.mark.usefixtures("providers_on")
+def test_a_link_begun_before_a_deactivation_links_nothing(client):
+    """The round trip carries the account in its state cookie; the account's
+    state is read again when it comes back."""
+    me = sign_in(client)
+    started = _link_start(client)
+    state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
+    users.set_active(me.id, active=False)
+
+    allowed = client.post(
+        "/auth/fake-consent",
+        data={"provider": "google", "state": state, "email": "mine@example.com"},
+        follow_redirects=False,
+    )
+    back = urlsplit(allowed.headers["location"])
+    query = {k: v[0] for k, v in parse_qs(back.query).items()}
+    client.get(back.path, params=query, follow_redirects=False)
+
+    assert users.linked_accounts(me.id) == []
 
 
 @pytest.mark.usefixtures("providers_on")

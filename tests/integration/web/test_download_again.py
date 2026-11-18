@@ -26,14 +26,16 @@ from download_files import (
     rows,
 )
 from fastapi.testclient import TestClient
-from signin import sign_in
+from signin import make_user, sign_in
 
 from ofmhelpers.db.stores import downloads as store
+from ofmhelpers.db.stores import users
 from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.downloads import cleanup, media
 from ofmhelpers.features.jobs import restart
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 A = "https://x.example/video/a"
@@ -133,15 +135,25 @@ def test_only_the_new_links_of_a_paste_make_a_job(client, downloads):
     assert downloads.fetched == [A, C]
 
 
-def test_a_link_someone_else_downloaded_is_not_fetched_again_and_the_card_is_mine(
+def _my_va(client: TestClient) -> TestClient:
+    """A client signed in as a VA of `client`'s person."""
+    va = make_user("va@example.com", Role.VA)
+    users.set_owner(va.id, client.user.id)
+    other = TestClient(app)
+    other.user = sign_in(other, "va@example.com", Role.VA)  # type: ignore[attr-defined]
+    return other
+
+
+def test_a_link_my_va_downloaded_is_not_fetched_again_and_the_card_is_mine(
     client, downloads
 ):
     """Dev 2026-11-11: a VA pasted a reel their owner had downloaded five
-    hours before and it was downloaded again. The same link is the same
-    video whoever asked: the server's file is used, the asker gets a card
-    and a job of their own, and never sees the other person's."""
-    other = TestClient(app)
-    theirs_user = sign_in(other, "other@example.com")
+    hours before and it was downloaded again. Inside a team the same link is
+    the same video whoever asked: the server's file is used and the asker
+    gets a card and a job of their own. Across teams it is fetched again
+    with the asker's own login (audit 2026-11-18,
+    tests/integration/audit/test_download_reuse_team.py)."""
+    other = _my_va(client)
     theirs = _paste(other, A)["job_id"]
 
     mine = _paste(client, A)
@@ -152,22 +164,14 @@ def test_a_link_someone_else_downloaded_is_not_fetched_again_and_the_card_is_min
     job = get_job(mine["job_id"])
     assert (job.status, job.user_id) == ("done", client.user.id)
     assert job.local_paths() == get_job(theirs).local_paths()
-    assert _shown(client) == [mine["job_id"]]
-    assert _shown(other) == [theirs]
-    assert client.get(f"/download-media/jobs/{theirs}/status").status_code == 404
-    # A copy of their own in their part of the asset store, not the other's.
-    mine_row, theirs_row = row(mine["job_id"]), row(theirs)
-    assert mine_row.user_id == client.user.id
-    assert theirs_row.user_id == theirs_user.id
-    assert f"users{os.sep}{client.user.id}{os.sep}" in mine_row.asset_path
-    assert mine_row.asset_path != theirs_row.asset_path
+    assert row(mine["job_id"]).user_id == client.user.id
+    assert row(theirs).user_id == other.user.id
 
 
 def test_a_shared_file_stays_while_anyone_still_has_it(client, downloads):
     """Two people's cards of one file: the sweep takes the older card's
     video only on paper, the file stays for the one still in its keep time."""
-    other = TestClient(app)
-    sign_in(other, "other@example.com")
+    other = _my_va(client)
     theirs = _paste(other, A)["job_id"]
     backdate(theirs, 2 * DAY)
     mine = _paste(client, A)["job_id"]

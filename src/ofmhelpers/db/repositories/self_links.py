@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import Date, cast, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from ofmhelpers.db.models import SelfLinkClickRow, SelfLinkDomainRow
+from ofmhelpers.db.models import SelfLinkClickRow, SelfLinkDomainRow, ShortLinkRow
 from ofmhelpers.db.repositories.cached_repository import (
     CachedRepository,
     cached,
@@ -110,8 +110,26 @@ class SelfLinkRepository(CachedRepository):
 
     @invalidates_cache
     def remove_domain(self, domain_id: int, owner: int | None = None) -> None:
+        """Deletes the domain; its owner's self links on that host go
+        inactive in the same transaction (rows stay)."""
         dom = SelfLinkDomainRow
         with session_scope() as s:
+            gone = s.execute(
+                select(dom.host, dom.owner_id).where(
+                    dom.id == domain_id, *mine(dom.owner_id, owner)
+                )
+            ).first()
+            if gone is not None and gone.owner_id is not None:
+                s.execute(
+                    update(ShortLinkRow)
+                    .where(
+                        ShortLinkRow.provider == "self",
+                        ShortLinkRow.domain == gone.host,
+                        ShortLinkRow.user_id == gone.owner_id,
+                        ShortLinkRow.status == "active",
+                    )
+                    .values(status="inactive")
+                )
             s.execute(
                 delete(dom).where(dom.id == domain_id, *mine(dom.owner_id, owner))
             )

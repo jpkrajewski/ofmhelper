@@ -101,12 +101,13 @@ class DownloadRepository(CachedRepository):
             ).scalars()
             return [_download(r) for r in rows]
 
-    def stored_anywhere(self, urls: list[str]) -> list[Download]:
-        """For each of `urls` anyone has stored: the files of the newest job
-        that fetched it and still has them all, by url then position. A
-        link is the same video whoever pasted it: nobody fetches twice what
-        the server already holds (owner 2026-11-12: "why not everyone?")."""
-        if not urls:
+    def stored_by(self, user_ids: frozenset[int], urls: list[str]) -> list[Download]:
+        """For each of `urls` one of `user_ids` (a team: an owner and their
+        VAs) has stored: the files of the newest job that fetched it and
+        still has them all, by url then position. Inside a team a link is
+        the same video whoever pasted it (owner 2026-11-12); beyond it the
+        file may have been fetched with someone else's login cookies."""
+        if not urls or not user_ids:
             return []
         row, later, gone = DownloadRow, aliased(DownloadRow), aliased(DownloadRow)
         # A job counts only while every file it fetched for the link is stored.
@@ -118,6 +119,7 @@ class DownloadRepository(CachedRepository):
             later.url == row.url,
             later.job_id != row.job_id,
             later.stored,
+            later.user_id.in_(user_ids),
             ~exists().where(
                 later_gone.job_id == later.job_id,
                 later_gone.url == later.url,
@@ -129,7 +131,7 @@ class DownloadRepository(CachedRepository):
         with session_scope() as s:
             rows = s.execute(
                 select(row)
-                .where(row.url.in_(urls), whole, ~newer)
+                .where(row.url.in_(urls), row.user_id.in_(user_ids), whole, ~newer)
                 .order_by(row.url, row.position)
             ).scalars()
             return [_download(r) for r in rows]

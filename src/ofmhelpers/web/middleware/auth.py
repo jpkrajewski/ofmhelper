@@ -314,6 +314,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
             id=session["user_id"], email=session["email"], role=session["role"]
         )
 
+    @classmethod
+    def valid_user(cls, request: Request) -> User | None:
+        """The signed-in user when this session passes every check of the
+        gate (`_refused`); None otherwise. For a public path that acts for
+        the person (the account-link start): the gate never runs there, so a
+        cookie already ended by Logout, a password change, deactivation or
+        idle time would still be taken (audit 2026-11-18)."""
+        current = cls.session_user(request)
+        user = get_user(current.id) if current else None
+        return user if cls._refused(request, current, user) is None else None
+
     @staticmethod
     def view_as(request: Request, user: User) -> None:
         """From the next request on this admin's pages are `user`'s, read
