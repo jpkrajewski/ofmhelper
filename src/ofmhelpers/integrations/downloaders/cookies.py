@@ -54,12 +54,14 @@ def load_jar(cookies: str) -> MozillaCookieJar:
         jar = MozillaCookieJar()
         try:
             jar.load(path, ignore_discard=True, ignore_expires=True)
-        except (LoadError, OSError, UnicodeDecodeError) as exc:
+        except LoadError, OSError, UnicodeDecodeError:
             msg = (
                 "Not a cookies.txt file: export one in Netscape format "
                 '(it starts with "# Netscape HTTP Cookie File")'
             )
-            raise CookieFileError(msg) from exc
+            # `from None`: the parser's error quotes the bad line, which is
+            # a cookie (any site's) of the person's own file: never logged.
+            raise CookieFileError(msg) from None
     return jar
 
 

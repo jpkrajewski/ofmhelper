@@ -10,7 +10,8 @@ Apple's sign-in token endpoints (`signin/fake.py`), Oopsie and Bouncy
 (`links/fake.py`), Apify (`apify/fake.py`), Stacked (`stacked/fake.py`), Fanvue (`fanvue/fake.py`), RunningHub
 (`integrations/ai_providers/runninghub/fake.py`), Elyum (`integrations/ai_providers/elyum/fake.py`), APIYI
 (`integrations/ai_providers/apiyi/fake.py`),
-Telegram (`integrations/senders/telegram/fake.py`) -- and a
+Telegram (`integrations/senders/telegram/fake.py`), Pinterest
+(`integrations/pinterest/fake.py`) -- and a
 host without a fake is refused with a connection error: nothing reaches the
 internet. Higgsfield's API (httpx, its SDK) and Drive (googleapiclient)
 are switched in their own clients.
@@ -85,6 +86,7 @@ def _routes() -> Registry[FakeHandler]:
     from ofmhelpers.integrations.downloaders.savers_fake import routes as savers_routes
     from ofmhelpers.integrations.fanvue.fake import routes as fanvue_routes
     from ofmhelpers.integrations.instagram.fake import routes as instagram_routes
+    from ofmhelpers.integrations.pinterest.fake import routes as pinterest_routes
     from ofmhelpers.integrations.senders.telegram.fake import routes as telegram_routes
     from ofmhelpers.integrations.short_links.fake import routes as links_routes
     from ofmhelpers.integrations.signin.fake import routes as signin_routes
@@ -104,6 +106,7 @@ def _routes() -> Registry[FakeHandler]:
         *elyum_routes(),
         *apiyi_routes(),
         *telegram_routes(),
+        *pinterest_routes(),
     ]
     return Registry[FakeHandler](entries={r.host: r.handler for r in routes})
 

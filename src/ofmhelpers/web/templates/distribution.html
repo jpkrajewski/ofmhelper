@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{# A manager's view: is it working, pins today, link clicks; new accounts
+   by uploading their cookies. Nothing else to click. #}
+{% block title %}Distribution — Ascend Global LLC{% endblock %}
+{% block content %}
+{% set h = page.health %}
+{{ ui.page_header("Distribution") }}
+
+{% if page.error %}{{ ui.notice(page.error, kind="fail") }}{% endif %}
+{% for a in page.added %}
+{% if a.error %}
+{{ ui.notice(a.file ~ ": " ~ a.error, kind="fail") }}
+{% else %}
+{{ ui.notice("Added @" ~ a.account ~ " · " ~ a.queued ~ " files to pin", kind="ok") }}
+{% endif %}
+{% endfor %}
+
+{% call ui.notice(kind="ok" if h.ok else "warn") %}
+<strong>{{ h.headline }}</strong>{% if h.last_pin_at %} · last pin {{ h.last_pin_at|ago }}{% endif %}
+{% for p in h.problems %}<br>{{ p }}{% endfor %}
+{% endcall %}
+
+<div class="ds-stats">
+    {{ ui.stat("Pins today", page.pinned_today) }}
+    {{ ui.stat("Link clicks today", page.clicks_today.views, page.clicks_today.clicks ~ " went on to the page") }}
+    {{ ui.stat("Link clicks · 7 days", page.clicks_week.views, page.clicks_week.clicks ~ " went on to the page") }}
+    {{ ui.stat("Accounts working", page.working ~ " / " ~ page.accounts) }}
+</div>
+
+{% call ui.card("Add Pinterest accounts") %}
+<form class="ds-add" method="post" action="/distribution/accounts" enctype="multipart/form-data">
+    <input type="file" name="files" accept=".txt" multiple required aria-label="Pinterest cookies.txt files">
+    {{ ui.button("Add accounts", "primary", type="submit", icon="upload") }}
+</form>
+{% endcall %}
+{% endblock %}

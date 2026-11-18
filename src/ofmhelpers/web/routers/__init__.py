@@ -44,6 +44,7 @@ from ofmhelpers.web.routers import (
     auth,
     chatting,
     cookies,
+    distribution,
     home,
     jobs,
     legal,
@@ -116,6 +117,7 @@ ROUTERS = [
     edit.router,
     repurpose.router,
     trials.router,
+    distribution.router,
     # admin/
     admin_users.router,
     admin_applications.router,

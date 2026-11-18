@@ -2490,3 +2490,101 @@ class ThreadsSettings(BaseSettings):
     job_timeout_s: int = Field(
         default=1800, ge=60, validation_alias="OFM_THREADS_JOB_TIMEOUT_S"
     )
+
+
+class PinterestSettings(BaseSettings):
+    """integrations/pinterest: pinterest.com's own web calls (what its "Create
+    Pin" page sends), made with an account's logged-in cookies. No developer
+    app, no review: each account connects with its cookies.txt on
+    /distribution."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    base_url: str = Field(
+        default="https://www.pinterest.com", validation_alias="OFM_PINTEREST_BASE_URL"
+    )
+    # Sent as the browser the cookies were made in (a desktop Chrome).
+    user_agent: str = Field(
+        default=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+        ),
+        validation_alias="OFM_PINTEREST_USER_AGENT",
+    )
+    timeout_s: float = Field(
+        default=30, gt=0, validation_alias="OFM_PINTEREST_TIMEOUT_S"
+    )
+    # One file to Pinterest's upload storage (a reel is tens of MB).
+    upload_timeout_s: float = Field(
+        default=300, gt=0, validation_alias="OFM_PINTEREST_UPLOAD_TIMEOUT_S"
+    )
+    # Tries of one upload (the same signed slot) before it fails.
+    upload_tries: int = Field(
+        default=3, ge=1, validation_alias="OFM_PINTEREST_UPLOAD_TRIES"
+    )
+    # Pinterest processes an upload before a pin may use it: asked every
+    # `upload_poll_s`, given up after `upload_wait_s`.
+    upload_poll_s: float = Field(
+        default=3, gt=0, validation_alias="OFM_PINTEREST_UPLOAD_POLL_S"
+    )
+    upload_wait_s: float = Field(
+        default=600, gt=0, validation_alias="OFM_PINTEREST_UPLOAD_WAIT_S"
+    )
+
+
+class DistributionSettings(BaseSettings):
+    """/distribution: each account's POSTED reels and THREADS pictures go out
+    to its Pinterest by themselves, `pins_per_day` a day, evenly spread."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Owner 2026-11-18: 15. Forums say new accounts get throttled near it:
+    # a rate limit makes that account wait (`rate_limit_pause_s`).
+    pins_per_day: int = Field(
+        default=15, ge=1, le=100, validation_alias="OFM_DISTRIBUTION_PINS_PER_DAY"
+    )
+    # Share of pins that carry only "ig: <handle>" (no caption, no link).
+    handle_share: float = Field(
+        default=0.5, ge=0, le=1, validation_alias="OFM_DISTRIBUTION_HANDLE_SHARE"
+    )
+    # How often the sweep fills the queues and starts what is due.
+    check_interval_s: float = Field(
+        default=300, gt=0, validation_alias="OFM_DISTRIBUTION_CHECK_INTERVAL_S"
+    )
+    # Each gap between an account's pins is the slot (24 h / pins_per_day)
+    # times a random factor in 1 +- jitter; a new account's first pin is at a
+    # random point of its first slot, so accounts never post in step.
+    jitter: float = Field(
+        default=0.3, ge=0, lt=1, validation_alias="OFM_DISTRIBUTION_JITTER"
+    )
+    # Pinterest said "too many": the account waits this long (or what it said).
+    rate_limit_pause_s: float = Field(
+        default=3600, gt=0, validation_alias="OFM_DISTRIBUTION_RATE_LIMIT_PAUSE_S"
+    )
+    # This many pins of one account failing in a row (not rate limits, not a
+    # logout): the account waits `rate_limit_pause_s` (a hold on the account,
+    # not bad files) instead of using up its queue's tries.
+    failures_before_pause: int = Field(
+        default=3, ge=1, validation_alias="OFM_DISTRIBUTION_FAILURES_BEFORE_PAUSE"
+    )
+    # A failed pin is tried again, up to this many tries in all.
+    max_attempts: int = Field(
+        default=3, ge=1, validation_alias="OFM_DISTRIBUTION_MAX_ATTEMPTS"
+    )
+    # One pin's job: the Drive download, the uploads, Pinterest's processing.
+    job_timeout_s: int = Field(
+        default=1800, ge=60, validation_alias="OFM_DISTRIBUTION_JOB_TIMEOUT_S"
+    )
+    # One ffprobe or the cover frame of a 4K reel.
+    ffmpeg_timeout_s: int = Field(
+        default=120, ge=1, validation_alias="OFM_DISTRIBUTION_FFMPEG_TIMEOUT_S"
+    )
+    # Pins go out by themselves on production only (unset; true/false forces
+    # it): dev runs on a copy of prod's channels and would pin everything a
+    # second time. Queues fill and "Pin now" works anywhere.
+    scheduled_pins: bool | None = Field(
+        default=None, validation_alias="OFM_DISTRIBUTION_SCHEDULED"
+    )
+
+    def scheduled(self, production: bool) -> bool:
+        return production if self.scheduled_pins is None else self.scheduled_pins

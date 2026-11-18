@@ -1,0 +1,15 @@
+{
+  "key": "jane",
+  "creator": "jane",
+  "title": "Jane Example",
+  "board": "Jane Example",
+  "target": "stacked",
+  "destination": "https://www.stacked.com/@janeexample/membership",
+  "domain": "go.example.com",
+  "slug": "jane",
+  "instagram": ["jane.example"],
+  "descriptions": [
+    "Jane Example - fitness, lifestyle and everyday moments. More at the link.",
+    "Morning run done before the city wakes up. Daily updates at the link."
+  ]
+}

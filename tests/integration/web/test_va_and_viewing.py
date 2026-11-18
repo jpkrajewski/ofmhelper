@@ -48,6 +48,7 @@ VA_REFUSED = [
     "/uniqify",
     "/trials",
     "/threads",
+    "/distribution",
     "/self-links",
     "/repurpose",
     "/cookies",

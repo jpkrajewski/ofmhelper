@@ -301,6 +301,26 @@ def _card(scope: int | None, viewer: int, login_id: int) -> DriveCard:
     return card
 
 
+# What a reel says when the job holding it is gone (a deploy cut it off and
+# it could not start over): its batch is not in Drive, it is selected again.
+STOPPED = "Stopped by an update: upload again"
+
+
+def _released(uid: int, state: FolderState) -> None:
+    """Reels still held by a job that no longer runs (failed, done, or gone)
+    let go: an upload's go back to how they were before the click, selected,
+    saying why (prod 2026-11-18: a deploy cut an upload of 6, recovery failed
+    it, the 6 stayed "uploading" with their selection gone and no reason)."""
+    for reel in state.reels:
+        if not reel.job_id or _at_work(uid, reel.job_id):
+            continue
+        if reel.status == ReelStatus.UPLOADING:
+            job = get_job(reel.job_id, str(uid))
+            reel.upload_failed(job.error if job and job.error else STOPPED)
+        else:
+            reel.job_id = None
+
+
 def _synced(card: DriveCard, state: FolderState) -> None:
     """`state` matched to the card's POSTED videos: new ones added, ones
     gone (or never videos) dropped unless already made."""
@@ -319,9 +339,14 @@ def _sync_state(
     card = _card(scope, viewer, login_id)
     state = load(viewer, login_id)
     before = state.model_dump_json()
-    _synced(card, state)
+
+    def fixed(s: FolderState) -> None:
+        _synced(card, s)
+        _released(viewer, s)
+
+    fixed(state)
     if state.model_dump_json() != before:
-        state = change(viewer, login_id, lambda s: _synced(card, s))
+        state = change(viewer, login_id, fixed)
     return card, state
 
 
@@ -420,6 +445,13 @@ class TrialsRun(BaseModel):
     refresh_token: str = ""
 
 
+class UploadArgs(BaseModel):
+    """What an Upload ran with (its row's `args`)."""
+
+    keys: list[str]
+    account_folder_id: str
+
+
 def replay_run(job: Job) -> TrialsRun | None:
     """What a trials job ran with, from its row (the Drive token read again
     for its person); None for one from before rows kept their `args`."""
@@ -438,30 +470,53 @@ def replay_run(job: Job) -> TrialsRun | None:
 
 
 def restart(job: Job) -> bool:
-    """A Generate cut off by a restart, queued again (recovery,
-    features/jobs/recovery.py): a deploy gives workers 120 s and a Generate
-    runs for hours (prod 2026-11-07: one cut at 52 min, "Interrupted by a
-    restart"). Copies already made are left alone, so it goes on where it
-    stopped. False (failed as interrupted): not a Generate (one reel's
-    remake or captions: it does not know its keys), or cut off too often."""
+    """A Generate or an Upload cut off by a restart, queued again (recovery,
+    features/jobs/recovery.py): a deploy gives workers 120 s, a Generate
+    runs for hours (prod 2026-11-07: one cut at 52 min) and an Upload that
+    makes deleted copies again for many minutes (prod 2026-11-18: one of 6
+    cut at 23 min). A Generate leaves copies already made alone; an Upload
+    goes up all or nothing, the old ones in TRIALS trashed only after, so
+    both go on as if never stopped. False (failed as interrupted, its reels
+    let go on the next page open: `_released`): one reel's remake or
+    captions (it does not know its keys), or cut off too often."""
     restarts = int(job.params.get("restarts", 0))
+    label = job.params.get("label")
     if (
-        job.params.get("label") != GENERATE
+        label not in (GENERATE, UPLOAD)
         or job.actor is None
         or restarts >= _RESTARTS_MAX
     ):
+        return False
+    upload = (
+        UploadArgs.model_validate(job.params["args"])
+        if label == UPLOAD and isinstance(job.params.get("args"), dict)
+        else None
+    )
+    if label == UPLOAD and upload is None:
         return False
     uid, login_id = int(job.actor), int(job.params["login"])
     # Counted first: a restart that dies on the way still counts.
     merge_params(job.id, {"restarts": restarts + 1})
     reopen_job(job.id)
-    claim = _Claim(uid, login_id, GENERATE)
+    claim = _Claim(uid, login_id, str(label))
     claim.job_id = job.id
+    if upload is None:
+        claim.launch(
+            JobQueue(name=QueueName.MEDIA).put,
+            tasks.make_trials,
+            len(load(uid, login_id).reels),
+            refresh_token=refresh_token(uid) or "",
+        )
+        return True
+    stored = {r.key for r in load(uid, login_id).reels if r.stored}
+    remade = set(upload.keys) - stored
     claim.launch(
-        JobQueue(name=QueueName.MEDIA).put,
-        tasks.make_trials,
-        len(load(uid, login_id).reels),
+        JobQueue(name=QueueName.MEDIA if remade else QueueName.DEFAULT).put,
+        tasks.upload_trials,
+        len(upload.keys),
         refresh_token=refresh_token(uid) or "",
+        account_folder_id=upload.account_folder_id,
+        keys=upload.keys,
     )
     return True
 

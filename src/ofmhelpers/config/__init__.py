@@ -40,6 +40,7 @@ from ofmhelpers.config.settings import (
     CloneAiCheckSettings,
     CloneLinksSettings,
     CloneLongSettings,
+    DistributionSettings,
     DownloadersSettings,
     ElyumSettings,
     EventsSettings,
@@ -54,6 +55,7 @@ from ofmhelpers.config.settings import (
     LLMSettings,
     LoggingSettings,
     PicturesSettings,
+    PinterestSettings,
     ReportsSettings,
     RepurposeSettings,
     RunningHubSettings,
@@ -160,6 +162,14 @@ class Settings:
     @property
     def threads(self) -> ThreadsSettings:
         return self._group(ThreadsSettings)
+
+    @property
+    def pinterest(self) -> PinterestSettings:
+        return self._group(PinterestSettings)
+
+    @property
+    def distribution(self) -> DistributionSettings:
+        return self._group(DistributionSettings)
 
     @property
     def downloaders(self) -> DownloadersSettings:

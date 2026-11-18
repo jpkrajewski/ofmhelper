@@ -74,6 +74,14 @@ Green CI opens or updates "Promote dev to main"
 (`gh pr list --base main --head dev`). Merge it with a merge commit:
 `gh pr merge <n> --merge`. This is the production deploy.
 
+Before the merge, look at what runs on prod: the deploy kills every running
+job (120 s grace). `running_jobs()` in the prod app container (read-only):
+a job a person waits on (trials Generate/Upload, threads, edit, clone) =
+wait for it to end, or tell the owner which and how long, and merge on
+their word. Prod 2026-11-18: a deploy cut a trials Upload of 6 at 23 min,
+the 6 never reached Drive and lost their selection (owner: "shit is
+missing").
+
 ## 7. Watch the deploy
 CI on main (it reuses the dev run when the tree is identical), then the Deploy
 workflow: `gh run watch <id> --exit-status` for each. Deploy red: its

@@ -1,0 +1,199 @@
+"""The distribution sweep (`features/jobs/sweeps.py`, every
+`OFM_DISTRIBUTION_CHECK_INTERVAL_S`):
+1. a post left `publishing` past a job's time (its worker was killed) is
+   failed, so it is tried again;
+2. every account that posts (cookies, not paused, not stopped) gets every
+   model's new files of its owner queued (`sources.py`, each owner's
+   /drive board read once per round): accounts belong to no model;
+3. on production only (`OFM_DISTRIBUTION_SCHEDULED`), each account whose
+   `next_at` passed and that is not rate limited (`resume_at`) starts its
+   next pin; its next one is due a slot later (24 h / pins_per_day) times
+   a random factor in 1 +- jitter. A new account's first pin is at a random
+   point of its first slot: accounts never post in step.
+One account's failure (Drive, Pinterest) is logged and the others go on.
+Each round logs one line: accounts, started, waiting, rate limited."""
+
+import random
+import time
+from itertools import groupby
+
+from ofmhelpers.cache.queue import active_job_ids
+from ofmhelpers.config import settings
+from ofmhelpers.db.stores import distribution as store
+from ofmhelpers.features.distribution.links import model_link
+from ofmhelpers.features.distribution.presets import preset_of, presets_of
+from ofmhelpers.features.distribution.publish import TASK, publish_post
+from ofmhelpers.features.distribution.sources import Sources
+from ofmhelpers.features.jobs.runner import start_job
+from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.log import get_logger
+lazy from ofmhelpers.schemas.distribution import Channel, ModelPreset
+
+logger = get_logger(__name__)
+
+CUT_OFF = "Cut off (the server restarted while it was being pinned); tried again"
+_DAY_S = 86400
+_HANDLE_PREFIXES = ("ig:", "insta:")
+
+
+def slot_s() -> float:
+    return _DAY_S / settings.distribution.pins_per_day
+
+
+def run_round() -> None:
+    s = settings.distribution
+    alive = active_job_ids()
+    if alive is not None:
+        cut = store.repository().cut_off(s.job_timeout_s + 60, CUT_OFF, alive)
+        if cut:
+            logger.warning("distribution: %s pin(s) cut off by a restart, retried", cut)
+    channels = sorted(store.repository().running(), key=lambda c: c.user_id)
+    for user_id, mine in groupby(channels, key=lambda c: c.user_id):
+        _fill(Sources(user_id=user_id), list(mine))
+    if not s.scheduled(settings.infra.production):
+        return
+    started = limited = 0
+    for channel in channels:
+        try:
+            state = _schedule(channel)
+        except Exception:
+            logger.exception("distribution: scheduling @%s", channel.account_name)
+            continue
+        started += state == "started"
+        limited += state == "limited"
+    logger.info(
+        "distribution round: %s account(s), %s pin(s) started, %s rate limited",
+        len(channels),
+        started,
+        limited,
+    )
+
+
+def _schedule(channel: Channel) -> str:
+    """One account's turn this round: "started", "limited", or "" (not
+    due, stopped meanwhile, or nothing left: its next turn is a slot on)."""
+    now = time.time()
+    fresh = store.repository().channel(channel.id)
+    if fresh is None or fresh.error or fresh.paused:
+        return ""
+    if fresh.resume_at is not None and fresh.resume_at > now:
+        return "limited"
+    if not _due(fresh, now):
+        return ""
+    store.repository().set_next(fresh.id, _after(now))
+    return "started" if start_next(fresh) is not None else ""
+
+
+def fill_many(user_id: int, channels: list[Channel]) -> int:
+    """These accounts' queues filled now (they just connected); how many
+    new in all."""
+    return _fill(Sources(user_id=user_id), channels)
+
+
+def _fill(sources: Sources, channels: list[Channel]) -> int:
+    """Every model's new files of the owner queued for each of their
+    accounts; how many in all. A Drive or preset failure is logged and the
+    next round tries again; it never stops another owner's round."""
+    try:
+        cards = sources.cards()
+        files = [
+            f for m in presets_of(sources.user_id) for f in sources.of_model(m, cards)
+        ]
+    except Exception:
+        logger.exception("distribution: content of user %s", sources.user_id)
+        return 0
+    added = 0
+    for channel in channels:
+        try:
+            new = store.repository().add_posts(channel.id, files)
+        except Exception:
+            logger.exception("distribution: queueing for @%s", channel.account_name)
+            continue
+        if new:
+            logger.info(
+                "distribution: @%s queued %s new file(s)", channel.account_name, new
+            )
+        added += new
+    return added
+
+
+def _due(channel: Channel, now: float) -> bool:
+    """Its slot came and nothing of it is being pinned; a new account gets
+    its first slot at a random point of the next one instead."""
+    repo = store.repository()
+    if channel.next_at is None:
+        first = now + random.uniform(0, slot_s())  # noqa: S311 -- spacing, not a secret
+        repo.set_next(channel.id, first)
+        logger.info(
+            "distribution: @%s first pin in %.0f min",
+            channel.account_name,
+            (first - now) / 60,
+        )
+        return False
+    return now >= channel.next_at and not repo.publishing(channel.id)
+
+
+def _after(now: float) -> float:
+    j = settings.distribution.jitter
+    return now + slot_s() * random.uniform(1 - j, 1 + j)  # noqa: S311 -- spacing, not a secret
+
+
+def _what(model: ModelPreset, link: str) -> tuple[str, str, str]:
+    """A pin's title, caption and link: `handle_share` of the time (owner
+    2026-11-18: "50/50") only "ig: <handle>" / "insta: <handle>" with no
+    caption and no link (people look the account up), else the model's
+    title, a caption drawn from its preset and the account's self link."""
+    pick = random.random
+    if model.instagram and pick() < settings.distribution.handle_share:
+        prefix = random.choice(_HANDLE_PREFIXES)  # noqa: S311 -- variety, not a secret
+        return f"{prefix} {random.choice(model.instagram)}", "", ""  # noqa: S311 -- variety, not a secret
+    return model.title, random.choice(model.descriptions), link  # noqa: S311 -- variety, not a secret
+
+
+def start_next(channel: Channel) -> str | None:
+    """Its next post claimed with a caption drawn from its model, and its
+    publish job started; the job's id, or None when nothing is left."""
+    repo = store.repository()
+    post = repo.next_post(channel, settings.distribution.max_attempts)
+    if post is None:
+        logger.info("distribution: @%s has nothing left to pin", channel.account_name)
+        return None
+    model = preset_of(channel.user_id, post.preset)
+    if model is None:
+        logger.error(
+            "distribution: %s's model %r has no preset: not pinned",
+            post.name,
+            post.preset,
+        )
+        return None
+    try:
+        link = model_link(channel.user_id, model)
+    except RefusedError:
+        logger.exception("distribution: %s has no link; pinning it without", model.key)
+        link = ""
+    title, caption, link = _what(model, link)
+    if not repo.claim(post.id, title, caption, link):
+        return None
+    try:
+        job_id = start_job(
+            TASK,
+            {"batch": str(channel.id), "post_id": post.id, "file": post.name},
+            publish_post,
+            {"post_id": post.id},
+            actor=str(channel.user_id),
+            job_timeout=settings.distribution.job_timeout_s,
+        )
+    except Exception as exc:
+        repo.failed(post.id, f"Could not be queued: {exc}")
+        raise
+    repo.set_job(post.id, job_id)
+    logger.info(
+        "distribution: @%s pinning %s %s of %s as %r (job %s)",
+        channel.account_name,
+        post.kind,
+        post.name,
+        model.key,
+        title,
+        job_id,
+    )
+    return job_id

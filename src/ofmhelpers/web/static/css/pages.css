@@ -1967,3 +1967,8 @@ a.ph-login-user:hover { text-decoration: underline; }
 
 /* /vas: the days table is its own section under the money tables. */
 .vas-days-title { margin-top: var(--gap-section); }
+
+/* /distribution: is it working, the numbers, the upload. */
+.ds-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--gap-grid); }
+.ds-add { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); }
+.ds-add input[type="file"] { flex: 1 1 16rem; min-width: 0; }

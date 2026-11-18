@@ -1172,3 +1172,125 @@ class UserEventTargetRow(Timestamps, Authored, Base):
     )
     sender: Mapped[str] = mapped_column(Text, primary_key=True)
     target: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class DistributionChannelRow(Timestamps, Authored, Base):
+    """One account on another site (`platform`: "pinterest") that
+    /distribution posts to (alembic 9909cfa699f9). It belongs to no model:
+    every model's content of its owner is spread over all their accounts.
+    `cookies` its logged-in cookies.txt (encrypted, masked in `audit_log`);
+    `next_at` when its next pin is due (jittered), `resume_at` set while the
+    site rate-limits it; `error` why it stopped (dead cookies); `paused_at`
+    set = nothing goes out. The middle three are the sweep's: quiet in the
+    stamps."""
+
+    __tablename__ = "distribution_channels"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    account_name: Mapped[str] = mapped_column(Text, nullable=False)
+    # Deferred: the page lists channels without decrypting anything.
+    cookies: Mapped[str] = mapped_column(
+        EncryptedText, nullable=False, default="", deferred=True
+    )
+    paused_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resume_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When its login cookie expires (renewed cookies are saved after every
+    # pin): the page warns a week before. Quiet in the stamps.
+    cookies_expire_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "platform",
+            "account_name",
+            name="uq_distribution_channels_account",
+        ),
+    )
+
+
+class DistributionPresetRow(Timestamps, Authored, Base):
+    """One model's preset, private to its owner (alembic 9909cfa699f9): a
+    `schemas.distribution.ModelPreset` dump, read back whole. Loaded with
+    `python -m ofmhelpers.features.distribution preset <file> --owner <id>`;
+    the files themselves never go into the (public) repo."""
+
+    __tablename__ = "distribution_presets"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    # The model's one self link, made the first time one of its files is
+    # pinned.
+    link_id: Mapped[int | None] = mapped_column(
+        ForeignKey("short_links.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "key", name="uq_distribution_presets_owner_key"),
+    )
+
+
+class DistributionPostRow(Base):
+    """One Drive file queued for one channel (alembic 9909cfa699f9): never
+    twice (unique per channel and file). `status` queued -> publishing ->
+    published (`remote_id` = the pin's id) or failed (`error`, tried again
+    up to `max_attempts`); `job_id` = its latest publish job."""
+
+    __tablename__ = "distribution_posts"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    channel_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("distribution_channels.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    file_id: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    # The model the file is of (its preset key).
+    preset: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    job_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    remote_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What it was pinned with, drawn when claimed (`PostSource` docs).
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    link: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id", "file_id", name="uq_distribution_posts_channel_file"
+        ),
+        Index("ix_distribution_posts_channel_status", "channel_id", "status"),
+        # Which files a model's accounts already pinned (the pick of the next).
+        Index("ix_distribution_posts_file_status", "file_id", "status"),
+    )

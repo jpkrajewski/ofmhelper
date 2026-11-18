@@ -116,9 +116,24 @@ def test_a_folder_knows_its_parent(drive, parent):
     assert drive.folder(made.id).parents == [parent]
 
 
+def _never_existed(call) -> FolderGoneError:
+    """What `call(id)` raises for an id no item ever had. Drive calls some
+    made-up ids malformed (400, `_missing_id`; live gate 2026-11-18): another
+    is drawn, as the listing test does."""
+    for _ in range(5):
+        try:
+            call(_missing_id())
+        except FolderGoneError as gone:
+            return gone
+        except DriveError as exc:
+            if "HttpError 400" not in str(exc):
+                raise
+    msg = "five made-up ids in a row answered 400"
+    raise AssertionError(msg)
+
+
 def test_a_missing_folder_is_gone(drive, parent):
-    with pytest.raises(FolderGoneError):
-        drive.folder(_missing_id())
+    assert isinstance(_never_existed(drive.folder), FolderGoneError)
 
 
 def test_listing_a_missing_folder_shows_nothing(drive, parent):
@@ -174,8 +189,7 @@ def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
     assert child.id not in [c.id for c in drive.children(parent)]
     with pytest.raises(FolderGoneError):
         drive.folder(child.id)
-    with pytest.raises(FolderGoneError):
-        drive.trash_file(_missing_id())
+    assert isinstance(_never_existed(drive.trash_file), FolderGoneError)
 
 
 def test_find_file_is_none_for_a_name_not_there_and_never_a_folder(drive, parent):

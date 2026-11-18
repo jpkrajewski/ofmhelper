@@ -34,6 +34,7 @@ PAGES = [
     "/uniqify",
     "/trials",
     "/threads",
+    "/distribution",
     "/self-links",
     "/account",
     "/cookies",
