@@ -33,6 +33,7 @@ PAGES = [
     "/viral",
     "/uniqify",
     "/trials",
+    "/threads",
     "/self-links",
     "/account",
     "/cookies",

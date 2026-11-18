@@ -151,6 +151,13 @@ NAV = (
         area=Area.TRIALS,
     ),
     NavItem(
+        href="/threads",
+        label="Threads",
+        icon="image",
+        place=NavPlace.MORE,
+        area=Area.THREADS,
+    ),
+    NavItem(
         href="/self-links",
         label="Self links",
         icon="chart",

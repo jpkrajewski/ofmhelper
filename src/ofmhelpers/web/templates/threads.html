@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{# /drive's phone cards: the phone opens the account's POSTED reels, one
+   click makes pictures for Threads of a reel. #}
+{% block title %}Threads — Ascend Global LLC{% endblock %}
+{% block content %}
+{{ ui.page_header("Threads") }}
+
+{% if board.problem %}
+{% call ui.notice(kind="warn") %}
+    <span>{{ board.problem }}</span>
+    {% if board.connect_drive %}{{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/threads") }}{% endif %}
+{% endcall %}
+{% endif %}
+
+{% if board.cards %}
+<div class="ph-grid" data-layout="grid">
+    {% for c in board.cards %}
+    {% set t = c.target %}
+    {% set posted = c.scan.posted|selectattr("kind", "equalto", "video")|list %}
+    <article class="ph-card dr-card tr-card">
+        <a class="ph-media" href="/threads/{{ t.login_id }}" aria-label="Threads of @{{ t.handle }}">
+            <img src="{{ t.device.drawing_url }}" alt="{{ t.device.specs }}" loading="lazy">
+        </a>
+        <div class="ph-body dr-body">
+            <div class="ph-title-row">
+                <div class="ph-title">
+                    <h2>{{ t.device.label }}</h2>
+                    <p class="ph-specs">{{ t.device.specs }}{% if t.device.owner %} · {{ t.device.owner }}{% endif %}</p>
+                </div>
+            </div>
+            <p class="dr-account">@{{ t.handle }}{% if t.followers_label %} <span class="dr-followers">· {{ t.followers_label }}</span>{% endif %}</p>
+            {% if c.error %}
+            <p class="dr-note dr-error">{{ c.error }}</p>
+            {% elif not c.account_folder_id %}
+            <p class="dr-note">No Drive folder yet</p>
+            {% else %}
+            <p class="dr-count"><span>Posted: <strong>{{ posted|length }}</strong></span></p>
+            {{ ui.button("Pick a reel", "primary", href="/threads/" ~ t.login_id, icon="image") }}
+            {% endif %}
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% elif not board.problem %}
+{% call ui.empty() %}No Instagram logins yet. <a href="/phones">Add one on Phones</a>{% endcall %}
+{% endif %}
+{% endblock %}

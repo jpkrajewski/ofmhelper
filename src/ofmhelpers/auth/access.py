@@ -48,6 +48,7 @@ class Area(StrEnum):
     UNIQIFY = "uniqify"
     REPURPOSE = "repurpose"
     TRIALS = "trials"
+    THREADS = "threads"
     COOKIES = "cookies"
     VAS = "vas"  # what each VA did and spent, per day
     # Admins.
@@ -110,6 +111,7 @@ USER = (
     Area.UNIQIFY,
     Area.REPURPOSE,
     Area.TRIALS,
+    Area.THREADS,
     Area.COOKIES,
     Area.VAS,
 )

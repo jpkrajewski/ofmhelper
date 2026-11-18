@@ -63,6 +63,7 @@ from ofmhelpers.config.settings import (
     StackedSettings,
     TelegramSettings,
     TelemetrySettings,
+    ThreadsSettings,
     TrialsSettings,
     VaultSettings,
     ViralSettings,
@@ -155,6 +156,10 @@ class Settings:
     @property
     def pictures(self) -> PicturesSettings:
         return self._group(PicturesSettings)
+
+    @property
+    def threads(self) -> ThreadsSettings:
+        return self._group(ThreadsSettings)
 
     @property
     def downloaders(self) -> DownloadersSettings:

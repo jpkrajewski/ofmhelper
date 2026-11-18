@@ -4,10 +4,24 @@ stores."""
 
 import mimetypes
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+class AccountFolder(StrEnum):
+    """The folders inside an account's Drive folder: POSTED is where people
+    move a posted video (its name is `settings.gdrive.posted_folder_name`,
+    this by default), TRIALS holds /trials' copies, THREADS /threads'
+    picture sets."""
+
+    POSTED = "POSTED"
+    TRIALS = "TRIALS"
+    THREADS = "THREADS"
+
+
 _FOLDER_URL = "https://drive.google.com/drive/folders/{}"
 
 

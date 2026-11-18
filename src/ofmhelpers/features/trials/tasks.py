@@ -20,7 +20,11 @@ import logfire
 from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.cache import JobQueue, QueueName
-from ofmhelpers.features.drive.folders import ReviewPlace, review_target
+from ofmhelpers.features.drive.folders import (
+    ReviewPlace,
+    account_subfolder,
+    review_target,
+)
 from ofmhelpers.features.jobs.runner import Requeued
 from ofmhelpers.features.previews.render import PREVIEW_ERRORS
 from ofmhelpers.features.trials import media
@@ -46,6 +50,7 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import (
     run as pipeline_run,
 )
+from ofmhelpers.schemas.gdrive import AccountFolder
 lazy from ofmhelpers.media.repurpose.repurpose import RunResult
 
 logger = get_logger(__name__)
@@ -396,20 +401,10 @@ class Folder(BaseModel, frozen=True):
         return Captioned(captions=len(choices))
 
     def _trials_folder(self, place: ReviewPlace, account_folder_id: str) -> str:
-        """TRIALS next to POSTED in her folder. Dev reading the live folders
-        (`review_target`'s root is its DEV root, her folder is not in it): in a
-        folder of the same name in the DEV root instead, so dev tests the whole
-        loop and never writes a live one. Found again every run: the scoped
-        Drive may write only into folders it found or made itself."""
-        drive, root = place.drive, place.folder_id
+        """TRIALS in her folder (`account_subfolder`: dev's twin of it while
+        dev reads the live folders)."""
         with locked(self.user_id, self.login_id, "trials-folder", _FOLDER_LOCK_S):
-            account = drive.folder(account_folder_id)
-            parent = (
-                account.id
-                if root in account.parents
-                else drive.ensure_folder(root, account.name).id
-            )
-            return drive.ensure_folder(parent, "TRIALS").id
+            return account_subfolder(place, account_folder_id, AccountFolder.TRIALS)
 
     def _open_trials(self, account_folder_id: str) -> _Trials | None:
         """The owner's Drive, TRIALS' id (remembered in the state) and what is

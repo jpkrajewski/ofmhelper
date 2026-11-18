@@ -1,0 +1,29 @@
+{
+  "label": "Threads: a reel's stills as an iPhone 16 Pro Max's front-camera photos, each a different picture (owner 2026-11-17: 10 a reel; the OOPSIE spoofer's crop + tone + grain + hash check)",
+  "device": "iphone16_usa",
+  "pictures": 10,
+  "lens": {
+    "label": "front camera, 12 MP at 16:9 (2268x4032); model string as the video profile iphone16_4k, 35 mm figure a photo's (the video's 20 is stabilisation-cropped)",
+    "make": "Apple",
+    "model": "iPhone 16 Pro Max front camera 2.71mm f/1.9",
+    "focal_length_mm": 2.71,
+    "focal_length_35mm": 23,
+    "f_number": 1.9,
+    "short_side": 2268,
+    "exposures": ["1/30", "1/40", "1/50", "1/60", "1/80", "1/120"],
+    "iso": [64, 400],
+    "quality": 92
+  },
+  "stills": {
+    "candidates": 3,
+    "slice": [0.05, 0.95],
+    "hash_side": 256,
+    "gap_s": [2.0, 9.0]
+  },
+  "retouch": {
+    "crops": [0.04, 0.05, 0.06, 0.07, 0.08, 0.1],
+    "side": [0.5, 1.0],
+    "tone": [-0.03, 0.03],
+    "grain": 2.0
+  }
+}
