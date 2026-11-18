@@ -9,9 +9,11 @@ so they ask the chat provider first (Groq, 1,000 a day free) and only then
 the video chain -- Gemini's free tier is 20 requests a day per model,
 shared with /clone-links and prod (llm/CLAUDE.md)."""
 
+import re
+from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, TypeAdapter, field_validator
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.trials import media
@@ -39,6 +41,23 @@ Rules for each: at most 7 words; lower case; funny, teasing, scroll-stopping;
 the voice of the person in the reel, never a commentator; no hashtags, no
 emojis, no quotes. Each a different idea, not the same joke reworded."""
 
+# The prompt asks for teasing; what comes back is checked word by word, and a
+# caption with a crude word is dropped (owner 2026-11-17: "my dick is out bro"
+# and the like were on prod copies; "check for nsfw word after generation").
+_WORD = re.compile(r"[a-z]+")
+
+
+@lru_cache(maxsize=1)
+def blocked_words() -> frozenset[str]:
+    """Whole words no caption may hold (`blocked_words.json`, lower case)."""
+    raw = Path(__file__).with_name("blocked_words.json").read_text(encoding="utf-8")
+    return TypeAdapter(frozenset[str]).validate_json(raw)
+
+
+def is_safe(caption: str) -> bool:
+    """No blocked word in it, matched as a whole word: "assault" stays."""
+    return blocked_words().isdisjoint(_WORD.findall(caption.casefold()))
+
 
 class ReelNotes(BaseModel):
     transcript: str = ""
@@ -46,8 +65,9 @@ class ReelNotes(BaseModel):
 
 
 class Captions(BaseModel):
-    """The choices, each one clean line that fits the bar, none twice; the
-    first `CHOICES`. None at all is the wrong answer: the next model is asked."""
+    """The choices, each one clean line that fits the bar, none twice, none
+    with a blocked word; the first `CHOICES`. None at all is the wrong
+    answer: the next model is asked."""
 
     captions: list[str]
 
@@ -55,7 +75,11 @@ class Captions(BaseModel):
     @classmethod
     def _clean(cls, found: list[str]) -> list[str]:
         cleaned = (" ".join(text.split()).strip('"').strip() for text in found)
-        unique = {text.casefold(): text[:CAPTION_MAX] for text in cleaned if text}
+        unique = {
+            text.casefold(): text[:CAPTION_MAX]
+            for text in cleaned
+            if text and is_safe(text)
+        }
         if not unique:
             msg = "no caption"
             raise ValueError(msg)

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% import "components/ui.html" as ui %}
+{# One login's POSTED reels, newest first: each one's pictures for Threads
+   (made, being made, failed) or a button that makes them. While one is
+   being made the page reloads itself (threads.js, `data-refresh`). #}
+{% block title %}Threads — @{{ folder.card.target.handle }} — Ascend Global LLC{% endblock %}
+{% block content %}
+{% set t = folder.card.target %}
+{{ ui.back_link("/threads", "Threads") }}
+{{ ui.page_header("@" ~ t.handle, t.device.label ~ (" · " ~ t.device.owner if t.device.owner else "")) }}
+
+{% if not folder.connected %}
+{% call ui.notice(kind="warn") %}
+    <span>Connect Google Drive to make pictures</span>
+    {{ ui.button("Connect Google Drive", href="/auth/google/start?link=1&next=/threads/" ~ t.login_id) }}
+{% endcall %}
+{% endif %}
+
+{% if folder.reels %}
+<div class="tr-grid"{% if folder.making %} data-refresh{% endif %}>
+    {% for r in folder.reels %}
+    {% set base = "/threads/" ~ t.login_id ~ "/reels/" ~ r.reel.id ~ "/pictures" %}
+    {% call ui.card(hook="tr-reel") %}
+        {% set made = r.made %}
+        {% if made %}
+        <div class="th-pictures">
+            {% for name in made.names %}
+            <a href="{{ base }}/{{ name }}" target="_blank" rel="noopener"><img src="{{ base }}/{{ name }}" alt="{{ name }}" loading="lazy"></a>
+            {% endfor %}
+        </div>
+        {% elif r.making %}
+        <div class="result-file tr-pending"><span class="spinner"></span> {{ "in queue · " ~ r.ahead ~ " ahead" if r.ahead else "making pictures…" }}</div>
+        {% else %}
+        <img class="tr-video" src="/drive/thumb/{{ t.login_id }}/{{ r.reel.id }}" alt="" loading="lazy">
+        {% endif %}
+        <p class="th-name" title="{{ r.reel.name }}">{{ r.reel.name }}</p>
+        {% if r.failed %}{{ ui.notice("Could not make the pictures", kind="fail") }}{% endif %}
+        <div class="th-actions">
+            {% if made %}
+            {{ ui.button("Open in Drive", "primary", href=made.folder_url, icon="folder", attrs={"target": "_blank", "rel": "noopener"}) }}
+            {% if folder.connected %}
+            <form method="post" action="{{ base }}">
+                {{ ui.button("Regenerate", icon="refresh", type="submit") }}
+            </form>
+            {% endif %}
+            {% elif not r.making and folder.connected %}
+            <form method="post" action="{{ base }}">
+                {{ ui.button("Try again" if r.failed else "Make pictures", "primary", icon="image", type="submit") }}
+            </form>
+            {% endif %}
+        </div>
+    {% endcall %}
+    {% endfor %}
+</div>
+{% else %}
+{{ ui.empty("No reels in POSTED yet") }}
+{% endif %}
+
+<script src="{{ static_url('js/threads.js') }}"></script>
+{% endblock %}

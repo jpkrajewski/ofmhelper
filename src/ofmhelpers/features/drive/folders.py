@@ -101,6 +101,7 @@ from ofmhelpers.schemas import (
 from ofmhelpers.schemas.drive import UploadedToday
 from ofmhelpers.telemetry import in_this_trace
 lazy from ofmhelpers.schemas.drive import StoredFolders
+lazy from ofmhelpers.schemas.gdrive import AccountFolder
 
 logger = get_logger(__name__)
 
@@ -282,6 +283,26 @@ def review_target(refresh_token: str, user_id: int) -> ReviewPlace:
     # Drive lists newest first: the oldest is the one people have been using.
     root = named[-1].id if named else raw.create_folder("root", name).id
     return ReviewPlace(drive=ScopedDrive(raw, root), folder_id=root)
+
+
+def account_subfolder(
+    place: ReviewPlace, account_folder_id: str, name: AccountFolder
+) -> str:
+    """The id of folder `name` in an account's folder (found or made). Dev
+    reading the live folders (`read_live_mode`, `place`'s root its DEV
+    root): in a folder of the account's name in the DEV root instead, so dev
+    tests the whole loop and never writes a live one; found again every run,
+    as the scoped Drive may write only into folders it found or made itself.
+    Anywhere else always the account's own folder: decided by the mode, not
+    by where the folder sits (review 2026-11-18: a moved account folder or a
+    remade root sent the files into a copy of the account folder, silently).
+    Raises `DriveError`."""
+    drive = place.drive
+    if not read_live_mode():
+        return drive.ensure_folder(account_folder_id, name).id
+    account = drive.folder(account_folder_id)
+    twin = drive.ensure_folder(place.folder_id, account.name).id
+    return drive.ensure_folder(twin, name).id
 
 
 @contextmanager

@@ -37,6 +37,7 @@ from pydantic_settings import (
 )
 
 from ofmhelpers.config.types import GeoPoint, ImageLimits, Place, StackedKey
+from ofmhelpers.schemas.gdrive import AccountFolder
 from ofmhelpers.utils.registry import Registry
 
 _SCAN_TIMES_MSG = "OFM_ACCOUNTS_SCAN_TIMES must be HH:MM, comma-separated"
@@ -1912,7 +1913,9 @@ class GDriveSettings(BaseSettings):
     # The folder inside each account folder for posted videos. Matched
     # case-insensitively, so one made by hand ("Posted") is adopted.
     posted_folder_name: str = Field(
-        default="POSTED", min_length=1, validation_alias="OFM_GDRIVE_POSTED_FOLDER"
+        default=AccountFolder.POSTED,
+        min_length=1,
+        validation_alias="OFM_GDRIVE_POSTED_FOLDER",
     )
     # IANA: the zone /drive's times are shown in.
     timezone: str = Field(
@@ -2468,4 +2471,22 @@ class PicturesSettings(BaseSettings):
     # own (user rule 2026-11-01: all pictures 3:4).
     aspect_ratio: str = Field(
         default="3:4", validation_alias="OFM_PICTURES_ASPECT_RATIO"
+    )
+
+
+class ThreadsSettings(BaseSettings):
+    """/threads: stills of one POSTED reel as iPhone photos, for Threads."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # The photo preset (media/repurpose/photos/<name>.json): how many
+    # pictures, the phone and lens, how stills are picked and retouched.
+    preset: str = Field(default="threads", validation_alias="OFM_THREADS_PRESET")
+    # One ffprobe or one still of a 4K reel.
+    ffmpeg_timeout_s: int = Field(
+        default=120, ge=1, validation_alias="OFM_THREADS_FFMPEG_TIMEOUT_S"
+    )
+    # One reel's job: its download, the stills and their upload.
+    job_timeout_s: int = Field(
+        default=1800, ge=60, validation_alias="OFM_THREADS_JOB_TIMEOUT_S"
     )

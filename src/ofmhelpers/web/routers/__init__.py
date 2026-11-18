@@ -63,7 +63,7 @@ from ofmhelpers.web.routers.downloads import videos as download_videos
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation import index as generation_index
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS
-from ofmhelpers.web.routers.image_tools import character_sheet, pictures
+from ofmhelpers.web.routers.image_tools import character_sheet, pictures, threads
 from ofmhelpers.web.routers.inventory import drive, handmade, phones
 from ofmhelpers.web.routers.tracking import accounts, links, self_links
 from ofmhelpers.web.routers.video_tools import edit, repurpose, trials, uniqify
@@ -110,6 +110,7 @@ ROUTERS = [
     # image_tools/
     character_sheet.router,
     pictures.router,
+    threads.router,
     # video_tools/
     uniqify.router,
     edit.router,

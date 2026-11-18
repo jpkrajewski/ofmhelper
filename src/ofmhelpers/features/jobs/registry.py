@@ -27,6 +27,7 @@ from ofmhelpers.features.handmade import service as handmade
 from ofmhelpers.features.jobs.restart import COUNT, Restart
 from ofmhelpers.features.pictures import service as pictures
 from ofmhelpers.features.repurpose import service as repurpose
+from ofmhelpers.features.threads import tasks as threads
 from ofmhelpers.features.uniqify import service as uniqify
 lazy from ofmhelpers.schemas import Job
 
@@ -71,6 +72,15 @@ def _sheet(job: Job) -> dict[str, Any]:
         "job_dir": job.params["dir"],
         "files": job.params["files"],
         "assets_root": str(assets_root_for_actor(job.actor)),
+    }
+
+
+def _threads(job: Job) -> dict[str, Any]:
+    """Its run from the row (the job reads its person's Drive token)."""
+    return {
+        **threads.PicturesRun.model_validate(job.params).model_dump(),
+        "user_id": int(job.actor or ""),
+        "job_id": job.id,
     }
 
 
@@ -132,6 +142,14 @@ RESTARTS = frozendict(
         ),
         download_images.TASK: Restart(
             run=download_images.run_downloads, kwargs=_download
+        ),
+        # Free and the same when run twice: pictures on disk are not cut
+        # again, those in Drive not uploaded again.
+        threads.TASK: Restart(
+            run=threads.make_pictures,
+            kwargs=_threads,
+            queue=QueueName.MEDIA,
+            job_timeout=lambda _params: settings.threads.job_timeout_s,
         ),
     }
 )

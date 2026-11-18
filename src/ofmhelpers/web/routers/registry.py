@@ -5,11 +5,12 @@ tool is one entry here instead of one in each of them. What recovery does
 with a task (its run function, time limit, queue, restart) is
 `features/jobs/registry.py`."""
 
+from ofmhelpers.features.threads.tasks import TASK as THREADS_TASK
 from ofmhelpers.schemas import Job, TaskCard, Tool
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
-from ofmhelpers.web.routers.image_tools import character_sheet, pictures
+from ofmhelpers.web.routers.image_tools import character_sheet, pictures, threads
 from ofmhelpers.web.routers.inventory import handmade
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
@@ -55,6 +56,7 @@ TOOLS = frozendict(
         "uniqify": Tool(label="Uniqify", router=uniqify.router),
         viral.TASK: Tool(label=viral.LABEL, router=viral.router),
         handmade.TASK: Tool(label="Handmade", router=handmade.router),
+        THREADS_TASK: Tool(label="Threads", router=threads.router),
         pictures.TASK: Tool(
             label=pictures.LABEL,
             router=pictures.router,

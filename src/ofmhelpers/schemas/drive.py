@@ -7,7 +7,7 @@ import datetime
 from pydantic import BaseModel, Field
 
 from ofmhelpers.schemas.devices import Device, _compact
-from ofmhelpers.schemas.gdrive import DriveFile, folder_url
+from ofmhelpers.schemas.gdrive import AccountFolder, DriveFile, folder_url
 
 
 class DriveTarget(BaseModel):
@@ -244,7 +244,7 @@ class DriveBoard(BaseModel):
     root_folder_id: str = ""
     root_name: str = ""
     connected: bool = False
-    posted_folder_name: str = "POSTED"
+    posted_folder_name: str = AccountFolder.POSTED
 
     @property
     def root_url(self) -> str | None:

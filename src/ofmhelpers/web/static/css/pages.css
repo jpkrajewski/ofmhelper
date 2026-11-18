@@ -1608,6 +1608,16 @@ a.ph-login-user:hover { text-decoration: underline; }
 .tr-reel-actions { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
 .tr-reel-actions button { flex: 1 1 auto; }
 .tr-reel-actions form { display: contents; }
+/* /threads: a reel's pictures, five to a row at the photos' own 9:16. */
+.th-pictures { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--gap-inline); }
+.th-pictures img { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-sm); background: var(--ink); }
+/* A card's buttons, each the same width (a link and a form's button alike):
+   side by side where both fit, else one per row at the card's width (two in
+   a 260px card overflowed, owner 2026-11-17). */
+.th-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--gap-inline); }
+.th-actions form { display: contents; }
+.th-actions .btn { width: 100%; justify-content: center; }
+.th-name { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); font-size: var(--step--1); }
 /* Select: a whole-width toggle; the card takes the accent while selected. */
 .tr-pick {
     position: relative;

@@ -330,6 +330,31 @@ _LOCAL_JOBS = {
             "assets_root": "ASSETS",
         },
     ),
+    # /threads: the set's own params (seed, preset, its folder once made);
+    # its Drive token is read by the run, never queued.
+    "threads": (
+        {
+            "batch": "3",
+            "login_id": 3,
+            "key": "reel1",
+            "reel_name": "VID_1.mp4",
+            "account_folder_id": "acc1",
+            "seed": "ab12cd34",
+            "preset": "threads",
+            "folder_id": "set1",
+        },
+        {
+            "login_id": 3,
+            "key": "reel1",
+            "reel_name": "VID_1.mp4",
+            "account_folder_id": "acc1",
+            "seed": "ab12cd34",
+            "preset": "threads",
+            "folder_id": "set1",
+            "user_id": 7,
+            "job_id": "JOB",
+        },
+    ),
     "edit_prepare": (
         {"video": "/a/in.mp4"},
         {"video": "/a/in.mp4", "assets_root": "ASSETS"},

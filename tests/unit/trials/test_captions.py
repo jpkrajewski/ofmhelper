@@ -107,6 +107,32 @@ def test_the_choices_come_back_clean_fitting_and_none_twice():
     assert found[2] == "two lines"
 
 
+def test_a_caption_with_a_crude_word_is_dropped():
+    """What prod copies carried (2026-11-17), next to innocent ones that only
+    contain a blocked word inside a longer one."""
+    found = Captions(
+        captions=[
+            "my dick is out bro",
+            "Pussy on means trouble",
+            "caught you peeking at my ass",
+            "sorry for the visual assault",
+            "back to class like nothing happened",
+            "keep FUCKING with the hairy guy",
+        ]
+    ).captions
+
+    assert found == [
+        "sorry for the visual assault",
+        "back to class like nothing happened",
+    ]
+
+
+def test_only_crude_captions_is_the_wrong_answer():
+    """The chain then asks the next model."""
+    with pytest.raises(ValidationError):
+        Captions(captions=["my dick is a trap", "boobs are real"])
+
+
 @pytest.mark.parametrize("empty", [[], ["", "   ", '""']])
 def test_no_caption_at_all_is_the_wrong_answer(empty):
     """The chain then asks the next model."""

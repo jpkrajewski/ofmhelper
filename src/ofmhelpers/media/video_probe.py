@@ -1,10 +1,46 @@
-"""Read a video's length, frame rate, size and frame times with ffprobe."""
+"""Read a video's length, frame rate, size, colour tags and frame times with
+ffprobe."""
 
 from fractions import Fraction
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.size import Size
+
+
+class ColourTags(BaseModel):
+    """The first video stream's colour tags as ffprobe names them (None:
+    untagged); `hdr.sdr_filters` takes them."""
+
+    color_transfer: str | None = None
+    color_primaries: str | None = None
+    color_space: str | None = None
+
+
+class _Streams(BaseModel):
+    streams: list[ColourTags]
+
+
+def colour_tags(src: Path | str, timeout_s: int) -> ColourTags:
+    out = run(
+        [
+            binary("ffprobe"),
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=color_transfer,color_primaries,color_space",
+            "-of",
+            "json",
+            str(src),
+        ],
+        timeout_s,
+    )
+    found = _Streams.model_validate_json(out).streams
+    return found[0] if found else ColourTags()
 
 
 def duration_s(src: Path | str, timeout_s: int) -> float:
