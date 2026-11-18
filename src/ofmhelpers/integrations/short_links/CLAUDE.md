@@ -2,13 +2,13 @@
 
 Short links on link providers (Oopsie, Bouncy), provider-agnostic: `/links` (`web/routers/tracking/links.py`) lists and makes them, `features/links/sync.py` syncs/makes/deletes on the worker, `/accounts` shows each Instagram account's links (clicks + CTR) next to its phones.
 
-- `schemas/link_catalog/providers.json` (moved down 2026-11-11 with `targets.json` and `models.py`: the stores and `schemas/links.py` read them; this package re-exports all of it) — per provider: label, `base_url`, key prefix, short-link `domains` (default first; Bouncy = bouncy.ai + its 42 system domains, all "premium" = paid plan, ours is Growth), `slug` rules (`invalid` char-run regex, min/max length, `unique_per` provider|domain), `min_interval_s` between calls (Oopsie 60/min), `stats_batch`, `max_history_days`, `max_span_days` (longest analytics range still answered in daily buckets), Bouncy `behavior`.
-- `targets.json` — pages a link sends to (OnlyFans, Fanvue, Stacked): `hosts` (subdomains too), `prefix` (what the Generate dialog prefills: `https://www.stacked.com/@`, ...), `profile` (regex the URL path must match: a profile name, then anything -- Stacked needs the `@`). `Target.problem(url)` is the one check (server); the dialog runs the same pattern as you type. New target = one entry.
-- `schemas/link_catalog/models.py` — `ProviderInfo`, `SlugRules.make(handle)`/`numbered(slug, n)`, `Target.matches`, `NewLink`, `RemoteLink` (`adult`: None = provider does not say), `DayStat`, `Usage`, `LinkDays`/`LinkHours` (one link's days / hours: what `daily` / `hourly` return a list of). `provider_infos()`, `targets()` and `link_providers()` are `utils.registry.Registry` (`[key]`, `.get`, `.names()`, `.all()`; never iterate one directly: it is a Pydantic model).
-- `errors.py` — `LinkError` (message shown on /links as is), `AuthError` (401), `QuotaError` (402 / Bouncy 403 `TOTAL_LINK_LIMIT_REACHED`), `RateLimitedError` (429), `SlugTakenError`.
-- `providers/base.py` — `LinkProvider` ABC: `create` (always 18+ gated: a link whose gate cannot be set is deleted again and the call fails), `list_links`, `daily(ids, start, end)`, `hourly(ids, day)` (one UTC day by the hour, `HourStat`: what the Telegram `money` answer reads live, `features/reports/hours.py`, 2026-11-08), `enable_adult`, `delete`, `usage`; `_call` (throttle, timeouts, status -> error mapping, through `integrations.outbound` so the fakes answer under `OFM_FAKE_EXTERNALS`). `default_key()` = `settings.links.admin_key(key)` (`OOPSIE_API_KEY_ADMIN`, `BOUNCY_API_KEY_ADMIN`).
-- `providers/oopsie.py`, `providers/bouncy.py`; registry `providers/__init__.py` `_PROVIDER_TYPES`. **New provider** = file + class in `_PROVIDER_TYPES` + `providers.json` entry + a wire fake in `fake.py` + its contract test rows. Never rename a key in use (stored on every link and in `user_api_keys`).
-- `fake.py` — `FakeOopsie`/`FakeBouncy` at the wire (hosts `oopsie.bio`, `api.bouncy.ai`); only `OOPSIE_FAKE_KEY`/`BOUNCY_FAKE_KEY`; quotas (`limit`, Bouncy `active_limit`), `traffic[(id, day)] = (views, clicks)`, `set_hour_traffic(id, hour, ...)` (a one-day range answers by the hour, as both services do; a day seeded only as a whole sits in its first hour), Bouncy `adult` = ids with the gate forced.
+- Catalog data lives in `schemas/link_catalog/` (`providers.json`, `targets.json`, `models.py`; this package re-exports it). `providers.json`: Bouncy domains = bouncy.ai + its 42 system domains, all "premium" = paid plan, ours is Growth; Oopsie `min_interval_s` = 60/min; `max_span_days` = longest analytics range still answered in daily buckets.
+- `targets.json` — pages a link sends to (OnlyFans, Fanvue, Stacked): `profile` is a regex the URL path must match (a profile name, then anything -- Stacked needs the `@`). `Target.problem(url)` is the one check (server); the dialog runs the same pattern as you type. New target = one entry.
+- `provider_infos()`, `targets()` and `link_providers()` are `utils.registry.Registry`: never iterate one directly, it is a Pydantic model (`[key]`, `.get`, `.names()`, `.all()`). `RemoteLink.adult` None = provider does not say.
+- `errors.py` — `LinkError` message is shown on /links as is; `QuotaError` = 402 / Bouncy 403 `TOTAL_LINK_LIMIT_REACHED`.
+- `providers/base.py`: `create` is always 18+ gated: a link whose gate cannot be set is deleted again and the call fails. `hourly(ids, day)` is what the Telegram `money` answer reads live (`features/reports/hours.py`). `_call` goes through `integrations.outbound` so the fakes answer under `OFM_FAKE_EXTERNALS`.
+- **New provider** = file + class in `providers/__init__.py` `_PROVIDER_TYPES` + `providers.json` entry + a wire fake in `fake.py` + its contract test rows. Never rename a key in use (stored on every link and in `user_api_keys`).
+- `fake.py`: `set_hour_traffic` (a one-day range answers by the hour, as both services do; a day seeded only as a whole sits in its first hour).
 
 Keys: a user's own (/account, `user_api_keys`, encrypted) always wins; an admin with none runs on the .env key; a user never gets it (`features/links/keys.py` `api_key`). Saving a link key on /account syncs at once.
 
@@ -58,9 +58,8 @@ every method reads/writes our DB -- no HTTP, no API key, no `_call`.
 - `providers.json` `self`: empty `domains` (they are ours, added at runtime); the
   Generate dialog fills them live (`routers/tracking/links._infos_with_self_domains`)
   and the route checks the chosen domain against `self_links.active_hosts(owner)`.
-  `ProviderInfo.domains` is now `default_factory=list` and `default_domain` empty-safe;
   `GenerateLinks._known` skips the domain check when a provider has no static domains.
-- New provider deviated from the usual steps: NO wire fake and it is NOT in the
+- Deviates from the usual new-provider steps: NO wire fake and NOT in the
   remote-HTTP contract test (`tests/contract` PROVIDERS stays `["oopsie","bouncy"]`);
   it has its own DB contract test `tests/integration/links/test_self_provider.py`.
 - Tables (alembic d5e6f7a8b9c0, ORM `SelfLinkDomainRow`/`SelfLinkClickRow`):
@@ -91,10 +90,10 @@ every method reads/writes our DB -- no HTTP, no API key, no `_call`.
 ### Self hardening (review 2026-11-08)
 - Bridge lookup `active_self_link(host, slug)` is backed by a **partial index**
   `ix_short_links_bridge (domain, slug) WHERE provider='self' AND status='active'`
-  (alembic e6f7a8b9c0d1) -- was a seq scan of every user's links on every hit.
+  (alembic e6f7a8b9c0d1): without it every hit scans every user's links.
 - The bridge write path is **off the event loop**: `web/middleware/bridge.py` is
   pure ASGI (Starlette doesn't threadpool it), so the lookup, the click INSERT and
-  the Jinja render all run via `run_in_threadpool`; one slow hit no longer stalls
+  the Jinja render all run via `run_in_threadpool`, so one slow hit cannot stall
   every request in the web process. For >100k hits/hour, batch/queue the inserts
   and add a daily rollup (`self_link_clicks_daily`); not needed below that.
 - The public endpoints (`GET /{slug}` view, `POST /api/track-direct` click) have a

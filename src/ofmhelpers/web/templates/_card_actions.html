@@ -14,3 +14,8 @@
     {{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}
     {% if may_hide %}{% call ui.menu("More actions") %}{{ hide.items() }}{% endcall %}{% endif %}
 </div></template>
+{# A failure the reader's own keys fix (schemas/errors.py `error_text`
+   `about_keys`): only for who may open /account. #}
+{% if can(request, "account") %}<template id="card-failed-keys"><a class="result-failed-fix" href="/account">API keys</a></template>{% endif %}
+{# Folded run of identical failures (static/js/failed-runs.js). #}
+<template id="card-failed-more">{{ ui.button("", block=true, hook="failed-more") }}</template>

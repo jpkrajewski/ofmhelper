@@ -1,6 +1,6 @@
 ---
 name: senior-python-rules
-description: Use when writing, changing, reviewing or debugging Python code: senior-style rules on simplicity, no new dependencies, pydantic contracts, root-cause debugging and automating repetition.
+description: "Use when writing, changing, reviewing or debugging Python code: senior-style rules on simplicity, no new dependencies, pydantic contracts, root-cause debugging and automating repetition."
 ---
 
 # Senior Python rules

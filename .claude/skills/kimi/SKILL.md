@@ -1,6 +1,6 @@
 ---
 name: kimi
-description: Hand a task to the owner's second agent, Kimi Code CLI (a different model, with its own WebSearch and FetchURL), from the shell. Use it as REVIEWER (an independent review of a diff: before every ship, after a risky change) and as RESEARCHER (web research on a library, an API, a release, an error; a second opinion on a root cause or plan), also in parallel with your own work. The owner asked for this (2026-11-08).
+description: "Hand a task to the owner's second agent, Kimi Code CLI (a different model, with its own WebSearch and FetchURL), from the shell. Use it as REVIEWER (an independent review of a diff: before every ship, after a risky change) and as RESEARCHER (web research on a library, an API, a release, an error; a second opinion on a root cause or plan), also in parallel with your own work. The owner asked for this (2026-11-08)."
 ---
 
 # Kimi: reviewer and researcher

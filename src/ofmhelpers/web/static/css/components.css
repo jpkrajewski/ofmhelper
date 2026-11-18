@@ -566,7 +566,14 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .fail-list li { margin-bottom: var(--s-2); }
 /* A failure: who refused, the reason and what they said (schemas/errors.py
    `error_line`), in red, on the card itself. */
-.result-failed { color: var(--fail); background: var(--fail-wash); font-weight: 500; }
+.result-failed { flex-direction: column; color: var(--fail); background: var(--fail-wash); font-weight: 500; }
+/* Who refused and why, bold; what they said under it, quiet; the fix when
+   it is the reader's own keys (schemas/errors.py `error_text`). */
+.result-failed-head { font-weight: 700; }
+.result-failed-said { color: var(--text-muted); font-weight: 400; }
+.result-failed-fix { font-weight: 600; }
+/* A run of the same failure folds into its first card (static/js/failed-runs.js). */
+.result-item[data-folded] { display: none; }
 /* One line per thing that failed (a download's links: "<link> · <reason>"). */
 .fail-note { min-height: 0; flex-direction: column; word-break: break-word; }
 .drive-states:empty { display: none; }
@@ -972,5 +979,42 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .time-zone-menu > summary .icon { width: 16px; height: 16px; }
 /* Above the pop-ups under the header (.page-alerts), like the More menu. */
 .time-zone-menu .menu-list { z-index: 110; }
+/* The header's chats (ui.chats_menu): the number of new ones on the icon,
+   one line per model or event in the list, the new ones marked. */
+.chats-menu > summary { position: relative; }
+.chats-menu > summary .icon { width: 18px; height: 18px; }
+.chats-count {
+    position: absolute;
+    top: calc(-1 * var(--s-1));
+    right: calc(-1 * var(--s-1));
+    min-width: 18px;
+    height: 18px;
+    padding: 0 var(--s-1);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: var(--step--2);
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
+.chats-list { z-index: 110; min-width: 300px; max-height: 70vh; overflow-y: auto; }
+.chats-item { gap: var(--s-2); text-decoration: none; }
+.chats-item-text { color: var(--text-muted); }
+.chats-item[data-new] .chats-item-text { color: var(--text); font-weight: 600; }
+.chats-item[data-new]::after {
+    content: "";
+    flex: none;
+    width: var(--s-2);
+    height: var(--s-2);
+    margin-left: auto;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+}
+/* A phone: the list spans the screen under the header. */
+@media (max-width: 600px) {
+    .chats-list { position: fixed; top: var(--header-h); right: var(--s-4); left: var(--s-4); min-width: 0; }
+    .chats-item { white-space: normal; }
+}
 .time-zone-choice .icon { visibility: hidden; }
 .time-zone-choice[aria-current="true"] .icon { visibility: visible; }

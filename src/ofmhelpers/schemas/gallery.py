@@ -16,7 +16,7 @@ from pydantic import BaseModel, computed_field
 
 from ofmhelpers.schemas.clone_ai_checks import CloneFromLink, ReviewReason
 from ofmhelpers.schemas.drive import DriveUpload
-from ofmhelpers.schemas.errors import error_line, error_reason
+from ofmhelpers.schemas.errors import ErrorText, error_line, error_reason, error_text
 from ofmhelpers.schemas.jobs import AssetCard, FailedSource
 lazy from ofmhelpers.schemas.persistence import Job
 
@@ -53,6 +53,12 @@ class JobCard(BaseModel):
     def error_line(self) -> str:
         """The failure as the card shows it: who, the reason, what they said."""
         return error_line(self.error)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_text(self) -> ErrorText:
+        """The failure as a failed card lays it out."""
+        return error_text(self.error)
 
     @classmethod
     def from_job(

@@ -1,15 +1,8 @@
-# iphones
+# recorder
 
-Re-encode a video into a camera recording of a real iPhone model. One folder per model, `<model>/profile.json` (decoded from real recordings, shipped in the package), validated into `models.DeviceProfile`; `load_profile(name)` is cached. New model = new folder. Exception: `iphone16` is adapted from the `iphone17` profile (model / lens / software strings only, `samples: 0`) — no iPhone 16 recording decoded yet; swap in real bytes when available. `iphone16_4k` = `iphone16` at 4K30 (2160x3840, level 5.1, 24 Mb/s: Apple's 170 MB/min for 4K30 HEVC, as its 60 MB/min matches the 1080p profile's 8.4 Mb/s) -- also a guess until a real 4K recording is decoded; `x265_preset` `fast` (profile field, default medium: same refs/SPS flags, ~2x quicker at 4K).
+Re-encode a video into a camera recording of a real iPhone model. One folder per model, `<model>/profile.json` (decoded from real recordings, shipped in the package), validated into `models.DeviceProfile`. New model = new folder. Exception: `iphone16` is adapted from the `iphone17` profile (model / lens / software strings only, `samples: 0`) — no iPhone 16 recording decoded yet; swap in real bytes when available. `iphone16_4k` = `iphone16` at 4K30 (2160x3840, level 5.1, 24 Mb/s: Apple's 170 MB/min for 4K30 HEVC, as its 60 MB/min matches the 1080p profile's 8.4 Mb/s) -- also a guess until a real 4K recording is decoded; `x265_preset` `fast` (profile field, default medium: same refs/SPS flags, ~2x quicker at 4K).
 
-## Files
-- `models.py` — `DeviceProfile`, `FrameTiming`/`TimingPlan`, `GeoPoint`/`Place` (location + jitter), `Recording` (end time in the phone's zone, length, location, seed).
-- `atoms.py` — `mdta` meta (ordered keys, typed values, locales), Apple media/data handlers, `alis` dref, `tapt`, `vmhd`.
-- `sample_entries.py` — stsd: video keeps ffmpeg's `hvcC`+`colr`; audio rebuilt (SoundDescription v1 + `wave`/`esds`; ffmpeg's AAC adds 3 SBR bytes no option removes).
-- `sample_tables.py` — `cslg`, `sync` `sgpd`/`sbgp` from stts/ctts/stss; iPhone stbl order.
-- `recorder.py` — `record(src, dst, profile, recording, timeout_s)`: ffmpeg encode from the profile, then moov rewritten; all tracks cut to the movie length via edit lists.
-
-No package or Debian tool builds these boxes (searched 2026-10-19: pyqtfile, qtfaststart, mediameta, Bento4 mp4edit, MP4Box), so builders follow Apple's QuickTime spec, each tested against real bytes.
+`sample_entries.py`: audio is rebuilt (SoundDescription v1 + `wave`/`esds`; ffmpeg's AAC adds 3 SBR bytes no option removes). No package or Debian tool builds these boxes (searched 2026-10-19: pyqtfile, qtfaststart, mediameta, Bento4 mp4edit, MP4Box), so builders follow Apple's QuickTime spec, each tested against real bytes.
 
 ## Findings (7 iPhone 17 Pro Max recordings, iOS 26.5.1, front camera)
 - Keys: text = type 1; `full-frame-rate-playback-intent` type 21, 8 bytes, value 1 (ffprobe misreads 0); maker notes .74/.97 type 21, 4 bytes (6/20). Lens keys locale `US`/`eng` (0x555315C7), movie keys locale 0.
@@ -28,6 +21,4 @@ No package or Debian tool builds these boxes (searched 2026-10-19: pyqtfile, qtf
 - `-chunk_duration 370000` gives ~0.49 s chunks.
 
 ## Verification
-`tests/iphones/test_matches_real_recording.py` diffs every exiftool tag of a recorded synthetic clip against `fixtures/iphone17_img0063.exif.json` (full dump, location included). Excluded with reasons: file system, per-recording, location, tracks 3-8 (ffmpeg can't write APAC/mebx), the exiftool quirk on the real hvc1 entry (bytes checked directly).
-
-Offered to pages through `ofmhelpers.media.exports` (one `DeviceExport` per profile; Mirror switch -> `Recording.mirror`); time zone and place in `settings.exports` (`OFM_EXPORT_DEVICE_TIMEZONE`, `OFM_EXPORT_DEVICE_PLACE`).
+`tests/unit/iphones/test_matches_real_recording.py` diffs every exiftool tag of a recorded synthetic clip against `tests/fixtures/iphones/iphone17_img0063.exif.json`. Excluded with reasons: file system, per-recording, location, tracks 3-8 (ffmpeg can't write APAC/mebx), the exiftool quirk on the real hvc1 entry (bytes checked directly).

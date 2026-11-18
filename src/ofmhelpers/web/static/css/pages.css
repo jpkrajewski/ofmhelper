@@ -709,6 +709,11 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-go a { font-size: var(--step--1); font-weight: 600; text-decoration: none; }
 .growth { white-space: nowrap; }
 .growth small { color: var(--text-faint); font-weight: 400; }
+/* The line under a number ("since Nov 13", "vs previous 7d") may wrap:
+   the table has to fit the page. */
+.accounts-table td.num .accounts-sub,
+.accounts-table td.num .growth small { white-space: normal; }
+.accounts-table td.num .growth small { display: block; }
 .growth[data-trend="up"] { color: var(--ok); }
 .growth[data-trend="down"] { color: var(--fail); }
 .accounts-pager {
@@ -734,9 +739,15 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .accounts-dialog::backdrop { background: var(--scrim); }
 .accounts-dialog h2 { margin-top: 0; }
 .accounts-dialog-actions { display: flex; justify-content: flex-end; gap: var(--gap-inline); }
-/* Desktop: the table fits without scrolling, so its header can stick to
-   the viewport under the site header. */
-@media (min-width: 1100px) {
+/* Laptop widths: tighter cells so the nine columns fit (2026-11-18: a
+   1389px table in a 1167px card at 1280, its right columns cut off). */
+@media (min-width: 720px) and (max-width: 1535px) {
+    .accounts-table th, .accounts-table td { padding: var(--pad-cell-dense); }
+}
+/* Wide enough that the table fits without scrolling, so its header can
+   stick to the viewport under the site header. Narrower, it scrolls inside
+   its own box instead of past the page's edge. */
+@media (min-width: 1240px) {
     .accounts-table-wrap, .accounts-table { overflow: visible; }
     .accounts-table thead th { position: sticky; top: var(--header-h); z-index: 2; }
 }
@@ -939,7 +950,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 /* ---- Links (/links, static/js/links.js; the accounts list classes) ----
    Same filter row, selection card, table and dialog as /accounts. */
 .links-address { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
-.links-address .accounts-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links-address .accounts-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .links-picker { margin: 0; }
 .links-pick-all { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); font-weight: 600; }
 .links-accounts {
@@ -952,9 +963,12 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 .links-accounts label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--step--1); }
 .links-accounts label[hidden] { display: none; }
 /* /accounts' Links column: each link of the account, its clicks and CTR. */
-.accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; }
+/* "Oopsie · 3,643 clicks" stays one line, its CTR under it: the column
+   was squeezed into one word per line (2026-11-18). */
+.accounts-link { display: block; color: var(--text); font-size: var(--step--1); text-decoration: none; white-space: nowrap; }
+.accounts-link + .accounts-link { margin-top: var(--s-2); }
 .accounts-link:hover span { text-decoration: underline; }
-.accounts-link small { color: var(--text-faint); }
+.accounts-link small { display: block; color: var(--text-faint); }
 
 /* ---------------------------------------------------------------------
    /phones: device-first cards. The product photo anchors each card; the
@@ -993,6 +1007,7 @@ th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: t
    what it does). */
 .icon-btn {
     display: inline-flex;
+    flex: none;  /* a fixed square: in a squeezed row it shrank to 11px (/links, phone) */
     align-items: center;
     justify-content: center;
     width: var(--control-h-sm);
@@ -1243,7 +1258,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     padding: var(--s-2);
     border-radius: 50%;
     background: var(--scrim-strong);
-    color: var(--accent-ink);
+    color: var(--on-media);
 }
 .dr-file-name {
     position: absolute;
@@ -1772,7 +1787,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     position: absolute;
     width: 18px;
     height: 18px;
-    border: 2px solid var(--accent-ink);
+    border: 2px solid var(--on-media);
     background: var(--accent);
 }
 .edit-crop-grip[data-corner="nw"] { top: 0; left: 0; cursor: nwse-resize; }
@@ -1864,7 +1879,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     left: var(--at);
     width: 3px;
     transform: translateX(-50%);
-    background: var(--accent-ink);
+    background: var(--on-media);
     box-shadow: 0 0 0 1px var(--scrim-strong);
     pointer-events: none;
 }
@@ -1875,7 +1890,7 @@ a.ph-login-user:hover { text-decoration: underline; }
     width: 13px;
     height: 13px;
     border-radius: var(--radius-pill);
-    background: var(--accent-ink);
+    background: var(--on-media);
     box-shadow: 0 0 0 1px var(--scrim-strong);
     transform: translateX(-50%);
     content: "";

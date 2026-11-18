@@ -1,6 +1,6 @@
 ---
 name: rest-api
-description: HTTP and REST rules for this app's FastAPI routes: Zalando's RESTful API Guidelines (the 85 MUST rules, full text by id) and the FastAPI best-practice list for agents, mapped to FastAPI. Use when creating or refactoring a router, naming a URL or query parameter, choosing an HTTP method or status code, shaping a JSON response or error, adding pagination, or changing a route other code or a provider calls.
+description: "HTTP and REST rules for this app's FastAPI routes: Zalando's RESTful API Guidelines (the 85 MUST rules, full text by id) and the FastAPI best-practice list for agents, mapped to FastAPI. Use when creating or refactoring a router, naming a URL or query parameter, choosing an HTTP method or status code, shaping a JSON response or error, adding pagination, or changing a route other code or a provider calls."
 ---
 
 # REST rules for FastAPI routes

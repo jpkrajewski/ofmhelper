@@ -156,6 +156,19 @@
 {% endcall %}
 {%- endmacro %}
 
+{# The header's chats and sales (static/js/chats-alert.js fills it from
+   /chatting/alerts): a message icon with the number of new ones on it,
+   each one a link in its list. Hidden while there is none; opening the
+   list marks them seen. Pop-ups over the page covered its title and
+   toolbar (2026-11-18). #}
+{% macro chats_menu() -%}
+<details class="menu chats-menu" hidden>
+    <summary class="icon-btn" aria-label="Chats">{{ ic.icon("message") }}<span class="chats-count" hidden></span></summary>
+    <div class="menu-list chats-list"></div>
+</details>
+<template id="chats-item"><a class="menu-item chats-item"><strong class="chats-item-who"></strong><span class="chats-item-text"></span></a></template>
+{%- endmacro %}
+
 {# Nothing to show yet: one short sentence (or markup as the call body). #}
 {% macro empty(message=None, attrs={}) -%}
 <p class="empty-state"{{ _attrs(attrs) }}>{% if caller is defined %}{{ caller() }}{% else %}{{ message }}{% endif %}</p>

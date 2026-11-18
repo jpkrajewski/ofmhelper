@@ -7,7 +7,13 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, computed_field
 
-from ofmhelpers.schemas.errors import download_reason, error_line, error_reason
+from ofmhelpers.schemas.errors import (
+    ErrorText,
+    download_reason,
+    error_line,
+    error_reason,
+    error_text,
+)
 from ofmhelpers.schemas.persistence import JobPreview
 
 
@@ -92,6 +98,12 @@ class JobStatusPayload(BaseModel):
     def error_line(self) -> str:
         """The failure as the card shows it: who, the reason, what they said."""
         return error_line(self.error)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_text(self) -> ErrorText:
+        """The failure as a failed card lays it out."""
+        return error_text(self.error)
 
 
 class JobQueued(BaseModel):
