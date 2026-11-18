@@ -147,12 +147,15 @@ def start(
     link: bool = False,
 ) -> Response:
     """To the provider's consent. `link`: connect it to the signed-in user
-    (/account) -- for Google, asking consent again so a Drive token comes."""
+    (/account) -- for Google, asking consent again so a Drive token comes.
+    Only for a session the gate would still let through: this path is public,
+    so the gate itself never looked at it."""
     provider = consent.provider(name)
-    current = AuthMiddleware.session_user(request)
-    if link and current is None:
+    linking = AuthMiddleware.valid_user(request) if link else None
+    if link and linking is None:
+        request.session.clear()
         return see_other("/login")
-    link_user_id = current.id if link and current else None
+    link_user_id = linking.id if linking else None
     begun = consent.begin(provider, str(request.base_url), next_url, link_user_id)
     response = see_other(begun.url)
     carry_state(response, begun.cookie)

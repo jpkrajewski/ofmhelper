@@ -117,7 +117,7 @@ def _claim_password_account(email: str, name: str) -> User | None:
     admins = settings.signin.admin_emails
     if not admins or normalized_email(email) != admins[0]:
         return None
-    account = password_admin()
+    account = agency_admin()
     if account is None or account.email != PASSWORD_ADMIN:
         return None
     return _repository().update(account.id, email=normalized_email(email), name=name)
@@ -131,7 +131,7 @@ def env_admin(email: str, name: str) -> User | None:
     email."""
     if not is_env_admin(email):
         return None
-    return _claim_password_account(email, name) or password_admin()
+    return _claim_password_account(email, name) or agency_admin()
 
 
 # --- Google / Apple ------------------------------------------------------------
@@ -225,8 +225,24 @@ def agency_id() -> int:
     return user.id
 
 
+def agency_admin() -> User | None:
+    """The password account for a sign-in that is not the admin password (an
+    `OFM_ADMIN_EMAILS` address through Google or Apple): made when missing,
+    an admin again if it was demoted, never reactivated. A deactivated one
+    stays out, `admit` refuses it: only the admin password restores it
+    (`password_admin`). Audit 2026-11-18: any env-admin identity undid the
+    one in-app lock of the agency account."""
+    user = _repository().password_account()
+    if user is None:
+        return password_admin()
+    if not user.is_admin:
+        return _repository().update(user.id, role=Role.ADMIN)
+    return user
+
+
 def password_admin() -> User | None:
-    """The password account, made or restored as an active admin."""
+    """The password account, made or restored as an active admin: the admin
+    password's doing only (break-glass)."""
     user = _repository().password_account()
     if user is None:
         added = _repository().add(

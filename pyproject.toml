@@ -100,6 +100,24 @@ lab = ["optuna>=4.0.0"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+# pdqhash ships only an sdist, so every image build compiles it, and uv does
+# not lock the tools a build runs: without these pins the production builder
+# takes whatever setuptools/wheel/Cython PyPI serves that minute, outside
+# uv.lock's hashes and the 14-day release-age rule (audit 2026-11-18). One
+# exact pin per entry of pdqhash 0.2.8's build-system.requires
+# ("setuptools >= 40.6.0", "wheel", "numpy >= 2.0", "cython"); numpy is the
+# runtime lock's. pyyaml 6.0.3 is source-only too (no 3.15 wheel) and builds
+# with setuptools and Cython, the same pins. A new version of either, or a new
+# source-only package: read its requires again
+# (tests/unit/test_build_constraints.py fails until then).
+build-constraint-dependencies = [
+    "setuptools==84.2.1",
+    "wheel==0.48.0",
+    "numpy==2.5.4",
+    "cython==3.3.1",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/ofmhelpers"]
 

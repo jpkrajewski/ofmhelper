@@ -44,8 +44,9 @@ def uploader(upload_id: int) -> int | None:
     return _repository().uploader(upload_id)
 
 
-def for_jobs(job_ids: list[str]) -> list[DriveUpload]:
-    return _repository().for_jobs(job_ids)
+def for_jobs(job_ids: list[str], user_id: int | None = None) -> list[DriveUpload]:
+    """Uploads of these jobs; with `user_id`, only that uploader's."""
+    return _repository().for_jobs(job_ids, user_id)
 
 
 def file_id(upload_id: int) -> str | None:

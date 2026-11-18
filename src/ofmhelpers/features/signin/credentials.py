@@ -43,7 +43,8 @@ def password_sign_in(email: str, password: str) -> User | None:
         stored = users.password_hash(account.id) if account else ""
         own = verify_password(password, stored)
         if _is_admin_password(password):
-            return users.admit(users.env_admin(email, "") or users.password_admin())
+            restored = users.password_admin()
+            return users.admit(users.env_admin(email, "") or restored)
         return users.admit(account) if own else None
     user = users.by_email(email)
     stored = users.password_hash(user.id) if user else ""

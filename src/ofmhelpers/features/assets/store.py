@@ -7,9 +7,9 @@ is only ever stored once.
 
 import hashlib
 import os
+import secrets
 import shutil
 import tempfile
-import uuid
 from pathlib import Path
 
 from starlette.datastructures import UploadFile
@@ -180,10 +180,23 @@ def safe_filename(name: str | None) -> str:
 
 
 def make_job_dir(upload_root: Path) -> Path:
-    """A fresh, unique directory for one job's uploads to live in."""
-    job_dir = upload_root / uuid.uuid4().hex[:8]
-    job_dir.mkdir(parents=True, exist_ok=True)
-    return job_dir
+    """A fresh directory for one job's uploads to live in, created exclusively:
+    an existing folder (another job's, another user's) is never adopted. A
+    name already taken is drawn again."""
+    upload_root.mkdir(parents=True, exist_ok=True)
+    while True:
+        job_dir = upload_root / _new_job_dir_name()
+        try:
+            job_dir.mkdir()
+        except FileExistsError:  # silent: name taken, the loop draws another
+            continue
+        return job_dir
+
+
+def _new_job_dir_name() -> str:
+    """32 hex characters: a collision is negligible. Folders made before this
+    have 8 and are still served from the paths stored on their job rows."""
+    return secrets.token_hex(16)
 
 
 def _free_name(job_dir: Path, name: str) -> Path:

@@ -177,7 +177,9 @@ def queue_uploads(
     ]
     if ids:
         _enqueue(ids, actor)
-    return store.for_jobs([j for j in job_ids if get_job(j, readers) is not None])
+    return store.for_jobs(
+        [j for j in job_ids if get_job(j, readers) is not None], user.id
+    )
 
 
 def _enqueue(upload_ids: list[int], actor: str) -> None:
@@ -241,20 +243,25 @@ def remove_upload(
     """Takes one uploaded video back out of its account folder: into the
     uploader's Drive trash (restorable there), then off the card. Only who
     may see the run (`readers`: the clicker's own runs and their VAs', as
-    `queue_uploads`; default: their own); already gone in Drive counts as
-    removed. Raises `UploadRefusedError` (not theirs, not uploaded) or
+    `queue_uploads`; default: their own) and only the one who uploaded it:
+    the file sits in the uploader's own Drive, so the account that trashes
+    it is always the clicker's. Already gone in Drive counts as removed.
+    Raises `UploadRefusedError` (not theirs, not uploaded) or
     `UnavailableError` (Drive failed)."""
     found = store.get(upload_id)
     readers = readers if readers is not None else user.actor
-    if found is None or get_job(found.job_id, readers) is None:
+    if (
+        found is None
+        or store.uploader(upload_id) != user.id
+        or get_job(found.job_id, readers) is None
+    ):
         msg = "No such upload"
         raise UploadRefusedError(msg)
     if found.status != "done":
         msg = "Only an uploaded video can be removed"
         raise UploadRefusedError(msg)
     file_id = store.file_id(upload_id)
-    uploader = store.uploader(upload_id)
-    token = refresh_token(uploader) if uploader is not None else ""
+    token = refresh_token(user.id)
     if not file_id or not token:
         msg = "Connect Google Drive on your Account page first"
         raise UploadRefusedError(msg)

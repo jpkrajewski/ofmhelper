@@ -53,8 +53,9 @@ def _link(
 ) -> Outcome:
     owner = users.get_user(user_id)
     # A VA signs in on the password page only: no Google or Apple account
-    # is ever linked to one.
-    may_link = owner is not None and owner.role != Role.VA
+    # is ever linked to one. Nor to a deactivated account: the link would
+    # be a way back in the day it is reactivated.
+    may_link = owner is not None and owner.active and owner.role != Role.VA
     linked = may_link and users.link_identity(user_id, identity)
     note = "linked" if linked else "taken"
     if linked:

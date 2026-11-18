@@ -186,10 +186,17 @@ def allowed(role: Role, what: Area | Action) -> bool:
 def opens(viewer: Viewer, what: Area | Action) -> bool:
     """Whether a request's person may open the area or do the action: what
     their role's list allows; a manager, of that, only what their employer
-    may open too (the chats are an admin's: a user's manager has none)."""
+    may open too (the chats are an admin's: a user's manager has none). A
+    manager with no active employer (`viewing._managing` shows them
+    themselves) opens what a user's manager opens: the employer rule was
+    checked against the manager's own list, chats included (audit
+    2026-11-18)."""
     if not allowed(viewer.access_role, what):
         return False
-    return not viewer.managing or allowed(viewer.user.role, what)
+    if not viewer.managing:
+        return True
+    employer = Role.USER if viewer.user.role == Role.MANAGER else viewer.user.role
+    return allowed(employer, what)
 
 
 def retired(area: Area) -> bool:

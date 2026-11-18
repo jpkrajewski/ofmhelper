@@ -122,6 +122,41 @@ def test_a_users_manager_sees_their_pages_but_no_chats():
     assert client.get("/vas", headers=PAGE).status_code == 200
 
 
+FETCH = {"sec-fetch-mode": "cors"}
+
+
+def test_a_manager_whose_employer_was_deactivated_gets_no_chats():
+    """Audit 2026-11-18: with the employer deactivated the manager is shown
+    themselves, and the employer rule was then checked against the manager's
+    own list, which has the chats: 403 turned into 200 on the agency's
+    chats."""
+    owner = make_user("leaving.owner@example.com").id
+    found = make_user("left.manager@example.com", Role.MANAGER)
+    user_store.set_owner(found.id, owner)
+    client = TestClient(app)
+    sign_in(client, "left.manager@example.com", Role.MANAGER)
+    assert client.get("/chatting/alerts", headers=FETCH).status_code == 403
+
+    user_store.set_active(owner, active=False)
+
+    assert client.get("/chatting/alerts", headers=FETCH).status_code == 403
+    assert client.get("/chatting", headers=FETCH).status_code == 403
+    home = client.get("/home", headers=PAGE)
+    assert home.status_code == 200
+    assert 'href="/chatting"' not in home.text
+
+
+def test_an_admins_manager_keeps_the_chats_after_the_fix(manager):
+    assert manager.get("/chatting/alerts", headers=FETCH).status_code == 200
+
+
+def test_an_admins_manager_loses_the_chats_when_the_admin_is_deactivated(boss, manager):
+    user_store.set_active(boss, active=False)
+
+    assert manager.get("/chatting/alerts", headers=FETCH).status_code == 403
+    assert manager.get("/home", headers=PAGE).status_code == 200
+
+
 def test_an_admin_adds_a_manager_for_any_user():
     client = TestClient(app)
     sign_in_admin(client)
