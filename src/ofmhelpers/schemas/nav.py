@@ -158,6 +158,13 @@ NAV = (
         area=Area.THREADS,
     ),
     NavItem(
+        href="/distribution",
+        label="Distribution",
+        icon="external",
+        place=NavPlace.MORE,
+        area=Area.DISTRIBUTION,
+    ),
+    NavItem(
         href="/self-links",
         label="Self links",
         icon="chart",

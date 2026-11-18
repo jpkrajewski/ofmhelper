@@ -190,12 +190,16 @@ def _serving(queue: QueueName, folder) -> None:
 
 
 def _pools(folder, count: int) -> dict[str, int]:
-    """queue -> its pool's pid, once `count` pools are up."""
+    """queue -> its pool's pid, once `count` pools are up and have written
+    it (a file is there before its pid is: read in between it was "",
+    deploy gate 2026-11-18)."""
     deadline = time.monotonic() + 10
-    while len(found := list(folder.glob("*.pid"))) < count:
+    while True:
+        found = {p.stem: p.read_text().strip() for p in folder.glob("*.pid")}
+        if len(found) >= count and all(found.values()):
+            return {queue: int(pid) for queue, pid in found.items()}
         assert time.monotonic() < deadline, "the pools did not start"
         time.sleep(0.01)
-    return {p.stem: int(p.read_text()) for p in found}
 
 
 def _gone(pid: int) -> bool:

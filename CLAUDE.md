@@ -1,6 +1,10 @@
 # CLAUDE.md
 
 ## HOW TO WORK
+- **YOU ARE SUPPOSED TO BUILD SYSTEM THAT IS 90% AUTOMATIC AND REQUIRES NO USER INPUTS OR CONFIGURATION** - when i ask for content discribuiton system, you are just asking for accounts and content folder!!!! the logic , inner workings YOU ARE HANDING WITH SYSTEM YOU BUILD, ex user asked for content distribution system for pnteres - agent created list of vaults connected to drive and asked user to add captions, lints titles, added stop start buttons,
+asked to categorize each account to model???!! this doesnt make any fucking sense user had to explain that he only uplaods cookies for accounts,
+and system just distributes the content accross accounts and handles captions links, posting we only care if opration brings clicks and about analiztys and system must be SETUP ONCE AND FORGET AND IF SOMETHING BREAKS AGENT ALREADY CREATYED THE LOGGING SYSTEM TO FIX IT THATS IT.
+THE MY VALUE LIES IN MY ACCOUNTS, CONNENT AND PHONES THE VALUE OF A SYSTEM IS AUTOMATION, DISTRIUBITON, STATISTICS, THATS IT
 - **SHORTEST CODE THAT GETS THE FEATURE WORKING.** No code written to write code. First it works and you SHOW ME it works on the happy path -> good UI -> I verify on dev -> then corner cases, tests, prod.
 - **CLEAN FROM THE FIRST VERSION.** "Happy path first" means fewer cases, not worse structure: the first working version already has clean routers, separate layers, Pydantic in and out and a job record. Never "clean it up later".
 - **USABLE BY ANYONE.** They click, they look, they confirm or cancel. That is all. Fewest clicks, least thinking, working defaults pre-filled (API keys, the most usable settings). No raw errors on screen, no smart-ass UI.

@@ -49,6 +49,7 @@ class Area(StrEnum):
     REPURPOSE = "repurpose"
     TRIALS = "trials"
     THREADS = "threads"
+    DISTRIBUTION = "distribution"
     COOKIES = "cookies"
     VAS = "vas"  # what each VA did and spent, per day
     # Admins.
@@ -112,6 +113,7 @@ USER = (
     Area.REPURPOSE,
     Area.TRIALS,
     Area.THREADS,
+    Area.DISTRIBUTION,
     Area.COOKIES,
     Area.VAS,
 )

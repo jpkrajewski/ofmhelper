@@ -23,7 +23,9 @@ lazy from ofmhelpers.schemas.self_links import (
     SelfBreakdownRow,
     SelfClick,
     SelfDomain,
+    SelfLinkDays,
     SelfRange,
+    SelfTotals,
 )
 
 # Statuses of a self link that exists (is serveable / counts in the plan).
@@ -130,6 +132,17 @@ def bridge_target(host: str, slug: str) -> BridgeTarget | None:
 
 def domains(owner: int | None = None) -> list[SelfDomain]:
     return _self().list_domains(owner)
+
+
+def days_of(link_ids: list[int], start: date, end: date) -> list[SelfLinkDays]:
+    """Per link, each UTC day in [start, end] with any hit: views and clicks."""
+    return _self().daily(link_ids, start, end)
+
+
+def totals(link_ids: list[int], start: date, end: date) -> SelfTotals:
+    """Views (landings) and clicks (on to the page) of these links over the
+    UTC days [start, end]: /distribution's link clicks."""
+    return _self().totals(link_ids, start, end)
 
 
 def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:

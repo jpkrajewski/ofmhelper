@@ -23,7 +23,7 @@ from signin import sign_in, sign_in_agency
 
 from ofmhelpers.cache import JobQueue, QueueName, get_queue, get_redis
 from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.jobs import create_job, get_job, history
+from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job, history
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs import recovery, runner, sweeps
 from ofmhelpers.features.previews.render import write_video_thumb
@@ -1302,6 +1302,70 @@ def test_a_restarted_generate_waits_on_the_media_queue_with_its_time_limit(
     assert queued.args[0] == job_id
     assert queued.timeout >= 2 * _PROD_COPY_S
     assert made == []
+
+
+def _upload_cut_off(login: int, *keys: str) -> str:
+    """An Upload a deploy killed mid-way: its reels claimed, its row still
+    running, nobody on it (prod 2026-11-18, job 9facbbfd)."""
+    state = _state(login)
+    job_id = create_job(
+        "trials",
+        {
+            "label": "Uploading",
+            "login": login,
+            "args": {"keys": list(keys), "account_folder_id": state.account_folder_id},
+        },
+        actor=str(users.agency_id()),
+    )
+
+    def claim(s: trial_state.FolderState) -> None:
+        for reel in s.reels:
+            if reel.key in keys:
+                reel.claim_upload(job_id)
+
+    trial_state.change(users.agency_id(), login, claim)
+    return job_id
+
+
+@pytest.mark.usefixtures("nobody_holds")
+def test_an_upload_cut_off_by_a_deploy_goes_up_after_all(drive, made):
+    """Prod 2026-11-18: a deploy cut an Upload of 6 (copies being made again
+    first); recovery failed it and the 6 were left "uploading", unselected,
+    nothing in Drive. Recovery now runs the same Upload again."""
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    first, second = _state(login).reels
+    job_id = _upload_cut_off(login, first.key, second.key)
+
+    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+
+    job = get_job(job_id)
+    assert (job.status, job.params["restarts"]) == ("done", 1)
+    (account,) = drive.named("ann.ig - Anna", ROOT)
+    (trials,) = drive.named("TRIALS", account)
+    assert len(drive.names_in(trials)) == 2
+    assert [r.status for r in _state(login).reels] == ["uploaded", "uploaded"]
+
+
+@pytest.mark.usefixtures("nobody_holds")
+def test_reels_held_by_a_job_that_died_are_selected_again_with_the_reason(drive, made):
+    """An Upload cut off too often fails for good: on the next page open its
+    reels are as before the click, selected, saying why; never stuck."""
+    login = _login(drive, "a.mp4", "b.mp4")
+    client = _client()
+    client.post(f"/trials/{login}/generate")
+    first, second = _state(login).reels
+    job_id = _upload_cut_off(login, first.key)
+    fail_job(job_id, recovery.INTERRUPTED)
+
+    page = client.get(f"/trials/{login}")
+
+    reel = next(r for r in _state(login).reels if r.key == first.key)
+    assert (reel.status, reel.approved, reel.job_id) == ("generated", True, None)
+    assert reel.error == recovery.INTERRUPTED
+    assert page.status_code == 200
+    assert next(r for r in _state(login).reels if r.key == second.key).approved is False
 
 
 @pytest.mark.usefixtures("nobody_holds")

@@ -32,6 +32,7 @@ from ofmhelpers.features.chatting import sources as chat_sources
 from ofmhelpers.features.chatting import sync as chat_history
 from ofmhelpers.features.chatting import wait_events as chat_wait_events
 from ofmhelpers.features.chatting import webhooks as chat_webhooks
+from ofmhelpers.features.distribution import sweep as distribution_sweep
 from ofmhelpers.features.downloads import cleanup as downloads_cleanup
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
@@ -105,6 +106,13 @@ def sweeps() -> list[Sweep]:
             name="link sync",
             run=link_sync.queue_due_syncs,
             interval_s=lambda: settings.links.sync_check_interval_s,
+        ),
+        # Queues each /distribution channel's new Drive files and starts its
+        # next pin when its slot is due.
+        Sweep(
+            name="distribution",
+            run=distribution_sweep.run_round,
+            interval_s=lambda: settings.distribution.check_interval_s,
         ),
         # Makes and reads /drive's folders in each owner's Google Drive.
         Sweep(

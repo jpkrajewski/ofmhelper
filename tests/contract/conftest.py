@@ -43,6 +43,7 @@ from ofmhelpers.integrations.instagram.fake import fake_instagram
 from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
 from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
 from ofmhelpers.integrations.llm.groq.fake import fake_groq
+from ofmhelpers.integrations.pinterest.fake import fake_pinterest
 from ofmhelpers.integrations.senders.telegram.client import _client as _telegram
 from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
 from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
@@ -86,6 +87,7 @@ def _reset_fakes() -> None:
         fake_elyum,
         fake_apiyi,
         fake_telegram,
+        fake_pinterest,
         # Its clients' sessions are mounted on the fakes, or not, when made.
         _telegram,
         fake_media.mp4,
