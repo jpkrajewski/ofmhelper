@@ -266,7 +266,7 @@ def _ask(prompt: Prompt, deadline: float) -> Answered[CloneAiVerdict] | _NoAnswe
                     return none_answered(exc, _reason(exc))
                 # One project's key revoked: the next key still works.
                 said.append(_said(entry, exc))
-                logger.exception("AI check: %s rejected", entry)
+                logger.warning("AI check: %s rejected", entry, exc_info=True)
             except LLMConfigError as exc:
                 # A missing key, a retired or mistyped model id: every key
                 # fails alike, skipped on every check until someone fixes it.

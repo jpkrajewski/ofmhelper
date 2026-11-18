@@ -6,11 +6,6 @@ themselves, once per sign-in (the browser part: tests/e2e/test_tour_page.py).
 Every step points at a control that is really on the page.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 
 import pytest

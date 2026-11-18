@@ -7,11 +7,6 @@ them on the previews queue), for older jobs by a startup backfill, and on
 request as the last resort. Download still serves the original.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import json
 import subprocess
 from pathlib import Path

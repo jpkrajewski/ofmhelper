@@ -11,11 +11,7 @@ stopped being served to the browser at all).
 """
 
 import json
-import os
 import re
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

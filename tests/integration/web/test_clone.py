@@ -1,11 +1,6 @@
 """/clone: subject images + N videos -> one Wan 3.0 run per video, each its
 own card in the gallery (the shared card of every tool page)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import html as html_lib
 import json
 import re

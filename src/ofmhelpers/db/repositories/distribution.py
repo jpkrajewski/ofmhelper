@@ -14,6 +14,7 @@ from ofmhelpers.db.models import (
     DistributionPostRow,
     DistributionPresetRow,
     ShortLinkRow,
+    UserRow,
 )
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.schemas.distribution import (
@@ -105,8 +106,15 @@ class DistributionRepository:
         """Every channel that posts: connected, not stopped or paused."""
         with session_scope() as s:
             rows = s.scalars(
-                select(_C).where(
-                    _C.paused_at.is_(None), _C.error.is_(None), _C.cookies != ""
+                select(_C)
+                .join(UserRow, UserRow.id == _C.user_id)
+                .where(
+                    _C.paused_at.is_(None),
+                    _C.error.is_(None),
+                    _C.cookies != "",
+                    # security audit 2026-11-18: a deactivated owner's
+                    # accounts post nothing.
+                    UserRow.active.is_(True),
                 )
             )
             return [_channel(r) for r in rows]

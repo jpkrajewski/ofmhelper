@@ -2,6 +2,7 @@
 swapped for one that keeps what would have been sent: nothing leaves the
 machine. What an event carries and, above all, what it must not."""
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -12,12 +13,19 @@ from fastapi.testclient import TestClient
 from rq import Queue, SimpleWorker
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
+from signin import make_user
 
 from ofmhelpers.cache import get_redis
+from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import RefusedError
+from ofmhelpers.integrations.ai_providers.errors import (
+    ProviderGenerationError,
+    ProviderNoCreditsError,
+)
 from ofmhelpers.log import get_logger
 from ofmhelpers.redact import MASK
-from ofmhelpers.sentry import configure_sentry
+from ofmhelpers.sentry import HEARTBEAT_S, configure_sentry, heartbeat, name_user
 from ofmhelpers.web.exceptions import exception_handlers
 
 DSN = "https://public@sentry.invalid/1"
@@ -35,6 +43,9 @@ class _Kept(Transport):
         event = envelope.get_event()
         if event is not None:
             self.events.append(event)
+        for item in envelope.items:
+            if item.type == "check_in" and item.payload.json is not None:
+                self.events.append({"type": "check_in", **item.payload.json})
 
 
 @pytest.fixture
@@ -138,6 +149,77 @@ def test_a_failed_job_is_an_event_without_its_arguments(sent):
     assert "keyword-value" not in whole
     assert sent[0]["extra"]["rq-job"]["job_id"] == job.id
     assert "description" not in sent[0]["extra"]["rq-job"]
+
+
+def _failing(exc: Exception) -> Callable[[], None]:
+    def run() -> None:
+        raise exc
+
+    return run
+
+
+def test_a_job_a_provider_refused_is_no_event(sent):
+    """No credits, flagged content, a wrong key: the card says why; it is
+    the provider's answer, not our crash (owner 2026-11-18)."""
+    refusals = [
+        ProviderNoCreditsError("kie.ai: Credits insufficient", provider="kie.ai"),
+        ProviderGenerationError("APIYI: [DataInspectionFailed] Green net check"),
+        RefusedError("Pick a video first."),
+    ]
+    for exc in refusals:
+        job_id = create_job("ai", {"prompt": "p"}, actor=str(make_user().id))
+
+        run_job(job_id, _failing(exc), {})
+
+        job = get_job(job_id)
+        assert job is not None
+        assert job.status == "failed"
+    assert sent == []
+
+
+def test_a_job_that_crashed_is_one_event(sent):
+    job_id = create_job("ai", {"prompt": "p"}, actor=str(make_user().id))
+
+    run_job(job_id, _failing(RuntimeError("list index out of range")), {})
+
+    assert len(sent) == 1
+    assert sent[0]["exception"]["values"][-1]["type"] == "RuntimeError"
+
+
+def test_a_jobs_event_names_its_person_by_id_only(sent):
+    """Sentry counts the people a crash hit; never their email."""
+    person = make_user("crashed@example.com")
+    job_id = create_job("ai", {"prompt": "p"}, actor=str(person.id))
+
+    run_job(job_id, _failing(RuntimeError("boom")), {})
+
+    assert sent[0]["user"] == {"id": str(person.id)}
+    # Nor anywhere else: a Redis breadcrumb's key held it (by_email:<email>).
+    assert "crashed@example.com" not in str(sent[0])
+    crumbs = sent[0].get("breadcrumbs", {}).get("values", [])
+    assert not [c for c in crumbs if c.get("category") == "redis"]
+
+
+def test_a_named_request_names_its_person_by_id_only(sent):
+    with sentry_sdk.isolation_scope():
+        name_user(42)
+        get_logger("ofmhelpers.test_sentry").error("page failed")
+
+    assert sent[0]["user"] == {"id": "42"}
+
+
+def test_the_heartbeat_is_a_check_in_that_makes_its_monitor(sent):
+    heartbeat()
+
+    [checkin] = sent
+    assert checkin["type"] == "check_in"
+    assert (checkin["monitor_slug"], checkin["status"]) == ("sweeps", "ok")
+    assert checkin["monitor_config"]["schedule"]["value"] == HEARTBEAT_S // 60
+    assert checkin["release"] == "abc1234"
+
+
+def test_no_dsn_no_heartbeat():
+    heartbeat()  # nothing to send to, nothing raised
 
 
 def test_configuring_twice_keeps_the_first_client(sent):

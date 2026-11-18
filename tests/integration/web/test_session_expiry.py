@@ -12,12 +12,8 @@ looks signed in. The fix has two halves, both covered here:
   every page via base.html.
 """
 
-import os
 import time
 from urllib.parse import parse_qs, urlsplit
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from fastapi.testclient import TestClient
 

@@ -4,11 +4,6 @@ the "reuse an uploaded image/video" pickers without a download-then-reupload
 round trip (see task_helpers.register_generated_asset).
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 
 import pytest

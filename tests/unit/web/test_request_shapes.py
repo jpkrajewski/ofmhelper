@@ -2,13 +2,9 @@
 (`web/forms.py`), a refusal raised past its route (`web/exceptions.py`), and
 what telemetry keeps of either."""
 
-import os
-from datetime import date
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import inspect
 from collections.abc import Iterator
+from datetime import date
 from typing import Annotated
 from unittest.mock import MagicMock
 

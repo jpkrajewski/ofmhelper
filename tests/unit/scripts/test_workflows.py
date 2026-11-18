@@ -158,3 +158,27 @@ def test_a_workflow_run_takes_only_this_repositorys_own_runs(path: Path):
             "github.event.workflow_run.head_repository.full_name"
             " == github.repository" in guard
         ), name
+
+
+def _deploy_text() -> str:
+    return (REPO / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+
+
+def test_the_deploy_job_has_no_checkout():
+    """security audit 2026-11-18: every step goes over SSH; nothing needs the
+    workspace, so none is fetched next to the SSH key."""
+    steps = _load(REPO / ".github/workflows/deploy.yml").jobs["deploy"].steps
+    assert not [s for s in steps if s.uses]
+
+
+def test_the_deploy_pins_the_host_key_and_never_trusts_first_use():
+    text = _deploy_text()
+    assert "ssh-keyscan" not in text.replace("(ssh-keyscan <host>)", "")
+    assert 'missing="$missing OFM_DEPLOY_KNOWN_HOSTS' in text
+
+
+def test_a_ci_deploy_never_rolls_back_but_a_manual_one_may():
+    text = _deploy_text()
+    assert "FORWARD_ONLY: ${{ github.event_name == 'workflow_run'" in text
+    assert 'git merge-base --is-ancestor "$target" "$current"' in text
+    assert "bash /tmp/ofm-deploy.sh '$DIR' '$SHA' '$FORWARD_ONLY'" in text

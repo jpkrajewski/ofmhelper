@@ -5,10 +5,6 @@ Reconnect) asks again. A failed upload's reason on a card is one of a few
 fixed words by kind, never Drive's own text (review 2026-10-25 #13, #16,
 #33, #46)."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in

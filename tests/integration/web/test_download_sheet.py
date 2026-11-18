@@ -6,11 +6,6 @@ before as one download job; the button then rests.
 The Drive is the fake one, the downloads write small files
 (`download_files.py`): no network."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from datetime import date, timedelta
 from pathlib import Path

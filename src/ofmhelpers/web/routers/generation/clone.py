@@ -68,6 +68,7 @@ from ofmhelpers.web.dependencies import (
 )
 from ofmhelpers.web.forms import Files, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
+from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
@@ -139,7 +140,8 @@ def form(
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
     first = gallery.page(viewer, query)
-    return render(
+    # security audit 2026-11-18: the page pre-fills saved API keys.
+    response = render(
         request,
         "clone.html",
         gallery=cards(first.jobs),
@@ -150,6 +152,8 @@ def form(
         **dict(form_view(actor, viewer.team, assets_root, video or [])),
         **dict(drive_picker(user.id)),
     )
+    response.headers.update(NO_STORE)
+    return response
 
 
 @router.get("/gallery")
@@ -224,11 +228,11 @@ def drive_upload_remove(
 
 @router.get("/drive-uploads")
 def drive_upload_states(
-    user: CurrentUser, actors: Actors, job: Annotated[list[str], Query(max_length=200)]
+    viewer: Viewing, actors: Actors, job: Annotated[list[str], Query(max_length=200)]
 ) -> list[DriveUpload]:
     """Where these runs' videos are in Drive: what clone.js polls while
-    uploads run. Only runs this session may see, uploads it made."""
-    return upload_states(job, actors, user.id)
+    uploads run. Only runs this session may see, uploads of its team."""
+    return upload_states(job, actors, viewer.team_ids)
 
 
 @router.post("/run", status_code=202)

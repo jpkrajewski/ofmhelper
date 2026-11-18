@@ -5,11 +5,6 @@ broken route or a lifespan crash by just running `pytest`, and it stays
 checked on every future change instead of evaporating after one manual run.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from html.parser import HTMLParser
 
 import pytest

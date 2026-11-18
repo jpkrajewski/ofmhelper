@@ -1,10 +1,6 @@
 """The web layer's typed shapes: stored results keep their exact old JSON
 shape, and the task registry covers every registered tool router."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from ofmhelpers.db.stores.jobs import _stored
 from ofmhelpers.schemas import ResultFile
 from ofmhelpers.web.routers import ROUTERS

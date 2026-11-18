@@ -3,11 +3,6 @@ Apple through their real flow against the in-process fakes of their token
 endpoints, set-password links from /users, linking accounts on /account,
 and the session following /users changes at once."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 import time
 from urllib.parse import parse_qs, urlsplit

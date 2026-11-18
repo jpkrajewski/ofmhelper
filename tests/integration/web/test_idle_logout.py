@@ -6,11 +6,6 @@ while everyone else keeps 5, and a VA who just stops working gets an
 their next sign-in -- once per idle stretch.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import time
 
 import pytest

@@ -8,9 +8,12 @@ lazy from fastapi import Request
 
 from ofmhelpers.cache.rate_limit import (
     clear_failed_logins,
+    clear_failed_user_logins,
     client_id,
     login_blocked,
     record_failed_login,
+    record_failed_user_login,
+    user_login_blocked,
 )
 from ofmhelpers.db.stores import users
 from ofmhelpers.features.signin import credentials
@@ -47,6 +50,23 @@ def login(request: Request, email: str, password: str, next_url: str) -> Outcome
         )
     clear_failed_logins(request)
     return signed_in(user, next_url, "password")
+
+
+def change_password(user_id: int, current: str, password: str, confirm: str) -> None:
+    """/account/password: `credentials.change_password`, its wrong current
+    passwords counted and braked per person like /login's (security audit
+    2026-11-18: a stolen session could otherwise guess the password).
+    Raises `credentials.PasswordRejectedError`."""
+    if user_login_blocked(user_id):
+        logger.warning("password change rate limit hit for user %s", user_id)
+        raise credentials.PasswordRejectedError(_TOO_MANY)
+    try:
+        credentials.change_password(user_id, current, password, confirm)
+    except credentials.WrongPasswordError:
+        record_failed_user_login(user_id)
+        logger.warning("wrong current password for user %s", user_id)
+        raise
+    clear_failed_user_logins(user_id)
 
 
 def va_login(request: Request, employer: str, password: str, next_url: str) -> Outcome:

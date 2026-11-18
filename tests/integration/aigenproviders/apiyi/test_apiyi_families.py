@@ -5,10 +5,7 @@ the request), Seedance's Ark tasks and Veo's /v1/videos -- what goes over the
 wire, what comes back saved, and the key each model runs on."""
 
 import base64
-import os
 from pathlib import Path
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from PIL import Image

@@ -32,6 +32,9 @@ def resolve_existing_ref(raw_path: str, allowed_root: Path) -> Path:
     Pure: it reads the store and never writes to it. "This file was just
     picked" is recorded by the caller (`features/assets/ref_usage.record_use`), which is
     the only place that knows a resolve meant a real reuse."""
+    if "\0" in raw_path:  # security audit 2026-11-18: refusal, not a 500
+        msg = "Invalid reference path"
+        raise AssetRefusedError(msg)
     resolved = Path(raw_path).resolve()
     if not in_asset_root(allowed_root, resolved):
         msg = "Invalid reference path"

@@ -5,11 +5,6 @@ rest from GET /download-assets/gallery?offset=N. Pages don't overlap, every
 job is reachable, and the sentinel is gone after the last page.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 
 import pytest

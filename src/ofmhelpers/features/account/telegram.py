@@ -19,7 +19,7 @@ from redis.exceptions import RedisError
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.acting import Acting, Via, acting
-from ofmhelpers.db.stores import event_targets
+from ofmhelpers.db.stores import event_targets, users
 from ofmhelpers.features.events.dispatch import deliver_to
 from ofmhelpers.features.refusals import UnavailableError
 from ofmhelpers.integrations.senders.telegram.client import TelegramError, bot_name
@@ -65,6 +65,13 @@ def link(start: Start) -> bool:
         deliver_to(SENDER, start.chat_id, _old_link())
         return False
     user_id = int(raw)
+    # security audit 2026-11-18: a token of a person deactivated meanwhile
+    # links nothing.
+    person = users.get_user(user_id)
+    if person is None or not person.active:
+        logger.info("telegram: a /start link of user %s, not active", user_id)
+        deliver_to(SENDER, start.chat_id, _old_link())
+        return False
     with acting(Acting(via=Via.TELEGRAM, actor_id=user_id, ref="telegram /start")):
         saved = event_targets.save(user_id, SENDER, start.chat_id)
     if not saved:

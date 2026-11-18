@@ -6,7 +6,7 @@ default_language_version:
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.2
+    rev: f368fb366ff7f2f808dd324b83a6d32267799e19  # frozen: v0.17.2
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -77,15 +77,15 @@ repos:
         always_run: true
         stages: [pre-push]
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.13.5
+    rev: eeca16c54e09b4d9a848259e46bae14737944348  # frozen: 0.13.5
     hooks:
       - id: uv-lock
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.28.0
+    rev: 4fb43823ef3d152d239e92d7d5cb04783b548062  # frozen: v8.28.0
     hooks:
       - id: gitleaks # API keys/tokens (kie.ai, Higgsfield, proxies), not just private keys
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # frozen: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer

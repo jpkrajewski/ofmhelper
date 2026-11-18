@@ -188,10 +188,13 @@ def download(found: DiskFile) -> Response:
 @router.post("/delete")
 def delete_one(path: FormText, root: FormText = DEFAULT_ROOT) -> Response:
     parent = disk.delete_one(root, path)
-    return see_other(f"/file-manager/disk?root={root}&path={parent}")
+    # security audit 2026-11-18: encoded like the other redirects.
+    query = urlencode({"root": root, "path": parent})
+    return see_other(f"/file-manager/disk?{query}")
 
 
 @router.post("/delete-all")
 def delete_all(path: FormText = "", root: FormText = DEFAULT_ROOT) -> Response:
     disk.delete_all(root, path)
-    return see_other(f"/file-manager/disk?root={root}&path={path}")
+    query = urlencode({"root": root, "path": path})
+    return see_other(f"/file-manager/disk?{query}")

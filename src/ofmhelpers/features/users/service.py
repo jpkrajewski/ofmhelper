@@ -121,7 +121,7 @@ def _va_signs_in(va: User) -> str:
 
 
 def _make_va_folder(va: User) -> None:
-    """A VA added, or moved to another employer: their folder in the
+    """A VA added (or given their first employer): their folder in the
     employer's Drive (`features/drive/va_folders.py`) is made now, on the
     worker, not at the next sweep. Never raises: the VA is saved already; a
     failure is logged and the sweep makes the folder."""
@@ -198,9 +198,19 @@ def set_owner(user: User, owner_id: int | None) -> None:
     what the VA makes, the VA's runs go out on the owner's saved API keys,
     and the VA signs in with the owner's email; a manager looks at the
     employer's pages (any user's or admin's; the chats only an admin's:
-    `auth.access.opens`). Both always have one."""
+    `auth.access.opens`). Both always have one. A VA's is set once, when
+    they are added (owner 2026-11-18: "Once created it stays that way"):
+    their runs were made on that employer's keys and belong to them. A
+    wrong pick = deactivate the VA and add them again. A manager makes no
+    runs, so theirs stays changeable."""
     if not user.role.has_employer:
         msg = "Only a VA or a manager has an employer"
+        raise RefusedError(msg)
+    if user.role == Role.VA and user.owner_id is not None:
+        msg = (
+            "A VA's employer is set when they are added. To change it,"
+            " deactivate them and add them again."
+        )
         raise RefusedError(msg)
     picked = _owner(owner_id)
     if picked is None:

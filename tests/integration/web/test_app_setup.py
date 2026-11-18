@@ -1,10 +1,6 @@
 """`create_app()` (web/main.py): what a deployment's settings turn on and off,
 and the order a request passes the middleware."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -18,6 +14,7 @@ from ofmhelpers.web.middleware import (
     BridgeMiddleware,
     CanonicalHostMiddleware,
     CompressionMiddleware,
+    FrameGuardMiddleware,
     WriteRateLimitMiddleware,
 )
 
@@ -35,6 +32,7 @@ def test_development_serves_the_docs():
 def test_production_serves_no_docs(monkeypatch):
     monkeypatch.setenv("OFM_ENV", "production")
     monkeypatch.setenv("SESSION_SECRET", "a" * 64)
+    monkeypatch.setenv("SESSION_HTTPS_ONLY", "true")
 
     assert not DOCS & _paths()
 
@@ -78,8 +76,30 @@ def test_production_refuses_a_short_session_secret(monkeypatch):
 def test_production_starts_with_a_long_session_secret(monkeypatch):
     monkeypatch.setenv("OFM_ENV", "production")
     monkeypatch.setenv("SESSION_SECRET", "a" * 64)
+    monkeypatch.setenv("SESSION_HTTPS_ONLY", "true")
 
     assert settings.session.session_secret == "a" * 64
+
+
+def test_production_refuses_session_cookies_that_may_go_over_http(monkeypatch):
+    monkeypatch.setenv("OFM_ENV", "production")
+    monkeypatch.setenv("SESSION_SECRET", "a" * 64)
+    monkeypatch.setenv("SESSION_HTTPS_ONLY", "false")
+
+    with pytest.raises(ValidationError, match="SESSION_HTTPS_ONLY"):
+        _ = settings.session
+
+
+def test_no_answer_of_the_app_may_be_framed_by_another_site():
+    """Clickjacking: until 2026-11-18 only SameSite=Lax stood in the way."""
+    client = TestClient(create_app())
+
+    for path in ("/login", "/home", "/static/css/tokens.css"):
+        response = client.get(path, follow_redirects=False)
+        assert response.headers["x-frame-options"] == "DENY", path
+        assert response.headers["content-security-policy"] == (
+            "frame-ancestors 'none'"
+        ), path
 
 
 def test_the_app_says_which_release_it_is(monkeypatch):
@@ -92,6 +112,7 @@ def test_a_request_passes_the_middleware_in_this_order():
     assert [m.cls for m in create_app().user_middleware] == [
         BridgeMiddleware,
         CanonicalHostMiddleware,
+        FrameGuardMiddleware,
         CompressionMiddleware,
         SessionMiddleware,
         WriteRateLimitMiddleware,

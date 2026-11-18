@@ -2,10 +2,6 @@
 served the previous file from a browser cache (nginx caches /static a week)."""
 
 import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 
 from fastapi.testclient import TestClient

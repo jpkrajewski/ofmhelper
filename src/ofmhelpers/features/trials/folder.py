@@ -533,6 +533,12 @@ class Trials(BaseModel, frozen=True):
     encode: Callable[..., object]
     enqueue: Callable[..., object]
 
+    def owned(self) -> None:
+        """security audit 2026-11-18: the login must be one of the viewer's
+        phones' (`scope`); NotFoundError (404) before anything is written."""
+        if all(t.login_id != self.login_id for t in drive_store.targets(self.scope)):
+            raise NotFoundError(NO_FOLDER)
+
     def open(self) -> OpenedFolder:
         card, state = _sync_state(self.scope, self.uid, self.login_id)
         return OpenedFolder(card=card, view=FolderView.of(self.uid, state))
@@ -543,8 +549,7 @@ class Trials(BaseModel, frozen=True):
     def view(self) -> FolderView:
         """The folder's view, when the login is one of the viewer's phones' (the
         phones /drive's cards are made from, without building them)."""
-        if all(t.login_id != self.login_id for t in drive_store.targets(self.scope)):
-            raise NotFoundError(NO_FOLDER)
+        self.owned()
         return FolderView.of(self.uid, load(self.uid, self.login_id))
 
     def claim(self, label: str) -> _Claim:

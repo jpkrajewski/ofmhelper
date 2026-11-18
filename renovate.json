@@ -10,6 +10,8 @@
   "rangeStrategy": "pin",
   "minimumReleaseAge": "14 days",
   "pre-commit": { "enabled": true },
+  "dockerfile": { "pinDigests": true },
+  "docker-compose": { "pinDigests": true },
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["* 0-5 1 * *"]

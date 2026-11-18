@@ -3,11 +3,6 @@ users to connect their fanvue or stacked?"; before, one `.env` line per
 account and a container restart): checked with Stacked first, then read
 with the `.env` ones for the agency's chats. Only for who may open them."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient

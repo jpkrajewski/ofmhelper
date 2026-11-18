@@ -1,10 +1,5 @@
 """/uniqify: one video in, N re-encoded variants out (utils/uniqify.py)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
 import json
 import random

@@ -7,10 +7,12 @@ its class in `providers/__init__.py`'s `_PROVIDER_TYPES` and its
 import hashlib
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
 from typing import Any, ClassVar
 lazy from datetime import date
 
 import requests
+from pydantic import ValidationError
 from redis import RedisError
 
 from ofmhelpers.cache import get_redis
@@ -34,6 +36,24 @@ lazy from ofmhelpers.schemas.link_catalog.models import (
 )
 
 logger = get_logger(__name__)
+
+
+def listed[T](
+    provider: str, rows: Iterable[T], make: Callable[[T], RemoteLink]
+) -> list[RemoteLink]:
+    """`rows` as RemoteLinks; a row the provider sent with a non-http(s) url
+    or destination is left out of the sync and logged (security audit
+    2026-11-18)."""
+    found: list[RemoteLink] = []
+    for row in rows:
+        try:
+            found.append(make(row))
+        except ValidationError:
+            logger.warning(
+                "%s: a listed link was dropped: %s", provider, row, exc_info=True
+            )
+    return found
+
 
 # Reserves the key's next call slot atomically: returns how long to wait
 # for it (seconds) and moves the key's next free slot `gap` past it.

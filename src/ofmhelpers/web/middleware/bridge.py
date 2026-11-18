@@ -19,6 +19,7 @@ import time
 from typing import Literal
 from urllib.parse import urlsplit
 
+from pydantic import BaseModel, ValidationError
 from redis.exceptions import RedisError
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -34,6 +35,14 @@ from ofmhelpers.web.templates_config import render
 
 logger = get_logger(__name__)
 
+
+class _Beacon(BaseModel):
+    """The `/api/track-direct` body."""
+
+    slug: str | None = None
+    referrer: str | None = None
+
+
 _SLUG = re.compile(r"^[a-z0-9._-]+$", re.IGNORECASE)
 _TRACK_PATH = "/api/track-direct"
 # A crawler/scanner: its view is not counted (the page it gets is the same).
@@ -45,10 +54,14 @@ _BOT = re.compile(
 # "open in your browser" page that re-opens the link in the real browser (the
 # gate and its tracking then run there).
 _FB_APP = re.compile(r"FBAN|FBAV|FB_IAB|FBIOS", re.IGNORECASE)
-# Kept off every search index and sent with no referrer or caching.
+# Kept off every search index and sent with no referrer or caching; never
+# framed by another site (clickjacking: these pages answer outside the app's
+# FrameGuardMiddleware; Kimi review 2026-11-18).
 _HEADERS = {
     "x-robots-tag": "noindex, nofollow, noarchive",
     "referrer-policy": "no-referrer",
+    "x-frame-options": "DENY",
+    "content-security-policy": "frame-ancestors 'none'",
     "cache-control": "no-store",
 }
 # In-app browser (matched against the UA) -> the analytics label we store.
@@ -228,18 +241,19 @@ class BridgeMiddleware:
         return response
 
     async def _track(self, request: Request, host: str) -> Response:
+        # security audit 2026-11-18: a body that is not {"slug", "referrer"}
+        # is a plain 204, one debug line, no error per request.
         try:
-            body = await request.json()
-        except ValueError:
-            # A visitor's body that is not JSON: the hit is not recorded.
-            logger.info("bridge: track body not JSON", exc_info=True)
-            body = {}
-        slug = str(body.get("slug") or "").strip("/")
+            body = _Beacon.model_validate_json(await request.body())
+        except ValidationError:
+            logger.debug("bridge: track body refused", exc_info=True)
+            return Response(status_code=204, headers=_HEADERS)
+        slug = (body.slug or "").strip("/")
         if slug and "/" not in slug and _SLUG.match(slug) and _allow(request):
             link = await run_in_threadpool(self_links.bridge_target, host, slug)
             if link is not None:
                 await run_in_threadpool(
                     _record,
-                    _visitor(request, "click", link.id, body.get("referrer")),
+                    _visitor(request, "click", link.id, body.referrer),
                 )
         return Response(status_code=204, headers=_HEADERS)

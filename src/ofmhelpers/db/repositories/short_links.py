@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 lazy from sqlalchemy.orm import Session
 
 from ofmhelpers.db.models import (
@@ -27,6 +28,7 @@ from ofmhelpers.db.repositories.cached_repository import (
     cached,
     invalidates_cache,
 )
+from ofmhelpers.db.repositories.devices import DuplicateError
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.schemas.link_catalog import DayStat
@@ -91,6 +93,16 @@ def _days(s: Session, link_ids: list[int], since: date) -> dict[int, list[DaySta
     for link_id, d, views, clicks in rows:
         found.setdefault(link_id, []).append(DayStat(day=d, views=views, clicks=clicks))
     return found
+
+
+def _taken(exc: IntegrityError) -> None:
+    """A link address already held (`uq_short_links_address` for the
+    owner's own, `uq_short_links_self_address` for anyone's self link) as
+    the refusal the page shows: two Generates racing for one slug."""
+    text = str(exc.orig)
+    if "uq_short_links_address" in text or "uq_short_links_self_address" in text:
+        msg = "That address is already taken"
+        raise DuplicateError(msg) from exc
 
 
 def _creator_of_account(s: Session, account_id: int | None) -> int | None:
@@ -239,7 +251,11 @@ class ShortLinkRepository(CachedRepository):
                     status="creating",
                 )
                 s.add(row)
-                s.flush()
+                try:
+                    s.flush()
+                except IntegrityError as exc:
+                    _taken(exc)
+                    raise
                 ids.append(row.id)
             return ids
 

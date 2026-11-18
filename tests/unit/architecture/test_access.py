@@ -8,10 +8,7 @@ neither fails, so does an area or an action no route uses, and a menu entry
 whose page is another area's.
 """
 
-import os
 import re
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, RouteContext, iter_route_contexts

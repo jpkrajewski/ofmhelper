@@ -7,11 +7,6 @@ never $0). A user sees their own VAs, an admin every VA under its owner, a
 VA cannot open the page. Days are the reader's chosen time zone's.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from datetime import datetime
 from decimal import Decimal

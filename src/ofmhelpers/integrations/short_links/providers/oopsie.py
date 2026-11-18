@@ -12,7 +12,7 @@ from ofmhelpers.integrations.short_links.errors import (
     SlugTakenError,
     UngatedError,
 )
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider
+from ofmhelpers.integrations.short_links.providers.base import LinkProvider, listed
 from ofmhelpers.schemas.link_catalog.models import (
     DayStat,
     HourStat,
@@ -118,7 +118,7 @@ class OopsieProvider(LinkProvider):
 
     def list_links(self) -> list[RemoteLink]:
         pages = self._data(self._call("GET", "/api/pages"), "list pages")
-        return [_remote(p) for p in pages]
+        return listed(self.key, pages, _remote)
 
     def _page(self, slug: str) -> dict[str, Any]:
         return self._data(

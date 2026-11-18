@@ -3,11 +3,6 @@ image of a person's /clone and /clone-links runs, last used and most used,
 one tile per picture (same content = one picture), only files still in
 their own part of the store."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from pathlib import Path
 

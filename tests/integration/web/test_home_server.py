@@ -2,11 +2,6 @@
 /home/server; the host numbers read from /proc and the disk; what is worth
 a warning."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 
 import pytest

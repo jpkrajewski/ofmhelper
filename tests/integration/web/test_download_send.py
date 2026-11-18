@@ -5,12 +5,8 @@ endpoint registers each video into the store (as /reels does) and hands over
 those store paths."""
 
 import json
-import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

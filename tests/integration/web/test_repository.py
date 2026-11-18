@@ -10,8 +10,6 @@ import threading
 
 # The app (test_pages_answer_while_the_cache_is_down) reads it at import:
 # set here like every app test, not left to another module collected first.
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from redis import Redis
 from signin import make_user
 

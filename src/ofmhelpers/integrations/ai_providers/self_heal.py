@@ -257,8 +257,10 @@ def callback_url(provider: str, key: str) -> str:
 
 
 def _ours(cls: type[Provider], api_key: str, task_id: str, key: str) -> bool:
-    """An unsigned callback's task, checked with the job's own key: a made-up
-    id is refused as not on our account. A provider too slow to say is taken
+    """A callback's task, checked with the job's own key: a made-up id is
+    refused as not on our account. Signed callbacks too: kie.ai signs only
+    `taskId.timestamp`, never which job's account it is (security audit
+    2026-11-18), and the check is a free status read. A provider too slow to say is taken
     at its word -- the run's own poll checks the task anyway -- rather than
     answered with an error it may never retry (kie.ai's Veo page: three
     tries, then no more callbacks)."""
@@ -304,7 +306,7 @@ def heard(provider: str, key: str, raw: bytes, headers: Mapping[str, str]) -> He
     noted = tasks.sent(job_id, part)
     if noted is None or noted.provider != provider:
         return Heard.IGNORED
-    if not cls.callback_signed() and not _ours(cls, noted.api_key, task_id, key):
+    if not _ours(cls, noted.api_key, task_id, key):
         return Heard.IGNORED
     tasks.found(job_id, part, task_id)
     logger.info("%s callback: job %s made task %s, answer lost", provider, key, task_id)

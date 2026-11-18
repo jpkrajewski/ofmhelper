@@ -36,9 +36,11 @@ def _encodes() -> Callable[..., object]:
 
 
 def _trials(login_id: int, user: CurrentUser, scope: Scope) -> folder.Trials:
-    return folder.Trials(
+    trials = folder.Trials(
         uid=user.id, scope=scope, login_id=login_id, encode=_encodes(), enqueue=enqueue
     )
+    trials.owned()  # security audit 2026-11-18: not their login = 404, nothing written
+    return trials
 
 
 # The signed-in person's trials of the login in the path.

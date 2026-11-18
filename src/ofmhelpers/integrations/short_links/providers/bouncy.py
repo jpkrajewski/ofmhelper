@@ -16,7 +16,7 @@ from ofmhelpers.integrations.short_links.errors import (
     SlugTakenError,
     UngatedError,
 )
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider
+from ofmhelpers.integrations.short_links.providers.base import LinkProvider, listed
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.link_catalog.models import (
     DayStat,
@@ -151,7 +151,7 @@ class BouncyProvider(LinkProvider):
             if not response.ok:
                 raise self._failed(response, "list links")
             body = response.json()
-            found += [_remote(x) for x in body["data"]]
+            found += listed(self.key, body["data"], _remote)
             if not body["pagination"]["hasMore"]:
                 return found
             page += 1

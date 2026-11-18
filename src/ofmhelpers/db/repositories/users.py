@@ -364,6 +364,25 @@ class UserRepository(CachedRepository):
             row.password_hash = password_hash
             s.execute(delete(PasswordLinkRow).where(PasswordLinkRow.user_id == user_id))
 
+    @invalidates_cache
+    def replace_password_hash(
+        self, user_id: int, expected: str, password_hash: str
+    ) -> bool:
+        """Compare-and-swap (security audit 2026-11-18): sets the hash only
+        while it is still `expected`, the one that was verified; False when
+        the password changed meanwhile. Also voids the set-password links."""
+        with session_scope() as s:
+            swapped = s.execute(
+                update(UserRow)
+                .where(UserRow.id == user_id, UserRow.password_hash == expected)
+                .values(password_hash=password_hash)
+                .returning(UserRow.id)
+            ).scalar_one_or_none()
+            if swapped is None:
+                return False
+            s.execute(delete(PasswordLinkRow).where(PasswordLinkRow.user_id == user_id))
+            return True
+
     def add_password_link(
         self, user_id: int, token_hash: str, expires_at: float
     ) -> None:

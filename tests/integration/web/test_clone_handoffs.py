@@ -2,11 +2,6 @@
 picked there (`POST /clone/{job}/handoffs`, features/assets/send.py; owner
 2026-11-16: "there is no option to click edit from clone")."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 

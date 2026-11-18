@@ -264,7 +264,7 @@ services:
     command:
       - rq-dashboard
       - --redis-url
-      - redis://redis:6379/0
+      - redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
       - --bind
       - 0.0.0.0
       - --port

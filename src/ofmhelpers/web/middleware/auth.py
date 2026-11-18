@@ -64,6 +64,7 @@ from ofmhelpers.features.users import presence
 from ofmhelpers.features.users.viewing import viewer_for
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import SessionUser, User
+from ofmhelpers.sentry import name_user
 lazy from ofmhelpers.schemas.users import Viewer
 
 logger = get_logger(__name__)
@@ -144,6 +145,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 **({"viewing.id": str(viewer.user.id)} if viewer.by else {}),
             }
         )
+        # Sentry counts the people a crash hit: the signed-in person's id,
+        # never the email (ofmhelpers/sentry.py).
+        name_user(user.id)
         if (
             viewer.read_only
             and request.method not in _READS

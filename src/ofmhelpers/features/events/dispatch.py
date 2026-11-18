@@ -55,6 +55,8 @@ _SLOT_S = 48 * 3600
 
 
 def _off() -> set[str]:
+    if not settings.events.sending(settings.infra.production):
+        return set(senders().names())
     off = set(settings.events.senders_off_list())
     unknown = off - set(senders().names())
     if unknown:
@@ -74,11 +76,16 @@ def _targets(sender: Sender, event: Event) -> list[str]:
     agency's chats are not theirs, owner 2026-11-15)."""
     if event.owner_id is None:
         return sender.targets()
+    owner = users.get_user(event.owner_id)
+    # security audit 2026-11-18: a deactivated (or deleted) person gets nothing
+    # on what they linked.
+    if owner is None or not owner.active:
+        logger.info("event %s: user %s is not active", event.name, event.owner_id)
+        return []
     own = event_targets.of(event.owner_id, sender.name)
     if own:
         return [own]
-    owner = users.get_user(event.owner_id)
-    if owner is not None and owner.is_admin:
+    if owner.is_admin:
         return sender.targets()
     logger.info(
         "event %s: user %s linked no %s", event.name, event.owner_id, sender.name
@@ -231,7 +238,7 @@ class Delivery(BaseModel, frozen=True, arbitrary_types_allowed=True):
 def listening() -> bool:
     """Whether any sender that is on has somewhere to send: none, and a producer
     with costly reads (the daily report, the unanswered list) does nothing."""
-    off = set(settings.events.senders_off_list())
+    off = _off()
     return any(s.targets() for s in senders().all() if s.name not in off)
 
 

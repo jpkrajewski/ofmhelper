@@ -190,17 +190,39 @@ def test_the_deploy_workflow_takes_a_sha_by_hand():
     assert inputs["sha"]["required"] is False
 
 
-def test_the_database_password_comes_from_the_environment():
-    """Not written into the file: POSTGRES_PASSWORD, with the value every
-    existing volume was made with as the fallback (the server sets none)."""
+def test_the_database_and_redis_passwords_are_required_never_a_default():
+    """Not written into the file, and no fallback: a known password let any
+    container on the network into Postgres, and Redis had none (security
+    audit 2026-11-18). Compose stops when .env lacks either."""
     services = _compose().services
     postgres = services["postgres"].model_dump()["environment"]
     app = services["ofmhelpers"].model_dump()["environment"]
-    assert "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ofmhelpers}" in postgres
+    redis = services["redis"].model_dump()
+    required_pg = "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+    required_redis = "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"
+    assert f"POSTGRES_PASSWORD={required_pg}" in postgres
     assert (
-        "OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:"
-        "${POSTGRES_PASSWORD:-ofmhelpers}@postgres:5432/ofmhelpers"
+        f"OFM_DATABASE_URL=postgresql+psycopg://ofmhelpers:{required_pg}"
+        "@postgres:5432/ofmhelpers"
     ) in app
+    assert f"OFM_REDIS_URL=redis://:{required_redis}@redis:6379/0" in app
+    assert redis["command"][-2:] == ["--requirepass", required_redis]
+    whole = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    assert ":-ofmhelpers}" not in whole
+
+
+def test_both_deploys_set_the_database_password_from_env_after_the_app_stops():
+    """The image reads POSTGRES_PASSWORD only when the volume is made: each
+    deploy makes it the user's password (a rotation = a new .env value),
+    with the app down, and recreates Redis only once the workers are."""
+    for deploy in DEPLOYS:
+        text = deploy.read_text(encoding="utf-8")
+        stop_app = text.index("stop ofmhelpers")
+        password = text.index("sh -s < scripts/postgres_password.sh")
+        redis = text.index("up -d --wait redis")
+        start = text.index("up -d --no-deps --force-recreate migrate")
+        assert stop_app < password < redis < start
+        assert "postgres redis pot-provider" not in text
 
 
 def test_no_image_floats_on_a_tag_alone():

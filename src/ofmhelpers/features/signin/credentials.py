@@ -21,6 +21,10 @@ class PasswordRejectedError(ValueError):
     """A new password not accepted; the message says why."""
 
 
+class WrongPasswordError(PasswordRejectedError):
+    """The current password typed is not the account's."""
+
+
 def _is_admin_password(password: str) -> bool:
     admin_password = settings.web.app_password_admin
     return bool(admin_password) and hmac.compare_digest(
@@ -147,5 +151,10 @@ def change_password(user_id: int, current: str, password: str, confirm: str) -> 
     stored = users.password_hash(user_id)
     if stored and not verify_password(current, stored):
         msg = "The current password is wrong"
+        raise WrongPasswordError(msg)
+    hashed = hash_password(_checked(password, confirm))
+    # security audit 2026-11-18: written only while the hash is still the one
+    # verified above, so two requests with the old password cannot both win.
+    if not users.replace_password_hash(user_id, stored, hashed):
+        msg = "Your password changed meanwhile: try again"
         raise PasswordRejectedError(msg)
-    users.set_password_hash(user_id, hash_password(_checked(password, confirm)))

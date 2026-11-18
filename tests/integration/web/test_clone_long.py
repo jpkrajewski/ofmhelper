@@ -3,13 +3,9 @@ most 15 s, joined into one video of the source's shape. Real upload,
 ffprobe, ffmpeg, runner and recovery; only the provider's calls are faked
 (the suite's RQ runs jobs inline)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import contextvars
 import json
+import os
 import subprocess
 import threading
 import time

@@ -3,11 +3,6 @@ Instagram account of a model, always 18+ gated; synced with their daily
 views and clicks; shown on /accounts next to each account's phones. Jobs
 run inline (the suite's RQ is synchronous)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from datetime import timedelta
 
 import pytest

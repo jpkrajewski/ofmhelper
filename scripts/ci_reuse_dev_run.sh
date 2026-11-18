@@ -5,7 +5,7 @@
 #
 #   scripts/ci_reuse_dev_run.sh [<commit>]     default HEAD; needs `gh` + GH_TOKEN
 #
-# The tree counts as tested when "CI passed" succeeded on
+# The tree counts as tested when the CI workflow's push run on dev succeeded on
 #   - the commit itself (a fast-forward of main to a tested dev commit), or
 #   - its second parent, when the merge changed nothing: the promote PR's
 #     merge commit has the dev head's tree, byte for byte.
@@ -17,9 +17,10 @@ commit=$(git rev-parse "${1:-HEAD}")
 repo=${GITHUB_REPOSITORY:?set GITHUB_REPOSITORY (owner/name)}
 
 passed() {
+  # security audit 2026-11-18: only ci.yml's own push run on dev counts, not
+  # any check run that happens to be named "CI passed".
   local count
-  count=$(gh api "repos/$repo/commits/$1/check-runs?check_name=CI%20passed" \
-    --jq '[.check_runs[] | select(.conclusion == "success")] | length') || return 1
+  count=$(gh api "repos/$repo/actions/runs?head_sha=$1&event=push&branch=dev&status=success&per_page=100"     --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml" and .conclusion == "success" and .event == "push" and .head_branch == "dev")] | length') || return 1
   [ "${count:-0}" -gt 0 ]
 }
 

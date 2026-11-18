@@ -17,7 +17,11 @@ SCRIPT = REPO / "scripts/ci_reuse_dev_run.sh"
 # The URL is the 2nd argument: repos/<repo>/commits/<sha>/check-runs?...
 _FAKE_GH = """#!/usr/bin/env bash
 [ -f "$FAKE_GH_FAIL" ] && exit 1
-sha=$(echo "$2" | cut -d/ -f5)
+case "$2" in
+  *"actions/runs?head_sha="*"event=push"*"branch=dev"*) ;;
+  *) echo 0; exit 0 ;;  # only ci.yml's push run on dev counts (2026-11-18)
+esac
+sha=$(echo "$2" | sed -E 's/.*head_sha=([0-9a-f]+).*/\\1/')
 grep -qx "$sha" "$GREEN" && echo 1 || echo 0
 """
 

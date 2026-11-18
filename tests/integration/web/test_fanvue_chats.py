@@ -3,14 +3,11 @@ subscribers and sales, mass messages that name nobody. What every platform does 
 test_chat_platforms.py."""
 
 import logging
-import os
 import re
 import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from chat_platforms import FanvueDriver

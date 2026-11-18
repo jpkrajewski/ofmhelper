@@ -886,6 +886,18 @@ class ShortLinkRow(Timestamps, Authored, Base):
             "slug",
             postgresql_where=text("provider = 'self' AND status = 'active'"),
         ),
+        # One self address is one link, whoever owns it (owner 2026-11-18):
+        # a live or paused one holds its address; failed and deleting ones
+        # do not. `taken_slugs` numbers a new one past it.
+        Index(
+            "uq_short_links_self_address",
+            "domain",
+            "slug",
+            unique=True,
+            postgresql_where=text(
+                "provider = 'self' AND status IN ('creating', 'active', 'inactive')"
+            ),
+        ),
     )
 
 

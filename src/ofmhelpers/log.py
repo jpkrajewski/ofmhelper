@@ -48,6 +48,8 @@ import re
 import sys
 from typing import Any
 
+from ofmhelpers.redact import path_tokens
+
 # Set by configure_logging() so a second call (e.g. an entrypoint that
 # imports another entrypoint) doesn't tear down and rebuild handlers.
 _configured = False
@@ -98,7 +100,8 @@ class _HideLoginCodes(logging.Filter):
             record.args = (
                 client,
                 method,
-                _LOGIN_CODE.sub(r"\1***", str(path)),
+                # security audit 2026-11-18: also the tokens in the path.
+                path_tokens(_LOGIN_CODE.sub(r"\1***", str(path))),
                 version,
                 status,
             )

@@ -7,11 +7,6 @@ it is what makes a job's gallery card disappear too (see
 web/stores/jobs.py's list_jobs()/_prune_missing_files()).
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency

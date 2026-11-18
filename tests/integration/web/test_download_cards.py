@@ -1,11 +1,6 @@
 """/download-assets: every file of a download is its own card, reloaded as when
 it finishes on the page, and a card's Clone sends that card's video."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 

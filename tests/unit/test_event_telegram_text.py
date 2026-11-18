@@ -12,7 +12,7 @@ from ofmhelpers.log import _config, _HideJobArguments
 from ofmhelpers.redact import MASK, redact
 from ofmhelpers.schemas.events import MAX_TITLE, Event
 
-_TOKEN = "7712345678:AAHk3v9-Qx_2mZpLw8rT4yUiO1aSdFgHjKl"
+_TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"
 _URL = "https://ascend.test/accounts"
 
 

@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import Date, cast, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from ofmhelpers.db.models import SelfLinkClickRow, SelfLinkDomainRow, ShortLinkRow
 from ofmhelpers.db.repositories.cached_repository import (
@@ -22,6 +23,7 @@ from ofmhelpers.db.repositories.cached_repository import (
     cached,
     invalidates_cache,
 )
+from ofmhelpers.db.repositories.devices import DuplicateError
 from ofmhelpers.db.repositories.owner_scope import mine
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.schemas.link_catalog import DayStat, HourStat
@@ -93,7 +95,12 @@ class SelfLinkRepository(CachedRepository):
                 status=status,
             )
             s.add(row)
-            s.flush()
+            try:
+                s.flush()
+            except IntegrityError as exc:
+                # Someone's already: said without saying whose.
+                msg = "This domain can't be added"
+                raise DuplicateError(msg) from exc
             return row.id
 
     @invalidates_cache

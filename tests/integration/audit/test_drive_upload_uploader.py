@@ -3,11 +3,6 @@ employer, the new employer neither lists nor trashes the old employer's
 files in the old employer's own Google Drive (audit finding
 `drive-uploads:remove-authorized-by-job-reader-not-uploader`)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 
 import pytest

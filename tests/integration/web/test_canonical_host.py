@@ -3,11 +3,6 @@ state cookie and the session live where the OAuth callback lands (prod,
 2026-10-22: a Google Drive connect started on www. failed on the apex
 callback). Other hosts -- loopback, the /health probe -- are served."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 

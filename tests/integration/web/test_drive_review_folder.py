@@ -5,11 +5,8 @@ ten folders of one name, review 2026-10-25 #15), the folder's id remembered
 and checked before reuse. Redis down or the lock held too long: the review
 goes ahead unlocked."""
 
-import os
 import threading
 from contextlib import nullcontext, suppress
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from redis.exceptions import RedisError

@@ -87,8 +87,13 @@ def in_asset_root(root: Path, path: Path) -> bool:
     resolved_root = root.resolve()
     if resolved_root not in resolved.parents:
         return False
+    if resolved_root != assets_root().resolve():
+        return True
+    # security audit 2026-11-18: the thumbnail cache (refs.thumbs_dir(),
+    # `.thumbs`) is no more the agency's to open than `users/`.
+    thumbs = (assets_root() / ".thumbs").resolve()
     users = _users_dir().resolve()
-    return resolved_root != assets_root().resolve() or users not in resolved.parents
+    return users not in resolved.parents and thumbs not in resolved.parents
 
 
 def assets_root_for_actor(actor: str | None) -> Path:
@@ -172,8 +177,9 @@ def safe_filename(name: str | None) -> str:
     path is stripped the same way on Linux, where "\\" is an ordinary
     filename character.
     """
+    # security audit 2026-11-18: a NUL byte is a refusal, not a ValueError 500.
     base = Path((name or "").replace("\\", "/")).name
-    if not base or base in {".", ".."}:
+    if not base or base in {".", ".."} or "\0" in base:
         msg = "Invalid file name"
         raise AssetRefusedError(msg)
     return base
@@ -239,24 +245,29 @@ def save_asset(upload: UploadFile, assets_root: Path | None = None) -> str:
     hasher = hashlib.sha256()
     with tempfile.NamedTemporaryFile(dir=assets_root, delete=False) as tmp:
         tmp_path = Path(tmp.name)
-        for chunk in iter(lambda: upload.file.read(1 << 20), b""):
-            hasher.update(chunk)
-            tmp.write(chunk)
-    digest = hasher.hexdigest()
-
-    existing = next(assets_root.glob(f"{digest}__*"), None)
-    if existing is not None:
-        tmp_path.unlink()
-        return str(existing)
-
-    final_path = assets_root / f"{digest}__{stored_name}"
+        # security audit 2026-11-18: whatever fails from here on, the temp file
+        # is removed (it is gone already once renamed: missing_ok).
+        try:
+            for chunk in iter(lambda: upload.file.read(1 << 20), b""):
+                hasher.update(chunk)
+                tmp.write(chunk)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
     try:
-        tmp_path.rename(final_path)
-    except FileExistsError:  # silent: a concurrent upload of the same content won
-        # Lost a race with a concurrent upload of the same content -- fine,
-        # that copy is just as good.
-        tmp_path.unlink()
-    return str(final_path)
+        digest = hasher.hexdigest()
+        existing = next(assets_root.glob(f"{digest}__*"), None)
+        if existing is not None:
+            return str(existing)
+        final_path = assets_root / f"{digest}__{stored_name}"
+        try:
+            tmp_path.rename(final_path)
+        except FileExistsError:  # silent: a concurrent upload of the same content won
+            # That copy is just as good; `finally` removes this temp file.
+            tmp_path.unlink(missing_ok=True)
+        return str(final_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def register_generated_asset(

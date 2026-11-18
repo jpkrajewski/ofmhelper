@@ -56,3 +56,14 @@ backlog.txt
 
 # AWS guide text for the aws-devops-guidance skill: all rights reserved, rebuilt by its build_cache.py
 .claude/skills/aws-devops-guidance/cache/
+
+# security audit 2026-11-18: credentials never reach this public repo.
+.env.local
+.env.production
+*.pem
+*.key
+id_rsa*
+credentials*.json
+service-account*.json
+/cookies.txt
+token.json

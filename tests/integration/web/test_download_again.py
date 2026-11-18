@@ -6,11 +6,6 @@ clone's Recreate (`/refs/missing` says which gone files can come back).
 
 No network and no ffmpeg (`download_files.py`)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path

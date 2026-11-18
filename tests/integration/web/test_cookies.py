@@ -4,13 +4,8 @@ scans log in with it, nobody else's; a watched profile's one shared scan
 uses the earliest-added watcher's who has any. No value ever reaches a
 page, a log line or Redis."""
 
-import os
-import re
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import logging
+import re
 import time
 
 import pytest

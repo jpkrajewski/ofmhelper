@@ -3,11 +3,6 @@
 Nobody opens one, no menu lists it, and nothing of it runs in the
 background."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin

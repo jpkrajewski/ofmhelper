@@ -9,11 +9,7 @@ whether it works, pins today and link clicks; the report has each model's
 pins and clicks per day. Pinterest and Drive are their fakes."""
 
 import io
-import os
 import time
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from fastapi.testclient import TestClient

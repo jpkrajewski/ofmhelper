@@ -3,11 +3,24 @@ ffprobe."""
 
 from fractions import Fraction
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 
 from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.size import Size
+
+
+def _source(src: Path | str) -> str:
+    """The ffprobe input: a Path is a local file, a str only an http(s) URL.
+    security audit 2026-11-18: a str is never a path or a protocol (`file:`,
+    `concat:`) a caller's data could name. Raises `ValueError`."""
+    if isinstance(src, Path):
+        return str(src)
+    if urlsplit(src).scheme not in {"http", "https"}:
+        msg = "ffprobe reads a Path or an http(s) URL"
+        raise ValueError(msg)
+    return src
 
 
 class ColourTags(BaseModel):
@@ -35,7 +48,8 @@ def colour_tags(src: Path | str, timeout_s: int) -> ColourTags:
             "stream=color_transfer,color_primaries,color_space",
             "-of",
             "json",
-            str(src),
+            "-i",
+            _source(src),
         ],
         timeout_s,
     )
@@ -56,7 +70,8 @@ def duration_s(src: Path | str, timeout_s: int) -> float:
             "format=duration",
             "-of",
             "default=noprint_wrappers=1:nokey=1",
-            str(src),
+            "-i",
+            _source(src),
         ],
         timeout_s,
     )
@@ -77,7 +92,8 @@ def frame_rate(src: Path | str, timeout_s: int) -> float | None:
             "stream=avg_frame_rate",
             "-of",
             "default=noprint_wrappers=1:nokey=1",
-            str(src),
+            "-i",
+            _source(src),
         ],
         timeout_s,
     )
@@ -103,7 +119,8 @@ def video_size(src: Path | str, timeout_s: int) -> Size:
             "stream=width,height",
             "-of",
             "csv=p=0:s=x",
-            str(src),
+            "-i",
+            _source(src),
         ],
         timeout_s,
     )
@@ -125,7 +142,8 @@ def frame_times(src: Path | str, timeout_s: int) -> list[float]:
             "packet=pts_time",
             "-of",
             "csv=p=0",
-            str(src),
+            "-i",
+            _source(src),
         ],
         timeout_s,
     )

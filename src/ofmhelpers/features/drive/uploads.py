@@ -178,7 +178,7 @@ def queue_uploads(
     if ids:
         _enqueue(ids, actor)
     return store.for_jobs(
-        [j for j in job_ids if get_job(j, readers) is not None], user.id
+        [j for j in job_ids if get_job(j, readers) is not None], frozenset({user.id})
     )
 
 

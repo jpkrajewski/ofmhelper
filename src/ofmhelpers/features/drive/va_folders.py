@@ -6,11 +6,11 @@ drive access").
 Named after the VA (`User.label`) in the owner's "ALL ACCOUNTS", next to the
 account folders; the VA's handmade reels land in it (/handmade,
 `features/handmade/`), so the VA never opens Drive. Kept by id
-(`drive_va_folders`): a renamed VA renames the folder; a VA moved to another
-owner gets one in that owner's root (the old one stays where it is).
+(`drive_va_folders`): a renamed VA renames the folder. A VA's employer is
+never changed after the add (owner 2026-11-18), so one root holds it.
 
 Made by the Drive sweep (`folders.sync`: every `check_interval_s`, the Sync
-button, a VA added or moved on /users), which calls Drive only for a VA
+button, a VA added on /users), which calls Drive only for a VA
 with no folder in the owner's current root or one under an old name. A
 folder deleted by hand is found missing by the next upload into it
 (`folders.va_place`) and made again. Nothing is ever deleted or moved."""

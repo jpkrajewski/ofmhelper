@@ -3,10 +3,6 @@ Google OAuth consent screen links to them and its reviewers fetch them
 without a session (2026-11-08: both answered 401, the app's verification
 stalled for months) -- and linked from the landing page's footer."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in

@@ -136,6 +136,16 @@ class SessionSettings(BaseSettings):
             raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def _https_cookies_in_production(self) -> SessionSettings:
+        """Production is HTTPS only: a session cookie without Secure goes
+        out on a plain-http request someone on the same wifi can read.
+        Prod has said true since 2026-11-18; now it cannot be forgotten."""
+        if self.environment == "production" and not self.session_https_only:
+            msg = "SESSION_HTTPS_ONLY=true is required with OFM_ENV=production"
+            raise ValueError(msg)
+        return self
+
 
 class WebSettings(BaseSettings):
     """middleware/auth.py, api_keys.py, recovery.py, jobs.py,
@@ -143,7 +153,8 @@ class WebSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_password_admin: str | None = None
+    # security audit 2026-11-18: credential fields stay out of repr().
+    app_password_admin: str | None = Field(default=None, repr=False)
     # The public address, with a trailing slash (https://ascendglobal.cash/):
     # what links leaving the app (OAuth redirects) are built from. Empty:
     # the request's own address.
@@ -182,7 +193,7 @@ class WebSettings(BaseSettings):
         default=("/static/", "/auth/", "/password/", "/events/", "/files/ai/"),
         validation_alias="OFM_PUBLIC_PREFIXES",
     )
-    kie_ai_api_key_admin: str | None = None
+    kie_ai_api_key_admin: str | None = Field(default=None, repr=False)
     # The landing form's bot trap (routers/apply.py): a submit faster than
     # this after the page was served, or with a token older than the TTL,
     # is a bot's.
@@ -207,6 +218,15 @@ class WebSettings(BaseSettings):
     # never one created a moment ago and not enqueued yet.
     recovery_orphan_grace_s: int = Field(
         default=120, ge=0, validation_alias="OFM_RECOVERY_ORPHAN_GRACE_S"
+    )
+    # Whether a cut-off job of a local task (`recovery.RESTARTS`: downloads,
+    # threads, trials...) is started over. Unset = production only: on a dev
+    # copy of the prod database every job running at dump time looks cut off,
+    # and restarting it would use prod people's cookies and write into their
+    # live Drive folders from dev (security audit 2026-11-18). Paid tasks
+    # still resume from their provider task id everywhere.
+    recovery_restarts: bool | None = Field(
+        default=None, validation_alias="OFM_RECOVERY_RESTARTS"
     )
     gallery_limit: int = Field(default=20, validation_alias="OFM_GALLERY_LIMIT")
     # /download-assets cards per page: the first page paints fast, the rest
@@ -495,6 +515,9 @@ class WebSettings(BaseSettings):
         default={"480P": 0.0588, "720P": 0.1176, "1080P": 0.2352},
         validation_alias="OFM_CLONE_APIYI_USD_PER_VIDEO_S",
     )
+
+    def restarting(self, production: bool) -> bool:
+        return production if self.recovery_restarts is None else self.recovery_restarts
 
 
 def _compose_database_url() -> str:
@@ -817,7 +840,9 @@ class HiggsfieldSettings(ProviderSettings):
 
     model_config = SettingsConfigDict(env_prefix="OFM_HF_")
 
-    api_key_admin: str | None = Field(default=None, validation_alias="HF_API_KEY_ADMIN")
+    api_key_admin: str | None = Field(
+        default=None, validation_alias="HF_API_KEY_ADMIN", repr=False
+    )
     base_url: str = "https://api.higgsfield.ai"
     upload_cache_ttl_s: int = 24 * 3600
     # The HEAD behind the upload cache. kie.ai's variable still counts: this
@@ -842,7 +867,7 @@ class RunningHubSettings(ProviderSettings):
     model_config = SettingsConfigDict(env_prefix="OFM_RH_")
 
     api_key_admin: str | None = Field(
-        default=None, validation_alias="RUNNINGHUB_API_KEY_ADMIN"
+        default=None, validation_alias="RUNNINGHUB_API_KEY_ADMIN", repr=False
     )
     # International site; runninghub.cn is the mainland one (other accounts).
     base_url: str = "https://www.runninghub.ai"
@@ -858,7 +883,7 @@ class ElyumSettings(ProviderSettings):
     model_config = SettingsConfigDict(env_prefix="OFM_ELYUM_")
 
     api_key_admin: str | None = Field(
-        default=None, validation_alias="ELYUM_API_KEY_ADMIN"
+        default=None, validation_alias="ELYUM_API_KEY_ADMIN", repr=False
     )
     base_url: str = "https://api.elyum.ai"
     # "Upload once and reuse the returned id"; its lifetime is not
@@ -897,12 +922,13 @@ class ApiyiSettings(ProviderSettings):
         validation_alias=AliasChoices(
             "APIYI_API_KEY_WAN", "APIYI_API_KEY", "APIYI_API_KEY_ADMIN"
         ),
+        repr=False,
     )
     api_key_seedance: str | None = Field(
-        default=None, validation_alias="APIYI_API_KEY_SEEDANCE"
+        default=None, validation_alias="APIYI_API_KEY_SEEDANCE", repr=False
     )
     api_key_default: str | None = Field(
-        default=None, validation_alias="APIYI_API_KEY_DEFAULT"
+        default=None, validation_alias="APIYI_API_KEY_DEFAULT", repr=False
     )
     base_url: str = "https://api.apiyi.com"
     # A submit answers once the task is queued (references are fetched after).
@@ -1426,10 +1452,10 @@ class LinksSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     oopsie_api_key_admin: str | None = Field(
-        default=None, validation_alias="OOPSIE_API_KEY_ADMIN"
+        default=None, validation_alias="OOPSIE_API_KEY_ADMIN", repr=False
     )
     bouncy_api_key_admin: str | None = Field(
-        default=None, validation_alias="BOUNCY_API_KEY_ADMIN"
+        default=None, validation_alias="BOUNCY_API_KEY_ADMIN", repr=False
     )
     request_timeout_s: float = Field(
         default=30, gt=0, validation_alias="OFM_LINKS_REQUEST_TIMEOUT_S"
@@ -1961,6 +1987,13 @@ class GDriveSettings(BaseSettings):
     # (gdrive.client.ReadOnlyDrive), and the sweep does not run, so the live
     # folders can only be read, never changed.
     read_live: bool = Field(default=False, validation_alias="OFM_DRIVE_READ_LIVE")
+    # Whether the background Drive work runs (the /drive sweep, /distribution
+    # reading each owner's POSTED folders). Unset = production only: dev and
+    # prod sign in with one Google client, so on a dev copy of the prod
+    # database every owner's refresh token works and the sweep made a
+    # "DEV - ALL ACCOUNTS" tree in each customer's own Drive (security audit
+    # 2026-11-18). A Sync pressed on dev still syncs the one who pressed it.
+    sweep_enabled: bool | None = Field(default=None, validation_alias="OFM_DRIVE_SWEEP")
     # The folder inside each account folder for posted videos. Matched
     # case-insensitively, so one made by hand ("Posted") is adopted.
     posted_folder_name: str = Field(
@@ -2037,6 +2070,9 @@ class GDriveSettings(BaseSettings):
         default=7 * 24 * 3600, ge=60, validation_alias="OFM_GDRIVE_REVIEW_FOLDER_TTL_S"
     )
 
+    def sweeping(self, production: bool) -> bool:
+        return production if self.sweep_enabled is None else self.sweep_enabled
+
 
 class RepurposeSettings(BaseSettings):
     """`ofmhelpers.media.repurpose`: the checker's optional detectors and the knob
@@ -2101,7 +2137,9 @@ class ViralSettings(BaseSettings):
     # Comma-separated Apify API tokens; a search runs on the one with the most
     # credit left. The name the server's .env has held since the lead hunt.
     # A plain string, split by `api_keys`: a list field is parsed as JSON.
-    apify_api_keys: str = Field(default="", validation_alias="APIFY_API_KEYS")
+    apify_api_keys: str = Field(
+        default="", validation_alias="APIFY_API_KEYS", repr=False
+    )
     actor: str = Field(
         default="apify~instagram-reel-scraper", validation_alias="OFM_VIRAL_ACTOR"
     )
@@ -2422,8 +2460,14 @@ class EventsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Senders switched off, by name (`telegram`): an event goes to every other
-    # sender that is set up.
-    senders_off: str = Field(default="", validation_alias="OFM_EVENTS_SENDERS_OFF")
+    # sender that is set up. Not set: production sends with every sender,
+    # anywhere else nothing goes out (`sending`): a dev copy of the prod
+    # database holds prod's linked chats and a copied .env prod's bot token,
+    # so dev would message real people (security audit 2026-11-18). Set to ""
+    # on dev to send with every sender.
+    senders_off: str | None = Field(
+        default=None, validation_alias="OFM_EVENTS_SENDERS_OFF"
+    )
     # An event with a `key` goes out once per key in this long.
     key_ttl_s: int = Field(
         default=30 * 24 * 3600, ge=1, validation_alias="OFM_EVENTS_KEY_TTL_S"
@@ -2449,7 +2493,11 @@ class EventsSettings(BaseSettings):
     )
 
     def senders_off_list(self) -> list[str]:
-        return _names(self.senders_off)
+        return _names(self.senders_off or "")
+
+    def sending(self, production: bool) -> bool:
+        """Whether events go out at all (to the senders not switched off)."""
+        return production if self.senders_off is None else True
 
 
 class TelegramSettings(BaseSettings):

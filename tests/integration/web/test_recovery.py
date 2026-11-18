@@ -446,6 +446,25 @@ def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
     assert (job.status, job.error, job.params["restarts"]) == ("running", None, 1)
 
 
+def test_outside_production_a_cut_off_local_job_is_left_as_copied(
+    status, restarts, active, monkeypatch
+):
+    """A dev copy of the prod database: every job running at dump time
+    looks cut off. Started over on dev it would use prod people's cookies
+    and live Drive folders (audit 2026-11-18), so it is left alone."""
+    monkeypatch.delenv("OFM_RECOVERY_RESTARTS")
+    params, _kwargs = _LOCAL_JOBS["download_media"]
+    job_id = create_job("download_media", params, actor=_seven())
+
+    assert recovery.run_recovery_once().entries == {job_id: "left"}
+
+    assert restarts == []
+    job = get_job(job_id)
+    assert (job.status, job.error) == ("running", None)
+    monkeypatch.setenv("OFM_ENV", "production")
+    assert recovery.run_recovery_once().entries == {job_id: "restarted"}
+
+
 def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
     status, restarts, active, monkeypatch
 ):

@@ -88,6 +88,27 @@ def clear_failed_logins(request: Request) -> None:
     _clear(LOGIN_BUCKET, client_id(request))
 
 
+def _user_key(user_id: int) -> str:
+    return f"user:{user_id}"
+
+
+def user_login_blocked(user_id: int) -> bool:
+    """security audit 2026-11-18: like `login_blocked`, per signed-in person
+    (the current-password check of /account/password)."""
+    s = settings.web
+    if not s.rate_limit_enabled:
+        return False
+    return _count(LOGIN_BUCKET, _user_key(user_id)) >= s.login_max_failures
+
+
+def record_failed_user_login(user_id: int) -> None:
+    hit(LOGIN_BUCKET, _user_key(user_id), settings.web.login_failure_window_s)
+
+
+def clear_failed_user_logins(user_id: int) -> None:
+    _clear(LOGIN_BUCKET, _user_key(user_id))
+
+
 def webhook_blocked(request: Request) -> bool:
     """True once this client has sent too many deliveries failing the signature."""
     if not settings.web.rate_limit_enabled:

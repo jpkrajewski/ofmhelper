@@ -1,11 +1,6 @@
 """/self-links: the Self links page -- its domains (add / disable / remove) and
 its click statistics over any time frame, read from the click log."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from datetime import UTC, datetime, timedelta
 
 import pytest

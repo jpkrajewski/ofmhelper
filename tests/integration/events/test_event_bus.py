@@ -16,6 +16,7 @@ from rq.registry import FailedJobRegistry, ScheduledJobRegistry
 
 import ofmhelpers.features.events.dispatch as dispatch_module
 from ofmhelpers.cache import QueueName, get_queue, get_redis
+from ofmhelpers.config import settings
 from ofmhelpers.features.events import Event, emit, emits
 from ofmhelpers.integrations.senders.telegram import TelegramClient
 from ofmhelpers.integrations.senders.telegram.fake import (
@@ -103,6 +104,26 @@ def test_a_sender_switched_off_gets_nothing(monkeypatch):
     emit(_clicks())
 
     assert fake_telegram().sent == []
+
+
+def test_outside_production_nothing_is_sent_unless_asked(monkeypatch):
+    """A dev copy of the prod database holds prod's linked chats, a copied
+    .env prod's bot token: unset, dev messages nobody (audit 2026-11-18)."""
+    monkeypatch.delenv("OFM_EVENTS_SENDERS_OFF")
+
+    emit(_clicks())
+
+    assert fake_telegram().sent == []
+
+
+def test_production_sends_unless_told_and_dev_only_when_told(monkeypatch):
+    """Production with fakes would not be the fakes' any more: the rule
+    itself, `EventsSettings.sending(production)`."""
+    monkeypatch.delenv("OFM_EVENTS_SENDERS_OFF")
+    assert settings.events.sending(production=True)
+    assert not settings.events.sending(production=False)
+    monkeypatch.setenv("OFM_EVENTS_SENDERS_OFF", "")
+    assert settings.events.sending(production=False)
 
 
 def test_a_misspelt_sender_name_is_logged(monkeypatch, caplog):

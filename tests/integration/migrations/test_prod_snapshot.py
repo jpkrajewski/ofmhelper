@@ -920,3 +920,29 @@ def test_event_targets_start_empty_and_change_no_row(db):
     after = _row_counts(db)
     assert after["user_event_targets"] == 0
     assert {t: n for t, n in after.items() if t in before} == before
+
+
+DISTRIBUTION = "9909cfa699f9"
+SELF_ADDRESS = "a7c3e9d41f2b"
+
+
+def test_self_link_addresses_become_unique_and_no_row_changes(db):
+    """Prod had no address held twice (2026-11-18): the unique index goes on
+    without a cleanup, and a downgrade drops only it."""
+    needs(SELF_ADDRESS)(db)
+    command.upgrade(_alembic(), DISTRIBUTION)
+    before = _row_counts(db)
+
+    command.upgrade(_alembic(), SELF_ADDRESS)
+
+    [index] = [
+        i
+        for i in inspect(db).get_indexes("short_links")
+        if i["name"] == "uq_short_links_self_address"
+    ]
+    assert index["unique"]
+    assert index["column_names"] == ["domain", "slug"]
+    assert _row_counts(db) == before
+    command.downgrade(_alembic(), DISTRIBUTION)
+    names = {i["name"] for i in inspect(db).get_indexes("short_links")}
+    assert "uq_short_links_self_address" not in names

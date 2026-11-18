@@ -2,11 +2,6 @@
 and views; scans in the background (first on add, then every 6 h), each
 batch rotating through the platform's proxies."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor

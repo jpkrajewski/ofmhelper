@@ -3,11 +3,7 @@ recorded by the database itself, and any state can be gone back to (owner
 2026-11-13: "someone removes a phone ... we can go back to any state").
 Plus the daily encrypted backup file of those states."""
 
-import os
 from pathlib import Path
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from cryptography.fernet import Fernet

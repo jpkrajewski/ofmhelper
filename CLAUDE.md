@@ -40,6 +40,11 @@ Define success criteria; loop until verified.
 - **`IMPROVEMENTS.md` = everything you notice but were not asked to do.** Write it the moment you see it, while working: security improvements, refactors, code that can be shorter, and why something was hard to build (what in the code made it hard). One line each: date, file or area, the finding. Do not fix them on your own; the owner picks. Fixed = delete the line.
 - **AFTER EVERY SHIP: REFLECT.** What went wrong, what was slow, what would you tell yourself at the start of this session. The lines that would DRASTICALLY improve the next session go to `BRAIN.md`, the rest to `IMPROVEMENTS.md` or nowhere.
 - Both are gitignored and never hold secrets.
+- **ALSO AT THE END OF EVERY WORKING SESSION, SHIP OR NOT.** A session that never ships loses its lessons otherwise.
+- **REFLECT AGAINST THE PLAN.** Read the session's plan file next to what happened: an item dropped, reverted or done another way, and the assumption behind it, is the strongest lesson.
+- **A TRAP A CHECK CAN CATCH BECOMES THE CHECK.** A test, hook or startup refusal that fails on it; then its `BRAIN.md` line is deleted. A line stays only for what no check can catch.
+- **`BRAIN.md` lines start with two dates:** `<added> / hit <date>:`. A line that saved time, or would have, gets today as its hit date. At 40 lines, the line hit longest ago goes first.
+- **`IMPROVEMENTS.md` lines carry who can act, after the date:** `[agent can do]`, `[owner decides]` or `[needs owner check]` (a fact only the owner can see: a server, an account, a dashboard). The owner still picks what is done (line above); the tag shows at a glance what an agent could take alone.
 
 ## Git
 - Work on `dev` in this checkout; no worktrees.

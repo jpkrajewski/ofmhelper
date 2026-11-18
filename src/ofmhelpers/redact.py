@@ -35,10 +35,20 @@ _PARAM_NAMES = (
     r"|X-Amz-[A-Za-z-]+|X-Goog-[A-Za-z-]+"
 )
 
+# security audit 2026-11-18: a bearer token carried in the URL path itself
+# (`/password/<token>`, `/files/ai/<token>/<name>`): the segment after the
+# prefix is a credential, the same on a span, a log line and an error.
+_PATH_TOKENS = re.compile(r"(/password/|/files/ai/)[^/?#\s'\"]+")
+
 _KEYS = re.compile(KEY_PATTERN)
 _PARAMS = re.compile(rf"(?i)([?&](?:{_PARAM_NAMES})=)[^&\s'\"]+")
 
 
 def redact(text: str) -> str:
     """`text` with every credential it holds masked."""
-    return _PARAMS.sub(rf"\g<1>{MASK}", _KEYS.sub(MASK, text))
+    return _PARAMS.sub(rf"\g<1>{MASK}", path_tokens(_KEYS.sub(MASK, text)))
+
+
+def path_tokens(text: str) -> str:
+    """`text` with the bearer tokens of URL paths masked, nothing else."""
+    return _PATH_TOKENS.sub(rf"\g<1>{MASK}", text)

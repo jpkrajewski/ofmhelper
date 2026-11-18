@@ -58,7 +58,7 @@ dependencies = [
     "logfire[fastapi,sqlalchemy,requests,httpx]>=4.41.0",
     # Crashes and logged errors grouped into issues (ofmhelpers/sentry.py);
     # errors only, traces stay Logfire's. Sends nothing without SENTRY_DSN.
-    "sentry-sdk>=2.74.0",
+    "sentry-sdk==2.74.0",
     "imagehash>=4.3.2",
     # Meta's PDQ (256-bit, dihedral) for repurpose.checker; sdist only on
     # Linux, built with the g++ of the Dockerfile's build/test stages.

@@ -5,12 +5,8 @@ newest first, images and videos with a thumbnail, opening in the browser;
 download and delete as before. Admin only.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import io
+import os
 import shutil
 import subprocess
 import time

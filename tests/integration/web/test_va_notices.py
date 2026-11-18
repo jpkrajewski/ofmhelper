@@ -6,11 +6,6 @@ sends a key once), only a VA's work counts, and a notice that cannot be
 made never fails the job.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from decimal import Decimal
 
 import pytest

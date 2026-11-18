@@ -13,6 +13,7 @@ from ofmhelpers.config import settings
 from ofmhelpers.features.generate.page import form_view
 from ofmhelpers.web.dependencies import Access, Actor, ApiKeys, Viewing
 from ofmhelpers.web.gallery import Gallery, GalleryParams
+from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.registry import GENERATE_TOOLS, task_card
 from ofmhelpers.web.templates_config import render, render_polled
 
@@ -32,7 +33,8 @@ def form(
     query: GalleryParams,
 ) -> Response:
     first = gallery.page(viewer, query)
-    return render(
+    # security audit 2026-11-18: the page pre-fills saved API keys.
+    response = render(
         request,
         "generate_form.html",
         api_keys=api_keys,
@@ -42,6 +44,8 @@ def form(
         dates=query,
         **dict(form_view(actor)),
     )
+    response.headers.update(NO_STORE)
+    return response
 
 
 @router.get("/gallery")

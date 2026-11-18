@@ -25,6 +25,7 @@ from ofmhelpers.web.middleware import (
     BridgeMiddleware,
     CanonicalHostMiddleware,
     CompressionMiddleware,
+    FrameGuardMiddleware,
     WriteRateLimitMiddleware,
 )
 from ofmhelpers.web.routers import ROUTERS
@@ -74,6 +75,8 @@ def _middleware() -> list[Middleware]:
         Middleware(BridgeMiddleware),
         # www. of APP_BASE_URL redirects to the one public host.
         Middleware(CanonicalHostMiddleware),
+        # No answer of the app may be framed by another site (clickjacking).
+        Middleware(FrameGuardMiddleware),
         # Compresses what everything inside produced (pages, JSON, CSS/JS).
         Middleware(CompressionMiddleware),
         Middleware(

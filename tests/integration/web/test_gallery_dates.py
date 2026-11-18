@@ -4,11 +4,6 @@ both included, days of the reader's own time zone (cookie `ofm_timezone`).
 The page, its scroll pages (`/gallery`) and its live poll (`/gallery/latest`)
 all stay inside the filter; one shared control draws it (`ui.date_range`)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo

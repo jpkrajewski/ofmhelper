@@ -3,11 +3,6 @@ owner's seen) and an admin's "View as" (another person's pages, read only).
 Who may open what is `auth/access.py`; who a request acts as is the
 `Viewer` the auth middleware builds (`features/users/viewing.py`)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -261,7 +256,7 @@ def test_an_owner_sees_their_vas_jobs_and_a_va_only_their_own():
 # --- /users: making a VA -----------------------------------------------------------
 
 
-def test_users_adds_a_va_with_an_owner_and_changes_it():
+def test_users_adds_a_va_with_an_owner_that_never_changes():
     admin = TestClient(app)
     sign_in_admin(admin)
     owner = make_user(OWNER)
@@ -281,13 +276,19 @@ def test_users_adds_a_va_with_an_owner_and_changes_it():
     assert va is not None
     assert (va.role, va.owner_id) == (Role.VA, owner.id)
 
-    admin.post(f"/users/{va.id}/owner", data={"owner_id": str(other.id)})
-    assert users.get_user(va.id).owner_id == other.id
+    # Once added, a VA stays with that employer (owner 2026-11-18): their
+    # runs were made on its keys. The page shows no control for it.
+    page = admin.get("/users")
+    assert f'action="/users/{va.id}/owner"' not in page.text
+    r = admin.post(f"/users/{va.id}/owner", data={"owner_id": str(other.id)})
+    assert r.status_code == 400
+    assert "deactivate them and add them again" in r.text
+    assert users.get_user(va.id).owner_id == owner.id
 
-    # A VA always has an employer: it cannot be cleared.
+    # Nor can it be cleared.
     r = admin.post(f"/users/{va.id}/owner", data={"owner_id": ""})
     assert r.status_code == 400
-    assert users.get_user(va.id).owner_id == other.id
+    assert users.get_user(va.id).owner_id == owner.id
     # The role itself never changes after the user is added.
     r = admin.post(f"/users/{va.id}/role", data={"role": "user"})
     assert r.status_code in (404, 405)
@@ -669,17 +670,6 @@ def test_an_admin_sets_a_vas_new_password_and_the_old_one_stops_working():
     r = admin.post(f"/users/{owner.id}/password", data={"password": "x" * 20})
     assert r.status_code == 400
     assert not users.get_user(owner.id).has_password
-
-
-def test_a_va_moved_to_another_employer_signs_in_with_that_employers_email():
-    admin, _added = _added_va()
-    va = users.by_email(VA)
-    other = make_user(OTHER)
-
-    admin.post(f"/users/{va.id}/owner", data={"owner_id": str(other.id)})
-
-    assert _va_login(TestClient(app), OWNER, VA_PASSWORD).status_code == 401
-    assert _va_login(TestClient(app), OTHER, VA_PASSWORD).status_code == 303
 
 
 def test_a_deactivated_va_no_longer_signs_in():

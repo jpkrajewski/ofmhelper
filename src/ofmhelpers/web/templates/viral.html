@@ -57,7 +57,7 @@
             <p class="source">{{ rc.short_count(reel.plays) }} plays{% if reel.likes is not none %} · {{ rc.short_count(reel.likes) }} likes{% endif %}{% if reel.seconds %} · {{ reel.seconds|round|int }} s{% endif %}{% if reel.posted_at %} · {{ reel.posted_at.strftime("%b %-d, %Y") }}{% endif %}</p>
             <div class="result-actions">
                 {{ ui.button("Download", href=reel.file.download_url, icon="download", hook="download-btn", attrs={"download": reel.file.download_name}) }}
-                {{ ui.icon_button("external", "Open on Instagram", href=reel.url, attrs={"target": "_blank", "rel": "noopener"}) }}
+                {{ ui.icon_button("external", "Open on Instagram", href="https://www.instagram.com/reel/" ~ reel.code ~ "/", attrs={"target": "_blank", "rel": "noopener"}) }}
             </div>
         </div>
         {% endfor %}

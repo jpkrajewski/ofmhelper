@@ -2,11 +2,6 @@
 still opens, for a user who has every kind of secret saved. Only what reads a
 secret on purpose says so (tests/integration/web/test_devices.py)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient

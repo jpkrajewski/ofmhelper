@@ -2,10 +2,6 @@
 saved key of the model's slot, a key saved under the wrong slot passed over,
 the first working key kept as theirs, and its end recorded on the job."""
 
-import os
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in

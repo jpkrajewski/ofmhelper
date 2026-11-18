@@ -7,11 +7,6 @@ the params as the /ai job they would be today: a catalog model, and inputs
 under that model's schema names, so Recreate restores all of it.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import html
 import json
 import re

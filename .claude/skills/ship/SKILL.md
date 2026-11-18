@@ -95,9 +95,12 @@ lines — quote them.
   HTTP spans. New exception types since the release = report them.
 - Sentry (MCP server `sentry`, project `ofmhelpers`): `search_issues` with
   `environment:production firstSeen:-1h` and that release. Every issue first
-  seen since the deploy = report it with its link. The MCP not signed in, or
-  production without `SENTRY_DSN` (no events at all for the release): say
-  which, never "none".
+  seen since the deploy = report it with its link. First prove production
+  reaches Sentry at all: `find_monitors` (project `ofmhelpers`, environment
+  `production`): the `sweeps` monitor's last check-in is after the deploy
+  (the sweeps process checks in every 5 minutes, `ofmhelpers/sentry.py`
+  `heartbeat`; wait one interval if needed). No fresh check-in = production
+  sends nothing: report that, never "no issues". The MCP not signed in: say so.
 
 ## 9. Report
 Commit sha, what shipped (one line per feature/fix), test counts, CI and
@@ -109,3 +112,10 @@ not run.
 After the report (CLAUDE.md "SELF-LEARNING"): update `BRAIN.md` (critical only,
 prune stale lines, max 40) and move this session's unlogged findings to
 `IMPROVEMENTS.md`. Say in one line what was added or removed.
+- Read the session's plan file (if any) against what shipped: every item
+  dropped, reverted or done another way is a candidate lesson.
+- A trap a test or hook can catch: write that check instead of a line (or
+  delete the line it replaces).
+- `BRAIN.md` lines keep `<added> / hit <date>:`; bump the hit date of every
+  line that helped this session. `IMPROVEMENTS.md` lines keep their
+  `[agent can do]` / `[owner decides]` / `[needs owner check]` tag.

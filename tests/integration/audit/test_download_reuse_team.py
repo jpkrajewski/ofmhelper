@@ -5,11 +5,6 @@ a fetch with B's own cookies; an owner and their VAs still share one fetch.
 
 No network and no ffmpeg (`download_files.py`)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 
 import pytest

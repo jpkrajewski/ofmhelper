@@ -10,11 +10,8 @@ import base64
 import hashlib
 import hmac
 import json
-import os
 import time
 from collections.abc import Iterator
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 import requests
@@ -342,21 +339,46 @@ def test_a_forgotten_job_is_not_brought_back_by_a_late_callback(kie, client):
     assert len(kie.calls) == 0
 
 
-def test_a_signed_callback_is_believed_without_asking_kie(kie, client, monkeypatch):
-    monkeypatch.setenv("KIE_AI_WEBHOOK_HMAC_KEY", HMAC_KEY)
-    _note()
+def _signed_headers(task: str = TASK) -> dict[str, str]:
     now = int(time.time())
-    signed = {
+    return {
         "X-Webhook-Timestamp": str(now),
-        "X-Webhook-Signature": _signature(TASK, now),
+        "X-Webhook-Signature": _signature(task, now),
     }
 
-    assert _callback(client, "job-1", headers=signed) == 200
+
+def test_a_signed_callback_is_believed_once_the_jobs_key_knows_its_task(
+    kie, client, monkeypatch
+):
+    monkeypatch.setenv("KIE_AI_WEBHOOK_HMAC_KEY", HMAC_KEY)
+    _note()
+    _record_success(kie)
+
+    assert _callback(client, "job-1", headers=_signed_headers()) == 200
 
     remembered = tasks.recall("job-1")
     assert remembered is not None
     assert remembered.task_id == TASK
-    assert len(kie.calls) == 0
+    assert len(kie.calls) == 1  # one free status read, with the job's key
+
+
+def test_a_signed_callback_for_a_task_not_on_the_jobs_account_is_ignored(
+    kie, client, monkeypatch
+):
+    """kie.ai signs `taskId.timestamp` only: a genuinely signed callback of
+    someone else's task, sent to this job's address, claims nothing (audit
+    2026-11-18)."""
+    monkeypatch.setenv("KIE_AI_WEBHOOK_HMAC_KEY", HMAC_KEY)
+    _note()
+    kie.get(_jobs("recordInfo"), json={"code": 422, "msg": "recordInfo is null"})
+
+    signed = _signed_headers("task_of_someone_else")
+    assert (
+        _callback(client, "job-1", task="task_of_someone_else", headers=signed) == 200
+    )
+
+    assert tasks.recall("job-1") is None
+    assert tasks.sent("job-1") is not None
 
 
 def test_with_the_key_set_only_a_signed_callback_counts(kie, client, monkeypatch):

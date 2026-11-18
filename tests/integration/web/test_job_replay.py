@@ -2,11 +2,6 @@
 job with a fake provider, fake client?"): from its row alone, here, never on
 a queue, and never against a real service."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 
 import pytest

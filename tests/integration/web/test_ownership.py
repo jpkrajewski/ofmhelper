@@ -3,11 +3,6 @@ accounts, watched profiles, jobs and Drive cards -- admins included: an
 admin manages people, never reads their work. Only the background sweeps
 see everyone's. What was unique for the whole agency is unique per owner."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin, sign_in_agency

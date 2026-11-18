@@ -9,11 +9,6 @@ The important property is the one at the bottom: a broker that can't record
 needs.
 """
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 from pathlib import Path
 from unittest import mock
 

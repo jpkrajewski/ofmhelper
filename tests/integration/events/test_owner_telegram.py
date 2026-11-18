@@ -3,11 +3,6 @@ there (owner 2026-11-15: "is it easy for new users to connect their telegram
 bot?"; before, every owner's VA notices went to the agency's chats from the
 server's .env)."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import time
 from urllib.parse import parse_qs, urlsplit
 

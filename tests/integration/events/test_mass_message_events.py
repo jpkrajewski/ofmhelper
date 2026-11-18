@@ -4,11 +4,8 @@ report and no count (owner 2026-11-07: "it's just info"), each list taking the
 place of the one before -- the daily report's Chatting part too -- like "Chats
 unanswered". Fanvue is left out for now (`OFM_CHATTING_EVENTS_PLATFORMS_OFF`)."""
 
-import os
 import time
 from http import HTTPStatus
-
-os.environ.setdefault("SESSION_SECRET", "test-secret")
 
 import pytest
 from chat_platforms import StackedDriver

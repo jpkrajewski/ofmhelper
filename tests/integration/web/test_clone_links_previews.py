@@ -7,11 +7,6 @@ link answered within the request's deadline; reads limited process-wide.
 yt-dlp is faked (`fake_externals`); a test that needs another answer
 swaps `video_info` where the preview calls it and counts the reads."""
 
-import os
-
-os.environ["APP_PASSWORD_ADMIN"] = "test-admin"
-os.environ.setdefault("SESSION_SECRET", "test-secret")
-
 import json
 import threading
 import time

@@ -48,8 +48,11 @@ def run_round() -> None:
         if cut:
             logger.warning("distribution: %s pin(s) cut off by a restart, retried", cut)
     channels = sorted(store.repository().running(), key=lambda c: c.user_id)
-    for user_id, mine in groupby(channels, key=lambda c: c.user_id):
-        _fill(Sources(user_id=user_id), list(mine))
+    # Reading each owner's Drive is the Drive sweep's rule (OFM_DRIVE_SWEEP):
+    # on a dev copy of prod it would open every customer's Drive.
+    if settings.gdrive.sweeping(settings.infra.production):
+        for user_id, mine in groupby(channels, key=lambda c: c.user_id):
+            _fill(Sources(user_id=user_id), list(mine))
     if not s.scheduled(settings.infra.production):
         return
     started = limited = 0
