@@ -34,6 +34,7 @@ from ofmhelpers.cache import QueueJob, QueueName, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.acting import Acting, Via, acting
 from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.sentry import configure_sentry
 from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
 lazy from ofmhelpers.integrations.ai_providers.base import provider_classes
 lazy from ofmhelpers.integrations.llm.base import llm_classes
@@ -56,6 +57,7 @@ class ConfiguredWorker(Worker):
 
     def work(self, *args, **kwargs) -> bool:
         configure_telemetry("ascend-worker")
+        configure_sentry("ascend-worker")
         configure_logging()
         return super().work(*args, **kwargs)
 
@@ -173,6 +175,7 @@ def _signal_all(pools: list, signum: int) -> None:
 
 def main() -> None:
     configure_telemetry("ascend-worker")
+    configure_sentry("ascend-worker")
     configure_logging()
     parser = argparse.ArgumentParser(prog="ofmhelpers.worker")
     parser.add_argument("queue", nargs="*", type=QueueName, choices=list(QueueName))

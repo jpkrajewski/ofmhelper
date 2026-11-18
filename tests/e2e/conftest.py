@@ -89,6 +89,9 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "OFM_GDRIVE_SERVICE_ACCOUNT": "{}",
         # The developer's .env holds the Logfire write token: never send.
         "LOGFIRE_TOKEN": "",
+        # The same for Sentry's DSN; and a crash answers the plain sentence.
+        "SENTRY_DSN": "",
+        "OFM_DEBUG": "0",
         # Sweeps only when a test asks (the Sync button), never between.
         "OFM_GDRIVE_CHECK_INTERVAL_S": "86400",
         # The daily posting window (18:45-00:45 UTC) never opens here: inside

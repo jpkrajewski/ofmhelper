@@ -59,7 +59,11 @@ services:
       - --proxy-headers
       - --forwarded-allow-ips
       - 127.0.0.1,172.16.0.0/12
-    environment: *dev-environment
+    environment:
+      - OFM_ENV=development
+      # FastAPI's debug mode: a crash answers its traceback page. The web
+      # service only; production refuses to start with it (InfraSettings).
+      - OFM_DEBUG=1
     dns: *public-dns
     volumes:
       # Merged with (not replacing) the base file's volume list.

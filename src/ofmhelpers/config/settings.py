@@ -586,10 +586,23 @@ class InfraSettings(BaseSettings):
     # Where fakes keep state shared between processes (the app under test
     # and the test seeding it). Empty = in memory, this process only.
     fakes_dir: str = Field(default="", validation_alias="OFM_FAKES_DIR")
+    # FastAPI's debug mode (web/main.py): a crash answers its traceback page
+    # instead of the plain sentence. The dev overlay turns it on for the web
+    # service; the test suite leaves it off (it checks the plain sentence).
+    debug: bool = Field(default=False, validation_alias="OFM_DEBUG")
 
     @property
     def production(self) -> bool:
         return self.environment == "production"
+
+    @model_validator(mode="after")
+    def _no_debug_in_production(self) -> InfraSettings:
+        """A traceback page shows code and the values in it: production
+        refuses to start with it."""
+        if self.debug and self.production:
+            msg = "OFM_DEBUG=1 is refused with OFM_ENV=production"
+            raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _no_fakes_in_production(self) -> InfraSettings:
@@ -1364,6 +1377,24 @@ class TelemetrySettings(BaseSettings):
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         """`LOGFIRE_TOKEN=` (blank) is off, like no token at all."""
+        return None if isinstance(value, str) and not value.strip() else value
+
+
+class SentrySettings(BaseSettings):
+    """ofmhelpers/sentry.py: crashes and logged errors to Sentry. No DSN:
+    nothing is sent (tests, CI, a fresh checkout). The release and the
+    environment an event carries are `TelemetrySettings.release` and
+    `InfraSettings.environment`."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # The project's address for events (Sentry: Settings -> Client Keys).
+    dsn: SecretStr | None = Field(default=None, validation_alias="SENTRY_DSN")
+
+    @field_validator("dsn", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        """`SENTRY_DSN=` (blank) is off, like no DSN at all."""
         return None if isinstance(value, str) and not value.strip() else value
 
 

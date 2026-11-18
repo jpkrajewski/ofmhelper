@@ -16,6 +16,7 @@ import signal
 
 from ofmhelpers.features.jobs.sweeps import Sweep, running, sweeps
 from ofmhelpers.log import configure_logging, get_logger
+from ofmhelpers.sentry import configure_sentry
 from ofmhelpers.telemetry import configure_telemetry, flush_telemetry
 
 # Not __name__: under `python -m ofmhelpers.sweeps` that's "__main__", which
@@ -38,6 +39,7 @@ async def run(all_sweeps: list[Sweep]) -> None:
 
 def main() -> None:
     configure_telemetry("ascend-sweeps")
+    configure_sentry("ascend-sweeps")
     configure_logging()
     try:
         asyncio.run(run(sweeps()))

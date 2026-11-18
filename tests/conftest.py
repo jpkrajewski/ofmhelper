@@ -6,6 +6,9 @@ from pathlib import Path
 # write token, and the test process (the e2e harness included) must never
 # send. An env var outranks .env; blank is off (TelemetrySettings).
 os.environ["LOGFIRE_TOKEN"] = ""
+# The same for Sentry's DSN (SentrySettings) and the dev overlay's debug mode.
+os.environ["SENTRY_DSN"] = ""
+os.environ["OFM_DEBUG"] = "0"
 # OFM_ENV has no default (config/settings.py InfraSettings): the suite is
 # never production, whatever the shell that started it says.
 os.environ["OFM_ENV"] = "development"

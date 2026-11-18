@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Commit, push and deploy this repo to production, then watch it go live. Use ONLY when the owner says "ship", "commit", "push" or "deploy" in this turn — never on your own initiative. Runs the deploy test gate, commits on dev, pushes, watches CI, merges the promote PR (that merge is the production deploy), watches the Deploy workflow, checks /health and Logfire errors for the new release, and reports.
+description: Commit, push and deploy this repo to production, then watch it go live. Use ONLY when the owner says "ship", "commit", "push" or "deploy" in this turn — never on your own initiative. Runs the deploy test gate, commits on dev, pushes, watches CI, merges the promote PR (that merge is the production deploy), watches the Deploy workflow, checks /health, Logfire errors and new Sentry issues for the new release, and reports.
 ---
 
 # Ship
@@ -93,8 +93,19 @@ lines — quote them.
 - Logfire (skill `logfire`), the release is `git rev-parse --short HEAD` of main:
   errors on production since the deploy started, excluding retried outbound
   HTTP spans. New exception types since the release = report them.
+- Sentry (MCP server `sentry`, project `ofmhelpers`): `search_issues` with
+  `environment:production firstSeen:-1h` and that release. Every issue first
+  seen since the deploy = report it with its link. The MCP not signed in, or
+  production without `SENTRY_DSN` (no events at all for the release): say
+  which, never "none".
 
 ## 9. Report
 Commit sha, what shipped (one line per feature/fix), test counts, CI and
-deploy run links, /health, Logfire errors since release (or "none"), anything
+deploy run links, /health, Logfire errors since release (or "none"), Sentry
+issues new since release (or "none", or why it could not be read), anything
 not run.
+
+## 10. Reflect
+After the report (CLAUDE.md "SELF-LEARNING"): update `BRAIN.md` (critical only,
+prune stale lines, max 40) and move this session's unlogged findings to
+`IMPROVEMENTS.md`. Say in one line what was added or removed.
