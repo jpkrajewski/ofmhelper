@@ -272,6 +272,8 @@ def github(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
         (ONE_OPEN, "gh pr merge --repo o/r 103", "PR #103 has 1"),
         (ONE_OPEN, "gh pr merge -b 'pr merge 9' 103", "PR #103 has 1"),
         (ONE_OPEN, "echo y | gh pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge -dt 9 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge -dF notes.md 103", "PR #103 has 1"),
         (NONE_OPEN, "gh pr merge 1 && gh pr merge 2", "One gh pr merge per command"),
         (NONE_OPEN, "GH_REPO=o/r gh pr merge 7", "not GH_REPO"),
     ],
@@ -301,6 +303,7 @@ def test_a_pr_without_open_review_comments_merges_on_the_ship_word(
     [
         "gh pr merge 7 -R other/repo",
         "gh pr merge -Rother/repo 7",
+        "gh pr merge -dRother/repo 7",
         "gh pr merge --repo=github.com/other/repo 7",
         "gh pr merge https://github.com/other/repo/pull/7",
     ],

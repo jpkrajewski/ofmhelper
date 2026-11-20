@@ -91,8 +91,9 @@ def _flag(word: str) -> tuple[str, str | None]:
     if word.startswith("--"):
         flag, has_value, value = word.partition("=")
         return flag, value if has_value else None
-    if len(word) > len("-R"):
-        return word[:2], word[2:].removeprefix("=")
+    for index, letter in enumerate(word[1:], start=2):
+        if f"-{letter}" in VALUE_FLAGS:
+            return f"-{letter}", word[index:].removeprefix("=") or None
     return word, None
 
 
