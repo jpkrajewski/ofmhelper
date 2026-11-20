@@ -9,11 +9,21 @@ from signin import sign_in_agency
 
 from ofmhelpers.config.settings import AccountsSettings
 from ofmhelpers.db.models import AccountSnapshotRow, TrackedPostRow
-from ofmhelpers.db.repositories import (
-    tracked_accounts as tracked_accounts_repository,
-)
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores.tracked_accounts import (
+from ofmhelpers.db.tracked_accounts import repository as tracked_accounts_repository
+from ofmhelpers.db.tracked_accounts.schema import (
+    NO_CREATOR,
+    AccountHistory,
+    AccountQuery,
+    AccountSort,
+    AccountSummary,
+    AddAccounts,
+    FollowerChart,
+    Snapshot,
+    ago,
+    tick_label,
+)
+from ofmhelpers.db.tracked_accounts.store import (
     claim_due,
     get_account,
     get_history,
@@ -25,6 +35,7 @@ from ofmhelpers.db.stores.tracked_accounts import (
     untrack,
 )
 from ofmhelpers.features.accounts import tracker as account_tracker
+from ofmhelpers.integrations.outbound import ProxyPool
 from ofmhelpers.integrations.socials import (
     AccountProfile,
     AccountStats,
@@ -34,16 +45,6 @@ from ofmhelpers.integrations.socials import (
     SocialError,
 )
 from ofmhelpers.integrations.socials.platforms.instagram import InstagramPlatform
-from ofmhelpers.schemas import (
-    NO_CREATOR,
-    AccountHistory,
-    AccountQuery,
-    AccountSort,
-    AccountSummary,
-    AddAccounts,
-)
-from ofmhelpers.schemas.accounts import FollowerChart, Snapshot, ago, tick_label
-from ofmhelpers.utils.proxy_pool import ProxyPool
 from ofmhelpers.web.main import app
 
 DAY = 86400

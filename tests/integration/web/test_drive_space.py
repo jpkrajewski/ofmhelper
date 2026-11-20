@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive.space import (
     DRIVE_FULL,
     FOLDER_MISSING,

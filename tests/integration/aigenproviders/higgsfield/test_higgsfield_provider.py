@@ -7,6 +7,7 @@ import pytest
 from PIL import Image
 
 from ofmhelpers.cache import get_redis
+from ofmhelpers.features.jobs.schema import error_reason
 from ofmhelpers.integrations.ai_providers import self_heal, tasks
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.integrations.ai_providers.errors import (
@@ -24,7 +25,6 @@ from ofmhelpers.integrations.ai_providers.higgsfield.fake import (
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.runner import generate
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas.errors import error_reason
 
 BASE = "https://api.higgsfield.ai"
 SPEC = get_spec("higgsfield:alibaba/wan-3.0/reference-to-video")

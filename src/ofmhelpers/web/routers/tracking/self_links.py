@@ -3,9 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
-from ofmhelpers.auth.access import Area
+from ofmhelpers.db.short_links.schema import SelfDomainForm, SelfRange
 from ofmhelpers.features.links import self_page
-from ofmhelpers.schemas.self_links import SelfDomainForm, SelfRange
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 

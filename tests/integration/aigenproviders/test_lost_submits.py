@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import time
-from collections.abc import Iterator
+lazy from collections.abc import Iterator
 
 import pytest
 import requests
@@ -14,6 +14,7 @@ from responses import registries
 from urllib3.exceptions import MaxRetryError, NewConnectionError
 
 from ofmhelpers.config import settings
+from ofmhelpers.features.jobs.schema import error_reason
 from ofmhelpers.integrations.ai_providers import runner, self_heal, tasks
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.integrations.ai_providers.elyum.fake import FAKE_KEY, fake_elyum
@@ -26,7 +27,6 @@ from ofmhelpers.integrations.ai_providers.higgsfield.fake import FAKE_KEY as HF_
 from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
-from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.main import app
 
 KIE_SPEC = get_spec("kie:seedream/5-lite-text-to-image")

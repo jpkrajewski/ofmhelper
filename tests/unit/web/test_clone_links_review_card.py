@@ -1,13 +1,13 @@
 import pytest
 
-from ofmhelpers.schemas import Job
-from ofmhelpers.schemas.clone_ai_checks import (
+from ofmhelpers.db.clone_ai_checks.schema import (
     CHECK_FAILED,
     CloneFromLink,
     ReviewReason,
     StoredCloneAiCheck,
 )
-from ofmhelpers.schemas.gallery import CloneLinksCard
+from ofmhelpers.db.jobs.schema import Job
+from ofmhelpers.features.jobs.schema import CloneLinksCard
 
 NOW = 1_800_000_000.0
 STALE_S = 1800

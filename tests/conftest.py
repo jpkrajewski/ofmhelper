@@ -18,6 +18,32 @@ from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
+lazy from alembic.config import Config
+
+lazy from alembic import command
+lazy from ofmhelpers.cache import get_redis
+lazy from ofmhelpers.db.models import Base
+lazy from ofmhelpers.db.session import get_engine
+lazy from ofmhelpers.features.fakes import install_fakes
+lazy from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
+lazy from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
+lazy from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
+lazy from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
+lazy from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
+lazy from ofmhelpers.integrations.apify.fake import fake_apify
+lazy from ofmhelpers.integrations.fanvue.fake import fake_fanvue
+lazy from ofmhelpers.integrations.gdrive.fake import _fake_drive
+lazy from ofmhelpers.integrations.instagram.fake import fake_instagram
+lazy from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
+lazy from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
+lazy from ofmhelpers.integrations.llm.groq.fake import fake_groq
+lazy from ofmhelpers.integrations.pinterest.fake import fake_pinterest
+lazy from ofmhelpers.integrations.senders.telegram.client import _client as _telegram
+lazy from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
+lazy from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
+lazy from ofmhelpers.integrations.signin import passwords
+lazy from ofmhelpers.integrations.stacked.fake import fake_stacked
+lazy from ofmhelpers.media import fake_media
 
 settings_module = importlib.import_module("ofmhelpers.config.settings")
 
@@ -102,11 +128,6 @@ def _test_environment(tmp_path_factory):
 def _test_database(_test_environment):
     _ensure_test_database(TEST_DATABASE_URL)
 
-    from alembic.config import Config
-
-    from alembic import command
-    from ofmhelpers.db.session import get_engine
-
     with get_engine().begin() as conn:
         conn.execute(text("DROP SCHEMA public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
@@ -121,8 +142,6 @@ def _clean_tables(request):
         monkeypatch.setenv("OFM_REDIS_URL", _NO_REDIS)
         return
     wipe = request.getfixturevalue("_wipe_sql")
-    from ofmhelpers.cache import get_redis
-    from ofmhelpers.db.session import get_engine
 
     with get_engine().begin() as conn:
         conn.exec_driver_sql(wipe)
@@ -131,8 +150,6 @@ def _clean_tables(request):
 
 @pytest.fixture(scope="session")
 def _wipe_sql(_test_database) -> str:
-    from ofmhelpers.db.models import Base
-    from ofmhelpers.db.session import get_engine
 
     with get_engine().begin() as conn:
         found = conn.execute(
@@ -202,28 +219,8 @@ def pytest_configure(config):
 
 @pytest.fixture
 def fake_externals(monkeypatch, tmp_path):
-    from ofmhelpers.integrations import outbound
-    from ofmhelpers.integrations.ai_providers.apiyi.fake import fake_apiyi
-    from ofmhelpers.integrations.ai_providers.elyum.fake import fake_elyum
-    from ofmhelpers.integrations.ai_providers.higgsfield.fake import fake_higgsfield
-    from ofmhelpers.integrations.ai_providers.kie.fake import fake_kie
-    from ofmhelpers.integrations.ai_providers.runninghub.fake import fake_runninghub
-    from ofmhelpers.integrations.apify.fake import fake_apify
-    from ofmhelpers.integrations.fanvue.fake import fake_fanvue
-    from ofmhelpers.integrations.gdrive.fake import _fake_drive
-    from ofmhelpers.integrations.instagram.fake import fake_instagram
-    from ofmhelpers.integrations.llm.cerebras.fake import fake_cerebras
-    from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
-    from ofmhelpers.integrations.llm.groq.fake import fake_groq
-    from ofmhelpers.integrations.pinterest.fake import fake_pinterest
-    from ofmhelpers.integrations.senders.telegram.client import _client as _telegram
-    from ofmhelpers.integrations.senders.telegram.fake import fake_telegram
-    from ofmhelpers.integrations.short_links.fake import _fake_bouncy, _fake_oopsie
-    from ofmhelpers.integrations.stacked.fake import fake_stacked
-    from ofmhelpers.media import fake_media
 
     caches = (
-        outbound._routes,
         fake_instagram,
         _fake_oopsie,
         _fake_bouncy,
@@ -248,6 +245,7 @@ def fake_externals(monkeypatch, tmp_path):
     monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path / "fakes"))
     for cached in caches:
         cached.cache_clear()
+    install_fakes()
     yield
     for cached in caches:
         cached.cache_clear()
@@ -281,6 +279,5 @@ def _provider_files_in_tmp(monkeypatch, tmp_path):
 def _cheap_password_hashing(request, monkeypatch):
     if request.node.get_closest_marker("real_password_hashing"):
         return
-    from ofmhelpers.integrations.signin import passwords
 
     monkeypatch.setattr(passwords, "_N", 2**4)

@@ -1,6 +1,6 @@
 from ofmhelpers.integrations.ai_providers.base import provider_classes
 from ofmhelpers.integrations.ai_providers.catalog import catalog
-from ofmhelpers.schemas import ModelChoice, ProviderChoice
+from ofmhelpers.integrations.ai_providers.schema import ModelChoice, ProviderChoice
 
 
 def provider_choices(
@@ -14,7 +14,7 @@ def provider_choices(
             needs_key=classes[name].needs_key,
             notice=classes[name].notice() if notices else "",
         )
-        for name in (names or classes.names())
+        for name in (names or classes.keys())
     ]
 
 
@@ -35,5 +35,5 @@ def model_choices() -> list[ModelChoice]:
             ),
             default_prompt=spec.default_prompt,
         )
-        for spec in catalog().all()
+        for spec in catalog().values()
     ]

@@ -29,12 +29,16 @@ def is_review_agent(event: HookEvent) -> bool:
     return event.tool_name in AGENTS and bool(REVIEW_WORDS.search(text))
 
 
+def is_code(path: str) -> bool:
+    return path.startswith("src/") and not path.endswith(".md")
+
+
 def edited_source(event: HookEvent) -> bool:
     if event.tool_name in EDITS:
-        return event.relative.startswith("src/")
+        return is_code(event.relative)
     if event.tool_name not in SHELLS or not SCRIPTED_WRITE.search(event.command):
         return False
-    return any(f.path.startswith("src/") for f in changed_by_this_call(event))
+    return any(is_code(f.path) for f in changed_by_this_call(event))
 
 
 def record(event: HookEvent, markers: Markers) -> None:

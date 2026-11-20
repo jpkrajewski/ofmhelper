@@ -1,7 +1,9 @@
 import math
-import random
+lazy import random
 
 from pydantic import BaseModel
+
+lazy from ofmhelpers.media.repurpose.values import Value
 
 Range = tuple[float, float]
 
@@ -25,16 +27,24 @@ def _wave(rng: random.Random, amp: float, freq: Range) -> Wave:
     return Wave(amp=amp, freq=rng.uniform(*freq), phase=rng.uniform(0.0, 2 * math.pi))
 
 
+def _uniform(rng: random.Random, bounds: Value | None) -> float:
+    if bounds is None:
+        return rng.uniform(0.0, 0.0)
+    if isinstance(bounds, tuple):
+        return rng.uniform(*bounds)
+    return rng.uniform(bounds, bounds)
+
+
 def _motion(
     rng: random.Random, shake: float, drift: float, seconds: float
-) -> tuple[Wave, ...]:
+) -> list[Wave]:
     waves = [
         _wave(rng, shake * share * rng.uniform(0.8, 1.2), (lo, hi))
         for lo, hi, share in _SHAKE_BANDS
     ]
     cycles = (_DRIFT_CYCLES[0] / seconds, _DRIFT_CYCLES[1] / seconds)
     waves.append(_wave(rng, drift, cycles))
-    return tuple(w for w in waves if w.amp > 0)
+    return [w for w in waves if w.amp > 0]
 
 
 class Handheld(BaseModel, frozen=True):
@@ -49,27 +59,29 @@ class Handheld(BaseModel, frozen=True):
         cls,
         rng: random.Random,
         *,
-        tilt: Range,
-        perspective: Range,
-        shake: Range,
-        drift: Range,
+        tilt: Value | None,
+        perspective: Value | None,
+        shake: Value | None,
+        drift: Value | None,
         seconds: float,
         aspect: float,
     ) -> Handheld:
-        skew = rng.uniform(*perspective)
+        skew = _uniform(rng, perspective)
         top, bottom, left, right = (rng.uniform(-skew, skew) for _ in range(4))
-        shake_amp = rng.uniform(*shake)
-        drift_amp = rng.uniform(*drift)
+        shake_amp = _uniform(rng, shake)
+        drift_amp = _uniform(rng, drift)
         seconds = max(seconds, _MIN_SECONDS)
         return cls(
-            tilt_deg=round(rng.uniform(*tilt), 3),
+            tilt_deg=round(_uniform(rng, tilt), 3),
             corners=(top, bottom, left, right),
-            x=_motion(rng, shake_amp, drift_amp, seconds),
-            y=_motion(
-                rng,
-                shake_amp * rng.uniform(0.6, 0.9),
-                drift_amp * rng.uniform(0.5, 1.0),
-                seconds,
+            x=tuple(_motion(rng, shake_amp, drift_amp, seconds)),
+            y=tuple(
+                _motion(
+                    rng,
+                    shake_amp * rng.uniform(0.6, 0.9),
+                    drift_amp * rng.uniform(0.5, 1.0),
+                    seconds,
+                )
             ),
             aspect=aspect,
         )

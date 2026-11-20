@@ -4,7 +4,7 @@ from urllib.parse import quote, urlsplit
 from fastapi import HTTPException
 from opentelemetry import trace
 from starlette.concurrency import run_in_threadpool
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import (
     JSONResponse,
     PlainTextResponse,
@@ -13,18 +13,21 @@ from starlette.responses import (
 )
 lazy from starlette.requests import HTTPConnection, Request
 
-from ofmhelpers.auth.access import Action, Area, opens
+from ofmhelpers.acting import Acting, Via, acting
 from ofmhelpers.config import settings
-from ofmhelpers.db.acting import Acting, Via, acting
-from ofmhelpers.db.stores.jobs import log_event
-from ofmhelpers.db.stores.users import get_user
+from ofmhelpers.db.users.schema import SessionUser, User
 from ofmhelpers.features.signin import state as signin_state
 from ofmhelpers.features.users import presence
-from ofmhelpers.features.users.viewing import viewer_for
+from ofmhelpers.features.users.viewing import (
+    signed_in_user,
+    viewer_for,
+    viewing_ended,
+    viewing_started,
+)
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import SessionUser, User
-from ofmhelpers.sentry import name_user
-lazy from ofmhelpers.schemas.users import Viewer
+from ofmhelpers.monitoring.sentry import name_user
+from ofmhelpers.web.access import Action, Area, opens
+lazy from ofmhelpers.db.users.schema import Viewer
 
 logger = get_logger(__name__)
 
@@ -52,12 +55,14 @@ def _request(request: Request) -> Acting:
 class AuthMiddleware(BaseHTTPMiddleware):
     HOME = signin_state.HOME
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         if self.is_public(request.url.path):
             with acting(_request(request)):
                 return await call_next(request)
         current = self.session_user(request)
-        user = await run_in_threadpool(get_user, current.id) if current else None
+        user = await run_in_threadpool(signed_in_user, current.id) if current else None
         reason = self._refused(request, current, user)
         if reason is not None or current is None or user is None:
             if reason != "no session" or request.cookies.get("ofm_session"):
@@ -218,7 +223,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     @classmethod
     def valid_user(cls, request: HTTPConnection) -> User | None:
         current = cls.session_user(request)
-        user = get_user(current.id) if current else None
+        user = signed_in_user(current.id) if current else None
         return user if cls._refused(request, current, user) is None else None
 
     @classmethod
@@ -232,22 +237,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
     def view_as(request: Request, user: User) -> None:
         request.session[_VIEWING] = user.id
         admin = AuthMiddleware.session_user(request)
-        log_event(
-            "viewing",
-            actor=str(admin.id) if admin else None,
-            params={"viewing": user.id, "email": user.email},
-        )
+        viewing_started(admin.id if admin else None, user)
 
     @staticmethod
     def stop_viewing(request: Request) -> None:
         viewed = request.session.pop(_VIEWING, None)
         admin = AuthMiddleware.session_user(request)
         if viewed is not None:
-            log_event(
-                "viewing_end",
-                actor=str(admin.id) if admin else None,
-                params={"viewing": viewed},
-            )
+            viewing_ended(admin.id if admin else None, viewed)
 
     @staticmethod
     def viewer(request: Request) -> Viewer:

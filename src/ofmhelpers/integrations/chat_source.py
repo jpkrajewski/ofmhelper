@@ -1,8 +1,7 @@
 from typing import Protocol
 lazy from collections.abc import Iterator, Mapping
 
-from ofmhelpers.errors import AppError
-lazy from ofmhelpers.schemas.chatting import (
+lazy from ofmhelpers.db.chats.schema import (
     ChatDelivery,
     ChatModel,
     ChatModels,
@@ -14,7 +13,7 @@ lazy from ofmhelpers.schemas.chatting import (
 )
 
 
-class ChatSourceError(AppError): ...
+class ChatSourceError(Exception): ...
 
 
 class ChatSource(Protocol):

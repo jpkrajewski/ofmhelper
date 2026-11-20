@@ -8,7 +8,13 @@ import requests
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.watched_profiles import (
+from ofmhelpers.db.watched_profiles.schema import (
+    FeedItem,
+    GroupForm,
+    Leaderboard,
+    WatchForm,
+)
+from ofmhelpers.db.watched_profiles.store import (
     create_group,
     list_groups,
     list_watched,
@@ -21,7 +27,7 @@ from ofmhelpers.features.assets.store import (
     register_generated_asset,
     uploads_root,
 )
-from ofmhelpers.features.downloads.service import Redirect
+from ofmhelpers.features.redirect import Redirect
 from ofmhelpers.features.reels.thumbs import reel_thumb, thumb_path
 from ofmhelpers.features.reels.watch import queue_due_scans
 from ofmhelpers.features.refusals import (
@@ -36,8 +42,7 @@ from ofmhelpers.integrations.instagram import (
     ReelDownload,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import FeedItem, GroupForm, Leaderboard, WatchForm
-from ofmhelpers.telemetry import in_this_trace
+from ofmhelpers.monitoring.telemetry import in_this_trace
 
 logger = get_logger(__name__)
 
@@ -88,11 +93,18 @@ class WatchRows(BaseModel):
     groups: list[str]
 
 
+class FilterLink(BaseModel, frozen=True):
+    label: str
+    href: str
+    current: bool
+    tier: str | None = None
+
+
 class PageView(FeedPage, WatchRows):
     feed_endpoint: str
-    group_links: list[tuple[str, str, bool]]
-    rank_links: list[tuple[str, str | None, str, bool]]
-    ratio_links: list[tuple[str, str, bool]]
+    group_links: list[FilterLink]
+    rank_links: list[FilterLink]
+    ratio_links: list[FilterLink]
     group: str
     rank: str
     ratio: int | None
@@ -117,9 +129,17 @@ def _feed_page(filters: Filters, offset: int, owner: int | None) -> FeedPage:
     )
 
 
-def _group_links(filters: Filters, owner: int | None) -> list[tuple[str, str, bool]]:
-    return [("All", filters.url("/reels", group=None), not filters.group)] + [
-        (g, filters.url("/reels", group=g), g == filters.group)
+def _group_links(filters: Filters, owner: int | None) -> list[FilterLink]:
+    return [
+        FilterLink(
+            label="All",
+            href=filters.url("/reels", group=None),
+            current=not filters.group,
+        )
+    ] + [
+        FilterLink(
+            label=g, href=filters.url("/reels", group=g), current=g == filters.group
+        )
         for g in list_groups(owner)
     ]
 
@@ -128,27 +148,37 @@ def _short(views: int) -> str:
     return f"{views // _MILLION}M" if views >= _MILLION else f"{views // 1000}k"
 
 
-def _rank_links(filters: Filters) -> list[tuple[str, str | None, str, bool]]:
+def _rank_links(filters: Filters) -> list[FilterLink]:
     ceilings = [None] + [floor for floor, _ in VIEW_TIERS[:-1]]
-    return [("All", None, filters.url("/reels", rank=None), not filters.rank)] + [
-        (
-            f"{name} {_short(floor)}+"
+    return [
+        FilterLink(
+            label="All", href=filters.url("/reels", rank=None), current=not filters.rank
+        )
+    ] + [
+        FilterLink(
+            label=f"{name} {_short(floor)}+"
             if ceiling is None
             else f"{name} {_short(ceiling)}\N{EN DASH}{_short(floor)}",
-            name,
-            filters.url("/reels", rank=name),
-            name == filters.rank,
+            tier=name,
+            href=filters.url("/reels", rank=name),
+            current=name == filters.rank,
         )
         for (floor, name), ceiling in zip(VIEW_TIERS, ceilings, strict=True)
     ]
 
 
-def _ratio_links(filters: Filters) -> list[tuple[str, str, bool]]:
-    return [("Any", filters.url("/reels", ratio=None), not filters.ratio)] + [
-        (
-            f"\N{MULTIPLICATION SIGN}{n}+",
-            filters.url("/reels", ratio=n),
-            n == filters.ratio,
+def _ratio_links(filters: Filters) -> list[FilterLink]:
+    return [
+        FilterLink(
+            label="Any",
+            href=filters.url("/reels", ratio=None),
+            current=not filters.ratio,
+        )
+    ] + [
+        FilterLink(
+            label=f"\N{MULTIPLICATION SIGN}{n}+",
+            href=filters.url("/reels", ratio=n),
+            current=n == filters.ratio,
         )
         for n in _RATIO_STEPS
     ]

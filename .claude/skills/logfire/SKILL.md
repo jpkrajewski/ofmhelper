@@ -5,7 +5,7 @@ description: Query this app's Logfire telemetry (EU project jakubpkrajewski/star
 
 # Logfire first
 
-Before ssh, psql or reading logs: query Logfire (`src/ofmhelpers/telemetry.py`). Every request, RQ job, SQL query, outbound HTTP call (kie.ai, Higgsfield, Instagram, Google) and log line of dev and prod is in its `records` table.
+Before ssh, psql or reading logs: query Logfire (`src/ofmhelpers/monitoring/telemetry.py`). Every request, RQ job, SQL query, outbound HTTP call (kie.ai, Higgsfield, Instagram, Google) and log line of dev and prod is in its `records` table.
 
 ## How to query
 1. **MCP (preferred):** server `logfire` (tools `mcp__logfire__*`), local to this checkout: `claude mcp add --transport http logfire https://logfire-eu.pydantic.dev/mcp` (done 2026-11-08). First use: `/mcp` → `logfire` → authenticate in the browser (Logfire account, no token file). The Logfire plugin's own server reads `${LOGFIRE_MCP_URL:-https://logfire-us.pydantic.dev/mcp}`; unset, it is the US region and cannot see this EU project. `LOGFIRE_MCP_URL=https://logfire-eu.pydantic.dev/mcp` is in `~/.claude/settings.json` `env` (2026-11-08), and `claude mcp list` then shows one EU server.

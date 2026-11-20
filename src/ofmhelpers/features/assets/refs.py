@@ -9,11 +9,21 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import downloads
+from ofmhelpers.db.downloads import store as downloads
 from ofmhelpers.features.assets import ref_usage, store
-from ofmhelpers.features.assets.kinds import classify_kind
-from ofmhelpers.features.assets.store import in_asset_root, strip_asset_hash_prefix
-from ofmhelpers.features.edit.service import STAGING as EDIT_STAGING
+from ofmhelpers.features.assets.ref_schema import (
+    MissingRefs,
+    RefEntry,
+    RestorableRef,
+    StoredRef,
+    StoredRefs,
+)
+from ofmhelpers.features.assets.store import (
+    EDIT_STAGING,
+    in_asset_root,
+    strip_asset_hash_prefix,
+)
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews.render import (
     PREVIEW_ERRORS,
     write_atomic,
@@ -22,8 +32,6 @@ from ofmhelpers.features.previews.render import (
 )
 from ofmhelpers.features.refusals import ForbiddenError, NotFoundError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import MissingRefs, RefEntry, StoredRef, StoredRefs
-from ofmhelpers.schemas.files import RestorableRef
 
 logger = get_logger(__name__)
 

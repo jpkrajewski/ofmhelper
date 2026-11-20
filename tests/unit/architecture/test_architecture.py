@@ -14,33 +14,56 @@ BASELINE = Path(__file__).with_name("baseline.json")
 
 RANK = {
     "web": 4,
+    "background": 4,
+    "monitoring": 1,
     "features": 3,
     "integrations": 2,
     "media": 2,
     "db": 1,
     "cache": 1,
-    "schemas": 1,
-    "auth": 1,
     "config": 1,
-    "utils": 1,
 }
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}
 MAX_ROUTE_LINES = 25
 QUEUE_MACHINERY = ("features/jobs/", "features/events/")
-LOOSE = re.compile(
-    r"\b(dict|tuple|Dict|Tuple|Mapping|MutableMapping|NamedTuple|TypedDict)\b"
-)
+LOOSE = re.compile(r"\b(dict|tuple|Dict|Tuple|Mapping|MutableMapping|NamedTuple)\b")
+DICTS = re.compile(r"\b(dict|Dict|Mapping|MutableMapping)\b")
+SHAPES = re.compile(r"ofmhelpers\.db\.(\w+\.)+schema$")
+SERVES_A_MAPPING = {
+    "__getitem__",
+    "__contains__",
+    "__len__",
+    "get",
+    "keys",
+    "values",
+    "items",
+    "names",
+    "all",
+}
 SHARED_PARAMETERS = 3
 FUNCTION_RULES = (
     "features/",
     "integrations/",
-    "schemas/",
     "db/",
     "cache/",
     "media/",
-    "utils/",
     "config/",
 )
+PYDANTIC_HOOKS = {
+    "field_validator",
+    "model_validator",
+    "field_serializer",
+    "model_serializer",
+}
+OPEN_TYPES = {"Any", "object"}
+ITERATORS = {
+    "Iterator",
+    "Iterable",
+    "Generator",
+    "AsyncIterator",
+    "AsyncIterable",
+    "AsyncGenerator",
+}
 TRACE_CALLS = {"exception", "record_exception"}
 LOG_LEVELS = {"debug", "info", "warning", "error", "critical", "log"}
 SILENT = "# silent:"
@@ -96,22 +119,6 @@ def routes(
         and isinstance(decorator.func, ast.Attribute)
         and decorator.func.attr in ROUTE_METHODS
     ]
-
-
-def functions(
-    tree: ast.Module,
-) -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
-    found = []
-    for node in tree.body:
-        members = node.body if isinstance(node, ast.ClassDef) else [node]
-        prefix = f"{node.name}." if isinstance(node, ast.ClassDef) else ""
-        found += [
-            (prefix + member.name, member)
-            for member in members
-            if isinstance(member, ast.FunctionDef | ast.AsyncFunctionDef)
-            and not member.name.startswith("_")
-        ]
-    return found
 
 
 class Scope(BaseModel, arbitrary_types_allowed=True):
@@ -282,13 +289,46 @@ def test_layers_import_downwards_only():
     check(found, baseline().layers)
 
 
-def test_routers_import_no_database_and_no_integration():
+def reaches_past_features(tree: ast.Module) -> set[str]:
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+        elif isinstance(node, ast.Import):
+            modules |= {alias.name for alias in node.names}
+    return {
+        m
+        for m in modules
+        if m.startswith("ofmhelpers.integrations")
+        or (m.startswith("ofmhelpers.db") and not SHAPES.match(m))
+    }
+
+
+def test_web_imports_no_database_and_no_integration():
     found = {
-        f"{name} -> {area}"
-        for name, tree in under("web/routers/").items()
-        for area in imported_areas(tree) & {"db", "integrations"}
+        f"{name} -> {module}"
+        for name, tree in under("web/").items()
+        for module in reaches_past_features(tree)
     }
     check(found, baseline().router_imports)
+
+
+def test_the_web_rule_lets_shapes_through_and_nothing_else():
+    tree = ast.parse(
+        dedent("""
+            from ofmhelpers.db.users.schema import SessionUser
+            from ofmhelpers.db.devices.catalog.schema import Catalog
+            from ofmhelpers.db.users import store
+            from ofmhelpers.db.session import session_scope
+            from ofmhelpers.integrations.gdrive import connect_as
+        """)
+    )
+
+    assert reaches_past_features(tree) == {
+        "ofmhelpers.db.users",
+        "ofmhelpers.db.session",
+        "ofmhelpers.integrations.gdrive",
+    }
 
 
 def test_routes_are_short():
@@ -325,14 +365,97 @@ def test_background_work_has_a_job_row():
     check(found, baseline().unrecorded_jobs)
 
 
-def test_functions_return_models_not_dicts_or_tuples():
+def every_function(
+    tree: ast.Module,
+) -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    found = []
+
+    def visit(node: ast.AST, where: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                found.append((where + child.name, child))
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                visit(child, f"{where}{child.name}.")
+            else:
+                visit(child, where)
+
+    visit(tree, "")
+    return found
+
+
+def pydantic_hook(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    return any(
+        ast.unparse(decorator).split("(")[0].split(".")[-1] in PYDANTIC_HOOKS
+        for decorator in function.decorator_list
+    )
+
+
+def open_type(annotation: ast.expr) -> bool:
+    match annotation:
+        case ast.BinOp(op=ast.BitOr(), left=left, right=right):
+            return open_type(left) or open_type(right)
+        case ast.Name(id=written) | ast.Attribute(attr=written):
+            return written in OPEN_TYPES
+    return False
+
+
+def iterates(returns: ast.expr) -> bool:
+    outer = returns.value if isinstance(returns, ast.Subscript) else returns
+    match outer:
+        case ast.Name(id=written) | ast.Attribute(attr=written):
+            return written in ITERATORS
+    return False
+
+
+def loose_return(function: ast.FunctionDef | ast.AsyncFunctionDef, name: str) -> bool:
+    returns = function.returns
+    if returns is None or pydantic_hook(function) or function.name == "__iter__":
+        return False
+    if iterates(returns):
+        return bool(DICTS.search(ast.unparse(returns)))
+    return loose(returns, name) or open_type(returns)
+
+
+def test_every_function_returns_a_model_or_a_plain_value():
     found = {
-        f"{name}::{function_name}"
-        for name, tree in under(*FUNCTION_RULES).items()
-        for function_name, function in functions(tree)
-        if function.returns is not None and loose(function.returns, name)
+        f"{name}::{qualified}"
+        for name, tree in trees().items()
+        for qualified, function in every_function(tree)
+        if loose_return(function, name)
     }
     check(found, baseline().loose_returns)
+
+
+def test_the_return_rule_reads_every_function(monkeypatch):
+    tree = ast.parse(
+        dedent("""
+            from types import MappingProxyType
+            from typing import Any, TypedDict
+            class Shape(TypedDict):
+                x: int
+            def plain() -> int: ...
+            def shaped() -> Shape: ...
+            def lookup() -> MappingProxyType[str, int]: ...
+            def _private() -> dict[str, int]: ...
+            def pairs() -> Iterator[tuple[int, int]]: ...
+            def rows() -> Iterator[dict[str, int]]: ...
+            async def outer() -> None:
+                def inner() -> tuple[int, int]: ...
+            class Box:
+                def anything(self) -> Any | None: ...
+                def model(self) -> Box: ...
+                def __iter__(self) -> object: ...
+                @field_validator("x", mode="before")
+                def _raw(cls, value: object) -> object: ...
+        """)
+    )
+    monkeypatch.setattr(sys.modules[__name__], "trees", lambda: {"m.py": tree})
+    scope.cache_clear()
+
+    flagged = {q for q, f in every_function(tree) if loose_return(f, "m.py")}
+
+    scope.cache_clear()
+    assert flagged == {"_private", "rows", "outer.inner", "Box.anything"}
 
 
 @pytest.fixture
@@ -374,6 +497,54 @@ def test_the_return_rule_follows_a_name_to_the_dict_behind_it():
     assert [w for w in here if not is_loose(w, "a.py")] == []
     assert [w for w in imported if not is_loose(w, "b/c.py")] == []
     assert [w for w in models if is_loose(w, "b/c.py")] == []
+
+
+def dict_in_disguise(node: ast.ClassDef) -> bool:
+    holds = any(
+        isinstance(child, ast.AnnAssign) and DICTS.search(ast.unparse(child.annotation))
+        for child in node.body
+    )
+    serves = {
+        child.name
+        for child in node.body
+        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    return holds and bool(serves & SERVES_A_MAPPING)
+
+
+def disguised(tree: ast.Module) -> set[str]:
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and dict_in_disguise(node)
+    }
+
+
+def test_no_class_is_a_dict_in_disguise():
+    found = {f"{name}::{c}" for name, tree in trees().items() for c in disguised(tree)}
+
+    assert sorted(found) == [], (
+        "a lookup by name is MappingProxyType[str, T], a fixed shape is a TypedDict"
+    )
+
+
+def test_the_disguise_rule_reads_each_class():
+    tree = ast.parse(
+        dedent("""
+            class Registry(BaseModel):
+                entries: dict[str, int]
+                def __getitem__(self, name: str) -> int: ...
+            class Holder(BaseModel):
+                classes: dict[str, int]
+            class Shape(TypedDict):
+                x: int
+            class View(BaseModel):
+                rows: list[int]
+                def all(self) -> list[int]: ...
+        """)
+    )
+
+    assert disguised(tree) == {"Registry"}
 
 
 def test_failures_leave_a_trace():

@@ -4,15 +4,10 @@ from statistics import mean
 from zoneinfo import ZoneInfo
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatPlatform, FanMessage, LateWait, ModelReport
 from ofmhelpers.features.chatting.reached import reached_names
 from ofmhelpers.features.chatting.recent import remember
-from ofmhelpers.schemas.chatting import (
-    ChatPlatform,
-    FanMessage,
-    LateWait,
-    ModelReport,
-)
 
 _MINUTE_S = 60
 _HOUR_MIN = 60
@@ -38,10 +33,14 @@ def _waits(messages: list[FanMessage]) -> list[FanMessage]:
     return list({(m.channel_id, m.replied_at): m for m in messages}.values())
 
 
-def _urgent_first(wait: FanMessage) -> tuple[bool, float]:
+def _sent_order(wait: FanMessage) -> float:
     if wait.replied_at is None:
-        return (False, wait.sent_at)
-    return (True, -wait.sent_at)
+        return wait.sent_at
+    return -wait.sent_at
+
+
+def _was_replied(wait: FanMessage) -> bool:
+    return wait.replied_at is not None
 
 
 def _late(wait: FanMessage, now: float, zone: str) -> LateWait:
@@ -66,7 +65,10 @@ def model_report(platform: ChatPlatform, username: str, zone: str) -> ModelRepor
         average_response_time=_duration(mean(answered)) if answered else None,
         period_h=lookback_s // _HOUR_S,
         late_after_min=limit_s // _MINUTE_S,
-        late=[_late(w, now, zone) for w in sorted(late, key=_urgent_first)],
+        late=[
+            _late(w, now, zone)
+            for w in sorted(sorted(late, key=_sent_order), key=_was_replied)
+        ],
     )
 
 

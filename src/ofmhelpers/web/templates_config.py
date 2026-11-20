@@ -3,30 +3,43 @@ import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Callable, Iterator
 
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
+from pydantic import BaseModel
 lazy from fastapi import Request
 
-from ofmhelpers.auth.access import Action, Area, opens
 from ofmhelpers.config import settings
+from ofmhelpers.db.tracked_accounts.schema import ago
 from ofmhelpers.features.drive.posting import window as posting_window
 from ofmhelpers.features.users.presence import idle_limit_s
 from ofmhelpers.features.users.viewing import makers
-from ofmhelpers.schemas.accounts import ago
-from ofmhelpers.schemas.nav import nav, nav_of
-from ofmhelpers.schemas.time_zones import TIME_ZONES, time_zone
+from ofmhelpers.web.access import Action, Area, opens
+from ofmhelpers.web.nav import nav, nav_of
+from ofmhelpers.web.time_zones import TIME_ZONES, time_zone
+lazy from ofmhelpers.db.users.schema import Viewer
 lazy from ofmhelpers.features.users.viewing import Maker
-lazy from ofmhelpers.schemas.users import Viewer
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 TEMPLATE_RECHECK_S = 1.0
 
 
+class TemplateSource(BaseModel):
+    source: str
+    filename: str | None
+    is_current: Callable[[], bool]
+
+    def __iter__(self) -> Iterator[str | Callable[[], bool] | None]:  # type: ignore[override]
+        return iter((self.source, self.filename, self.is_current))
+
+
 class TemplateFiles(FileSystemLoader):
-    def get_source(self, environment: Environment, template: str):
+    def get_source(  # type: ignore[override]
+        self, environment: Environment, template: str
+    ) -> TemplateSource:
         source, filename, uptodate = super().get_source(environment, template)
         checked_at = time.monotonic()
         current = True
@@ -38,7 +51,7 @@ class TemplateFiles(FileSystemLoader):
                 current = uptodate()
             return current
 
-        return source, filename, is_current
+        return TemplateSource(source=source, filename=filename, is_current=is_current)
 
 
 @lru_cache(maxsize=256)

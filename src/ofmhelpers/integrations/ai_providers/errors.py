@@ -1,10 +1,7 @@
-from ofmhelpers.errors import AppError
-
-
 class InvalidInputError(ValueError): ...
 
 
-class ProviderError(AppError):
+class ProviderError(Exception):
     retryable = False
 
 

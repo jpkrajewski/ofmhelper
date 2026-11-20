@@ -2,13 +2,17 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
+from ofmhelpers.features.fakes import install_fakes
+from ofmhelpers.integrations.downloaders import generic, images, kvs
 from ofmhelpers.web.main import app
+lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
 
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
     monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path / "fakes"))
+    install_fakes()
     c = TestClient(app)
     sign_in(c)
     return c
@@ -57,9 +61,6 @@ def test_a_download_run_shows_on_the_page_and_reopens_in_the_one_tool(client):
 
 
 def test_a_login_walled_reel_is_rescued_by_the_saver_fallback(client, monkeypatch):
-    from ofmhelpers.integrations.downloaders import generic, images, kvs
-    from ofmhelpers.integrations.downloaders.models import DownloadResult
-
     walled = "content isn't available to everyone"
     monkeypatch.setattr(
         generic,

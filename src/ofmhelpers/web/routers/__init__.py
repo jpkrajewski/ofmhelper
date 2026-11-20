@@ -1,4 +1,4 @@
-from types import ModuleType
+lazy from types import ModuleType
 
 from fastapi import APIRouter
 

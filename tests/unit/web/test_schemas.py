@@ -1,5 +1,5 @@
-from ofmhelpers.db.stores.jobs import _stored
-from ofmhelpers.schemas import ResultFile
+from ofmhelpers.db.jobs.schema import ResultFile
+from ofmhelpers.db.jobs.store import _stored
 from ofmhelpers.web.routers import ROUTERS
 from ofmhelpers.web.routers.generation import clone_links
 from ofmhelpers.web.routers.image_tools import pictures

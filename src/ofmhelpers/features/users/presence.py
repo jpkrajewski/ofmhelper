@@ -1,6 +1,6 @@
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import users
-from ofmhelpers.schemas.users import Role, User
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 
 
 def idle_limit_s(role: Role | None) -> int:

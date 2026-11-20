@@ -9,26 +9,20 @@ lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import clone_from_links
-from ofmhelpers.db.stores.jobs import (
+from ofmhelpers.db.clone_from_links import store as clone_from_links
+from ofmhelpers.db.jobs.schema import Job
+from ofmhelpers.db.jobs.store import (
     create_job,
     fail_job,
     get_job,
     list_batch,
     redone_links,
 )
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.manifests import build_ordered_paths
-from ofmhelpers.features.clone.pricing import UnpricedError, clone_price
 from ofmhelpers.features.clone.service import export_label, require_kind
-from ofmhelpers.features.clone.targets import (
-    DEFAULT_RESOLUTION,
-    CloneTarget,
-    clone_targets,
-    offered_resolutions,
-)
 from ofmhelpers.features.clone_links.links import read_pasted
 from ofmhelpers.features.clone_links.models import (
     CheckRefused,
@@ -44,7 +38,15 @@ from ofmhelpers.features.clone_links.preview import (
 )
 from ofmhelpers.features.clone_links.review import NOT_CONNECTED
 from ofmhelpers.features.clone_links.stop import stop_batch
+from ofmhelpers.features.clone_pricing.pricing import UnpricedError, clone_price
+from ofmhelpers.features.clone_pricing.targets import (
+    DEFAULT_RESOLUTION,
+    CloneTarget,
+    clone_targets,
+    offered_resolutions,
+)
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.jobs.schema import CloneLinksCard
 from ofmhelpers.features.refusals import (
     NotFoundError,
     RefusedError,
@@ -53,8 +55,7 @@ from ofmhelpers.features.refusals import (
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.exports import exports
-from ofmhelpers.schemas import CloneLinksCard, Job
-lazy from ofmhelpers.schemas.clone_ai_checks import CloneFromLink
+lazy from ofmhelpers.db.clone_ai_checks.schema import CloneFromLink
 
 logger = get_logger(__name__)
 
@@ -180,6 +181,16 @@ class Submitted(Protocol):
     batch: str | None
 
 
+class _Shared(BaseModel, frozen=True):
+    provider: str
+    model: str
+    prompt: str
+    resolution: str
+    audio: bool
+    export: str
+    mirror: bool
+
+
 class Generate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -217,7 +228,7 @@ class Generate(BaseModel):
             form.provider, _target(form.provider).model, form.api_key
         )
 
-    def _checked(self, form: Submitted) -> dict[str, Any]:
+    def _checked(self, form: Submitted) -> _Shared:
         target = _target(form.provider)
         if not self._key(form):
             msg = "API key is required"
@@ -227,15 +238,15 @@ class Generate(BaseModel):
             raise RefusedError(msg)
         resolution = _resolution(form.resolution)
         _require_drive(self.user_id)
-        return {
-            "provider": form.provider,
-            "model": target.model,
-            "prompt": form.prompt,
-            "resolution": resolution,
-            "audio": form.audio,
-            "export": form.export,
-            "mirror": form.mirror,
-        }
+        return _Shared(
+            provider=form.provider,
+            model=target.model,
+            prompt=form.prompt,
+            resolution=resolution,
+            audio=form.audio,
+            export=form.export,
+            mirror=form.mirror,
+        )
 
     def _subject(self, form: Submitted) -> list[str]:
         paths = build_ordered_paths(
@@ -249,7 +260,7 @@ class Generate(BaseModel):
         return paths
 
     def start(self, form: Submitted) -> Sent:
-        shared = self._checked(form)
+        shared = self._checked(form).model_dump()
         urls = read("\n".join(form.links))
         images = self._subject(form)
         batch = form.batch

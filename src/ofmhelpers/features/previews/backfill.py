@@ -1,6 +1,6 @@
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import list_finished_jobs
+from ofmhelpers.db.jobs.store import list_finished_jobs
 from ofmhelpers.features.previews.render import is_warm, warm_previews
 from ofmhelpers.log import get_logger
 

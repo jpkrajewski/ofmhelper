@@ -1,7 +1,7 @@
 import time
 
-from ofmhelpers.db.stores import chats
-from ofmhelpers.schemas.chatting import ChatEvent, ChatPlatform, ChatRead
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatEvent, ChatPlatform, ChatRead
 
 PLATFORM = ChatPlatform.STACKED
 

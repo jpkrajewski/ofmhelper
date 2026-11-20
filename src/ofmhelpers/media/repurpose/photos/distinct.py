@@ -1,4 +1,4 @@
-import random
+lazy import random
 
 from PIL import Image, ImageEnhance
 from pydantic import BaseModel

@@ -4,8 +4,7 @@ from typing import Any
 lazy from collections.abc import Callable, Iterator
 
 import requests
-from pydantic import ValidationError
-lazy from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations import outbound
@@ -29,6 +28,10 @@ from ofmhelpers.integrations.fanvue.models import (
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
+
+
+class BearerHeader(BaseModel):
+    authorization: str = Field(serialization_alias="Authorization")
 
 
 class FanvueClient:
@@ -100,12 +103,12 @@ class FanvueClient:
     def unsubscribe(self, subscription_id: str) -> None:
         self._change("DELETE", f"webhooks/subscriptions/{subscription_id}")
 
-    def _change(self, method: str, path: str, **kwargs: Any) -> Any:
+    def _change(self, method: str, path: str, **kwargs: Any) -> requests.Response:
         try:
             r = self._session.request(
                 method,
                 f"{settings.fanvue.api_url}/{path}",
-                headers=self._auth(),
+                headers=self._auth().model_dump(by_alias=True),
                 timeout=settings.fanvue.timeout_s,
                 **kwargs,
             )
@@ -114,10 +117,10 @@ class FanvueClient:
             raise FanvueError(msg) from exc
         return _ok(r)
 
-    def _auth(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token()}"}
+    def _auth(self) -> BearerHeader:
+        return BearerHeader(authorization=f"Bearer {self._token()}")
 
-    def _get(self, path: str, **params: Any) -> Any:
+    def _get(self, path: str, **params: Any) -> requests.Response:
         for attempt in range(1, settings.fanvue.tries):
             try:
                 r = self._request(path, params)
@@ -144,14 +147,19 @@ class FanvueClient:
         return self._session.get(
             f"{settings.fanvue.api_url}/{path}",
             params=params,
-            headers=self._auth(),
+            headers=self._auth().model_dump(by_alias=True),
             timeout=settings.fanvue.timeout_s,
         )
 
 
-def _parsed[T: BaseModel](model: type[T], reply: Any) -> T:
+def _parsed[T: BaseModel](model: type[T], reply: requests.Response) -> T:
     try:
-        return model.model_validate(reply)
+        body = reply.json() if reply.content else None
+    except ValueError as exc:
+        msg = "Fanvue answered something that is not JSON"
+        raise FanvueError(msg) from exc
+    try:
+        return model.model_validate(body)
     except ValidationError as exc:
         msg = f"Fanvue answered an unexpected {model.__name__}: {exc.error_count()} fields"
         raise FanvueError(msg) from None
@@ -179,13 +187,9 @@ def _retry_wait(r: requests.Response) -> float:
         return settings.fanvue.retry_wait_s
 
 
-def _ok(r: requests.Response) -> Any:
+def _ok(r: requests.Response) -> requests.Response:
     if r.ok:
-        try:
-            return r.json() if r.content else None
-        except ValueError as exc:
-            msg = "Fanvue answered something that is not JSON"
-            raise FanvueError(msg) from exc
+        return r
     logger.warning(
         "fanvue %s %s: %s",
         r.request.method,

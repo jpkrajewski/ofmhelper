@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 lazy from PIL import Image
 
 from ofmhelpers.media.repurpose.checker import audio, frames, sscd, tmk, visual
@@ -37,26 +37,39 @@ class CheckReport(BaseModel, frozen=True):
         return not self.looks_like_source and not self.sounds_like_source
 
 
-def _usable(sampled: frames.Sampled) -> tuple[list[Image.Image], np.ndarray]:
+class _Usable(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    images: list[Image.Image]
+    times: np.ndarray
+
+
+class _SourceHashes(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    kept: dict[HashKind, np.ndarray]
+    times: np.ndarray
+    count: int
+
+
+def _usable(sampled: frames.Sampled) -> _Usable:
     images = sampled.images
     picked = [i for i, f in enumerate(images) if not is_flat(f)] or list(
         range(len(images))
     )
     times = np.array([sampled.times[i] for i in picked])
-    return [normalize(images[i]) for i in picked], times
+    return _Usable(images=[normalize(images[i]) for i in picked], times=times)
 
 
 @lru_cache(maxsize=32)
-def _source(
-    path: str, mtime: float, fps: float, timeout_s: int
-) -> tuple[dict[HashKind, np.ndarray], np.ndarray, int]:
+def _source(path: str, mtime: float, fps: float, timeout_s: int) -> _SourceHashes:
     del mtime
     sampled = frames.sample(Path(path), fps, timeout_s)
-    images, times = _usable(sampled)
-    return (
-        {kind: visual.stored(kind, images) for kind in HashKind},
-        times,
-        len(sampled.images),
+    usable = _usable(sampled)
+    return _SourceHashes(
+        kept={kind: visual.stored(kind, usable.images) for kind in HashKind},
+        times=usable.times,
+        count=len(sampled.images),
     )
 
 
@@ -69,13 +82,14 @@ def check(
     timeout_s: int = _DEFAULT_TIMEOUT_S,
 ) -> CheckReport:
     source, copy = Path(source), Path(copy)
-    kept, source_t, source_count = _source(
-        str(source), source.stat().st_mtime, source_fps, timeout_s
-    )
+    stored = _source(str(source), source.stat().st_mtime, source_fps, timeout_s)
     copy_sampled = frames.sample(copy, fps, timeout_s)
-    copy_frames, copy_t = _usable(copy_sampled)
+    copy_usable = _usable(copy_sampled)
+    copy_frames, copy_t = copy_usable.images, copy_usable.times
     hashes = [
-        visual.score(kind, kept[kind], source_t, copy_frames, copy_t, 1 / fps)
+        visual.score(
+            kind, stored.kept[kind], stored.times, copy_frames, copy_t, 1 / fps
+        )
         for kind in HashKind
     ]
     found = (
@@ -92,7 +106,7 @@ def check(
     return CheckReport(
         source_file=source,
         copy_file=copy,
-        source_frames=source_count,
+        source_frames=stored.count,
         copy_frames=len(copy_sampled.images),
         flat_copy_frames=len(copy_sampled.images) - len(copy_frames),
         hashes=hashes,

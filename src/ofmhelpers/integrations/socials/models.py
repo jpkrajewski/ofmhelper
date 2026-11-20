@@ -1,4 +1,4 @@
-from ofmhelpers.schemas.socials import (
+from ofmhelpers.db.tracked_accounts.schema import (
     AccountMetrics,
     AccountProfile,
     AccountStats,

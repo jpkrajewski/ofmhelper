@@ -3,7 +3,8 @@ from pathlib import Path
 lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.schema import ResultFile
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.assets.store import (
     IMAGE_KINDS,
     convert_heic_upload,
@@ -14,9 +15,9 @@ from ofmhelpers.features.assets.store import (
     uploads_root,
 )
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.media.metadata_cleaner import clean_metadata
-from ofmhelpers.schemas import JobQueued, ResultFile
 
 TASK = "clean_images"
 

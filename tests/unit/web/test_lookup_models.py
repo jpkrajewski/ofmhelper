@@ -1,5 +1,5 @@
-from ofmhelpers.schemas.devices import AccountPhones, Device, PhonesByAccount
-from ofmhelpers.schemas.drive import StoredFolder, StoredFolders
+from ofmhelpers.db.devices.schema import AccountPhones, Device, PhonesByAccount
+from ofmhelpers.db.drive_folders.schema import StoredFolder, StoredFolders
 
 
 def _device(label: str) -> Device:

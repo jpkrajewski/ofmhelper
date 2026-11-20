@@ -15,7 +15,8 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 - `features/<page>/` what a page or background job does (`service.py`, `jobs.py`, `models.py`). Math and static data in their own files, not next to the logic.
 - `integrations/` everything that talks to an outside service: `ai_providers/<name>/`, `gdrive`, `instagram`, `llm`, `short_links`, `apify`, `stacked`, `fanvue`, `downloaders`, `signin`, `socials`, `senders/<name>/` (where events go out: Telegram, ...; `features/events` emits).
 - `media/` local video and image work (ffmpeg, recorder, repurpose, exports).
-- `db/` session, models, `repositories/`, `stores/`. `schemas/` shared Pydantic shapes. `config/`, `cache/`, `utils/`.
+- `db/` session, models, one package per table: `db/<table>/repository.py`, `store.py`, `schema.py`. `config/`, `cache/`. No `utils/`: a helper lives in the module that uses it (`web/time_zones.py`, `integrations/outbound.py` `ProxyPool`).
+- Pydantic shapes: `schema.py` of the lowest module that makes them (`db/<table>/`, `integrations/<name>/`, `features/<page>/`). No shared schemas folder.
 
 ## Architecture
 - `DB -> Repository (cached) -> Service`; services never touch the DB.
@@ -34,7 +35,7 @@ One rule: `web/` is HTTP only. Where a new thing goes:
 ## Data Models
 - Map all data to Pydantic (tool JSON, config, fixtures); no raw dicts or hand parsers. Large static data = package JSON + model.
 - Validation/transforms on the model; logic in services.
-- Shared route shapes in `schemas/`; one-template forms stay in their router. Many models -> `models/` folder.
+- Route shapes in the `schema.py` of the module that makes them; one-template forms stay in their router. Many models -> `models/` folder.
 
 ## Logging
 - `logger = get_logger(__name__)` (`ofmhelpers.log`), module scope; lazy `%s` args; `exc_info=True` in `except`.

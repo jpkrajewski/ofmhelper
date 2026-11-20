@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from pathlib import Path
+from types import MappingProxyType
 from zoneinfo import ZoneInfo
+lazy from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,7 +12,6 @@ from ofmhelpers.media.ffmpeg import binary, run
 from ofmhelpers.media.recorder import available, load_profile
 from ofmhelpers.media.recorder.models import Recording
 from ofmhelpers.media.recorder.recorder import record
-from ofmhelpers.utils.registry import Registry
 
 __all__ = ["Export", "ExportOptions", "exports", "get_export"]
 
@@ -106,8 +106,8 @@ def _build() -> list[Export]:
 
 
 @lru_cache
-def exports() -> Registry[Export]:
-    return Registry[Export](entries={e.name: e for e in _build()})
+def exports() -> MappingProxyType[str, Export]:
+    return MappingProxyType({e.name: e for e in _build()})
 
 
 def get_export(name: str) -> Export:

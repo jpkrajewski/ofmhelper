@@ -2,16 +2,16 @@ from pydantic import BaseModel, ConfigDict, SkipValidation, ValidationError
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.repositories import OwnsDataError
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.db.jobs.store import create_job, fail_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.repository import OwnsDataError
+from ofmhelpers.db.users.schema import Role, User, UserForm
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
-from ofmhelpers.features.signin import credentials
+from ofmhelpers.features.users import credentials
 from ofmhelpers.integrations.signin import Provider, configured
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import Role, User, UserForm
 
 logger = get_logger(__name__)
 

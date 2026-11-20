@@ -5,8 +5,8 @@ import requests
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import cookies as login_cookies
-from ofmhelpers.db.stores.watched_profiles import (
+from ofmhelpers.db.cookies import store as login_cookies
+from ofmhelpers.db.watched_profiles.store import (
     claim_due,
     get_watched,
     list_watched,
@@ -25,8 +25,8 @@ from ofmhelpers.integrations.instagram import (
     Reel,
     scan_profile,
 )
+from ofmhelpers.integrations.outbound import ProxyPool
 from ofmhelpers.log import get_logger
-from ofmhelpers.utils.proxy_pool import ProxyPool
 
 logger = get_logger(__name__)
 

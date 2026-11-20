@@ -2,11 +2,12 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
-from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.tracked_accounts import list_accounts
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.tracked_accounts.store import list_accounts
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.phones import service as phones_service
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.schemas import DeviceFields
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"

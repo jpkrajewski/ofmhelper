@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.kinds import classify_kind
 
 
 def download_name(name: str, job_id: str = "") -> str:

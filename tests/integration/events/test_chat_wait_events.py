@@ -1,20 +1,29 @@
 import threading
 import time
 from http import HTTPStatus
+from types import SimpleNamespace
 
 import pytest
 from chat_platforms import StackedDriver
 from fastapi.testclient import TestClient
 
+import ofmhelpers.features.chatting.sync as chat_sync
 import ofmhelpers.features.events.dispatch as dispatch_module
+from ofmhelpers.db.chats.schema import (
+    ChatEvent,
+    ChatModel,
+    ChatModels,
+    ChatPlatform,
+    ChatRead,
+)
 from ofmhelpers.db.models import ChatFanMessageRow
 from ofmhelpers.db.session import session_scope
 from ofmhelpers.features.chatting import rechecks, wait_events
 from ofmhelpers.features.chatting.sync import sync
 from ofmhelpers.features.chatting.wait_events import emit_waiting, recheck_due, waited
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
-from ofmhelpers.schemas.chatting import ChatEvent, ChatPlatform, ChatRead
 from ofmhelpers.web.main import app
+lazy from ofmhelpers.integrations.chat_source import ChatSourceError
 
 NOW = time.time()
 LOOK = 600
@@ -223,12 +232,6 @@ def test_a_new_list_deletes_the_one_before_and_the_last_stays_when_nobody_waits(
 
 
 def test_a_model_that_cannot_be_read_does_not_drop_the_others(monkeypatch):
-    from types import SimpleNamespace
-
-    from ofmhelpers.features.chatting import sync as chat_sync
-    from ofmhelpers.integrations.chat_source import ChatSourceError
-    from ofmhelpers.schemas.chatting import ChatModel, ChatModels, ChatPlatform
-
     def new_reads(model, _scope):
         if model.username == "broken":
             msg = "Stacked is not answering"

@@ -2,14 +2,14 @@ import argparse
 import shutil
 from pathlib import Path
 
-from ofmhelpers.db.stores import clone_examples as store
-from ofmhelpers.db.stores.jobs import get_job
+from ofmhelpers.db.clone_examples import store
+from ofmhelpers.db.clone_examples.schema import CloneExample, ExampleCard, ExamplePart
+from ofmhelpers.db.jobs.store import get_job
 from ofmhelpers.features.assets.store import uploads_root
 from ofmhelpers.features.previews.render import write_video_thumb
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.log import configure_logging, get_logger
 from ofmhelpers.media.side_by_side import side_by_side
-from ofmhelpers.schemas.clone_examples import CloneExample, ExampleCard, ExamplePart
 
 logger = get_logger(__name__)
 

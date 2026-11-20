@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.web.main import app
@@ -41,7 +41,7 @@ def _assert_fits_its_model(params: dict) -> None:
     spec = get_spec(params["model"])
     assert params["provider"] == spec.provider
     inputs = set(params) - {"provider", "model"}
-    assert inputs <= set(spec.properties.names()), inputs - set(spec.properties.names())
+    assert inputs <= set(spec.properties), inputs - set(spec.properties)
 
 
 def test_seedream5_card_restores_model_settings_and_references(client, tmp_path):

@@ -1,9 +1,9 @@
 from pydantic import BaseModel, ValidationError
 
-from ofmhelpers.features.signin import credentials
+from ofmhelpers.db.users.schema import PasswordForm, User
 from ofmhelpers.features.signin.outcome import Outcome, signed_in
 from ofmhelpers.features.signin.state import HOME
-from ofmhelpers.schemas import PasswordForm, User
+from ofmhelpers.features.users import credentials
 
 _DEAD_LINK = "This link is used, expired or wrong. Ask an admin for a new one."
 

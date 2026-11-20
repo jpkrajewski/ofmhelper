@@ -8,11 +8,13 @@ from typing import Any
 lazy from pathlib import Path
 
 import logfire
+from pydantic import BaseModel
 lazy import httplib2
 lazy from google.auth.credentials import Credentials
 lazy from google.auth.exceptions import GoogleAuthError, RefreshError
 lazy from google.auth.transport.requests import AuthorizedSession
 lazy from google.oauth2 import service_account
+lazy from google.oauth2.credentials import Credentials as OAuthCredentials
 lazy from google_auth_httplib2 import AuthorizedHttp
 lazy from googleapiclient.discovery import build
 lazy from googleapiclient.errors import Error as GoogleApiError
@@ -25,14 +27,19 @@ from ofmhelpers.integrations.gdrive.base import (
     DriveAuthError,
     DriveError,
     DriveFullError,
+    DriveNotSetUpError,
     FolderGoneError,
 )
 from ofmhelpers.integrations.gdrive.models import (
     FOLDER_MIME,
+    DriveAbout,
+    DriveAck,
     DriveDownload,
     DriveFile,
     DriveFolder,
     DriveListing,
+    DriveRow,
+    DriveRowList,
     DriveSheet,
     DriveStorage,
     DriveThumb,
@@ -40,6 +47,11 @@ from ofmhelpers.integrations.gdrive.models import (
 )
 from ofmhelpers.integrations.gdrive.sheets import XLSX_MIME, read_xlsx
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.gdrive.fake import (
+    FAKE_BOT_EMAIL,
+    fake_drive,
+    fake_person,
+)
 
 logger = get_logger(__name__)
 
@@ -151,7 +163,8 @@ def _guard(drive: DriveApi) -> DriveApi:
     return ReadOnlyDrive(drive) if read_live_mode() else drive
 
 
-SCOPES = ("https://www.googleapis.com/auth/drive",)
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
+SCOPES: tuple[str, ...] = ("https://www.googleapis.com/auth/drive",)
 _FILE_FIELDS = "id, name, mimeType, webViewLink, hasThumbnail, createdTime, size"
 _THUMB_SIZE = re.compile(r"=s\d+$")
 _THUMB_TIMEOUT_S = 20
@@ -171,6 +184,20 @@ def _credentials(key_json: str) -> service_account.Credentials:
         raise DriveError(msg) from exc
 
 
+def drive_credentials(refresh_token: str) -> Credentials:
+    s = settings.signin
+    if not s.google_configured or s.google_client_secret is None:
+        msg = "Google Drive sign in is not set up"
+        raise DriveNotSetUpError(msg)
+    return OAuthCredentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri=GOOGLE_TOKEN_URL,
+        client_id=s.google_client_id,
+        client_secret=s.google_client_secret.get_secret_value(),
+    )
+
+
 def _key() -> str:
     key = settings.gdrive.service_account
     if key is None:
@@ -181,8 +208,6 @@ def _key() -> str:
 
 def service_account_email() -> str | None:
     if settings.infra.fake_externals:
-        from ofmhelpers.integrations.gdrive.fake import FAKE_BOT_EMAIL
-
         return FAKE_BOT_EMAIL
     try:
         return _credentials(_key()).service_account_email
@@ -260,9 +285,9 @@ class Drive:
         self._about = service.about()
         self._retries = settings.gdrive.retries if retries is None else retries
 
-    def _run(self, request: HttpRequest, what: str) -> dict[str, Any]:
+    def _run[M: BaseModel](self, request: HttpRequest, what: str, shape: type[M]) -> M:
         try:
-            return request.execute(num_retries=self._retries)
+            raw = request.execute(num_retries=self._retries)
         except (
             GoogleApiError,
             GoogleAuthError,
@@ -270,14 +295,12 @@ class Drive:
             httplib2.HttpLib2Error,
         ) as exc:
             raise _failure(exc, what) from exc
+        return shape.model_validate(raw)
 
     def storage(self) -> DriveStorage:
-        found = self._run(self._about.get(fields="storageQuota"), "Storage")
-        quota = found.get("storageQuota", {})
-        limit = quota.get("limit")
-        return DriveStorage(
-            usage=int(quota.get("usage", 0)), limit=int(limit) if limit else None
-        )
+        found = self._run(self._about.get(fields="storageQuota"), "Storage", DriveAbout)
+        quota = found.storage_quota
+        return DriveStorage(usage=quota.usage, limit=quota.limit)
 
     def folder(self, folder_id: str) -> DriveFolder:
         found = self._run(
@@ -287,16 +310,15 @@ class Drive:
                 supportsAllDrives=True,
             ),
             f"Folder {folder_id}",
+            DriveRow,
         )
-        if found.get("trashed") or found.get("mimeType") != FOLDER_MIME:
+        if found.trashed or found.mime_type != FOLDER_MIME:
             msg = f"Folder {folder_id} is trashed or not a folder"
             raise FolderGoneError(msg)
-        return DriveFolder(
-            id=found["id"], name=found["name"], parents=found.get("parents", [])
-        )
+        return DriveFolder(id=found.id, name=found.name, parents=found.parents)
 
-    def _list(self, query: str, fields: str, what: str) -> list[dict[str, Any]]:
-        items: list[dict[str, Any]] = []
+    def _list(self, query: str, fields: str, what: str) -> list[DriveRow]:
+        items: list[DriveRow] = []
         page: str | None = None
         while True:
             found = self._run(
@@ -310,9 +332,10 @@ class Drive:
                     includeItemsFromAllDrives=True,
                 ),
                 what,
+                DriveRowList,
             )
-            items.extend(found.get("files", []))
-            page = found.get("nextPageToken")
+            items.extend(found.files)
+            page = found.next_page_token
             if not page:
                 return items
 
@@ -323,7 +346,7 @@ class Drive:
         if folders_only:
             query += f" and mimeType = '{FOLDER_MIME}'"
         rows = self._list(query, _FILE_FIELDS, f"Listing folder {parent_id}")
-        return [DriveFile.model_validate(row) for row in rows]
+        return [row.as_file() for row in rows]
 
     def children_of(self, parent_ids: list[str]) -> DriveListing:
         found: dict[str, list[DriveFile]] = {p: [] for p in parent_ids}
@@ -336,7 +359,7 @@ class Drive:
                 f"Listing {len(chunk)} folders",
             )
             for row in rows:
-                item = DriveFile.model_validate(row)
+                item = row.as_file()
                 for parent in item.parents:
                     if parent in found:
                         found[parent].append(item)
@@ -352,17 +375,18 @@ class Drive:
         rows = self._list(query, "id, name, createdTime", f"Finding {name!r}")
         if not rows:
             return None
-        oldest = min(rows, key=lambda row: row.get("createdTime", ""))
-        return DriveFolder(id=oldest["id"], name=oldest["name"])
+        oldest = min(rows, key=lambda row: row.created_time)
+        return DriveFolder(id=oldest.id, name=oldest.name)
 
     def create_folder(self, parent_id: str, name: str) -> DriveFolder:
         body = {"name": name, "mimeType": FOLDER_MIME, "parents": [parent_id]}
         made = self._run(
             self._files.create(body=body, fields="id, name", supportsAllDrives=True),
             f"Creating {name!r}",
+            DriveRow,
         )
-        logger.info("drive: created folder %r (%s)", made["name"], made["id"])
-        return DriveFolder(id=made["id"], name=made["name"])
+        logger.info("drive: created folder %r (%s)", made.name, made.id)
+        return DriveFolder(id=made.id, name=made.name)
 
     def ensure_folder(self, parent_id: str, name: str) -> DriveFolder:
         return self.find_folder(parent_id, name) or self.create_folder(parent_id, name)
@@ -376,9 +400,10 @@ class Drive:
                 supportsAllDrives=True,
             ),
             f"Renaming {folder_id} to {name!r}",
+            DriveRow,
         )
         logger.info("drive: renamed folder %s to %r", folder_id, name)
-        return DriveFolder(id=done["id"], name=done["name"])
+        return DriveFolder(id=done.id, name=done.name)
 
     def file(self, file_id: str) -> DriveFile:
         found = self._run(
@@ -388,11 +413,12 @@ class Drive:
                 supportsAllDrives=True,
             ),
             f"File {file_id}",
+            DriveRow,
         )
-        if found.get("trashed"):
+        if found.trashed:
             msg = f"File {file_id} is trashed"
             raise FolderGoneError(msg)
-        return DriveFile.model_validate(found)
+        return found.as_file()
 
     def find_file(self, parent_id: str, name: str) -> DriveFile | None:
         query = (
@@ -402,8 +428,8 @@ class Drive:
         rows = self._list(query, _FILE_FIELDS, f"Finding {name!r}")
         if not rows:
             return None
-        oldest = min(rows, key=lambda row: row.get("createdTime", ""))
-        return DriveFile.model_validate(oldest)
+        oldest = min(rows, key=lambda row: row.created_time)
+        return oldest.as_file()
 
     def sheet(self, file_id: str) -> DriveSheet:
         what = f"Sheet {file_id}"
@@ -481,9 +507,10 @@ class Drive:
                     supportsAllDrives=True,
                 ),
                 f"Uploading {name!r}",
+                DriveRow,
             )
-        logger.info("drive: uploaded %r (%s)", name, made["id"])
-        return DriveFile.model_validate(made)
+        logger.info("drive: uploaded %r (%s)", name, made.id)
+        return made.as_file()
 
     def grant(self, item_id: str, email: str) -> None:
         self._run(
@@ -495,12 +522,14 @@ class Drive:
                 fields="id",
             ),
             f"Sharing {item_id} with {email}",
+            DriveAck,
         )
 
     def trash_file(self, item_id: str) -> None:
         self._run(
             self._files.get(fileId=item_id, supportsAllDrives=True, fields="id"),
             f"File {item_id}",
+            DriveAck,
         )
         self._run(
             self._files.update(
@@ -510,6 +539,7 @@ class Drive:
                 fields="id",
             ),
             f"File {item_id}",
+            DriveAck,
         )
         logger.info("drive: trashed %s", item_id)
 
@@ -519,8 +549,6 @@ _THREAD = threading.local()
 
 def connect(*, interactive: bool = False) -> DriveApi:
     if settings.infra.fake_externals:
-        from ofmhelpers.integrations.gdrive.fake import fake_drive
-
         return _guard(fake_drive())
     s = settings.gdrive
     key = _key()
@@ -542,12 +570,8 @@ def connect_as(
     refresh_token: str, *, interactive: bool = False, guard: bool = True
 ) -> DriveApi:
     if settings.infra.fake_externals:
-        from ofmhelpers.integrations.gdrive.fake import fake_person
-
         person = fake_person(refresh_token)
         return _guard(person) if guard else person
-    from ofmhelpers.integrations.signin.google import drive_credentials
-
     s = settings.gdrive
     timeout_s, retries = (
         (s.interactive_timeout_s, s.interactive_retries)

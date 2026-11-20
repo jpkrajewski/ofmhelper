@@ -14,7 +14,7 @@
 <div class="field" id="api-key-field"{% if not types_key %} hidden data-server-key{% endif %}>
     <label for="api-key">API key</label>
     <input type="password" name="api_key" id="api-key" value=""
-           data-keys="{{ api_keys|tojson|forceescape }}"
+           data-keys="{{ dict(api_keys)|tojson|forceescape }}"
            required autocomplete="new-password"
            data-lpignore="true" data-1p-ignore data-bwignore="true" data-dashlane-ignore="true"
            data-form-type="other">

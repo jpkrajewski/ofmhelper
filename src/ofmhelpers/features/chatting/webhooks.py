@@ -7,22 +7,22 @@ from sqlalchemy.exc import DataError
 
 from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
-from ofmhelpers.errors import AppError
-from ofmhelpers.features.chatting import rechecks
-from ofmhelpers.features.chatting.sources import configured_sources
-from ofmhelpers.features.notifications import service as notifications
-from ofmhelpers.features.reports.mass import tell_mass
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import (
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import (
     ChatDelivery,
     ChatPlatform,
     ChatWebhook,
     CreatedSubscription,
     DeliveryKind,
 )
+from ofmhelpers.features.chatting import rechecks
+from ofmhelpers.features.chatting.sources import configured_sources
+from ofmhelpers.features.notifications import service as notifications
+from ofmhelpers.features.reports.mass import tell_mass
+from ofmhelpers.integrations.chat_source import ChatSourceError
+from ofmhelpers.log import get_logger
+lazy from ofmhelpers.db.chats.schema import ChatModel
 lazy from ofmhelpers.integrations.chat_source import ChatSource
-lazy from ofmhelpers.schemas.chatting import ChatModel
 
 logger = get_logger(__name__)
 
@@ -160,7 +160,7 @@ def ensure_destinations() -> None:
         for owner, models in owners.items():
             try:
                 _ensure_owner(source, models, mine, url)
-            except AppError:
+            except ChatSourceError:
                 logger.warning(
                     "%s %s: no webhook", source.platform.value, owner, exc_info=True
                 )

@@ -44,11 +44,11 @@ import json
 import re
 import sys
 from collections import Counter
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Iterator
 
 import requests
 import yaml

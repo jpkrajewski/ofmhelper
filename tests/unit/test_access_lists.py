@@ -1,4 +1,5 @@
-from ofmhelpers.auth.access import (
+from ofmhelpers.db.users.schema import Role
+from ofmhelpers.web.access import (
     ACCESS,
     ADMIN,
     MANAGER,
@@ -11,8 +12,7 @@ from ofmhelpers.auth.access import (
     allowed,
     areas_of,
 )
-from ofmhelpers.schemas.time_zones import TIME_ZONES, time_zone
-from ofmhelpers.schemas.users import Role
+from ofmhelpers.web.time_zones import TIME_ZONES, time_zone
 
 
 def test_each_role_has_the_pages_of_the_one_below_and_its_own():

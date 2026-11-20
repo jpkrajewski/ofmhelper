@@ -1,11 +1,11 @@
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import downloads
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.downloads import store as downloads
 from ofmhelpers.features.assets.names import download_name
+from ofmhelpers.features.jobs.schema import AssetCard, FailedSource, error_reason
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews import render as previews
-from ofmhelpers.schemas import AssetCard, FailedSource, Job
-from ofmhelpers.schemas.errors import error_reason
+lazy from ofmhelpers.db.jobs.schema import Job
 
 
 class JobAssets(BaseModel):

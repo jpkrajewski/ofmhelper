@@ -1,5 +1,5 @@
+from ofmhelpers.background import sweeps
 from ofmhelpers.config import settings
-from ofmhelpers.features.jobs import sweeps
 
 
 def _drive_sweep():

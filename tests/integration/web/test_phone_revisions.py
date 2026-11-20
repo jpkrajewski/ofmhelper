@@ -7,12 +7,12 @@ from signin import make_user, sign_in
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
 from ofmhelpers.db.encrypted import VaultError
+from ofmhelpers.db.phone_revisions import store
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import devices
-from ofmhelpers.db.stores import phone_revisions as store
 from ofmhelpers.features.phones import backup
-from ofmhelpers.schemas import DeviceFields, LoginFields
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"

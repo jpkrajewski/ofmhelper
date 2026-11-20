@@ -1,7 +1,4 @@
-from ofmhelpers.errors import AppError
-
-
-class SocialError(AppError): ...
+class SocialError(Exception): ...
 
 
 class RetryableError(SocialError):

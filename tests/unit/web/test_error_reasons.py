@@ -1,8 +1,12 @@
 import pytest
 
 from ofmhelpers.features.clone_links import run as clone_link_run
-from ofmhelpers.schemas import JobStatusPayload
-from ofmhelpers.schemas.errors import FALLBACK, download_reason, error_reason
+from ofmhelpers.features.jobs.schema import (
+    FALLBACK,
+    JobStatusPayload,
+    download_reason,
+    error_reason,
+)
 
 
 @pytest.mark.parametrize(

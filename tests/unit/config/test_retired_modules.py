@@ -1,7 +1,7 @@
 import fnmatch
 
-from ofmhelpers.auth.access import ACCESS, RETIRED, Area
 from ofmhelpers.config.retired import retired
+from ofmhelpers.web.access import ACCESS, RETIRED, Area
 from ofmhelpers.web.routers import ROUTERS
 from ofmhelpers.web.routers.downloads import reels
 from ofmhelpers.web.routers.generation import clone_links

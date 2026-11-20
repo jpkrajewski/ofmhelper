@@ -104,7 +104,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
-    # Runs RQ via ofmhelpers.worker so the pool starts with the app's logging
+    # Runs RQ via ofmhelpers.background.worker so the pool starts with the app's logging
     # configured (see ofmhelpers/log.py); it reads OFM_RQ_WORKERS/OFM_REDIS_URL
     # from settings itself, so no shell is needed to expand them -- exec form
     # also keeps signals going straight to the process.
@@ -115,12 +115,12 @@ services:
     # a Telegram message never waits behind a 45-min generation). One
     # container, not three: all of it is network work, and each container
     # held the app's code again (~210 MB idle each, prod 2026-11-11).
-    command: ["python", "-m", "ofmhelpers.worker", "default", "clone-links", "events"]
+    command: ["python", "-m", "ofmhelpers.background.worker", "default", "clone-links", "events"]
     # `compose stop` (every deploy) is a warm shutdown: the pool takes no new
     # job and each worker finishes the one it runs. Docker's default 10 s
     # SIGKILLed /clone-links reviews mid-LLM-call or mid-upload; 120 s lets
     # them finish. A generation still running then is cut off and resumed by
-    # recovery (features/jobs/recovery.py). The deploys stop the workers before the
+    # recovery (background/recovery.py). The deploys stop the workers before the
     # app, so this wait is not downtime.
     stop_grace_period: 120s
     # The image's HTTP healthcheck (probes :8000/health) is meaningless for the
@@ -151,7 +151,7 @@ services:
     cap_add:
       - DAC_OVERRIDE
 
-  # The background sweeps (features/jobs/sweeps.py: recovery, due rescans,
+  # The background sweeps (background/sweeps.py: recovery, due rescans,
   # Drive, chats, the daily report), in a process of their own: exactly one,
   # however many web processes serve. They ran inside the web process until
   # 2026-11-11, where a second one would have run every sweep twice. One
@@ -160,7 +160,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
-    command: ["python", "-m", "ofmhelpers.sweeps"]
+    command: ["python", "-m", "ofmhelpers.background.sweeps"]
     # A stop waits for the sweeps' threads: the Telegram read (`telegram asks`)
     # waits up to OFM_TELEGRAM_ASK_WAIT_S (10 s) for a message. Docker's 10 s
     # default killed it mid-read about half the time.
@@ -196,7 +196,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
-    command: ["python", "-m", "ofmhelpers.worker", "media"]
+    command: ["python", "-m", "ofmhelpers.background.worker", "media"]
     cpus: 3.0
     stop_grace_period: 120s
     healthcheck:
@@ -229,7 +229,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
-    command: ["python", "-m", "ofmhelpers.worker", "edit"]
+    command: ["python", "-m", "ofmhelpers.background.worker", "edit"]
     cpus: 3.0
     mem_limit: 2g
     stop_grace_period: 120s
@@ -262,7 +262,7 @@ services:
     build: .
     image: *app-image
     restart: unless-stopped
-    command: ["python", "-m", "ofmhelpers.worker", "previews"]
+    command: ["python", "-m", "ofmhelpers.background.worker", "previews"]
     cpus: 2.0
     # As the other workers: the encode it runs finishes on `compose stop`.
     stop_grace_period: 120s

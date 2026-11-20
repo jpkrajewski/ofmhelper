@@ -1,6 +1,6 @@
 # clone_ai_check
 
-Is a generated reel too glitchy to post? `check_clone(video, *, mirrored=False) -> CloneAiCheck`. Pure service: no DB, no web (callers save it: `db/stores/clone_ai_checks.py`, every field a column).
+Is a generated reel too glitchy to post? `check_clone(video, *, mirrored=False) -> CloneAiCheck`. Pure service: no DB, no web (callers save it: `db/clone_ai_checks/store.py`, every field a column).
 
 - `check.py` — the whole video as one contact sheet (`llm.frames.contact_sheet`), `RULES` as the system prompt, sent along `settings.llm.video_chain`: `LLM_DEFAULT_VIDEO` (Gemini 3.6-flash: user decision 2026-10-25, 3.8-flash was 503-overloaded for 10+ min while 3.6 answered), then each of `LLM_FALLBACK_VIDEO`; every key of `GEMINI_API_KEY` (comma-separated) on a model before the next model when a key is out of quota (429) or rejected; an overloaded model (503) goes straight to the next model while the one before is down / rate limited / out of quota / not set up; any other failure (wrong shape after its re-ask, refused, wrong key, rejected input) is the answer. User decision 2026-10-25: a contact sheet of the whole video, not the raw video; GOOD or GLITCHY + a percent.
   - **Never Groq/Cerebras** (review #8/#59): an entry whose provider class reads no video (`MediaKind.VIDEO not in llm_class(...).media`) is skipped with a warning -- they get the sheet shrunk to 1024 px and Groq's qwen said GOOD to every dev reel (llm/CLAUDE.md findings). A chain of only such entries = "setup" error, reel to TRIAL.

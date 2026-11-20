@@ -2,14 +2,14 @@ import hashlib
 import subprocess
 import tempfile
 import time
-from collections.abc import Callable
 from pathlib import Path
+lazy from collections.abc import Callable
 
 from PIL import Image
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.log import get_logger
 from ofmhelpers.media import ffmpeg
 
@@ -222,39 +222,46 @@ def file_thumb(source: Path) -> Path:
     return dest
 
 
-def _media(sources: list[str | None]) -> list[tuple[int, Path, str]]:
-    found = []
+class _Source(BaseModel, frozen=True):
+    index: int
+    path: Path
+    kind: str
+
+
+def _media(sources: list[str | None]) -> list[_Source]:
+    found: list[_Source] = []
     for index, raw in enumerate(sources):
         if raw is None:
             continue
         path = Path(raw)
         kind = classify_kind(path.name)
         if kind in ("image", "video") and path.is_file():
-            found.append((index, path, kind))
+            found.append(_Source(index=index, path=path, kind=kind))
     return found
 
 
 def is_warm(job_id: str, sources: list[str | None]) -> bool:
     return all(
-        ResultPreview(source=path, job_id=job_id, index=index).failed_before()
+        ResultPreview(source=item.path, job_id=job_id, index=item.index).failed_before()
         or (
-            preview_path(job_id, index, kind).is_file()
-            and (kind != "video" or poster_path(job_id, index).is_file())
+            preview_path(job_id, item.index, item.kind).is_file()
+            and (item.kind != "video" or poster_path(job_id, item.index).is_file())
         )
-        for index, path, kind in _media(sources)
+        for item in _media(sources)
     )
 
 
 def warm_previews(job_id: str, sources: list[str | None]) -> None:
-    for index, path, kind in _media(sources):
-        result = ResultPreview(source=path, job_id=job_id, index=index)
+    for item in _media(sources):
+        path = item.path
+        result = ResultPreview(source=path, job_id=job_id, index=item.index)
         if result.failed_before():
             continue
         try:
             result.make()
         except PREVIEW_ERRORS:
             logger.warning("could not preview %s", path, exc_info=True)
-        if kind != "video":
+        if item.kind != "video":
             continue
         try:
             result.poster()

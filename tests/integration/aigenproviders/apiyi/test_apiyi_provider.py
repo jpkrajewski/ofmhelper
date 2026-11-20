@@ -1,11 +1,14 @@
 import os
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from ofmhelpers.integrations.ai_providers import runner
+from ofmhelpers.features.jobs.schema import error_line, error_reason
+from ofmhelpers.integrations.ai_providers import runner, self_heal, tasks
 from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY, fake_apiyi
 from ofmhelpers.integrations.ai_providers.apiyi.models import raise_for
 from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
@@ -20,8 +23,13 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas.errors import error_line, error_reason
 from ofmhelpers.web.main import app
+lazy from ofmhelpers.integrations.ai_providers.apiyi.fake import FakeReply
+lazy from ofmhelpers.integrations.ai_providers.apiyi.keys import key_for
+lazy from ofmhelpers.integrations.ai_providers.apiyi.models import (
+    ApiyiSubmit,
+    ApiyiTask,
+)
 
 WAN = "apiyi:wan3.0-video"
 BASE = "https://ascendglobal.test/"
@@ -230,8 +238,6 @@ def test_a_submit_whose_answer_is_lost_is_never_sent_again(provider):
         runner.generate(provider, spec, {"prompt": "p"}, "apiyi-lost")
     assert len(fake_apiyi().created) == 1
 
-    from ofmhelpers.integrations.ai_providers import tasks
-
     assert tasks.recall("apiyi-lost") is None
 
 
@@ -311,8 +317,6 @@ def test_a_reference_never_downloaded_reads_plainly_on_the_card(provider, monkey
 
 
 def test_a_rate_limited_submit_is_sent_again_and_made_once(provider, monkeypatch):
-    from ofmhelpers.integrations.ai_providers import self_heal
-
     monkeypatch.setattr(self_heal, "_sleep", lambda _s: None)
     fake_apiyi().refuse_next = (429, "rate_limit", "upstream saturated")
     spec = get_spec(WAN)
@@ -402,8 +406,6 @@ def test_no_credits_reads_as_no_credits_on_the_card():
 
 
 def test_an_unknown_status_keeps_the_task_remembered(provider):
-    from ofmhelpers.integrations.ai_providers.apiyi.fake import FakeReply
-
     fake = fake_apiyi()
     fake.tasks["t-1"] = {"polls": 99, "failure": None}
     fake._read = staticmethod(  # type: ignore[method-assign]
@@ -417,8 +419,6 @@ def test_an_unknown_status_keeps_the_task_remembered(provider):
 
 
 def test_a_task_read_wrapped_in_data_is_read_too():
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
-
     task = ApiyiTask.model_validate(
         {"data": {"id": "t", "status": "completed", "result_url": "https://x/y.mp4"}}
     )
@@ -430,8 +430,6 @@ SEEDANCE_KEY = "sk-seedanceGroupKey0123456789abcdefghijklmnop"
 
 
 def test_an_admin_key_runs_wan_on_the_wan_groups_key(provider, monkeypatch):
-    from ofmhelpers.integrations.ai_providers import tasks
-
     monkeypatch.setenv("APIYI_API_KEY_WAN", FAKE_KEY)
     monkeypatch.setenv("APIYI_API_KEY_SEEDANCE", SEEDANCE_KEY)
     seedance_side = ApiyiProvider(SEEDANCE_KEY)
@@ -469,8 +467,6 @@ def test_a_users_own_key_is_never_swapped(provider, monkeypatch):
     ],
 )
 def test_each_model_family_maps_to_its_groups_key(monkeypatch, model, given, used):
-    from ofmhelpers.integrations.ai_providers.apiyi.keys import key_for
-
     monkeypatch.setenv("APIYI_API_KEY_WAN", FAKE_KEY)
     monkeypatch.setenv("APIYI_API_KEY_SEEDANCE", SEEDANCE_KEY)
 
@@ -511,8 +507,6 @@ def test_a_task_read_that_errs_is_asked_again_until_it_ends(provider, refused):
     ],
 )
 def test_an_odd_but_finished_task_body_still_reads_as_done(body):
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
-
     task = ApiyiTask.model_validate(body)
 
     assert task.urls == ["https://x/y.mp4"]
@@ -520,14 +514,10 @@ def test_an_odd_but_finished_task_body_still_reads_as_done(body):
 
 
 def test_a_submit_answer_with_a_numeric_task_id_is_read():
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiSubmit
-
     assert ApiyiSubmit.model_validate({"output": {"task_id": 42}}).task_id == "42"
 
 
 def test_a_failed_media_link_is_not_read_as_moderation():
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
-
     task = ApiyiTask.model_validate(
         {
             "status": "failed",
@@ -545,8 +535,6 @@ _FIXTURES = Path(__file__).parents[3] / "fixtures" / "providers" / "apiyi"
 
 
 def test_apiyis_real_moderated_task_reads_as_flagged_content():
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
-
     body = (_FIXTURES / "task_moderated.json").read_text(encoding="utf-8")
     task = ApiyiTask.model_validate_json(body)
 
@@ -572,8 +560,6 @@ def test_apiyis_real_moderated_task_reads_as_flagged_content():
     ids=["gateway code field", "DashScope's own output"],
 )
 def test_a_moderation_code_in_its_own_field_reads_as_flagged_content(body):
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
-
     task = ApiyiTask.model_validate({"status": "failed", **body})
 
     assert error_reason(task.failure) == "Flagged content"
@@ -589,8 +575,6 @@ def test_a_moderated_job_stored_before_the_fix_reads_as_flagged_content_too():
 
 
 def test_a_code_cited_in_the_message_that_is_not_moderation_stays_its_reason():
-    from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
-
     task = ApiyiTask.model_validate(
         {
             "status": "failed",
@@ -608,15 +592,10 @@ def test_a_code_cited_in_the_message_that_is_not_moderation_stays_its_reason():
 
 
 def test_status_reads_wait_at_least_apiyis_floor(provider, monkeypatch):
-    import time
-    from types import SimpleNamespace
-
-    from ofmhelpers.integrations.ai_providers import runner as runner_module
-
     monkeypatch.setenv("OFM_APIYI_MIN_POLL_INTERVAL_S", "4")
     waits: list[float] = []
     monkeypatch.setattr(
-        runner_module,
+        runner,
         "time",
         SimpleNamespace(sleep=waits.append, monotonic=time.monotonic),
     )

@@ -4,8 +4,10 @@ import logfire
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import merge_params
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.config.types import AccountFolder
+from ofmhelpers.db.drive_folders.schema import folder_url
+from ofmhelpers.db.jobs.store import merge_params
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.drive.folders import (
     ReviewPlace,
     account_subfolder,
@@ -15,7 +17,6 @@ from ofmhelpers.integrations.gdrive import FolderGoneError
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.photos import write_photos
 from ofmhelpers.media.repurpose.photos.models import load_photo_preset
-from ofmhelpers.schemas.gdrive import AccountFolder, folder_url
 
 logger = get_logger(__name__)
 

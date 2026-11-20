@@ -6,8 +6,8 @@ import sqlalchemy
 from sqlalchemy import Engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
+from ofmhelpers import acting
 from ofmhelpers.config import settings
-from ofmhelpers.db import acting
 
 _ACTING_SQL = (
     "SELECT set_config('ofm.actor_id', %(actor_id)s, true), "

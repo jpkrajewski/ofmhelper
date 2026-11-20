@@ -12,13 +12,15 @@ from clone_links_helpers import (
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import clone_from_links
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.clone_from_links import store as clone_from_links
+from ofmhelpers.db.jobs.schema import Job, ResultFile
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.clone import run as clone_run
 from ofmhelpers.features.clone_links import job as clone_links_job
 from ofmhelpers.features.clone_links import run as run_module
 from ofmhelpers.features.clone_links.stop import stop_batch, stopped
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.jobs.schema import error_reason
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import Provider
 from ofmhelpers.integrations.ai_providers.errors import (
@@ -30,8 +32,6 @@ from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST, fake_kie
 from ofmhelpers.integrations.downloaders.models import DownloadResult
 from ofmhelpers.media import exports as exports_module
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas import Job, ResultFile
-from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.routers.generation import clone, clone_links
 from ofmhelpers.web.routers.generation.clone_links import TASK
 from ofmhelpers.web.routers.task_helpers import assets_root_for_actor

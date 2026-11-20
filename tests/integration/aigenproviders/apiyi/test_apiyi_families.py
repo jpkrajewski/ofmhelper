@@ -1,9 +1,10 @@
 import base64
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from ofmhelpers.features.jobs.schema import error_reason
 from ofmhelpers.features.pictures import targets as picture_targets
 from ofmhelpers.integrations.ai_providers import runner, tasks
 from ofmhelpers.integrations.ai_providers.apiyi.fake import FAKE_KEY, fake_apiyi
@@ -18,7 +19,9 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderRateLimitError,
 )
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas.errors import error_reason
+lazy from ofmhelpers.integrations.ai_providers.apiyi.families import family_for
+lazy from ofmhelpers.integrations.ai_providers.catalog import models_for
+lazy from ofmhelpers.web.routers.image_tools import pictures
 
 BASE = "https://ascendglobal.test/"
 
@@ -373,9 +376,6 @@ def test_an_image_model_on_the_admins_wan_key_runs_on_the_default_groups(
 
 
 def test_every_catalog_model_has_a_family():
-    from ofmhelpers.integrations.ai_providers.apiyi.families import family_for
-    from ofmhelpers.integrations.ai_providers.catalog import models_for
-
     specs = models_for("apiyi")
     assert len(specs) >= 30
     for spec in specs:
@@ -383,8 +383,6 @@ def test_every_catalog_model_has_a_family():
 
 
 def test_a_pictures_run_on_apiyi_is_nano_banana_pro_at_2k(provider, image):
-    from ofmhelpers.web.routers.image_tools import pictures
-
     target = pictures.PICTURE_TARGETS["apiyi"]
     values = picture_targets.values(
         target,

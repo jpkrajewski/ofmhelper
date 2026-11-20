@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime, timedelta
 
-from ofmhelpers.schemas.reports import DayCount, ReportMarks
-lazy from ofmhelpers.schemas.links import ShortLink
+from ofmhelpers.db.report_runs.schema import DayCount, ReportMarks
+lazy from ofmhelpers.db.short_links.schema import ShortLink
 
 
 def marks(links: list[ShortLink], now: float) -> ReportMarks:

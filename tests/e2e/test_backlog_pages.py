@@ -1,10 +1,16 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from e2e_session import Session
 from playwright.sync_api import expect
 
 from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST
+lazy from ofmhelpers.db.clone_examples import store as clone_examples
+lazy from ofmhelpers.db.devices import store as devices
+lazy from ofmhelpers.db.devices.schema import DeviceFields
+lazy from ofmhelpers.db.jobs.schema import JobPreview
+lazy from ofmhelpers.db.jobs.store import create_job, set_job_preview
+lazy from ofmhelpers.features.jobs.runner import run_job
 
 pytestmark = pytest.mark.e2e
 
@@ -14,8 +20,6 @@ PROMPT = "Replace the guy in @Video1 with subject from @Image1, no tattoos"
 
 
 def _clone(owner: int, out: Path | None = None) -> str:
-    from ofmhelpers.db.stores.jobs import create_job
-    from ofmhelpers.features.jobs.runner import run_job
 
     job_id = create_job(
         "clone", {"prompt": PROMPT, "export": "capcut"}, actor=str(owner)
@@ -41,8 +45,6 @@ def test_a_click_keeps_the_session(va: Session):
 def test_a_generated_clone_still_being_exported_shows_one_video_and_says_so(
     va: Session,
 ):
-    from ofmhelpers.db.stores.jobs import set_job_preview
-    from ofmhelpers.schemas.persistence import JobPreview
 
     job_id = _clone(USER_ID)
     hosted = f"https://{RESULT_HOST}/results/e2e-stage.mp4"
@@ -70,7 +72,6 @@ def test_a_generated_clone_still_being_exported_shows_one_video_and_says_so(
 def test_the_sop_shows_the_fixed_examples_and_a_prompt_is_used(
     admin: Session, va: Session, tmp_path: Path
 ):
-    from ofmhelpers.db.stores import clone_examples
 
     job_id = _clone(ADMIN_ID, tmp_path / "result.png")
     clone_examples.add(job_id, "Remove tattoos", PROMPT)
@@ -93,8 +94,6 @@ def test_the_sop_shows_the_fixed_examples_and_a_prompt_is_used(
 
 
 def test_history_brings_a_deleted_phone_back(va: Session):
-    from ofmhelpers.db.stores import devices
-    from ofmhelpers.schemas import DeviceFields
 
     phone = devices.add_device(DeviceFields(label="e2e kept"), USER_ID)
     devices.delete_device(phone, USER_ID)

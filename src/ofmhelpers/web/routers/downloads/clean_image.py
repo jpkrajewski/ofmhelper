@@ -2,10 +2,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, UploadFile
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.features.downloads import clean
 from ofmhelpers.features.downloads.clean import run_clean as _run_clean
-from ofmhelpers.schemas import JobQueued
+from ofmhelpers.features.jobs.schema import JobQueued
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 

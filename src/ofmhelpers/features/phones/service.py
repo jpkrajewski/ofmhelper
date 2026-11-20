@@ -1,39 +1,45 @@
 import datetime
-from collections.abc import Iterator
 from contextlib import contextmanager
+from types import MappingProxyType
+lazy from collections.abc import Iterator
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.cache import enqueue
+from ofmhelpers.db.devices import store
+from ofmhelpers.db.devices.catalog import (
+    catalog,
+    find_model,
+    services,
+    tracked_services,
+)
+from ofmhelpers.db.devices.catalog.schema import Catalog, LoginService
+from ofmhelpers.db.devices.schema import (
+    ArchivedLogin,
+    AssignAccount,
+    Device,
+    LoginFields,
+    LoginSecrets,
+    PhoneQuery,
+    PhoneSort,
+)
 from ofmhelpers.db.encrypted import VaultError
-from ofmhelpers.db.stores import devices as store
-from ofmhelpers.db.stores.jobs import create_job, fail_job
-from ofmhelpers.db.stores.tracked_accounts import get_account
+from ofmhelpers.db.jobs.store import create_job, fail_job
+from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
+from ofmhelpers.db.tracked_accounts.store import get_account
 from ofmhelpers.features.accounts.removal import logins_leaving
 from ofmhelpers.features.accounts.tracker import track_login
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.phones import workbook
 from ofmhelpers.features.phones.catalog.render import render as draw
-from ofmhelpers.features.refusals import ConflictError, NotFoundError
+from ofmhelpers.features.refusals import (
+    ConflictError,
+    NotFoundError,
+    duplicate_refused,
+)
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import (
-    Device,
-    LoginFields,
-    PhoneQuery,
-    PhoneSort,
-    TrackedAccount,
-)
-from ofmhelpers.schemas.devices import ArchivedLogin, AssignAccount, LoginSecrets
-from ofmhelpers.schemas.phone_catalog import (
-    catalog,
-    find_model,
-    services,
-    tracked_services,
-)
-from ofmhelpers.schemas.phone_catalog.models import Catalog, LoginService
-from ofmhelpers.utils.registry import Registry
-lazy from ofmhelpers.schemas import DeviceFields
+lazy from ofmhelpers.db.devices.schema import DeviceFields
 
 logger = get_logger(__name__)
 
@@ -57,6 +63,8 @@ class Assigning(BaseModel):
 
 
 class PageView(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     assigning: Assigning | None
     devices: list[Device]
     retired: list[Device]
@@ -66,7 +74,7 @@ class PageView(BaseModel):
     owners: list[str]
     sorts: type[PhoneSort]
     default_sort: PhoneSort
-    services: Registry[LoginService]
+    services: MappingProxyType[str, LoginService]
     catalog: Catalog
 
 
@@ -129,7 +137,8 @@ def export(scope: int) -> Workbook:
 
 @_vault()
 def add(body: DeviceFields, owner_id: int) -> int:
-    return store.add_device(body, owner_id)
+    with duplicate_refused():
+        return store.add_device(body, owner_id)
 
 
 def _require(found: bool, what: str) -> None:
@@ -165,7 +174,9 @@ class Phone(BaseModel, frozen=True):
 
     @_vault()
     def edit(self, body: DeviceFields) -> None:
-        _require(store.update_device(self.device_id, body, self.scope), "Phone")
+        with duplicate_refused():
+            found = store.update_device(self.device_id, body, self.scope)
+        _require(found, "Phone")
 
     def retire(self) -> None:
         _require(store.retire_device(self.device_id, self.scope), "Phone")
@@ -184,7 +195,8 @@ class Phone(BaseModel, frozen=True):
 
     @_vault()
     def _saved(self, body: LoginFields) -> LoginAdded:
-        added = store.add_login(self.device_id, body, self.scope)
+        with duplicate_refused():
+            added = store.add_login(self.device_id, body, self.scope)
         if added is None:
             msg = "Phone not found"
             raise NotFoundError(msg)
@@ -203,7 +215,7 @@ class Phone(BaseModel, frozen=True):
         new = LoginFields(service=found.service, username=found.account.handle)
         on_phone = phone.accounts_of(found.service)
         already = on_phone.get(new.username)
-        others = [name for name in on_phone.names() if name != new.username]
+        others = [name for name in on_phone if name != new.username]
         if others and not body.replace:
             names = ", ".join(f"@{name}" for name in others)
             msg = f"{phone.label} already has {names}"
@@ -233,7 +245,9 @@ class SavedLogin(BaseModel, frozen=True):
 
     @_vault()
     def edit(self, body: LoginFields) -> None:
-        _require(store.update_login(self.login_id, body, self.scope), "Login")
+        with duplicate_refused():
+            found = store.update_login(self.login_id, body, self.scope)
+        _require(found, "Login")
         _track(self.login_id, body, revive=False)
 
     def restore(self) -> None:

@@ -2,12 +2,12 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in_admin, sign_in_agency
 
-from ofmhelpers.db.stores import drive_folders as store
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.drive_folders import store
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import va_folders
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"

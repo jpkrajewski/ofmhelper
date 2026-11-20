@@ -2,6 +2,7 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
+from signin import sign_in
 
 from ofmhelpers.config import settings
 from ofmhelpers.web.main import app
@@ -237,8 +238,6 @@ def test_signing_in_again_after_logout_works(caplog):
 
 
 def test_one_persons_logout_ends_nobody_elses_session():
-    from signin import sign_in
-
     other = TestClient(app)
     sign_in(other, "someone@example.com")
     person = _signed_in()

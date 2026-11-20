@@ -2,9 +2,12 @@ import time
 lazy from datetime import date
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import self_links as store
+from ofmhelpers.db.self_links import store
 from ofmhelpers.integrations.short_links import RemoteLink, Usage
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider
+from ofmhelpers.integrations.short_links.providers.base import (
+    LinkProvider,
+    RequestHeaders,
+)
 lazy from ofmhelpers.integrations.short_links import LinkDays, LinkHours, NewLink
 
 
@@ -19,8 +22,8 @@ class SelfProvider(LinkProvider):
     def local_key(cls, user_id: int) -> str | None:
         return str(user_id)
 
-    def _headers(self) -> dict[str, str]:
-        return {}
+    def _headers(self) -> RequestHeaders:
+        return RequestHeaders()
 
     def create(self, link: NewLink) -> RemoteLink:
         return RemoteLink(

@@ -9,8 +9,9 @@ from PIL import Image
 from signin import sign_in_agency
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.repositories import JobRepository
-from ofmhelpers.db.stores.jobs import create_job, get_job, set_job_preview
+from ofmhelpers.db.jobs.repository import JobRepository
+from ofmhelpers.db.jobs.schema import JobPreview
+from ofmhelpers.db.jobs.store import create_job, get_job, set_job_preview
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.downloads import videos as download_videos_router
 from ofmhelpers.integrations.ai_providers import base
@@ -19,7 +20,6 @@ from ofmhelpers.integrations.ai_providers.catalog import catalog
 from ofmhelpers.integrations.ai_providers.errors import ProviderUnavailableError
 from ofmhelpers.integrations.ai_providers.higgsfield.provider import HiggsfieldProvider
 from ofmhelpers.integrations.ai_providers.kie.provider import KieProvider
-from ofmhelpers.schemas import JobPreview
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import job_status_payload
 
@@ -73,7 +73,7 @@ def test_page_offers_every_provider_and_every_model(client):
             re.DOTALL,
         ).group(1)
     )
-    assert {m["key"] for m in models} == set(catalog().names())
+    assert {m["key"] for m in models} == set(catalog())
     assert 'action="/ai/run"' in html
 
 
@@ -152,7 +152,7 @@ def _unrendered(client, key: str) -> list[str]:
 
 
 def test_every_model_renders_its_fields(client):
-    keys = catalog().names()
+    keys = list(catalog())
 
     missing = [lack for key in keys for lack in _unrendered(client, key)]
 
@@ -572,7 +572,7 @@ def plugin(tmp_path, monkeypatch):
             dest.write_bytes(b"x")
             return dest
 
-    monkeypatch.setitem(base._registry(), "plugin", PluginProvider)
+    monkeypatch.setitem(base._registered().classes, "plugin", PluginProvider)
     catalog.cache_clear()
     yield sent
     catalog.cache_clear()

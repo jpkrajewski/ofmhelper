@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.users.schema import Identity
 from ofmhelpers.integrations.signin.base import (
     SignInError,
     TokenReply,
@@ -15,7 +16,6 @@ from ofmhelpers.integrations.signin.base import (
     claims,
     token_request,
 )
-from ofmhelpers.schemas.users import Identity
 
 ISSUER = "https://appleid.apple.com"
 AUTH_URL = f"{ISSUER}/auth/authorize"

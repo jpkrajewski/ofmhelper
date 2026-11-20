@@ -7,13 +7,14 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.stores import audit_log, event_targets
+from ofmhelpers.db.audit_log import store as audit_log
+from ofmhelpers.db.event_targets import store as event_targets
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.events import Event
 from ofmhelpers.features.events.dispatch import dispatch
 from ofmhelpers.features.reports import asks
 from ofmhelpers.integrations.senders.telegram import client as telegram_client_module
 from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 AGENCY_CHAT = "111"

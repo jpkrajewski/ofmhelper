@@ -6,10 +6,10 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-from ofmhelpers.auth.access import Area
-from ofmhelpers.features.downloads.service import Redirect
+from ofmhelpers.features.redirect import Redirect
 from ofmhelpers.features.reels import page
 from ofmhelpers.features.reels.page import ProfileMoved, WatchAdded
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, AssetsRoot, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 

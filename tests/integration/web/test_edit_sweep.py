@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, fail_job, get_job
+from ofmhelpers.db.jobs.store import create_job, fail_job, get_job
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.edit import cleanup
 from ofmhelpers.features.edit import service as edit_service

@@ -6,7 +6,7 @@ from redis.exceptions import RedisError
 from signin import make_user
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive.folders import review_folder
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive

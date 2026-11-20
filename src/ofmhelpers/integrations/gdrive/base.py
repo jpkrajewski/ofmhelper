@@ -1,7 +1,6 @@
 from typing import Protocol
 lazy from pathlib import Path
 
-from ofmhelpers.errors import AppError
 lazy from ofmhelpers.integrations.gdrive.models import (
     DriveDownload,
     DriveFile,
@@ -13,7 +12,7 @@ lazy from ofmhelpers.integrations.gdrive.models import (
 )
 
 
-class DriveError(AppError): ...
+class DriveError(Exception): ...
 
 
 class FolderGoneError(DriveError): ...
@@ -28,6 +27,9 @@ class DriveAuthError(DriveError):
 
 
 class DriveFullError(DriveError): ...
+
+
+class DriveNotSetUpError(DriveError): ...
 
 
 class DriveApi(Protocol):

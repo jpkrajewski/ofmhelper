@@ -30,19 +30,23 @@ def error(status: int, code: str, message: str) -> FakeReply:
     )
 
 
-def _problem(body: dict[str, Any]) -> tuple[str, str] | None:
+def _said(code: str, message: str) -> str:
+    return f"[{code}] {message}"
+
+
+def _problem(body: dict[str, Any]) -> str | None:
     media = body.get("input", {}).get("media") or []
     types = {m.get("type") for m in media}
     if types & _FRAMES and types & _REFERENCES:
-        return "InvalidParameter", "first_frame cannot be mixed with reference_*"
+        return _said("InvalidParameter", "first_frame cannot be mixed with reference_*")
     for item in media:
         if not str(item.get("url", "")).startswith("https://"):
-            return "InvalidURL", f"url not reachable: {item.get('url')}"
+            return _said("InvalidURL", f"url not reachable: {item.get('url')}")
     parameters = body.get("parameters", {})
     if not isinstance(parameters.get("duration", 5), int):
-        return "InvalidParameter", "duration must be an integer"
+        return _said("InvalidParameter", "duration must be an integer")
     if parameters.get("resolution", "1080P") not in _RESOLUTIONS:
-        return "InvalidParameter", "resolution must be 480P, 720P or 1080P"
+        return _said("InvalidParameter", "resolution must be 480P, 720P or 1080P")
     return None
 
 
@@ -102,7 +106,7 @@ class FakeApiyi:
             failure, self.fail_next = self.fail_next, None
             self.tasks[task_id] = {
                 "polls": 0,
-                "failure": failure or _problem(body),
+                "failure": _said(*failure) if failure else _problem(body),
             }
             lost, self.lose_next = self.lose_next, False
         if lost:
@@ -128,8 +132,7 @@ class FakeApiyi:
             state = "submitted" if polls == 1 else "in_progress"
             return self._read(task_id, state, progress="30%")
         if found["failure"]:
-            code, message = found["failure"]
-            said = f"[{code}] {message}"
+            said = found["failure"]
             return self._read(
                 task_id,
                 "failed",

@@ -4,18 +4,18 @@ from typing import Annotated, Any, Self
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from fastapi import Cookie, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 from pydantic import Field, PrivateAttr, model_validator
 
-from ofmhelpers.auth.access import Action, allowed
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import count_hidden_jobs, gallery_page
-from ofmhelpers.schemas.persistence import Created
-from ofmhelpers.schemas.time_zones import time_zone
+from ofmhelpers.db.jobs.schema import Created
+from ofmhelpers.features.jobs.gallery import GalleryAsk, gallery_jobs, hidden_jobs
+from ofmhelpers.web.access import Action, allowed
 from ofmhelpers.web.forms import LoggedFields
-lazy from ofmhelpers.schemas.persistence import GalleryJobs
-lazy from ofmhelpers.schemas.users import Viewer
-lazy from ofmhelpers.web.dependencies import Viewing
+from ofmhelpers.web.time_zones import time_zone
+lazy from ofmhelpers.db.jobs.schema import GalleryJobs
+lazy from ofmhelpers.db.users.schema import Viewer
+lazy from ofmhelpers.web.dependencies import Viewing, Zone
 
 Day = Annotated[date, Field(ge=date(2000, 1, 1), le=date(2100, 1, 1))]
 
@@ -85,11 +85,11 @@ class GalleryQuery(LoggedFields):
 def gallery_query(
     query: Annotated[GalleryQuery, Query()],
     viewer: Viewing,
-    ofm_timezone: Annotated[str | None, Cookie()] = None,
+    zone: Zone,
 ) -> GalleryQuery:
     if query.va is not None and query.va not in viewer.user_ids:
         raise HTTPException(status_code=404, detail="No such VA")
-    return query.in_zone(time_zone(ofm_timezone).zone)
+    return query.in_zone(zone.zone)
 
 
 GalleryParams = Annotated[GalleryQuery, Depends(gallery_query)]
@@ -117,19 +117,26 @@ class Gallery:
 
     def page(self, viewer: Viewer, query: GalleryQuery | None = None) -> GalleryJobs:
         asked = query or GalleryQuery()
-        return gallery_page(
-            self.tasks,
-            asked.offset,
-            self.limit(),
-            frozenset({str(asked.va)}) if asked.va is not None else viewer.actors,
-            asked.hidden if _hides(viewer) else None,
-            reader=viewer.user.id,
-            by_use=self.by_use,
-            created=asked.created,
-            not_uploaded=asked.not_uploaded,
+        readers = (
+            frozenset({str(asked.va)})
+            if asked.va is not None
+            else frozenset(viewer.actors)
+        )
+        return gallery_jobs(
+            GalleryAsk(
+                tasks=frozenset(self.tasks),
+                offset=asked.offset,
+                limit=self.limit(),
+                readers=readers,
+                hidden=asked.hidden if _hides(viewer) else None,
+                reader=viewer.user.id,
+                by_use=self.by_use,
+                created=asked.created,
+                not_uploaded=asked.not_uploaded,
+            )
         )
 
     def hidden_count(self, viewer: Viewer) -> int:
         if not _hides(viewer):
             return 0
-        return count_hidden_jobs(self.tasks, viewer.actors)
+        return hidden_jobs(frozenset(self.tasks), frozenset(viewer.actors))

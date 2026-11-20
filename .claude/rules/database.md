@@ -21,7 +21,7 @@ Sources: PostgreSQL wiki "Don't Do This" (https://wiki.postgresql.org/wiki/Don%2
 - Not null unless absence means something.
 
 ## Access
-- Only `db/repositories/` and `db/stores/` touch the database; they return models. Services never see a session.
+- Only `db/<table>/repository.py` and `store.py` touch the database; they return models. Services never see a session.
 - Caching only through `CachedRepository` + `@cached` / `@invalidates_cache`.
 - Queries filter by owner: every user, admin included, sees only their own rows.
 - Filtering, joining and counting happen in SQL, not in Python over fetched rows. No `NOT IN (subquery)`; use `NOT EXISTS`.

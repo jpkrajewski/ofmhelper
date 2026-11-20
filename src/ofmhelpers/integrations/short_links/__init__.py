@@ -1,12 +1,4 @@
-from ofmhelpers.integrations.short_links.errors import (
-    AuthError,
-    LinkError,
-    QuotaError,
-    RateLimitedError,
-    SlugTakenError,
-    UngatedError,
-)
-from ofmhelpers.schemas.link_catalog import (
+from ofmhelpers.db.short_links.catalog import (
     DayStat,
     HourStat,
     LinkDays,
@@ -20,6 +12,14 @@ from ofmhelpers.schemas.link_catalog import (
     detect_target,
     provider_infos,
     targets,
+)
+from ofmhelpers.integrations.short_links.errors import (
+    AuthError,
+    LinkError,
+    QuotaError,
+    RateLimitedError,
+    SlugTakenError,
+    UngatedError,
 )
 
 __all__ = [

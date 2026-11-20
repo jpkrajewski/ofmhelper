@@ -70,13 +70,13 @@ class _Dotenv:
 
 class Settings:
     def __init__(self) -> None:
-        self._built: dict[type[BaseSettings], tuple[tuple, BaseSettings]] = {}
+        self._built: dict[type[BaseSettings], tuple[int, BaseSettings]] = {}
         self._dotenv = _Dotenv()
 
-    def _inputs(self, cls: type[BaseSettings]) -> tuple:
+    def _inputs(self, cls: type[BaseSettings]) -> int:
         env_file = cls.model_config.get("env_file")
         mtime = self._dotenv.mtime(str(env_file)) if env_file else None
-        return (hash(frozenset(os.environ.items())), env_file, mtime)
+        return hash((hash(frozenset(os.environ.items())), env_file, mtime))
 
     def _group(self, cls: type[_Group]) -> _Group:
         inputs = self._inputs(cls)

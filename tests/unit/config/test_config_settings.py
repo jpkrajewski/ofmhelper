@@ -5,6 +5,8 @@ import pytest
 from pydantic import ValidationError
 from repo_paths import SRC
 
+from ofmhelpers import config
+from ofmhelpers.config import Settings
 from ofmhelpers.config.settings import (
     AigenSettings,
     DownloadersSettings,
@@ -238,8 +240,6 @@ def test_downloader_timeout_defaults_to_the_previous_literal(clean_env):
 
 
 def test_a_group_is_built_once_while_the_environment_holds(monkeypatch):
-    from ofmhelpers.config import Settings
-
     monkeypatch.setenv("OFM_GALLERY_LIMIT", "7")
     s = Settings()
     assert s.web is s.web
@@ -247,8 +247,6 @@ def test_a_group_is_built_once_while_the_environment_holds(monkeypatch):
 
 
 def test_a_group_follows_a_changed_environment_at_once(monkeypatch):
-    from ofmhelpers.config import Settings
-
     s = Settings()
     monkeypatch.setenv("OFM_GALLERY_LIMIT", "7")
     first = s.web
@@ -260,9 +258,6 @@ def test_a_group_follows_a_changed_environment_at_once(monkeypatch):
 
 
 def test_a_group_follows_an_edited_env_file(monkeypatch, tmp_path):
-    from ofmhelpers import config
-    from ofmhelpers.config import Settings
-
     monkeypatch.delenv("OFM_GALLERY_LIMIT", raising=False)
     monkeypatch.setattr(config, "_DOTENV_CHECK_S", 0.0)
     dotenv = tmp_path / ".env"

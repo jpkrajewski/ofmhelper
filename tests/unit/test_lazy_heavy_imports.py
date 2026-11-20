@@ -5,7 +5,7 @@ import sys
 import pytest
 from repo_paths import REPO
 
-from ofmhelpers.worker import _LAZY_HEAVY
+from ofmhelpers.background.worker import _LAZY_HEAVY
 
 HEAVY = ("google.genai", "googleapiclient", "openpyxl", "yt_dlp", "imagehash")
 

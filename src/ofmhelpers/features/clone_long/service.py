@@ -11,14 +11,9 @@ from pydantic import BaseModel, model_serializer
 from rq.timeouts import JobTimeoutException
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import set_job_preview
+from ofmhelpers.db.jobs.schema import JobPreview, ResultFile
+from ofmhelpers.db.jobs.store import set_job_preview
 from ofmhelpers.features.assets.store import register_generated_asset
-from ofmhelpers.features.clone.pricing import clone_price
-from ofmhelpers.features.clone.targets import (
-    CloneTarget,
-    clone_targets,
-    offered_resolutions,
-)
 from ofmhelpers.features.clone_long.models import (
     LongCloneParams,
     Plan,
@@ -27,12 +22,18 @@ from ofmhelpers.features.clone_long.models import (
     Shape,
 )
 from ofmhelpers.features.clone_long.video import VideoTools
+from ofmhelpers.features.clone_pricing.pricing import clone_price
+from ofmhelpers.features.clone_pricing.targets import (
+    CloneTarget,
+    clone_targets,
+    offered_resolutions,
+)
 from ofmhelpers.features.jobs.runner import resumable
+from ofmhelpers.features.refusals import input_refused
 from ofmhelpers.integrations.ai_providers import runner, tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider, uploader
 from ofmhelpers.integrations.ai_providers.errors import ProviderGenerationError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import JobPreview, ResultFile
 
 logger = get_logger(__name__)
 
@@ -109,7 +110,7 @@ class PieceValues(BaseModel):
 
 TARGETS = {
     name: Target(**row.model_dump())
-    for name, row in clone_targets().entries.items()
+    for name, row in clone_targets().items()
     if row.long_clone
 }
 
@@ -188,10 +189,11 @@ class LongClone:
                 audio=switches.audio,
             )
         )
-        for piece in plan.pieces:
-            target.spec.check(
-                target.values(clone.params, piece.length, video).model_dump()
-            )
+        with input_refused():
+            for piece in plan.pieces:
+                target.spec.check(
+                    target.values(clone.params, piece.length, video).model_dump()
+                )
         return clone
 
     @property

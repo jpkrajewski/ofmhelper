@@ -6,8 +6,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ofmhelpers.cache import delete_text, get_text, set_text
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
-from ofmhelpers.errors import AppError
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ReadScope
 from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.reached import remember_reached
 from ofmhelpers.features.chatting.sources import source_for
@@ -21,9 +21,8 @@ from ofmhelpers.features.chatting.webhooks import (
 from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ReadScope
+lazy from ofmhelpers.db.chats.schema import ChatModel, ChatPlatform
 lazy from ofmhelpers.integrations.chat_source import ChatSource
-lazy from ofmhelpers.schemas.chatting import ChatModel, ChatPlatform
 
 logger = get_logger(__name__)
 
@@ -77,7 +76,7 @@ def sync(
         read += 1
         try:
             changed += _sync_model(source, model, scope)
-        except AppError:
+        except ChatSourceError:
             logger.warning(
                 "%s %s not read", platform.value, model.username, exc_info=True
             )
@@ -112,7 +111,7 @@ def read_now(source: ChatSource, usernames: set[str]) -> set[str]:
             continue
         try:
             _sync_model(source, model, scope)
-        except AppError:
+        except ChatSourceError:
             logger.warning(
                 "%s %s not read", platform.value, model.username, exc_info=True
             )

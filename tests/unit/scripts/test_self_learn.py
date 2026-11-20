@@ -1,7 +1,7 @@
 import importlib.util
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+lazy from pathlib import Path
 
 from repo_paths import REPO
 

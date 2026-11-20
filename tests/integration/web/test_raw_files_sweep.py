@@ -1,10 +1,10 @@
 import os
 import time
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 
-from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.db.jobs.store import create_job, fail_job
 from ofmhelpers.features.jobs import raw_files
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks

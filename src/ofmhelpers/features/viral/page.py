@@ -1,18 +1,20 @@
 import zipfile
-from collections.abc import Callable
 from pathlib import Path
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import get_job, list_jobs_page, merge_params
+from ofmhelpers.db.jobs.store import get_job, list_jobs_page, merge_params
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.store import make_job_dir, uploads_root
 from ofmhelpers.features.jobs.runner import start_job
+from ofmhelpers.features.jobs.schema import JobQueued
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
+from ofmhelpers.features.viral.schema import ViralFile, ViralSearch
 from ofmhelpers.features.viral.service import find_viral
 from ofmhelpers.integrations.instagram import ProfileHandle
-from ofmhelpers.schemas import Job, JobQueued, ViralFile, ViralSearch
+lazy from ofmhelpers.db.jobs.schema import Job
 
 TASK = "viral_reels"
 _HISTORY = 20

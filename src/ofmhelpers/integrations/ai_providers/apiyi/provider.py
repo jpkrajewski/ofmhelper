@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from pathlib import Path
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
@@ -24,8 +24,8 @@ from ofmhelpers.integrations.ai_providers.base import (
 )
 from ofmhelpers.integrations.ai_providers.errors import ProviderError
 from ofmhelpers.log import get_logger
+lazy from ofmhelpers.integrations.ai_providers.schema import KeySlot
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
-lazy from ofmhelpers.schemas.generation import KeySlot
 
 logger = get_logger(__name__)
 
@@ -46,7 +46,7 @@ class ApiyiProvider(Provider):
 
     @classmethod
     def env_keys(cls) -> list[str]:
-        return admin_keys().all()
+        return list(admin_keys().values())
 
     @classmethod
     def key_slots(cls) -> list[KeySlot]:

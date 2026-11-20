@@ -1,7 +1,7 @@
-from collections.abc import Callable, Mapping
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Literal
 
 from jsonschema import Draft202012Validator
 from pydantic import (
@@ -14,7 +14,9 @@ from pydantic import (
 )
 
 from ofmhelpers.integrations.ai_providers.errors import InvalidInputError
-from ofmhelpers.utils.registry import Registry
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 MediaKind = Literal["image", "video", "audio"]
 OutputKind = Literal["image", "video"]
@@ -136,11 +138,11 @@ class ModelSpec(BaseModel):
         return f"{self.provider}:{self.model_id}"
 
     @cached_property
-    def properties(self) -> Registry[FieldSchema]:
+    def properties(self) -> MappingProxyType[str, FieldSchema]:
         raw = self.input_schema.get("properties")
         schema = raw if isinstance(raw, dict) else {}
-        return Registry[FieldSchema](
-            entries={
+        return MappingProxyType(
+            {
                 name: FieldSchema.model_validate(value).concrete
                 for name, value in schema.items()
             }
@@ -156,7 +158,7 @@ class ModelSpec(BaseModel):
     @cached_property
     def media_fields(self) -> list[MediaField]:
         fields = []
-        for name, field in self.properties.entries.items():
+        for name, field in self.properties.items():
             kind = _media_kind(name, field)
             if kind is None or field.base_type not in ("string", "array"):
                 continue
@@ -176,7 +178,7 @@ class ModelSpec(BaseModel):
     def form_fields(self) -> list[FormField]:
         media = {f.name for f in self.media_fields}
         fields = []
-        for name, field in self.properties.entries.items():
+        for name, field in self.properties.items():
             kind = field.base_type
             if name in media or kind not in _SCALAR_TYPES or field.is_uri:
                 continue

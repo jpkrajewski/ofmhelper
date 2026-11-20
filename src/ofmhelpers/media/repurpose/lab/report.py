@@ -38,13 +38,26 @@ class TrialRow(BaseModel):
     over_cap: bool
 
 
-def _load(results: Path) -> dict[str, list[dict[str, Any]]]:
+class _Pick(BaseModel):
+    name: str
+    trial: TrialRow
+
+
+class _FlatRow(BaseModel, extra="allow"):
+    pass
+
+
+def _load(results: Path) -> list[TrialRow]:
     rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for line in results.read_text(encoding="utf-8").splitlines():
         if line.strip():
             row = json.loads(line)
             rows[row["trial"]].append(row)
-    return rows
+    return [_trial(name, trial_rows) for name, trial_rows in rows.items()]
+
+
+def _named(picks: list[_Pick], name: str) -> TrialRow | None:
+    return next((p.trial for p in picks if p.name == name), None)
 
 
 def _avg(values: list[float | None]) -> float | None:
@@ -75,13 +88,13 @@ def _trial(name: str, rows: list[dict[str, Any]]) -> TrialRow:
     )
 
 
-def _pick_video(trials: list[TrialRow], base_vmaf: float) -> dict[str, TrialRow]:
+def _pick_video(trials: list[TrialRow], base_vmaf: float) -> list[_Pick]:
     pool = [
         t
         for t in trials
         if t.part is Part.VIDEO and not t.errors and t.vmaf and t.phase != "baseline"
     ]
-    picks = {}
+    picks: list[_Pick] = []
     for name, drop in _VIDEO_PICKS.items():
         floor = base_vmaf - drop
         fit = [
@@ -90,7 +103,7 @@ def _pick_video(trials: list[TrialRow], base_vmaf: float) -> dict[str, TrialRow]
             if t.vmaf and t.vmaf >= floor and (name == "wild" or not t.over_cap)
         ]
         if fit:
-            picks[name] = min(
+            best = min(
                 fit,
                 key=lambda t: (
                     mean(t.methods.values()) if t.methods else 100.0,
@@ -98,10 +111,11 @@ def _pick_video(trials: list[TrialRow], base_vmaf: float) -> dict[str, TrialRow]
                     -(t.vmaf or 0),
                 ),
             )
+            picks.append(_Pick(name=name, trial=best))
     return picks
 
 
-def _pick_audio(trials: list[TrialRow], base_db: float) -> dict[str, TrialRow]:
+def _pick_audio(trials: list[TrialRow], base_db: float) -> list[_Pick]:
     pool = [
         t
         for t in trials
@@ -110,7 +124,7 @@ def _pick_audio(trials: list[TrialRow], base_db: float) -> dict[str, TrialRow]:
         and t.change_db is not None
         and t.phase != "baseline"
     ]
-    picks = {}
+    picks: list[_Pick] = []
     for name, extra in _AUDIO_PICKS.items():
         fit = [
             t
@@ -119,7 +133,8 @@ def _pick_audio(trials: list[TrialRow], base_db: float) -> dict[str, TrialRow]:
             and (name == "wild" or not t.over_cap)
         ]
         if fit:
-            picks[name] = min(fit, key=lambda t: (t.audio or 0, t.change_db or 0))
+            best = min(fit, key=lambda t: (t.audio or 0, t.change_db or 0))
+            picks.append(_Pick(name=name, trial=best))
     return picks
 
 
@@ -132,23 +147,25 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _flat(t: TrialRow) -> dict[str, Any]:
-    return {
-        "trial": t.trial,
-        "phase": t.phase,
-        "part": t.part.value,
-        "caught_%": t.caught,
-        "methods_beaten": sum(
-            1 for m in _METHODS if m in t.methods and t.methods[m] < CAUGHT_PERCENT
-        ),
-        "mean_found_%": round(mean(t.methods.values()), 1) if t.methods else None,
-        **{f"{m}_%": v for m, v in t.methods.items()},
-        "audio_%": t.audio,
-        "vmaf": t.vmaf,
-        "change_db": t.change_db,
-        "over_cap": t.over_cap,
-        "knobs": " ".join(f"{k}={v:g}" for k, v in sorted(t.strengths.items())),
-    }
+def _flat(t: TrialRow) -> _FlatRow:
+    return _FlatRow(
+        **{
+            "trial": t.trial,
+            "phase": t.phase,
+            "part": t.part.value,
+            "caught_%": t.caught,
+            "methods_beaten": sum(
+                1 for m in _METHODS if m in t.methods and t.methods[m] < CAUGHT_PERCENT
+            ),
+            "mean_found_%": round(mean(t.methods.values()), 1) if t.methods else None,
+            **{f"{m}_%": v for m, v in t.methods.items()},
+            "audio_%": t.audio,
+            "vmaf": t.vmaf,
+            "change_db": t.change_db,
+            "over_cap": t.over_cap,
+            "knobs": " ".join(f"{k}={v:g}" for k, v in sorted(t.strengths.items())),
+        }
+    )
 
 
 def _validate(job: tuple[str, dict[str, float], str, int, str]) -> Measurement:
@@ -225,16 +242,14 @@ def main(argv: list[str] | None = None) -> None:
     report = args.out / "report"
     (report / "presets").mkdir(parents=True, exist_ok=True)
     (report / "examples").mkdir(parents=True, exist_ok=True)
-    trials = [
-        _trial(name, rows) for name, rows in _load(args.out / "results.jsonl").items()
-    ]
+    trials = _load(args.out / "results.jsonl")
     base_db = next((t.change_db for t in trials if t.trial == "base_audio"), 0.0) or 0.0
 
     ablation = sorted(
         (t for t in trials if t.phase in ("baseline", "ablation")),
         key=lambda t: (t.part.value, t.trial),
     )
-    _write_csv(report / "knobs.csv", [_flat(t) for t in ablation])
+    _write_csv(report / "knobs.csv", [_flat(t).model_dump() for t in ablation])
     explored = sorted(
         (t for t in trials if t.phase in ("random", "search")),
         key=lambda t: (
@@ -242,13 +257,13 @@ def main(argv: list[str] | None = None) -> None:
             t.caught if t.part is Part.VIDEO else (t.audio or 0),
         ),
     )
-    _write_csv(report / "trials.csv", [_flat(t) for t in explored])
+    _write_csv(report / "trials.csv", [_flat(t).model_dump() for t in explored])
 
     base_vmaf = next((t.vmaf for t in trials if t.trial == "base_video"), None) or 95.0
     video, audio = _pick_video(trials, base_vmaf), _pick_audio(trials, base_db)
     presets: dict[str, dict[str, float]] = {}
     for name in _VIDEO_PICKS:
-        v, a = video.get(name), audio.get(name)
+        v, a = _named(video, name), _named(audio, name)
         strengths = {**(v.strengths if v else {}), **(a.strengths if a else {})}
         presets[name] = strengths
         made = preset(
@@ -324,11 +339,11 @@ def main(argv: list[str] | None = None) -> None:
                 copy.unlink()
                 examples.append((name, clip.stem, dst.name))
 
-    knob_rows = [_flat(t) for t in ablation]
+    knob_rows = [_flat(t).model_dump() for t in ablation]
     pick_rows = [
-        {"pick": f"{part} {name}", **_flat(t)}
+        {"pick": f"{part} {p.name}", **_flat(p.trial).model_dump()}
         for part, picks in (("video", video), ("audio", audio))
-        for name, t in picks.items()
+        for p in picks
     ]
     videos = "".join(
         f"<figure><video controls preload='metadata' src='examples/{html.escape(f)}'></video>"
@@ -346,7 +361,7 @@ video{{height:480px}}</style>
 <h2>Examples</h2>{videos}
 <h2>Picks</h2>{_table(pick_rows)}
 <h2>Each knob alone</h2>{_table(knob_rows)}
-<h2>Best 60 explored (random throws + search)</h2>{_table([_flat(t) for t in explored if t.part is Part.VIDEO][:40] + [_flat(t) for t in explored if t.part is Part.AUDIO][:20])}
+<h2>Best 60 explored (random throws + search)</h2>{_table([_flat(t).model_dump() for t in explored if t.part is Part.VIDEO][:40] + [_flat(t).model_dump() for t in explored if t.part is Part.AUDIO][:20])}
 """
     (report / "index.html").write_text(page, encoding="utf-8")
     print(f"report: {report / 'index.html'}", flush=True)

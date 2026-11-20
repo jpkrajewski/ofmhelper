@@ -4,11 +4,11 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
-from ofmhelpers.features.chatting.stacked_keys import StackedKeys
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatPlatform, DeliveryKind
+from ofmhelpers.features.account.stacked_keys import StackedKeys
 from ofmhelpers.integrations.stacked import StackedClient, StackedError, reachable
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatPlatform, DeliveryKind
 
 logger = get_logger(__name__)
 

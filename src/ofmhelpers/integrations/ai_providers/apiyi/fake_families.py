@@ -26,6 +26,10 @@ def error(status: int, code: str, message: str) -> FakeReply:
     )
 
 
+class Body(BaseModel):
+    values: dict[str, Any]
+
+
 class Multipart(BaseModel):
     fields: dict[str, str]
     files: list[tuple[str, str]]
@@ -78,13 +82,13 @@ class FakeFamilies:
             self.calls.append((path, body, files or []))
 
     @staticmethod
-    def _json(request: requests.PreparedRequest) -> dict[str, Any]:
+    def _json(request: requests.PreparedRequest) -> Body:
         raw = request.body
         loaded = json.loads(raw if isinstance(raw, (str, bytes)) and raw else b"{}")
-        return loaded if isinstance(loaded, dict) else {}
+        return Body(values=loaded if isinstance(loaded, dict) else {})
 
     def _gemini(self, request: requests.PreparedRequest, path: str) -> FakeReply:
-        body = self._json(request)
+        body = self._json(request).values
         self._record(path, body)
         with self._lock:
             answer, self.gemini_next = self.gemini_next, None
@@ -115,7 +119,7 @@ class FakeFamilies:
             body = sent.fields
             self._record(path, body, sent.files)
         else:
-            body = self._json(request)
+            body = self._json(request).values
             self._record(path, body)
         model = str(body.get("model", ""))
         if not model:
@@ -138,7 +142,7 @@ class FakeFamilies:
                 body=b'id":"cgt-trunc', headers={"Content-Type": "application/json"}
             )
         if request.method == "POST":
-            body = self._json(request)
+            body = self._json(request).values
             self._record(path, body)
             task_id = f"cgt-2026110600000{next(self._ids)}-fake"
             with self._lock:
@@ -188,7 +192,7 @@ class FakeFamilies:
             self._record(path, body, sent.files)
             seconds: Any = body.get("seconds", "8")
         else:
-            body = self._json(request)
+            body = self._json(request).values
             self._record(path, body)
             seconds = body.get("seconds", "8")
             if "generateAudio" in json.dumps(body):

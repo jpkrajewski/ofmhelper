@@ -3,11 +3,11 @@ import logging
 import pytest
 from pydantic import ValidationError
 
+from ofmhelpers.integrations.senders.schema import MAX_TITLE, Event
 from ofmhelpers.integrations.senders.telegram import message_text
 from ofmhelpers.integrations.senders.telegram.models import MAX_TEXT
 from ofmhelpers.log import _config, _HideJobArguments
 from ofmhelpers.redact import MASK, redact
-from ofmhelpers.schemas.events import MAX_TITLE, Event
 
 _TOKEN = "123456789:AAFakeTelegramBotTokenForTheTestsX0"
 _URL = "https://ascend.test/accounts"
@@ -124,6 +124,6 @@ def test_rq_failure_lines_lose_the_jobs_arguments():
 
 
 def test_the_app_logging_puts_that_filter_on_rqs_worker_logger():
-    loggers = _config("INFO", "text", access_log=False)["loggers"]
+    loggers = _config("INFO", "text", access_log=False).loggers
 
-    assert loggers["rq.worker"]["filters"] == ["hide_job_arguments"]
+    assert loggers["rq.worker"].filters == ["hide_job_arguments"]

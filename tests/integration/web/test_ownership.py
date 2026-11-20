@@ -2,13 +2,17 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin, sign_in_agency
 
-from ofmhelpers.db.stores import devices, users
-from ofmhelpers.db.stores.tracked_accounts import list_accounts
-from ofmhelpers.db.stores.watched_profiles import list_watched
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields
+from ofmhelpers.db.tracked_accounts.store import list_accounts
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.watched_profiles.store import list_watched
+from ofmhelpers.features.accounts import page as accounts
+from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.features.drive import folders as drive_folders
+from ofmhelpers.features.reels import page as reels
 from ofmhelpers.features.reels import watch as reel_watch
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
-from ofmhelpers.schemas import DeviceFields
 from ofmhelpers.web.main import app
 
 PHONE = {
@@ -38,12 +42,9 @@ def bob() -> TestClient:
 @pytest.fixture(autouse=True)
 def _no_scans(monkeypatch):
     monkeypatch.setattr(reel_watch, "queue_due_scans", list)
-    from ofmhelpers.features.accounts import page as accounts
-    from ofmhelpers.features.accounts import tracker as account_tracker
 
     monkeypatch.setattr(account_tracker, "queue_due_scans", list)
     monkeypatch.setattr(accounts, "queue_due_scans", list)
-    from ofmhelpers.features.reels import page as reels
 
     monkeypatch.setattr(reels, "queue_due_scans", list)
 

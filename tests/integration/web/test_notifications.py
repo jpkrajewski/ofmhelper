@@ -7,16 +7,15 @@ from notifications_socket import SOCKET, first_sent, next_lines, next_sent
 from signin import make_user, sign_in
 from starlette.websockets import WebSocketDisconnect
 
+from ofmhelpers.background.recovery import fail_cut_off
 from ofmhelpers.cache.redis import get_redis
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, finish_job, record_failure
-from ofmhelpers.features.jobs.recovery import fail_cut_off
+from ofmhelpers.db.jobs.store import create_job, finish_job, record_failure
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.notifications import service as notifications
+from ofmhelpers.features.notifications.schema import Notifications, Reader
 from ofmhelpers.features.trials.folder import CAPTIONS, GENERATE, REMAKE, UPLOAD
 from ofmhelpers.features.trials.tasks import Captioned, Made
-from ofmhelpers.features.users.viewing import viewer_for
-from ofmhelpers.schemas.notifications import Notifications
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"
@@ -141,23 +140,24 @@ def _subscribers(channel: str) -> int:
 def test_open_sockets_share_one_redis_subscription_and_a_burst_is_one_read(monkeypatch):
     reads: list[int] = []
 
-    def counted_read(viewer):
-        reads.append(viewer.user.id)
+    def counted_read(reader):
+        reads.append(reader.user_id)
         return Notifications(items=[])
 
     monkeypatch.setattr(notifications, "read", counted_read)
     channel = f"notifications-burst-test-{time.time_ns()}"
     monkeypatch.setattr(notifications, "_CHANNEL", channel)
-    viewer = viewer_for(make_user(OWNER), None)
+    owner = make_user(OWNER)
+    reader = Reader(user_id=owner.id, chats=True)
 
     async def five_sockets_and_a_burst() -> tuple[int, int, bool, int]:
-        sockets = [notifications.updates(lambda: viewer) for _ in range(5)]
+        sockets = [notifications.updates(lambda: reader) for _ in range(5)]
         for socket in sockets:
             await anext(socket)
         await asyncio.sleep(0.3)
         shared = _subscribers(channel)
         for _ in range(50):
-            notifications.changed(viewer.user.id)
+            notifications.changed(owner.id)
         await asyncio.sleep(0.3)
         for socket in sockets:
             await asyncio.wait_for(anext(socket), 5)

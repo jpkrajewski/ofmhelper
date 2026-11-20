@@ -2,10 +2,10 @@ import json
 import re
 import sys
 from collections import Counter
-from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Iterator
 
 from pydantic import BaseModel
 

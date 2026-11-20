@@ -6,9 +6,13 @@ lazy from datetime import date
 from pydantic import BaseModel
 
 from ofmhelpers.cache import get_text, set_text
-from ofmhelpers.db.stores import report_runs, users
-from ofmhelpers.db.stores import short_links as link_store
-from ofmhelpers.db.stores.tracked_accounts import list_accounts
+from ofmhelpers.db.chats.schema import ChatPlatform
+from ofmhelpers.db.report_runs import store as report_runs
+from ofmhelpers.db.report_runs.schema import DayCount
+from ofmhelpers.db.short_links import store as link_store
+from ofmhelpers.db.short_links.schema import LinkSyncKey, ShortLink, ctr
+from ofmhelpers.db.tracked_accounts.store import list_accounts
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.events import Event, emit, listening
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.features.links.sync import sync_links
@@ -22,13 +26,10 @@ from ofmhelpers.features.reports.format import (
     window_title,
 )
 from ofmhelpers.features.reports.schedule import Due, due, local
+from ofmhelpers.integrations.senders.schema import MAX_TEXT
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatPlatform
-from ofmhelpers.schemas.events import MAX_TEXT
-from ofmhelpers.schemas.links import LinkSyncKey, ShortLink, ctr
-from ofmhelpers.schemas.reports import DayCount
-lazy from ofmhelpers.schemas.reports import ReportRun
+lazy from ofmhelpers.db.report_runs.schema import ReportRun
 
 logger = get_logger(__name__)
 
@@ -82,11 +83,13 @@ def _profile(link: ShortLink) -> str | None:
     return first.removeprefix("@") or None
 
 
-_Fan = tuple[ChatPlatform, str]
+class _Fan(BaseModel, frozen=True):
+    platform: ChatPlatform
+    username: str
 
 
 def _fan(platform: ChatPlatform, username: str) -> _Fan:
-    return platform, username.casefold()
+    return _Fan(platform=platform, username=username.casefold())
 
 
 def _model_rows(
@@ -124,9 +127,9 @@ def _model_rows(
             if fan not in owner:
                 owner[fan] = f"@{username}"
                 rows.setdefault(owner[fan], ModelRow(name=owner[fan]))
-    for fan, name in sorted(owner.items()):
-        platform, key = fan
-        found = sites[platform].stats(usernames.get(fan, key))
+    by_username = sorted(owner.items(), key=lambda item: item[0].username)
+    for fan, name in sorted(by_username, key=lambda item: item[0].platform):
+        found = sites[fan.platform].stats(usernames.get(fan, fan.username))
         if found is not None:
             rows[name].add_fan(found.subs, found.cents)
     return sorted(rows.values(), key=lambda r: (-r.clicks, -(r.cents or 0), r.name))
@@ -192,9 +195,14 @@ def _events(
     ]
 
 
+class _ModelsBlock(BaseModel, frozen=True):
+    title: str
+    chunks: list[str]
+
+
 def _models_block(
     links: list[ShortLink], previous: ReportRun, now: float
-) -> tuple[str, list[str]]:
+) -> _ModelsBlock:
     window = window_title(local(previous.ran_at), local(now))
     rows = _model_rows(
         links,
@@ -202,7 +210,7 @@ def _models_block(
         previous.ran_at,
         now,
     )
-    return f"Clicks / Rev ({window})", _model_chunks(rows)
+    return _ModelsBlock(title=f"Clicks / Rev ({window})", chunks=_model_chunks(rows))
 
 
 def _model_chunks(rows: list[ModelRow]) -> list[str]:
@@ -211,7 +219,8 @@ def _model_chunks(rows: list[ModelRow]) -> list[str]:
 
 def build(links: list[ShortLink], previous: ReportRun, now: float) -> list[Event]:
     day = local(now).date().isoformat()
-    title, models = _models_block(links, previous, now)
+    models_block = _models_block(links, previous, now)
+    title, models = models_block.title, models_block.chunks
 
     def events(
         block: str, title: str, chunks: list[str], replaces: str | None = None
@@ -255,7 +264,7 @@ def money_now(now: float | None = None) -> list[Event]:
 def _fresh_links(owner: int) -> list[ShortLink]:
     keyed = [
         LinkSyncKey(user_id=owner, provider=p)
-        for p in link_providers().names()
+        for p in link_providers()
         if link_keys.api_key(owner, p)
     ]
     link_store.mark_due(owner)

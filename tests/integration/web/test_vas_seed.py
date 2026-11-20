@@ -1,26 +1,27 @@
 from datetime import datetime
 from decimal import Decimal
-from pathlib import Path
 from zoneinfo import ZoneInfo
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 from sqlalchemy import func, select
 
+from ofmhelpers.db.jobs.schema import GenerationRecord, JobCost, JobMeta
+from ofmhelpers.db.jobs.store import create_job, get_job, keep_cost
 from ofmhelpers.db.models import JobRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, keep_cost
-from ofmhelpers.features.clone.pricing import clone_pricing
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
+from ofmhelpers.features.clone_pricing.pricing import clone_pricing
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.vas import seed as made_up
 from ofmhelpers.features.vas import service
 from ofmhelpers.features.vas.models import Period
-from ofmhelpers.schemas import Role, User
-from ofmhelpers.schemas.persistence import GenerationRecord, JobCost, JobMeta
 from ofmhelpers.web.main import app
+from ofmhelpers.web.time_zones import time_zone
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -113,7 +114,7 @@ def test_a_made_up_month_is_the_vas_rows_priced_by_the_apps_own_prices(uploads):
     assert (found.days, found.downloads) == (len(made_up.DAYS_BACK), 0)
     assert min(found.clones, found.failed_clones, found.generations) > 0
     assert all(row.created_at <= NOW.timestamp() for row in rows)
-    prices = clone_pricing().entries
+    prices = clone_pricing()
     clones = [r for r in rows if r.task == "clone" and r.status == "done"]
     assert {r.params["provider"] for r in clones} == set(prices)
     for row in clones:
@@ -149,7 +150,11 @@ def test_the_owner_sees_the_made_up_days_and_money_on_the_page(uploads):
     sign_in(client, OWNER)
 
     view = service.page_view(
-        owner.id, {owner.id, va.id}, everyone=False, zone="Europe/Warsaw", now=NOW
+        owner.id,
+        {owner.id, va.id},
+        everyone=False,
+        zone=time_zone("Europe/Warsaw"),
+        now=NOW,
     )
 
     assert [day.day.day for day in view.days] == [15, 14, 13, 12, 10, 9, 6, 3]

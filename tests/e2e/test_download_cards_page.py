@@ -1,10 +1,14 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from download_files import removed_download
 from e2e_session import Session
 from PIL import Image
 from playwright.sync_api import expect
+
+lazy from ofmhelpers.db.jobs.store import create_job
+lazy from ofmhelpers.features.jobs.runner import run_job
+lazy from ofmhelpers.integrations.downloaders.models import DownloadResult
 
 pytestmark = pytest.mark.e2e
 
@@ -13,9 +17,6 @@ RESULT_TIMEOUT_MS = 30_000
 
 
 def _download(folder: Path, *names: str) -> str:
-    from ofmhelpers.db.stores.jobs import create_job
-    from ofmhelpers.features.jobs.runner import run_job
-    from ofmhelpers.integrations.downloaders.models import DownloadResult
 
     paths = []
     for name in names:

@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in, sign_in_agency
 
-from ofmhelpers.db.stores import jobs as jobs_store
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.jobs import store as jobs_store
+from ofmhelpers.db.jobs.store import create_job, get_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.downloads import clean as clean_image_router
 from ofmhelpers.features.downloads import images as download_images_router

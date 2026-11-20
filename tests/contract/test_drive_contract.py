@@ -1,6 +1,6 @@
 import secrets
 import uuid
-from collections.abc import Iterator
+lazy from collections.abc import Iterator
 
 import pytest
 

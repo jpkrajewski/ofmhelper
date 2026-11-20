@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from signin import make_user
 
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import runner, self_heal, tasks
 from ofmhelpers.integrations.ai_providers.base import TaskState

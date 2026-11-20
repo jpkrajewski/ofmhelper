@@ -7,7 +7,7 @@ from redis.exceptions import RedisError
 
 from ofmhelpers.cache import get_redis
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.users import get_user
+from ofmhelpers.db.users.store import get_user
 from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)

@@ -2,12 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
 
+from ofmhelpers.db.report_runs.schema import DayCount
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.integrations.short_links.errors import LinkError
 from ofmhelpers.integrations.short_links.providers import get_link_provider
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.reports import DayCount
-lazy from ofmhelpers.schemas.links import ShortLink
+lazy from ofmhelpers.db.short_links.schema import ShortLink
 
 logger = get_logger(__name__)
 

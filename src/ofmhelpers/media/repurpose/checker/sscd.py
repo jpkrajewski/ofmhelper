@@ -1,10 +1,10 @@
+import importlib.util
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from PIL import Image, ImageOps
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 lazy import torch
 
 from ofmhelpers.config import settings
@@ -34,17 +34,20 @@ def available() -> bool:
     path = settings.repurpose.sscd_model
     if not path or not Path(path).is_file():
         return False
-    try:
-        import torch  # noqa: F401 - optional, lab only
-    except ImportError:  # silent: optional, lab only
-        return False
-    return True
+    return importlib.util.find_spec("torch") is not None
 
 
 @lru_cache(maxsize=1)
-def _model() -> Any:
+def _model() -> torch.jit.ScriptModule:
     torch.set_num_threads(settings.repurpose.sscd_threads)
     return torch.jit.load(settings.repurpose.sscd_model).eval()
+
+
+class _SourceDescriptors(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    stored: np.ndarray
+    times: np.ndarray
 
 
 def _batch(images: list[Image.Image]) -> np.ndarray:
@@ -72,12 +75,12 @@ def descriptors(images: list[Image.Image]) -> np.ndarray:
 
 
 @lru_cache(maxsize=32)
-def _source(
-    path: str, mtime: float, fps: float, timeout_s: int
-) -> tuple[np.ndarray, np.ndarray]:
+def _source(path: str, mtime: float, fps: float, timeout_s: int) -> _SourceDescriptors:
     del mtime
     sampled = frames.sample(Path(path), fps, timeout_s)
-    return descriptors(sampled.images), np.array(sampled.times)
+    return _SourceDescriptors(
+        stored=descriptors(sampled.images), times=np.array(sampled.times)
+    )
 
 
 def score(
@@ -87,12 +90,10 @@ def score(
     sample_s: float,
     timeout_s: int,
 ) -> DescriptorScore:
-    stored, stored_t = _source(
-        str(source), source.stat().st_mtime, source_fps, timeout_s
-    )
+    reference = _source(str(source), source.stat().st_mtime, source_fps, timeout_s)
     plain = descriptors(copy.images)
     mirrored = descriptors([ImageOps.mirror(i) for i in copy.images])
-    similarity = np.maximum(plain @ stored.T, mirrored @ stored.T)
+    similarity = np.maximum(plain @ reference.stored.T, mirrored @ reference.stored.T)
     cut = threshold()
     nearest = [round(float(s), 3) for s in similarity.max(axis=1)]
     return DescriptorScore(
@@ -100,5 +101,7 @@ def score(
         nearest=nearest,
         median=round(float(np.median(nearest)), 3),
         matched_share=round(sum(s >= cut for s in nearest) / len(nearest), 3),
-        sequence=best_line(similarity >= cut, np.array(copy.times), stored_t, sample_s),
+        sequence=best_line(
+            similarity >= cut, np.array(copy.times), reference.times, sample_s
+        ),
     )

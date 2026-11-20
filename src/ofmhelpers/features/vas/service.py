@@ -1,23 +1,23 @@
-from collections.abc import Collection
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
+lazy from collections.abc import Collection
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import days, sessions, spend
+from ofmhelpers.db.jobs.schema import Spend, SpendPeriod, UserDay
+from ofmhelpers.db.jobs.store import days, sessions, spend
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.vas.hours import day_hours, worded
 from ofmhelpers.features.vas.models import (
     Amount,
     Column,
     OwnerSpend,
     Period,
+    ShownZone,
     VaDay,
     VaSpend,
     VasView,
 )
-from ofmhelpers.schemas import Role, User
-from ofmhelpers.schemas.persistence import Spend, SpendPeriod, UserDay
-from ofmhelpers.schemas.time_zones import time_zone
 
 _WEEK_DAYS = 7
 REEL_TASKS = frozenset({"clone", "clone_long"})
@@ -149,11 +149,10 @@ def page_view(
     user_ids: Collection[int],
     *,
     everyone: bool,
-    zone: str | None,
+    zone: ShownZone,
     now: datetime | None = None,
 ) -> VasView:
-    chosen = time_zone(zone)
-    at = (now or datetime.now(UTC)).astimezone(ZoneInfo(chosen.zone))
+    at = (now or datetime.now(UTC)).astimezone(ZoneInfo(zone.zone))
     vas = _vas(reader, user_ids, everyone)
     spans = periods(at)
     sums = spend([va.id for va in vas], spans)
@@ -164,5 +163,5 @@ def page_view(
         totals=_totals(rows),
         days=_days(vas, month, at),
         grouped=everyone,
-        zone=chosen.label,
+        zone=zone.label,
     )

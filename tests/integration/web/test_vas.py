@@ -8,18 +8,19 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 from sqlalchemy import update
 
+from ofmhelpers.db.jobs.schema import GenerationRecord, JobCost, JobMeta
+from ofmhelpers.db.jobs.store import create_job, get_job, keep_cost, log_event
 from ofmhelpers.db.models import JobRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, keep_cost, log_event
-from ofmhelpers.features.jobs.cost import cost_of
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User, UserForm
+from ofmhelpers.features.clone_pricing.cost import cost_of
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.vas import service
 from ofmhelpers.features.vas.models import Amount, Period
 from ofmhelpers.integrations.ai_providers import tasks
-from ofmhelpers.schemas import Role, User, UserForm
-from ofmhelpers.schemas.persistence import GenerationRecord, JobCost, JobMeta
 from ofmhelpers.web.main import app
+from ofmhelpers.web.time_zones import time_zone
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -74,7 +75,7 @@ def _amounts(view, va: User) -> dict[Period, Amount]:
 
 def _view(owner: User, va: User, now: datetime = NOW, zone: str = "Europe/Warsaw"):
     return service.page_view(
-        owner.id, {owner.id, va.id}, everyone=False, zone=zone, now=now
+        owner.id, {owner.id, va.id}, everyone=False, zone=time_zone(zone), now=now
     )
 
 
@@ -156,7 +157,9 @@ def test_a_job_that_asked_no_provider_is_not_a_run():
     job_id = create_job("download_media", {"urls": ["u"]}, actor=str(va.id))
     run_job(job_id, list, {})
 
-    view = service.page_view(owner.id, {owner.id, va.id}, everyone=False, zone=None)
+    view = service.page_view(
+        owner.id, {owner.id, va.id}, everyone=False, zone=time_zone(None)
+    )
 
     assert _amounts(view, va)[Period.MONTH] == Amount()
 

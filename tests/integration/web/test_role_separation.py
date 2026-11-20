@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import ADMIN_EMAIL, USER_EMAIL, sign_in
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.features.assets import store as task_helper_uploads
-from ofmhelpers.schemas import Role
 from ofmhelpers.web.main import app
 
 

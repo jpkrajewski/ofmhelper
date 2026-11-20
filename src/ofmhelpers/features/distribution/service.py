@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING, BinaryIO
 from pydantic import BaseModel, SkipValidation
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import distribution as store
-from ofmhelpers.db.stores import self_links
+from ofmhelpers.db.distribution import store
+from ofmhelpers.db.self_links import store as self_links
+from ofmhelpers.db.short_links.schema import SelfTotals
 from ofmhelpers.features.distribution import sweep
 from ofmhelpers.features.distribution.presets import presets_of
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.integrations.downloaders.cookies import CookieFileError
+from ofmhelpers.integrations.cookie_jar import CookieFileError
 from ofmhelpers.integrations.pinterest import (
     PinterestClient,
     PinterestError,
@@ -18,10 +19,9 @@ from ofmhelpers.integrations.pinterest import (
     session_expires_at,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.self_links import SelfTotals
 
 if TYPE_CHECKING:
-    from ofmhelpers.schemas.distribution import Channel, PostCounts
+    from ofmhelpers.db.distribution.schema import Channel, PostCounts
 
 logger = get_logger(__name__)
 

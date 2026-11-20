@@ -55,7 +55,8 @@ def test_a_renamed_account_is_read_under_its_new_name():
         ],
     )
 
-    read, gave_up = ApifyInstagramSource()._read(client, ["old_name"])  # type: ignore[arg-type]
+    result = ApifyInstagramSource()._read(client, ["old_name"])  # type: ignore[arg-type]
+    read, gave_up = result.stats, result.gave_up
 
     assert client.inputs[1][1]["username"] == ["new_name"]
     assert read["old_name"].profile.handle == "new_name"
@@ -75,7 +76,7 @@ def test_a_reel_listed_twice_is_one_post():
         profiles=[{"username": "yuki", "followersCount": 5}], reels=[reel, reel]
     )
 
-    read, _ = ApifyInstagramSource()._read(client, ["yuki"])  # type: ignore[arg-type]
+    read = ApifyInstagramSource()._read(client, ["yuki"]).stats  # type: ignore[arg-type]
 
     assert [p.id for p in read["yuki"].posts] == ["AAAAA"]
 

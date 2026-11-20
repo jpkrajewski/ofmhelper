@@ -3,6 +3,12 @@ from datetime import date, timedelta
 import pytest
 from pydantic import ValidationError
 
+from ofmhelpers.db.short_links.schema import (
+    GenerateLinks,
+    LinkPeriod,
+    LinkSummary,
+    ShortLink,
+)
 from ofmhelpers.integrations.short_links import (
     Usage,
     detect_target,
@@ -13,8 +19,7 @@ from ofmhelpers.integrations.short_links.providers import (
     get_link_provider,
     link_providers,
 )
-from ofmhelpers.integrations.short_links.providers.bouncy import _spans
-from ofmhelpers.schemas import GenerateLinks, LinkPeriod, LinkSummary, ShortLink
+from ofmhelpers.integrations.short_links.providers.bouncy import Span, _spans
 
 OOPSIE = provider_infos()["oopsie"].slug
 BOUNCY = provider_infos()["bouncy"].slug
@@ -22,18 +27,16 @@ BOUNCY = provider_infos()["bouncy"].slug
 
 def test_every_registered_provider_has_its_config_and_back():
     assert (
-        link_providers().names()
-        == provider_infos().names()
-        == ["self", "oopsie", "bouncy"]
+        list(link_providers()) == list(provider_infos()) == ["self", "oopsie", "bouncy"]
     )
-    for key, info in provider_infos().entries.items():
+    for key, info in provider_infos().items():
         assert get_link_provider(key).info() is info
         assert info.default_domain == (info.domains[0] if info.domains else "")
         assert info.key == key
 
 
 def test_targets_are_onlyfans_fanvue_stacked():
-    assert {t.key: t.label for t in targets().all()} == {
+    assert {t.key: t.label for t in list(targets().values())} == {
         "onlyfans": "OnlyFans",
         "fanvue": "Fanvue",
         "stacked": "Stacked",
@@ -79,13 +82,14 @@ def test_numbered_slug_stays_within_max_length():
 def test_bouncy_spans_cover_the_range_in_31_day_pieces():
     start, end = date(2026, 7, 25), date(2026, 10, 22)
     spans = _spans(start, end, 31)
-    assert spans[0][0] == start
-    assert spans[-1][1] == end
-    assert all((b - a).days < 31 for a, b in spans)
+    assert spans[0].first == start
+    assert spans[-1].last == end
+    assert all((s.last - s.first).days < 31 for s in spans)
     assert all(
-        spans[i][1] + timedelta(1) == spans[i + 1][0] for i in range(len(spans) - 1)
+        spans[i].last + timedelta(1) == spans[i + 1].first
+        for i in range(len(spans) - 1)
     )
-    assert _spans(end, end, 31) == [(end, end)]
+    assert _spans(end, end, 31) == [Span(first=end, last=end)]
 
 
 def test_room_is_the_tighter_of_total_and_active_limits():
@@ -166,7 +170,7 @@ def test_generate_form_accepts_a_profile_of_its_target(target, url):
 
 
 def test_every_target_prefix_is_its_own_host():
-    for t in targets().all():
+    for t in list(targets().values()):
         assert t.matches(t.prefix)
         assert t.problem(t.prefix) == f"Add the {t.label} profile after {t.prefix}"
         assert t.problem(t.prefix + "someone") is None

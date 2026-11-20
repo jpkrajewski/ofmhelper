@@ -11,6 +11,7 @@ import requests
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
+lazy from ofmhelpers.integrations.ai_providers.catalog import catalog
 
 FAKE_KEY = "ek_live_fake-elyum-key"
 HOST = "api.elyum.ai"
@@ -162,8 +163,6 @@ class FakeElyum:
 
 
 def _is_video(model: str) -> bool:
-    from ofmhelpers.integrations.ai_providers.catalog import catalog
-
     spec = catalog().get(f"elyum:{model}")
     return spec is not None and spec.kind == "video"
 

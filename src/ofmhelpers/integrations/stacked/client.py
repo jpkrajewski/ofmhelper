@@ -6,7 +6,7 @@ from typing import Any
 lazy from collections.abc import Iterable, Iterator
 
 import requests
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ofmhelpers.cache import get_text, set_text
 from ofmhelpers.config import settings
@@ -125,7 +125,11 @@ class StackedClient:
         self, creator_user_id: str, start: datetime, end: datetime
     ) -> Earnings | None:
         page = _parsed(
-            EarningsPage, self._get("earnings", **_window(creator_user_id, start, end))
+            EarningsPage,
+            self._get(
+                "earnings",
+                **_window(creator_user_id, start, end).model_dump(by_alias=True),
+            ),
         )
         return page.earnings[0] if page.earnings else None
 
@@ -134,7 +138,10 @@ class StackedClient:
     ) -> SubscriberSummary | None:
         page = _parsed(
             SubscriberSummaryPage,
-            self._get("subscribers/summary", **_window(creator_user_id, start, end)),
+            self._get(
+                "subscribers/summary",
+                **_window(creator_user_id, start, end).model_dump(by_alias=True),
+            ),
         )
         return page.summaries[0] if page.summaries else None
 
@@ -160,7 +167,7 @@ class StackedClient:
 
     def _change(
         self, method: str, path: str, creator_user_id: str, **kwargs: Any
-    ) -> Any:
+    ) -> requests.Response:
         try:
             r = self._session.request(
                 method,
@@ -174,7 +181,7 @@ class StackedClient:
             raise StackedError(msg) from exc
         return _ok(r)
 
-    def _get(self, path: str, **params: Any) -> Any:
+    def _get(self, path: str, **params: Any) -> requests.Response:
         for attempt in range(1, settings.stacked.tries):
             try:
                 r = self._request(path, params)
@@ -253,17 +260,28 @@ def _rfc3339(at: datetime) -> str:
     return at.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _window(creator_user_id: str, start: datetime, end: datetime) -> dict[str, str]:
-    return {
-        "creatorUserId": creator_user_id,
-        "startTime": _rfc3339(start),
-        "endTime": _rfc3339(end),
-    }
+class _Window(BaseModel):
+    creator_user_id: str = Field(serialization_alias="creatorUserId")
+    start_time: str = Field(serialization_alias="startTime")
+    end_time: str = Field(serialization_alias="endTime")
 
 
-def _parsed[T: BaseModel](model: type[T], reply: Any) -> T:
+def _window(creator_user_id: str, start: datetime, end: datetime) -> _Window:
+    return _Window(
+        creator_user_id=creator_user_id,
+        start_time=_rfc3339(start),
+        end_time=_rfc3339(end),
+    )
+
+
+def _parsed[T: BaseModel](model: type[T], reply: requests.Response) -> T:
     try:
-        return model.model_validate(reply)
+        body = reply.json() if reply.content else None
+    except ValueError as exc:
+        msg = "Stacked answered something that is not JSON"
+        raise StackedError(msg) from exc
+    try:
+        return model.model_validate(body)
     except ValidationError as exc:
         msg = f"Stacked answered an unexpected {model.__name__}: {exc.error_count()} fields"
         raise StackedError(msg) from None
@@ -295,13 +313,9 @@ def _retry_wait(r: requests.Response) -> float:
         return settings.stacked.retry_wait_s
 
 
-def _ok(r: requests.Response) -> Any:
+def _ok(r: requests.Response) -> requests.Response:
     if r.ok:
-        try:
-            return r.json() if r.content else None
-        except ValueError as exc:
-            msg = "Stacked answered something that is not JSON"
-            raise StackedError(msg) from exc
+        return r
     try:
         detail = ErrorReply.model_validate_json(r.content).error
     except ValidationError:  # silent: not Stacked's error body: the reason

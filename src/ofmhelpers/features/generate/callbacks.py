@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+lazy from collections.abc import Mapping
 
 from pydantic import BaseModel
 

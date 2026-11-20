@@ -4,16 +4,16 @@ import pytest
 from signin import make_user
 from sqlalchemy import update
 
+from ofmhelpers.db.jobs.schema import GenerationRecord, JobCost, JobMeta
+from ofmhelpers.db.jobs.store import create_job, get_job, keep_cost
 from ofmhelpers.db.models import JobRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, keep_cost
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.events import Event
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.signin.outcome import signed_in
 from ofmhelpers.features.vas import notices
-from ofmhelpers.schemas import Role, User
-from ofmhelpers.schemas.persistence import GenerationRecord, JobCost, JobMeta
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+lazy from datetime import datetime
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers.apiyi.models import PROVIDER

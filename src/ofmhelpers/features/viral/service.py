@@ -5,7 +5,6 @@ import requests
 from pydantic import ValidationError
 
 from ofmhelpers.config import settings
-from ofmhelpers.errors import AppError
 from ofmhelpers.features.viral.media import add_audio, has_audio
 from ofmhelpers.features.viral.models import (
     ApifyItemError,
@@ -22,7 +21,7 @@ from ofmhelpers.integrations.apify import (
 )
 from ofmhelpers.integrations.apify.instagram import ReelScraperInput
 from ofmhelpers.log import get_logger
-from ofmhelpers.telemetry import in_this_trace
+from ofmhelpers.monitoring.telemetry import in_this_trace
 
 logger = get_logger(__name__)
 
@@ -32,7 +31,7 @@ _START_EVENT = "actor-start"
 _REEL_EVENT = "reel"
 
 
-class ViralError(AppError): ...
+class ViralError(Exception): ...
 
 
 def reel_input(username: str, scan: int) -> ReelScraperInput:

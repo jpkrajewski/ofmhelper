@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.users import refresh_token
-from ofmhelpers.features.clone.targets import (
+from ofmhelpers.db.users.store import refresh_token
+from ofmhelpers.features.clone_pricing.targets import (
     DEFAULT_RESOLUTION,
     clone_targets,
     offered_resolutions,
@@ -10,8 +10,8 @@ from ofmhelpers.features.clone.targets import (
 from ofmhelpers.features.drive.space import DriveSpace, drive_space
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
+from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
 from ofmhelpers.media.exports import Export, exports
-from ofmhelpers.schemas import ProviderChoice
 
 
 class FormView(BaseModel):
@@ -32,7 +32,7 @@ class FormView(BaseModel):
 
 
 def form_view(actor: str, user_id: int) -> FormView:
-    targets = clone_targets().names()
+    targets = list(clone_targets())
     return FormView(
         providers=provider_choices(targets),
         selected_provider=start_provider(actor, CLONE_TASKS, targets),
@@ -42,7 +42,7 @@ def form_view(actor: str, user_id: int) -> FormView:
         max_images=settings.web.clone_max_images,
         max_links=settings.clone_links.max_links,
         live_poll_s=settings.web.gallery_live_poll_s,
-        exports=exports().all(),
+        exports=list(exports().values()),
         default_export=settings.exports.default,
         default_mirror=settings.exports.mirror,
         drive_ready=bool(refresh_token(user_id)),

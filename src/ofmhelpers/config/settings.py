@@ -1,6 +1,7 @@
 import datetime
 import os
 from enum import IntEnum, StrEnum
+from types import MappingProxyType
 from typing import Literal
 
 from pydantic import (
@@ -19,9 +20,13 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from ofmhelpers.config.types import GeoPoint, ImageLimits, Place, StackedKey
-from ofmhelpers.schemas.gdrive import AccountFolder
-from ofmhelpers.utils.registry import Registry
+from ofmhelpers.config.types import (
+    AccountFolder,
+    GeoPoint,
+    ImageLimits,
+    Place,
+    StackedKey,
+)
 
 _SCAN_TIMES_MSG = "OFM_ACCOUNTS_SCAN_TIMES must be HH:MM, comma-separated"
 _STACKED_KEY_PREFIX = "stacked_api_key_"
@@ -347,7 +352,7 @@ class InfraSettings(BaseSettings):
     edit_workers: int = Field(default=1, ge=1, validation_alias="OFM_EDIT_WORKERS")
 
     @property
-    def queues(self) -> Registry[QueueConfig]:
+    def queues(self) -> MappingProxyType[str, QueueConfig]:
         entries: dict[str, QueueConfig] = {
             QueueName.DEFAULT: QueueConfig(
                 workers=self.rq_workers, priority=QueuePriority.HIGHEST
@@ -368,7 +373,7 @@ class InfraSettings(BaseSettings):
                 workers=self.media_workers, priority=QueuePriority.LOWEST
             ),
         }
-        return Registry[QueueConfig](entries=entries)
+        return MappingProxyType(entries)
 
     uploads_root: str = Field(default="uploads", validation_alias="OFM_UPLOADS_ROOT")
     cache_ttl_s: int = Field(default=300, validation_alias="OFM_CACHE_TTL_S")

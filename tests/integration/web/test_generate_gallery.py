@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from signin import sign_in_agency
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.web.main import app
 

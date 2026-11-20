@@ -3,10 +3,10 @@ import time
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import applications as store
+from ofmhelpers.db.applications import store
+from ofmhelpers.db.applications.schema import Application, ApplicationForm
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import Application, ApplicationForm
 
 logger = get_logger(__name__)
 

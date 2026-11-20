@@ -3,14 +3,16 @@ from fastapi.testclient import TestClient
 from signin import make_user
 from sqlalchemy import select
 
+from ofmhelpers.db.devices.repository import DuplicateError
 from ofmhelpers.db.models import SelfLinkClickRow
-from ofmhelpers.db.repositories import DuplicateError
+from ofmhelpers.db.self_links import store as self_links
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import self_links, short_links
+from ofmhelpers.db.short_links import store as short_links
+from ofmhelpers.db.short_links.schema import PlannedLink
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.features.links import self_page
+from ofmhelpers.features.refusals import ConflictError
 from ofmhelpers.integrations.short_links import NewLink
-from ofmhelpers.schemas.links import PlannedLink
 from ofmhelpers.web.main import app
 
 HOST = "reclaim.test"
@@ -112,7 +114,7 @@ def test_a_host_someone_holds_cannot_be_added_and_whose_is_not_said():
     bob = make_user("bob-bridge@example.com")
     self_page.add_domain(HOST, ann.id)
 
-    with pytest.raises(DuplicateError) as refused:
+    with pytest.raises(ConflictError) as refused:
         self_page.add_domain(HOST, bob.id)
 
     assert str(refused.value) == "This domain can't be added"

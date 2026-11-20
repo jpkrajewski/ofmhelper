@@ -70,8 +70,11 @@ keeps the dependencies current.
 
 ## 4. Commit and push dev
 Conventional message (`feat:` / `fix:` / `test:` / `chore:`), one line saying
-what the owner gets, as earlier commits do (`git log --oneline -10`). Then
-`git push origin dev`. A push touching `.github/workflows/` needs the gh token's
+what the owner gets, as earlier commits do (`git log --oneline -10`). Commit and
+push in separate calls: a pre-commit hook that reformats a file stops the commit
+(re-add that file, commit again), and `git push origin dev` runs the 3+ minute
+pre-push suite, so it goes with run_in_background (the git guard denies a
+foreground push); then compare `git ls-remote origin dev` with HEAD. A push touching `.github/workflows/` needs the gh token's
 `workflow` scope; if refused, the owner runs `! gh auth refresh -s workflow`.
 
 ## 5. CI on dev
@@ -107,7 +110,7 @@ lines — quote them.
   seen since the deploy = report it with its link. First prove production
   reaches Sentry at all: `find_monitors` (project `ofmhelpers`, environment
   `production`): the `sweeps` monitor's last check-in is after the deploy
-  (the sweeps process checks in every 5 minutes, `ofmhelpers/sentry.py`
+  (the sweeps process checks in every 5 minutes, `ofmhelpers/monitoring/sentry.py`
   `heartbeat`; wait one interval if needed). No fresh check-in = production
   sends nothing: report that, never "no issues". The MCP not signed in: say so.
 

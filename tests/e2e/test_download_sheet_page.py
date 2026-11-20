@@ -6,6 +6,7 @@ from playwright.sync_api import expect
 
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, FakePersonDrive
 from ofmhelpers.integrations.gdrive.models import SheetTab
+lazy from ofmhelpers.features.downloads import sheet
 
 pytestmark = pytest.mark.e2e
 
@@ -18,7 +19,6 @@ LABEL = "Download from Drive sheet"
 
 
 def _sheet(drive: FakeDrive, *links: str) -> None:
-    from ofmhelpers.features.downloads import sheet
 
     FakePersonDrive(drive, EMAIL).children("root")
     mine = f"mydrive-{EMAIL}"
@@ -29,7 +29,6 @@ def _sheet(drive: FakeDrive, *links: str) -> None:
 
 
 def _rested() -> None:
-    from ofmhelpers.features.downloads import sheet
 
     sheet.Clicker(user_id=VA_ID).wake()
 

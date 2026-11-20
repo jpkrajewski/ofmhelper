@@ -1,8 +1,8 @@
 import argparse
 
-from ofmhelpers.db.stores import audit_log
+from ofmhelpers.db.audit_log import store as audit_log
 from ofmhelpers.log import configure_logging
-lazy from ofmhelpers.schemas.audit import AuditEntry
+lazy from ofmhelpers.db.audit_log.schema import AuditEntry
 
 
 def _found(args: argparse.Namespace) -> list[AuditEntry]:

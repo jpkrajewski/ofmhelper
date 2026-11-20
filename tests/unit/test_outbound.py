@@ -1,6 +1,7 @@
 import pytest
 import requests
 
+from ofmhelpers.features.fakes import install_fakes
 from ofmhelpers.integrations import outbound
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 
@@ -9,9 +10,7 @@ from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST
 def fakes_on(monkeypatch, tmp_path):
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
     monkeypatch.setenv("OFM_FAKES_DIR", str(tmp_path))
-    outbound._routes.cache_clear()
-    yield
-    outbound._routes.cache_clear()
+    install_fakes()
 
 
 def test_a_host_without_a_fake_is_refused(fakes_on):

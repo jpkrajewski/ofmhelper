@@ -3,10 +3,9 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.users import store as users
+from ofmhelpers.features.notifications.schema import Notification, Reader
 from ofmhelpers.features.notifications.service import read
-from ofmhelpers.features.users.viewing import viewer_for
-from ofmhelpers.schemas.notifications import Notification
 
 SOCKET = "/notifications/ws"
 
@@ -14,7 +13,7 @@ SOCKET = "/notifications/ws"
 def agency_notifications() -> list[Notification]:
     admin = users.get_user(users.agency_id())
     assert admin is not None
-    return read(viewer_for(admin, None)).items
+    return read(Reader(user_id=admin.id, chats=True)).items
 
 
 def first_sent(client: TestClient) -> list[dict]:

@@ -40,7 +40,7 @@ class Knob(BaseModel, frozen=True):
     integer: bool = False
     extra: dict[str, Any] = {}
 
-    def value(self, strength: float) -> Any:
+    def value(self, strength: float) -> list[float]:
         s = strength
         lo, hi = {
             Shape.SYM: (-s, s),
@@ -147,33 +147,37 @@ BY_NAME = {k.name: k for k in KNOBS}
 _AUDIO_BASE: dict[str, Any] = {"match_level": True}
 
 
+class _Settings(BaseModel, extra="allow"):
+    pass
+
+
 def knobs(part: Part) -> list[Knob]:
     return [k for k in KNOBS if k.part is part]
 
 
-def _settings(strengths: dict[str, float], part: Part) -> dict[str, Any]:
+def _settings(strengths: dict[str, float], part: Part) -> _Settings:
     out: dict[str, Any] = dict(_AUDIO_BASE) if part is Part.AUDIO else {}
     for name, strength in strengths.items():
         knob = BY_NAME[name]
         if knob.part is not part or strength <= 0:
             continue
-        value = knob.value(strength)
         if knob.field == "loudness":
-            value = max(out.get("loudness", 0.0), round(strength, 3))
-        out[knob.field] = value
+            out[knob.field] = max(out.get("loudness", 0.0), round(strength, 3))
+        else:
+            out[knob.field] = knob.value(strength)
         for key, extra in knob.extra.items():
             if isinstance(extra, list):
                 out[key] = sorted({*out.get(key, []), *extra})
             else:
                 out[key] = extra
-    return out
+    return _Settings(**out)
 
 
 def preset(strengths: dict[str, float], label: str = "") -> Preset:
     return Preset.model_validate(
         {
             "label": label,
-            "video": _settings(strengths, Part.VIDEO),
-            "audio": _settings(strengths, Part.AUDIO),
+            "video": _settings(strengths, Part.VIDEO).model_dump(),
+            "audio": _settings(strengths, Part.AUDIO).model_dump(),
         }
     )

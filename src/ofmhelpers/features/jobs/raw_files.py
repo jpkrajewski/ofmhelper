@@ -1,11 +1,11 @@
 import time
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+lazy from collections.abc import Iterator
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import files_naming
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.jobs.store import files_naming
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.log import get_logger
 

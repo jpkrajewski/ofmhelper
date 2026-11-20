@@ -3,15 +3,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores.jobs import get_job, hide_job
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.jobs.store import get_job, hide_job
+from ofmhelpers.features.jobs.schema import JobQueued, error_reason
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import JobQueued
-from ofmhelpers.schemas.errors import error_reason
-lazy from ofmhelpers.features.jobs.registry import RESTARTS
-lazy from ofmhelpers.schemas import Job
-lazy from ofmhelpers.schemas.downloads import Download
+lazy from ofmhelpers.db.downloads.schema import Download
+lazy from ofmhelpers.db.jobs.schema import Job
+lazy from ofmhelpers.features.downloads.restarts import RESTARTS
 
 logger = get_logger(__name__)
 

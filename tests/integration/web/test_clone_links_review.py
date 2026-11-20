@@ -1,5 +1,5 @@
 import time
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from clone_links_helpers import (
@@ -15,12 +15,15 @@ from rq.timeouts import JobTimeoutException
 from sqlalchemy import update
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.clone_ai_checks import store as clone_ai_checks
+from ofmhelpers.db.clone_ai_checks.schema import CHECK_FAILED, ReviewReason
+from ofmhelpers.db.clone_from_links import store
+from ofmhelpers.db.jobs.schema import ResultFile
+from ofmhelpers.db.jobs.store import _repository as jobs_repository
+from ofmhelpers.db.jobs.store import create_job, history
 from ofmhelpers.db.models import CloneFromLinkRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import clone_ai_checks, users
-from ofmhelpers.db.stores import clone_from_links as store
-from ofmhelpers.db.stores.jobs import _repository as jobs_repository
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.clone_links import review
 from ofmhelpers.features.clone_links.ai_check import unanswered
@@ -29,8 +32,6 @@ from ofmhelpers.features.drive.space import DRIVE_FULL, drive_space
 from ofmhelpers.integrations.gdrive.fake import fake_drive
 from ofmhelpers.integrations.llm.gemini.fake import fake_gemini
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas import ResultFile
-from ofmhelpers.schemas.clone_ai_checks import CHECK_FAILED, ReviewReason
 
 pytestmark = pytest.mark.usefixtures("clone_links_env")
 
@@ -119,8 +120,6 @@ def test_a_good_video_lands_in_good_reels_with_its_check_kept(tmp_path):
 
 
 def test_a_review_leaves_a_job_row_naming_the_clone_it_checked(tmp_path):
-    from ofmhelpers.db.stores.jobs import history
-
     client(ANN)
     fake_gemini().answer_next(GOOD)
 
@@ -602,7 +601,7 @@ def test_a_done_run_kept_only_by_the_provider_is_marked_once(tmp_path):
     assert row.status == "failed"
     assert row.error == ReviewReason.NOT_SAVED
     assert "upload" not in drive.calls
-    assert review.resume_reviews().entries == {}
+    assert review.resume_reviews() == {}
 
 
 def test_recovery_never_starts_another_users_review_on_a_run(tmp_path):

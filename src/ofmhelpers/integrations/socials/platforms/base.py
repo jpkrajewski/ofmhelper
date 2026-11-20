@@ -1,9 +1,9 @@
 from abc import abstractmethod
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.tracked_accounts.schema import PlatformNames
 from ofmhelpers.integrations.socials.client_source import LoginSource, ProxySource
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.socials import PlatformNames
 lazy from ofmhelpers.integrations.socials.models import AccountStats
 lazy from ofmhelpers.integrations.socials.sources import AccountSource
 

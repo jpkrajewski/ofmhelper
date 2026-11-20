@@ -1,6 +1,6 @@
 import datetime
-import random
-from pathlib import Path
+lazy import random
+lazy from pathlib import Path
 
 from pydantic import BaseModel
 

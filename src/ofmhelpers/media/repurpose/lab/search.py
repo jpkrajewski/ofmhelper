@@ -3,11 +3,10 @@ import hashlib
 import json
 import random
 import time
-from collections.abc import Callable, Iterator
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from pathlib import Path
 from statistics import mean
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import optuna
 from pydantic import BaseModel
@@ -15,6 +14,9 @@ from pydantic import BaseModel
 from ofmhelpers.media.repurpose.lab.calibrate import Calibration, cross_pairs
 from ofmhelpers.media.repurpose.lab.measure import Measurement, measure
 from ofmhelpers.media.repurpose.lab.space import BY_NAME, OVER_CAP, Part, knobs
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 VMAF_DROP = 3.0
 _DEFAULT_BASELINE = 95.0

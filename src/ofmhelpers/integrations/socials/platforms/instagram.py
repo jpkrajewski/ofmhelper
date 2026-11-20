@@ -2,9 +2,10 @@ import time
 from itertools import islice
 
 import requests
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from ofmhelpers.config import settings
+from ofmhelpers.db.tracked_accounts.schema import InstagramNames
 from ofmhelpers.integrations.instagram import (
     InstagramClient,
     InstagramError,
@@ -28,7 +29,6 @@ from ofmhelpers.integrations.socials.platforms.instagram_apify import (
     ApifyInstagramSource,
 )
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.socials import InstagramNames
 lazy from ofmhelpers.integrations.socials.sources import AccountSource
 
 logger = get_logger(__name__)
@@ -42,9 +42,14 @@ _DEAD_PROXY = (
 )
 
 
+class _Reels(BaseModel):
+    summaries: list[ReelSummary]
+    limited: bool
+
+
 def _reels(
     client: InstagramClient, username: str, user_id: str, cap: int, logged_in: bool
-) -> tuple[list[ReelSummary], bool]:
+) -> _Reels:
     if logged_in:
         try:
             full = client.reels_logged_in(username, user_id, cap + 1)
@@ -52,8 +57,8 @@ def _reels(
             logger.warning("logged-in reels of %s failed", user_id, exc_info=True)
             full = None
         if full is not None:
-            return full, False
-    return list(islice(client.reels(user_id), cap + 1)), True
+            return _Reels(summaries=full, limited=False)
+    return _Reels(summaries=list(islice(client.reels(user_id), cap + 1)), limited=True)
 
 
 class InstagramPlatform(InstagramNames, Platform):
@@ -88,11 +93,12 @@ class InstagramPlatform(InstagramNames, Platform):
     ) -> AccountStats:
         profile = client.open_profile(handle)
         cap = settings.instagram.track_max_reels
-        reels, limited = (
-            ([], False)
+        found = (
+            _Reels(summaries=[], limited=False)
             if profile.is_private
             else _reels(client, profile.username, profile.user_id, cap, logged_in)
         )
+        reels = found.summaries
         return AccountStats(
             profile=AccountProfile(
                 handle=profile.username,
@@ -115,6 +121,6 @@ class InstagramPlatform(InstagramNames, Platform):
                 for r in reels[:cap]
             ],
             complete=not profile.is_private and len(reels) <= cap,
-            limited=limited,
+            limited=found.limited,
             scanned_at=time.time(),
         )

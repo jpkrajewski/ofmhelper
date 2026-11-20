@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from starlette.datastructures import FormData
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.features.generate import service
 from ofmhelpers.features.generate.service import (
     TASK,
@@ -13,7 +12,8 @@ from ofmhelpers.features.generate.service import (
     run_ai,
     start_runs,
 )
-from ofmhelpers.schemas import JobsQueued
+from ofmhelpers.features.jobs.schema import JobsQueued
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render_polled

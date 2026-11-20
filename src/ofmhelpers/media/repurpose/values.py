@@ -1,4 +1,4 @@
-import random
+lazy import random
 
 Span = tuple[float, float]
 Value = float | Span

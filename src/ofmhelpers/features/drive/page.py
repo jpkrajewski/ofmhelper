@@ -1,15 +1,14 @@
 from pydantic import BaseModel
 
-from ofmhelpers.db.stores import drive_uploads as upload_store
-from ofmhelpers.db.stores.jobs import Readers, get_job
+from ofmhelpers.db.drive_folders.schema import DriveBoard, UploadPick
+from ofmhelpers.db.drive_uploads import store as upload_store
+from ofmhelpers.db.jobs.store import Readers, get_job
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.drive import folders
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.integrations.gdrive import DriveError
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import UploadPick
-from ofmhelpers.schemas.drive import DriveBoard
 
 logger = get_logger(__name__)
 

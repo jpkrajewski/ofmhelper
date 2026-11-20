@@ -1,28 +1,28 @@
 from functools import lru_cache
 
+from ofmhelpers.features.account.stacked_keys import StackedKeys
 from ofmhelpers.features.chatting.fanvue_tokens import FanvueTokens
-from ofmhelpers.features.chatting.stacked_keys import StackedKeys
 from ofmhelpers.integrations.fanvue import FanvueSource
 from ofmhelpers.integrations.stacked.source import StackedSource
-from ofmhelpers.schemas.chatting import ChatPlatform
+lazy from ofmhelpers.db.chats.schema import ChatPlatform
 lazy from ofmhelpers.integrations.chat_source import ChatSource
 
 
 @lru_cache(maxsize=1)
-def _all() -> dict[ChatPlatform, ChatSource]:
-    return {
-        ChatPlatform.STACKED: StackedSource(StackedKeys()),
-        ChatPlatform.FANVUE: FanvueSource(FanvueTokens()),
-    }
+def _all() -> list[ChatSource]:
+    return [
+        StackedSource(StackedKeys()),
+        FanvueSource(FanvueTokens()),
+    ]
 
 
 def platforms() -> list[ChatPlatform]:
-    return list(_all())
+    return [source.platform for source in _all()]
 
 
 def source_for(platform: ChatPlatform) -> ChatSource | None:
-    return _all().get(platform)
+    return next((source for source in _all() if source.platform == platform), None)
 
 
 def configured_sources() -> list[ChatSource]:
-    return [source for source in _all().values() if source.configured()]
+    return [source for source in _all() if source.configured()]

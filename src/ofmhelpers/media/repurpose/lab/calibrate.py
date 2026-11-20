@@ -1,5 +1,5 @@
 import itertools
-from pathlib import Path
+lazy from pathlib import Path
 
 from pydantic import BaseModel
 

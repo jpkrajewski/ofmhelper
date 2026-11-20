@@ -1,6 +1,6 @@
 import pytest
 
-from ofmhelpers.db.stores import tracked_accounts as store
+from ofmhelpers.db.tracked_accounts import store
 from ofmhelpers.features.accounts import tracker as account_tracker
 from ofmhelpers.integrations.instagram.fake import fake_instagram
 from ofmhelpers.integrations.socials import client_source

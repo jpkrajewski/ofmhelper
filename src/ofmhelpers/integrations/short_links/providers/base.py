@@ -1,12 +1,11 @@
 import hashlib
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 lazy from datetime import date
 
 import requests
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from redis import RedisError
 
 from ofmhelpers.cache import get_redis
@@ -20,7 +19,7 @@ from ofmhelpers.integrations.short_links.errors import (
     RateLimitedError,
 )
 from ofmhelpers.log import get_logger
-lazy from ofmhelpers.schemas.link_catalog.models import (
+lazy from ofmhelpers.db.short_links.catalog.schema import (
     LinkDays,
     LinkHours,
     NewLink,
@@ -29,7 +28,14 @@ lazy from ofmhelpers.schemas.link_catalog.models import (
     Usage,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
 logger = get_logger(__name__)
+
+
+class RequestHeaders(BaseModel):
+    pass
 
 
 def listed[T](
@@ -85,7 +91,7 @@ class LinkProvider(ABC):
         return None
 
     @abstractmethod
-    def _headers(self) -> dict[str, str]: ...
+    def _headers(self) -> RequestHeaders: ...
 
     def _error(self, response: requests.Response) -> str:
         try:
@@ -133,7 +139,7 @@ class LinkProvider(ABC):
             response = self._session.request(
                 method,
                 info.base_url + path,
-                headers=self._headers(),
+                headers=self._headers().model_dump(by_alias=True),
                 timeout=settings.links.request_timeout_s,
                 **kwargs,
             )

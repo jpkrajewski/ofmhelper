@@ -3,9 +3,9 @@ import re
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, fail_job
-from ofmhelpers.schemas import Role
+from ofmhelpers.db.jobs.store import create_job, fail_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role
 from ofmhelpers.web.main import app
 
 ANN = "ann@example.com"

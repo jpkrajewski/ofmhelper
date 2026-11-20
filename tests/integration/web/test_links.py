@@ -5,10 +5,14 @@ from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_agency
 from sqlalchemy import func, text
 
+from ofmhelpers.db.jobs.store import history
 from ofmhelpers.db.models import ShortLinkRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import short_links, users
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.db.short_links import store as short_links
+from ofmhelpers.db.short_links.schema import LinkSyncKey, PlannedLink, utc_today
+from ofmhelpers.db.tracked_accounts.store import list_accounts, track
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, UserForm
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.integrations.outbound import FakeReply
@@ -19,8 +23,8 @@ from ofmhelpers.integrations.short_links.fake import (
     fake_bouncy,
     fake_oopsie,
 )
-from ofmhelpers.schemas import Role, UserForm
-from ofmhelpers.schemas.links import LinkSyncKey, PlannedLink, utc_today
+from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
+from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
 from ofmhelpers.web.main import app
 
 FANVUE = "https://www.fanvue.com/walker_dane"
@@ -114,8 +118,6 @@ def test_bouncy_links_are_made_per_account_and_18_plus_gated(client, admin):
 
 
 def test_generate_leaves_a_job_row_naming_its_links(client, admin):
-    from ofmhelpers.db.stores.jobs import history
-
     ids = _accounts(admin.id, "Rachel", "rachel.rose")
     _generate(
         client,
@@ -239,7 +241,7 @@ def test_a_link_whose_gate_fails_is_deleted_again(client, admin, monkeypatch):
     [row] = short_links.list_links(admin.id)
     assert row.status == "failed"
     assert row.error == "Bouncy did not take the 18+ gate on dane-walker"
-    assert fake_bouncy().links.names() == []
+    assert list(fake_bouncy().links) == []
 
 
 @pytest.mark.parametrize(
@@ -355,7 +357,7 @@ def test_delete_removes_links_on_the_provider_and_here(client, admin):
     _generate(client, ids)
     [link] = short_links.list_links(admin.id)
     assert client.post("/links/delete", json={"ids": [link.id]}).json() == {"count": 1}
-    assert fake_bouncy().links.names() == []
+    assert list(fake_bouncy().links) == []
     assert short_links.list_links(admin.id) == []
 
 
@@ -506,8 +508,6 @@ def test_a_numbered_slug_never_lands_on_the_owners_own(client, admin):
 def test_an_unexpected_error_fails_one_link_and_the_rest_go_on(
     client, admin, monkeypatch
 ):
-    from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
-
     calls = {"n": 0}
     real = BouncyProvider.create
 
@@ -531,8 +531,6 @@ def test_an_unexpected_error_fails_one_link_and_the_rest_go_on(
 
 
 def test_a_sync_on_an_odd_answer_is_recorded_not_lost(client, admin, monkeypatch):
-    from ofmhelpers.integrations.short_links.providers.bouncy import BouncyProvider
-
     def odd(self):
         missing = "pagination"
         raise KeyError(missing)
@@ -568,8 +566,6 @@ def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
 
 
 def test_one_key_waits_its_turn_across_clients(monkeypatch):
-    from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
-
     waits: list[float] = []
     monkeypatch.setattr("time.sleep", waits.append)
     first, second = OopsieProvider(OOPSIE_FAKE_KEY), OopsieProvider(OOPSIE_FAKE_KEY)

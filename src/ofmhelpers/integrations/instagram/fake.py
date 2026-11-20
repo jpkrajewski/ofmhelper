@@ -3,7 +3,7 @@ import threading
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 from urllib.parse import parse_qs, urlsplit
 lazy from collections.abc import Mapping
 
@@ -94,20 +94,126 @@ def _pk(posted_at: float, profile: int, reel: int) -> str:
     return str((ms << _ID_TIME_SHIFT) | (profile << 8) | reel)
 
 
-def _page(
-    rows: list[FakeRow], variables: dict[str, Any]
-) -> tuple[list[FakeRow], str | None]:
+class _Page(BaseModel, frozen=True):
+    rows: list[FakeRow]
+    cursor: str | None
+
+
+def _page(rows: list[FakeRow], variables: dict[str, Any]) -> _Page:
     first = int(variables.get("first") or 12)
     start = int(variables.get("after") or 0)
     end = start + first
-    return rows[start:end], (str(end) if end < len(rows) else None)
+    return _Page(rows=rows[start:end], cursor=str(end) if end < len(rows) else None)
 
 
-def _connection(edges: list[dict[str, Any]], cursor: str | None) -> dict[str, Any]:
-    return {
-        "edges": edges,
-        "page_info": {"end_cursor": cursor, "has_next_page": cursor is not None},
-    }
+class _Image(BaseModel):
+    url: str
+
+
+class _Images(BaseModel):
+    candidates: list[_Image]
+
+
+class _ClipMedia(BaseModel):
+    pk: str
+    code: str
+    play_count: int
+    image_versions2: _Images
+    clips_tab_pinned_user_ids: list[str] | None
+
+
+class _ClipNode(BaseModel):
+    media: _ClipMedia
+
+
+class _ClipEdge(BaseModel):
+    node: _ClipNode
+
+
+class _TimelineNode(FakeVideoNode):
+    code: str
+    timeline_pinned_user_ids: list[str] | None
+
+
+class _TimelineEdge(BaseModel):
+    node: _TimelineNode
+
+
+class _PageInfo(BaseModel):
+    end_cursor: str | None
+    has_next_page: bool
+
+
+class _Connection[E: BaseModel](BaseModel):
+    edges: list[E]
+    page_info: _PageInfo
+
+    @classmethod
+    def of(cls, edges: list[E], cursor: str | None) -> Self:
+        return cls(
+            edges=edges,
+            page_info=_PageInfo(end_cursor=cursor, has_next_page=cursor is not None),
+        )
+
+
+class _UserNode(BaseModel):
+    pk: str
+    username: str
+    full_name: str
+    follower_count: int
+    following_count: int
+    is_private: bool
+    is_verified: bool
+    profile_pic_url: str
+    hd_profile_pic_url_info: _Image
+
+
+class _UserData(BaseModel):
+    user: _UserNode | None
+
+
+class _UserBody(BaseModel):
+    data: _UserData
+
+
+class _ClipsUser(BaseModel):
+    clips_connection: _Connection[_ClipEdge]
+
+
+class _ClipsData(BaseModel):
+    clips_user: _ClipsUser = Field(serialization_alias="fetch__XDTUserDict")
+
+
+class _ClipsBody(BaseModel):
+    data: _ClipsData
+
+
+class _TimelineData(BaseModel):
+    xdt_api__v1__feed__user_timeline_graphql_connection: _Connection[_TimelineEdge]
+
+
+class _TimelineBody(BaseModel):
+    data: _TimelineData
+
+
+class _GatedMedia(BaseModel):
+    if_not_gated_logged_out: FakeVideoNode | None
+
+
+class _MediaData(BaseModel):
+    xig_polaris_media: _GatedMedia
+
+
+class _MediaBody(BaseModel):
+    data: _MediaData
+
+
+class _ErrorMessage(BaseModel):
+    message: str
+
+
+class _ErrorBody(BaseModel):
+    errors: list[_ErrorMessage]
 
 
 class FakeInstagram:
@@ -174,10 +280,10 @@ class FakeInstagram:
     def _graphql(self, form: dict[str, str]) -> FakeReply:
         name = form.get("fb_api_req_friendly_name", "")
         variables = json.loads(form.get("variables") or "{}")
-        body: dict[str, Any]
+        body: BaseModel
         match name:
             case "PolarisProfilePageContentQuery":
-                body = {"data": {"user": self._user(str(variables.get("id")))}}
+                body = self._user(str(variables.get("id")))
             case "PolarisProfileReelsTabContentQuery_connection":
                 body = self._clips(variables)
             case "PolarisProfilePostsTabContentQuery_connection":
@@ -185,74 +291,87 @@ class FakeInstagram:
             case "PolarisLoggedOutDesktopWWWPostRootContentQuery":
                 body = self._media(str(variables.get("media_id")))
             case _:
-                body = {"errors": [{"message": f"unknown query {name}"}]}
-        return FakeReply.json_body(body)
+                body = _ErrorBody(
+                    errors=[_ErrorMessage(message=f"unknown query {name}")]
+                )
+        return FakeReply.json_body(body.model_dump(mode="json", by_alias=True))
 
-    def _user(self, pk: str) -> dict[str, Any] | None:
+    def _user(self, pk: str) -> _UserBody:
         p = self._by_pk(pk)
         if p is None:
-            return None
+            return _UserBody(data=_UserData(user=None))
         avatar = f"{CDN}/avatar-{p.username}.jpg"
-        return {
-            "pk": p.pk,
-            "username": p.username,
-            "full_name": p.full_name,
-            "follower_count": p.followers,
-            "following_count": p.following,
-            "is_private": p.is_private,
-            "is_verified": p.is_verified,
-            "profile_pic_url": avatar,
-            "hd_profile_pic_url_info": {"url": avatar},
-        }
-
-    def _clips(self, variables: dict[str, Any]) -> dict[str, Any]:
-        rows = self._visible_rows(self._by_pk(str(variables.get("id") or "")))
-        chunk, cursor = _page(rows, variables)
-        edges = [
-            {
-                "node": {
-                    "media": {
-                        "pk": r.pk,
-                        "code": r.code,
-                        "play_count": r.reel.views,
-                        "image_versions2": {"candidates": [{"url": r.thumb}]},
-                        "clips_tab_pinned_user_ids": r.pinned_by,
-                    }
-                }
-            }
-            for r in chunk
-        ]
-        return {
-            "data": {
-                "fetch__XDTUserDict": {"clips_connection": _connection(edges, cursor)}
-            }
-        }
-
-    def _timeline(self, variables: dict[str, Any]) -> dict[str, Any]:
-        rows = self._visible_rows(self.profiles.get(str(variables.get("username"))))
-        chunk, cursor = _page(rows, variables)
-        edges = [
-            {
-                "node": {
-                    **r.video_node().model_dump(),
-                    "code": r.code,
-                    "timeline_pinned_user_ids": r.pinned_by,
-                }
-            }
-            for r in chunk
-        ]
-        return {
-            "data": {
-                "xdt_api__v1__feed__user_timeline_graphql_connection": _connection(
-                    edges, cursor
+        return _UserBody(
+            data=_UserData(
+                user=_UserNode(
+                    pk=p.pk,
+                    username=p.username,
+                    full_name=p.full_name,
+                    follower_count=p.followers,
+                    following_count=p.following,
+                    is_private=p.is_private,
+                    is_verified=p.is_verified,
+                    profile_pic_url=avatar,
+                    hd_profile_pic_url_info=_Image(url=avatar),
                 )
-            }
-        }
+            )
+        )
 
-    def _media(self, pk: str) -> dict[str, Any]:
+    def _clips(self, variables: dict[str, Any]) -> _ClipsBody:
+        rows = self._visible_rows(self._by_pk(str(variables.get("id") or "")))
+        page = _page(rows, variables)
+        edges = [
+            _ClipEdge(
+                node=_ClipNode(
+                    media=_ClipMedia(
+                        pk=r.pk,
+                        code=r.code,
+                        play_count=r.reel.views,
+                        image_versions2=_Images(candidates=[_Image(url=r.thumb)]),
+                        clips_tab_pinned_user_ids=r.pinned_by,
+                    )
+                )
+            )
+            for r in page.rows
+        ]
+        return _ClipsBody(
+            data=_ClipsData(
+                clips_user=_ClipsUser(
+                    clips_connection=_Connection[_ClipEdge].of(edges, page.cursor)
+                )
+            )
+        )
+
+    def _timeline(self, variables: dict[str, Any]) -> _TimelineBody:
+        rows = self._visible_rows(self.profiles.get(str(variables.get("username"))))
+        page = _page(rows, variables)
+        edges = [
+            _TimelineEdge(
+                node=_TimelineNode(
+                    **r.video_node().model_dump(),
+                    code=r.code,
+                    timeline_pinned_user_ids=r.pinned_by,
+                )
+            )
+            for r in page.rows
+        ]
+        return _TimelineBody(
+            data=_TimelineData(
+                xdt_api__v1__feed__user_timeline_graphql_connection=_Connection[
+                    _TimelineEdge
+                ].of(edges, page.cursor)
+            )
+        )
+
+    def _media(self, pk: str) -> _MediaBody:
         row = self._find(pk)
-        info = row.video_node().model_dump() if row else None
-        return {"data": {"xig_polaris_media": {"if_not_gated_logged_out": info}}}
+        return _MediaBody(
+            data=_MediaData(
+                xig_polaris_media=_GatedMedia(
+                    if_not_gated_logged_out=row.video_node() if row else None
+                )
+            )
+        )
 
     def _media_info(self, pk: str) -> FakeReply:
         row = self._find(pk)

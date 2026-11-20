@@ -1,9 +1,9 @@
 import random
 import re
 import time
-from collections.abc import Callable, Mapping
 from enum import StrEnum
-from pathlib import Path
+from typing import TYPE_CHECKING
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers import tasks
@@ -19,6 +19,9 @@ lazy from ofmhelpers.integrations.ai_providers.spec import (
     OutputKind,
     Payload,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 logger = get_logger(__name__)
 

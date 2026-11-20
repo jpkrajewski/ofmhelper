@@ -4,8 +4,8 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import Response
 from pydantic import Field, field_validator
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
+from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.features.repurpose import service
 from ofmhelpers.features.repurpose.service import (
     DEFAULT_COPIES,
@@ -13,7 +13,7 @@ from ofmhelpers.features.repurpose.service import (
     PREFIX,
     TASK,
 )
-from ofmhelpers.schemas import JobsQueued
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import (
     Access,
     Actor,

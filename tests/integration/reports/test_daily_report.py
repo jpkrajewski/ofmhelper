@@ -7,22 +7,26 @@ import pytest
 
 import ofmhelpers.features.events.dispatch as dispatch_module
 from ofmhelpers.cache import get_redis
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatDelivery, ChatPlatform, DeliveryKind
+from ofmhelpers.db.jobs.store import history
 from ofmhelpers.db.models import (
     ChatThreadRow,
     CreatorRow,
     ShortLinkDayRow,
     ShortLinkRow,
 )
+from ofmhelpers.db.report_runs import store as report_runs
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import chats, report_runs, users
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, record_scan, track
+from ofmhelpers.db.tracked_accounts.store import list_accounts, record_scan, track
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.reports import asks, daily
 from ofmhelpers.features.reports.schedule import Due
-from ofmhelpers.integrations.senders.telegram.fake import TOKEN, fake_telegram
+from ofmhelpers.integrations.senders.telegram.fake import TOKEN, error, fake_telegram
 from ofmhelpers.integrations.short_links.fake import OOPSIE_FAKE_KEY, fake_oopsie
 from ofmhelpers.integrations.socials import AccountProfile, AccountStats, PostStat
 from ofmhelpers.integrations.stacked.fake import CREATOR, CREATOR_KEY, fake_stacked
-from ofmhelpers.schemas.chatting import ChatDelivery, ChatPlatform, DeliveryKind
+lazy from ofmhelpers.background.sweeps import sweeps
 
 _DAY = 86400
 NOW = time.time()
@@ -256,8 +260,6 @@ def test_it_goes_out_once_a_day(agency):
 
 
 def test_switched_off_it_does_nothing(agency, monkeypatch):
-    from ofmhelpers.features.jobs.sweeps import sweeps
-
     monkeypatch.setenv("OFM_REPORTS_DAILY_ENABLED", "false")
 
     report = next(s for s in sweeps() if s.name == "daily report")
@@ -353,8 +355,6 @@ def test_money_typed_in_the_group_is_answered_with_the_last_24_hours(typed):
 
 @pytest.mark.usefixtures("live")
 def test_an_ask_leaves_a_job_row_with_the_word_and_never_the_chat():
-    from ofmhelpers.db.stores.jobs import history
-
     fake_telegram().wrote(111, text="money")
 
     asks.answer_asks()
@@ -448,8 +448,6 @@ def test_a_provider_that_cannot_tell_now_is_named(monkeypatch):
 
 
 def test_a_failed_read_waits_before_the_next(monkeypatch):
-    from ofmhelpers.integrations.senders.telegram.fake import error
-
     fake_telegram().fail_next.append(error(HTTPStatus.BAD_GATEWAY, "Bad Gateway"))
 
     asks.answer_asks()

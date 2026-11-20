@@ -1,13 +1,16 @@
 import secrets
-from pathlib import Path
+from types import MappingProxyType
+lazy from pathlib import Path
 
 from pydantic import BaseModel
 
 from ofmhelpers.cache import JobQueue, QueueName
 from ofmhelpers.cache.lock import locked
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import list_batch
-from ofmhelpers.db.stores.users import refresh_token
+from ofmhelpers.db.drive_folders.schema import DriveBoard, DriveCard, DriveFile
+from ofmhelpers.db.jobs.schema import Job, JobStatus
+from ofmhelpers.db.jobs.store import list_batch
+from ofmhelpers.db.users.store import refresh_token
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.jobs.runner import start_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
@@ -17,9 +20,6 @@ from ofmhelpers.features.threads.tasks import (
     PicturesRun,
     make_pictures,
 )
-from ofmhelpers.schemas import Job, JobStatus
-from ofmhelpers.schemas.drive import DriveBoard, DriveCard
-from ofmhelpers.schemas.gdrive import DriveFile
 
 NO_FOLDER = "No such account folder"
 NO_REEL = "No such reel"
@@ -117,8 +117,8 @@ class Threads(BaseModel, frozen=True):
     def _all_jobs(self) -> list[Job]:
         return list_batch(TASK, str(self.login_id), str(self.uid))
 
-    def _jobs(self) -> dict[str, Job]:
-        return {job.params["key"]: job for job in self._all_jobs()}
+    def _jobs(self) -> MappingProxyType[str, Job]:
+        return MappingProxyType({job.params["key"]: job for job in self._all_jobs()})
 
     def open(self) -> ThreadsFolder:
         card = self._card()

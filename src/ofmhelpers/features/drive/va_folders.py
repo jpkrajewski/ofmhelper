@@ -1,5 +1,7 @@
-from ofmhelpers.db.stores import drive_folders as store
-from ofmhelpers.db.stores import users
+from ofmhelpers.db.drive_folders import store
+from ofmhelpers.db.drive_folders.schema import SyncReport, VaFolder
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.integrations.gdrive import (
     DriveApi,
     DriveError,
@@ -8,8 +10,6 @@ from ofmhelpers.integrations.gdrive import (
 )
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.drive import SyncReport, VaFolder
-from ofmhelpers.schemas.users import Role, User
 
 logger = get_logger(__name__)
 

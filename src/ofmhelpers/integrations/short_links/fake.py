@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 lazy from collections.abc import Iterator, Mapping
@@ -15,19 +16,19 @@ lazy import requests
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
-from ofmhelpers.utils.registry import Registry
 
 OOPSIE_FAKE_KEY = "gmp_live_fake"
 BOUNCY_FAKE_KEY = "bcy_live_pk_fake"
 
 
-def _body(request: requests.PreparedRequest) -> dict[str, Any]:
+def _body[M: BaseModel](request: requests.PreparedRequest, shape: type[M]) -> M:
     raw = request.body if isinstance(request.body, (str, bytes)) else b"{}"
-    return json.loads(raw or b"{}")
+    return shape.model_validate(json.loads(raw or b"{}"))
 
 
-def _query(request: requests.PreparedRequest) -> dict[str, str]:
-    return {k: v[0] for k, v in parse_qs(urlsplit(request.url or "").query).items()}
+def _query[M: BaseModel](request: requests.PreparedRequest, shape: type[M]) -> M:
+    found = parse_qs(urlsplit(request.url or "").query)
+    return shape.model_validate({k: v[0] for k, v in found.items()})
 
 
 def _path(request: requests.PreparedRequest) -> str:
@@ -42,6 +43,42 @@ def _days(start: str, end: str) -> list[date]:
 class Traffic(BaseModel, frozen=True):
     views: int = 0
     clicks: int = 0
+
+
+class OopsieCreate(BaseModel, extra="allow"):
+    slug: str
+    theme: dict[str, Any]
+    display_name: str = ""
+
+
+class OopsiePatch(BaseModel, extra="allow"):
+    pass
+
+
+class OopsieActivityRequest(BaseModel, extra="allow"):
+    first: str = Field(alias="from")
+    last: str = Field(alias="to")
+    scope_value: str = Field(alias="scopeValue")
+
+
+class BouncyCreate(BaseModel, extra="allow"):
+    url: str
+    slug: str
+    domain: str = "bouncy.ai"
+
+
+class BouncyUpdate(BaseModel, extra="allow"):
+    pass
+
+
+class BouncyPage(BaseModel):
+    page: int = 1
+    limit: int = 50
+
+
+class BouncyRange(BaseModel):
+    first: str = Field(alias="from")
+    last: str = Field(alias="to")
 
 
 class OopsiePage(BaseModel, extra="allow"):
@@ -147,23 +184,20 @@ class _Fake:
         with self._state() as state:
             return list(state.calls)
 
-    def _links(self) -> dict[str, dict[str, Any]]:
-        with self._state() as state:
-            return dict(state.links)
-
 
 class FakeOopsie(_Fake):
     file_name = "oopsie.json"
     default_limit = 50
 
     @property
-    def pages(self) -> Registry[OopsiePage]:
-        return Registry[OopsiePage](
-            entries={
-                slug: OopsiePage.model_validate(page)
-                for slug, page in self._links().items()
-            }
-        )
+    def pages(self) -> MappingProxyType[str, OopsiePage]:
+        with self._state() as state:
+            return MappingProxyType(
+                {
+                    slug: OopsiePage.model_validate(page)
+                    for slug, page in state.links.items()
+                }
+            )
 
     @staticmethod
     def _ok(data: Any, status: int = 200) -> FakeReply:
@@ -174,16 +208,16 @@ class FakeOopsie(_Fake):
         return FakeReply.json_body({"success": False, "error": error}, status)
 
     @staticmethod
-    def _page(slug: str, theme: dict[str, Any], name: str = "") -> dict[str, Any]:
-        return {
-            "id": f"page-{slug}",
-            "slug": slug,
-            "display_name": name or slug,
-            "links": [],
-            "is_active": True,
-            "created_at": datetime.now(UTC).isoformat(),
-            "theme": theme,
-        }
+    def _page(slug: str, theme: dict[str, Any], name: str = "") -> OopsiePage:
+        return OopsiePage(
+            id=f"page-{slug}",
+            slug=slug,
+            display_name=name or slug,
+            links=[],
+            is_active=True,
+            created_at=datetime.now(UTC).isoformat(),
+            theme=theme,
+        )
 
     def add_page(self, slug: str, destination: str, *, age_gate: bool = True) -> None:
         theme = {
@@ -193,7 +227,7 @@ class FakeOopsie(_Fake):
             "preferred_public_host": "oopsie.bio",
         }
         with self._state() as state:
-            state.links[slug] = self._page(slug, theme)
+            state.links[slug] = self._page(slug, theme).model_dump()
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         if request.headers.get("x-api-key") != OOPSIE_FAKE_KEY:
@@ -204,7 +238,7 @@ class FakeOopsie(_Fake):
             if path == "/api/pages" and method == "GET":
                 return self._ok(list(state.links.values()))
             if path == "/api/pages" and method == "POST":
-                return self._create(state, _body(request))
+                return self._create(state, _body(request, OopsieCreate))
             if path == "/api/account/usage":
                 return self._ok(
                     {
@@ -214,18 +248,18 @@ class FakeOopsie(_Fake):
                     }
                 )
             if path == "/api/analytics/activity":
-                return self._activity(state, _body(request))
+                return self._activity(state, _body(request, OopsieActivityRequest))
             if match := re.fullmatch(r"/api/pages/([^/]+)", path):
                 return self._one(state, method, match[1], request)
         return self._no("Not found", 404)
 
-    def _create(self, state: FakeAccount, body: dict[str, Any]) -> FakeReply:
-        slug = body["slug"]
+    def _create(self, state: FakeAccount, body: OopsieCreate) -> FakeReply:
+        slug = body.slug
         if slug in state.links:
             return self._no("Slug already taken", 409)
         if len(state.links) >= state.limit:
             return self._no("Page limit reached for your plan", 402)
-        page = self._page(slug, body["theme"], body.get("display_name", ""))
+        page = self._page(slug, body.theme, body.display_name).model_dump()
         state.links[slug] = page
         return self._ok(page, 201)
 
@@ -243,12 +277,12 @@ class FakeOopsie(_Fake):
             del state.links[slug]
             return self._ok({"deleted": True, "clicks_deleted": 0})
         if method == "PATCH":
-            page.update(_body(request))
+            page.update(_body(request, OopsiePatch).model_dump())
         return self._ok(page)
 
-    def _activity(self, state: FakeAccount, body: dict[str, Any]) -> FakeReply:
-        days = _days(body["from"], body["to"])
-        slugs = [s for s in body["scopeValue"].split(",") if s in state.links]
+    def _activity(self, state: FakeAccount, body: OopsieActivityRequest) -> FakeReply:
+        days = _days(body.first, body.last)
+        slugs = [s for s in body.scope_value.split(",") if s in state.links]
         if len(days) == 1:
             [day] = days
             series = [
@@ -287,13 +321,14 @@ class FakeBouncy(_Fake):
     default_active_limit = 5
 
     @property
-    def links(self) -> Registry[BouncyLink]:
-        return Registry[BouncyLink](
-            entries={
-                link_id: BouncyLink.model_validate(link)
-                for link_id, link in self._links().items()
-            }
-        )
+    def links(self) -> MappingProxyType[str, BouncyLink]:
+        with self._state() as state:
+            return MappingProxyType(
+                {
+                    link_id: BouncyLink.model_validate(link)
+                    for link_id, link in state.links.items()
+                }
+            )
 
     @property
     def adult(self) -> set[str]:
@@ -301,27 +336,29 @@ class FakeBouncy(_Fake):
             return set(state.adult)
 
     @staticmethod
-    def _new(state: FakeAccount, slug: str, destination: str, domain: str) -> dict:
+    def _new(
+        state: FakeAccount, slug: str, destination: str, domain: str
+    ) -> BouncyLink:
         active = sum(x["isActive"] for x in state.links.values()) < (
             state.active_limit or 0
         )
         link_id = slug if domain == "bouncy.ai" else f"{domain}__{slug}"
-        link = {
-            "id": link_id,
-            "slug": slug,
-            "domain": domain,
-            "destination": destination,
-            "url": f"https://{domain}/{slug}",
-            "isActive": active,
-            "type": "deeplink",
-            "createdAt": {"_seconds": int(datetime.now(UTC).timestamp())},
-        }
-        state.links[link_id] = link
+        link = BouncyLink(
+            id=link_id,
+            slug=slug,
+            domain=domain,
+            destination=destination,
+            url=f"https://{domain}/{slug}",
+            isActive=active,
+            type="deeplink",
+            createdAt={"_seconds": int(datetime.now(UTC).timestamp())},
+        )
+        state.links[link_id] = link.model_dump(by_alias=True)
         return link
 
     def add_link(self, slug: str, destination: str, domain: str = "bouncy.ai") -> str:
         with self._state() as state:
-            return self._new(state, slug, destination, domain)["id"]
+            return self._new(state, slug, destination, domain).id
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         if request.headers.get("Authorization") != f"Bearer {BOUNCY_FAKE_KEY}":
@@ -332,13 +369,13 @@ class FakeBouncy(_Fake):
         with self._state() as state:
             state.calls.append(f"{method} {path}")
             if path == "/links" and method == "GET":
-                return self._list(state, _query(request))
+                return self._list(state, _query(request, BouncyPage))
             if path == "/links" and method == "POST":
-                return self._create(state, _body(request))
+                return self._create(state, _body(request, BouncyCreate))
             if path == "/account/limits":
                 return self._limits(state)
             if match := re.fullmatch(r"/analytics/links/(.+)", path):
-                return self._analytics(state, match[1], _query(request))
+                return self._analytics(state, match[1], _query(request, BouncyRange))
             if match := re.fullmatch(r"/links/(.+)", path):
                 return self._link(state, method, match[1], request)
         return FakeReply.json_body({"error": "Not Found"}, 404)
@@ -354,8 +391,8 @@ class FakeBouncy(_Fake):
         return FakeReply.json_body({"success": True, "data": {"links": links}})
 
     @staticmethod
-    def _list(state: FakeAccount, query: dict[str, str]) -> FakeReply:
-        page, limit = int(query.get("page", 1)), int(query.get("limit", 50))
+    def _list(state: FakeAccount, query: BouncyPage) -> FakeReply:
+        page, limit = query.page, query.limit
         items = list(state.links.values())
         return FakeReply.json_body(
             {
@@ -369,9 +406,9 @@ class FakeBouncy(_Fake):
             }
         )
 
-    def _create(self, state: FakeAccount, body: dict[str, Any]) -> FakeReply:
-        domain = body.get("domain", "bouncy.ai")
-        slug = body["slug"].lower()
+    def _create(self, state: FakeAccount, body: BouncyCreate) -> FakeReply:
+        domain = body.domain
+        slug = body.slug.lower()
         if any(
             x["slug"] == slug and x["domain"] == domain for x in state.links.values()
         ):
@@ -386,8 +423,10 @@ class FakeBouncy(_Fake):
                 },
                 403,
             )
-        link = self._new(state, slug, body["url"], domain)
-        return FakeReply.json_body({"success": True, "data": link}, 201)
+        link = self._new(state, slug, body.url, domain)
+        return FakeReply.json_body(
+            {"success": True, "data": link.model_dump(by_alias=True)}, 201
+        )
 
     def _link(
         self,
@@ -405,7 +444,7 @@ class FakeBouncy(_Fake):
             state.adult = [x for x in state.adult if x != link_id]
             return FakeReply.json_body({"success": True, "id": link_id})
         if method == "PUT":
-            body = _body(request)
+            body = _body(request, BouncyUpdate).model_dump()
             known = {
                 "destination",
                 "title",
@@ -424,12 +463,10 @@ class FakeBouncy(_Fake):
         return FakeReply.json_body({"success": True, "data": state.links[link_id]})
 
     @staticmethod
-    def _analytics(
-        state: FakeAccount, link_id: str, query: dict[str, str]
-    ) -> FakeReply:
+    def _analytics(state: FakeAccount, link_id: str, query: BouncyRange) -> FakeReply:
         if link_id not in state.links:
             return FakeReply.json_body({"error": "Not Found"}, 404)
-        days = _days(query["from"], query["to"])
+        days = _days(query.first, query.last)
         if len(days) == 1:
             [day] = days
             buckets = [

@@ -67,28 +67,28 @@ def test_higgsfield_catalog_has_its_whole_model_list():
     assert "alibaba/wan-3.0/reference-to-video" in {s.model_id for s in specs}
 
 
-@pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
 def test_every_schema_is_valid_and_every_field_classified(spec):
     Draft202012Validator.check_schema(spec.input_schema)
     media = {f.name for f in spec.media_fields}
     scalars = {f.name for f in spec.form_fields}
     assert not media & scalars
-    assert {"prompt"} & set(spec.properties.names()) <= scalars
+    assert {"prompt"} & set(spec.properties) <= scalars
 
 
-@pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
 def test_every_required_field_is_one_the_form_fills(spec):
     assert spec.required <= {f.name for f in spec.form_fields} | {
         f.name for f in spec.media_fields
     }
 
 
-@pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
 def test_no_field_collides_with_the_run_forms_own(spec):
-    assert not {"provider", "model", "api_key"} & set(spec.properties.names())
+    assert not {"provider", "model", "api_key"} & set(spec.properties)
 
 
-@pytest.mark.parametrize("spec", catalog().all(), ids=lambda s: s.key)
+@pytest.mark.parametrize("spec", list(catalog().values()), ids=lambda s: s.key)
 def test_no_default_is_a_url(spec):
     urls = {
         name: prop["default"]
@@ -150,7 +150,7 @@ def plugin_provider(tmp_path, monkeypatch):
             del task_id
             return TaskState(state="done", urls=["https://plugin/out.png"])
 
-    monkeypatch.setitem(base._registry(), "plugin", PluginProvider)
+    monkeypatch.setitem(base._registered().classes, "plugin", PluginProvider)
     catalog.cache_clear()
     yield PluginProvider
     catalog.cache_clear()

@@ -6,10 +6,12 @@ from typing import Any
 from urllib.parse import urlsplit
 lazy from collections.abc import Mapping
 
+from pydantic import BaseModel, Field
 lazy import requests
 
 from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
+lazy from ofmhelpers.integrations.ai_providers.catalog import catalog
 
 FAKE_KEY = "fake-runninghub-key"
 HOST = "www.runninghub.ai"
@@ -17,25 +19,27 @@ FILES_HOST = "fake-files.runninghub.ai"
 _API = "/openapi/v2/"
 
 
-def _task(task_id: str = "", status: str = "", **fields: Any) -> dict[str, Any]:
-    return {
-        "taskId": task_id,
-        "status": status,
-        "errorCode": "",
-        "errorMessage": "",
-        "results": None,
-        "clientId": "",
-        "promptTips": "",
-        "failedReason": {},
-        "usage": None,
-        **fields,
-    }
+class TaskBody(BaseModel):
+    task_id: str = Field(default="", serialization_alias="taskId")
+    status: str = ""
+    error_code: str = Field(default="", serialization_alias="errorCode")
+    error_message: str = Field(default="", serialization_alias="errorMessage")
+    results: list[dict[str, Any]] | None = None
+    client_id: str = Field(default="", serialization_alias="clientId")
+    prompt_tips: str = Field(default="", serialization_alias="promptTips")
+    failed_reason: dict[str, Any] = Field(
+        default_factory=dict, serialization_alias="failedReason"
+    )
+    usage: dict[str, Any] | None = None
+
+    def reply(self) -> FakeReply:
+        return FakeReply.json_body(self.model_dump(by_alias=True))
 
 
 def _refused(code: int, message: str, task_id: str = "") -> FakeReply:
-    return FakeReply.json_body(
-        _task(task_id, errorCode=str(code), errorMessage=message)
-    )
+    return TaskBody(
+        task_id=task_id, error_code=str(code), error_message=message
+    ).reply()
 
 
 class FakeRunningHub:
@@ -91,7 +95,7 @@ class FakeRunningHub:
             task_id = f"20{next(self._ids):017d}"
             failure, self.fail_next = self.fail_next, None
             self.tasks[task_id] = {"model": model, "polls": 0, "failure": failure}
-        return FakeReply.json_body(_task(task_id, "QUEUED"))
+        return TaskBody(task_id=task_id, status="QUEUED").reply()
 
     def _query(self, task_id: str) -> FakeReply:
         with self._lock:
@@ -101,28 +105,27 @@ class FakeRunningHub:
             found["polls"] += 1
             done = found["polls"] > self.polls_until_done
         if not done:
-            return FakeReply.json_body(_task(task_id, "RUNNING"))
+            return TaskBody(task_id=task_id, status="RUNNING").reply()
         if found["failure"]:
             code, message = found["failure"]
-            return FakeReply.json_body(
-                _task(task_id, "FAILED", errorCode=str(code), errorMessage=message)
-            )
+            return TaskBody(
+                task_id=task_id,
+                status="FAILED",
+                error_code=str(code),
+                error_message=message,
+            ).reply()
         suffix = "mp4" if _is_video(found["model"]) else "png"
         result = {"url": f"https://{FILES_HOST}/output/{task_id}.{suffix}"}
         usage = {"consumeMoney": "0.42", "consumeCoins": "0", "taskCostTime": "12"}
-        return FakeReply.json_body(
-            _task(
-                task_id,
-                "SUCCESS",
-                results=[result | {"outputType": suffix}],
-                usage=usage,
-            )
-        )
+        return TaskBody(
+            task_id=task_id,
+            status="SUCCESS",
+            results=[result | {"outputType": suffix}],
+            usage=usage,
+        ).reply()
 
 
 def _is_video(model: str) -> bool:
-    from ofmhelpers.integrations.ai_providers.catalog import catalog
-
     spec = catalog().get(f"runninghub:{model}")
     return spec is not None and spec.kind == "video"
 

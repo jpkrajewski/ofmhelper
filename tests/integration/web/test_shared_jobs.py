@@ -1,15 +1,15 @@
 import re
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from signin import make_user, sign_in
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job, log_event
+from ofmhelpers.db.jobs.store import create_job, get_job, log_event
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, User, UserForm
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.schemas import Role, User, UserForm
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.filterwarnings("ignore")

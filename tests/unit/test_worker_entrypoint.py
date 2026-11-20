@@ -10,9 +10,9 @@ from typing import ClassVar
 import pytest
 from rq import Worker
 
-from ofmhelpers import worker as worker_module
+from ofmhelpers.background import worker as worker_module
+from ofmhelpers.background.worker import ConfiguredWorker, QueueGroup
 from ofmhelpers.cache import QueueName
-from ofmhelpers.worker import ConfiguredWorker, QueueGroup
 
 
 def test_configured_worker_is_a_real_rq_worker():
@@ -73,7 +73,7 @@ def _pool(monkeypatch, *argv: str) -> _Pool:
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
     monkeypatch.setattr(worker_module, "WorkerPool", _Pool)
     monkeypatch.setattr(worker_module.os, "nice", _Pool.niced.append)
-    monkeypatch.setattr(sys, "argv", ["ofmhelpers.worker", *argv])
+    monkeypatch.setattr(sys, "argv", ["ofmhelpers.background.worker", *argv])
     worker_module.main()
     (pool,) = _Pool.made
     assert pool.started
@@ -133,7 +133,7 @@ def test_an_unknown_queue_is_refused(monkeypatch, capsys):
 
 
 def test_worker_logger_is_named_for_the_module_not_main():
-    assert worker_module.logger.name == "ofmhelpers.worker"
+    assert worker_module.logger.name == "ofmhelpers.background.worker"
     assert isinstance(worker_module.logger, logging.Logger)
 
 

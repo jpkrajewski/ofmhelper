@@ -1,20 +1,20 @@
 import secrets
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+lazy from pathlib import Path
 
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.downloads.schema import Download, DownloadedFile
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.db.models import DownloadRow
 from ofmhelpers.db.session import session_scope
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores.jobs import create_job
 from ofmhelpers.features.downloads import media
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.integrations.downloaders.models import DownloadResult
-from ofmhelpers.schemas.downloads import Download, DownloadedFile
 
 HOUR = 3600
 DAY = 24 * HOUR

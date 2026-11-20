@@ -1,5 +1,5 @@
-from collections.abc import Callable
 from typing import Any
+lazy from collections.abc import Callable
 
 import pytest
 import sentry_sdk
@@ -11,8 +11,10 @@ from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 from signin import make_user
 
+from ofmhelpers.background import alive
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.cache.queue import QueueLoad
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.integrations.ai_providers.errors import (
@@ -20,8 +22,13 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderNoCreditsError,
 )
 from ofmhelpers.log import get_logger
+from ofmhelpers.monitoring.sentry import (
+    HEARTBEAT_S,
+    configure_sentry,
+    heartbeat,
+    name_user,
+)
 from ofmhelpers.redact import MASK
-from ofmhelpers.sentry import HEARTBEAT_S, configure_sentry, heartbeat, name_user
 from ofmhelpers.web.exceptions import exception_handlers
 
 DSN = "https://public@sentry.invalid/1"
@@ -54,7 +61,7 @@ def sent(monkeypatch):
 
 
 def _client() -> TestClient:
-    app = FastAPI(exception_handlers=exception_handlers())
+    app = FastAPI(exception_handlers=exception_handlers().model_dump())
 
     @app.post("/crash")
     def crash(secret: str = "") -> None:
@@ -203,6 +210,56 @@ def test_the_heartbeat_is_a_check_in_that_makes_its_monitor(sent):
     assert (checkin["monitor_slug"], checkin["status"]) == ("sweeps", "ok")
     assert checkin["monitor_config"]["schedule"]["value"] == HEARTBEAT_S // 60
     assert checkin["release"] == "abc1234"
+
+
+def test_an_unhealthy_heartbeat_fails_and_alarms_from_the_second_in_a_row(sent):
+    heartbeat(healthy=False)
+
+    [checkin] = sent
+    assert checkin["status"] == "error"
+    config = checkin["monitor_config"]
+    assert (config["failure_issue_threshold"], config["recovery_threshold"]) == (2, 1)
+
+
+def _loads(**workers: int) -> list[QueueLoad]:
+    return [
+        QueueLoad(
+            name=name, workers=count, busy=0, waiting=0, failed=0, oldest_wait_s=None
+        )
+        for name, count in workers.items()
+    ]
+
+
+def test_every_queue_with_a_worker_is_a_healthy_heartbeat(sent, monkeypatch):
+    monkeypatch.setattr(alive, "queue_loads", lambda: _loads(default=10, media=1))
+
+    alive.report_alive()
+
+    [checkin] = sent
+    assert (checkin["type"], checkin["status"]) == ("check_in", "ok")
+
+
+def test_a_queue_nobody_works_on_is_an_error_that_names_it(sent, monkeypatch):
+    monkeypatch.setattr(
+        alive, "queue_loads", lambda: _loads(default=10, media=0, edit=0)
+    )
+
+    alive.report_alive()
+
+    event, checkin = sent
+    assert event["level"] == "error"
+    assert event["logentry"]["formatted"] == "no worker takes jobs from: media, edit"
+    assert (checkin["type"], checkin["status"]) == ("check_in", "error")
+
+
+def test_queues_that_cannot_be_read_are_an_error(sent, monkeypatch):
+    monkeypatch.setattr(alive, "queue_loads", list)
+
+    alive.report_alive()
+
+    event, checkin = sent
+    assert "Redis unreadable" in event["logentry"]["formatted"]
+    assert checkin["status"] == "error"
 
 
 def test_no_dsn_no_heartbeat():

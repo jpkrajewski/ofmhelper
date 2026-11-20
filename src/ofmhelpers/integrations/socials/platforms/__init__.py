@@ -1,15 +1,15 @@
 from functools import lru_cache
+from types import MappingProxyType
 
 from ofmhelpers.integrations.socials.platforms.base import Platform
 from ofmhelpers.integrations.socials.platforms.instagram import InstagramPlatform
-from ofmhelpers.utils.registry import Registry
 
 _PLATFORM_TYPES: tuple[type[Platform], ...] = (InstagramPlatform,)
 
 
 @lru_cache(maxsize=1)
-def platforms() -> Registry[Platform]:
-    return Registry[Platform](entries={cls.key: cls() for cls in _PLATFORM_TYPES})
+def platforms() -> MappingProxyType[str, Platform]:
+    return MappingProxyType({cls.key: cls() for cls in _PLATFORM_TYPES})
 
 
 def get_platform(key: str) -> Platform:

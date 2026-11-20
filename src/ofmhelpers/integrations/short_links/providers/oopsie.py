@@ -3,13 +3,9 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import quote
 
-from ofmhelpers.integrations.short_links.errors import (
-    LinkError,
-    SlugTakenError,
-    UngatedError,
-)
-from ofmhelpers.integrations.short_links.providers.base import LinkProvider, listed
-from ofmhelpers.schemas.link_catalog.models import (
+from pydantic import BaseModel
+
+from ofmhelpers.db.short_links.catalog.schema import (
     DayStat,
     HourStat,
     LinkDays,
@@ -17,7 +13,23 @@ from ofmhelpers.schemas.link_catalog.models import (
     RemoteLink,
     Usage,
 )
-lazy from ofmhelpers.schemas.link_catalog.models import NewLink
+from ofmhelpers.integrations.short_links.errors import (
+    LinkError,
+    SlugTakenError,
+    UngatedError,
+)
+from ofmhelpers.integrations.short_links.providers.base import LinkProvider, listed
+from ofmhelpers.integrations.short_links.providers.oopsie_wire import (
+    ActivityPoint,
+    LinkActivity,
+    OopsieActivity,
+    OopsieHeaders,
+    OopsiePageData,
+    OopsiePages,
+    OopsieSeries,
+    OopsieUsage,
+)
+lazy from ofmhelpers.db.short_links.catalog.schema import NewLink
 
 _CREATED = 201
 _HOUR_LABEL = re.compile(r"\d{2}:00")
@@ -60,16 +72,18 @@ def _remote(page: dict[str, Any]) -> RemoteLink:
 class OopsieProvider(LinkProvider):
     key = "oopsie"
 
-    def _headers(self) -> dict[str, str]:
-        return {"x-api-key": self.api_key}
+    def _headers(self) -> OopsieHeaders:
+        return OopsieHeaders(api_key=self.api_key)
 
-    def _data(self, response: Any, what: str) -> Any:
+    def _checked(self, response: Any, what: str) -> None:
         if not response.ok:
             raise self._failed(response, what)
-        body = response.json()
-        if not body.get("success"):
+        if not response.json().get("success"):
             raise self._failed(response, what)
-        return body["data"]
+
+    def _data[M: BaseModel](self, response: Any, what: str, shape: type[M]) -> M:
+        self._checked(response, what)
+        return shape.model_validate(response.json()["data"])
 
     def create(self, link: NewLink) -> RemoteLink:
         response = self._call(
@@ -95,7 +109,9 @@ class OopsieProvider(LinkProvider):
             raise SlugTakenError(msg)
         if response.status_code != _CREATED:
             raise self._failed(response, f"make {link.slug}")
-        made = _remote(self._data(response, f"make {link.slug}"))
+        made = _remote(
+            self._data(response, f"make {link.slug}", OopsiePageData).model_dump()
+        )
         if not made.adult:
             try:
                 self.delete(made.remote_id)
@@ -110,65 +126,67 @@ class OopsieProvider(LinkProvider):
         return made
 
     def list_links(self) -> list[RemoteLink]:
-        pages = self._data(self._call("GET", "/api/pages"), "list pages")
-        return listed(self.key, pages, _remote)
+        pages = self._data(self._call("GET", "/api/pages"), "list pages", OopsiePages)
+        return listed(self.key, pages.root, _remote)
 
-    def _page(self, slug: str) -> dict[str, Any]:
+    def _page(self, slug: str) -> OopsiePageData:
         return self._data(
-            self._call("GET", f"/api/pages/{quote(slug, safe='')}"), f"read {slug}"
+            self._call("GET", f"/api/pages/{quote(slug, safe='')}"),
+            f"read {slug}",
+            OopsiePageData,
         )
 
     def enable_adult(self, remote_id: str) -> None:
-        theme = {**(self._page(remote_id).get("theme") or {}), "age_gate": True}
+        theme = {**(self._page(remote_id).theme or {}), "age_gate": True}
         response = self._call(
             "PATCH", f"/api/pages/{quote(remote_id, safe='')}", json={"theme": theme}
         )
-        page = self._data(response, f"turn 18+ on for {remote_id}")
-        if not (page.get("theme") or {}).get("age_gate"):
+        page = self._data(response, f"turn 18+ on for {remote_id}", OopsiePageData)
+        if not (page.theme or {}).get("age_gate"):
             msg = f"Oopsie did not keep the 18+ gate on {remote_id}"
             raise LinkError(msg)
 
     def delete(self, remote_id: str) -> None:
         response = self._call("DELETE", f"/api/pages/{quote(remote_id, safe='')}")
         if response.status_code != _NOT_FOUND:
-            self._data(response, f"delete {remote_id}")
+            self._checked(response, f"delete {remote_id}")
 
     def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
         days = [start + timedelta(d) for d in range((end - start).days + 1)]
         by_label = {d.strftime("%m-%d"): d for d in days}
         return [
             LinkDays(
-                remote_id=slug,
+                remote_id=found.slug,
                 days=[
-                    DayStat(day=by_label[label], views=v, clicks=c)
-                    for label, v, c in buckets
-                    if label in by_label and (v or c)
+                    DayStat(day=by_label[p.label], views=p.views, clicks=p.clicks)
+                    for p in found.points
+                    if p.label in by_label and (p.views or p.clicks)
                 ],
             )
-            for slug, buckets in self._activity(remote_ids, start, end).items()
+            for found in self._activity(remote_ids, start, end)
         ]
 
     def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
         return [
             LinkHours(
-                remote_id=slug,
+                remote_id=found.slug,
                 hours=[
                     HourStat(
-                        hour=datetime.combine(day, time(int(label[:2])), tzinfo=UTC),
-                        views=v,
-                        clicks=c,
+                        hour=datetime.combine(day, time(int(p.label[:2])), tzinfo=UTC),
+                        views=p.views,
+                        clicks=p.clicks,
                     )
-                    for label, v, c in buckets
-                    if _HOUR_LABEL.fullmatch(label) and (v or c)
+                    for p in found.points
+                    if _HOUR_LABEL.fullmatch(p.label) and (p.views or p.clicks)
                 ],
             )
-            for slug, buckets in self._activity(remote_ids, day, day).items()
+            for found in self._activity(remote_ids, day, day)
         ]
 
     def _activity(
         self, remote_ids: list[str], start: date, end: date
-    ) -> dict[str, list[tuple[str, int, int]]]:
-        found: dict[str, list[tuple[str, int, int]]] = {}
+    ) -> list[LinkActivity]:
+        found: dict[str, list[ActivityPoint]] = {}
         batch = self.info().stats_batch
         for i in range(0, len(remote_ids), batch):
             slugs = remote_ids[i : i + batch]
@@ -187,20 +205,36 @@ class OopsieProvider(LinkProvider):
                     },
                 ),
                 "read analytics",
+                OopsieActivity,
             )
-            per = data.get("perSlug") or data["timeSeries"]
-            series = per["series"]
-            if isinstance(series, dict):
-                series = [{"slug": slugs[0], **series}]
+            per = data.per_slug or data.time_series
+            if per is None:
+                msg = "Oopsie sent no analytics numbers"
+                raise LinkError(msg)
+            series = per.series
+            if isinstance(series, OopsieSeries):
+                series = [
+                    series.model_copy(update={"slug": slugs[0]})
+                    if series.slug is None
+                    else series
+                ]
             for item in series:
-                found[item["slug"]] = list(
-                    zip(per["labels"], item["views"], item["clicks"], strict=True)
-                )
-        return found
+                if item.slug is None:
+                    msg = "Oopsie sent analytics without a slug"
+                    raise LinkError(msg)
+                found[item.slug] = [
+                    ActivityPoint(label=label, views=views, clicks=clicks)
+                    for label, views, clicks in zip(
+                        per.labels, item.views, item.clicks, strict=True
+                    )
+                ]
+        return [LinkActivity(slug=s, points=p) for s, p in found.items()]
 
     def usage(self) -> Usage:
-        data = self._data(self._call("GET", "/api/account/usage"), "read usage")
+        data = self._data(
+            self._call("GET", "/api/account/usage"), "read usage", OopsieUsage
+        )
         return Usage(
-            used=data["pages_used"],
-            limit=None if data.get("is_unlimited") else data.get("effective_limit"),
+            used=data.pages_used,
+            limit=None if data.is_unlimited else data.effective_limit,
         )

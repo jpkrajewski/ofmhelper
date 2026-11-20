@@ -10,10 +10,12 @@ from download_files import removed_download
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 
-from ofmhelpers.db.stores import devices, watched_profiles
-from ofmhelpers.db.stores.jobs import create_job, fail_job
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.jobs.store import create_job, fail_job
+from ofmhelpers.db.watched_profiles import store as watched_profiles
 from ofmhelpers.integrations.gdrive.fake import FakeDrive
-from ofmhelpers.schemas import DeviceFields, LoginFields
+lazy from ofmhelpers.features.jobs.runner import run_job
 
 pytestmark = pytest.mark.e2e
 
@@ -867,8 +869,6 @@ def test_drive_page_lists_accounts_searches_and_syncs(
 def test_a_user_uploads_a_finished_clone_into_their_accounts_drive(
     va: Session, fake_drive: FakeDrive, source_videos: list[Path], jobs_idle
 ):
-    from ofmhelpers.db.stores.jobs import create_job
-    from ofmhelpers.features.jobs.runner import run_job
 
     connect_google(va, "va.google@example.com")
     expect(va.page.locator(".card").nth(1)).to_contain_text("Connected")

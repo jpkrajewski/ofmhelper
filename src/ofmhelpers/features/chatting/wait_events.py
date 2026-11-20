@@ -1,18 +1,19 @@
 import hashlib
 import time
-from typing import NamedTuple
+
+from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats
-from ofmhelpers.errors import AppError
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatPlatform, OpenWait
 from ofmhelpers.features.chatting import rechecks
 from ofmhelpers.features.chatting.rechecks import ChatKey
 from ofmhelpers.features.chatting.sources import source_for
 from ofmhelpers.features.chatting.sync import read_now
 from ofmhelpers.features.events import Event, emit, listening
 from ofmhelpers.features.notifications import service as notifications
+from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatPlatform, OpenWait
 
 logger = get_logger(__name__)
 
@@ -34,14 +35,18 @@ def waited(seconds: float) -> str:
     return f"{seconds // _DAY}d {seconds % _DAY // _HOUR}h"
 
 
-def _waiting(now: float) -> dict[_Model, list[OpenWait]]:
+class _Waiting(BaseModel, frozen=True):
+    by_model: dict[_Model, list[OpenWait]]
+
+
+def _waiting(now: float) -> _Waiting:
     off = settings.chatting.events_off()
     before = now - settings.chatting.unanswered_after_s
     found: dict[_Model, list[OpenWait]] = {}
     for wait in chats.open_waits(before=before):
         if wait.platform.value not in off:
             found.setdefault((wait.platform, wait.model_username), []).append(wait)
-    return found
+    return _Waiting(by_model=found)
 
 
 def _fresh(platform: ChatPlatform, usernames: set[str]) -> set[str]:
@@ -50,7 +55,7 @@ def _fresh(platform: ChatPlatform, usernames: set[str]) -> set[str]:
         return set()
     try:
         return read_now(source, usernames)
-    except AppError:
+    except ChatSourceError:
         logger.warning("%s: not read before telling", platform.value, exc_info=True)
         return set()
 
@@ -99,7 +104,7 @@ def _untold(
     return rechecks.untold(due)
 
 
-class _Told(NamedTuple):
+class _Told(BaseModel, frozen=True):
     models: int = 0
     unread: frozenset[ChatKey] = frozenset()
 
@@ -110,7 +115,7 @@ def _tell(now: float, key: str | None, chats_due: set[ChatKey] | None) -> _Told:
     with rechecks.one_teller() as mine:
         if not mine:
             return _Told(unread=frozenset(chats_due or ()))
-        waiting = _waiting(now)
+        waiting = _waiting(now).by_model
         due = _untold(waiting, chats_due) if chats_due is not None else []
         if not waiting or (chats_due is not None and not due):
             return _Told()
@@ -123,7 +128,7 @@ def _tell(now: float, key: str | None, chats_due: set[ChatKey] | None) -> _Told:
             for w in due
             if (w.platform, w.model_username) not in fresh
         )
-        still = {m: waits for m, waits in _waiting(now).items() if m in fresh}
+        still = {m: waits for m, waits in _waiting(now).by_model.items() if m in fresh}
         if chats_due is not None:
             new = _untold(still, chats_due)
             if not new:

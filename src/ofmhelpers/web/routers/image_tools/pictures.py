@@ -4,7 +4,9 @@ from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from ofmhelpers.auth.access import Area
+from ofmhelpers.db.jobs.schema import Job
+from ofmhelpers.db.picture_presets.schema import PicturePreset
+from ofmhelpers.features.jobs.schema import JobsQueued, TaskCard
 from ofmhelpers.features.pictures import service
 from ofmhelpers.features.pictures.service import LABEL, TASK, run_picture
 from ofmhelpers.features.pictures.targets import (
@@ -17,7 +19,7 @@ from ofmhelpers.features.pictures.targets import (
     run_aspect,
 )
 from ofmhelpers.features.pictures.targets import resolution as _resolution
-from ofmhelpers.schemas import Job, JobsQueued, PicturePreset, TaskCard
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import (
     Access,
     Actor,
@@ -30,6 +32,7 @@ from ofmhelpers.web.forms import Files, FormModel, PaidForm, Stripped
 from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_polled
+lazy from ofmhelpers.web.routers.registry import task_card
 
 __all__ = [
     "LABEL",
@@ -47,7 +50,7 @@ __all__ = [
     "run_picture",
 ]
 
-router = APIRouter(
+router: APIRouter = APIRouter(
     prefix="/pictures", tags=["pictures"], dependencies=[Access(Area.PICTURES)]
 )
 
@@ -72,8 +75,6 @@ class PresetDeleted(BaseModel):
 
 
 def _cards(jobs: list[Job]) -> list[TaskCard]:
-    from ofmhelpers.web.routers.registry import task_card
-
     return [task_card(job) for job in jobs]
 
 

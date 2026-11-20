@@ -1,7 +1,7 @@
-from pathlib import Path
+lazy from pathlib import Path
 
-from ofmhelpers.db.stores import distribution as store
-from ofmhelpers.schemas.distribution import ModelPreset
+from ofmhelpers.db.distribution import store
+from ofmhelpers.db.distribution.schema import ModelPreset
 
 
 def preset_of(user_id: int, key: str) -> ModelPreset | None:

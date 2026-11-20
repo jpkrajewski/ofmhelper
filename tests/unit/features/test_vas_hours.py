@@ -1,9 +1,9 @@
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from ofmhelpers.db.jobs.schema import SessionSpan
+from ofmhelpers.db.users.schema import Role, User
 from ofmhelpers.features.vas.hours import day_hours, worded
-from ofmhelpers.schemas.persistence import SessionSpan
-from ofmhelpers.schemas.users import Role, User
 
 WARSAW = ZoneInfo("Europe/Warsaw")
 

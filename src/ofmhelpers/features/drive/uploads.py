@@ -4,11 +4,18 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.db.stores import drive_folders
-from ofmhelpers.db.stores import drive_uploads as store
-from ofmhelpers.db.stores.jobs import Readers, create_job, fail_job, get_job
-from ofmhelpers.db.stores.tracked_accounts import list_accounts
-from ofmhelpers.db.stores.users import get_user, refresh_token
+from ofmhelpers.config.types import AccountFolder
+from ofmhelpers.db.drive_folders import store as drive_folders
+from ofmhelpers.db.drive_folders.schema import (
+    DriveUpload,
+    StoredFolder,
+    UploadTarget,
+    VaFolder,
+)
+from ofmhelpers.db.drive_uploads import store
+from ofmhelpers.db.jobs.store import Readers, create_job, fail_job, get_job
+from ofmhelpers.db.tracked_accounts.store import list_accounts
+from ofmhelpers.db.users.store import get_user, refresh_token
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.drive import va_folders
 from ofmhelpers.features.drive.folders import (
@@ -23,15 +30,14 @@ from ofmhelpers.features.refusals import UnavailableError
 from ofmhelpers.integrations.gdrive import (
     DriveApi,
     DriveError,
+    DriveNotSetUpError,
     FolderGoneError,
     connect_as,
 )
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import get_platform
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas import DriveUpload, SessionUser, StoredFolder, UploadTarget
-from ofmhelpers.schemas.drive import VaFolder
-from ofmhelpers.schemas.gdrive import AccountFolder
+lazy from ofmhelpers.db.users.schema import SessionUser
 
 type Folder = StoredFolder | VaFolder
 
@@ -45,12 +51,21 @@ SPOOFED_TASK = "repurpose"
 class UploadRefusedError(ValueError): ...
 
 
-def _creators(owner: int | None) -> dict[str, str]:
-    return {
-        a.handle: a.creator
-        for a in list_accounts(owner)
-        if a.platform == _PLATFORM and a.creator
-    }
+class _Creators(BaseModel, frozen=True):
+    by_handle: dict[str, str]
+
+    def of(self, handle: str) -> str | None:
+        return self.by_handle.get(handle)
+
+
+def _creators(owner: int | None) -> _Creators:
+    return _Creators(
+        by_handle={
+            a.handle: a.creator
+            for a in list_accounts(owner)
+            if a.platform == _PLATFORM and a.creator
+        }
+    )
 
 
 def _handle(username: str) -> str:
@@ -74,7 +89,7 @@ def targets(owner: int | None) -> list[UploadTarget]:
                 folder_name=t.folder_name,
                 handle=t.handle,
                 owner=t.owner,
-                creator=creators.get(_handle(t.handle)),
+                creator=creators.of(_handle(t.handle)),
                 waiting=len(folder.scan.waiting) if folder.scan else None,
                 followers=t.followers,
             )
@@ -87,12 +102,17 @@ def _folder_owner(login_id: int) -> int | None:
     return found.device.user_id if found else None
 
 
-def _files(job_id: str, readers: Readers) -> list[tuple[int, Path]]:
+class _UploadFile(BaseModel, frozen=True):
+    index: int
+    path: Path
+
+
+def _files(job_id: str, readers: Readers) -> list[_UploadFile]:
     job = get_job(job_id, readers)
     if job is None or job.status != "done":
         return []
     return [
-        (index, Path(raw))
+        _UploadFile(index=index, path=Path(raw))
         for index, raw in enumerate(job.local_paths())
         if raw is not None and Path(raw).is_file()
     ]
@@ -128,7 +148,11 @@ def queue_uploads(
         raise UploadRefusedError(msg)
     vas = _va_folders(user.id, va_ids)
     actor = user.actor
-    files = [(job, index) for job in job_ids for index, _path in _files(job, readers)]
+    files = [
+        (job, index)
+        for job in job_ids
+        for index in (f.index for f in _files(job, readers))
+    ]
     ids = [
         upload_id
         for login_id in dict.fromkeys(login_ids)
@@ -180,7 +204,7 @@ def _destination(
 
 
 def _upload_one(upload: DriveUpload, owner_id: int, folder: Folder) -> None:
-    files = dict(_files(upload.job_id, None))
+    files = {f.index: f.path for f in _files(upload.job_id, None)}
     path = files.get(upload.file_index)
     if path is None:
         store.finish(upload.id, error="The file is no longer on the server")
@@ -245,7 +269,7 @@ def remove_upload(
         connect_as(token).trash_file(file_id)
     except FolderGoneError:  # silent: already gone in Drive
         logger.info("drive upload %s was already gone in Drive", upload_id)
-    except SignInError as exc:
+    except (SignInError, DriveNotSetUpError) as exc:
         logger.warning(
             "drive upload %s: sign-in refused: %s", upload_id, exc, exc_info=True
         )

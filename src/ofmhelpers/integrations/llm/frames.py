@@ -1,7 +1,7 @@
-import logging
 import math
 import tempfile
 from pathlib import Path
+lazy import logging
 
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, ConfigDict

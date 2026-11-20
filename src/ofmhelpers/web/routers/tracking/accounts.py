@@ -4,11 +4,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from ofmhelpers.auth.access import Area
-from ofmhelpers.features.accounts import page
-from ofmhelpers.features.accounts.removal import remove_accounts
-from ofmhelpers.features.accounts.tracker import sync_now
-from ofmhelpers.schemas import (
+from ofmhelpers.db.tracked_accounts.schema import (
     AccountQuery,
     AddAccounts,
     AddResult,
@@ -16,6 +12,10 @@ from ofmhelpers.schemas import (
     Notes,
     SelectedAccounts,
 )
+from ofmhelpers.features.accounts import page
+from ofmhelpers.features.accounts.removal import remove_accounts
+from ofmhelpers.features.accounts.tracker import sync_now
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, OwnerId, Scope
 from ofmhelpers.web.templates_config import render
 

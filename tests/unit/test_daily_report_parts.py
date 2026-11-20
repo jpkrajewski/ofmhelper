@@ -3,14 +3,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from ofmhelpers.db.chats.schema import ChatPlatform
+from ofmhelpers.db.report_runs.schema import ReportMarks, ReportRun
+from ofmhelpers.db.short_links.schema import ShortLink
 from ofmhelpers.features.reports import clicks, daily
 from ofmhelpers.features.reports.fan_sites import FanStats
 from ofmhelpers.features.reports.format import compact, money, percent, window_title
 from ofmhelpers.features.reports.schedule import Due, Planned, due
 from ofmhelpers.integrations.short_links import DayStat
-from ofmhelpers.schemas.chatting import ChatPlatform
-from ofmhelpers.schemas.links import ShortLink
-from ofmhelpers.schemas.reports import ReportMarks, ReportRun
 
 _WARSAW = ZoneInfo("Europe/Warsaw")
 

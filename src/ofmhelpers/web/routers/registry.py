@@ -1,5 +1,12 @@
+from collections.abc import Callable
+from typing import Any
+
+from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict
+
+from ofmhelpers.db.jobs.schema import Job, JobParams
+from ofmhelpers.features.jobs.schema import TaskCard
 from ofmhelpers.features.threads.tasks import TASK as THREADS_TASK
-from ofmhelpers.schemas import Job, TaskCard, Tool
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
 from ofmhelpers.web.routers.generation import ai, clone, clone_links, clone_long
 from ofmhelpers.web.routers.generation.legacy import LEGACY_TOOLS, as_ai_params
@@ -7,6 +14,24 @@ from ofmhelpers.web.routers.image_tools import character_sheet, pictures, thread
 from ofmhelpers.web.routers.inventory import handmade
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
+
+
+class Tool(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+
+    label: str
+    router: APIRouter
+    describe: Callable[[Any], str] | None = None
+    form_params: Callable[[Any], JobParams] | None = None
+
+    @property
+    def prefix(self) -> str:
+        return self.router.prefix
+
+    @property
+    def files_prefix(self) -> str:
+        return f"{self.router.prefix}/files"
+
 
 GENERATE_TOOLS = frozendict(
     {
@@ -58,10 +83,12 @@ TOOLS = frozendict(
 def task_card(job: Job) -> TaskCard:
     tool = TOOLS[job.task]
     if tool.form_params:
-        job = job.model_copy(update={"params": tool.form_params(job)})
+        job = job.model_copy(update={"params": tool.form_params(job).params})
+    found = job_assets(job, tool.files_prefix)
     return TaskCard.from_job(
         job,
-        *job_assets(job, tool.files_prefix),
+        found.assets,
+        found.failed_sources,
         task_label=tool.describe(job) if tool.describe else tool.label,
         poll_prefix=tool.prefix,
     )

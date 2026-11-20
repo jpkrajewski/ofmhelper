@@ -3,6 +3,8 @@ import shutil
 import time
 from pathlib import Path
 
+from pydantic import BaseModel, Field
+
 from ofmhelpers.features.server.models import Folder, Host, Usage
 from ofmhelpers.log import get_logger
 
@@ -21,39 +23,56 @@ def _read(name: str) -> str:
 _IDLE, _IOWAIT = 3, 4
 
 
-def _cpu_ticks() -> tuple[int, int]:
+class CpuTicks(BaseModel, frozen=True):
+    busy: int
+    total: int
+
+
+class MemInfo(BaseModel):
+    total: int = Field(0, alias="MemTotal")
+    available: int | None = Field(None, alias="MemAvailable")
+    swap_total: int = Field(0, alias="SwapTotal")
+    swap_free: int | None = Field(None, alias="SwapFree")
+
+
+class FolderSize(BaseModel, frozen=True):
+    bytes: int
+    files: int
+
+
+def _cpu_ticks() -> CpuTicks:
     for line in _read("stat").splitlines():
         if line.startswith("cpu "):
             values = [int(v) for v in line.split()[1:]]
             idle = values[_IDLE] + (values[_IOWAIT] if len(values) > _IOWAIT else 0)
             total = sum(values)
-            return total - idle, total
-    return 0, 0
+            return CpuTicks(busy=total - idle, total=total)
+    return CpuTicks(busy=0, total=0)
 
 
 def cpu_percent(sample_s: float) -> float:
-    busy0, total0 = _cpu_ticks()
+    first = _cpu_ticks()
     time.sleep(sample_s)
-    busy1, total1 = _cpu_ticks()
-    spent = total1 - total0
-    return 100 * (busy1 - busy0) / spent if spent > 0 else 0.0
+    second = _cpu_ticks()
+    spent = second.total - first.total
+    return 100 * (second.busy - first.busy) / spent if spent > 0 else 0.0
 
 
-def _meminfo() -> dict[str, int]:
+def _meminfo() -> MemInfo:
     found: dict[str, int] = {}
     for line in _read("meminfo").splitlines():
         key, _, rest = line.partition(":")
         parts = rest.split()
         if parts and parts[0].isdigit():
             found[key] = int(parts[0]) * 1024
-    return found
+    return MemInfo.model_validate(found)
 
 
-def _load() -> tuple[float, float, float]:
+def _load() -> list[float]:
     parts = _read("loadavg").split()
     if len(parts) < 3:  # noqa: PLR2004
-        return 0.0, 0.0, 0.0
-    return float(parts[0]), float(parts[1]), float(parts[2])
+        return [0.0, 0.0, 0.0]
+    return [float(parts[0]), float(parts[1]), float(parts[2])]
 
 
 def _existing(path: Path) -> Path:
@@ -65,22 +84,28 @@ def _existing(path: Path) -> Path:
 
 def host(disk_path: Path, sample_s: float) -> Host:
     mem = _meminfo()
-    total = mem.get("MemTotal", 0)
-    swap_total = mem.get("SwapTotal", 0)
+    total = mem.total
+    swap_total = mem.swap_total
     disk = shutil.disk_usage(_existing(disk_path))
     uptime = _read("uptime").split()
     return Host(
         cpus=os.cpu_count() or 1,
         cpu_percent=cpu_percent(sample_s),
         load=_load(),
-        memory=Usage(used=total - mem.get("MemAvailable", total), total=total),
-        swap=Usage(used=swap_total - mem.get("SwapFree", swap_total), total=swap_total),
+        memory=Usage(
+            used=total - (total if mem.available is None else mem.available),
+            total=total,
+        ),
+        swap=Usage(
+            used=swap_total - (swap_total if mem.swap_free is None else mem.swap_free),
+            total=swap_total,
+        ),
         disk=Usage(used=disk.total - disk.free, total=disk.total),
         uptime_s=float(uptime[0]) if uptime else 0.0,
     )
 
 
-def _size(path: Path) -> tuple[int, int]:
+def _size(path: Path) -> FolderSize:
     size = files = 0
     for dirpath, _dirs, names in os.walk(path):
         for name in names:
@@ -89,7 +114,7 @@ def _size(path: Path) -> tuple[int, int]:
             except OSError:  # silent: gone mid-walk
                 continue
             files += 1
-    return size, files
+    return FolderSize(bytes=size, files=files)
 
 
 def folders(root: Path) -> list[Folder]:
@@ -103,9 +128,11 @@ def folders(root: Path) -> list[Folder]:
     for entry in entries:
         try:
             if entry.is_dir(follow_symlinks=False):
-                size, files = _size(Path(entry.path))
-                if size:
-                    found.append(Folder(name=entry.name, bytes=size, files=files))
+                folder = _size(Path(entry.path))
+                if folder.bytes:
+                    found.append(
+                        Folder(name=entry.name, bytes=folder.bytes, files=folder.files)
+                    )
             elif entry.is_file(follow_symlinks=False):
                 loose_bytes += entry.stat(follow_symlinks=False).st_size
                 loose_files += 1

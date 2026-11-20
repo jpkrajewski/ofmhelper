@@ -6,31 +6,27 @@ from typing import Any
 from pydantic import BaseModel
 
 from ofmhelpers.cache import enqueue
-from ofmhelpers.db.stores import cookies as login_cookies
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import create_job, get_job
-from ofmhelpers.features.assets.kinds import classify_kind
-from ofmhelpers.features.assets.store import register_generated_asset
-from ofmhelpers.features.downloads import again
-from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.features.previews import render as previews
-from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.features.users.viewing import viewer_for
-from ofmhelpers.integrations.downloaders.urls import read_links
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.downloads import (
+from ofmhelpers.db.cookies import store as login_cookies
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.downloads.schema import (
     DownloadedFile,
     DownloadResult,
     DownloadsQueued,
 )
-lazy from ofmhelpers.schemas import Job
+from ofmhelpers.db.jobs.store import create_job, get_job
+from ofmhelpers.db.users import store as users
+from ofmhelpers.features.assets.store import register_generated_asset
+from ofmhelpers.features.downloads import again
+from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.kinds import classify_kind
+from ofmhelpers.features.previews import render as previews
+from ofmhelpers.features.refusals import RefusedError, input_refused
+from ofmhelpers.features.users.viewing import viewer_for
+from ofmhelpers.integrations.downloaders.urls import read_links
+from ofmhelpers.log import get_logger
+lazy from ofmhelpers.db.jobs.schema import Job
 
 logger = get_logger(__name__)
-
-
-class Redirect(BaseModel):
-    redirect: str
 
 
 def queue_downloads(
@@ -41,7 +37,8 @@ def queue_downloads(
     owner_id: int,
     assets_root: Path,
 ) -> DownloadsQueued:
-    links = list(dict.fromkeys(read_links(pasted)))
+    with input_refused():
+        links = list(dict.fromkeys(read_links(pasted)))
     if not links:
         msg = "At least one URL is required"
         raise RefusedError(msg)
@@ -88,17 +85,17 @@ def _team_of(user_id: int | None) -> frozenset[int]:
     return viewer_for(user, None).team_ids if user is not None else frozenset()
 
 
-def _already_here(user_id: int | None, urls: list[str]) -> dict[str, DownloadResult]:
+def _already_here(user_id: int | None, urls: list[str]) -> list[DownloadResult]:
     if not urls:
-        return {}
+        return []
     found: dict[str, list[Path]] = {}
     for file in store.stored_by(_team_of(user_id), urls):
         found.setdefault(file.url, []).append(Path(file.file_path))
-    return {
-        url: DownloadResult(url=url, success=True, output_paths=paths)
+    return [
+        DownloadResult(url=url, success=True, output_paths=paths)
         for url, paths in found.items()
         if all(path.is_file() for path in paths)
-    }
+    ]
 
 
 def fetch(
@@ -112,7 +109,7 @@ def fetch(
     before = {r.url: r for r in job.download_results() if r.success} if job else {}
     missing = [url for url in urls if not _on_disk(before.get(url))]
     if job is not None:
-        before |= _already_here(job.user_id or user_id, missing)
+        before |= {r.url: r for r in _already_here(job.user_id or user_id, missing)}
     wanted = [url for url in missing if not _on_disk(before.get(url))]
     fetched = iter(
         download_all(wanted, cookies=login_cookies.for_user(user_id)) if wanted else []

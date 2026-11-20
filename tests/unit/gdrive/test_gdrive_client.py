@@ -6,6 +6,7 @@ from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials as UserCredentials
 from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.http import HttpMockSequence
+lazy import httplib2
 
 from ofmhelpers.integrations.gdrive import (
     RECONNECT,
@@ -13,6 +14,7 @@ from ofmhelpers.integrations.gdrive import (
     DriveAuthError,
     DriveError,
     DriveFullError,
+    DriveNotSetUpError,
     FolderGoneError,
 )
 from ofmhelpers.integrations.gdrive import client as drive_client
@@ -317,8 +319,6 @@ def test_file_kinds_and_links():
 
 class _NoNetwork:
     def request(self, *_args, **_kwargs):
-        import httplib2
-
         msg = "Unable to find the server at www.googleapis.com"
         raise httplib2.ServerNotFoundError(msg)
 
@@ -356,9 +356,14 @@ def test_connect_keeps_one_drive_per_thread_and_bounds_interactive_calls(
 
 
 def test_a_resumable_uploads_308_is_not_followed_as_a_redirect():
-    from ofmhelpers.integrations.gdrive.client import _transport
-
-    http = _transport(10)
+    http = drive_client._transport(10)
     assert 308 not in http.redirect_codes
     assert {301, 302, 303, 307} <= http.redirect_codes
     assert http.timeout == 10
+
+
+def test_drive_without_google_sign_in_set_up_says_so(monkeypatch):
+    monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "")
+
+    with pytest.raises(DriveNotSetUpError, match="not set up"):
+        drive_client.drive_credentials("a-refresh-token")

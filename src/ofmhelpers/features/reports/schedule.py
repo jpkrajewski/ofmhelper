@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-lazy from ofmhelpers.schemas.reports import ReportRun
+lazy from ofmhelpers.db.report_runs.schema import ReportRun
 
 
 class Due(StrEnum):

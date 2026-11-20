@@ -7,9 +7,21 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import requests
 from fastapi.testclient import TestClient
-from signin import sign_in_agency
+from PIL import Image
+from signin import sign_in, sign_in_agency
+from sqlalchemy import select
 
-from ofmhelpers.db.stores.watched_profiles import (
+from ofmhelpers.db.jobs.store import history
+from ofmhelpers.db.models import ProfileScanStatRow
+from ofmhelpers.db.session import session_scope
+from ofmhelpers.db.users.store import agency_id
+from ofmhelpers.db.watched_profiles.schema import (
+    FeedItem,
+    Leaderboard,
+    WatchedProfile,
+    WatchForm,
+)
+from ofmhelpers.db.watched_profiles.store import (
     claim_due,
     get_watched,
     list_groups,
@@ -34,8 +46,7 @@ from ofmhelpers.integrations.instagram.models import (
     ReelMedia,
     ReelStat,
 )
-from ofmhelpers.schemas import FeedItem, Leaderboard, WatchedProfile, WatchForm
-from ofmhelpers.utils.proxy_pool import ProxyPool
+from ofmhelpers.integrations.outbound import ProxyPool
 from ofmhelpers.web.main import app
 
 CDN = "https://scontent.cdninstagram.com/v/{}.mp4"
@@ -237,9 +248,6 @@ def test_uploading_cookies_unlocks_stored_login_only_reels(client, monkeypatch):
 
 
 def test_a_cookies_upload_leaves_a_job_row_for_the_unlock(client):
-    from ofmhelpers.db.stores.jobs import history
-    from ofmhelpers.db.stores.users import agency_id
-
     jar = (
         b"# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tx\n"
     )
@@ -651,11 +659,6 @@ def test_scan_stats_cover_every_reel_of_the_window():
 
 
 def test_every_scan_appends_its_numbers_to_the_history(monkeypatch):
-    from sqlalchemy import select
-
-    from ofmhelpers.db.models import ProfileScanStatRow
-    from ofmhelpers.db.session import session_scope
-
     monkeypatch.setattr(
         reel_watch,
         "scan_profile",
@@ -988,7 +991,6 @@ def test_clone_page_drops_prefill_paths_outside_the_store(client, tmp_path):
 
 
 def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
-
     def stored(username, length):
         result = _found(username, code=f"c_{username}")
         reel = result.reels[0].model_copy(update={"duration_s": length})
@@ -1013,8 +1015,6 @@ def test_feed_hides_stored_reels_past_the_length_cap(client, monkeypatch):
 
 
 def _jpeg(width: int = 1080, height: int = 1920) -> bytes:
-    from PIL import Image
-
     out = io.BytesIO()
     Image.new("RGB", (width, height), "teal").save(out, "JPEG")
     return out.getvalue()
@@ -1057,8 +1057,6 @@ def test_feed_cards_load_the_kept_thumbnail_not_instagrams(client, monkeypatch):
 
 
 def test_thumbnail_is_fetched_once_shrunk_and_kept(client, monkeypatch, cdn):
-    from PIL import Image
-
     asked, _state = cdn
     _one_profile(monkeypatch)
 
@@ -1086,8 +1084,6 @@ def test_thumbnail_of_a_reel_not_watched_is_404_and_fetches_nothing(
 def test_thumbnail_of_a_profile_someone_else_watches_is_404_like_a_missing_one(
     client, scans, cdn
 ):
-    from signin import sign_in
-
     client.post("/reels/watch", data={"profiles": "user1", "group": "asian"})
     assert client.get("/reels/thumb/r_user1").status_code == 200
     stranger = TestClient(app)

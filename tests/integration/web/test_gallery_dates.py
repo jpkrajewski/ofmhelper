@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 from signin import sign_in
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, list_jobs_page
-from ofmhelpers.schemas.persistence import Created
+from ofmhelpers.db.jobs.schema import Created
+from ofmhelpers.db.jobs.store import create_job, list_jobs_page
 from ofmhelpers.web.main import app
 
 WARSAW = ZoneInfo("Europe/Warsaw")

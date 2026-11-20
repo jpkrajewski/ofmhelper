@@ -1,4 +1,3 @@
-import sys
 from types import SimpleNamespace
 
 import pytest
@@ -59,9 +58,7 @@ def real_externals(monkeypatch):
 
 def _install(monkeypatch, tmp_path, fails=lambda opts: False) -> FakeYtDlp:
     fake = FakeYtDlp(tmp_path / "Dejzz26ILDl.mp4", fails)
-    monkeypatch.setitem(
-        sys.modules, "yt_dlp", SimpleNamespace(YoutubeDL=fake.YoutubeDL)
-    )
+    monkeypatch.setattr(generic, "yt_dlp", SimpleNamespace(YoutubeDL=fake.YoutubeDL))
     return fake
 
 

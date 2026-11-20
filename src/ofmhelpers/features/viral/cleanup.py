@@ -1,7 +1,7 @@
 import shutil
 import time
-from pathlib import Path
 lazy from collections.abc import Callable
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.assets.store import uploads_root

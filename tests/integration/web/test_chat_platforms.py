@@ -16,8 +16,10 @@ from signin import sign_in, sign_in_admin
 from starlette.websockets import WebSocketDisconnect
 
 from ofmhelpers.cache import get_text
-from ofmhelpers.db.stores import chats, users
-from ofmhelpers.db.stores.jobs import create_job, finish_job
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import DeliveryKind, ReadScope
+from ofmhelpers.db.jobs.store import create_job, finish_job
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.chatting.sync import run_when_due, sync
 from ofmhelpers.features.chatting.webhooks import (
     ensure_destinations,
@@ -27,7 +29,6 @@ from ofmhelpers.features.chatting.webhooks import (
 from ofmhelpers.features.trials.folder import GENERATE
 from ofmhelpers.features.trials.tasks import Made
 from ofmhelpers.integrations.chat_source import ChatSourceError
-from ofmhelpers.schemas.chatting import DeliveryKind, ReadScope
 from ofmhelpers.web.main import app
 
 pytestmark = pytest.mark.usefixtures("fake_externals")

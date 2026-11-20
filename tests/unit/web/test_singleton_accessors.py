@@ -1,5 +1,6 @@
-from ofmhelpers.db.repositories import cached_repository as cache_module
-from ofmhelpers.db.stores import applications, jobs
+from ofmhelpers.db import cached_repository as cache_module
+from ofmhelpers.db.applications import store as applications
+from ofmhelpers.db.jobs import store as jobs
 from ofmhelpers.web.templates_config import get_templates
 
 STORES = (jobs, applications)

@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.features.threads import service
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, CurrentUser, Scope
 from ofmhelpers.web.templates_config import render
 

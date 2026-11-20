@@ -35,7 +35,7 @@ Continuous delivery
 - `DL.CD.2` Prod builds only the `origin/main` commit that passed CI. Never from a dev checkout, never with the dev overlay.
 - `DL.CD.3` A deploy is checked after it lands: `/health` poll in `deploy.yml`, then Logfire errors for that release.
 - `DL.CD.4` The whole deploy is the workflow. No hand step on the server; a new step goes into both deploy paths.
-- `DL.CD.5` Deployable any time: `scripts/deploy.sh` is the escape hatch (it deploys a commit already on `origin/main`; it never commits or pushes). A deploy kills in-flight jobs, so anything long-running must be resumable or restartable (`features/jobs/recovery.py`: `RESUMABLE`, `RESTARTS`).
+- `DL.CD.5` Deployable any time: `scripts/deploy.sh` is the escape hatch (it deploys a commit already on `origin/main`; it never commits or pushes). A deploy kills in-flight jobs, so anything long-running must be resumable or restartable (`background/recovery.py`: `RESUMABLE`, `RESTARTS`).
 
 Advanced deployment strategies
 - `DL.ADS.1` Pre-production is dev on a prod snapshot: migrations run on the snapshot (`tests/migrations/`), the failed prod job is replayed there.

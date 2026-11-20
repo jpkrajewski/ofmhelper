@@ -1,10 +1,10 @@
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+lazy from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
 
-lazy from ofmhelpers.schemas.persistence import SessionSpan
-lazy from ofmhelpers.schemas.users import User
+lazy from ofmhelpers.db.jobs.schema import SessionSpan
+lazy from ofmhelpers.db.users.schema import User
 
 
 class DayHours(BaseModel):

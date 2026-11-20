@@ -1,7 +1,7 @@
 import re
 from typing import Annotated, Any, NoReturn
 
-from pydantic import AliasChoices, BeforeValidator, Field, model_validator
+from pydantic import AliasChoices, BaseModel, BeforeValidator, Field, model_validator
 
 from ofmhelpers.integrations.ai_providers.errors import (
     ProviderAuthError,
@@ -13,6 +13,7 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.integrations.ai_providers.http import Lenient
+lazy from ofmhelpers.integrations.ai_providers.apiyi.keys import group_of
 
 PROVIDER = "APIYI"
 
@@ -39,12 +40,15 @@ _CODE_IN_MESSAGE = re.compile(r"^\[(\w+)\]\s*(.*)$", re.DOTALL)
 _UNFETCHED = re.compile(r"failed to download\s+\S*/files/ai/", re.IGNORECASE)
 
 
-def _text(value: Any) -> Any:
+def _text(value: str | float | None) -> str:
     if value is None:
         return ""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return str(value)
-    return value
+    if isinstance(value, str):
+        return value
+    msg = "expected text"
+    raise ValueError(msg)
 
 
 Text = Annotated[str, BeforeValidator(_text)]
@@ -67,21 +71,25 @@ class ApiyiErrorBody(Lenient):
         return ApiyiError(message=self.error or self.message, code=self.code)
 
 
-def _read_error(status: int, text: str) -> tuple[str, str]:
+class ReadError(BaseModel, frozen=True):
+    message: str
+    said: str
+
+
+def _read_error(status: int, text: str) -> ReadError:
     try:
         error = ApiyiErrorBody.model_validate_json(text).as_error()
     except ValueError:  # silent: not JSON: the text is the message
         error = ApiyiError(message=text[:200])
     detail = error.message or "error"
     code = error.code or error.type or "error"
-    return f"{PROVIDER}: {detail} ({code}, HTTP {status})", f"{detail} {code}"
+    return ReadError(
+        message=f"{PROVIDER}: {detail} ({code}, HTTP {status})",
+        said=f"{detail} {code}",
+    )
 
 
 def _no_channel(message: str, said: str) -> NoReturn:
-    from ofmhelpers.integrations.ai_providers.apiyi.keys import (
-        group_of,
-    )
-
     group = _GROUP.search(said)
     model = _MODEL.search(said)
     expected = _GROUP_NAMES[group_of(model.group(1) if model else "wan")]
@@ -99,7 +107,8 @@ def _no_channel(message: str, said: str) -> NoReturn:
 def raise_for(
     status: int, text: str, *, forbidden_is_refusal: bool = False
 ) -> NoReturn:
-    message, said = _read_error(status, text)
+    read = _read_error(status, text)
+    message, said = read.message, read.said
     if status == _HTTP_AUTH:
         raise ProviderAuthError(PROVIDER, message)
     if status == _HTTP_PAYMENT_REQUIRED or (
@@ -126,20 +135,23 @@ def raise_for(
 
 
 def raise_for_read(status: int, text: str) -> NoReturn:
-    message, _said = _read_error(status, text)
+    message = _read_error(status, text).message
     if status == _HTTP_AUTH:
         raise ProviderAuthError(PROVIDER, message)
     raise ProviderUnavailableError(message)
 
 
-def _unwrapped(data: Any) -> Any:
-    if (
-        isinstance(data, dict)
-        and "status" not in data
-        and isinstance(data.get("data"), dict)
-    ):
-        return data["data"]
-    return data
+class Unwrapped(Lenient):
+    @model_validator(mode="before")
+    @classmethod
+    def _inner(cls, data: Any) -> Any:
+        if (
+            isinstance(data, dict)
+            and "status" not in data
+            and isinstance(data.get("data"), dict)
+        ):
+            return data["data"]
+        return data
 
 
 class ApiyiSubmitOutput(Lenient):
@@ -147,17 +159,12 @@ class ApiyiSubmitOutput(Lenient):
     task_status: Text = ""
 
 
-class ApiyiSubmit(Lenient):
+class ApiyiSubmit(Unwrapped):
     output: ApiyiSubmitOutput | None = None
     request_id: Text = ""
     top_task_id: Text = Field(
         default="", validation_alias=AliasChoices("task_id", "id")
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _inner(cls, data: Any) -> Any:
-        return _unwrapped(data)
 
     @property
     def task_id(self) -> str:
@@ -171,7 +178,7 @@ class ApiyiNativeOutput(Lenient):
     message: Text = ""
 
 
-class ApiyiTask(Lenient):
+class ApiyiTask(Unwrapped):
     task_id: Text = Field(default="", validation_alias=AliasChoices("task_id", "id"))
     status: Text = ""
     progress: str | int | float | None = None
@@ -179,11 +186,6 @@ class ApiyiTask(Lenient):
     error: ApiyiError | str | None = None
     fail_reason: Text = ""
     output: ApiyiNativeOutput | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _inner(cls, data: Any) -> Any:
-        return _unwrapped(data)
 
     @property
     def state(self) -> str:

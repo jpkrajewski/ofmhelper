@@ -1,5 +1,5 @@
-from collections.abc import Mapping
-from pathlib import Path
+lazy from collections.abc import Mapping
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.ai_providers import self_heal

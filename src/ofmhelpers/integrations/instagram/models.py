@@ -9,7 +9,7 @@ from pydantic import (
     Field,
 )
 
-from ofmhelpers.schemas.instagram import (
+from ofmhelpers.db.watched_profiles.schema import (
     CDN_HOST_SUFFIXES,
     GLOBAL_CDN_HOST,
     VIEW_TIERS,

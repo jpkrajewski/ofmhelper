@@ -3,11 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Action, Area
+from ofmhelpers.db.users.schema import ApiKeysForm, SessionUser
 from ofmhelpers.features.account import service
 from ofmhelpers.features.account.service import Notice
 from ofmhelpers.features.drive.space import DriveSpace, drive_space
-from ofmhelpers.schemas import ApiKeysForm
+from ofmhelpers.web.access import Action, Area, allowed
 from ofmhelpers.web.dependencies import Access, Can, CurrentUser
 from ofmhelpers.web.middleware import AuthMiddleware
 from ofmhelpers.web.responses import NO_STORE, see_other
@@ -18,8 +18,12 @@ router = APIRouter(
 )
 
 
-def _page(request: Request, user_id: int, notice: Notice) -> Response:
-    view = service.page_view(user_id, notice)
+def _chats(me: SessionUser) -> bool:
+    return allowed(me.role, Area.CHATTING)
+
+
+def _page(request: Request, me: SessionUser, notice: Notice) -> Response:
+    view = service.page_view(me.id, notice, chats=_chats(me))
     response = render(
         request, "account.html", **dict(iter(view)), status_code=notice.status_code
     )
@@ -31,7 +35,7 @@ def _page(request: Request, user_id: int, notice: Notice) -> Response:
 def account_page(
     request: Request, me: CurrentUser, google: str = "", apple: str = ""
 ) -> Response:
-    return _page(request, me.id, service.link_notice(google, apple))
+    return _page(request, me, service.link_notice(google, apple))
 
 
 @router.get("/drive-space")
@@ -50,7 +54,7 @@ def change_password(
     changed = service.change_password(me.id, current, password, confirm)
     if changed.user is not None:
         AuthMiddleware.remember(request, changed.user)
-    return _page(request, me.id, changed.notice)
+    return _page(request, me, changed.notice)
 
 
 async def _keys_form(request: Request) -> ApiKeysForm:
@@ -61,7 +65,7 @@ async def _keys_form(request: Request) -> ApiKeysForm:
 def save_keys(
     request: Request, me: CurrentUser, form: Annotated[ApiKeysForm, Depends(_keys_form)]
 ) -> Response:
-    return _page(request, me.id, service.save_keys(me.id, form))
+    return _page(request, me, service.save_keys(me.id, form, chats=_chats(me)))
 
 
 @router.post("/telegram")
@@ -69,7 +73,7 @@ def connect_telegram(request: Request, me: CurrentUser) -> Response:
     found = service.connect_telegram(me.id)
     if found.url is not None:
         return see_other(found.url)
-    return _page(request, me.id, found.notice)
+    return _page(request, me, found.notice)
 
 
 @router.post("/telegram/delete")
@@ -82,6 +86,6 @@ def disconnect_telegram(me: CurrentUser) -> Response:
 def unlink(request: Request, me: CurrentUser, provider: str) -> Response:
     unlinked = service.unlink(me.id, provider)
     if unlinked.user is None:
-        return _page(request, me.id, unlinked.notice)
+        return _page(request, me, unlinked.notice)
     AuthMiddleware.sign_in(request, unlinked.user)
     return see_other("/account")

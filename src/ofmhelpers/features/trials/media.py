@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pathlib import Path
+lazy from pathlib import Path
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.previews.render import (

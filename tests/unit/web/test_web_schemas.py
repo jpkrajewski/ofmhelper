@@ -3,7 +3,7 @@ import time
 import pytest
 from pydantic import ValidationError
 
-from ofmhelpers.schemas import Job, JobStatus
+from ofmhelpers.db.jobs.schema import Job, JobStatus
 
 
 def _job_dict(**overrides):

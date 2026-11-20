@@ -1,14 +1,14 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from download_files import fake_downloads, fake_posters
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in
 
-from ofmhelpers.db.stores.jobs import create_job, get_job
+from ofmhelpers.background import registry, replay
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.generate.legacy import legacy_tools
-from ofmhelpers.features.jobs import registry, replay
 from ofmhelpers.features.trials import folder as trials
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
 from ofmhelpers.web.main import app
@@ -108,6 +108,6 @@ def test_every_tool_is_replayable_or_says_why_not():
         | set(registry.RESUMABLE)
         | {trials.TASK}
         | set(replay.NOT_REPLAYABLE)
-        | set(legacy_tools().entries)
+        | set(legacy_tools())
     )
     assert sorted(set(TOOLS) - known) == []

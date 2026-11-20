@@ -1,7 +1,7 @@
 import urllib.parse
 from urllib.parse import parse_qs, urlsplit
 
-from ofmhelpers.integrations.outbound import FakeReply, FakeRoute
+from ofmhelpers.integrations.outbound import FakeHandler, FakeReply, FakeRoute
 from ofmhelpers.media import fake_media
 
 _K_EXP = "1893456000"
@@ -125,7 +125,7 @@ def _dl(query: str) -> FakeReply:
     )
 
 
-def _saver_host(host: str):
+def _saver_host(host: str) -> FakeHandler:
     def handle(request, _proxies) -> FakeReply:
         split = urlsplit(request.url or "")
         if request.method == "GET" and split.path.rstrip("/") in ("", "/en"):

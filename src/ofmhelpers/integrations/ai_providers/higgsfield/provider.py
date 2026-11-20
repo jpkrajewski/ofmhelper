@@ -2,10 +2,10 @@ import hashlib
 import json
 import math
 import mimetypes
-from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import cached_property
-from pathlib import Path
+lazy from collections.abc import Iterator
+lazy from pathlib import Path
 
 import httpx
 import requests  # noqa: F401
@@ -43,6 +43,9 @@ from ofmhelpers.integrations.ai_providers.uploads import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.video_mp4 import CONVERTIBLE_SUFFIXES
+lazy from ofmhelpers.integrations.ai_providers.higgsfield.fake import (
+    install as install_fake,
+)
 lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
@@ -194,9 +197,7 @@ class HiggsfieldProvider(Provider):
             base_url=s.base_url, timeout=s.request_timeout_s, api_key=api_key
         )
         if settings.infra.fake_externals:
-            from ofmhelpers.integrations.ai_providers.higgsfield.fake import install
-
-            install(self.client)
+            install_fake(self.client)
 
     @classmethod
     def default_key(cls) -> str | None:

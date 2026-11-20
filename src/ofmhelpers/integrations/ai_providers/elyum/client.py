@@ -1,7 +1,7 @@
 import mimetypes
 import re
-from pathlib import Path
 from typing import Any, NoReturn
+lazy from pathlib import Path
 
 lazy import requests
 

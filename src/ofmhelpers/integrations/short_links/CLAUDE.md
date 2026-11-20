@@ -2,9 +2,9 @@
 
 Short links on link providers (Oopsie, Bouncy), provider-agnostic: `/links` (`web/routers/tracking/links.py`) lists and makes them, `features/links/sync.py` syncs/makes/deletes on the worker, `/accounts` shows each Instagram account's links (clicks + CTR) next to its phones.
 
-- Catalog data lives in `schemas/link_catalog/` (`providers.json`, `targets.json`, `models.py`; this package re-exports it). `providers.json`: Bouncy domains = bouncy.ai + its 42 system domains, all "premium" = paid plan, ours is Growth; Oopsie `min_interval_s` = 60/min; `max_span_days` = longest analytics range still answered in daily buckets.
+- Catalog data lives in `db/short_links/catalog/` (`providers.json`, `targets.json`, `models.py`; this package re-exports it). `providers.json`: Bouncy domains = bouncy.ai + its 42 system domains, all "premium" = paid plan, ours is Growth; Oopsie `min_interval_s` = 60/min; `max_span_days` = longest analytics range still answered in daily buckets.
 - `targets.json` — pages a link sends to (OnlyFans, Fanvue, Stacked): `profile` is a regex the URL path must match (a profile name, then anything -- Stacked needs the `@`). `Target.problem(url)` is the one check (server); the dialog runs the same pattern as you type. New target = one entry.
-- `provider_infos()`, `targets()` and `link_providers()` are `utils.registry.Registry`: never iterate one directly, it is a Pydantic model (`[key]`, `.get`, `.names()`, `.all()`). `RemoteLink.adult` None = provider does not say.
+- `provider_infos()`, `targets()` and `link_providers()` are read-only `MappingProxyType[str, T]` (`[key]`, `.get`, iterate the keys, `.values()`, `.items()`). `RemoteLink.adult` None = provider does not say.
 - `errors.py` — `LinkError` message is shown on /links as is; `QuotaError` = 402 / Bouncy 403 `TOTAL_LINK_LIMIT_REACHED`.
 - `providers/base.py`: `create` is always 18+ gated: a link whose gate cannot be set is deleted again and the call fails. `hourly(ids, day)` is what the Telegram `money` answer reads live (`features/reports/hours.py`). `_call` goes through `integrations.outbound` so the fakes answer under `OFM_FAKE_EXTERNALS`.
 - **New provider** = file + class in `providers/__init__.py` `_PROVIDER_TYPES` + `providers.json` entry + a wire fake in `fake.py` + its contract test rows. Never rename a key in use (stored on every link and in `user_api_keys`).
@@ -66,7 +66,7 @@ every method reads/writes our DB -- no HTTP, no API key, no `_call`.
   `self_link_domains` (host unique, owner_id NULL = shared, status), `self_link_clicks`
   (one row per hit: link_id, ts, kind view|click, ip raw, country/region/city/tz from
   Cloudflare, referrer, platform, device, ua; index (link_id, ts)). Owned by
-  `db/repositories/self_links.py` + `db/stores/self_links.py` (kept free of
+  `db/self_links/repository.py` + `db/self_links/store.py` (kept free of
   `stores/short_links` and the provider registry to avoid an import cycle). Domain
   reads are `@cached` + bumped on domain writes; click writes never bump.
 - The public bridge: `web/middleware/bridge.py` (outermost, before auth). On a host in

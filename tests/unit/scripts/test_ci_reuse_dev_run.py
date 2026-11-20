@@ -1,6 +1,6 @@
 import os
 import subprocess
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from repo_paths import REPO

@@ -11,8 +11,10 @@ from fastapi.testclient import TestClient
 from rq.timeouts import JobTimeoutException
 from signin import make_user, sign_in
 
+from ofmhelpers.background import recovery
+from ofmhelpers.background.registry import JOB_TIMEOUTS, RESUMABLE
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import fail_job, get_job, list_jobs
+from ofmhelpers.db.jobs.store import create_job, fail_job, get_job, list_jobs
 from ofmhelpers.features.assets import store as task_helper_uploads
 from ofmhelpers.features.clone_long import (
     TARGETS,
@@ -21,8 +23,6 @@ from ofmhelpers.features.clone_long import (
     Shape,
     service,
 )
-from ofmhelpers.features.jobs import recovery
-from ofmhelpers.features.jobs.registry import JOB_TIMEOUTS, RESUMABLE
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
 from ofmhelpers.integrations.ai_providers.base import TaskState
@@ -103,7 +103,6 @@ def _size(path: Path) -> tuple[int, int]:
 
 
 def _provider(monkeypatch, provider_cls, generated: Path, sent: list, status=None):
-
     def submit(_self, spec, payload, idempotency_key):
         sent.append({"key": idempotency_key, **payload})
         return f"t{len(sent)}"
@@ -764,7 +763,6 @@ def test_a_chained_runs_time_limit_has_a_provider_wait_per_piece(monkeypatch):
 
 def test_recovery_reruns_a_cut_off_run_with_its_own_time_limit(tmp_path, monkeypatch):
     params = _params(tmp_path).model_dump()
-    from ofmhelpers.db.stores.jobs import create_job
 
     job_id = create_job("clone_long", params, actor=str(make_user().id))
     fail_job(job_id, "Task exceeded maximum timeout value")

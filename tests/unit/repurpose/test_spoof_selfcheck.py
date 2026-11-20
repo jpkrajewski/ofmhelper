@@ -1,3 +1,4 @@
+import random
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,13 @@ from ofmhelpers.features.repurpose.models import CopyScore
 from ofmhelpers.media.repurpose.audio_check import BrokenAudioError
 from ofmhelpers.media.repurpose.devices import load_device
 from ofmhelpers.media.repurpose.presets import load_preset
+from ofmhelpers.media.repurpose.probe import Source
+from ofmhelpers.media.repurpose.transformations.video import (
+    VideoDraws,
+    VideoSettings,
+    VideoTransformer,
+)
+from ofmhelpers.media.size import Size
 
 
 class _Report:
@@ -97,6 +105,30 @@ def test_the_spoof_preset_makes_an_iphone_16_pro_max_h264_recording():
     assert device.video.codec == "libx264"
     assert device.tags.format["com.apple.quicktime.model"] == "iPhone 16 Pro Max"
     assert "+faststart" not in device.container.movflags
+
+
+def _framings(video: VideoSettings) -> list[VideoDraws]:
+    source = Source(duration=11.0, width=2160, height=3840, has_audio=True)
+    size = Size(width=1080, height=1920)
+    return [
+        VideoTransformer(video, source, size, random.Random(seed)).draws  # noqa: S311 - seeded draws, not cryptography
+        for seed in range(200)
+    ]
+
+
+def test_spoof_mirrors_half_the_copies_and_turns_1_to_3_degrees_either_way():
+    draws = _framings(load_preset(service.PRESET).video)
+
+    turns = [d.rotate or 0.0 for d in draws]
+    assert 70 <= sum(d.mirror for d in draws) <= 130
+    assert all(1.0 <= abs(turn) <= 3.0 for turn in turns)
+    assert 70 <= sum(turn < 0 for turn in turns) <= 130
+
+
+def test_a_turn_keeps_one_direction_unless_both_ways_is_on():
+    draws = _framings(VideoSettings(rotate=(1.0, 3.0)))
+
+    assert all(1.0 <= (d.rotate or 0.0) <= 3.0 for d in draws)
 
 
 def _verdicts(monkeypatch, caught: list[bool]):

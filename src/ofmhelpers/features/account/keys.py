@@ -1,11 +1,16 @@
+from types import MappingProxyType
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict
 
-from ofmhelpers.db.stores import users
-from ofmhelpers.integrations.ai_providers.base import Provider, provider_class
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, SavedKeys
+from ofmhelpers.integrations.ai_providers.base import (
+    Provider,
+    provider_class,
+    provider_classes,
+)
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.users import Role, SavedKeys
 lazy from ofmhelpers.integrations.ai_providers.tasks import ProviderTask
 
 logger = get_logger(__name__)
@@ -83,3 +88,15 @@ def keep_used(user_id: int, made: list[ProviderTask]) -> None:
         users.set_api_key(user_id, slot, task.api_key)
         saved = users.api_keys(user_id)
         logger.info("user %s: %s key kept from a run", user_id, slot)
+
+
+def prefilled(user_id: int | None) -> MappingProxyType[str, str]:
+    names = [cls.name for cls in provider_classes().values()]
+    if user_id is None:
+        return MappingProxyType(dict.fromkeys(names, ""))
+    keys = Keys.of(user_id)
+    return MappingProxyType({name: keys.prefill(name) for name in names})
+
+
+def known_provider(provider: str) -> None:
+    provider_class(provider)

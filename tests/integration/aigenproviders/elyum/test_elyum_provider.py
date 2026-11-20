@@ -1,8 +1,9 @@
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from ofmhelpers.features.jobs.schema import error_reason
 from ofmhelpers.integrations.ai_providers import runner
 from ofmhelpers.integrations.ai_providers.catalog import get_spec
 from ofmhelpers.integrations.ai_providers.elyum.fake import FAKE_KEY, fake_elyum
@@ -16,7 +17,6 @@ from ofmhelpers.integrations.ai_providers.errors import (
     ProviderUnavailableError,
 )
 from ofmhelpers.media import fake_media
-from ofmhelpers.schemas.errors import error_reason
 from ofmhelpers.web.routers.generation import clone
 
 WAN = "elyum:alibaba/wan-3.0/reference-to-video"

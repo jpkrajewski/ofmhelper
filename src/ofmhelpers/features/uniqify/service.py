@@ -1,15 +1,16 @@
 import shutil
 import zipfile
-from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
+lazy from collections.abc import Callable
 
 from pydantic import BaseModel
 lazy from starlette.datastructures import UploadFile
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores.jobs import create_job, list_jobs_page
+from ofmhelpers.db.jobs.schema import Job, ResultFile
+from ofmhelpers.db.jobs.store import create_job, list_jobs_page
 from ofmhelpers.features.assets.cards import job_assets
 from ofmhelpers.features.assets.store import (
     VIDEO_KINDS,
@@ -18,9 +19,9 @@ from ofmhelpers.features.assets.store import (
     safe_filename,
 )
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.jobs.schema import JobCard, JobQueued
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.media.uniqify import MetadataMode, Strength, generate_variants
-from ofmhelpers.schemas import Job, JobCard, JobQueued, ResultFile
 
 TASK = "uniqify"
 

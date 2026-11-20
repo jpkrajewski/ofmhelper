@@ -1,8 +1,7 @@
-from ofmhelpers.errors import AppError
-lazy from ofmhelpers.schemas.link_catalog.models import RemoteLink
+lazy from ofmhelpers.db.short_links.catalog.schema import RemoteLink
 
 
-class LinkError(AppError): ...
+class LinkError(Exception): ...
 
 
 class AuthError(LinkError): ...

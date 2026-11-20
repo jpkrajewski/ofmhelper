@@ -1,6 +1,6 @@
 import statistics
-from collections.abc import Callable
 from enum import StrEnum
+lazy from collections.abc import Callable
 
 import imagehash
 import numpy as np

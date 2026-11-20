@@ -5,6 +5,7 @@ lazy import httpx
 from ofmhelpers.config import settings
 from ofmhelpers.integrations.llm.base import register_llm
 from ofmhelpers.integrations.llm.chat_completions import ChatCompletionsLLM
+lazy from ofmhelpers.integrations.llm.groq.fake import fake_groq
 
 
 @register_llm
@@ -26,6 +27,4 @@ class GroqLLM(ChatCompletionsLLM):
 
     @classmethod
     def fake_transport(cls) -> httpx.BaseTransport:
-        from ofmhelpers.integrations.llm.groq.fake import fake_groq
-
         return fake_groq().transport()

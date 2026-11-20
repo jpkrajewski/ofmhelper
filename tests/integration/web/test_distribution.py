@@ -6,8 +6,14 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from signin import sign_in_agency
 
-from ofmhelpers.db.stores import devices, self_links, tracked_accounts, users
-from ofmhelpers.db.stores import distribution as store
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
+from ofmhelpers.db.distribution import store
+from ofmhelpers.db.distribution.schema import ModelPreset, PostStatus
+from ofmhelpers.db.self_links import store as self_links
+from ofmhelpers.db.short_links.schema import SelfClick
+from ofmhelpers.db.tracked_accounts import store as tracked_accounts
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.distribution import publish, sweep
 from ofmhelpers.features.distribution.report import report
 from ofmhelpers.features.distribution.service import Distribution, Upload
@@ -16,9 +22,6 @@ from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive
 from ofmhelpers.integrations.outbound import FakeReply
 from ofmhelpers.integrations.pinterest.fake import FakePinterest, fake_pinterest
-from ofmhelpers.schemas import DeviceFields, LoginFields
-from ofmhelpers.schemas.distribution import ModelPreset, PostStatus
-from ofmhelpers.schemas.self_links import SelfClick
 from ofmhelpers.web.main import app
 
 AGENCY = "agency@example.com"
@@ -185,7 +188,7 @@ def test_each_pin_carries_its_own_models_board_title_caption_and_link(
         assert post.title == model.title
         assert post.description in model.descriptions
         assert post.link == f"https://{DOMAIN}/{model.key}"
-    boards = {b["name"]: b["id"] for b in pinterest.boards}
+    boards = {b.name: b.id for b in pinterest.boards}
     assert {p.body["board_id"] for p in pinterest.pins} == {
         boards["Dane Example"],
         boards["Clark Example"],
@@ -313,7 +316,7 @@ def test_an_ig_pin_names_the_handle_with_no_caption_and_no_link(
 def test_about_half_the_pins_are_ig_pins(monkeypatch):
     monkeypatch.setenv("OFM_DISTRIBUTION_HANDLE_SHARE", "0.5")
 
-    titles = [sweep._what(DANE, "https://x")[0] for _ in range(400)]
+    titles = [sweep._what(DANE, "https://x").title for _ in range(400)]
 
     ig = sum(1 for t in titles if t != DANE.title)
     assert 140 <= ig <= 260

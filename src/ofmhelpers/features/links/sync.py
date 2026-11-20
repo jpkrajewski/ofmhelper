@@ -3,8 +3,9 @@ lazy from collections.abc import Callable
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import short_links as store
-from ofmhelpers.db.stores.tracked_accounts import list_accounts
+from ofmhelpers.db.short_links import store
+from ofmhelpers.db.short_links.schema import LinkSyncKey, utc_today
+from ofmhelpers.db.tracked_accounts.store import list_accounts
 from ofmhelpers.features.links import keys
 from ofmhelpers.integrations.short_links import (
     AuthError,
@@ -18,9 +19,8 @@ from ofmhelpers.integrations.short_links import (
 )
 from ofmhelpers.integrations.short_links.providers import link_providers
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.links import LinkSyncKey, utc_today
+lazy from ofmhelpers.db.short_links.schema import ShortLink
 lazy from ofmhelpers.integrations.short_links.providers import LinkProvider
-lazy from ofmhelpers.schemas import ShortLink
 
 logger = get_logger(__name__)
 
@@ -218,7 +218,7 @@ def sync_now(user_id: int, provider: str | None = None) -> list[LinkSyncKey]:
     return _queue(
         [
             LinkSyncKey(user_id=user_id, provider=key)
-            for key in link_providers().names()
+            for key in link_providers()
             if (provider is None or key == provider) and keys.api_key(user_id, key)
         ]
     )

@@ -3,6 +3,7 @@ import worker_tasks
 from rq import SimpleWorker, Worker
 from rq.job import Job
 
+from ofmhelpers.background import recovery
 from ofmhelpers.cache import (
     QueueName,
     active_job_ids,
@@ -11,8 +12,7 @@ from ofmhelpers.cache import (
     get_queue,
     get_redis,
 )
-from ofmhelpers.db.stores.jobs import create_job, get_job
-from ofmhelpers.features.jobs import recovery
+from ofmhelpers.db.jobs.store import create_job, get_job
 from ofmhelpers.features.jobs.runner import run_job
 
 
@@ -122,7 +122,7 @@ def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
         assert queue.get_job_ids() == []
 
     assert active_job_ids() == {default_id, links_id}
-    assert recovery.fail_cut_off(active_job_ids(), set()).entries == {}
+    assert recovery.fail_cut_off(active_job_ids(), set()) == {}
     assert get_job(default_id).status == "running"
     assert get_job(links_id).status == "running"
 

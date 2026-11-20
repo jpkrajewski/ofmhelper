@@ -15,16 +15,19 @@ from clone_links_helpers import (
 )
 from redis.exceptions import RedisError
 
+from ofmhelpers.background.registry import RESUMABLE
 from ofmhelpers.cache import QueueName
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import clone_from_links, users
-from ofmhelpers.db.stores.jobs import (
+from ofmhelpers.db.clone_from_links import store as clone_from_links
+from ofmhelpers.db.jobs.schema import Job
+from ofmhelpers.db.jobs.store import (
     create_job,
     fail_job,
     get_job,
     hide_job,
     list_jobs_page,
 )
+from ofmhelpers.db.users import store as users
 from ofmhelpers.features.clone_links import job as clone_links_job
 from ofmhelpers.features.clone_links import page as clone_links_page
 from ofmhelpers.features.clone_links import service as clone_links_service
@@ -32,11 +35,9 @@ from ofmhelpers.features.clone_links.links import NOT_A_VIDEO_SITE
 from ofmhelpers.features.clone_links.models import LinkPreview
 from ofmhelpers.features.clone_links.review import NOT_CONNECTED
 from ofmhelpers.features.clone_links.stop import stopped
-from ofmhelpers.features.jobs.registry import RESUMABLE
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.kie.fake import FAKE_KEY as KIE_KEY
-from ofmhelpers.schemas import Job
 from ofmhelpers.web.routers.generation import clone_links
 from ofmhelpers.web.routers.registry import TOOLS
 

@@ -1,6 +1,6 @@
 import argparse
-from datetime import datetime
 from pathlib import Path
+lazy from datetime import datetime
 
 from ofmhelpers.media.repurpose.audio_check import verify_audio
 from ofmhelpers.media.repurpose.repurpose import Repurpose, RunResult

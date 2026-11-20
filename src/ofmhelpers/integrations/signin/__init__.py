@@ -1,5 +1,7 @@
 from functools import lru_cache
+from types import MappingProxyType
 
+from ofmhelpers.db.users.schema import Identity
 from ofmhelpers.integrations.signin.apple import Apple
 from ofmhelpers.integrations.signin.base import (
     Provider,
@@ -8,18 +10,16 @@ from ofmhelpers.integrations.signin.base import (
 )
 from ofmhelpers.integrations.signin.google import Google
 from ofmhelpers.integrations.signin.owner import Owner
-from ofmhelpers.schemas.users import Identity
-from ofmhelpers.utils.registry import Registry
 
 
 @lru_cache(maxsize=1)
-def providers() -> Registry[Provider]:
+def providers() -> MappingProxyType[str, Provider]:
     found: list[Provider] = [Google(), Apple(), Owner()]
-    return Registry[Provider](entries={p.name: p for p in found})
+    return MappingProxyType({p.name: p for p in found})
 
 
 def configured() -> list[Provider]:
-    return [p for p in providers().all() if p.configured()]
+    return [p for p in providers().values() if p.configured()]
 
 
 def linkable() -> list[Provider]:

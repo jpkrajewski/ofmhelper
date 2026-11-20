@@ -5,6 +5,7 @@ import worker_tasks
 from logfire.testing import CaptureLogfire
 from rq import SimpleWorker, Worker
 
+from ofmhelpers.background.worker import ConfiguredWorker
 from ofmhelpers.cache import (
     JOB_QUEUES,
     JobQueue,
@@ -16,9 +17,8 @@ from ofmhelpers.cache import (
 )
 from ofmhelpers.config import settings
 from ofmhelpers.config.settings import QueuePriority
-from ofmhelpers.db.stores.jobs import create_job
+from ofmhelpers.db.jobs.store import create_job
 from ofmhelpers.features.jobs.runner import run_job
-from ofmhelpers.worker import ConfiguredWorker
 
 
 @pytest.fixture(autouse=True)
@@ -120,8 +120,8 @@ def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
 
 def test_default_is_on_top_and_media_at_the_bottom_one_at_a_time():
     queues = settings.infra.queues
-    assert queues.names() == list(QueueName)
-    priorities = [queue.priority for queue in queues.all()]
+    assert list(queues) == list(QueueName)
+    priorities = [queue.priority for queue in list(queues.values())]
     assert priorities == sorted(priorities)
     assert queues[QueueName.DEFAULT].priority == QueuePriority.HIGHEST
     assert queues[QueueName.MEDIA].priority == QueuePriority.LOWEST

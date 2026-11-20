@@ -2,8 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
 
-from ofmhelpers.db.stores import self_links, short_links
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, track
+from ofmhelpers.db.self_links import store as self_links
+from ofmhelpers.db.short_links import store as short_links
+from ofmhelpers.db.tracked_accounts.store import list_accounts, track
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.web.main import app
 

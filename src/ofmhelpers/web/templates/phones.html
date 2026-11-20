@@ -89,7 +89,7 @@
 
 {% macro phone_card(d) -%}
 <article class="ph-card" id="phone-{{ d.id }}" data-id="{{ d.id }}" data-search="{{ d.search_text }}"
-         {% if assigning and not d.retired %}data-pickable data-has="{{ d.accounts_of(assigning.service).names()|join(',') }}"{% endif %}
+         {% if assigning and not d.retired %}data-pickable data-has="{{ d.accounts_of(assigning.service)|join(',') }}"{% endif %}
          {% if can_edit %}data-phone='{{ {"label": d.label, "model_id": d.model_id or "", "color_id": d.color_id or "", "custom_model": d.custom_model, "owner": d.owner, "phone_number": d.phone_number, "notes": d.notes}|tojson }}'{% endif %}>
     <div class="ph-media">
         <img src="{{ d.drawing_url }}" alt="{{ d.specs }}" loading="lazy">
@@ -240,7 +240,7 @@
             <div class="field">
                 <label for="ph-login-service">Service</label>
                 <select id="ph-login-service" name="service">
-                    {% for s in services.all() %}<option value="{{ s.key }}" data-custom="{{ 'true' if s.custom else 'false' }}">{{ s.label }}</option>{% endfor %}
+                    {% for s in services.values() %}<option value="{{ s.key }}" data-custom="{{ 'true' if s.custom else 'false' }}">{{ s.label }}</option>{% endfor %}
                 </select>
             </div>
             <div class="field" data-provider hidden>

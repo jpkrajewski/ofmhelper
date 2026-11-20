@@ -2,7 +2,7 @@ import datetime
 import json
 import mmap
 import random
-from pathlib import Path
+lazy from pathlib import Path
 
 from pydantic import BaseModel, Field
 

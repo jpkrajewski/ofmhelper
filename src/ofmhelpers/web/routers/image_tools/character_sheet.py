@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import Response
 
-from ofmhelpers.auth.access import Area
 from ofmhelpers.config import settings
 from ofmhelpers.features.character_sheet import service
 from ofmhelpers.features.character_sheet.service import (
@@ -12,7 +11,8 @@ from ofmhelpers.features.character_sheet.service import (
     TASK,
 )
 from ofmhelpers.features.character_sheet.service import run_combine as _run_combine
-from ofmhelpers.schemas import JobQueued
+from ofmhelpers.features.jobs.schema import JobQueued
+from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render

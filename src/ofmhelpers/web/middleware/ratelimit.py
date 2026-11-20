@@ -1,6 +1,6 @@
 from fastapi.concurrency import run_in_threadpool
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import JSONResponse, Response
 lazy from starlette.requests import Request
 
 from ofmhelpers.cache.rate_limit import LOGIN_BUCKET as _LOGIN_BUCKET
@@ -37,7 +37,9 @@ WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 class WriteRateLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         s = settings.web
         if (
             not s.rate_limit_enabled

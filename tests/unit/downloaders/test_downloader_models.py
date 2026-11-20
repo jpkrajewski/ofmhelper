@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
-from ofmhelpers.integrations.downloaders.models import YtDlpInfo
+from ofmhelpers.integrations.downloaders.models import ExtractorArgs, YtDlpInfo
 
 
 def test_info_reads_merged_files_of_a_single_video():
@@ -25,7 +25,9 @@ def test_info_reads_every_playlist_entry_and_skips_missing_ones():
 
 def test_options_dict_keeps_yt_dlp_defaults_for_unset_options():
     config = DownloadConfig(
-        cookies_from_browser=None, youtube_player_clients=["ios"], extractor_args={}
+        cookies_from_browser=None,
+        youtube_player_clients=["ios"],
+        extractor_args=ExtractorArgs(),
     )
 
     opts = config.ydl_opts().model_dump(exclude_none=True)
@@ -41,7 +43,7 @@ def test_options_merge_pot_provider_args_over_player_clients():
     config = DownloadConfig(
         cookies_from_browser="firefox",
         youtube_player_clients=["ios"],
-        extractor_args=pot,
+        extractor_args=ExtractorArgs(values=pot),
     )
 
     opts = config.ydl_opts("/c/cookies.txt").model_dump(exclude_none=True)

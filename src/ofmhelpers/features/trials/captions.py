@@ -66,11 +66,15 @@ class Captions(BaseModel):
         return list(unique.values())[:CHOICES]
 
 
-def _ask[A: BaseModel](
-    prompt: Prompt, answer: type[A], chain: list[tuple[LLMUse, str]]
-) -> A:
+class _Step(BaseModel, frozen=True):
+    use: LLMUse
+    entry: str
+
+
+def _ask[A: BaseModel](prompt: Prompt, answer: type[A], chain: list[_Step]) -> A:
     errors: list[str] = []
-    for use, entry in chain:
+    for step in chain:
+        use, entry = step.use, step.entry
         try:
             llm = get_llm(use, provider=entry)
             if prompt.media and MediaKind.VIDEO not in llm.media:
@@ -83,8 +87,8 @@ def _ask[A: BaseModel](
     raise RuntimeError(msg)
 
 
-def _video_chain() -> list[tuple[LLMUse, str]]:
-    return [(LLMUse.VIDEO, e) for e in settings.llm.video_chain]
+def _video_chain() -> list[_Step]:
+    return [_Step(use=LLMUse.VIDEO, entry=e) for e in settings.llm.video_chain]
 
 
 def understand(video: Path) -> ReelNotes:
@@ -98,5 +102,5 @@ def captions_for(notes: ReelNotes) -> list[str]:
         transcript=notes.transcript or "(nothing said)",
         choices=CHOICES,
     )
-    chain = [(LLMUse.CHAT, settings.llm.default_chat), *_video_chain()]
+    chain = [_Step(use=LLMUse.CHAT, entry=settings.llm.default_chat), *_video_chain()]
     return _ask(Prompt.of(prompt, system=_RULES), Captions, chain).captions

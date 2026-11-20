@@ -1,6 +1,6 @@
 import re
 
-from ofmhelpers.schemas import Job
+from ofmhelpers.db.jobs.schema import Job
 from ofmhelpers.web.routers.task_helpers import (
     asset_card,
     download_name,

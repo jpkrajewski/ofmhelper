@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -9,6 +10,11 @@ _CENT = Decimal("0.01")
 
 def _dollars(amount: Decimal) -> str:
     return f"${amount.quantize(_CENT):,}"
+
+
+class ShownZone(Protocol):
+    label: str
+    zone: str
 
 
 class Period(StrEnum):

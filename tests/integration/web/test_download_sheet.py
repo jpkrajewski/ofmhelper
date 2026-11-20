@@ -1,6 +1,6 @@
 import re
 from datetime import date, timedelta
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from download_files import fake_downloads, fake_posters, rows
@@ -9,16 +9,16 @@ from redis.exceptions import ConnectionError as RedisDown
 from signin import make_user, sign_in
 
 from ofmhelpers.cache import get_redis
-from ofmhelpers.db.stores import users
-from ofmhelpers.db.stores.jobs import get_job, list_jobs_page
-from ofmhelpers.db.stores.users import _repository as user_repository
+from ofmhelpers.db.jobs.store import get_job, list_jobs_page
+from ofmhelpers.db.users import store as users
+from ofmhelpers.db.users.schema import Role, UserForm
+from ofmhelpers.db.users.store import _repository as user_repository
 from ofmhelpers.features.assets import store as asset_store
 from ofmhelpers.features.downloads import service, sheet
 from ofmhelpers.features.drive.folders import root_name
 from ofmhelpers.integrations.gdrive import RECONNECT, DriveError
 from ofmhelpers.integrations.gdrive.fake import FakeDrive, fake_drive, fake_person
 from ofmhelpers.integrations.gdrive.models import SheetTab
-from ofmhelpers.schemas import Role, UserForm
 from ofmhelpers.web.main import app
 
 OWNER = "owner@example.com"

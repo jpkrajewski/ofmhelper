@@ -1,5 +1,5 @@
 import mmap
-from pathlib import Path
+lazy from pathlib import Path
 
 _COMPRESSOR_NAME_OFFSET = 42
 _COMPRESSOR_NAME_LEN = 32

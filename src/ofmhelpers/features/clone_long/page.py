@@ -8,7 +8,6 @@ lazy from fastapi import UploadFile
 from ofmhelpers.config import settings
 from ofmhelpers.features.account.keys import Keys
 from ofmhelpers.features.assets.cards import job_assets
-from ofmhelpers.features.assets.kinds import classify_kind
 from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_videos
 from ofmhelpers.features.clone_long.models import Shape
 from ofmhelpers.features.clone_long.service import (
@@ -22,8 +21,11 @@ from ofmhelpers.features.clone_long.video import VideoTools
 from ofmhelpers.features.generate.choices import provider_choices
 from ofmhelpers.features.generate.providers import CLONE_TASKS, start_provider
 from ofmhelpers.features.jobs.runner import start_job
+from ofmhelpers.features.jobs.schema import TaskCard
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.refusals import RefusedError
-from ofmhelpers.schemas import Job, ProviderChoice, TaskCard
+from ofmhelpers.integrations.ai_providers.schema import ProviderChoice
+lazy from ofmhelpers.db.jobs.schema import Job
 
 TASK = "clone_long"
 LABEL = "Clone long"

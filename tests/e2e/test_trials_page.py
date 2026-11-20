@@ -2,17 +2,17 @@ import re
 import shutil
 import subprocess
 from datetime import UTC, datetime
-from pathlib import Path
+lazy from pathlib import Path
 
 import pytest
 from e2e_session import Session, connect_google, my_root
 from playwright.sync_api import expect
 from sqlalchemy import create_engine, text
 
-from ofmhelpers.db.stores import devices
+from ofmhelpers.db.devices import store as devices
+from ofmhelpers.db.devices.schema import DeviceFields, LoginFields
 from ofmhelpers.features.trials.state import FolderState, ReelState
 from ofmhelpers.integrations.gdrive.fake import FakeDrive
-from ofmhelpers.schemas import DeviceFields, LoginFields
 
 pytestmark = pytest.mark.e2e
 

@@ -4,6 +4,10 @@ import pytest
 from e2e_session import Session
 from playwright.sync_api import expect
 
+lazy from ofmhelpers.db.jobs.store import create_job
+lazy from ofmhelpers.db.users import store as users
+lazy from ofmhelpers.db.users.schema import Role, UserForm
+
 pytestmark = pytest.mark.e2e
 
 ADMIN_ID = 1
@@ -12,8 +16,6 @@ KEY = "tour:/clone"
 
 
 def _make_a_va(user_id: int, owner_id: int) -> None:
-    from ofmhelpers.db.stores import users
-    from ofmhelpers.schemas import Role
 
     users.set_role(user_id, Role.VA)
     users.set_owner(user_id, owner_id)
@@ -109,9 +111,6 @@ def test_the_zone_starts_as_the_browsers_own_and_the_globe_changes_it(va: Sessio
 
 
 def test_the_vas_button_and_the_not_uploaded_switch_filter_clone(va: Session):
-    from ofmhelpers.db.stores import users
-    from ofmhelpers.db.stores.jobs import create_job
-    from ofmhelpers.schemas import Role, UserForm
 
     helper = users.add_user(
         UserForm(

@@ -1,4 +1,4 @@
-import random
+lazy import random
 
 from pydantic import BaseModel
 

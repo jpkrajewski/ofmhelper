@@ -5,15 +5,15 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import downloads as store
-from ofmhelpers.db.stores.jobs import naming_each
-from ofmhelpers.features.assets.kinds import classify_kind
+from ofmhelpers.db.downloads import store
+from ofmhelpers.db.downloads.schema import Download
+from ofmhelpers.db.jobs.schema import Named
+from ofmhelpers.db.jobs.store import naming_each
 from ofmhelpers.features.assets.store import assets_root_for_user
+from ofmhelpers.features.kinds import classify_kind
 from ofmhelpers.features.previews import render as previews
 from ofmhelpers.integrations.downloaders.generic import DownloadConfig
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.downloads import Download
-from ofmhelpers.schemas.persistence import Named
 
 logger = get_logger(__name__)
 

@@ -4,14 +4,14 @@ import sys
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 
-from ofmhelpers import sweeps as entrypoint
+from ofmhelpers.background import sweeps as entrypoint
 
 _CHILD = textwrap.dedent(
     """
     import asyncio
-    from ofmhelpers.features.jobs.sweeps import Sweep
+    from ofmhelpers.background.sweeps import Sweep
     from ofmhelpers.log import configure_logging
-    from ofmhelpers.sweeps import run
+    from ofmhelpers.background.sweeps import run
 
     configure_logging()
     tick = Sweep(

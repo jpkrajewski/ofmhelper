@@ -1,12 +1,25 @@
-from collections.abc import Callable
+from types import MappingProxyType
+lazy from collections.abc import Callable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.cache import enqueue
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import self_links, short_links
-from ofmhelpers.db.stores.jobs import create_job
-from ofmhelpers.db.stores.tracked_accounts import list_accounts, list_creators
+from ofmhelpers.db.jobs.store import create_job
+from ofmhelpers.db.self_links import store as self_links
+from ofmhelpers.db.short_links import store as short_links
+from ofmhelpers.db.short_links.schema import (
+    GenerateLinks,
+    LinkPage,
+    LinkPeriod,
+    LinkQuery,
+    LinkSort,
+    LinksQueued,
+    LinkSummary,
+    ProviderState,
+)
+from ofmhelpers.db.tracked_accounts.schema import TrackedAccount
+from ofmhelpers.db.tracked_accounts.store import list_accounts, list_creators
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.links import keys as link_keys
 from ofmhelpers.features.links import sync
@@ -17,24 +30,15 @@ from ofmhelpers.integrations.short_links import (
     provider_infos,
     targets,
 )
-from ofmhelpers.schemas import (
-    GenerateLinks,
-    LinkPage,
-    LinkPeriod,
-    LinkQuery,
-    LinkSort,
-    LinksQueued,
-    LinkSummary,
-    ProviderState,
-    TrackedAccount,
-)
 
 
 class ListView(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     page: LinkPage
     summary: LinkSummary
     providers: list[ProviderState]
-    infos: dict[str, ProviderInfo]
+    infos: MappingProxyType[str, ProviderInfo]
     targets: dict[str, Target]
     accounts: list[TrackedAccount]
     source_label: str
@@ -67,12 +71,12 @@ def _period(query: LinkQuery) -> LinkPeriod:
     return LinkPeriod(days=days)
 
 
-def _infos_with_self_domains(owner: int) -> dict[str, ProviderInfo]:
-    infos = dict(provider_infos().entries)
+def _infos_with_self_domains(owner: int) -> MappingProxyType[str, ProviderInfo]:
+    infos = dict(provider_infos())
     if "self" in infos:
         hosts = self_links.active_hosts(owner)
         infos["self"] = infos["self"].model_copy(update={"domains": hosts})
-    return infos
+    return MappingProxyType(infos)
 
 
 def list_view(query: LinkQuery, scope: int) -> ListView:
@@ -89,7 +93,7 @@ def list_view(query: LinkQuery, scope: int) -> ListView:
         summary=LinkSummary.of(matching, period.days),
         providers=link_keys.provider_states(scope),
         infos=_infos_with_self_domains(scope),
-        targets=targets().entries,
+        targets=dict(targets()),
         accounts=short_links.source_accounts(list_accounts(scope)),
         source_label=short_links.source_label(),
         period=period,

@@ -7,21 +7,20 @@ lazy from collections.abc import AsyncIterator, Callable
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 
-from ofmhelpers.auth.access import Area, opens
 from ofmhelpers.cache.redis import get_redis, subscriber
 from ofmhelpers.config import settings
-from ofmhelpers.db.stores import chats, drive_folders
-from ofmhelpers.db.stores.jobs import list_jobs_page
+from ofmhelpers.db.chats import store as chats
+from ofmhelpers.db.chats.schema import ChatPlatform, DeliveryKind, StoredNotification
+from ofmhelpers.db.drive_folders import store as drive_folders
+from ofmhelpers.db.jobs.schema import JobStatus
+from ofmhelpers.db.jobs.store import list_jobs_page
+from ofmhelpers.features.notifications.schema import Notification, Notifications, Reader
 from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import ChatPlatform, DeliveryKind, StoredNotification
-from ofmhelpers.schemas.notifications import Notification, Notifications
-from ofmhelpers.schemas.persistence import JobStatus
+lazy from ofmhelpers.db.chats.schema import OpenWait
+lazy from ofmhelpers.db.drive_folders.schema import DriveTarget
+lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.features.trials.folder import GENERATE, REMAKE
 lazy from ofmhelpers.features.trials.tasks import NOTHING_NEW, Made
-lazy from ofmhelpers.schemas.chatting import OpenWait
-lazy from ofmhelpers.schemas.drive import DriveTarget
-lazy from ofmhelpers.schemas.persistence import Job
-lazy from ofmhelpers.schemas.users import Viewer
 
 logger = get_logger(__name__)
 
@@ -166,10 +165,10 @@ def _jobs(user_id: int, now: float) -> list[Notification]:
     return [n for job in ended if (n := _job(job, accounts)) is not None]
 
 
-def read(viewer: Viewer) -> Notifications:
+def read(reader: Reader) -> Notifications:
     now = time.time()
-    found = _jobs(viewer.user.id, now)
-    if opens(viewer, Area.CHATTING):
+    found = _jobs(reader.user_id, now)
+    if reader.chats:
         found += _reconnects(now) + _waits(now) + _chat_events(now)
     return Notifications(items=sorted(found, key=lambda n: n.at, reverse=True))
 
@@ -222,16 +221,13 @@ def _changes() -> _Changes:
     return _Changes()
 
 
-def _channels_of(viewer: Viewer) -> set[str]:
-    return (
-        {str(viewer.user.id), _CHATS}
-        if opens(viewer, Area.CHATTING)
-        else {str(viewer.user.id)}
-    )
+def _channels_of(reader: Reader) -> set[str]:
+    own = str(reader.user_id)
+    return {own, _CHATS} if reader.chats else {own}
 
 
-async def _next_change_of(viewer: Viewer, queue: asyncio.Queue[str]) -> None:
-    channels = _channels_of(viewer)
+async def _next_change_of(reader: Reader, queue: asyncio.Queue[str]) -> None:
+    channels = _channels_of(reader)
     while True:
         seen = {await queue.get()}
         while not queue.empty():
@@ -241,13 +237,13 @@ async def _next_change_of(viewer: Viewer, queue: asyncio.Queue[str]) -> None:
 
 
 async def updates(
-    signed_in: Callable[[], Viewer | None],
+    signed_in: Callable[[], Reader | None],
 ) -> AsyncIterator[Notifications]:
     changes = _changes()
     queue = changes.join()
     try:
-        while (viewer := await asyncio.to_thread(signed_in)) is not None:
-            yield await asyncio.to_thread(read, viewer)
-            await _next_change_of(viewer, queue)
+        while (reader := await asyncio.to_thread(signed_in)) is not None:
+            yield await asyncio.to_thread(read, reader)
+            await _next_change_of(reader, queue)
     finally:
         changes.leave(queue)

@@ -5,7 +5,10 @@ import re
 import sys
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from ofmhelpers.redact import path_tokens
+lazy from ofmhelpers.config import settings
 
 _configured = False
 
@@ -62,51 +65,91 @@ _JOB_ARGUMENTS = ("arguments", "kwargs")
 _HIDDEN = "[hidden]"
 
 
-def _config(level: str, fmt: str, access_log: bool) -> dict[str, Any]:
-    formatters: dict[str, Any] = {
-        "text": {
-            "format": "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
-        "json": {"()": JsonFormatter},
-    }
+class _Factory(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    return {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": formatters,
-        "filters": {
-            "hide_login_codes": {"()": _HideLoginCodes},
-            "hide_job_arguments": {"()": _HideJobArguments},
+    factory: Any = Field(default=None, serialization_alias="()")
+
+
+class _Formatter(_Factory):
+    format: str | None = None
+    datefmt: str | None = None
+
+
+class _Handler(_Factory):
+    handler_class: str | None = Field(default=None, serialization_alias="class")
+    formatter: str | None = None
+
+
+class _Logger(BaseModel):
+    handlers: list[str] | None = None
+    propagate: bool | None = None
+    level: str | None = None
+    filters: list[str] | None = None
+
+
+class _Handlers(BaseModel):
+    stdout: _Handler
+    logfire: _Handler | None = None
+
+
+class LoggingConfig(BaseModel):
+    version: int = 1
+    disable_existing_loggers: bool = False
+    formatters: dict[str, _Formatter]
+    filters: dict[str, _Factory]
+    handlers: _Handlers
+    root: _Logger
+    loggers: dict[str, _Logger]
+
+
+def _config(
+    level: str, fmt: str, access_log: bool, *, logfire: bool = False
+) -> LoggingConfig:
+    return LoggingConfig(
+        formatters={
+            "text": _Formatter(
+                format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            ),
+            "json": _Formatter(factory=JsonFormatter),
         },
-        "handlers": {
-            "stdout": {
-                "class": "logging.StreamHandler",
-                "stream": sys.stdout,
-                "formatter": "json" if fmt == "json" else "text",
-            }
+        filters={
+            "hide_login_codes": _Factory(factory=_HideLoginCodes),
+            "hide_job_arguments": _Factory(factory=_HideJobArguments),
         },
-        "root": {"handlers": ["stdout"], "level": level},
-        "loggers": {
-            "uvicorn": {"handlers": [], "propagate": True},
-            "uvicorn.error": {"handlers": [], "propagate": True},
-            "uvicorn.access": {
-                "handlers": [],
-                "propagate": access_log,
-                "level": "INFO" if access_log else "CRITICAL",
-                "filters": ["hide_login_codes"],
-            },
-            "rq": {"level": "INFO", "propagate": True},
-            "rq.worker": {"filters": ["hide_job_arguments"], "propagate": True},
-            "httpx": {"level": "WARNING"},
-            "httpx2": {"level": "WARNING"},
-            "httpcore": {"level": "WARNING"},
-            "urllib3": {"level": "WARNING"},
-            "requests": {"level": "WARNING"},
-            "apscheduler": {"level": "WARNING"},
-            "openpyxl": {"level": "WARNING"},
+        handlers=_Handlers(
+            stdout=_Handler(
+                handler_class="logging.StreamHandler",
+                formatter="json" if fmt == "json" else "text",
+            ),
+            logfire=_Handler(factory="ofmhelpers.monitoring.telemetry.logfire_handler")
+            if logfire
+            else None,
+        ),
+        root=_Logger(
+            handlers=["stdout", "logfire"] if logfire else ["stdout"], level=level
+        ),
+        loggers={
+            "uvicorn": _Logger(handlers=[], propagate=True),
+            "uvicorn.error": _Logger(handlers=[], propagate=True),
+            "uvicorn.access": _Logger(
+                handlers=[],
+                propagate=access_log,
+                level="INFO" if access_log else "CRITICAL",
+                filters=["hide_login_codes"],
+            ),
+            "rq": _Logger(level="INFO", propagate=True),
+            "rq.worker": _Logger(filters=["hide_job_arguments"], propagate=True),
+            "httpx": _Logger(level="WARNING"),
+            "httpx2": _Logger(level="WARNING"),
+            "httpcore": _Logger(level="WARNING"),
+            "urllib3": _Logger(level="WARNING"),
+            "requests": _Logger(level="WARNING"),
+            "apscheduler": _Logger(level="WARNING"),
+            "openpyxl": _Logger(level="WARNING"),
         },
-    }
+    )
 
 
 def configure_logging(*, force: bool = False) -> None:
@@ -114,14 +157,16 @@ def configure_logging(*, force: bool = False) -> None:
     if _configured and not force:
         return
 
-    from ofmhelpers.config import settings
-
     cfg = settings.logging
-    config = _config(cfg.level.upper(), cfg.format.lower(), cfg.access_log)
-    if settings.telemetry.token is not None:
-        config["handlers"]["logfire"] = {"()": "ofmhelpers.telemetry.logfire_handler"}
-        config["root"]["handlers"].append("logfire")
-    logging.config.dictConfig(config)
+    config = _config(
+        cfg.level.upper(),
+        cfg.format.lower(),
+        cfg.access_log,
+        logfire=settings.telemetry.token is not None,
+    )
+    dumped = config.model_dump(by_alias=True, exclude_none=True)
+    dumped["handlers"]["stdout"]["stream"] = sys.stdout
+    logging.config.dictConfig(dumped)
     _configured = True
 
 

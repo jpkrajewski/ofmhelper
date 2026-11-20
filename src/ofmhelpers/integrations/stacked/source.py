@@ -1,14 +1,7 @@
 from typing import Protocol
 lazy from collections.abc import Iterator, Mapping
 
-from ofmhelpers.integrations.stacked import history, webhooks
-from ofmhelpers.integrations.stacked.client import StackedClient, reach
-from ofmhelpers.integrations.stacked.errors import (
-    StackedAuthError,
-    StackedForbiddenError,
-)
-from ofmhelpers.log import get_logger
-from ofmhelpers.schemas.chatting import (
+from ofmhelpers.db.chats.schema import (
     ChatDelivery,
     ChatModel,
     ChatModels,
@@ -18,6 +11,13 @@ from ofmhelpers.schemas.chatting import (
     ReadScope,
     Subscription,
 )
+from ofmhelpers.integrations.stacked import history, webhooks
+from ofmhelpers.integrations.stacked.client import StackedClient, reach
+from ofmhelpers.integrations.stacked.errors import (
+    StackedAuthError,
+    StackedForbiddenError,
+)
+from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
 
