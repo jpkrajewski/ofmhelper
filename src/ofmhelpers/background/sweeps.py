@@ -24,6 +24,7 @@ from ofmhelpers.features.downloads import cleanup as downloads_cleanup
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.edit import cleanup as edit_cleanup
 from ofmhelpers.features.fakes import install_fakes
+from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.jobs import raw_files
 from ofmhelpers.features.links import sync as link_sync
 from ofmhelpers.features.phones import backup as phones_backup
@@ -181,6 +182,11 @@ def sweeps() -> list[Sweep]:
             interval_s=lambda: HEARTBEAT_S,
             waits_first=True,
             enabled=lambda: settings.sentry.dsn is not None,
+        ),
+        Sweep(
+            name="idempotency keys",
+            run=idempotency.remove_old,
+            interval_s=lambda: settings.idempotency.sweep_s,
         ),
         Sweep(
             name="va idle",

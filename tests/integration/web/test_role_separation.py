@@ -3,6 +3,7 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from PIL import Image
 from signin import ADMIN_EMAIL, USER_EMAIL, sign_in
 
@@ -45,6 +46,7 @@ def assets_dir(tmp_path, monkeypatch):
 def _fake_ai_job(client: TestClient, prompt: str) -> str:
     r = client.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "fake",
             "model": "fake:image",
@@ -107,6 +109,7 @@ def test_an_admin_cannot_reuse_a_users_file_by_path(admin, va, assets_dir):
 
     r = admin.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "fake",
             "model": "fake:image",
@@ -136,6 +139,7 @@ def test_va_cannot_reuse_an_admin_file_by_path(admin, va, assets_dir):
 
     r = va.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "fake",
             "model": "fake:image",

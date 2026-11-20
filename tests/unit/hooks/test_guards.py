@@ -12,6 +12,11 @@ from pydantic import BaseModel
 REPO = Path(__file__).resolve().parents[3]
 DISPATCHER = REPO / ".claude" / "hooks" / "guard.py"
 DEV_COMPOSE = "docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+REVIEWER = {
+    "description": "Review the diff",
+    "subagent_type": "caveman:cavecrew-reviewer",
+}
+KIMI = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
 
 
 class Answer(BaseModel):
@@ -217,6 +222,115 @@ def test_a_subagent_never_inherits_the_owners_word(hooks: Hooks) -> None:
     assert subagent.bash("git commit -m x").decision == "deny"
 
 
+ONE_OPEN = '0 {"open": 1, "more": false}'
+THREE_OPEN = '0 {"open": 3, "more": false}'
+NONE_OPEN = '0 {"open": 0, "more": false}'
+MORE_PAGES = '0 {"open": 0, "more": true}'
+
+
+def _guard_hook_budget_s() -> float:
+    settings = json.loads((REPO / ".claude" / "settings.json").read_text())
+    return next(
+        hook["timeout"]
+        for entry in settings["hooks"]["PreToolUse"]
+        for hook in entry["hooks"]
+        if "guard.py" in hook["command"]
+    )
+
+
+@pytest.fixture
+def github(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
+    answer = hooks.root / "gh_answer"
+    asked = hooks.root / "gh_asked"
+    fake = hooks.root / "fake_gh.py"
+    fake.write_text(
+        "import pathlib, sys, time\n"
+        f"pathlib.Path({str(asked)!r}).write_text(chr(10).join(sys.argv[1:]))\n"
+        f"text = pathlib.Path({str(answer)!r}).read_text()\n"
+        "time.sleep(60 if text == 'hang' else 0)\n"
+        "code, out = text.split(' ', 1)\n"
+        "print(out)\n"
+        "sys.exit(int(code))\n"
+    )
+    monkeypatch.setenv("CLAUDE_GUARDS_GH", f"{sys.executable} {fake}")
+    hooks.prompt("ship")
+    return answer
+
+
+@pytest.mark.parametrize(
+    ("answer", "command", "reason"),
+    [
+        (ONE_OPEN, "gh pr merge 103 --merge", "YOU CANT MERGE IF THERE ARE COMMENTS"),
+        (THREE_OPEN, "gh pr merge https://github.com/o/r/pull/7", "PR #7 has 3"),
+        ("1 HTTP 502", "gh pr merge 103 --merge", "Could not read"),
+        (NONE_OPEN, "gh pr merge --merge", "Name the PR"),
+        (NONE_OPEN, "gh pr merge my-branch", "Name the PR"),
+        (MORE_PAGES, "gh pr merge 103", "more than 100"),
+        (ONE_OPEN, "gh.exe pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "/c/tools/gh.exe pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "ls & gh pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge --repo o/r 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge -b 'pr merge 9' 103", "PR #103 has 1"),
+        (ONE_OPEN, "echo y | gh pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge -dt 9 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge -dF notes.md 103", "PR #103 has 1"),
+        (NONE_OPEN, "gh pr merge 1 && gh pr merge 2", "One gh pr merge per command"),
+        (NONE_OPEN, "GH_REPO=o/r gh pr merge 7", "not GH_REPO"),
+    ],
+)
+def test_a_pr_with_open_review_comments_is_never_merged_even_on_the_ship_word(
+    hooks: Hooks, github: Path, answer: str, command: str, reason: str
+) -> None:
+    github.write_text(answer)
+
+    verdict = hooks.bash(command)
+
+    assert verdict.decision == "deny"
+    assert reason in verdict.reason
+
+
+def test_a_pr_without_open_review_comments_merges_on_the_ship_word(
+    hooks: Hooks, github: Path
+) -> None:
+    github.write_text(NONE_OPEN)
+
+    assert hooks.bash("gh pr merge 103 --merge").decision == "allow"
+    assert hooks.bash("gh pr view 103 --comments").decision == "allow"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr merge 7 -R other/repo",
+        "gh pr merge -Rother/repo 7",
+        "gh pr merge -dRother/repo 7",
+        "gh pr merge --repo=github.com/other/repo 7",
+        "gh pr merge https://github.com/other/repo/pull/7",
+    ],
+)
+def test_a_pr_of_another_repo_is_checked_in_that_repo(
+    hooks: Hooks, github: Path, command: str
+) -> None:
+    github.write_text(ONE_OPEN)
+
+    assert hooks.bash(command).decision == "deny"
+    asked = (hooks.root / "gh_asked").read_text().splitlines()
+    assert {"owner=other", "repo=repo", "number=7"} <= set(asked)
+
+
+def test_a_github_that_does_not_answer_stops_the_merge_within_the_hook_budget(
+    hooks: Hooks, github: Path
+) -> None:
+    github.write_text("hang")
+    started = time.monotonic()
+
+    verdict = hooks.bash("gh pr merge 103 --merge")
+
+    assert verdict.decision == "deny"
+    assert "Could not read" in verdict.reason
+    assert time.monotonic() - started < _guard_hook_budget_s() - 4
+
+
 def test_an_open_ship_keeps_git_open_into_the_next_session(hooks: Hooks) -> None:
     (hooks.root / "reports" / "hooks").mkdir(parents=True)
     (hooks.root / "reports" / "hooks" / "ship.open").write_text("ed20257")
@@ -363,18 +477,13 @@ def test_stopping_after_source_edits_asks_once_for_an_independent_review(
     assert hooks.send("Stop").decision == "allow"
 
     hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
-    review = {
-        "description": "Review the egress guard diff",
-        "subagent_type": "caveman:cavecrew-reviewer",
-    }
-    hooks.send("PostToolUse", tool_name="Agent", tool_input=review)
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=KIMI)
     stop = hooks.send("SubagentStop")
     assert stop.decision == "block"
-    assert "kimi" in stop.reason
+    assert "caveman:cavecrew-reviewer" in stop.reason
 
     hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md egress"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     assert hooks.send("SubagentStop").decision == "allow"
 
 
@@ -389,20 +498,19 @@ def test_source_edited_from_the_shell_also_needs_a_review(hooks: Hooks) -> None:
     stop = hooks.send("SubagentStop")
 
     assert stop.decision == "block"
-    assert "kimi" in stop.reason
+    assert "caveman:cavecrew-reviewer" in stop.reason
 
 
 def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
 
     stop = hooks.send("SubagentStop")
     assert stop.decision == "block"
     assert "restart worker media-worker" in stop.reason
 
     hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     restart = {"command": f"{DEV_COMPOSE} restart worker media-worker sweeps"}
     hooks.send("PostToolUse", tool_name="Bash", tool_input=restart)
     assert hooks.send("SubagentStop").decision == "allow"
@@ -410,16 +518,14 @@ def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -
 
 def test_a_doc_beside_worker_code_needs_no_worker_restart(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/media/repurpose/CLAUDE.md", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
 
     assert hooks.send("SubagentStop").decision == "allow"
 
 
 def test_a_web_only_change_needs_no_worker_restart(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/web/templates/x.html", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     shot = {"command": "uv run python -c 'import ui_screens as u; u.shoot(p, s, out)'"}
     hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
 
@@ -438,8 +544,7 @@ def test_a_ui_change_is_looked_at_before_it_is_done(hooks: Hooks) -> None:
         "command": f"{DEV_COMPOSE} --profile test run --rm tests uv run --frozen python scripts/ui_screens.py r60"
     }
     hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     assert hooks.send("Stop").decision == "allow"
 
 
@@ -465,15 +570,10 @@ def test_a_shell_write_is_not_blamed_for_a_file_it_does_not_name(hooks: Hooks) -
     assert answer.decision == "allow"
 
 
-def test_the_backup_reviewer_counts_once_kimi_was_tried(hooks: Hooks) -> None:
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md egress"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+def test_kimi_counts_once_the_cavecrew_reviewer_was_tried(hooks: Hooks) -> None:
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
-    review = {
-        "description": "Review after Kimi timed out",
-        "subagent_type": "caveman:cavecrew-reviewer",
-    }
-    hooks.send("PostToolUse", tool_name="Agent", tool_input=review)
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=KIMI)
 
     assert hooks.send("SubagentStop").decision == "allow"
 

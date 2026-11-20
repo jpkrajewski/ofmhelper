@@ -15,12 +15,18 @@ from ofmhelpers.features.generate.service import (
 from ofmhelpers.features.jobs.schema import JobsQueued
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, AssetsRoot, OwnerId
+from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render_polled
 
 __all__ = ["TASK", "describe", "router", "run_ai"]
 
-router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Access(Area.GENERATE)])
+router = APIRouter(
+    prefix="/ai",
+    tags=["ai"],
+    dependencies=[Access(Area.GENERATE)],
+    route_class=IdempotentRoute,
+)
 
 
 async def _form(request: Request) -> FormData:
@@ -32,7 +38,7 @@ def fields(request: Request, model: Annotated[str, Query()]) -> Response:
     return render_polled(request, "_ai_fields.html", spec=service.model_spec(model))
 
 
-@router.post("/run", status_code=202)
+@router.post("/run", status_code=202, dependencies=[Idempotent])
 def run(
     form: Annotated[FormData, Depends(_form)],
     assets_root: AssetsRoot,

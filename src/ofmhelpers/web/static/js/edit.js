@@ -339,8 +339,11 @@
         function onMedia(media) {
             const c = clips[shown];
             if (!player.paused && !player.seeking && !advancing && c && playTo !== null) {
-                if (timelineTime(media) >= playTo - 1e-3) player.pause();
-                else if (media >= c.end - 1e-3) {
+                const past = timelineTime(media) - playTo;
+                if (past >= -1e-3) {
+                    player.pause();
+                    if (past > 0) player.currentTime = media - past;
+                } else if (media >= c.end - 1e-3) {
                     advance();
                     return;
                 }

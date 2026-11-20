@@ -2,6 +2,7 @@ import secrets
 from pathlib import Path
 from typing import Protocol
 
+from pydantic import BaseModel
 lazy from fastapi import UploadFile
 
 from ofmhelpers.cache import QueueName, enqueue_to
@@ -25,7 +26,7 @@ from ofmhelpers.features.repurpose.models import (
 )
 from ofmhelpers.log import get_logger
 from ofmhelpers.media.repurpose.audio_check import BrokenAudioError, verify_audio
-from ofmhelpers.media.repurpose.repurpose import Repurpose
+from ofmhelpers.media.repurpose.repurpose import EncodeStep, Repurpose
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
 lazy from ofmhelpers.db.jobs.schema import Job
 lazy from ofmhelpers.media.repurpose.checker import CheckReport, check
@@ -94,32 +95,43 @@ def _copy_name(seed: int) -> str:
     return f"IMG_{1000 + seed % 9000}.mov"
 
 
-def _made(source: Path, copy: Path, seed: int, timeout: int) -> CopyScore | None:
-    Repurpose(source, copy, seed=seed, timeout_s=timeout).apply_json_preset(
-        PRESET
-    ).run()
+class _Made(BaseModel):
+    score: CopyScore
+    step: EncodeStep | None
+
+
+def _made(source: Path, copy: Path, seed: int, timeout: int) -> _Made | None:
+    run = (
+        Repurpose(source, copy, seed=seed, timeout_s=timeout)
+        .apply_json_preset(PRESET)
+        .run()
+    )
     try:
         verify_audio(source, copy)
     except BrokenAudioError:
         logger.warning("repurpose: seed %s broke the audio", seed, exc_info=True)
         return None
-    return _score(check(source, copy, timeout_s=timeout))
+    return _Made(score=_score(check(source, copy, timeout_s=timeout)), step=run.step)
 
 
 def _first_unique(source: Path, copy: Path, seed: int) -> RepurposeResult:
     timeout = settings.web.uniqify_encode_timeout_s
     tries = settings.repurpose.attempts
     for attempt in range(1, tries + 1):
-        score = _made(source, copy, seed + attempt, timeout)
-        if score is not None and score.unique:
+        made = _made(source, copy, seed + attempt, timeout)
+        if made is not None and made.score.unique:
             return RepurposeResult(
-                name=copy.name, path=str(copy), score=score, attempts=attempt
+                name=copy.name,
+                path=str(copy),
+                score=made.score,
+                attempts=attempt,
+                step=made.step,
             )
         logger.warning(
             "repurpose: attempt %s of %s did not pass: %s",
             attempt,
             tries,
-            score.model_dump_json() if score else "broken audio",
+            made.score.model_dump_json() if made else "broken audio",
         )
     msg = f"Still matches the source after {tries} tries"
     raise StillLooksLikeSourceError(msg)
@@ -147,6 +159,7 @@ def _card(job: Job, uploads: list[DriveUpload]) -> RepurposeCard:
     found = job_assets(job, FILES_PREFIX)
     entries = job.result if isinstance(job.result, list) else []
     result = RepurposeResult.model_validate(entries[0]) if entries else None
+    drawn = result.step.video if result and result.step else None
     return RepurposeCard.from_job(
         job,
         found.assets,
@@ -157,6 +170,8 @@ def _card(job: Job, uploads: list[DriveUpload]) -> RepurposeCard:
         drive_uploads=uploads,
         score=result.score if result else None,
         attempts=result.attempts if result else 1,
+        mirrored=drawn.mirror if drawn else None,
+        turn=drawn.rotate if drawn else None,
     )
 
 

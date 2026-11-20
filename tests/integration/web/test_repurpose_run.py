@@ -2,7 +2,9 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import sign_in
+from spoof_draws import drawn_step
 
 from ofmhelpers.cache import QueueName
 from ofmhelpers.db.devices import store as devices
@@ -43,7 +45,12 @@ def client():
 
 
 def _run(client, **data):
-    return client.post("/spoof/run", data={"video_manifest": NEW, **data}, files=[CLIP])
+    return client.post(
+        "/spoof/run",
+        data={"video_manifest": NEW, **data},
+        files=[CLIP],
+        headers=keyed(),
+    )
 
 
 def test_each_copy_is_its_own_job_on_the_media_queue_with_its_own_seed(client, queued):
@@ -73,8 +80,35 @@ def test_more_copies_than_the_limit_are_refused(client, queued):
     assert queued == []
 
 
+def test_a_second_click_with_the_same_key_queues_nothing_more(client, queued):
+    key = keyed()
+    form = {"video_manifest": NEW, "copies": "2"}
+
+    first = client.post("/spoof/run", data=form, files=[CLIP], headers=key)
+    again = client.post("/spoof/run", data=form, files=[CLIP], headers=key)
+
+    assert (first.status_code, again.status_code) == (202, 200)
+    assert again.json() == first.json()
+    assert len(queued) == 2
+
+
+def test_the_same_key_with_another_video_of_the_same_size_is_refused(client, queued):
+    key = keyed()
+    form = {"video_manifest": NEW, "copies": "1"}
+
+    first = client.post(
+        "/spoof/run", data=form, files=[("video", ("a.mp4", b"aaaa"))], headers=key
+    )
+    other = client.post(
+        "/spoof/run", data=form, files=[("video", ("a.mp4", b"bbbb"))], headers=key
+    )
+
+    assert (first.status_code, other.status_code) == (202, 400)
+    assert len(queued) == 1
+
+
 def test_no_video_is_refused(client, queued):
-    r = client.post("/spoof/run", data={"copies": "1"})
+    r = client.post("/spoof/run", data={"copies": "1"}, headers=keyed())
 
     assert r.status_code == 400
     assert r.json() == {"detail": "Pick one video"}
@@ -112,3 +146,30 @@ def test_a_copy_uploaded_to_drive_says_so_on_its_card(client, tmp_path):
 
     assert "In Drive" in html
     assert "ann.ig - Anna" in html
+
+
+def _copy_drawn(client, tmp_path, seed: int) -> None:
+    copy = tmp_path / f"IMG_{seed}.mov"
+    copy.write_bytes(b"a copy")
+    job = create_job(
+        "repurpose", {"source": "s.mp4", "seed": seed}, actor=str(client.user.id)
+    )
+    step = drawn_step(seed).model_dump(mode="json")
+    run_job(job, lambda: [{"name": copy.name, "path": str(copy), "step": step}], {})
+
+
+def test_a_copy_card_says_if_it_was_mirrored_and_how_far_it_turned(client, tmp_path):
+    seeds = range(8)
+    for seed in seeds:
+        _copy_drawn(client, tmp_path, seed)
+    drawn = [drawn_step(seed).video for seed in seeds]
+
+    html = client.get("/spoof").text
+
+    mirrored = sum(d.mirror for d in drawn)
+    assert 0 < mirrored < len(drawn)
+    assert html.count("· mirrored") == mirrored
+    assert html.count("· not&nbsp;mirrored") == len(drawn) - mirrored
+    turn = drawn[0].rotate or 0.0
+    side = "right" if turn > 0 else "left"
+    assert f"· turned&nbsp;{abs(turn):.1f}°&nbsp;{side}" in html

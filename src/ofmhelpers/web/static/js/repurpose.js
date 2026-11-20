@@ -72,6 +72,42 @@
         });
     }
 
+    const DRIVE_POLL_MS = 3000;
+    const DRIVE_POLL_MAX_MS = 30000;
+
+    function followUploads(gallery, wait = DRIVE_POLL_MS, gone = new Set()) {
+        if (document.hidden) {
+            document.addEventListener(
+                "visibilitychange",
+                () => followUploads(gallery, wait, gone),
+                { once: true }
+            );
+            return;
+        }
+        const queued = [...gallery.querySelectorAll('.drive-states li[data-status="queued"]')]
+            .map((li) => li.closest(".result-item")?.dataset.jobId)
+            .filter((jobId) => jobId && !gone.has(jobId));
+        if (!queued.length) return;
+        const redraws = [...new Set(queued)].map((jobId) =>
+            fetch(`/spoof/cards/${jobId}`)
+                .then((r) => {
+                    if (r.status >= 400 && r.status < 500) gone.add(jobId);
+                    return r.ok ? r.text() : "";
+                })
+                .then((html) => {
+                    const tpl = document.createElement("template");
+                    tpl.innerHTML = html.trim();
+                    const fresh = tpl.content.querySelector(".drive-states");
+                    const shown = gallery.querySelector(`.result-item[data-job-id="${jobId}"] .drive-states`);
+                    if (fresh && shown) shown.replaceWith(fresh);
+                })
+        );
+        Promise.allSettled(redraws).then(() => {
+            const next = Math.min(wait * 1.5, DRIVE_POLL_MAX_MS);
+            setTimeout(() => followUploads(gallery, next, gone), wait);
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         const form = document.getElementById("repurpose-form");
         const gallery = document.getElementById("rp-gallery");
@@ -79,6 +115,7 @@
         initSwap(gallery);
         initRecreate(form, gallery);
         initDrive(gallery);
+        followUploads(gallery);
         const prefill = JSON.parse(form.dataset.prefillVideo || "[]");
         if (prefill.length) window.FilePicker.setExisting("video", prefill);
     });

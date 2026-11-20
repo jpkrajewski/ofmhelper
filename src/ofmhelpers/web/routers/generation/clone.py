@@ -52,6 +52,7 @@ from ofmhelpers.web.dependencies import (
 )
 from ofmhelpers.web.forms import Files, PaidForm
 from ofmhelpers.web.gallery import Gallery, GalleryParams
+from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
@@ -71,7 +72,12 @@ __all__ = [
     "router",
 ]
 
-router = APIRouter(prefix=PREFIX, tags=["clone"], dependencies=[Access(Area.CLONE)])
+router = APIRouter(
+    prefix=PREFIX,
+    tags=["clone"],
+    dependencies=[Access(Area.CLONE)],
+    route_class=IdempotentRoute,
+)
 
 
 def default_prompt() -> str:
@@ -203,7 +209,7 @@ def drive_upload_states(
     return upload_states(job, actors, viewer.team_ids)
 
 
-@router.post("/run", status_code=202)
+@router.post("/run", status_code=202, dependencies=[Idempotent])
 def run(
     request: Request,
     form: Annotated[CloneForm, Form()],

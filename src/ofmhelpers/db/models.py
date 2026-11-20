@@ -266,6 +266,11 @@ class JobRow(Base):
     __table_args__ = (
         Index("ix_jobs_created_at", "created_at"),
         Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
+        Index(
+            "ix_jobs_running_user_id",
+            "user_id",
+            postgresql_where=text("status = 'running'"),
+        ),
     )
 
 
@@ -587,6 +592,34 @@ class DriveUploadRow(Base):
         CheckConstraint(
             "(login_id IS NULL) <> (va_id IS NULL)", name="ck_drive_uploads_one_folder"
         ),
+    )
+
+
+class IdempotencyKeyRow(Base):
+    __tablename__ = "idempotency_keys"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    response_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    response_body: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('started', 'done')", name="ck_idempotency_keys_status"
+        ),
+        CheckConstraint("length(key) <= 255", name="ck_idempotency_keys_key_length"),
+        Index("ix_idempotency_keys_created_at", "created_at"),
     )
 
 

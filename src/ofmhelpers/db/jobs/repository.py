@@ -1,7 +1,7 @@
 import time
 import uuid
 from typing import Any
-lazy from collections.abc import Sequence
+lazy from collections.abc import Collection, Sequence
 lazy from decimal import Decimal
 
 from sqlalchemy import (
@@ -21,7 +21,7 @@ from sqlalchemy import (
     update,
     values,
 )
-from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array_agg
+from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by, array, array_agg
 
 from ofmhelpers.config import settings
 from ofmhelpers.db.cached_repository import CachedRepository, cached, invalidates_cache
@@ -437,6 +437,24 @@ class JobRepository(CachedRepository):
                 .scalars()
                 .all()
             )
+            return [_job(r) for r in rows]
+
+    def running_with_links(
+        self, tasks: Collection[str], user_id: int, links: list[str]
+    ) -> list[Job]:
+        if not links:
+            return []
+        with session_scope() as s:
+            rows = s.execute(
+                select(JobRow)
+                .where(
+                    JobRow.task.in_(tasks),
+                    JobRow.user_id == user_id,
+                    JobRow.status == "running",
+                    JobRow.params["urls"].has_any(array(links)),
+                )
+                .order_by(JobRow.created_at)
+            ).scalars()
             return [_job(r) for r in rows]
 
     @invalidates_cache

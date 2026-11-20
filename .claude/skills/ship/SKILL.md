@@ -33,12 +33,15 @@ that did not import, each failure with its error, the 10 slowest). Green =
 report.json with a reader of your own: its per-test list leaves out files
 that failed to import (2026-11-20: "6285 passed" reported green over 5 errors).
 
-## 2b. Independent review by Kimi
-While the gate runs: the `kimi` skill, a read-only review of the diff that is
-about to ship (code and config; not uv.lock, not moved docs). A HIGH finding
+## 2b. Independent review by the cavecrew reviewer
+While the gate runs: the Agent tool with `subagent_type` `caveman:cavecrew-reviewer`,
+a read-only review of the diff that is about to ship (code and config; not
+uv.lock, not moved docs). Only if it fails or times out, Kimi as backup (the
+`kimi` skill; say why the reviewer failed). Owner 2026-11-20: cavecrew first,
+Kimi the fallback. A HIGH finding
 is fixed, or disproved with the quoted code, before the commit; anything fixed
 means step 2 again. Name every finding and what happened to it in the report.
-The review is also against the rules: give Kimi the `.claude/rules/*.md` files
+The review is also against the rules: give the reviewer the `.claude/rules/*.md` files
 whose `paths` match the changed files and have it name each broken rule (for a
 Zalando rule, its id). A `tests/unit/architecture/baseline.json` that grew is
 a HIGH finding.
@@ -82,11 +85,38 @@ foreground push); then compare `git ls-remote origin dev` with HEAD. A push touc
 --exit-status`. Red: `gh run view <id> --log-failed`, fix, back to step 2.
 
 ## 6. Promote = deploy
-Green CI opens or updates "Promote dev to main"
-(`gh pr list --base main --head dev`). Merge it with a merge commit:
-`gh pr merge <n> --merge`. This is the production deploy.
+Green CI opens or updates the "Promote dev to main" PR
+(`gh pr list --base main --head dev`). Merging it with a merge commit
+(`gh pr merge <n> --merge`) is the production deploy. Two checks come first.
 
-Before the merge, look at what runs on prod: the deploy kills every running
+**Review comments.** No PR is merged with an open review comment. Every
+reviewer counts, bots included: CodeQL posts each new alert as a review
+comment. List them with `gh pr view <n> --comments` and
+`gh api repos/jpkrajewski/ofmhelper/pulls/<n>/comments`. For each one:
+1. Verify it against the code at the line it names. A CodeQL alert on a line
+   that only moved comes back under a new number while the old number is
+   marked fixed at the same moment
+   (`gh api "repos/jpkrajewski/ofmhelper/code-scanning/alerts?state=fixed"`).
+   Say so in the answer, but answer it like any other.
+2. Close it one of two ways:
+   - **A real defect:** fix it on dev with a test that fails without the fix,
+     reply in the thread with what changed, and go back to step 2. The new
+     push reruns CodeQL; resolve the thread once the alert shows as fixed.
+   - **Not a defect:** reply in the thread with the reason and the evidence
+     (the line of code that rules it out), resolve the thread (GraphQL
+     `resolveReviewThread`), and dismiss the CodeQL alert with the matching
+     reason (`false positive` or `won't fix`) and the same text
+     (`gh api -X PATCH .../code-scanning/alerts/<id> -f state=dismissed ...`).
+3. A review whose only text is its summary has no thread to resolve: answer
+   it in a PR comment.
+
+The `pr_comments` guard denies `gh pr merge` while a review thread is
+unresolved or a reviewer's latest review requests changes. Name every comment
+and how it was closed in the step 9 report. (Owner, 2026-11-20, after #103
+was merged over an unanswered CodeQL comment: "YOU CANT MERGE IF THERE ARE
+COMMENTS".)
+
+**Running jobs.** Look at what runs on prod: the deploy kills every running
 job (120 s grace). `running_jobs()` in the prod app container (read-only):
 a job a person waits on (trials Generate/Upload, threads, edit, clone) =
 wait for it to end, or tell the owner which and how long, and merge on

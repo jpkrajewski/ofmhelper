@@ -303,6 +303,15 @@ def list_batch(task: str, batch: str, actor: str) -> list[Job]:
     return [] if user_id is None else _repository().list_batch(task, user_id, batch)
 
 
+def running_with_links(
+    tasks: Collection[str], actor: str, links: list[str]
+) -> list[Job]:
+    user_id = _user_id(actor)
+    if user_id is None:
+        return []
+    return _repository().running_with_links(tasks, user_id, links)
+
+
 def merge_params(job_id: str, values: dict[str, Any]) -> None:
     _repository().merge_params(job_id, values)
 

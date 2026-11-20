@@ -11,11 +11,11 @@ REVIEW_WORDS = re.compile(r"review", re.IGNORECASE)
 KIMI_RUN = re.compile(
     r"kimi/ask\.py\s+review|kimi\.exe|(^|[;&|(]\s*)kimi\s+(-p|-r)\b", re.MULTILINE
 )
-KIMI_FIRST = (
-    "MY-RULES: before calling a feature done, an independent reviewer checks it for failures, races, "
-    "scale and safety, and you fix what it finds. The reviewer is Kimi: the kimi skill, "
-    "python .claude/skills/kimi/ask.py review <task.md> <name> on the diff. Only if Kimi fails or "
-    "times out, a cavecrew-reviewer agent as backup (say why Kimi failed). "
+REVIEWER_FIRST = (
+    "Owner (2026-11-20): before calling a feature done, an independent reviewer checks it for failures, "
+    "races, scale and safety, and you fix what it finds. The reviewer is the cavecrew reviewer: the Agent "
+    "tool with subagent_type caveman:cavecrew-reviewer on the diff. Only if it fails or times out, Kimi as "
+    "backup: python .claude/skills/kimi/ask.py review <task.md> <name> (say why the reviewer failed). "
     "If this stop is a question to the owner, not done, say so and stop again."
 )
 
@@ -51,9 +51,9 @@ def record(event: HookEvent, markers: Markers) -> None:
 
 
 def reviewed_since(markers: Markers, edited: float) -> bool:
-    kimi = markers.since("kimi-review")
-    backup = markers.since("agent-review")
-    return kimi > edited or (backup > edited and kimi > 0)
+    reviewer = markers.since("agent-review")
+    backup = markers.since("kimi-review")
+    return reviewer > edited or (backup > edited and reviewer > 0)
 
 
 def check(event: HookEvent) -> Verdict | None:
@@ -67,7 +67,7 @@ def check(event: HookEvent) -> Verdict | None:
     if reviewed_since(markers, edited) or markers.since("review-asked") > edited:
         return None
     markers.set("review-asked")
-    return block(NAME, KIMI_FIRST)
+    return block(NAME, REVIEWER_FIRST)
 
 
 GUARD = Guard(

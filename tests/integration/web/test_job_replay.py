@@ -3,6 +3,7 @@ lazy from pathlib import Path
 import pytest
 from download_files import fake_downloads, fake_posters
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import make_user, sign_in
 
 from ofmhelpers.background import registry, replay
@@ -39,7 +40,9 @@ def test_a_download_runs_again_from_its_row(tmp_path, monkeypatch):
     downloads = fake_downloads(monkeypatch, tmp_path)
     client = TestClient(app)
     sign_in(client)
-    job_id = client.post("/download-media/run", data={"urls": LINK}).json()["job_id"]
+    job_id = client.post(
+        "/download-media/run", data={"urls": LINK}, headers=keyed()
+    ).json()["job_id"]
 
     done = replay.replay(job_id)
 

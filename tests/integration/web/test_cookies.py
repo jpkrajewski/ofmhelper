@@ -4,6 +4,7 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import sign_in
 from sqlalchemy import text
 
@@ -292,7 +293,9 @@ def test_a_download_logs_in_as_whoever_started_it(ann, bob, monkeypatch):
     _upload(ann[0], _jar(ANN_SECRET))
 
     for client, _ in (ann, bob):
-        r = client.post("/download-media/run", data={"urls": "https://x.test/p/1"})
+        r = client.post(
+            "/download-media/run", data={"urls": "https://x.test/p/1"}, headers=keyed()
+        )
         assert r.status_code == 202
 
     assert ANN_SECRET in (logins[0] or "")

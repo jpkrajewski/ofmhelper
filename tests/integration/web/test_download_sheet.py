@@ -5,6 +5,7 @@ lazy from pathlib import Path
 import pytest
 from download_files import fake_downloads, fake_posters, rows
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from redis.exceptions import ConnectionError as RedisDown
 from signin import make_user, sign_in
 
@@ -145,7 +146,9 @@ def test_only_the_links_added_since_are_downloaded(downloads):
 
 def test_a_link_pasted_by_hand_before_is_not_downloaded_again(downloads):
     client = _client()
-    pasted = client.post("/download-media/run", data={"urls": A}).json()["job_id"]
+    pasted = client.post(
+        "/download-media/run", data={"urls": A}, headers=keyed()
+    ).json()["job_id"]
     _type(OWNER, A, B)
 
     answer = _click(client)

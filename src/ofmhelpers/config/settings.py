@@ -1752,3 +1752,15 @@ class DistributionSettings(BaseSettings):
 
     def scheduled(self, production: bool) -> bool:
         return production if self.scheduled_pins is None else self.scheduled_pins
+
+
+class IdempotencySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    keep_s: int = Field(
+        default=86400, ge=3600, validation_alias="OFM_IDEMPOTENCY_KEEP_S"
+    )
+    stale_s: int = Field(default=600, ge=10, validation_alias="OFM_IDEMPOTENCY_STALE_S")
+    sweep_s: int = Field(
+        default=3600, ge=60, validation_alias="OFM_IDEMPOTENCY_SWEEP_S"
+    )

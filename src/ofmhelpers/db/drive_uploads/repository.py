@@ -8,6 +8,8 @@ from ofmhelpers.db.drive_folders.schema import DriveUpload
 from ofmhelpers.db.models import DriveUploadRow
 from ofmhelpers.db.session import session_scope
 
+GONE_IN_DRIVE = "Removed in Drive"
+
 
 def _upload(row: DriveUploadRow) -> DriveUpload:
     return DriveUpload(
@@ -118,20 +120,29 @@ class DriveUploadRepository(CachedRepository):
                 .values(status="removed", error=reason)
             )
 
-    def gone_from(self, login_id: int, present: set[str], before: float) -> int:
+    def follow_drive(self, login_id: int, present: set[str], before: float) -> int:
         with session_scope() as s:
             rows = s.execute(
                 select(DriveUploadRow).where(
                     DriveUploadRow.login_id == login_id,
-                    DriveUploadRow.status == "done",
                     DriveUploadRow.finished_at < before,
+                    or_(
+                        DriveUploadRow.status == "done",
+                        and_(
+                            DriveUploadRow.status == "removed",
+                            DriveUploadRow.error == GONE_IN_DRIVE,
+                        ),
+                    ),
                 )
             ).scalars()
-            gone = [r for r in rows if r.drive_file_id not in present]
-            for row in gone:
-                row.status = "removed"
-                row.error = "Removed in Drive"
-            return len(gone)
+            changed = [
+                r for r in rows if (r.drive_file_id in present) != (r.status == "done")
+            ]
+            for row in changed:
+                there = row.drive_file_id in present
+                row.status = "done" if there else "removed"
+                row.error = None if there else GONE_IN_DRIVE
+            return len(changed)
 
     def finish(
         self,

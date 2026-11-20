@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from PIL import Image
 from signin import sign_in_agency
 
@@ -58,7 +59,7 @@ def _fake(client, files=None, **fields):
         "delay": "0",
         **fields,
     }
-    return client.post("/ai/run", data=data, files=files)
+    return client.post("/ai/run", data=data, files=files, headers=keyed())
 
 
 def test_page_offers_every_provider_and_every_model(client):
@@ -293,7 +294,7 @@ def test_settings_are_typed_from_the_form(client):
     ],
 )
 def test_a_bad_request_is_a_400_and_queues_nothing(client, data, detail):
-    r = client.post("/ai/run", data=data)
+    r = client.post("/ai/run", data=data, headers=keyed())
 
     assert r.status_code == 400
     assert detail in r.json()["detail"]
@@ -330,6 +331,7 @@ def test_a_kie_run_sends_the_catalog_body_and_keeps_the_hosted_copy(client, kie)
     files = {"reference_image_urls": ("face.png", io.BytesIO(_png()), "image/png")}
     r = client.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "kie",
             "model": "kie:wan/3-0-video",
@@ -365,6 +367,7 @@ def test_a_failed_download_keeps_the_job_on_the_hosted_copy(client, kie, monkeyp
 
     job_id = client.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "kie",
             "model": "kie:wan/3-0-video",
@@ -388,6 +391,7 @@ def test_a_failure_before_any_result_fails_the_job(client, kie, monkeypatch):
 
     job_id = client.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "kie",
             "model": "kie:wan/3-0-video",
@@ -429,6 +433,7 @@ def test_a_higgsfield_run_uses_its_own_field_names(client, monkeypatch):
 
     r = client.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "higgsfield",
             "model": "higgsfield:kling-video/v3.0/pro/image-to-video",
@@ -585,6 +590,7 @@ def test_a_new_provider_works_end_to_end_with_no_web_change(client, plugin):
 
     r = client.post(
         "/ai/run",
+        headers=keyed(),
         data={
             "provider": "plugin",
             "model": "plugin:toy",
