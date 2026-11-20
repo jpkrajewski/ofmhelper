@@ -4,14 +4,14 @@
 {% if job.score %}
 <div class="rp-score">
     {% if job.score.unique %}{{ ui.badge("Unique", "ok") }}{% endif %}
-    {% if job.score.looks_like_source %}{{ ui.badge("Picture matches source", "warn") }}{% endif %}
-    {% if job.score.sounds_like_source %}{{ ui.badge("Sound matches source", "warn") }}{% endif %}
+    {% if job.attempts > 1 %}{{ ui.badge("Took " ~ job.attempts ~ " tries", "warn") }}{% endif %}
     {% for m in job.score.methods %}
     <p class="rp-method"><span>{{ m.method }} · {{ m.medium }}</span><span>{{ m.percent }}%</span></p>
     {% endfor %}
 </div>
 {% endif %}
 {% endblock %}
-{% block meta %}Repurpose{% if job.copies %} · copy {{ job.copy_number }}/{{ job.copies }}{% endif %} · {{ job.params.preset_name or "custom" }}{% if job.params.special %} special{% endif %} · {{ job.params.device }}{% endblock %}
-{% block pending_label %}making copies…{% endblock %}
-{% block actions %}{{ ui.button("Recreate", icon="restore", hook="recreate-btn") }}{% endblock %}
+{% block meta %}Spoof · iPhone 16 Pro Max{% endblock %}
+{% block pending_label %}spoofing…{% endblock %}
+{% block below %}{% include "_drive_states.html" %}{% endblock %}
+{% block menu_items %}{% if drive_targets %}{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}{% endif %}{% endblock %}

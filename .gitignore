@@ -11,6 +11,7 @@ CLAUDE.local.md
 # Agent journal (CLAUDE.md "SELF-LEARNING"): local only.
 /BRAIN.md
 /IMPROVEMENTS.md
+/repurpose.md
 deploy.local.env
 
 # Runtime data directories, anchored to the repo root with a leading slash.

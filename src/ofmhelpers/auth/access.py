@@ -1,5 +1,6 @@
 from enum import StrEnum
 
+from ofmhelpers.config.retired import retired as retired_config
 from ofmhelpers.schemas.users import Role
 lazy from ofmhelpers.schemas.users import Viewer
 
@@ -110,7 +111,7 @@ PAGES: frozendict[Role, tuple[Area, ...]] = frozendict(
     {Role.VA: VA, Role.USER: USER, Role.ADMIN: ADMIN, Role.MANAGER: MANAGER}
 )
 
-RETIRED = frozenset({Area.CLONE_LINKS, Area.PICTURES, Area.REELS, Area.REPURPOSE})
+RETIRED = frozenset(Area(name) for name in retired_config().areas)
 
 
 def _roles(area: Area) -> frozenset[Role]:

@@ -173,15 +173,9 @@ def _kind(item: pytest.Item) -> str:
     return kind
 
 
-collect_ignore_glob = [
-    "*/test_clone_links*.py",
-    "*/clone_ai_check/test_*.py",
-    "*/test_drive_review_folder.py",
-    "*/test_reels*.py",
-    "*/test_reel_thumbs.py",
-    "*/test_repurpose_run.py",
-    "*/test_pictures*.py",
-]
+collect_ignore_glob = (
+    importlib.import_module("ofmhelpers.config.retired").retired().tests
+)
 
 
 @pytest.hookimpl(tryfirst=True)

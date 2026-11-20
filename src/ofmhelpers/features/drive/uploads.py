@@ -11,15 +11,27 @@ from ofmhelpers.db.stores.tracked_accounts import list_accounts
 from ofmhelpers.db.stores.users import get_user, refresh_token
 from ofmhelpers.features.assets.names import download_name
 from ofmhelpers.features.drive import va_folders
-from ofmhelpers.features.drive.folders import root_name, usable_root
+from ofmhelpers.features.drive.folders import (
+    ReviewPlace,
+    account_subfolder,
+    review_target,
+    root_name,
+    usable_root,
+)
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import UnavailableError
-from ofmhelpers.integrations.gdrive import DriveError, FolderGoneError, connect_as
+from ofmhelpers.integrations.gdrive import (
+    DriveApi,
+    DriveError,
+    FolderGoneError,
+    connect_as,
+)
 from ofmhelpers.integrations.signin import SignInError
 from ofmhelpers.integrations.socials import get_platform
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DriveUpload, SessionUser, StoredFolder, UploadTarget
 from ofmhelpers.schemas.drive import VaFolder
+from ofmhelpers.schemas.gdrive import AccountFolder
 
 type Folder = StoredFolder | VaFolder
 
@@ -27,6 +39,7 @@ logger = get_logger(__name__)
 
 _PLATFORM = "instagram"
 TASK = "drive_upload"
+SPOOFED_TASK = "repurpose"
 
 
 class UploadRefusedError(ValueError): ...
@@ -155,6 +168,17 @@ def _enqueue(upload_ids: list[int], actor: str) -> None:
             store.finish(upload_id, error=f"Could not queue the upload: {exc}")
 
 
+def _destination(
+    upload: DriveUpload, owner_id: int, folder: Folder, drive: DriveApi, token: str
+) -> ReviewPlace:
+    job = get_job(upload.job_id, None)
+    if job is None or job.task != SPOOFED_TASK:
+        return ReviewPlace(drive=drive, folder_id=folder.folder_id)
+    place = review_target(token, owner_id)
+    spoofed = account_subfolder(place, folder.folder_id, AccountFolder.SPOOFED)
+    return ReviewPlace(drive=place.drive, folder_id=spoofed)
+
+
 def _upload_one(upload: DriveUpload, owner_id: int, folder: Folder) -> None:
     files = dict(_files(upload.job_id, None))
     path = files.get(upload.file_index)
@@ -185,7 +209,10 @@ def _upload_one(upload: DriveUpload, owner_id: int, folder: Folder) -> None:
                 " folder: Sync on /drive, then upload again",
             )
             return
-        made = drive.upload(folder.folder_id, path, download_name(path.name), mime)
+        target = _destination(upload, owner_id, folder, drive, token)
+        made = target.drive.upload(
+            target.folder_id, path, download_name(path.name), mime
+        )
     except (DriveError, SignInError) as exc:
         logger.warning("drive upload %s failed: %s", upload.id, exc, exc_info=True)
         store.finish(upload.id, error=str(exc))

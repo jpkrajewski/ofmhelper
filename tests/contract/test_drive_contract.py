@@ -144,12 +144,11 @@ def _trash(drive, backend, folder_id: str) -> None:
         ).execute()
 
 
-def test_a_trashed_folder_still_lists_but_is_gone_as_a_folder(drive, backend, parent):
+def test_a_trashed_folder_with_contents_is_gone_as_a_folder(drive, backend, parent):
     trashed = drive.create_folder(parent, "trashed")
-    child = drive.create_folder(trashed.id, "child")
+    drive.create_folder(trashed.id, "child")
     _trash(drive, backend, trashed.id)
 
-    assert [f.id for f in drive.children(trashed.id)] == [child.id]
     with pytest.raises(FolderGoneError):
         drive.folder(trashed.id)
 

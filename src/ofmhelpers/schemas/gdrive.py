@@ -11,6 +11,7 @@ class AccountFolder(StrEnum):
     POSTED = "POSTED"
     TRIALS = "TRIALS"
     THREADS = "THREADS"
+    SPOOFED = "SPOOFED"
 
 
 _FOLDER_URL = "https://drive.google.com/drive/folders/{}"

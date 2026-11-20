@@ -28,6 +28,20 @@ def _finished_clone(client: TestClient, tmp_path: Path) -> str:
     return job_id
 
 
+def test_a_clone_card_offers_spoof_and_opens_repurpose_with_its_video(client, tmp_path):
+    job = _finished_clone(client, tmp_path)
+
+    assert "send-to-spoof" in client.get("/clone").text
+    r = client.post(f"/clone/{job}/handoffs", data={"target": "spoof"})
+
+    assert r.status_code == 200, r.text
+    url = urlsplit(r.json()["redirect"])
+    assert url.path == "/spoof"
+    (video,) = parse_qs(url.query)["video"]
+    assert Path(video).read_bytes() == b"a clone"
+    assert client.get(r.json()["redirect"]).status_code == 200
+
+
 @pytest.mark.parametrize("target", ["edit", "clone-long"])
 def test_a_clone_opens_on_edit_or_clone_long_with_its_video(client, tmp_path, target):
     job = _finished_clone(client, tmp_path)

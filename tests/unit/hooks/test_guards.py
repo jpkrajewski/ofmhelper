@@ -357,12 +357,12 @@ def test_the_production_host_never_lands_in_a_tracked_file(hooks: Hooks) -> None
 def test_stopping_after_source_edits_asks_once_for_an_independent_review(
     hooks: Hooks,
 ) -> None:
-    hooks.edit("src/ofmhelpers/x.py", when="PostToolUse")
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
 
     assert hooks.send("Stop").decision == "block"
     assert hooks.send("Stop").decision == "allow"
 
-    hooks.edit("src/ofmhelpers/x.py", when="PostToolUse")
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
     review = {
         "description": "Review the egress guard diff",
         "subagent_type": "caveman:cavecrew-reviewer",
@@ -372,10 +372,75 @@ def test_stopping_after_source_edits_asks_once_for_an_independent_review(
     assert stop.decision == "block"
     assert "kimi" in stop.reason
 
-    hooks.edit("src/ofmhelpers/x.py", when="PostToolUse")
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
     kimi = {"command": "python .claude/skills/kimi/ask.py review task.md egress"}
     hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
     assert hooks.send("SubagentStop").decision == "allow"
+
+
+def test_source_edited_from_the_shell_also_needs_a_review(hooks: Hooks) -> None:
+    hooks.skill("senior-python-rules")
+    (hooks.root / "src" / "ofmhelpers" / "made_by_python.py").write_text("x = 1\n")
+    write = {
+        "command": "python - <<'EOF'\nopen('src/ofmhelpers/made_by_python.py','w')\nEOF"
+    }
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=write, duration_ms=300)
+
+    stop = hooks.send("SubagentStop")
+
+    assert stop.decision == "block"
+    assert "kimi" in stop.reason
+
+
+def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -> None:
+    hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+
+    stop = hooks.send("SubagentStop")
+    assert stop.decision == "block"
+    assert "restart worker media-worker" in stop.reason
+
+    hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    restart = {"command": f"{DEV_COMPOSE} restart worker media-worker sweeps"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=restart)
+    assert hooks.send("SubagentStop").decision == "allow"
+
+
+def test_a_doc_beside_worker_code_needs_no_worker_restart(hooks: Hooks) -> None:
+    hooks.edit("src/ofmhelpers/media/repurpose/CLAUDE.md", when="PostToolUse")
+    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+
+    assert hooks.send("SubagentStop").decision == "allow"
+
+
+def test_a_web_only_change_needs_no_worker_restart(hooks: Hooks) -> None:
+    hooks.edit("src/ofmhelpers/web/templates/x.html", when="PostToolUse")
+    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    shot = {"command": "uv run python -c 'import ui_screens as u; u.shoot(p, s, out)'"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
+
+    assert hooks.send("SubagentStop").decision == "allow"
+
+
+def test_a_ui_change_is_looked_at_before_it_is_done(hooks: Hooks) -> None:
+    hooks.edit("src/ofmhelpers/web/static/css/pages.css", when="PostToolUse")
+
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "ui_screens" in stop.reason
+
+    hooks.edit("src/ofmhelpers/web/static/css/pages.css", when="PostToolUse")
+    shot = {
+        "command": f"{DEV_COMPOSE} --profile test run --rm tests uv run --frozen python scripts/ui_screens.py r60"
+    }
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
+    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    assert hooks.send("Stop").decision == "allow"
 
 
 def test_saying_kimi_is_not_a_review(hooks: Hooks) -> None:
@@ -403,7 +468,7 @@ def test_a_shell_write_is_not_blamed_for_a_file_it_does_not_name(hooks: Hooks) -
 def test_the_backup_reviewer_counts_once_kimi_was_tried(hooks: Hooks) -> None:
     kimi = {"command": "python .claude/skills/kimi/ask.py review task.md egress"}
     hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
-    hooks.edit("src/ofmhelpers/x.py", when="PostToolUse")
+    hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
     review = {
         "description": "Review after Kimi timed out",
         "subagent_type": "caveman:cavecrew-reviewer",
@@ -481,3 +546,61 @@ def test_every_call_leaves_an_audit_line(hooks: Hooks) -> None:
     last = json.loads(lines[-1])
     assert last["verdicts"] == ["git:deny"]
     assert last["target"] == "git commit -m x"
+
+
+def test_a_deploy_is_followed_by_one_self_learn_pass(hooks: Hooks) -> None:
+    merge = {"command": "gh pr merge 120 --merge"}
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=merge)
+
+    stop = hooks.send("Stop")
+    assert stop.decision == "block"
+    assert "self-learn skill" in stop.reason
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_a_deploy_already_learned_from_ends_quietly(hooks: Hooks) -> None:
+    hooks.send(
+        "PostToolUse",
+        tool_name="Bash",
+        tool_input={"command": "gh workflow run deploy.yml --ref main"},
+    )
+    done = hooks.root / "reports" / "self-learn" / "last.txt"
+    done.parent.mkdir(parents=True)
+    time.sleep(0.05)
+    done.write_text(
+        time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() + 1)),
+        encoding="utf-8",
+    )
+
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_no_deploy_no_self_learn_pass(hooks: Hooks) -> None:
+    hooks.send("PostToolUse", tool_name="Bash", tool_input={"command": "gh pr list"})
+
+    assert hooks.send("Stop").decision == "allow"
+
+
+def test_a_deploy_run_by_a_subagent_still_holds_the_main_session(
+    tmp_path: Path,
+) -> None:
+    hooks_root = Hooks(tmp_path, agent="sub1")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    shutil.copy(REPO / "CLAUDE.md", tmp_path / "CLAUDE.md")
+    hooks_root.send(
+        "PostToolUse",
+        tool_name="Bash",
+        tool_input={"command": "gh pr merge 120 --merge"},
+    )
+
+    stop = Hooks(tmp_path).send("Stop")
+
+    assert stop.decision == "block"
+    assert "self-learn skill" in stop.reason
+
+
+def test_a_command_that_only_mentions_a_merge_is_no_deploy(hooks: Hooks) -> None:
+    text = "cat >> notes.md <<'EOF'\ngh pr merge 120 --merge\nEOF\necho 'gh pr merge 7'"
+    hooks.send("PostToolUse", tool_name="Bash", tool_input={"command": text})
+
+    assert hooks.send("Stop").decision == "allow"

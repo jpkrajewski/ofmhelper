@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from ofmhelpers.media.repurpose.pipelines.snapchat_iphone16_usa import _verify_audio
+from ofmhelpers.media.repurpose.audio_check import verify_audio as _verify_audio
 
 
 def _tone(path, volume_db: float, *, audio: bool = True):

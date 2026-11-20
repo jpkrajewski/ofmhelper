@@ -1,6 +1,7 @@
 import re
 
 from guards.event import Guard, HookEvent, Markers, Verdict, block
+from guards.shell_writes import SCRIPTED_WRITE, changed_by_this_call
 
 NAME = "review_before_done"
 EDITS = {"Edit", "Write", "MultiEdit"}
@@ -28,8 +29,16 @@ def is_review_agent(event: HookEvent) -> bool:
     return event.tool_name in AGENTS and bool(REVIEW_WORDS.search(text))
 
 
+def edited_source(event: HookEvent) -> bool:
+    if event.tool_name in EDITS:
+        return event.relative.startswith("src/")
+    if event.tool_name not in SHELLS or not SCRIPTED_WRITE.search(event.command):
+        return False
+    return any(f.path.startswith("src/") for f in changed_by_this_call(event))
+
+
 def record(event: HookEvent, markers: Markers) -> None:
-    if event.tool_name in EDITS and event.relative.startswith("src/"):
+    if edited_source(event):
         markers.set("edited-src")
     elif is_kimi(event):
         markers.set("kimi-review")

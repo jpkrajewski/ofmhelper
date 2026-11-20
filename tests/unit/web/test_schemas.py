@@ -1,6 +1,8 @@
 from ofmhelpers.db.stores.jobs import _stored
 from ofmhelpers.schemas import ResultFile
 from ofmhelpers.web.routers import ROUTERS
+from ofmhelpers.web.routers.generation import clone_links
+from ofmhelpers.web.routers.image_tools import pictures
 from ofmhelpers.web.routers.registry import DOWNLOAD_TOOLS, GENERATE_TOOLS, TOOLS
 
 
@@ -18,8 +20,9 @@ def test_result_file_stores_only_the_fields_that_were_set():
 
 
 def test_every_registered_tool_is_a_mounted_router():
-    mounted = {id(r) for r in ROUTERS}
-    assert all(id(tool.router) in mounted for tool in TOOLS.values())
+    served = {id(r) for r in ROUTERS}
+    retired_routers = {id(clone_links.router), id(pictures.router)}
+    assert all(id(t.router) in served | retired_routers for t in TOOLS.values())
     assert TOOLS["wan3"].files_prefix == "/wan3/files"
 
 

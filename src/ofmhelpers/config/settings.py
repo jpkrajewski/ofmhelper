@@ -1320,6 +1320,15 @@ class RepurposeSettings(BaseSettings):
     snapchat_font: str | None = Field(
         default=None, validation_alias="OFM_SNAPCHAT_FONT"
     )
+    job_timeout_s: int = Field(
+        default=5400, ge=60, validation_alias="OFM_REPURPOSE_JOB_TIMEOUT_S"
+    )
+    attempts: int = Field(
+        default=3, ge=1, le=10, validation_alias="OFM_REPURPOSE_ATTEMPTS"
+    )
+    max_copies: int = Field(
+        default=5, ge=1, validation_alias="OFM_REPURPOSE_MAX_COPIES"
+    )
 
 
 class TrialsSettings(BaseSettings):
@@ -1360,6 +1369,9 @@ class ViralSettings(BaseSettings):
     download_timeout_s: float = Field(
         default=60, gt=0, validation_alias="OFM_VIRAL_DOWNLOAD_TIMEOUT_S"
     )
+
+    keep_s: int = Field(default=3 * 86400, ge=60, validation_alias="OFM_VIRAL_KEEP_S")
+    sweep_s: int = Field(default=3600, ge=60, validation_alias="OFM_VIRAL_SWEEP_S")
 
     @property
     def api_keys(self) -> list[str]:

@@ -10,14 +10,11 @@ from ofmhelpers.schemas.nav import NAV, nav
 from ofmhelpers.schemas.users import Role
 from ofmhelpers.web.main import app
 
-PAGES = ["/reels", "/clone-links", "/repurpose", "/pictures"]
+PAGES = ["/reels", "/clone-links", "/pictures"]
 
 
-def test_reels_clone_links_repurpose_and_pictures_are_the_retired_ones():
-    assert (
-        frozenset({Area.REELS, Area.CLONE_LINKS, Area.REPURPOSE, Area.PICTURES})
-        == RETIRED
-    )
+def test_reels_clone_links_and_pictures_are_the_retired_ones():
+    assert frozenset({Area.REELS, Area.CLONE_LINKS, Area.PICTURES}) == RETIRED
 
 
 @pytest.mark.parametrize("page", PAGES)
@@ -29,17 +26,16 @@ def test_nobody_opens_a_retired_page(page):
 
     for client in (admin, user):
         r = client.get(page, follow_redirects=False)
-        assert r.status_code == 403
-        assert r.json() == {"detail": "Not available to you"}
+        assert r.status_code == 404
 
 
 def test_a_retired_pages_other_routes_are_off_too():
     admin = TestClient(app)
     sign_in_admin(admin)
 
-    assert admin.post("/reels/watch", data={"profiles": "someone"}).status_code == 403
-    assert admin.get("/clone-links/gallery").status_code == 403
-    assert admin.post("/pictures/run", data={"preset": "1"}).status_code == 403
+    assert admin.post("/reels/watch", data={"profiles": "someone"}).status_code == 404
+    assert admin.get("/clone-links/gallery").status_code == 404
+    assert admin.post("/pictures/run", data={"preset": "1"}).status_code == 404
 
 
 @pytest.mark.parametrize("role", list(Role))

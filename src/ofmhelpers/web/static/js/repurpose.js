@@ -1,158 +1,4 @@
 (() => {
-    function number(input) {
-        if (!input || input.value.trim() === "") return null;
-        const n = Number(input.value);
-        return Number.isFinite(n) ? n : null;
-    }
-
-    function getPath(obj, path) {
-        return path.split(".").reduce((o, key) => (o == null ? undefined : o[key]), obj);
-    }
-
-    function setPath(obj, path, value) {
-        const keys = path.split(".");
-        const last = keys.pop();
-        let o = obj;
-        for (const key of keys) {
-            o[key] = o[key] || {};
-            o = o[key];
-        }
-        o[last] = value;
-    }
-
-    function paths(form) {
-        return [...new Set([...form.querySelectorAll("[data-knob]")].map((el) => el.dataset.knob))];
-    }
-
-    function inputs(form, path) {
-        return [...form.querySelectorAll(`[data-knob="${path}"]`)];
-    }
-
-    function read(form, path) {
-        const els = inputs(form, path);
-        const first = els[0];
-        if (first.dataset.end) {
-            const lo = number(els.find((el) => el.dataset.end === "lo"));
-            const hi = number(els.find((el) => el.dataset.end === "hi"));
-            if (lo === null || hi === null || lo === hi) return lo ?? hi;
-            return [Math.min(lo, hi), Math.max(lo, hi)];
-        }
-        if (first.type === "checkbox" && "switch" in first.dataset) return first.checked || null;
-        if (first.type === "checkbox") {
-            const words = els.filter((el) => el.checked).map((el) => el.value);
-            return words.length ? words : null;
-        }
-        if (first.tagName === "SELECT") return first.value || null;
-        return number(first);
-    }
-
-    function write(form, path, value) {
-        const els = inputs(form, path);
-        const first = els[0];
-        if (first.dataset.end) {
-            const [lo, hi] = Array.isArray(value) ? value : [value, null];
-            for (const el of els) {
-                const v = el.dataset.end === "lo" ? lo : hi;
-                el.value = v ?? "";
-            }
-            return;
-        }
-        if (first.type === "checkbox" && "switch" in first.dataset) {
-            first.checked = !!value;
-            return;
-        }
-        if (first.type === "checkbox") {
-            const picked = Array.isArray(value) ? value : value ? [value] : [];
-            for (const el of els) el.checked = picked.includes(el.value);
-            return;
-        }
-        first.value = value ?? "";
-    }
-
-    function collect(form) {
-        const preset = { video: {}, audio: {} };
-        for (const path of paths(form)) {
-            const value = read(form, path);
-            if (value !== null) setPath(preset, path, value);
-        }
-        return preset;
-    }
-
-    function fill(form, preset) {
-        for (const path of paths(form)) write(form, path, getPath(preset, path));
-    }
-
-    function hasOption(select, value) {
-        return [...select.options].some((o) => o.value === value);
-    }
-
-    function initPresets(form, presets) {
-        const select = form.querySelector("#rp-preset");
-        const special = form.querySelector("#rp-special");
-        const device = form.querySelector("#rp-device");
-
-        function apply() {
-            const p = presets[select.value];
-            if (!p) return;
-            const on = special.checked;
-            fill(form, {
-                video: { ...p.video, ...(on ? p.video_special : {}) },
-                audio: { ...p.audio, ...(on ? p.audio_special : {}) },
-            });
-            const name = (on && p.device_special) || p.device || form.dataset.defaultDevice;
-            if (hasOption(device, name)) device.value = name;
-        }
-
-        select.addEventListener("change", apply);
-        special.addEventListener("change", apply);
-        apply();
-    }
-
-    function initSubmit(form) {
-        form.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const fd = window.FilePicker.collectFormData(new FormData(form));
-            fd.set("preset", JSON.stringify(collect(form)));
-            document.getElementById("rp-empty").hidden = true;
-            window.Generation.submit(form, fd);
-        });
-    }
-
-    function initDownload(form) {
-        form.querySelector(".rp-download").addEventListener("click", () => {
-            const name = form.querySelector("#rp-preset").value || "custom";
-            const special = form.querySelector("#rp-special").checked;
-            const preset = {
-                ...collect(form),
-                label: special ? `${name} special` : name,
-                device: form.querySelector("#rp-device").value,
-            };
-            fetch("/repurpose/preset.json", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(preset),
-            })
-                .then((r) => {
-                    if (!r.ok) throw new Error("preset refused");
-                    return r.blob();
-                })
-                .then((blob) => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `repurpose-${name}${special ? "-special" : ""}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
-                })
-                .catch(() => {
-                    const status = document.querySelector("#results-panel .generation-status");
-                    status.innerHTML = '<div class="generation-error">A knob has a value it cannot take</div>';
-                });
-        });
-    }
-
     function initSwap(gallery) {
         const swapping = new Set();
 
@@ -164,7 +10,7 @@
             }
             if (swapping.has(jobId)) return;
             swapping.add(jobId);
-            fetch(`/repurpose/cards/${jobId}`)
+            fetch(`/spoof/cards/${jobId}`)
                 .then((r) => {
                     if (!r.ok) throw new Error("cards failed");
                     return r.text();
@@ -198,14 +44,31 @@
             if (!card) return;
             const params = JSON.parse(card.dataset.params);
             window.FilePicker.setExisting("video", params.source ? [params.source] : []);
-            const select = form.querySelector("#rp-preset");
-            select.value = hasOption(select, params.preset_name || "") ? params.preset_name || "" : "";
-            form.querySelector("#rp-special").checked = !!params.special;
-            fill(form, params.preset || {});
-            const device = form.querySelector("#rp-device");
-            if (hasOption(device, params.device)) device.value = params.device;
-            if (params.copies) form.querySelector("#rp-copies").value = params.copies;
             form.scrollIntoView({ behavior: "smooth" });
+        });
+    }
+
+    function initDrive(gallery) {
+        gallery.addEventListener("click", (e) => {
+            const upload = e.target.closest(".drive-upload-btn");
+            const jobId = upload?.closest(".result-item")?.dataset.jobId;
+            if (jobId) window.location.href = `/drive?upload=${encodeURIComponent(jobId)}`;
+
+            const remove = e.target.closest(".drive-remove");
+            if (!remove || !window.confirm(`${remove.getAttribute("aria-label")}?`)) return;
+            remove.disabled = true;
+            fetch(`/clone/drive-uploads/${remove.dataset.upload}/remove`, { method: "POST" })
+                .then(async (r) => {
+                    if (!r.ok) {
+                        const body = await r.json().catch(() => ({}));
+                        throw new Error(body.detail || `failed (${r.status})`);
+                    }
+                    window.location.reload();
+                })
+                .catch((err) => {
+                    remove.disabled = false;
+                    window.alert(`Could not remove it: ${err.message}`);
+                });
         });
     }
 
@@ -213,11 +76,10 @@
         const form = document.getElementById("repurpose-form");
         const gallery = document.getElementById("rp-gallery");
         if (!form || !gallery) return;
-        const presets = JSON.parse(document.getElementById("rp-presets").textContent);
-        initPresets(form, presets);
-        initSubmit(form);
-        initDownload(form);
         initSwap(gallery);
         initRecreate(form, gallery);
+        initDrive(gallery);
+        const prefill = JSON.parse(form.dataset.prefillVideo || "[]");
+        if (prefill.length) window.FilePicker.setExisting("video", prefill);
     });
 })();

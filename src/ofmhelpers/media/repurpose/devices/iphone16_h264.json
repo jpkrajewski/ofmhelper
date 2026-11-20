@@ -1,0 +1,56 @@
+{
+  "label": "iPhone 16 Pro Max 1080p30 camera recording, Most Compatible (H.264): one fast encode",
+  "video": {
+    "codec": "libx264",
+    "profile": "high",
+    "level": "4.0",
+    "preset": "fast",
+    "crf": null,
+    "bitrate_kbps": [15500, 17500],
+    "gop": 30,
+    "tag": "avc1",
+    "strip_sei": true,
+    "pix_fmt": "yuv420p",
+    "colorspace": "bt709",
+    "color_primaries": "bt709",
+    "color_trc": "bt709",
+    "color_range": "tv",
+    "timescale": 600,
+    "fps": 30,
+    "max_width": null,
+    "short_side": 1080
+  },
+  "audio": {
+    "codec": "aac",
+    "bitrate_kbps": [150, 175],
+    "sample_rate": 48000,
+    "channels": 2
+  },
+  "container": {
+    "movflags": ["+use_metadata_tags"]
+  },
+  "tags": {
+    "format": {
+      "major_brand": "qt  ",
+      "minor_version": "0",
+      "compatible_brands": "qt  ",
+      "creation_time": "{creation_time}",
+      "com.apple.quicktime.make": "Apple",
+      "com.apple.quicktime.model": "iPhone 16 Pro Max",
+      "com.apple.quicktime.software": "26.5.1"
+    },
+    "video": {
+      "creation_time": "{creation_time}",
+      "handler_name": "Core Media Video",
+      "vendor_id": "appl",
+      "encoder": "H.264"
+    },
+    "audio": {
+      "creation_time": "{creation_time}",
+      "handler_name": "Core Media Audio",
+      "vendor_id": "appl"
+    },
+    "creation_time": "recent",
+    "recent_days": 30
+  }
+}

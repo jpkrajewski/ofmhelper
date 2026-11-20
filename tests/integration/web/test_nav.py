@@ -22,7 +22,7 @@ def test_every_entry_has_an_icon_and_opens_a_page():
     sign_in_admin(client)
     for item in NAV:
         assert f'"{item.icon}":' in ICONS, item.icon
-        opens = 403 if item.area in RETIRED else 200
+        opens = 404 if item.area in RETIRED else 200
         assert client.get(item.href).status_code == opens, item.href
 
 

@@ -43,6 +43,7 @@ Define success criteria; loop until verified.
 - **ALSO AT THE END OF EVERY WORKING SESSION, SHIP OR NOT.** A session that never ships loses its lessons otherwise.
 - **REFLECT AGAINST THE PLAN.** Read the session's plan file next to what happened: an item dropped, reverted or done another way, and the assumption behind it, is the strongest lesson.
 - **A TRAP A CHECK CAN CATCH BECOMES THE CHECK.** A test, hook or startup refusal that fails on it; then its `BRAIN.md` line is deleted. A line stays only for what no check can catch.
+- **LEARN FROM THE LOGS, NOT FROM MEMORY.** After every successful deploy (ship step 10, held open by the `self_learn_after_deploy` guard) the `self-learn` skill reads every saved session log since the last pass (`scripts/self_learn.py`: owner corrections, interrupts, rejected calls, failed calls, guard blocks, tokens per session, files re-read) and turns each lesson into a check, a `BRAIN.md` line with its why, or an `IMPROVEMENTS.md` line. Lessons go to `BRAIN.md`, not memory: only `BRAIN.md` is loaded whole into every session.
 - **`BRAIN.md` lines start with two dates:** `<added> / hit <date>:`. A line that saved time, or would have, gets today as its hit date. At 40 lines, the line hit longest ago goes first.
 - **`IMPROVEMENTS.md` lines carry who can act, after the date:** `[agent can do]`, `[owner decides]` or `[needs owner check]` (a fact only the owner can see: a server, an account, a dashboard). The owner still picks what is done (line above); the tag shows at a glance what an agent could take alone.
 
