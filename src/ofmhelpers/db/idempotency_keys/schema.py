@@ -8,6 +8,7 @@ class Outcome(StrEnum):
     NEW = "new"
     REPLAY = "replay"
     BUSY = "busy"
+    ABANDONED = "abandoned"
     MISMATCH = "mismatch"
 
 

@@ -1,3 +1,4 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
@@ -20,7 +21,7 @@ from ofmhelpers.features.downloads import media as download_media
 from ofmhelpers.features.downloads import service as download_service
 from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.refusals import UnavailableError
-from ofmhelpers.web.idempotency import IdempotentRoute, marked
+from ofmhelpers.web.idempotency import MISMATCH, IdempotentRoute, marked
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers import ROUTERS
 
@@ -63,7 +64,7 @@ def _asked(client: TestClient, key: dict[str, str], urls: str) -> Asked:
         user_id=client.user.id,  # type: ignore[attr-defined]
         key=key["Idempotency-Key"],
         path=f"POST {RUN}",
-        fingerprint=idempotency.fingerprint([f"urls={urls}"]),
+        fingerprint=idempotency.fingerprint([json.dumps(["urls", urls])]),
     )
 
 
@@ -145,14 +146,35 @@ def test_a_key_still_being_handled_asks_to_come_back(client, downloads):
     assert downloads.fetched == []
 
 
-def test_a_key_left_by_a_crashed_request_is_taken_over(client, downloads):
+def test_a_key_left_by_a_request_that_died_is_never_run_again(client, downloads):
     key = keyed()
     asked = _asked(client, key, A)
     idempotency.claim(asked)
     _backdate(asked, timedelta(hours=1))
 
-    assert _run(client, A, key).status_code == 202
-    assert downloads.fetched == [A]
+    abandoned = _run(client, A, key)
+
+    assert abandoned.status_code == 409
+    assert "Retry-After" not in abandoned.headers
+    assert abandoned.json() == {
+        "detail": "This request did not finish. Reload the page and try again."
+    }
+    assert downloads.fetched == []
+
+
+def test_a_left_key_sent_with_a_different_request_is_refused_as_different(
+    client, downloads
+):
+    key = keyed()
+    asked = _asked(client, key, A)
+    idempotency.claim(asked)
+    _backdate(asked, timedelta(hours=1))
+
+    different = _run(client, B, key)
+
+    assert different.status_code == 400
+    assert different.json() == {"detail": MISMATCH}
+    assert downloads.fetched == []
 
 
 def test_a_crash_after_the_work_started_never_runs_it_again(downloads, monkeypatch):
@@ -194,22 +216,17 @@ def test_an_outside_service_down_frees_the_key_to_try_again(
     assert downloads.fetched == [A]
 
 
-def test_a_late_answer_to_a_taken_over_key_is_not_kept(client):
+def test_an_answer_for_another_claim_of_the_key_is_not_kept(client):
     asked = _asked(client, keyed(), A)
-    first = idempotency.claim(asked).held
-    assert first is not None
-    _backdate(asked, timedelta(hours=1))
-    late = first.model_copy(
-        update={"claimed_at": first.claimed_at - timedelta(hours=1)}
-    )
+    held = idempotency.claim(asked).held
+    assert held is not None
+    other = held.model_copy(update={"claimed_at": held.claimed_at - timedelta(hours=1)})
 
-    second = idempotency.claim(asked).held
-    idempotency.finish(late, 202, {"job_id": "late"})
+    idempotency.finish(other, 202, {"job_id": "other"})
 
-    assert second is not None
     assert idempotency.claim(asked).outcome is Outcome.BUSY
-    idempotency.finish(second, 202, {"job_id": "taken over"})
-    assert idempotency.claim(asked).response_body == {"job_id": "taken over"}
+    idempotency.finish(held, 202, {"job_id": "mine"})
+    assert idempotency.claim(asked).response_body == {"job_id": "mine"}
 
 
 def test_keys_older_than_their_keep_time_are_removed(client):

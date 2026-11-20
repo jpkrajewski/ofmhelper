@@ -1,3 +1,4 @@
+import json
 lazy from pathlib import Path
 
 import pytest
@@ -120,6 +121,51 @@ def test_a_click_after_a_failed_answer_sends_the_same_key(va: Session):
     assert len(keys) == 2
     assert keys[0] == keys[1]
     assert keys[0]
+
+
+def _answered(va: Session, status: int, detail: str) -> list[str | None]:
+    keys: list[str | None] = []
+
+    def answer(route) -> None:
+        keys.append(route.request.headers.get("idempotency-key"))
+        route.fulfill(
+            status=status,
+            content_type="application/json",
+            body=json.dumps({"detail": detail}),
+        )
+
+    va.page.route("**/download-media/run", answer)
+    return keys
+
+
+def test_a_click_after_a_refusal_sends_a_new_key(va: Session):
+    va.goto("/download-assets")
+    page = va.page
+    keys = _answered(va, 400, "This Idempotency-Key was used for a different request")
+    page.locator("#dl-urls").fill("https://www.example.com/watch/refused")
+    run = page.locator('#download-assets-form [type="submit"]')
+    with page.expect_request("**/download-media/run"):
+        run.click()
+    expect(page.locator(".generation-error")).to_be_visible()
+    page.wait_for_timeout(3_100)
+    with page.expect_request("**/download-media/run"):
+        run.click()
+
+    assert len(keys) == 2
+    assert keys[0] != keys[1]
+
+
+def test_a_request_that_did_not_finish_is_not_asked_again(va: Session):
+    va.goto("/download-assets")
+    page = va.page
+    did_not_finish = "This request did not finish. Reload the page and try again."
+    keys = _answered(va, 409, did_not_finish)
+    page.locator("#dl-urls").fill("https://www.example.com/watch/abandoned")
+    page.locator('#download-assets-form [type="submit"]').click()
+
+    expect(page.locator(".generation-error")).to_have_text(did_not_finish)
+    page.wait_for_timeout(2_000)
+    assert len(keys) == 1
 
 
 def test_a_request_still_being_handled_is_asked_again_four_times_at_most(

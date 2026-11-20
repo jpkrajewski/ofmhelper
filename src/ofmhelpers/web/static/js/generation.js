@@ -392,6 +392,7 @@
                     );
                 }
                 if (xhr.status < 200 || xhr.status >= 300) {
+                    window.Idempotency.refused(form, key, xhr.status);
                     throw new Error(data.detail || "Request failed.");
                 }
 

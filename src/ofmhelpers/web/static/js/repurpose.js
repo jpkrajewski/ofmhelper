@@ -75,16 +75,23 @@
     const DRIVE_POLL_MS = 3000;
     const DRIVE_POLL_MAX_MS = 30000;
 
-    function followUploads(gallery, wait = DRIVE_POLL_MS) {
+    function followUploads(gallery, wait = DRIVE_POLL_MS, gone = new Set()) {
+        if (document.hidden) {
+            document.addEventListener(
+                "visibilitychange",
+                () => followUploads(gallery, wait, gone),
+                { once: true }
+            );
+            return;
+        }
         const queued = [...gallery.querySelectorAll('.drive-states li[data-status="queued"]')]
             .map((li) => li.closest(".result-item")?.dataset.jobId)
-            .filter(Boolean);
+            .filter((jobId) => jobId && !gone.has(jobId));
         if (!queued.length) return;
-        let refused = false;
         const redraws = [...new Set(queued)].map((jobId) =>
             fetch(`/spoof/cards/${jobId}`)
                 .then((r) => {
-                    if (!r.ok) refused = true;
+                    if (r.status >= 400 && r.status < 500) gone.add(jobId);
                     return r.ok ? r.text() : "";
                 })
                 .then((html) => {
@@ -96,9 +103,8 @@
                 })
         );
         Promise.allSettled(redraws).then(() => {
-            if (refused) return;
             const next = Math.min(wait * 1.5, DRIVE_POLL_MAX_MS);
-            setTimeout(() => followUploads(gallery, next), wait);
+            setTimeout(() => followUploads(gallery, next, gone), wait);
         });
     }
 

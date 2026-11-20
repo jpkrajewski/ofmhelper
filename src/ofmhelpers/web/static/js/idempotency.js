@@ -48,11 +48,16 @@
     async function send(post) {
         for (let attempt = 0; ; attempt += 1) {
             const xhr = await post();
-            if (xhr.status !== 409 || attempt >= RETRIES) return xhr;
-            const after = Number(xhr.getResponseHeader("Retry-After")) || 1;
+            const after = Number(xhr.getResponseHeader("Retry-After"));
+            if (xhr.status !== 409 || !after || attempt >= RETRIES) return xhr;
             await new Promise((resolve) => setTimeout(resolve, Math.max(after, 2 ** attempt) * 1000));
         }
     }
 
-    window.Idempotency = { HEADER, keyFor, holdUntilSettled, send };
+    function refused(form, key, status) {
+        const refusal = status >= 400 && status < 500 && status !== 409;
+        if (refusal && actions.get(form)?.key === key) actions.delete(form);
+    }
+
+    window.Idempotency = { HEADER, keyFor, holdUntilSettled, send, refused };
 })();

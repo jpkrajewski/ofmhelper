@@ -17,7 +17,7 @@ from ofmhelpers.db.idempotency_keys.schema import Asked, Held, Outcome
 from ofmhelpers.features.idempotency import service as idempotency
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.log import get_logger
-from ofmhelpers.web.exceptions import MESSAGE, REFUSALS
+from ofmhelpers.web.exceptions import REFUSALS
 from ofmhelpers.web.middleware import AuthMiddleware
 
 logger = get_logger(__name__)
@@ -28,6 +28,8 @@ KEY_MAX = 255
 FILE_SAMPLE = 64 * 1024
 NO_KEY = "Send an Idempotency-Key header, one per action"
 BUSY = "This request is still being handled"
+ABANDONED = "This request did not finish. Reload the page and try again."
+CRASHED = "Something went wrong. Reload the page and try again."
 MISMATCH = "This Idempotency-Key was used for a different request"
 _FORMS = ("multipart/form-data", "application/x-www-form-urlencoded")
 
@@ -50,11 +52,11 @@ def marked(route: APIRoute) -> bool:
 
 def _field(name: str, value: str | UploadFile) -> str:
     if isinstance(value, str):
-        return f"{name}={value}"
+        return json.dumps([name, value])
     value.file.seek(0)
     head = hashlib.sha256(value.file.read(FILE_SAMPLE)).hexdigest()
     value.file.seek(0)
-    return f"{name}=file:{value.filename}:{value.size}:{head}"
+    return json.dumps([name, f"file:{value.filename}:{value.size}:{head}"])
 
 
 async def _fields(request: Request) -> list[str]:
@@ -112,7 +114,7 @@ async def _settle_crash(held: Held, exc: BaseException) -> None:
         else:
             crashed = HTTPStatus.INTERNAL_SERVER_ERROR
             await run_in_threadpool(
-                idempotency.finish, held, crashed, {"detail": MESSAGE}
+                idempotency.finish, held, crashed, {"detail": CRASHED}
             )
     except Exception:
         logger.exception("idempotency: key of %s not settled", held.asked.path)
@@ -163,6 +165,8 @@ class IdempotentRoute(APIRoute):
                 return JSONResponse(
                     {"detail": BUSY}, status_code=409, headers={"Retry-After": "1"}
                 )
+            if claimed.outcome is Outcome.ABANDONED:
+                return JSONResponse({"detail": ABANDONED}, status_code=409)
             return JSONResponse({"detail": MISMATCH}, status_code=400)
 
         return once
