@@ -9,6 +9,7 @@ lazy from collections.abc import Iterator
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import egress
 from ofmhelpers.integrations.downloaders import generic, images, kvs, savers
 from ofmhelpers.integrations.downloaders.cookies import cookie_file
 from ofmhelpers.integrations.downloaders.models import DownloadResult
@@ -66,6 +67,13 @@ class _Download(BaseModel):
 
     def run(self) -> DownloadResult:
         url = self.url
+        try:
+            egress.check_public(url)
+        except egress.NotPublicError:
+            logger.warning("download %s refused: not public", url, exc_info=True)
+            return DownloadResult(
+                url=url, success=False, error="This link is not on the public internet"
+            )
         errors: list[str] = []
         for tool in self.order():
             result = tool.fetch()

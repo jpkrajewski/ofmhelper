@@ -13,6 +13,8 @@ from ofmhelpers.media.recorder.models import Recording
 from ofmhelpers.media.recorder.recorder import record
 from ofmhelpers.media.repurpose import Repurpose
 
+pytestmark = pytest.mark.ci_only
+
 FIXTURE = FIXTURES / "iphones" / "iphone17_img0063.exif.json"
 EXIFTOOL_ARGS = ["-j", "-a", "-G1:4", "-n", "-u"]
 

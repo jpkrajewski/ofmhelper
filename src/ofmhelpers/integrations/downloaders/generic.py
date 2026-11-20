@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 lazy from yt_dlp.extractor import gen_extractor_classes
 
 from ofmhelpers.config import settings
+from ofmhelpers.integrations import egress
 from ofmhelpers.integrations.downloaders import fake
 from ofmhelpers.integrations.downloaders.cookies import cookie_file
 from ofmhelpers.integrations.downloaders.models import (
@@ -261,6 +262,11 @@ def video_info(
 ) -> VideoInfo:
     if settings.infra.fake_externals:
         return fake.info(url)
+    try:
+        egress.check_public(url)
+    except egress.NotPublicError:
+        logger.warning("video_info %s refused: not public", url, exc_info=True)
+        return VideoInfo(url=url, error="This link is not on the public internet")
     import yt_dlp
 
     config = DownloadConfig.single_post(socket_timeout=socket_timeout)
@@ -286,7 +292,13 @@ def video_info(
     stream = entry.video_url()
     if seconds is None and stream:
         try:
+            egress.check_public(stream)
             seconds = duration_s(stream, settings.downloaders.probe_timeout_s)
+        except egress.NotPublicError:
+            logger.warning(
+                "video info %s: stream refused: not public", url, exc_info=True
+            )
+            return VideoInfo(url=url, error="This link is not on the public internet")
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             logger.warning(
                 "video info %s: length not probed: %s", url, exc, exc_info=True

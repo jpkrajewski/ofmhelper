@@ -52,6 +52,10 @@ stamp="$(date +%Y%m%d-%H%M%S)"
 run_dir="reports/$stamp"
 mkdir -p "$run_dir"
 
+lock=reports/.running
+echo "$$ $stamp ${1:-default}" > "$lock"
+trap 'rm -f "$lock"' EXIT
+
 # The results volume starts empty but for the previous report's history
 # (Allure trends and flaky detection). Inside the container: the volume is
 # only there. The old bind-mounted results folder goes once.

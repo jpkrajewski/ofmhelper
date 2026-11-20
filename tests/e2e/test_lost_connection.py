@@ -114,6 +114,7 @@ def _slow_generate(va: Session, tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.ci_only
 def test_a_slow_upload_shows_its_progress_asks_before_leaving_and_becomes_the_job(
     va: Session, tmp_path: Path
 ):

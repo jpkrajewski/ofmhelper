@@ -160,6 +160,8 @@ _NO_DATABASE = (
 _NO_REDIS = "unix:///nonexistent-unit-tests-have-no-redis.sock"
 
 _KINDS = ("unit", "integration", "contract", "e2e")
+_ON_CI = os.environ.get("CI") == "true"
+_LOCAL_SKIP = pytest.mark.skip(reason="ci_only: runs on CI only (owner 2026-11-20)")
 
 
 def _kind(item: pytest.Item) -> str:
@@ -193,6 +195,15 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.xdist_group("e2e"))
         if item.get_closest_marker("live"):
             item.add_marker(pytest.mark.enable_socket)
+        if item.get_closest_marker("ci_only") and not _ON_CI:
+            item.add_marker(_LOCAL_SKIP)
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "ci_only: slow and of little use locally; runs only where CI=true (GitHub Actions)",
+    )
 
 
 @pytest.fixture

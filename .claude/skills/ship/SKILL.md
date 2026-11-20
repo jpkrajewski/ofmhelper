@@ -11,6 +11,12 @@ Without it: report what changed and stop. Approval covers this one batch only.
 Each step must pass before the next. A failure: stop, quote the error, fix it
 or report it. Never `--no-verify`, never force-push, never `git stash`.
 
+## 0. Open the ship
+`mkdir -p reports/hooks && git rev-parse --short HEAD > reports/hooks/ship.open`.
+The git and tests hooks (`.claude/hooks/guards/`) let commit, push, the
+promote merge and the deploy gate through while this file exists, also in the
+next session when a ship was cut short. Step 10 removes it.
+
 ## 1. Own files only
 Other Claude sessions share this checkout.
 - `git status --short` and `git diff --stat`: name every file. Stage only the
@@ -122,3 +128,4 @@ prune stale lines, max 40) and move this session's unlogged findings to
 - `BRAIN.md` lines keep `<added> / hit <date>:`; bump the hit date of every
   line that helped this session. `IMPROVEMENTS.md` lines keep their
   `[agent can do]` / `[owner decides]` / `[needs owner check]` tag.
+- Close the ship: `rm -f reports/hooks/ship.open`.
