@@ -222,6 +222,112 @@ def test_a_subagent_never_inherits_the_owners_word(hooks: Hooks) -> None:
     assert subagent.bash("git commit -m x").decision == "deny"
 
 
+ONE_OPEN = '0 {"open": 1, "more": false}'
+THREE_OPEN = '0 {"open": 3, "more": false}'
+NONE_OPEN = '0 {"open": 0, "more": false}'
+MORE_PAGES = '0 {"open": 0, "more": true}'
+
+
+def _guard_hook_budget_s() -> float:
+    settings = json.loads((REPO / ".claude" / "settings.json").read_text())
+    return next(
+        hook["timeout"]
+        for entry in settings["hooks"]["PreToolUse"]
+        for hook in entry["hooks"]
+        if "guard.py" in hook["command"]
+    )
+
+
+@pytest.fixture
+def github(hooks: Hooks, monkeypatch: pytest.MonkeyPatch) -> Path:
+    answer = hooks.root / "gh_answer"
+    asked = hooks.root / "gh_asked"
+    fake = hooks.root / "fake_gh.py"
+    fake.write_text(
+        "import pathlib, sys, time\n"
+        f"pathlib.Path({str(asked)!r}).write_text(chr(10).join(sys.argv[1:]))\n"
+        f"text = pathlib.Path({str(answer)!r}).read_text()\n"
+        "time.sleep(60 if text == 'hang' else 0)\n"
+        "code, out = text.split(' ', 1)\n"
+        "print(out)\n"
+        "sys.exit(int(code))\n"
+    )
+    monkeypatch.setenv("CLAUDE_GUARDS_GH", f"{sys.executable} {fake}")
+    hooks.prompt("ship")
+    return answer
+
+
+@pytest.mark.parametrize(
+    ("answer", "command", "reason"),
+    [
+        (ONE_OPEN, "gh pr merge 103 --merge", "YOU CANT MERGE IF THERE ARE COMMENTS"),
+        (THREE_OPEN, "gh pr merge https://github.com/o/r/pull/7", "PR #7 has 3"),
+        ("1 HTTP 502", "gh pr merge 103 --merge", "Could not read"),
+        (NONE_OPEN, "gh pr merge --merge", "Name the PR"),
+        (NONE_OPEN, "gh pr merge my-branch", "Name the PR"),
+        (MORE_PAGES, "gh pr merge 103", "more than 100"),
+        (ONE_OPEN, "gh.exe pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "/c/tools/gh.exe pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "ls & gh pr merge 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge --repo o/r 103", "PR #103 has 1"),
+        (ONE_OPEN, "gh pr merge -b 'pr merge 9' 103", "PR #103 has 1"),
+        (ONE_OPEN, "echo y | gh pr merge 103", "PR #103 has 1"),
+        (NONE_OPEN, "gh pr merge 1 && gh pr merge 2", "One gh pr merge per command"),
+        (NONE_OPEN, "GH_REPO=o/r gh pr merge 7", "not GH_REPO"),
+    ],
+)
+def test_a_pr_with_open_review_comments_is_never_merged_even_on_the_ship_word(
+    hooks: Hooks, github: Path, answer: str, command: str, reason: str
+) -> None:
+    github.write_text(answer)
+
+    verdict = hooks.bash(command)
+
+    assert verdict.decision == "deny"
+    assert reason in verdict.reason
+
+
+def test_a_pr_without_open_review_comments_merges_on_the_ship_word(
+    hooks: Hooks, github: Path
+) -> None:
+    github.write_text(NONE_OPEN)
+
+    assert hooks.bash("gh pr merge 103 --merge").decision == "allow"
+    assert hooks.bash("gh pr view 103 --comments").decision == "allow"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr merge 7 -R other/repo",
+        "gh pr merge -Rother/repo 7",
+        "gh pr merge --repo=github.com/other/repo 7",
+        "gh pr merge https://github.com/other/repo/pull/7",
+    ],
+)
+def test_a_pr_of_another_repo_is_checked_in_that_repo(
+    hooks: Hooks, github: Path, command: str
+) -> None:
+    github.write_text(ONE_OPEN)
+
+    assert hooks.bash(command).decision == "deny"
+    asked = (hooks.root / "gh_asked").read_text().splitlines()
+    assert {"owner=other", "repo=repo", "number=7"} <= set(asked)
+
+
+def test_a_github_that_does_not_answer_stops_the_merge_within_the_hook_budget(
+    hooks: Hooks, github: Path
+) -> None:
+    github.write_text("hang")
+    started = time.monotonic()
+
+    verdict = hooks.bash("gh pr merge 103 --merge")
+
+    assert verdict.decision == "deny"
+    assert "Could not read" in verdict.reason
+    assert time.monotonic() - started < _guard_hook_budget_s() - 4
+
+
 def test_an_open_ship_keeps_git_open_into_the_next_session(hooks: Hooks) -> None:
     (hooks.root / "reports" / "hooks").mkdir(parents=True)
     (hooks.root / "reports" / "hooks" / "ship.open").write_text("ed20257")
