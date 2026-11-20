@@ -12,6 +12,11 @@ from pydantic import BaseModel
 REPO = Path(__file__).resolve().parents[3]
 DISPATCHER = REPO / ".claude" / "hooks" / "guard.py"
 DEV_COMPOSE = "docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+REVIEWER = {
+    "description": "Review the diff",
+    "subagent_type": "caveman:cavecrew-reviewer",
+}
+KIMI = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
 
 
 class Answer(BaseModel):
@@ -363,18 +368,13 @@ def test_stopping_after_source_edits_asks_once_for_an_independent_review(
     assert hooks.send("Stop").decision == "allow"
 
     hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
-    review = {
-        "description": "Review the egress guard diff",
-        "subagent_type": "caveman:cavecrew-reviewer",
-    }
-    hooks.send("PostToolUse", tool_name="Agent", tool_input=review)
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=KIMI)
     stop = hooks.send("SubagentStop")
     assert stop.decision == "block"
-    assert "kimi" in stop.reason
+    assert "caveman:cavecrew-reviewer" in stop.reason
 
     hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md egress"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     assert hooks.send("SubagentStop").decision == "allow"
 
 
@@ -389,20 +389,19 @@ def test_source_edited_from_the_shell_also_needs_a_review(hooks: Hooks) -> None:
     stop = hooks.send("SubagentStop")
 
     assert stop.decision == "block"
-    assert "kimi" in stop.reason
+    assert "caveman:cavecrew-reviewer" in stop.reason
 
 
 def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
 
     stop = hooks.send("SubagentStop")
     assert stop.decision == "block"
     assert "restart worker media-worker" in stop.reason
 
     hooks.edit("src/ofmhelpers/features/repurpose/tasks.py", when="PostToolUse")
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     restart = {"command": f"{DEV_COMPOSE} restart worker media-worker sweeps"}
     hooks.send("PostToolUse", tool_name="Bash", tool_input=restart)
     assert hooks.send("SubagentStop").decision == "allow"
@@ -410,16 +409,14 @@ def test_worker_code_changed_without_a_restart_is_sent_back_once(hooks: Hooks) -
 
 def test_a_doc_beside_worker_code_needs_no_worker_restart(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/media/repurpose/CLAUDE.md", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
 
     assert hooks.send("SubagentStop").decision == "allow"
 
 
 def test_a_web_only_change_needs_no_worker_restart(hooks: Hooks) -> None:
     hooks.edit("src/ofmhelpers/web/templates/x.html", when="PostToolUse")
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     shot = {"command": "uv run python -c 'import ui_screens as u; u.shoot(p, s, out)'"}
     hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
 
@@ -438,8 +435,7 @@ def test_a_ui_change_is_looked_at_before_it_is_done(hooks: Hooks) -> None:
         "command": f"{DEV_COMPOSE} --profile test run --rm tests uv run --frozen python scripts/ui_screens.py r60"
     }
     hooks.send("PostToolUse", tool_name="Bash", tool_input=shot)
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md x"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     assert hooks.send("Stop").decision == "allow"
 
 
@@ -465,15 +461,10 @@ def test_a_shell_write_is_not_blamed_for_a_file_it_does_not_name(hooks: Hooks) -
     assert answer.decision == "allow"
 
 
-def test_the_backup_reviewer_counts_once_kimi_was_tried(hooks: Hooks) -> None:
-    kimi = {"command": "python .claude/skills/kimi/ask.py review task.md egress"}
-    hooks.send("PostToolUse", tool_name="Bash", tool_input=kimi)
+def test_kimi_counts_once_the_cavecrew_reviewer_was_tried(hooks: Hooks) -> None:
+    hooks.send("PostToolUse", tool_name="Agent", tool_input=REVIEWER)
     hooks.edit("src/ofmhelpers/web/x.py", when="PostToolUse")
-    review = {
-        "description": "Review after Kimi timed out",
-        "subagent_type": "caveman:cavecrew-reviewer",
-    }
-    hooks.send("PostToolUse", tool_name="Agent", tool_input=review)
+    hooks.send("PostToolUse", tool_name="Bash", tool_input=KIMI)
 
     assert hooks.send("SubagentStop").decision == "allow"
 

@@ -21,6 +21,7 @@ from ofmhelpers.config.settings import (
     FanvueSettings,
     GDriveSettings,
     HiggsfieldSettings,
+    IdempotencySettings,
     InfraSettings,
     InstagramSettings,
     KieAISettings,
@@ -206,6 +207,10 @@ class Settings:
     @property
     def viral(self) -> ViralSettings:
         return self._group(ViralSettings)
+
+    @property
+    def idempotency(self) -> IdempotencySettings:
+        return self._group(IdempotencySettings)
 
     @property
     def stacked(self) -> StackedSettings:

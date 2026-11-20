@@ -70,6 +70,86 @@ def test_download_fetches_a_removed_video_again(
     assert va.js_errors == []
 
 
+def test_a_key_is_kept_until_its_own_jobs_settle(va: Session):
+    va.goto("/download-assets")
+
+    kept = va.page.evaluate(
+        """() => {
+            const form = document.getElementById('download-assets-form');
+            const data = new FormData(form);
+            const settle = (jobId) => document.dispatchEvent(
+                new CustomEvent('job:settled', { detail: { jobId } }));
+            const first = Idempotency.keyFor(form, data);
+            settle('someone-elses');
+            const waiting = Idempotency.keyFor(form, data) === first;
+            Idempotency.holdUntilSettled(form, first, ['mine']);
+            settle('someone-elses');
+            const running = Idempotency.keyFor(form, data) === first;
+            settle('mine');
+            const done = Idempotency.keyFor(form, data) !== first;
+            return [waiting, running, done];
+        }"""
+    )
+
+    assert kept == [True, True, True]
+
+
+def test_a_click_after_a_failed_answer_sends_the_same_key(va: Session):
+    va.goto("/download-assets")
+    page = va.page
+    keys: list[str | None] = []
+
+    def failed(route) -> None:
+        keys.append(route.request.headers.get("idempotency-key"))
+        route.fulfill(
+            status=500,
+            content_type="application/json",
+            body='{"detail": "Something went wrong. Try again."}',
+        )
+
+    page.route("**/download-media/run", failed)
+    page.locator("#dl-urls").fill("https://www.example.com/watch/failing")
+    run = page.locator('#download-assets-form [type="submit"]')
+    with page.expect_request("**/download-media/run"):
+        run.click()
+    expect(page.locator(".generation-error")).to_be_visible()
+    page.wait_for_timeout(3_100)
+    with page.expect_request("**/download-media/run"):
+        run.click()
+
+    assert len(keys) == 2
+    assert keys[0] == keys[1]
+    assert keys[0]
+
+
+def test_a_request_still_being_handled_is_asked_again_four_times_at_most(
+    va: Session,
+):
+    va.goto("/download-assets")
+    page = va.page
+    keys: list[str | None] = []
+
+    def busy(route) -> None:
+        keys.append(route.request.headers.get("idempotency-key"))
+        route.fulfill(
+            status=409,
+            headers={"Retry-After": "1"},
+            content_type="application/json",
+            body='{"detail": "This request is still being handled"}',
+        )
+
+    page.route("**/download-media/run", busy)
+    page.locator("#dl-urls").fill("https://www.example.com/watch/busy")
+    page.locator('#download-assets-form [type="submit"]').click()
+
+    expect(page.locator(".generation-error")).to_have_text(
+        "This request is still being handled", timeout=RESULT_TIMEOUT_MS
+    )
+    assert len(keys) == 5
+    assert len(set(keys)) == 1
+    assert keys[0]
+
+
 def test_a_link_pasted_again_moves_its_card_first_and_downloads_nothing(va: Session):
     va.goto("/download-assets")
     page = va.page

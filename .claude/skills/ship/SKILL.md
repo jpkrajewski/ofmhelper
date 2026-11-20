@@ -33,12 +33,15 @@ that did not import, each failure with its error, the 10 slowest). Green =
 report.json with a reader of your own: its per-test list leaves out files
 that failed to import (2026-11-20: "6285 passed" reported green over 5 errors).
 
-## 2b. Independent review by Kimi
-While the gate runs: the `kimi` skill, a read-only review of the diff that is
-about to ship (code and config; not uv.lock, not moved docs). A HIGH finding
+## 2b. Independent review by the cavecrew reviewer
+While the gate runs: the Agent tool with `subagent_type` `caveman:cavecrew-reviewer`,
+a read-only review of the diff that is about to ship (code and config; not
+uv.lock, not moved docs). Only if it fails or times out, Kimi as backup (the
+`kimi` skill; say why the reviewer failed). Owner 2026-11-20: cavecrew first,
+Kimi the fallback. A HIGH finding
 is fixed, or disproved with the quoted code, before the commit; anything fixed
 means step 2 again. Name every finding and what happened to it in the report.
-The review is also against the rules: give Kimi the `.claude/rules/*.md` files
+The review is also against the rules: give the reviewer the `.claude/rules/*.md` files
 whose `paths` match the changed files and have it name each broken rule (for a
 Zalando rule, its id). A `tests/unit/architecture/baseline.json` that grew is
 a HIGH finding.

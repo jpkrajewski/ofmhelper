@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from signin import sign_in
 
 from ofmhelpers.db.drive_folders import store as folder_store
+from ofmhelpers.db.drive_uploads import store as upload_store
 from ofmhelpers.db.jobs.store import create_job, history
 from ofmhelpers.db.tracked_accounts.store import list_accounts, record_scan
 from ofmhelpers.db.users import store as users
@@ -728,3 +729,46 @@ def test_a_spoofed_copy_goes_into_the_spoofed_folder_of_the_account(drive, tmp_p
     (spoofed,) = drive.named("SPOOFED", account)
     assert len(drive.names_in(spoofed)) == 1
     assert _files_in(drive, "ann.ig - Anna") == ["SPOOFED"]
+
+
+def _spoof_state(client: TestClient, job: str) -> str:
+    [state] = client.get("/clone/drive-uploads", params={"job": job}).json()
+    return state["status"]
+
+
+def test_a_spoofed_copy_stays_in_drive_after_a_sync(drive, tmp_path):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_spoof("ann@example.com", tmp_path)
+    _upload(ann, job, login)
+
+    with time_machine.travel(time.time() + 5):
+        drive_folders.sync()
+
+    assert _spoof_state(ann, job) == "done"
+
+
+def test_an_upload_marked_gone_is_back_once_drive_shows_its_file(drive, tmp_path):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_spoof("ann@example.com", tmp_path)
+    upload = _upload(ann, job, login)
+    upload_store.remove(upload["id"], "Removed in Drive")
+
+    with time_machine.travel(time.time() + 5):
+        drive_folders.sync()
+
+    assert _spoof_state(ann, job) == "done"
+
+
+def test_an_upload_its_owner_took_out_of_drive_stays_out(drive, tmp_path):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_spoof("ann@example.com", tmp_path)
+    upload = _upload(ann, job, login)
+    upload_store.remove(upload["id"])
+
+    with time_machine.travel(time.time() + 5):
+        drive_folders.sync()
+
+    assert _spoof_state(ann, job) == "removed"

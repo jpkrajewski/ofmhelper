@@ -112,20 +112,15 @@
             const pending = buildUploadingCard(manifestCount(formData, "videos"));
             gallery.prepend(pending);
 
-            let guarded = () => {};
             const done = () => {
-                guarded();
                 uploading = false;
                 submitBtn.disabled = false;
             };
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", form.action);
-            xhr.upload.addEventListener("progress", (ev) => {
-                if (ev.lengthComputable) {
-                    pending.setProgress(Math.floor((ev.loaded / ev.total) * 100));
-                }
-            });
-            xhr.addEventListener("load", () => {
+            const key = window.Idempotency.keyFor(form, formData);
+            const headers = { [window.Idempotency.HEADER]: key };
+            window.Idempotency.send(() =>
+                window.UploadGuard.post(form.action, formData, pending.setProgress, headers)
+            ).then((xhr) => {
                 done();
                 if (xhr.status === 401) {
 
@@ -140,6 +135,7 @@
                     return;
                 }
                 const data = JSON.parse(xhr.responseText);
+                window.Idempotency.holdUntilSettled(form, key, data.job_ids);
                 const holder = document.createElement("div");
                 holder.innerHTML = data.html;
                 const cards = [...holder.children];
@@ -155,15 +151,12 @@
                 );
                 const n = data.job_ids.length;
                 setStatus(statusEl, `Queued ${n} run${n === 1 ? "" : "s"}.`, false);
-            });
-            xhr.addEventListener("error", () => {
+            }, () => {
                 done();
                 pending.remove();
                 showEmpty();
                 setStatus(statusEl, "Upload failed — check your connection and try again.", true);
             });
-            xhr.send(formData);
-            guarded = window.UploadGuard.begin();
         });
     }
 

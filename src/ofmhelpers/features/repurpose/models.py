@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from ofmhelpers.db.jobs.schema import ResultFile
 from ofmhelpers.features.jobs.schema import TaskCard
 lazy from ofmhelpers.db.drive_folders.schema import DriveUpload
+lazy from ofmhelpers.media.repurpose.repurpose import EncodeStep
 
 
 class Medium(StrEnum):
@@ -31,9 +32,12 @@ class CopyScore(BaseModel, frozen=True):
 class RepurposeResult(ResultFile):
     score: CopyScore | None = None
     attempts: int = 1
+    step: EncodeStep | None = None
 
 
 class RepurposeCard(TaskCard):
     score: CopyScore | None = None
     attempts: int = 1
+    mirrored: bool | None = None
+    turn: float | None = None
     drive_uploads: list[DriveUpload] = Field(default_factory=list)

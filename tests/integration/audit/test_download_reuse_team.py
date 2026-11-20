@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from download_files import FakeDownloads, fake_posters
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import make_user, sign_in
 
 from ofmhelpers.db.cookies import store as login_cookies
@@ -51,7 +52,7 @@ def _client(email: str, role: Role = Role.USER, owner_id: int | None = None):
 
 
 def _paste(client: TestClient) -> str:
-    r = client.post("/download-media/run", data={"urls": LINK})
+    r = client.post("/download-media/run", data={"urls": LINK}, headers=keyed())
     assert r.status_code == 202, r.text
     return r.json()["job_id"]
 

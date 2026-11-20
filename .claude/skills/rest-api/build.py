@@ -16,6 +16,7 @@ CHAPTERS = f"https://api.github.com/repos/{REPO}/contents/chapters"
 HERE = Path(__file__).parent
 RULE = re.compile(r"^\[#(\d+)\]\n=+ \{(\w+)\}(.*)$", re.MULTILINE)
 CHAPTER = re.compile(r"^= (.+)$", re.MULTILINE)
+KEPT = frozenset({"229", "230", "231"})
 
 
 def get(url: str) -> str:
@@ -33,17 +34,18 @@ def main() -> None:
         found = list(RULE.finditer(text))
         for match, following in itertools.pairwise([*found, None]):
             number, level, title = match[1], match[2], match[3].strip(" /")
-            if level != "MUST":
+            if level != "MUST" and number not in KEPT:
                 continue
             body = text[
                 match.end() : following.start() if following else len(text)
             ].strip()
             (rules / f"{number}.md").write_text(
-                f"# [{number}] MUST {title}\n\n{body}\n", "utf-8"
+                f"# [{number}] {level} {title}\n\n{body}\n", "utf-8"
             )
-            rows.append(
-                f"{number} | {chapter[1] if chapter else entry['name']} | {title}"
-            )
+            if level == "MUST":
+                rows.append(
+                    f"{number} | {chapter[1] if chapter else entry['name']} | {title}"
+                )
     (HERE / "must.md").write_text("\n".join(rows) + "\n", "utf-8")
     print(f"{len(rows)} MUST rules -> {rules}")
 

@@ -13,6 +13,7 @@ from download_files import (
     rows,
 )
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import make_user, sign_in
 
 from ofmhelpers.db.downloads import store
@@ -52,7 +53,9 @@ def client() -> TestClient:
 
 
 def _paste(client: TestClient, *links: str) -> dict:
-    r = client.post("/download-media/run", data={"urls": "\n".join(links)})
+    r = client.post(
+        "/download-media/run", data={"urls": "\n".join(links)}, headers=keyed()
+    )
     assert r.status_code == 202, r.text
     return r.json()
 

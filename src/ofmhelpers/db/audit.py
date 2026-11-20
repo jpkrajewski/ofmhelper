@@ -44,6 +44,7 @@ EXCLUDED: frozendict[str, str] = frozendict(
         "drive_account_folders": "made and healed by the Drive sweep",
         "drive_va_folders": "made and renamed by the Drive sweep",
         "drive_uploads": "its own record: who, which file, which folder, when",
+        "idempotency_keys": "request bookkeeping: the first answer to a key, kept 24 h",
         "distribution_posts": "its own record: which file went to which channel, when, its pin",
         "drive_posted_files": "what the Drive sweep saw in POSTED",
         "short_link_daily_stats": "copied from the link providers",

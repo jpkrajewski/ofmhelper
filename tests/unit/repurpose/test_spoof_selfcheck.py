@@ -1,11 +1,13 @@
 import random
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from spoof_draws import drawn_step
 
 from ofmhelpers.config import settings
 from ofmhelpers.features.repurpose import service
-from ofmhelpers.features.repurpose.models import CopyScore
+from ofmhelpers.features.repurpose.models import CopyScore, RepurposeResult
 from ofmhelpers.media.repurpose.audio_check import BrokenAudioError
 from ofmhelpers.media.repurpose.devices import load_device
 from ofmhelpers.media.repurpose.presets import load_preset
@@ -54,10 +56,22 @@ def made(monkeypatch):
 
         def run(self):
             self.copy.write_bytes(b"x")
+            return SimpleNamespace(step=drawn_step(seeds[-1]))
 
     monkeypatch.setattr(service, "Repurpose", _Repurpose)
     monkeypatch.setattr(service, "verify_audio", lambda src, dst: None)
     return seeds
+
+
+def test_a_copy_keeps_what_was_drawn_for_it(made, monkeypatch, tmp_path):
+    _verdicts(monkeypatch, [False])
+
+    [result] = service.run_repurpose(str(tmp_path), "src.mp4", 10)
+    kept = RepurposeResult.model_validate_json(result.model_dump_json())
+
+    assert kept.step == drawn_step(11)
+    assert kept.step is not None
+    assert 1.0 <= abs(kept.step.video.rotate or 0.0) <= 3.0
 
 
 def _broken_audio_first(monkeypatch):

@@ -11,7 +11,9 @@
 </div>
 {% endif %}
 {% endblock %}
-{% block meta %}Spoof · iPhone 16 Pro Max{% endblock %}
+{% block meta %}Spoof · iPhone 16 Pro Max
+{%- if job.mirrored is not none %} · {{ "mirrored" if job.mirrored else "not&nbsp;mirrored"|safe }}{% endif %}
+{%- if job.turn %} · turned&nbsp;{{ "%.1f"|format(job.turn|abs) }}°&nbsp;{{ "right" if job.turn > 0 else "left" }}{% endif %}{% endblock %}
 {% block pending_label %}spoofing…{% endblock %}
 {% block below %}{% include "_drive_states.html" %}{% endblock %}
 {% block menu_items %}{% if drive_targets %}{{ ui.menu_item("Upload to Drive", "folder", "drive-upload-btn") }}{% endif %}{% endblock %}

@@ -8,6 +8,7 @@ from types import MappingProxyType
 import pytest
 import requests
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import sign_in, sign_in_agency
 
 import ofmhelpers.media.exports as exports_module
@@ -63,7 +64,7 @@ def _post(client, videos, data=None):
         "videos_manifest": _new(len(videos)),
         **(data or {}),
     }
-    return client.post("/clone/run", data=form, files=files)
+    return client.post("/clone/run", data=form, files=files, headers=keyed())
 
 
 @pytest.mark.parametrize(
@@ -140,6 +141,7 @@ def test_recreate_resubmits_the_same_files_without_uploading(client):
 
     r = client.post(
         "/clone/run",
+        headers=keyed(),
         data={
             "api_key": "k",
             "image_manifest": json.dumps([{"kind": "existing", "path": image[0]}]),
@@ -177,6 +179,7 @@ def test_every_run_gets_all_the_subject_images(client):
     ] + [("videos", (n, n.encode(), "video/mp4")) for n in ("a.mp4", "b.mp4")]
     r = client.post(
         "/clone/run",
+        headers=keyed(),
         data={"api_key": "k", "image_manifest": _new(2), "videos_manifest": _new(2)},
         files=files,
     )
@@ -196,6 +199,7 @@ def test_run_caps_subject_images(client, monkeypatch):
     files.append(("videos", ("a.mp4", b"a", "video/mp4")))
     r = client.post(
         "/clone/run",
+        headers=keyed(),
         data={"api_key": "k", "image_manifest": _new(2), "videos_manifest": NEW},
         files=files,
     )
@@ -394,9 +398,10 @@ def _stub(provider_cls, monkeypatch, sent):
     monkeypatch.setattr(provider_cls, "download", download)
 
 
-def _post_clips(client, clips, data=None):
+def _post_clips(client, clips, data=None, key=None):
     return client.post(
         "/clone/run",
+        headers=key or keyed(),
         data={
             "api_key": "k",
             "image_manifest": NEW,
@@ -408,6 +413,20 @@ def _post_clips(client, clips, data=None):
             *[("videos", (c.name, c.read_bytes(), "video/mp4")) for c in clips],
         ],
     )
+
+
+def test_a_double_click_pays_for_one_set_of_runs(client, tmp_path, monkeypatch):
+    sent = []
+    _stub(KieProvider, monkeypatch, sent)
+    clips = [_clip(tmp_path / "a.mp4", 3)]
+    key = keyed()
+
+    first = _post_clips(client, clips, {"provider": "kie"}, key)
+    again = _post_clips(client, clips, {"provider": "kie"}, key)
+
+    assert (first.status_code, again.status_code) == (202, 200)
+    assert again.json() == first.json()
+    assert len(sent) == 1
 
 
 def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatch):
@@ -520,6 +539,7 @@ def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
 
     r = client.post(
         "/clone/run",
+        headers=keyed(),
         data={
             "api_key": "k",
             "provider": "higgsfield",

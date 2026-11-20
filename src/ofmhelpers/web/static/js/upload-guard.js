@@ -59,7 +59,7 @@
         });
     });
 
-    function post(url, formData, onProgress) {
+    function post(url, formData, onProgress, headers = {}) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             let guarded = () => {};
@@ -68,6 +68,9 @@
                 settle();
             };
             xhr.open("POST", url);
+            for (const [name, value] of Object.entries(headers)) {
+                xhr.setRequestHeader(name, value);
+            }
             xhr.upload.addEventListener("progress", (ev) => {
                 if (ev.lengthComputable) {
                     onProgress(Math.floor((ev.loaded / ev.total) * 100));

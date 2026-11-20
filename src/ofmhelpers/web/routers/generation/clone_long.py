@@ -24,6 +24,7 @@ from ofmhelpers.web.dependencies import (
 )
 from ofmhelpers.web.forms import Files, PaidForm, Stripped, Upper
 from ofmhelpers.web.gallery import Gallery, GalleryParams
+from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
@@ -31,7 +32,10 @@ from ofmhelpers.web.templates_config import render
 __all__ = ["FILES_PREFIX", "LABEL", "TASK", "card", "router"]
 
 router = APIRouter(
-    prefix=PREFIX, tags=["clone-long"], dependencies=[Access(Area.CLONE_LONG)]
+    prefix=PREFIX,
+    tags=["clone-long"],
+    dependencies=[Access(Area.CLONE_LONG)],
+    route_class=IdempotentRoute,
 )
 
 gallery = Gallery({TASK})
@@ -84,7 +88,7 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
     )
 
 
-@router.post("/run", status_code=202)
+@router.post("/run", status_code=202, dependencies=[Idempotent])
 def run(
     form: Annotated[LongCloneForm, Form()],
     actor: Actor,

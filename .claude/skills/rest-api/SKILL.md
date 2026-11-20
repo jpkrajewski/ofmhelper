@@ -10,6 +10,7 @@ The rules that apply to every route load by themselves from `.claude/rules/route
 ## Files
 - `must.md`: all 85 MUST rules, `id | chapter | title`. Grep it by keyword.
 - `rules/<id>.md`: Zalando's text for that rule (reasons, examples, exceptions). Read the one you need.
+- Also kept, though not MUST (`build.py` `KEPT`): `229` SHOULD design POST and PATCH idempotent, `230` MAY support the `Idempotency-Key` header, `231` SHOULD use a secondary key for an idempotent POST. This app's layer: `web/idempotency.py` (`IdempotentRoute` + `Idempotent`, keys in `idempotency_keys`).
 - Refresh: `MSYS_NO_PATHCONV=1 $C run --rm --no-deps -v "$(pwd -W)/.claude/skills/rest-api:/skill" tests python /skill/build.py` (`C` = the dev compose pair).
 
 Source and licence: Zalando RESTful API and Event Guidelines, https://opensource.zalando.com/restful-api-guidelines/ (`#<id>` jumps to a rule), repo `zalando/restful-api-guidelines`, CC BY 4.0. Text in `rules/` is theirs, cut per rule (code samples reformatted by the repo's ruff).

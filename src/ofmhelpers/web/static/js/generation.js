@@ -290,6 +290,7 @@
                     again(Math.min(interval * 1.4, POLL_MAX_MS));
                     return;
                 }
+                document.dispatchEvent(new CustomEvent("job:settled", { detail: { jobId } }));
                 if (job.status === "gone") {
                     card.replaceWith(
                         buildFailedCard(label, `Job ${jobId} no longer exists.`, null, "Not found")
@@ -367,7 +368,11 @@
         const card = buildUploadingCard();
         gallery.prepend(card);
 
-        window.UploadGuard.post(form.action, formData, card.setProgress)
+        const key = window.Idempotency.keyFor(form, formData);
+        const headers = { [window.Idempotency.HEADER]: key };
+        window.Idempotency.send(() =>
+            window.UploadGuard.post(form.action, formData, card.setProgress, headers)
+        )
             .then((xhr) => {
 
                 if (xhr.status === 401) {
@@ -399,7 +404,8 @@
                     pollJob(theCard, prefix, jobId, label, resultKind);
                 }
 
-                const ids = data.job_ids || [data.job_id];
+                const ids = (data.job_ids || [data.job_id]).filter(Boolean);
+                window.Idempotency.holdUntilSettled(form, key, ids);
 
                 if (!ids.length) card.remove();
                 else {
@@ -415,7 +421,6 @@
                 form.dispatchEvent(new CustomEvent("generation:queued", { detail: data }));
             })
             .catch((err) => {
-
                 card.replaceWith(buildFailedCard(label, err.message));
                 setSubmitError(err.message);
             });

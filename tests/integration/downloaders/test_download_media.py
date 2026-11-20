@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from signin import sign_in
 
 from ofmhelpers.features.fakes import install_fakes
@@ -22,7 +23,9 @@ def test_one_run_gets_a_reels_video_and_a_posts_images(client):
     reel = "https://www.instagram.com/reel/abc/"
     post = "https://www.instagram.com/p/xyz/"
 
-    r = client.post("/download-media/run", data={"urls": f"{reel}\n{post}"})
+    r = client.post(
+        "/download-media/run", data={"urls": f"{reel}\n{post}"}, headers=keyed()
+    )
     assert r.status_code == 202
     status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
 
@@ -36,7 +39,9 @@ def test_one_run_gets_a_reels_video_and_a_posts_images(client):
 
 def test_a_dead_link_reports_both_downloaders(client):
     r = client.post(
-        "/download-media/run", data={"urls": "https://www.tiktok.com/fake-fail"}
+        "/download-media/run",
+        data={"urls": "https://www.tiktok.com/fake-fail"},
+        headers=keyed(),
     )
     status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
 
@@ -46,12 +51,15 @@ def test_a_dead_link_reports_both_downloaders(client):
 
 
 def test_an_empty_form_is_refused(client):
-    assert client.post("/download-media/run", data={"urls": " \n "}).status_code == 400
+    refused = client.post("/download-media/run", data={"urls": " \n "}, headers=keyed())
+    assert refused.status_code == 400
 
 
 def test_a_download_run_shows_on_the_page_and_reopens_in_the_one_tool(client):
     r = client.post(
-        "/download-media/run", data={"urls": "https://www.instagram.com/reel/abc/"}
+        "/download-media/run",
+        data={"urls": "https://www.instagram.com/reel/abc/"},
+        headers=keyed(),
     )
     html = client.get("/download-assets").text
 
@@ -85,7 +93,7 @@ def test_a_login_walled_reel_is_rescued_by_the_saver_fallback(client, monkeypatc
     )
 
     url = "https://www.instagram.com/reel/rescued/"
-    r = client.post("/download-media/run", data={"urls": url})
+    r = client.post("/download-media/run", data={"urls": url}, headers=keyed())
     status = client.get(f"/download-media/jobs/{r.json()['job_id']}/status").json()
 
     assert status["status"] == "done"

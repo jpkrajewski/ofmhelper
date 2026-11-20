@@ -860,3 +860,19 @@ def test_self_link_addresses_become_unique_and_no_row_changes(db):
     command.downgrade(_alembic(), DISTRIBUTION)
     names = {i["name"] for i in inspect(db).get_indexes("short_links")}
     assert "uq_short_links_self_address" not in names
+
+
+IDEMPOTENCY_KEYS = "6b760327929d"
+
+
+def test_idempotency_keys_adds_an_empty_table_and_changes_no_row(db):
+    needs(IDEMPOTENCY_KEYS)(db)
+    before = _row_counts(db)
+
+    command.upgrade(_alembic(), IDEMPOTENCY_KEYS)
+
+    after = _row_counts(db)
+    assert after["idempotency_keys"] == 0
+    assert {t: n for t, n in after.items() if t in before} == before
+    command.downgrade(_alembic(), SELF_ADDRESS)
+    assert _row_counts(db) == before

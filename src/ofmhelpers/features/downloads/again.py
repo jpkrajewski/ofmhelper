@@ -4,7 +4,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from ofmhelpers.db.downloads import store
-from ofmhelpers.db.jobs.store import get_job, hide_job
+from ofmhelpers.db.jobs.store import get_job, hide_job, running_with_links
 from ofmhelpers.features.jobs.schema import JobQueued, error_reason
 from ofmhelpers.features.refusals import NotFoundError
 from ofmhelpers.log import get_logger
@@ -58,7 +58,11 @@ def sort_out(actor: str, links: list[str]) -> Seen:
         hide_job(job_id, actor, hidden=False)
         if not _here(files):
             _fetch_again(job_id, actor)
-    return Seen(new=[link for link in links if link not in by_link], jobs=jobs)
+    waiting = [link for link in links if link not in by_link]
+    running = running_with_links(TASKS, actor, waiting)
+    jobs += [job.id for job in running if job.id not in jobs]
+    busy = {url for job in running for url in job.params.get("urls", [])}
+    return Seen(new=[link for link in waiting if link not in busy], jobs=jobs)
 
 
 def _fetch_again(job_id: str, actor: str) -> Job:

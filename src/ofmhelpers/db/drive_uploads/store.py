@@ -51,8 +51,8 @@ def remove(upload_id: int, reason: str = "Removed from Drive") -> None:
     _repository().remove(upload_id, reason)
 
 
-def gone_from(login_id: int, present: set[str], before: float) -> int:
-    return _repository().gone_from(login_id, present, before)
+def follow_drive(login_id: int, present: set[str], before: float) -> int:
+    return _repository().follow_drive(login_id, present, before)
 
 
 def finish(

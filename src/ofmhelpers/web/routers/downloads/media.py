@@ -12,6 +12,7 @@ from ofmhelpers.features.redirect import Redirect
 from ofmhelpers.web.access import Area
 from ofmhelpers.web.dependencies import Access, Actor, Actors, AssetsRoot, OwnerId
 from ofmhelpers.web.forms import FormModel
+from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 
 __all__ = ["TASK", "_run_downloads", "router"]
@@ -22,6 +23,7 @@ router = APIRouter(
     prefix="/download-media",
     tags=["download-media"],
     dependencies=[Access(Area.DOWNLOAD)],
+    route_class=IdempotentRoute,
 )
 
 
@@ -31,7 +33,7 @@ class SendForm(FormModel):
     index: int | None = Field(default=None, ge=0)
 
 
-@router.post("/run", status_code=202)
+@router.post("/run", status_code=202, dependencies=[Idempotent])
 def run(
     urls: Annotated[str, Form()],
     actor: Actor,

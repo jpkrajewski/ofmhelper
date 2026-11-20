@@ -492,7 +492,24 @@ def _build_scan(
     )
 
 
-def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountScan:
+class _Scanned(BaseModel):
+    scan: AccountScan
+    items: list[DriveFile]
+
+
+def _spoofed(drive: DriveApi, items: list[DriveFile]) -> list[DriveFile]:
+    found: list[DriveFile] = []
+    for d in items:
+        if d.kind != "folder" or d.name != AccountFolder.SPOOFED:
+            continue
+        try:
+            found += _files(drive.children(d.id))
+        except FolderGoneError:  # silent: only that SPOOFED folder went
+            logger.info("drive: SPOOFED folder %s gone mid-scan", d.id)
+    return found
+
+
+def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> _Scanned:
     current = drive.folder(account_id)
     items = drive.children(account_id)
     posted_items = DriveListing()
@@ -503,7 +520,9 @@ def _scan(drive: DriveApi, account_id: str, posted_id: str | None) -> AccountSca
             )
         except FolderGoneError:  # silent: only that POSTED folder went
             logger.info("drive: POSTED folder %s gone mid-scan", d.id)
-    return _build_scan(current.name, items, posted_id, posted_items)
+    return _Scanned(
+        scan=_build_scan(current.name, items, posted_id, posted_items), items=items
+    )
 
 
 def _kept_posted_ok(scan: AccountScan, stored: StoredFolder) -> bool:
@@ -521,10 +540,11 @@ def _tally_one(
     if drive is None:
         return report
     try:
-        scan = _scan(drive, stored.folder_id, stored.posted_folder_id)
+        scanned = _scan(drive, stored.folder_id, stored.posted_folder_id)
     except FolderGoneError:  # silent: deleted by hand: the account is removed
         _deleted_by_hand(target)
         return report
+    scan = scanned.scan
     if scan.name != target.folder_name:
         drive.rename(stored.folder_id, target.folder_name)
         report.renamed.append(target.folder_name)
@@ -536,8 +556,9 @@ def _tally_one(
         return report
     report.newly_posted = newly
     store.save_scans({target.login_id: scan}, seen_at)
-    present = {f.id for f in (*scan.waiting, *scan.posted)}
-    upload_store.gone_from(target.login_id, present, seen_at)
+    spoofed = _spoofed(drive, scanned.items)
+    present = {f.id for f in (*scan.waiting, *scan.posted, *spoofed)}
+    upload_store.follow_drive(target.login_id, present, seen_at)
     return report
 
 
@@ -629,7 +650,7 @@ def _list_account(user_id: int, card: DriveCard, seen_at: float) -> None:
         if drive is None:
             return
         folder_id = card.account_folder_id
-        card.scan = _scan(drive, folder_id, card.posted_folder_id)
+        card.scan = _scan(drive, folder_id, card.posted_folder_id).scan
     except FolderGoneError:  # silent: deleted by hand: the account is removed
         _deleted_by_hand(card.target)
         card.account_folder_id = card.posted_folder_id = None

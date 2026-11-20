@@ -22,12 +22,18 @@ from ofmhelpers.web.dependencies import (
     OwnerId,
 )
 from ofmhelpers.web.forms import Files, FormModel, at_most
+from ofmhelpers.web.idempotency import Idempotent, IdempotentRoute
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render
 
 __all__ = ["DEFAULT_COPIES", "FILES_PREFIX", "TASK", "router"]
 
-router = APIRouter(prefix=PREFIX, tags=["spoof"], dependencies=[Access(Area.REPURPOSE)])
+router = APIRouter(
+    prefix=PREFIX,
+    tags=["spoof"],
+    dependencies=[Access(Area.REPURPOSE)],
+    route_class=IdempotentRoute,
+)
 
 
 class RepurposeForm(FormModel):
@@ -62,7 +68,7 @@ def cards(request: Request, job_id: str, actor: Actor, user: CurrentUser) -> Res
     )
 
 
-@router.post("/run", status_code=202)
+@router.post("/run", status_code=202, dependencies=[Idempotent])
 def run(
     form: Annotated[RepurposeForm, Form()],
     actor: Actor,

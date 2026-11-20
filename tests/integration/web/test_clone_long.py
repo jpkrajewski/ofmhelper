@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from idempotent import keyed
 from rq.timeouts import JobTimeoutException
 from signin import make_user, sign_in
 
@@ -132,6 +133,7 @@ def _post(client, video: Path | None, data=None, images=1):
         files.append(("video", (video.name, video.read_bytes(), "video/mp4")))
     return client.post(
         "/clone-long/run",
+        headers=keyed(),
         data={
             "api_key": "secret-key-123",
             "provider": "kie",
