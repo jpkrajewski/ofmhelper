@@ -165,8 +165,8 @@ NAV = (
         area=Area.SELF_LINKS,
     ),
     NavItem(
-        href="/repurpose",
-        label="Repurpose",
+        href="/spoof",
+        label="Spoof",
         icon="sparkles",
         place=NavPlace.MORE,
         area=Area.REPURPOSE,

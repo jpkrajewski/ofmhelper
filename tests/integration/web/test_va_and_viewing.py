@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin
 
 from ofmhelpers.auth.access import RETIRED, Area, areas_of
+from ofmhelpers.config.retired import retired
 from ofmhelpers.db.stores import devices, users
 from ofmhelpers.db.stores.jobs import create_job, get_job
 from ofmhelpers.features.account.keys import Keys, keep_used
@@ -40,7 +41,7 @@ VA_REFUSED = [
     "/threads",
     "/distribution",
     "/self-links",
-    "/repurpose",
+    "/spoof",
     "/cookies",
     "/users",
     "/chatting",
@@ -92,7 +93,7 @@ def test_a_va_is_refused_every_other_page(path):
 
     r = _client(VA, Role.VA).get(path, follow_redirects=False)
 
-    assert r.status_code == 403
+    assert r.status_code == (404 if path.lstrip("/") in retired().areas else 403)
 
 
 def test_a_page_that_is_not_theirs_sends_the_browser_home():

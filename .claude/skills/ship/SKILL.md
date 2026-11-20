@@ -118,9 +118,12 @@ issues new since release (or "none", or why it could not be read), anything
 not run.
 
 ## 10. Reflect
-After the report (CLAUDE.md "SELF-LEARNING"): update `BRAIN.md` (critical only,
-prune stale lines, max 40) and move this session's unlogged findings to
-`IMPROVEMENTS.md`. Say in one line what was added or removed.
+After the report (CLAUDE.md "SELF-LEARNING"): run the `self-learn` skill. It
+reads every saved session log since the last pass (this ship's included):
+owner corrections, failed calls, guard blocks, token waste; lessons become
+checks, `BRAIN.md` lines (critical only, max 40) or `IMPROVEMENTS.md` lines,
+then `scripts/self_learn.py --done`. Say in one line what was added or removed.
+The `self_learn_after_deploy` guard keeps the session from ending until it ran.
 - Read the session's plan file (if any) against what shipped: every item
   dropped, reverted or done another way is a candidate lesson.
 - A trap a test or hook can catch: write that check instead of a line (or

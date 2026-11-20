@@ -44,7 +44,7 @@ esac
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$dest/db" "$dest/env"
 if command -v icacls >/dev/null 2>&1; then
-  MSYS_NO_PATHCONV=1 icacls "$(cygpath -w "$dest")" /T /inheritance:r /grant:r "${USERNAME:-$USER}:(OI)(CI)F" >/dev/null
+  MSYS_NO_PATHCONV=1 icacls "$(cygpath -w "$dest")" /inheritance:r /grant:r "${USERNAME:-$USER}:(OI)(CI)F" >/dev/null
 fi
 
 find "$dest/.lock" -maxdepth 0 -mmin +150 -exec rmdir {} + 2>/dev/null || true

@@ -1,46 +1,43 @@
 import secrets
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
-from pydantic import BaseModel, ValidationError
 lazy from fastapi import UploadFile
 
-from ofmhelpers.cache import enqueue
+from ofmhelpers.cache import QueueName, enqueue_to
 from ofmhelpers.config import settings
+from ofmhelpers.db.stores import drive_uploads as upload_store
 from ofmhelpers.db.stores.jobs import create_job, get_job, list_jobs_page
 from ofmhelpers.features.assets.cards import job_assets
-from ofmhelpers.features.assets.manifests import build_ordered_paths
+from ofmhelpers.features.assets.manifests import build_ordered_paths, keep_videos
 from ofmhelpers.features.assets.store import make_job_dir, uploads_root
+from ofmhelpers.features.clone.service import DrivePicker, drive_picker
+from ofmhelpers.features.drive.uploads import SPOOFED_TASK
 from ofmhelpers.features.jobs.runner import run_job
 from ofmhelpers.features.refusals import NotFoundError, RefusedError
 from ofmhelpers.features.repurpose.models import (
     CopyScore,
-    KnobGroup,
     Medium,
     MethodScore,
     RepurposeCard,
     RepurposeResult,
-    knob_groups,
 )
-from ofmhelpers.media.repurpose import Repurpose
-from ofmhelpers.media.repurpose.devices import device_names, load_device
-from ofmhelpers.media.repurpose.presets import Preset, load_preset, preset_names
-from ofmhelpers.schemas import Job, JobQueued
+from ofmhelpers.log import get_logger
+from ofmhelpers.media.repurpose.audio_check import BrokenAudioError, verify_audio
+from ofmhelpers.media.repurpose.repurpose import Repurpose
+from ofmhelpers.schemas import DriveUpload, Job, JobsQueued
 lazy from ofmhelpers.media.repurpose.checker import CheckReport, check
 
-TASK = "repurpose"
-PREFIX = "/repurpose"
+logger = get_logger(__name__)
+
+TASK = SPOOFED_TASK
+PREFIX = "/spoof"
 FILES_PREFIX = f"{PREFIX}/files"
-
-DEFAULT_COPIES = 3
-
-DEFAULT_DEVICE = "strip"
-
-DEFAULT_PRESET = "medium"
-
-_HIDDEN_DEVICES = {"master"}
-
-_PAGE_ONLY = {"label", "video_special", "audio_special", "device", "device_special"}
+DEVICE_LABEL = "iPhone 16 Pro Max"
+PRESET = "spoof"
+DEFAULT_COPIES = 1
+NO_VIDEO = "Pick one video"
+NOT_FOUND = "Job not found"
 
 _HASH_NAMES = {
     "pdq": "PDQ",
@@ -51,23 +48,11 @@ _HASH_NAMES = {
 }
 
 
+class StillLooksLikeSourceError(RuntimeError): ...
+
+
 def upload_root() -> Path:
     return uploads_root() / "repurpose"
-
-
-def _devices() -> list[tuple[str, str]]:
-    return [
-        (name, load_device(name).label)
-        for name in device_names()
-        if name not in _HIDDEN_DEVICES
-    ]
-
-
-def _presets() -> dict[str, dict[str, Any]]:
-    return {
-        name: load_preset(name).model_dump(mode="json", exclude_unset=True)
-        for name in preset_names()
-    }
 
 
 def _score(report: CheckReport) -> CopyScore:
@@ -103,144 +88,144 @@ def _score(report: CheckReport) -> CopyScore:
     )
 
 
-def run_repurpose(
-    job_dir: str,
-    source: str,
-    preset: dict[str, Any],
-    device: str,
-    copies: int,
-    preset_name: str = "",
-    special: bool = False,
-) -> list[RepurposeResult]:
-    del preset_name, special
-    directory = Path(job_dir)
-    preset_file = directory / "preset.json"
-    preset_file.write_text(
-        Preset.model_validate({**preset, "device": device}).model_dump_json(
-            exclude_none=True, indent=2
-        ),
-        encoding="utf-8",
-    )
-    ext = ".mov" if load_device(device).recorder else ".mp4"
+def _copy_name(seed: int) -> str:
+    return f"IMG_{1000 + seed % 9000}.mov"
+
+
+def _made(source: Path, copy: Path, seed: int, timeout: int) -> CopyScore | None:
+    Repurpose(source, copy, seed=seed, timeout_s=timeout).apply_json_preset(
+        PRESET
+    ).run()
+    try:
+        verify_audio(source, copy)
+    except BrokenAudioError:
+        logger.warning("repurpose: seed %s broke the audio", seed, exc_info=True)
+        return None
+    return _score(check(source, copy, timeout_s=timeout))
+
+
+def _first_unique(source: Path, copy: Path, seed: int) -> RepurposeResult:
     timeout = settings.web.uniqify_encode_timeout_s
-    results = []
-    for i in range(1, copies + 1):
-        dst = directory / f"copy_{i:02d}{ext}"
-        Repurpose(
-            source, dst, seed=secrets.randbits(32), timeout_s=timeout
-        ).apply_json_preset(str(preset_file)).run()
-        report = check(source, dst, timeout_s=timeout)
-        results.append(
-            RepurposeResult(name=dst.name, path=str(dst), score=_score(report))
+    tries = settings.repurpose.attempts
+    for attempt in range(1, tries + 1):
+        score = _made(source, copy, seed + attempt, timeout)
+        if score is not None and score.unique:
+            return RepurposeResult(
+                name=copy.name, path=str(copy), score=score, attempts=attempt
+            )
+        logger.warning(
+            "repurpose: attempt %s of %s did not pass: %s",
+            attempt,
+            tries,
+            score.model_dump_json() if score else "broken audio",
         )
-    return results
+    msg = f"Still matches the source after {tries} tries"
+    raise StillLooksLikeSourceError(msg)
 
 
-def cards(job: Job) -> list[RepurposeCard]:
-    base: dict[str, Any] = {
-        "task_label": "Repurpose",
-        "poll_prefix": PREFIX,
-        "result_kind": "video",
-    }
-    if job.status != "done":
-        return [RepurposeCard.from_job(job, [], [], **base)]
+def run_repurpose(
+    job_dir: str, source: str, seed: int | None = None, **old_params: object
+) -> list[RepurposeResult]:
+    if seed is None:
+        seed = secrets.randbits(32)
+        logger.warning(
+            "repurpose: a job queued before /spoof (params %s) runs as a Spoof copy, seed %s",
+            sorted(old_params),
+            seed,
+        )
+    copy = Path(job_dir) / _copy_name(seed)
+    try:
+        return [_first_unique(Path(source), copy, seed)]
+    except BaseException:
+        copy.unlink(missing_ok=True)
+        raise
+
+
+def _card(job: Job, uploads: list[DriveUpload]) -> RepurposeCard:
     found = job_assets(job, FILES_PREFIX)
-    assets, failed = found.assets, found.failed_sources
     entries = job.result if isinstance(job.result, list) else []
-    scores = [RepurposeResult.model_validate(e).score for e in entries]
-    if not assets:
-        return [RepurposeCard.from_job(job, [], failed, **base)]
-    return [
-        RepurposeCard.from_job(
-            job,
-            [asset],
-            failed,
-            copy_number=i + 1,
-            copies=len(assets),
-            score=scores[i] if i < len(scores) else None,
-            **base,
-        )
-        for i, asset in enumerate(assets)
-    ]
+    result = RepurposeResult.model_validate(entries[0]) if entries else None
+    return RepurposeCard.from_job(
+        job,
+        found.assets,
+        found.failed_sources,
+        task_label="Spoof",
+        poll_prefix=PREFIX,
+        result_kind="video",
+        drive_uploads=uploads,
+        score=result.score if result else None,
+        attempts=result.attempts if result else 1,
+    )
+
+
+def cards(jobs: list[Job]) -> list[RepurposeCard]:
+    uploads: dict[str, list[DriveUpload]] = {}
+    for upload in upload_store.for_jobs([j.id for j in jobs]):
+        uploads.setdefault(upload.job_id, []).append(upload)
+    return [_card(j, uploads.get(j.id, [])) for j in jobs]
 
 
 def cards_of(job_id: str, actor: str) -> list[RepurposeCard]:
     job = get_job(job_id, actor)
     if job is None:
-        msg = "Job not found"
-        raise NotFoundError(msg)
-    return cards(job)
+        raise NotFoundError(NOT_FOUND)
+    return cards([job])
 
 
-class PageView(BaseModel):
+class CardsView(DrivePicker):
     cards: list[RepurposeCard]
-    knob_groups: list[KnobGroup]
-    presets: dict[str, dict[str, Any]]
-    devices: list[tuple[str, str]]
-    default_device: str
-    default_preset: str
+
+
+def cards_view(job_id: str, actor: str, user_id: int) -> CardsView:
+    return CardsView(cards=cards_of(job_id, actor), **dict(drive_picker(user_id)))
+
+
+class PageView(CardsView):
+    prefill_video: list[str]
+    device_label: str
     default_copies: int
     max_copies: int
 
 
-def page_view(actor: str) -> PageView:
+def page_view(
+    actor: str, user_id: int, assets_root: Path, videos: list[str]
+) -> PageView:
     recent = list_jobs_page({TASK}, 0, settings.web.gallery_limit, actor).jobs
     return PageView(
-        cards=[card for job in recent for card in cards(job)],
-        knob_groups=knob_groups(),
-        presets=_presets(),
-        devices=_devices(),
-        default_device=DEFAULT_DEVICE,
-        default_preset=DEFAULT_PRESET,
+        cards=cards(recent),
+        **dict(drive_picker(user_id)),
+        prefill_video=keep_videos(videos, assets_root)[:1],
+        device_label=DEVICE_LABEL,
         default_copies=DEFAULT_COPIES,
-        max_copies=settings.web.uniqify_max_copies,
+        max_copies=settings.repurpose.max_copies,
     )
 
 
 class Submitted(Protocol):
     video: list[UploadFile]
     video_manifest: str
-    preset: str
-    preset_name: str
-    special: bool
-    device: str
     copies: int
 
 
-def _knobs(form: Submitted) -> Preset:
-    if form.device not in dict(_devices()):
-        msg = "Unknown device"
-        raise RefusedError(msg)
-    try:
-        return Preset.model_validate_json(form.preset)
-    except ValidationError:
-        msg = "A knob has a value it cannot take"
-        raise RefusedError(msg) from None
-
-
-def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> JobQueued:
-    knobs = _knobs(form)
+def start(form: Submitted, actor: str, owner_id: int, assets_root: Path) -> JobsQueued:
     paths = build_ordered_paths(
         form.video_manifest, form.video, assets_root, user_id=owner_id
     )
     if len(paths) != 1:
-        msg = "Pick one video"
-        raise RefusedError(msg)
-    job_dir = make_job_dir(upload_root())
-    params = {
-        "source": paths[0],
-        "preset": knobs.model_dump(mode="json", exclude_none=True, exclude=_PAGE_ONLY),
-        "preset_name": form.preset_name,
-        "special": form.special,
-        "device": form.device,
-        "copies": form.copies,
-    }
-    job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
-    enqueue(
-        run_job,
-        job_id,
-        run_repurpose,
-        {"job_dir": str(job_dir), **params},
-        job_timeout=form.copies * settings.web.uniqify_encode_timeout_s,
-    )
-    return JobQueued(job_id=job_id)
+        raise RefusedError(NO_VIDEO)
+    job_ids = []
+    for _ in range(form.copies):
+        job_dir = make_job_dir(upload_root())
+        seed = secrets.randbits(32)
+        params = {"source": paths[0], "seed": seed}
+        job_id = create_job(TASK, {"dir": str(job_dir), **params}, actor=actor)
+        enqueue_to(
+            QueueName.MEDIA,
+            run_job,
+            job_id,
+            run_repurpose,
+            {"job_dir": str(job_dir), **params},
+            job_timeout=settings.repurpose.job_timeout_s,
+        )
+        job_ids.append(job_id)
+    return JobsQueued(job_ids=job_ids)

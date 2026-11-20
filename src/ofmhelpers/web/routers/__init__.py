@@ -1,3 +1,8 @@
+from types import ModuleType
+
+from fastapi import APIRouter
+
+from ofmhelpers.config.retired import retired
 from ofmhelpers.web.routers import (
     account,
     ai_files,
@@ -31,6 +36,12 @@ from ofmhelpers.web.routers.inventory import drive, handmade, phones
 from ofmhelpers.web.routers.tracking import accounts, links, self_links
 from ofmhelpers.web.routers.video_tools import edit, repurpose, trials, uniqify
 
+
+def _live(*modules: ModuleType) -> list[APIRouter]:
+    gone = retired().routers
+    return [m.router for m in modules if m.__name__.rsplit(".", 1)[-1] not in gone]
+
+
 ROUTERS = [
     home.router,
     auth.router,
@@ -49,14 +60,14 @@ ROUTERS = [
     ai.router,
     clone.router,
     clone_long.router,
-    clone_links.router,
+    *_live(clone_links),
     *(router for _label, router in LEGACY_TOOLS.values()),
     downloads_index.router,
     download_media.router,
     download_videos.router,
     download_images.router,
     clean_image.router,
-    reels.router,
+    *_live(reels),
     viral.router,
     accounts.router,
     links.router,
@@ -65,11 +76,11 @@ ROUTERS = [
     drive.router,
     handmade.router,
     character_sheet.router,
-    pictures.router,
+    *_live(pictures),
     threads.router,
     uniqify.router,
     edit.router,
-    repurpose.router,
+    *_live(repurpose),
     trials.router,
     distribution.router,
     admin_users.router,

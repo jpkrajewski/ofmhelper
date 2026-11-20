@@ -3,18 +3,7 @@
     <img class="result-video" data-clone-source src="{{ job.source.thumb_url }}" alt="{{ job.source.name }}" loading="lazy" decoding="async" onerror="this.hidden=true">
 {% endif %}{% endblock %}
 {% block below %}
-    {% set in_drive = request is not defined or can(request, "drive-upload") %}
-    <ul class="drive-states">
-        {%- for u in job.drive_uploads if u.status != "removed" %}
-        <li data-status="{{ u.status }}" data-login="{{ u.login_id }}">
-            {% if u.status == "done" and not in_drive %}In Drive: {{ u.folder_name }}
-            {% elif u.status == "done" %}In Drive: <a href="{{ u.drive_url }}" target="_blank" rel="noopener">{{ u.folder_name }}</a>
-            {{ ui.icon_button("x", "Remove from " ~ u.folder_name, hook="drive-remove", attrs={"data-upload": u.id}) }}
-            {% elif u.status == "failed" %}<span>Drive upload to {{ u.folder_name }} failed{% if u.error %}: {{ u.error }}{% endif %}</span>
-            {% else %}<span class="spinner"></span> Uploading to {{ u.folder_name }}…{% endif %}
-        </li>
-        {%- endfor -%}
-    </ul>
+    {% include "_drive_states.html" %}
 {% if job.task == "clone" and job.status == "done" and job.assets|selectattr("kind", "equalto", "video")|list %}
     {% include "_clone_send_to.html" %}
 {% endif %}

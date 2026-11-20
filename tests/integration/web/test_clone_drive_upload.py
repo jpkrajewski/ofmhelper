@@ -702,3 +702,31 @@ def test_the_vas_button_filters_gen_ai_and_download_too(page, fragment, task):
     assert f'data-gallery-endpoint="{fragment}?va={va}"' in (
         ann.get(page, params={"va": va}).text
     )
+
+
+def _finished_spoof(email: str, tmp_path: Path) -> str:
+    video = tmp_path / "IMG_4821.mov"
+    video.write_bytes(b"\x00\x00\x00\x18ftypqt   fake")
+    job_id = create_job(
+        "repurpose",
+        {"dir": str(tmp_path), "source": str(video), "seed": 1},
+        actor=str(users.by_email(email).id),
+    )
+    run_job(job_id, lambda: [{"name": video.name, "path": str(video)}], {})
+    return job_id
+
+
+def test_a_spoofed_copy_goes_into_the_spoofed_folder_of_the_account(drive, tmp_path):
+    ann = _client("ann@example.com")
+    login = _account_folder(ann)
+    job = _finished_spoof("ann@example.com", tmp_path)
+
+    r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
+
+    assert r.status_code == 200, r.text
+    [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
+    assert state["status"] == "done"
+    (account,) = drive.named("ann.ig - Anna", _root_of("ann@example.com"))
+    (spoofed,) = drive.named("SPOOFED", account)
+    assert len(drive.names_in(spoofed)) == 1
+    assert _files_in(drive, "ann.ig - Anna") == ["SPOOFED"]

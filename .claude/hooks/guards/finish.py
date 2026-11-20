@@ -13,8 +13,10 @@ HANDS_BACK = re.compile(
 DECIDE = (
     "CLAUDE.md THE RULES DECIDE + JUST FIX IT + DONE MEANS DONE: a question a rule or the task answers "
     "is not for the owner. Re-read the task (it names the fix), CLAUDE.md and the STANDARDS skills, pick "
-    "the best default, build it, run the scoped tests, then report. Only a destructive, paid or "
-    "production choice goes to the owner: if this is one, say which rule makes it one and stop again."
+    "the best default, build it, run the scoped tests, then report. The owner decides: a destructive, "
+    "paid or production choice, and anything the owner's task says to decide together, brainstorm or "
+    "ask them about. If this is one of those, quote the line of the task or the rule that makes it "
+    "one, ask the question, and stop again: this stop then goes through."
 )
 
 

@@ -1,0 +1,23 @@
+{
+  "modules": [
+    {
+      "area": "clone-links",
+      "routers": ["clone_links"],
+      "tests": [
+        "*/test_clone_links*.py",
+        "*/clone_ai_check/test_*.py",
+        "*/test_drive_review_folder.py"
+      ]
+    },
+    {
+      "area": "pictures",
+      "routers": ["pictures"],
+      "tests": ["*/test_pictures*.py"]
+    },
+    {
+      "area": "reels",
+      "routers": ["reels"],
+      "tests": ["*/test_reels*.py", "*/test_reel_thumbs.py"]
+    }
+  ]
+}

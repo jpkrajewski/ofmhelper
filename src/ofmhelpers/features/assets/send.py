@@ -13,6 +13,7 @@ class SendTarget(StrEnum):
     CLONE = "clone"
     CLONE_LONG = "clone-long"
     EDIT = "edit"
+    SPOOF = "spoof"
 
     @property
     def page(self) -> str:

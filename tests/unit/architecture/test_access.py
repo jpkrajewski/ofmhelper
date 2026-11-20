@@ -3,7 +3,7 @@ import re
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, RouteContext, iter_route_contexts
 
-from ofmhelpers.auth.access import ACTIONS, Action, Area
+from ofmhelpers.auth.access import ACTIONS, RETIRED, Action, Area
 from ofmhelpers.schemas.nav import NAV
 from ofmhelpers.web.dependencies import Allowed
 from ofmhelpers.web.main import app
@@ -61,12 +61,12 @@ def test_every_area_has_a_route_and_the_menu_names_its_pages_area():
     wrong = sorted(
         f"{item.href}: menu says {item.area}, its route {sorted(pages.get(item.href, []))}"
         for item in NAV
-        if item.area not in pages.get(item.href, set())
+        if item.area not in RETIRED | pages.get(item.href, set())
     )
     assert not wrong, "menu entries whose page is another area's:\n" + "\n".join(wrong)
 
     used = {area for route in api_routes() for area in areas(route)}
-    unused = sorted(set(Area) - used)
+    unused = sorted(set(Area) - used - RETIRED)
     assert not unused, f"areas no route names: {unused}"
 
 

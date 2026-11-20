@@ -1,0 +1,27 @@
+{
+  "label": "Spoof (/spoof): off-centre corner zoom 10-14 %, mirror, 1 degree turn, small tilt/drift/speed/colour, pitch +0.7-0.8 semitone + chorus + room echo; iPhone 16 Pro Max H.264",
+  "video": {
+    "mirror": 1.0,
+    "rotate": 1.0,
+    "cut_head": [0.01, 0.03],
+    "speed": [0.97, 1.03],
+    "corner_zoom": [1.10, 1.14],
+    "tilt": [-0.3, 0.3],
+    "drift": [0.01, 0.02],
+    "saturation": [0.97, 1.03],
+    "brightness": [0.0, 0.02],
+    "gamma": [1.0, 1.01],
+    "adjust": {"sharpen": 5}
+  },
+  "audio": {
+    "volume": [0.985, 1.015],
+    "pitch": [0.7, 0.8],
+    "loud": ["chorus"],
+    "echo": ["room"],
+    "room_ms": [20.0, 50.0],
+    "limit": 0.97,
+    "room_tone": true,
+    "match_level": true
+  },
+  "device": "iphone16_h264"
+}

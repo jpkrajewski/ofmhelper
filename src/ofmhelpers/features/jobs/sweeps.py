@@ -28,6 +28,7 @@ from ofmhelpers.features.reports import asks as report_asks
 from ofmhelpers.features.reports import daily as daily_report
 from ofmhelpers.features.trials import cleanup as trials_cleanup
 from ofmhelpers.features.users import idle as va_idle
+from ofmhelpers.features.viral import cleanup as viral_cleanup
 from ofmhelpers.log import get_logger
 from ofmhelpers.sentry import HEARTBEAT_S
 from ofmhelpers.sentry import heartbeat as sentry_heartbeat
@@ -148,6 +149,12 @@ def sweeps() -> list[Sweep]:
             run=downloads_cleanup.remove_old,
             interval_s=lambda: settings.downloaders.sweep_s,
             enabled=lambda: settings.downloaders.sweeping(settings.infra.production),
+            queue=QueueName.PREVIEWS,
+        ),
+        Sweep(
+            name="viral cleanup",
+            run=viral_cleanup.remove_old,
+            interval_s=lambda: settings.viral.sweep_s,
             queue=QueueName.PREVIEWS,
         ),
         Sweep(

@@ -51,9 +51,10 @@ PAGES = [
     Shot(name="phones", path="/phones"),
     Shot(name="drive", path="/drive"),
     Shot(name="trials", path="/trials"),
+    Shot(name="threads", path="/threads"),
     Shot(name="self-links", path="/self-links"),
     Shot(name="uniqify", path="/uniqify"),
-    Shot(name="repurpose", path="/repurpose"),
+    Shot(name="spoof", path="/spoof"),
     Shot(name="account", path="/account"),
     Shot(name="cookies", path="/cookies"),
     Shot(name="vas", path="/vas"),
@@ -167,6 +168,8 @@ def main() -> None:
             shots.append(Shot(name="account-analytics", path=detail))
         if folder := first_link(page, "/trials"):
             shots.append(Shot(name="trials-folder", path=folder))
+        if thread := first_link(page, "/threads"):
+            shots.append(Shot(name="thread", path=thread))
         for shot in shots:
             shoot(page, shot, revision)
         browser.close()

@@ -322,15 +322,15 @@
 
     function initSendTo(gallery) {
         gallery.addEventListener("click", async (e) => {
-            const btn = e.target.closest(".send-to-edit, .send-to-long");
+            const btn = e.target.closest(".send-to-edit, .send-to-spoof");
             const card = btn?.closest(".result-item[data-job-id]");
             if (!card) return;
-            const buttons = card.querySelectorAll(".send-to-edit, .send-to-long");
+            const buttons = card.querySelectorAll(".send-to-edit, .send-to-spoof");
             buttons.forEach((b) => {
                 b.disabled = true;
             });
             const body = new URLSearchParams({
-                target: btn.classList.contains("send-to-long") ? "clone-long" : "edit",
+                target: btn.classList.contains("send-to-spoof") ? "spoof" : "edit",
             });
             if (card.dataset.fileIndex) body.set("index", card.dataset.fileIndex);
             try {

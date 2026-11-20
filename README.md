@@ -292,10 +292,14 @@ Off the server, automatically: `scripts/pull_backup.sh`, run on the owner's PC
 `~/ofmhelpers-backups` (`OFM_BACKUP_DIR`): `db/` the verified
 pg_dump, `env/` the server `.env` (mode 600; above all `OFM_VAULT_KEY`), the
 newest 14 of each (`OFM_BACKUP_KEEP`). Nothing else: no `uploads/`, no media.
-`scripts/schedule_backup.ps1` (PowerShell, once) registers it daily at 04:00.
+`scripts/schedule_backup.ps1` (PowerShell, once) registers it daily at 04:00
+(task `ofmhelpers-pull-backup`; a missed run starts when the PC is on). Every
+scheduled run appends its time, output and `exit=` to `~/ofmhelpers-backups/pull.log`;
+Task Scheduler's "Last Run Result" 0 = ok. Live since 2026-11-20.
 
 A restore needs exactly these two: the dump and the `.env`. Drill (proved on
-dev 2026-11-20: same row counts and alembic head as the live dev DB):
+dev 2026-11-20: same row counts and alembic head as the live dev DB; and on the
+first production pull the same day: 47/47 tables row for row the same as production):
 `createdb restore_drill`, `gzip -dc <dump> | psql -v ON_ERROR_STOP=1 -d restore_drill`,
 compare counts, `dropdb restore_drill`. Dev proof of the script itself:
 `OFM_BACKUP_LOCAL=1 OFM_BACKUP_COMPOSE="docker compose -f docker-compose.yml -f docker-compose.dev.yml" scripts/pull_backup.sh`.

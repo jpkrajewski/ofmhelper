@@ -270,20 +270,12 @@ _LOCAL_JOBS = {
         {
             "dir": "/u/repurpose/cd34",
             "source": "/a/in.mp4",
-            "preset": {},
-            "preset_name": "",
-            "special": False,
-            "device": "iphone",
-            "copies": 4,
+            "seed": 12345,
         },
         {
             "job_dir": "/u/repurpose/cd34",
             "source": "/a/in.mp4",
-            "preset": {},
-            "preset_name": "",
-            "special": False,
-            "device": "iphone",
-            "copies": 4,
+            "seed": 12345,
         },
     ),
     "character_sheet": (
@@ -430,6 +422,7 @@ def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
 ):
     monkeypatch.setenv("OFM_UNIQIFY_ENCODE_TIMEOUT_S", "600")
     monkeypatch.setenv("OFM_EDIT_CUT_TIMEOUT_S", "300")
+    monkeypatch.setenv("OFM_REPURPOSE_JOB_TIMEOUT_S", "2400")
     create_job("repurpose", _LOCAL_JOBS["repurpose"][0], actor=_seven())
     create_job("edit_cut", _LOCAL_JOBS["edit_cut"][0], actor=_seven())
     create_job("uniqify", _LOCAL_JOBS["uniqify"][0], actor=_seven())
@@ -444,7 +437,7 @@ def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
         )
     )
     assert by_function == {
-        "run_repurpose": (QueueName.DEFAULT, 4 * 600),
+        "run_repurpose": (QueueName.MEDIA, 2400),
         "run_cut": (QueueName.EDIT, 360),
         "run_uniqify": (QueueName.DEFAULT, None),
     }

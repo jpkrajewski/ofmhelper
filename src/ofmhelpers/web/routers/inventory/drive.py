@@ -6,6 +6,7 @@ from ofmhelpers.auth.access import Area
 from ofmhelpers.features.drive import folders as drive_folders
 from ofmhelpers.features.drive import page
 from ofmhelpers.features.handmade import service as handmade
+from ofmhelpers.features.repurpose import service as repurpose
 from ofmhelpers.schemas import SyncReport
 from ofmhelpers.web.dependencies import Access, Actors, CurrentUser, Scope
 from ofmhelpers.web.responses import PRIVATE_FOR_A_DAY
@@ -19,6 +20,9 @@ FileId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{10,128}$")]
 
 _SOURCES = [
     page.Source(task=CLONE_TASK, files_prefix=CLONE_FILES, page="/clone"),
+    page.Source(
+        task=repurpose.TASK, files_prefix=repurpose.FILES_PREFIX, page=repurpose.PREFIX
+    ),
     page.Source(
         task=handmade.TASK, files_prefix=handmade.FILES_PREFIX, page=handmade.PREFIX
     ),

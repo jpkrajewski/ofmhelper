@@ -85,9 +85,8 @@ RESTARTS = frozendict(
         repurpose.TASK: Restart(
             run=repurpose.run_repurpose,
             kwargs=_in_its_folder,
-            job_timeout=lambda params: (
-                params["copies"] * settings.web.uniqify_encode_timeout_s
-            ),
+            queue=QueueName.MEDIA,
+            job_timeout=lambda _params: settings.repurpose.job_timeout_s,
         ),
         character_sheet.TASK: Restart(run=character_sheet.run_combine, kwargs=_sheet),
         edit_service.TASK: Restart(

@@ -11,10 +11,13 @@ from guards import (
     reminders,
     review,
     secrets,
+    self_learn,
     shell_writes,
     skills,
     test_lock,
     tests,
+    ui_look,
+    workers,
 )
 
 GUARDS = (
@@ -34,4 +37,7 @@ GUARDS = (
     shell_writes.GUARD,
     review.GUARD,
     finish.GUARD,
+    workers.GUARD,
+    ui_look.GUARD,
+    self_learn.GUARD,
 )
