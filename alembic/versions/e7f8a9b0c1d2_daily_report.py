@@ -1,16 +1,3 @@
-"""chat_sales and report_runs: the daily report's sales and its runs
-
-`chat_sales` keeps every sale a platform announces (until now only the ones over
-$50 were kept, in `chat_notifications`, for the pop-up); those are copied in, so
-the report has the history there is. `report_runs` is one row per report per
-day: the claim, where the next window starts, and the counters it saw.
-
-Revision ID: e7f8a9b0c1d2
-Revises: c9b8a7f6e5d4
-Create Date: 2026-11-06 03:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

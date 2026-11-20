@@ -1,11 +1,3 @@
-"""Cerebras Inference's OpenAI-compatible API (inference-docs.cerebras.ai,
-2026-10-24).
-
-Vision model `qwen-3.8-27b` (`OFM_CEREBRAS_MODEL`): images only, at most 2
-and 10 MiB a request, strict JSON Schema. Free Trial tier: 5 requests/min,
-1M tokens/day. Key: https://cloud.cerebras.ai (`CEREBRAS_API_KEY`).
-"""
-
 lazy import httpx
 
 from ofmhelpers.config import settings

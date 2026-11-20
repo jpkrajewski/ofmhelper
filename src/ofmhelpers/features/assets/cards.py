@@ -1,8 +1,3 @@
-"""A job's result files as the cards a page shows.
-
-Nothing here touches disk beyond a stat.
-"""
-
 from pydantic import BaseModel
 
 from ofmhelpers.db.stores import downloads
@@ -14,8 +9,6 @@ from ofmhelpers.schemas.errors import error_reason
 
 
 class JobAssets(BaseModel):
-    """A job's result as cards, and the sources that gave none."""
-
     assets: list[AssetCard] = []
     failed_sources: list[FailedSource] = []
 
@@ -31,30 +24,6 @@ def asset_card(
     removed: bool = False,
     again_error: str | None = None,
 ) -> AssetCard:
-    """One entry for the generic asset grid / status page: what kind of
-    preview to render, and the two URLs a client can already reach (never
-    the server-side path a result dict carries internally).
-
-    remote_url, when set, is always preferred (kie.ai is faster than
-    proxying through our own server, and it keeps the file for 14 days) --
-    but kie.ai's URL is only reliably valid ~24h, so `local_fallback_url` is
-    always included too (even when remote_url is what's actually used) so
-    the frontend can swap to our own copy client-side (an <video onerror>,
-    see generation.js) once the hosted one goes stale. There may be no local
-    copy at all (see job_status_payload's remote-only result) -- callers
-    that never had a local file just won't see this field used.
-
-    An image or video with a local copy also gets `preview_url` (what a
-    gallery shows) and a video `poster_url` (shown until played); see
-    features/previews/render.py. A video's is its own URL until the preview
-    worker made the small copy: one URL never serves two files (a player that
-    held the original's length asked `/preview` for ranges the small copy has
-    not got: 4,637 answers 416 in 48 h, prod 2026-11-07).
-
-    `removed`: a download whose video the retention sweep removed -- only
-    what was kept of it has a URL (a video's poster, an image's preview);
-    `again_error`: what the downloader said when it was last asked for
-    again and did not come."""
     local_url = f"{files_prefix}/{index}"
     kind = classify_kind(name)
     if removed:
@@ -110,9 +79,6 @@ def _removed_card(
 
 
 def _removed_positions(job: Job) -> list[int]:
-    """The files of a grouped download the sweep removed on purpose, by
-    their place in the result. Asked of the database only when a file is
-    not on disk."""
     paths = [path for r in job.download_results() for path in r.output_paths]
     if all(path.is_file() for path in paths):
         return []
@@ -120,9 +86,6 @@ def _removed_positions(job: Job) -> list[int]:
 
 
 def job_assets(job: Job, files_prefix: str) -> JobAssets:
-    """A finished job's result as asset cards, plus the sources that failed
-    (only a grouped download job has any). A file's index counts across every
-    group -- it is what `serve_job_file` resolves, so the two must agree."""
     if job.status != "done":
         return JobAssets()
     prefix = f"{files_prefix}/{job.id}"

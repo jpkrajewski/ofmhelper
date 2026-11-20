@@ -1,8 +1,3 @@
-"""/download-media: any links -- videos, photo posts, carousels -- in one go.
-The downloader picks yt-dlp or gallery-dl per link
-(`ofmhelpers.integrations.downloaders.media`), so nobody has to choose. A
-card's video goes on to /clone or /clone-long through `features/assets/send.py`."""
-
 from pathlib import Path
 
 from ofmhelpers.features.downloads.service import fetch, queue_downloads
@@ -19,9 +14,6 @@ def run_downloads(
     user_id: int | None = None,
     job_id: str | None = None,
 ) -> list[DownloadResult]:
-    """Runs in the background, logged in as the user who started it;
-    run_job stores the results as JSON. Run again, it fetches only what is
-    not on disk (`service.fetch`)."""
     return fetch(download_all, urls, assets_root, user_id, job_id)
 
 

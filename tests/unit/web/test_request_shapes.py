@@ -1,7 +1,3 @@
-"""What the routers lean on instead of repeating it: a form taken whole
-(`web/forms.py`), a refusal raised past its route (`web/exceptions.py`), and
-what telemetry keeps of either."""
-
 import inspect
 from collections.abc import Iterator
 from datetime import date
@@ -52,7 +48,6 @@ def _client() -> TestClient:
     @app.post("/refuse/{index}")
     def refuse(index: int):
         error = list(REFUSALS)[index]
-        # Past its __init__: some refusals word themselves.
         raise error.__new__(error, "words for the person")
 
     return TestClient(app)
@@ -119,8 +114,6 @@ def test_a_refusal_answers_its_status_and_its_own_words(index):
 
 
 def test_only_the_phone_routes_that_use_a_secret_answer_the_vault_reason():
-    """On the whole router, a broken vault key would turn the /phones page's
-    plain "Something went wrong" into raw JSON and lose its crash log."""
     with_reason = {
         route.endpoint.__name__
         for route in phones.router.routes
@@ -202,10 +195,6 @@ def test_every_route_says_what_it_returns():
 
 
 def test_a_refusal_before_the_first_yield_would_answer_200():
-    """Why /clone-links/previews returns a `StreamingResponse` and does not
-    `yield`, against the FastAPI skill's advice: its refusals (no Drive, bad
-    paste, unknown resolution) must stay 400s. If this ever fails, FastAPI
-    changed and that route can follow the skill."""
     app = FastAPI()
 
     @app.post("/stream")

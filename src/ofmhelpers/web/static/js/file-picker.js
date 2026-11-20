@@ -1,35 +1,5 @@
-/*
- * Ordered, reusable multi-file picker widget.
- *
- * Auto-discovers every `.file-picker[data-field][data-kind]` element on the
- * page -- no per-template JS needed. Each item added is either
- * {kind: 'new', file: File} (from the file input) or
- * {kind: 'existing', path, name} (reused from the `/refs` dropdown or
- * restored by click-to-reuse -- never re-uploaded, since it already lives
- * on the server. That's what prevents duplicate uploads).
- *
- * State lives on each picker ELEMENT (picker._items), not in a shared map
- * keyed by field name -- two tools' fieldsets may legitimately use the same
- * field names (seedance and fake_ai both have reference_images/videos/audio)
- * and must never share or clobber each other's queued files.
- *
- * Browsers sort multi-file pickers alphabetically, not by click order, so
- * files are added one at a time into a list this script fully controls,
- * with explicit up/down/remove. Every item gets an inline preview
- * (image thumb / video / audio player).
- *
- * `FilePicker.collectFormData(formData)` appends every ACTIVE picker's files
- * (new ones by bytes, existing ones as a `${field}_manifest` JSON list) to
- * the given FormData -- pickers inside a disabled fieldset (the tools not
- * currently selected on /generate) are skipped, matching how native form
- * submission treats disabled fieldsets.
- *
- * Also handles the simpler single-slot `.preview-input` fields: just an
- * object-URL preview swap, submitted as a plain file input.
- */
 (() => {
-    // "uploads/assets/{sha256}__{original}.png" -> "{original}.png" -- the
-    // hash prefix is a storage detail, not something to show the user.
+
     function displayName(path) {
         const base = path.split(/[\\/]/).pop();
         const sep = base.indexOf("__");
@@ -41,11 +11,7 @@
     }
 
     function buildPreview(kind, item) {
-        // Existing images and videos preview through /refs/thumb (small,
-        // cached) -- .thumb-small is a 100px box, a full-res original (or a
-        // video's range requests) would be pure waste. Freshly-picked files
-        // have no server path yet, so those still preview via a local
-        // object URL.
+
         const existing = item.kind !== "new";
         const src = !existing
             ? URL.createObjectURL(item.file)
@@ -79,11 +45,6 @@
         return null;
     }
 
-    // data-required: an empty list stops the form as a required input does. The
-    // input itself is always empty (each pick moves into the list), so its
-    // validity is set by hand. A disabled fieldset's input is never checked.
-    // A file being downloaded again (`restore`) has no path to send yet: it
-    // stops the form too, until it is back.
     function checkRequired(picker) {
         const waiting = picker._items.some((item) => item.restoring);
         const required = "required" in picker.dataset;
@@ -99,10 +60,7 @@
 
     function renderList(picker) {
         picker.querySelector(".file-picker-missing")?.remove();
-        // data-max caps the list wherever items came from (file input, paste,
-        // reuse browser, restore): the newest ones win, so picking a second
-        // file into a one-file slot replaces the first instead of erroring
-        // at submit.
+
         const max = Number(picker.dataset.max || 0);
         if (max && picker._items.length > max) picker._items = picker._items.slice(-max);
         const kind = picker.dataset.kind;
@@ -110,18 +68,13 @@
         listEl.innerHTML = "";
         picker._items.forEach((item, idx) => {
             const li = document.createElement("li");
-            // Drives the per-kind row layout in components.css: an <audio> player has
-            // a wide intrinsic width, so on an audio row the filename gets its
-            // own line instead of being ellipsised down to nothing.
+
             li.dataset.kind = kind;
             const name = item.kind === "new" ? item.file.name : item.name;
 
             const preview = item.restoring ? null : buildPreview(kind, item);
             if (preview) li.appendChild(preview);
 
-            // Name truncates with an ellipsis (long filenames must never
-            // stretch the layout); the full name lives in the tooltip, and
-            // "reused" is a separate badge so truncation can't swallow it.
             const span = document.createElement("span");
             span.className = "item-name";
             span.textContent = `${idx + 1}. ${name}`;
@@ -162,25 +115,12 @@
             listEl.appendChild(li);
         });
         checkRequired(picker);
-        // Every change to the list ends here, so this is the one place a page
-        // (clone-cost.js) can watch what is picked.
+
         picker.dispatchEvent(new CustomEvent("filepicker:change", { bubbles: true }));
     }
 
-    // How many tiles "show older" asks for -- must stay <= the server's own
-    // MAX_REF_LIMIT (routers/refs.py), which is what actually enforces it.
-    // The default open takes no limit at all: the server decides that split
-    // (5 last used + 5 last uploaded).
     const REF_MAX = 60;
 
-    // The "reuse an uploaded file" browser: a grid of preview tiles (image
-    // thumbs / video first-frames / audio name tiles) instead of a plain
-    // filename dropdown. Fetched fresh on every open so files uploaded since
-    // page load show up too. Clicking a tile queues it as an "existing" item.
-    //
-    // Opens on the files you last picked, then the ones you last uploaded
-    // (`used_at` marks which is which) -- picking the file you just used is
-    // the overwhelmingly common case, and a wall of tiles buried it.
     function loadRefBrowser(picker, browser, limit) {
         const kind = picker.dataset.kind;
         const query = limit ? `/refs?kind=${kind}&limit=${limit}` : `/refs?kind=${kind}`;
@@ -198,9 +138,7 @@
                 }
                 let group = null;
                 files.forEach((f) => {
-                    // One label per group, emitted when the group changes --
-                    // the server already returns used-first, so this needs no
-                    // sorting of its own.
+
                     const inUsed = f.used_at !== null && f.used_at !== undefined;
                     if (!limit && group !== inUsed) {
                         group = inUsed;
@@ -212,24 +150,12 @@
                         browser.appendChild(label);
                     }
 
-                    // An audio tile carries a real <audio controls>, and that
-                    // cannot live inside a <button>: nesting interactive
-                    // content in a button is invalid HTML, and the browser
-                    // hands the button every click -- press play and you'd
-                    // queue the file instead of hearing it. So an audio tile
-                    // is a plain div holding the player plus its own add
-                    // button; an image/video tile stays one button.
                     const isAudio = kind === "audio";
                     const tile = document.createElement(isAudio ? "div" : "button");
                     if (!isAudio) tile.type = "button";
                     tile.className = isAudio ? "ref-tile ref-tile--audio" : "ref-tile";
                     tile.title = f.name;
 
-                    // Both images and videos poster through /refs/thumb: once
-                    // "show older" is used this grid paints up to REF_MAX
-                    // tiles at once, and the old <video preload="metadata">
-                    // tile made that one range request per clip against
-                    // multi-MB originals.
                     if (kind === "image" || kind === "video") {
                         const img = document.createElement("img");
                         img.src = `/refs/thumb?path=${encodeURIComponent(f.path)}&size=200`;
@@ -237,9 +163,7 @@
                         img.alt = f.name;
                         tile.appendChild(img);
                     } else if (isAudio) {
-                        // preload="none" for the same reason videos poster
-                        // through a thumb: this grid can paint REF_MAX tiles,
-                        // and nothing should be fetched until you press play.
+
                         const aud = document.createElement("audio");
                         aud.className = "ref-tile-audio";
                         aud.src = `/refs/file?path=${encodeURIComponent(f.path)}`;
@@ -252,9 +176,7 @@
                         icon.textContent = "🎵";
                         tile.appendChild(icon);
                     }
-                    // On an audio tile the name IS the add button (the tile
-                    // itself can't be one); everywhere else the whole tile
-                    // adds, as before.
+
                     const name = document.createElement(isAudio ? "button" : "span");
                     if (isAudio) name.type = "button";
                     name.className = "ref-tile-name";
@@ -275,9 +197,6 @@
                     browser.appendChild(tile);
                 });
 
-                // The default view is deliberately short, so there is always
-                // "older" to reach for. Reuses .ref-toggle rather than
-                // inventing a component -- same affordance, one row down.
                 if (!limit) {
                     const more = document.createElement("button");
                     more.type = "button";
@@ -294,28 +213,12 @@
             });
     }
 
-    // Clipboard files (screenshots, copied images) rarely carry a real
-    // filename -- give them one so the server's extension-based classify_kind
-    // / save_asset still work like they do for a normal file-input upload.
     function ensureNamedFile(file, kind) {
         if (file.name) return file;
         const ext = (file.type.split("/")[1] || kind || "png").split("+")[0];
         return new File([file], `pasted-${Date.now()}.${ext}`, { type: file.type });
     }
 
-    // Ctrl+V/Cmd+V (same browser "paste" event on both platforms) support for
-    // adding a copied/screenshotted image straight into a picker -- same
-    // {kind: "new", file} shape and upload path as the file-input, so it's
-    // thumbnailed/stored/attached identically. Listens on `document`, no
-    // click-to-focus anything first -- Ctrl+V anywhere on the page just
-    // works. Routes purely by clipboard CONTENT, not by what happens to be
-    // focused: if the clipboard holds no file matching an active picker's
-    // kind (e.g. it's plain text), `picker` below stays undefined and the
-    // handler returns before preventDefault(), so normal text paste into
-    // the prompt textarea/any other field is completely unaffected. This is
-    // also why checking the focused element would be wrong -- the prompt
-    // textarea is very often focused right when you go to paste a
-    // screenshot, and an editable-target check would swallow it there.
     document.addEventListener("paste", (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
@@ -339,19 +242,14 @@
         }
         if (!matched.length) return;
 
-        // Only now that we know this paste is actually image/video/audio
-        // data meant for a picker do we take over the event -- anything else
-        // (plain text, a paste with no matching-kind files) is left alone.
         e.preventDefault();
         matched.forEach((file) => picker._items.push({ kind: "new", file }));
         renderList(picker);
         reuseStored(picker);
     });
 
-    // Bigger files are not hashed (the browser reads the whole file into
-    // memory for it): they upload as before.
     const HASH_MAX_BYTES = 256 * 1024 * 1024;
-    // As many digests as one /refs/stored takes.
+
     const STORED_MAX = 50;
 
     async function digestOf(file) {
@@ -359,12 +257,6 @@
         return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
     }
 
-    // A file picked from the computer that the server already has (uploaded
-    // before, here or on another page) becomes a reused one: its sha256 is
-    // what the store names files by, so one small request answers it and
-    // Generate sends a path, not the bytes again (prod 2026-11-11: the same
-    // picture went up whole on every Generate). Any failure here leaves the
-    // file as it was: it uploads, as before.
     async function reuseStored(picker) {
         if (!window.crypto?.subtle) return;
         const fresh = (picker._items || [])
@@ -389,12 +281,10 @@
             }
             if (swapped) renderList(picker);
         } catch {
-            // Unreadable file or no connection: nothing swapped.
+
         }
     }
 
-    // What just went up is in the store now: the same files still in a
-    // picker are reused by the next Generate.
     document.addEventListener("uploads:done", () => {
         document.querySelectorAll(".file-picker").forEach(reuseStored);
     });
@@ -454,7 +344,7 @@
                     formData.append(field, item.file, item.file.name);
                     manifest.push({ kind: "new" });
                 } else if (!item.restoring) {
-                    // (one being downloaded again has no path to send yet)
+
                     manifest.push({ kind: "existing", path: item.path });
                 }
             }
@@ -469,10 +359,6 @@
         renderList(picker);
     }
 
-    // Replace a field's list with server-side paths (already in the shared
-    // asset store) -- what /generate's click-to-reuse calls to restore a past
-    // job's reference files, previews included. Targets the picker in the
-    // currently-enabled fieldset when field names are shared across tools.
     function setExisting(field, paths) {
         const pickers = [...document.querySelectorAll(`.file-picker[data-field="${field}"]`)];
         const picker = pickers.find(isActive) || pickers[0];
@@ -485,10 +371,6 @@
         return dropMissing(picker);
     }
 
-    // Replace a field's list with what `items()` gave earlier -- a new
-    // item's File, a reused one's path -- in that order: /clone puts its
-    // form back after Trim it! (clone-return.js), files not uploaded yet
-    // included. Gone stored files leave the list as in setExisting.
     function setItems(field, saved) {
         const pickers = [...document.querySelectorAll(`.file-picker[data-field="${field}"]`)];
         const picker = pickers.find(isActive) || pickers[0];
@@ -501,15 +383,6 @@
         return dropMissing(picker);
     }
 
-    // A restored file that is gone (deleted since, or never on this server)
-    // leaves the list, and the picker says which (2026-10-23: Recreate
-    // filled the boxes with files that 404ed, found out only at Start).
-    // One request for all of them (/refs/missing), before anything is drawn:
-    // no broken preview flashes up. A network blip keeps them all.
-    //
-    // A gone file that was the person's own download, removed to save space
-    // (`restorable`), is not dropped: it is downloaded again (`restore`) and
-    // stays in the list, marked "Downloading again…", until it is back.
     async function dropMissing(picker) {
         const restored = picker._items.filter((item) => item.kind === "existing");
         let missing = [];
@@ -544,8 +417,6 @@
         return gone.map((item) => item.name);
     }
 
-    // `why`: the server's reason one download did not come back ("Post
-    // deleted or profile banned"), in place of the usual sentence.
     function noteMissing(picker, gone, why) {
         if (!gone.length) return;
         const note = document.createElement("p");
@@ -560,11 +431,9 @@
     }
 
     const RESTORE_POLL_MS = 2000;
-    // features/downloads/again.py NOT_HERE: no fetch was tried, no reason.
+
     const NOT_HERE = "Not on this server";
 
-    // Resolves when the download job is done; rejects when it failed or is
-    // gone. A failed poll (offline, a deploy) is tried again.
     async function downloaded(jobId) {
         for (;;) {
             await new Promise((resolve) => setTimeout(resolve, RESTORE_POLL_MS));
@@ -582,10 +451,6 @@
         }
     }
 
-    // A removed download fetched again into its own job, then put in the list
-    // under the path it is stored at NOW (a video fetched again may differ by
-    // a byte, and the store names files by content). Not back: it leaves the
-    // list with the usual "pick it again".
     async function restore(picker, item, ref) {
         const job = encodeURIComponent(ref.job_id);
         try {
@@ -612,10 +477,6 @@
         }
     }
 
-    // Hand one tool's queued files to the tool being switched to, by kind:
-    // each picker's items go to the destination's picker of the same kind
-    // (whatever its field name), so changing model on /generate keeps what
-    // was picked. A kind the destination has no picker for is not carried.
     function carryOver(fromRoot, toRoot) {
         fromRoot.querySelectorAll(".file-picker").forEach((src) => {
             const dst = toRoot.querySelector(`.file-picker[data-kind="${src.dataset.kind}"]`);
@@ -630,9 +491,6 @@
         initPreviewInputs();
     });
 
-    // What one picker holds, in order: a new item's File, or a reused one's
-    // server path. Not a file still being downloaded again: it has no file
-    // to read yet (the list changes once more when it is back).
     function items(picker) {
         return (picker._items || [])
             .filter((item) => !item.restoring)
@@ -643,15 +501,12 @@
             );
     }
 
-    // Whether a file of the page is still being downloaded again (`restore`):
-    // a form that checks itself (/clone) waits for it.
     function restoring() {
         return [...document.querySelectorAll(".file-picker")].some(
             (picker) => isActive(picker) && picker._items?.some((item) => item.restoring)
         );
     }
 
-    // init: wire pickers a page inserts after load (/generate's model fields).
     window.FilePicker = {
         init: initPicker,
         restoring,

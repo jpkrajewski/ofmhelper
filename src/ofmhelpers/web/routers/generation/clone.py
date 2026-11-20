@@ -1,15 +1,3 @@
-"""
-/clone: subject images (one person, up to `clone_max_images` photos) + many
-videos -> one Wan 3.0 run per video, every run getting all the images; each
-run is its own card in the gallery, the same card as /generate's
-(`_gallery_card.html`), newest first.
-
-Routes only; what they do is in `features/clone/` (the Wan 3.0 table, pricing,
-the submit's checks, cards, Drive picker, export; `run.py`: the worker's
-`run_clone`). `_run_clone` is that function under the path jobs queued before
-2026-11-11 name. `duration_s` is looked up here when called and handed on.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -72,7 +60,6 @@ from ofmhelpers.web.responses import NO_STORE
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_partial, render_polled
 
-# What other modules and the tests read here (same objects as the package's).
 __all__ = [
     "CLONE_TARGETS",
     "EXPORT_FAILURES",
@@ -92,7 +79,6 @@ router = APIRouter(prefix=PREFIX, tags=["clone"], dependencies=[Access(Area.CLON
 
 
 def default_prompt() -> str:
-    """What the prompt box starts with: a setting, read at each use."""
     return settings.web.clone_default_prompt
 
 
@@ -120,7 +106,6 @@ def _video_seconds(path: str) -> float:
 def _rendered_cards(
     request: Request, job_ids: list[str], actor: str, user_id: int
 ) -> str:
-    """These jobs' cards, newest first like the gallery."""
     picker = dict(drive_picker(user_id))
     return "".join(
         render_partial("_clone_card.html", request=request, job=card, **picker)
@@ -140,7 +125,6 @@ def form(
     video: Annotated[list[str] | None, Query()] = None,
 ) -> Response:
     first = gallery.page(viewer, query)
-    # security audit 2026-11-18: the page pre-fills saved API keys.
     response = render(
         request,
         "clone.html",
@@ -163,8 +147,6 @@ def gallery_page(
     viewer: Viewing,
     query: GalleryParams,
 ) -> Response:
-    """The next page of cards, for gallery-scroll.js; `hidden`: only the hidden
-    cards (hidden-cards.js's "Show hidden")."""
     found = gallery.page(viewer, query)
     return render(
         request,
@@ -179,8 +161,6 @@ def gallery_page(
 def gallery_latest(
     request: Request, viewer: Viewing, user: CurrentUser, query: GalleryParams
 ) -> Response:
-    """The newest page of cards, no sentinel: what live-gallery.js polls to
-    show runs started in other sessions."""
     return render_polled(
         request,
         "clone_gallery_fragment.html",
@@ -194,8 +174,6 @@ def gallery_latest(
 def drive_upload(
     user: CurrentUser, actors: Actors, body: UploadRequest
 ) -> UploadsQueued:
-    """These runs' videos (the clicker's own or their VAs') into each picked
-    account's Drive folder, on the worker, as the clicker's Google account."""
     uploads = queue_uploads(user, body.job_ids, body.login_ids, actors, body.va_ids)
     return UploadsQueued(
         queued=sum(1 for u in uploads if u.status == "queued"), uploads=uploads
@@ -210,8 +188,6 @@ def handoff(
     assets_root: AssetsRoot,
     index: Annotated[int | None, Form(ge=0)] = None,
 ) -> Redirect:
-    """A finished run's video (the asker's own or their VA's) to /edit or
-    /clone-long: answers the URL that opens it there, already picked."""
     return sending.send(job_id, target, index, actors, assets_root)
 
 
@@ -221,8 +197,6 @@ def handoff(
 def drive_upload_remove(
     user: CurrentUser, actors: Actors, upload_id: int
 ) -> DriveUpload:
-    """Takes an uploaded video back out of its account folder (Drive trash):
-    the clicker's own runs' and their VAs' (/clone, /handmade)."""
     return remove_upload(user, upload_id, actors)
 
 
@@ -230,8 +204,6 @@ def drive_upload_remove(
 def drive_upload_states(
     viewer: Viewing, actors: Actors, job: Annotated[list[str], Query(max_length=200)]
 ) -> list[DriveUpload]:
-    """Where these runs' videos are in Drive: what clone.js polls while
-    uploads run. Only runs this session may see, uploads of its team."""
     return upload_states(job, actors, viewer.team_ids)
 
 
@@ -244,9 +216,6 @@ def run(
     user: CurrentUser,
     assets_root: AssetsRoot,
 ) -> CloneQueued:
-    """Queues one run per video and returns their job ids plus their cards
-    rendered, newest first like the gallery, so the page shows them without
-    a reload."""
     submit = Submit(
         actor=actor,
         owner=owner,
@@ -258,9 +227,6 @@ def run(
     return CloneQueued(
         job_ids=job_ids, html=_rendered_cards(request, job_ids, actor, user.id)
     )
-
-
-# --- SOP: the fixed examples (features/clone/examples.py) ---------------------
 
 
 @router.get("/examples", summary="The SOP dialog's examples")

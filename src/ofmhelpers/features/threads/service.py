@@ -1,13 +1,3 @@
-"""What /threads does behind its routes (web/routers/image_tools/threads.py):
-the same phone cards as /trials, an account's POSTED reels from the last
-sweep's read (no Drive call: the page answers at once), and a click on one
-reel that starts its job (`tasks.make_pictures`, on the media queue: big
-local encodes take turns there), again on a made one for another set
-(Regenerate). Each reel shows its latest job: in line, being made, its
-pictures and Drive folder, or that it failed. A start is one locked step
-(review 2026-11-18: 30 POSTs at once made 30 jobs): one set of a reel at a
-time, whatever the clicks, tabs or retries."""
-
 import secrets
 from pathlib import Path
 
@@ -35,16 +25,12 @@ NO_FOLDER = "No such account folder"
 NO_REEL = "No such reel"
 NO_PICTURE = "No such picture"
 NO_DRIVE = "Connect Google Drive first"
-# A start's check-then-queue, held at most this long.
 _START_LOCK_S = 10
 
 
 class ReelPictures(BaseModel):
-    """One POSTED reel on the page and its latest job (None: never made)."""
-
     reel: DriveFile
     job: Job | None = None
-    # Jobs ahead of it on the media queue while it waits; None = not waiting.
     ahead: int | None = None
 
     @property
@@ -67,10 +53,6 @@ class ReelPictures(BaseModel):
 
     @property
     def place(self) -> float:
-        """Where it sits on the page, lowest first (owner 2026-11-17: a reel
-        clicked "dont go up"): being made, then made, then failed, newest of
-        each first (a group is 1e10 s wide, past any timestamp); untouched
-        reels last, in POSTED's order (the sort is stable)."""
         if self.job is None:
             return 3e10
         group = {JobStatus.running: 0, JobStatus.done: 1, JobStatus.failed: 2}
@@ -81,7 +63,6 @@ class ReelPictures(BaseModel):
 class ThreadsFolder(BaseModel):
     card: DriveCard
     reels: list[ReelPictures]
-    # The person's Google Drive is connected (a set needs it).
     connected: bool
 
     @property
@@ -90,16 +71,35 @@ class ThreadsFolder(BaseModel):
 
 
 def board(uid: int, scope: int | None) -> DriveBoard:
-    """/drive's phone cards from the last sweep's read."""
     return drive_folders.board(owner=scope, viewer=uid, live=False)
 
 
-class Threads(BaseModel, frozen=True):
-    """The signed-in person's /threads of one login."""
+class ThreadsProgress(BaseModel):
+    making: int
+    made: int
 
+
+class PhoneCards(BaseModel):
+    board: DriveBoard
+    progress: dict[int, ThreadsProgress]
+
+
+class Threads(BaseModel, frozen=True):
     uid: int
     scope: int | None
     login_id: int
+
+    @classmethod
+    def phone_cards(cls, uid: int, scope: int | None) -> PhoneCards:
+        cards = board(uid, scope)
+        progress = {}
+        for card in cards.cards:
+            jobs = list_batch(TASK, str(card.target.login_id), str(uid))
+            progress[card.target.login_id] = ThreadsProgress(
+                making=sum(1 for job in jobs if job.status is JobStatus.running),
+                made=sum(1 for job in jobs if job.status is JobStatus.done),
+            )
+        return PhoneCards(board=cards, progress=progress)
 
     def _card(self) -> DriveCard:
         found = next(
@@ -115,11 +115,9 @@ class Threads(BaseModel, frozen=True):
         return found
 
     def _all_jobs(self) -> list[Job]:
-        """Every set's job of this login, oldest first."""
         return list_batch(TASK, str(self.login_id), str(self.uid))
 
     def _jobs(self) -> dict[str, Job]:
-        """Each reel's latest job, by its Drive file id."""
         return {job.params["key"]: job for job in self._all_jobs()}
 
     def open(self) -> ThreadsFolder:
@@ -142,8 +140,6 @@ class Threads(BaseModel, frozen=True):
         )
 
     def start(self, key: str) -> None:
-        """A new set of pictures of reel `key` (its first, or Regenerate: a
-        new seed, its own Drive folder), unless one is being made now."""
         card = self._card()
         reel = next(
             (f for f in card.scan.posted if f.id == key and f.kind == "video"), None
@@ -176,7 +172,6 @@ class Threads(BaseModel, frozen=True):
             )
 
     def picture(self, key: str, name: str) -> Path:
-        """One picture of the reel's latest set; only that set's names."""
         latest = self._jobs().get(key)
         shown = ReelPictures.made_of(latest)
         if latest is None or shown is None or name not in shown.names:

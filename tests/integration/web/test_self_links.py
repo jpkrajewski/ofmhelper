@@ -1,7 +1,3 @@
-"""/links with the self provider: a user adds a domain, generates a bridge
-link on it (no API key, runs inline), and it shows live on the page. Self is
-served from our own data, so there is no wire fake here."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
@@ -85,6 +81,5 @@ def test_the_generate_dialog_offers_self_with_its_domain(client):
     self_links.add_domain("mybridge.test", None)
     page = client.get("/links")
     assert page.status_code == 200
-    # self is a provider option with its live domain in the domain picker.
     assert '<option value="self"' in page.text
     assert 'value="mybridge.test" data-provider="self"' in page.text

@@ -1,14 +1,3 @@
-"""
-Covers the "don't store a duplicate file" logic in web/routers/task_helpers.py:
-- save_asset() content-hashes uploads into the shared assets store, so the
-  same file uploaded twice (even under a different name, even by a different
-  tool) is only ever written to disk once.
-- build_ordered_paths() is what every reference-upload router
-  (seedance/kling3/nanobanana) relies on to let a VA reuse a
-  previously-uploaded reference, via save_asset for new uploads and
-  resolve_existing_ref for explicitly-reused ones.
-"""
-
 import io
 import json
 import os
@@ -29,7 +18,6 @@ from ofmhelpers.web.routers.task_helpers import (
     serve_job_file,
 )
 
-# Whose picks build_ordered_paths records.
 USER = 1
 
 
@@ -94,7 +82,6 @@ def test_build_ordered_paths_new_only_saves_each_file_once(tmp_path):
 def test_build_ordered_paths_reuses_existing_ref_without_duplicating(tmp_path):
     assets_root = tmp_path / "assets"
 
-    # First job uploads a genuinely new file.
     first_paths = build_ordered_paths(
         json.dumps([{"kind": "new"}]),
         [make_upload("ref.png")],
@@ -103,12 +90,10 @@ def test_build_ordered_paths_reuses_existing_ref_without_duplicating(tmp_path):
     )
     existing_path = first_paths[0]
 
-    # Second job reuses it by path -- no bytes attached, nothing to save.
     manifest = json.dumps([{"kind": "existing", "path": existing_path}])
     second_paths = build_ordered_paths(manifest, [], assets_root, user_id=USER)
 
     assert second_paths == [existing_path]
-    # still exactly one file in the shared store
     assert len(list(assets_root.iterdir())) == 1
 
 
@@ -129,11 +114,10 @@ def test_build_ordered_paths_mixed_manifest_preserves_order(tmp_path):
 
     assert paths[0] == existing
     assert paths[1].endswith("__second.png")
-    assert len(list(assets_root.iterdir())) == 2  # first.png + second.png, no dupes
+    assert len(list(assets_root.iterdir())) == 2
 
 
 def test_build_ordered_paths_refuses_a_malformed_manifest(tmp_path):
-    """Taking every entry as new would drop the picked files before a paid run."""
     assets_root = tmp_path / "assets"
 
     with pytest.raises(HTTPException) as exc_info:
@@ -168,9 +152,6 @@ def test_resolve_existing_ref_rejects_missing_file(tmp_path):
 
 
 def test_resolve_existing_ref_does_not_write_to_the_store(tmp_path):
-    """It validates a client-supplied path and nothing else. "This file was
-    just picked" is recorded separately (web/ref_usage.py) -- mtime has to keep
-    meaning "uploaded" for the picker's two lists to differ."""
     uploads = tmp_path / "uploads"
     uploads.mkdir()
     existing = uploads / "hash__face.png"
@@ -182,8 +163,6 @@ def test_resolve_existing_ref_does_not_write_to_the_store(tmp_path):
 
 
 def test_reusing_a_ref_records_it_as_used(tmp_path, monkeypatch):
-    """The manifest is the one place a resolve means the user picked a file,
-    so it is the one place that records it."""
     uploads = tmp_path / "uploads"
     uploads.mkdir()
     existing = uploads / "hash__face.png"
@@ -204,8 +183,6 @@ def test_reusing_a_ref_records_it_as_used(tmp_path, monkeypatch):
 
 
 def test_a_new_upload_is_recorded_as_used_too(tmp_path, monkeypatch):
-    """Re-uploading a file the store already has keeps its old mtime
-    (content-deduped), so only "used" can bring it to the picker's front."""
     assets_root = tmp_path / "assets"
     first = build_ordered_paths(
         json.dumps([{"kind": "new"}]),
@@ -227,14 +204,6 @@ def test_a_new_upload_is_recorded_as_used_too(tmp_path, monkeypatch):
 
     assert again == [first[0], first[0]]
     assert recorded == [(USER, Path(first[0])), (USER, Path(first[0]))]
-
-
-# ---------------------------------------------------------------------------
-# register_generated_asset() -- a generated image/video (Nano Banana, Kling,
-# Seedance, ...) must land in the same content-addressed store save_asset()
-# writes into, so it shows up in the "reuse an uploaded ..." picker (/refs)
-# immediately, just like a manual upload.
-# ---------------------------------------------------------------------------
 
 
 def test_register_generated_asset_writes_into_the_shared_store(tmp_path):
@@ -261,7 +230,6 @@ def test_register_generated_asset_dedupes_against_an_existing_upload(tmp_path):
 
     dest = register_generated_asset(generated, assets_root)
 
-    # same content as the earlier upload -- reused, not duplicated
     assert len(list(assets_root.iterdir())) == 1
     assert dest.name.endswith("__uploaded.png")
 
@@ -269,21 +237,9 @@ def test_register_generated_asset_dedupes_against_an_existing_upload(tmp_path):
 def test_register_generated_asset_is_best_effort_on_a_missing_source(tmp_path):
     assets_root = tmp_path / "assets"
 
-    # A job's generation succeeded already by the time this runs -- a
-    # bookkeeping failure here (source file gone, unwritable dir, ...) must
-    # never raise and blow up an otherwise-successful job.
     result = register_generated_asset(tmp_path / "does-not-exist.png", assets_root)
 
     assert result is None
-
-
-# ---------------------------------------------------------------------------
-# asset_card()/serve_job_file() with a remote-only result (local download
-# never completed -- see job_status_payload's "preview"/nbp.py's remote_url
-# fallback): the card must point straight at the hosted URL, and the
-# `/files/{id}/{index}` route must never be asked to serve a local file that
-# was never actually downloaded.
-# ---------------------------------------------------------------------------
 
 
 def test_asset_card_with_remote_url_points_view_and_download_at_it():
@@ -296,9 +252,6 @@ def test_asset_card_with_remote_url_points_view_and_download_at_it():
 
 
 def test_asset_card_prefers_remote_url_even_when_a_local_path_also_exists():
-    """A successful generation now keeps both a local path and remote_url
-    (see seedance.py/kling.py/nbp.py) -- the kie.ai URL must still win, since
-    it's faster than our own proxy and kie.ai keeps the file for 14 days."""
     card = asset_card(
         "clip.mp4", 0, "/kling3/files/abc123", remote_url="https://cdn.kie.ai/x.mp4"
     )

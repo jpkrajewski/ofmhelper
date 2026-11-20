@@ -1,17 +1,3 @@
-"""Gallery previews for jobs that finished before previews existed (or while
-the previews worker was down): one pass at startup (features/jobs/sweeps.py) queues
-every finished job
-whose previews are missing, newest first, so the cards people look at first
-are ready first. See features/previews/render.py.
-
-Idempotent -- a job with all its previews is skipped and every file is
-written atomically -- so a pass after every deploy is safe; the Redis guard
-only keeps the API's processes starting together from each queueing the same
-jobs. Read-only on the history: it lists jobs unhealed
-(`list_finished_jobs`), so a job whose files are missing is skipped, never
-deleted.
-"""
-
 from ofmhelpers.cache import QueueName, enqueue_to, get_redis
 from ofmhelpers.config import settings
 from ofmhelpers.db.stores.jobs import list_finished_jobs
@@ -24,8 +10,6 @@ GUARD_KEY = "previews:backfill"
 
 
 def backfill() -> int:
-    """Queue every finished job missing a preview; how many were queued
-    (0 when another process holds the guard)."""
     if not get_redis().set(
         GUARD_KEY, "1", nx=True, ex=settings.web.preview_backfill_guard_s
     ):

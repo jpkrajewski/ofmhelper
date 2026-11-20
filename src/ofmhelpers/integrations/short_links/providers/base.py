@@ -1,9 +1,3 @@
-"""What a link provider is to /links: make a link (always 18+ gated), list
-them, read their daily views and clicks, turn the 18+ gate on, delete one,
-and the plan's quota. A new provider is one subclass in its own file plus
-its class in `providers/__init__.py`'s `_PROVIDER_TYPES` and its
-`providers.json` entry; nothing else changes."""
-
 import hashlib
 import time
 from abc import ABC, abstractmethod
@@ -41,9 +35,6 @@ logger = get_logger(__name__)
 def listed[T](
     provider: str, rows: Iterable[T], make: Callable[[T], RemoteLink]
 ) -> list[RemoteLink]:
-    """`rows` as RemoteLinks; a row the provider sent with a non-http(s) url
-    or destination is left out of the sync and logged (security audit
-    2026-11-18)."""
     found: list[RemoteLink] = []
     for row in rows:
         try:
@@ -55,8 +46,6 @@ def listed[T](
     return found
 
 
-# Reserves the key's next call slot atomically: returns how long to wait
-# for it (seconds) and moves the key's next free slot `gap` past it.
 _TURN_SCRIPT = """
 local now = tonumber(ARGV[1])
 local gap = tonumber(ARGV[2])
@@ -72,9 +61,6 @@ _TOO_MANY = 429
 
 
 class LinkProvider(ABC):
-    """One account on one provider, built per job with the key it runs on."""
-
-    # Stored on every link; never rename one in use.
     key: ClassVar[str]
 
     def __init__(self, api_key: str) -> None:
@@ -92,23 +78,16 @@ class LinkProvider(ABC):
 
     @classmethod
     def default_key(cls) -> str | None:
-        """The key an admin runs on when they saved none of their own
-        (.env). Users only ever run on their own."""
         return settings.links.admin_key(cls.key)
 
     @classmethod
     def local_key(cls, user_id: int) -> str | None:  # noqa: ARG003
-        """A provider served from our own data (self) needs no saved API key:
-        every user is always keyed, and the key carries the owner's id so the
-        client knows whose links to read. Remote providers return None and run
-        on a saved key instead."""
         return None
 
     @abstractmethod
     def _headers(self) -> dict[str, str]: ...
 
     def _error(self, response: requests.Response) -> str:
-        """The provider's own words for a failed call."""
         try:
             body = response.json()
         except ValueError:  # silent: not JSON: the text is the error
@@ -127,10 +106,6 @@ class LinkProvider(ABC):
         return str(body)[:200]
 
     def _wait_turn(self, gap_s: float) -> None:
-        """Waits until this key may call again: one call per `gap_s` per
-        (provider, key), shared through Redis by every job and worker
-        process using the key (Oopsie allows 60 a minute per key). Redis
-        down: spaced within this client only."""
         if gap_s <= 0:
             return
         digest = hashlib.sha256(self.api_key.encode()).hexdigest()[:16]
@@ -152,9 +127,6 @@ class LinkProvider(ABC):
         self._last_call = time.monotonic()
 
     def _call(self, method: str, path: str, **kwargs: Any) -> requests.Response:
-        """One call, `min_interval_s` after the previous one. Raises
-        AuthError (401), QuotaError (402), RateLimitedError (429) and
-        LinkError for no answer at all; other statuses are the caller's."""
         info = self.info()
         self._wait_turn(info.min_interval_s)
         try:
@@ -191,34 +163,24 @@ class LinkProvider(ABC):
         return LinkError(f"{self.label()} could not {what}: {self._error(response)}")
 
     @abstractmethod
-    def create(self, link: NewLink) -> RemoteLink:
-        """Makes the link, visitors confirming 18+ before the redirect.
-        Raises SlugTakenError, QuotaError, ... -- and LinkError when the
-        gate could not be set (the link is deleted again then: none goes
-        live ungated)."""
+    def create(self, link: NewLink) -> RemoteLink: ...
 
     @abstractmethod
-    def list_links(self) -> list[RemoteLink]:
-        """Every link of the account."""
+    def list_links(self) -> list[RemoteLink]: ...
 
     @abstractmethod
-    def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
-        """Per link, its days from `start` to `end` (UTC, both included)
-        that had any traffic."""
+    def daily(
+        self, remote_ids: list[str], start: date, end: date
+    ) -> list[LinkDays]: ...
 
     @abstractmethod
-    def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
-        """Per link, the hours of the UTC `day` that had any traffic (what the
-        provider answers for a one-day range: hourly buckets), as fresh as the
-        provider counts. A link gone since it was listed is left out."""
+    def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]: ...
 
     @abstractmethod
-    def enable_adult(self, remote_id: str) -> None:
-        """Turns the 18+ confirmation on."""
+    def enable_adult(self, remote_id: str) -> None: ...
 
     @abstractmethod
-    def delete(self, remote_id: str) -> None:
-        """Deletes the link for good; one already gone is fine."""
+    def delete(self, remote_id: str) -> None: ...
 
     @abstractmethod
     def usage(self) -> Usage: ...

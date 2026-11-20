@@ -1,5 +1,3 @@
-"""Background-job history: what every generation/download tool writes."""
-
 import time
 import uuid
 from typing import Any
@@ -45,8 +43,6 @@ from ofmhelpers.schemas.persistence import (
     UserDay,
 )
 
-# Sentinel so update_status can tell "leave this column alone" apart from
-# "set it to None" (a failed job explicitly clears result, etc.).
 _UNSET = sentinel("_UNSET")
 
 
@@ -71,10 +67,7 @@ def _job(row: JobRow) -> Job:
     )
 
 
-# The shortest id prefix `delete_like` takes (`seed-`): never every job.
 _MIN_DELETE_PREFIX = 4
-# How far past a window `sessions` pairs sign-ins with what ended them: a
-# session signed in the evening before the month, or open at its end.
 _SESSION_REACH_S = 86400
 
 
@@ -133,9 +126,6 @@ class JobRepository(CachedRepository):
         status: str = "running",
         created_at: float | None = None,
     ) -> str:
-        """`user_id`: whose job it is; None = nobody's (a system event).
-        `created_at`: when it happened, for an event recorded afterwards
-        (an idle logout); None = now."""
         job_id = str(uuid.uuid4())[:8]
         with session_scope() as s:
             s.add(
@@ -157,8 +147,6 @@ class JobRepository(CachedRepository):
 
     @invalidates_cache
     def add_recorded(self, rows: list[RecordedJob]) -> None:
-        """`rows` as job rows, each with its own id, moment and ending. No
-        cap is enforced: they are few and removed again (`delete_like`)."""
         with session_scope() as s:
             s.add_all(
                 JobRow(
@@ -181,9 +169,6 @@ class JobRepository(CachedRepository):
 
     @invalidates_cache
     def delete_like(self, prefix: str) -> int:
-        """Deletes the jobs whose id starts with `prefix`; how many went.
-        A prefix too short to mean one batch is refused: an empty one would
-        match every job."""
         if len(prefix) < _MIN_DELETE_PREFIX:
             msg = f"refusing to delete jobs by the prefix {prefix!r}"
             raise ValueError(msg)
@@ -196,12 +181,6 @@ class JobRepository(CachedRepository):
             return len(gone.all())
 
     def _enforce_cap(self, session, task: str, user_id: int | None) -> None:
-        """Keep each person's history of each task from growing forever: past
-        settings.web.max_jobs, their oldest finished (done/failed) rows of
-        that task go. Never another person's rows and never a queued or
-        running job: a queued run whose row went would still pay, with nobody
-        to see or review it, and one cap over the whole table let sign-in
-        events push out tool jobs."""
         cap = settings.web.max_jobs
         owner = (
             JobRow.user_id.is_(None) if user_id is None else JobRow.user_id == user_id
@@ -244,7 +223,6 @@ class JobRepository(CachedRepository):
             "finished_at": time.time() if finished else None,
         }
         if finished:
-            # Only a running job's card reads it.
             values["preview"] = None
         if result is not _UNSET:
             values["result"] = result
@@ -255,9 +233,6 @@ class JobRepository(CachedRepository):
 
     @invalidates_cache
     def reopen_settled(self, job_id: str) -> bool:
-        """A done or failed job back to running (error cleared), in one
-        UPDATE; False when it is running already (or gone): of two clicks,
-        one gets True."""
         with session_scope() as s:
             found = s.execute(
                 update(JobRow)
@@ -269,8 +244,6 @@ class JobRepository(CachedRepository):
 
     @invalidates_cache
     def set_preview(self, job_id: str, preview: dict[str, Any]) -> None:
-        # UPDATE on a missing id touches 0 rows -- same no-op the old
-        # set_job_preview did when the job wasn't found.
         with session_scope() as s:
             s.execute(update(JobRow).where(JobRow.id == job_id).values(preview=preview))
 
@@ -281,8 +254,6 @@ class JobRepository(CachedRepository):
 
     @invalidates_cache
     def set_hidden(self, job_id: str, hidden_at: float | None) -> None:
-        """Hides the job from its galleries (`hidden_at` = when), or shows it
-        again (None)."""
         with session_scope() as s:
             s.execute(
                 update(JobRow).where(JobRow.id == job_id).values(hidden_at=hidden_at)
@@ -294,8 +265,6 @@ class JobRepository(CachedRepository):
             s.execute(delete(JobRow).where(JobRow.id == job_id))
 
     def list_running(self) -> list[Job]:
-        """Jobs still marked running, oldest first. Uncached: recovery
-        decides from it which were cut off."""
         with session_scope() as s:
             rows = (
                 s.execute(
@@ -309,9 +278,6 @@ class JobRepository(CachedRepository):
             return [_job(r) for r in rows]
 
     def files_naming(self, fragment: str) -> list[Any]:
-        """The params and result of every job (any status) whose params or
-        result hold `fragment` anywhere. Uncached: the raw-file sweep keeps
-        what they name."""
         with session_scope() as s:
             rows = s.execute(
                 select(JobRow.params, JobRow.result).where(
@@ -324,10 +290,6 @@ class JobRepository(CachedRepository):
             return [value for row in rows for value in row if value]
 
     def params_naming(self, fragment: str, while_running: set[str]) -> list[JobParams]:
-        """The params of every job whose params hold `fragment` anywhere:
-        whatever its status, but a job of `while_running` only while it is
-        running (or queued). Uncached: the /edit sweep keeps the files they
-        name."""
         with session_scope() as s:
             rows = (
                 s.execute(
@@ -345,11 +307,6 @@ class JobRepository(CachedRepository):
             return [JobParams(params=params or {}) for params in rows]
 
     def naming_each(self, fragments: tuple[str, ...]) -> list[Named]:
-        """For each of `fragments` a job names: when the newest job whose
-        params hold it was started, whether one of those is running (or
-        queued), and whether a job's result holds it. One query for them
-        all; a fragment no job names is not in the answer. Uncached: the
-        downloads sweep keeps what they name."""
         if not fragments:
             return []
         asked = values(column("fragment", Text), name="asked").data(
@@ -381,7 +338,6 @@ class JobRepository(CachedRepository):
 
     @cached
     def list_all(self) -> list[Job]:
-        """Newest first."""
         with session_scope() as s:
             rows = (
                 s.execute(select(JobRow).order_by(JobRow.created_at.desc()))
@@ -392,8 +348,6 @@ class JobRepository(CachedRepository):
 
     @cached
     def counts(self, tasks: tuple[str, ...]) -> list[JobCount]:
-        """How many done jobs each user has of each of `tasks` (sorted tuple:
-        stable cache key). The admin file manager's per-user totals."""
         with session_scope() as s:
             rows = s.execute(
                 select(JobRow.user_id, JobRow.task, func.count())
@@ -421,15 +375,6 @@ class JobRepository(CachedRepository):
         since: float | None = None,
         until: float | None = None,
     ) -> JobPage:
-        """One page of the jobs whose task is in `tasks` (and that one of
-        `user_ids` ran, unless None), newest first, plus how many match in
-        total. Filtered and sliced in SQL: a gallery page loads its 20 rows,
-        not the history.
-        `hidden`: only the jobs hidden from the galleries (True), only the
-        others (False), or both (None).
-        `since` / `until`: only the jobs started from `since` on and before
-        `until` (a gallery's date filter).
-        `tasks` and `user_ids` are sorted tuples: a stable cache key."""
         where = _page_filter(tasks, user_ids, status, hidden, since, until)
         return _page(where, [JobRow.created_at.desc()], offset, limit)
 
@@ -443,11 +388,6 @@ class JobRepository(CachedRepository):
         since: float | None = None,
         until: float | None = None,
     ) -> JobPage:
-        """`list_page`, the job whose download was asked for or used last
-        first (`downloads.last_used_at`, the newest of the job's files; a
-        job with no download row: when it was started). /download-assets'
-        order: a link pasted again moves its card to the first place.
-        Uncached: `downloads` changes without a job write."""
         used = (
             select(func.extract("epoch", func.max(DownloadRow.last_used_at)))
             .where(DownloadRow.job_id == JobRow.id)
@@ -471,10 +411,6 @@ class JobRepository(CachedRepository):
         since: float | None = None,
         until: float | None = None,
     ) -> JobPage:
-        """`list_page`, only the finished jobs none of whose files is in a
-        Drive folder (`drive_uploads`, status done; one queued, failed or
-        taken out again does not count): what is left to post. Uncached:
-        `drive_uploads` changes without a job write."""
         uploaded = (
             select(DriveUploadRow.id)
             .where(
@@ -490,8 +426,6 @@ class JobRepository(CachedRepository):
 
     @cached
     def list_batch(self, task: str, user_id: int, batch: str) -> list[Job]:
-        """`user_id`'s jobs of `task` queued by one submit (params `batch`),
-        oldest first: the order they were pasted in."""
         with session_scope() as s:
             rows = (
                 s.execute(
@@ -510,8 +444,6 @@ class JobRepository(CachedRepository):
 
     @invalidates_cache
     def merge_params(self, job_id: str, values: dict[str, Any]) -> None:
-        """`values` written into the job's params, the rest kept (JSONB
-        `||`). A missing job: nothing happens."""
         with session_scope() as s:
             s.execute(
                 update(JobRow)
@@ -527,8 +459,6 @@ class JobRepository(CachedRepository):
         cost_usd: Decimal | None,
         cost_estimated: bool,
     ) -> None:
-        """The job's provider requests (`meta`) and what they cost. A
-        missing job: nothing happens."""
         with session_scope() as s:
             s.execute(
                 update(JobRow)
@@ -544,12 +474,6 @@ class JobRepository(CachedRepository):
         zone: str,
         reel_tasks: tuple[str, ...],
     ) -> list[UserDay]:
-        """Each of `user_ids`' days from `from_ts` to `to_ts` (days of
-        `zone`, an IANA name), newest first, one row per person and day
-        with any job row: when they first and last signed in, last pressed
-        Logout, were last logged out as idle (the `login` / `logout` /
-        `idle_logout` events), how many jobs of `reel_tasks` they finished
-        and what the day's jobs cost. Grouped here; uncached like `spend`."""
         if not user_ids:
             return []
         day = cast(
@@ -604,13 +528,6 @@ class JobRepository(CachedRepository):
     def sessions(
         self, user_ids: tuple[int, ...], from_ts: float, to_ts: float
     ) -> list[SessionSpan]:
-        """Each sign-in of `user_ids` whose session reaches into `from_ts` ..
-        `to_ts`, oldest first, with what came next: the next `login` /
-        `logout` / `idle_logout` event (a Logout or idle logout ends it) and
-        their last job before it. The events are paired over a day more on
-        each side (review 2026-11-15): a session signed in before the window
-        keeps its part inside it, one open at its end sees the event that
-        ended it. One query; uncached like `days`."""
         if not user_ids:
             return []
         events = ("login", "logout", "idle_logout")
@@ -671,10 +588,6 @@ class JobRepository(CachedRepository):
     def spend(
         self, user_ids: tuple[int, ...], periods: tuple[SpendPeriod, ...]
     ) -> list[Spend]:
-        """What each of `user_ids`' runs cost in each of `periods`: a run is
-        a job that kept a provider request (`meta.generations`), counted in
-        the period it was started in. Grouped and summed here, one row per
-        person and period that has a run. Uncached: money is read fresh."""
         if not user_ids or not periods:
             return []
         period = values(
@@ -724,8 +637,6 @@ class JobRepository(CachedRepository):
     def redone_links(
         self, task: str, user_id: int, links: list[str], after: float
     ) -> set[str]:
-        """Which of `links` (params `link`) `user_id` queued again as `task`
-        after `after` and that is still running or done."""
         if not links:
             return set()
         link = JobRow.params["link"].astext
@@ -749,9 +660,6 @@ class JobRepository(CachedRepository):
         field: str,
         among: tuple[str, ...],
     ) -> str | None:
-        """Param `field` of the newest job of `tasks` one of `user_ids` ran
-        whose value is one of `among` (sorted tuples: stable cache key),
-        else None."""
         value = JobRow.params[field].astext
         with session_scope() as s:
             return s.execute(
@@ -769,10 +677,6 @@ class JobRepository(CachedRepository):
     def last_used_firsts(
         self, tasks: tuple[str, ...], user_ids: tuple[int, ...], field: str, limit: int
     ) -> list[str]:
-        """The first file of the list param `field` (`reference_images`: the
-        subject) of the jobs of `tasks` that `user_ids` ran (one person, or
-        a team: sorted tuples, a stable cache key), last used first, one
-        path per file (`_firsts`)."""
         return self._firsts(
             tasks, user_ids, field, limit, [func.max(JobRow.created_at).desc()]
         )
@@ -781,8 +685,6 @@ class JobRepository(CachedRepository):
     def most_used_firsts(
         self, tasks: tuple[str, ...], user_ids: tuple[int, ...], field: str, limit: int
     ) -> list[str]:
-        """As `last_used_firsts`, the one in the most jobs first (a tie: the
-        last used). A team's runs are counted together."""
         return self._firsts(
             tasks,
             user_ids,
@@ -799,10 +701,6 @@ class JobRepository(CachedRepository):
         limit: int,
         order: list[Any],
     ) -> list[str]:
-        """A file is its content: the store names it `<sha256>__<name>`, and
-        one picture sits under several names and paths (prod 2026-11-06: 44
-        paths, 36 pictures), so files group by that hash; each group answers
-        the path its newest job used."""
         first = JobRow.params[field][0].astext
         content = func.split_part(func.regexp_replace(first, "^.*/", ""), "__", 1)
         with session_scope() as s:
@@ -826,8 +724,6 @@ class JobRepository(CachedRepository):
 
     @cached
     def count_hidden(self, tasks: tuple[str, ...], user_ids: tuple[int, ...]) -> int:
-        """How many of `user_ids`' jobs of `tasks` are hidden (sorted tuples:
-        stable cache key) -- whether a gallery offers "Show hidden"."""
         with session_scope() as s:
             return s.execute(
                 select(func.count())

@@ -1,12 +1,3 @@
-"""What the /trials page plays: the copy itself is the iPhone's 10-bit HLG
-HEVC (hvc1, BT.2020), which Chrome on Windows shows as a black box -- and a
-player that ignores HLG shows washed out (saturation -27% on a real copy,
-2026-10-30). So the page gets an H.264 SDR preview and a first-frame poster
-(`web.previews` writers), converted back from HLG the way the copy was made
-(`zscale` at the profile's SDR white: a lossless round trip, measured). They
-sit next to the copy and are made again once the copy is newer (a caption
-applied). Raise one of `web.previews.PREVIEW_ERRORS`."""
-
 from functools import lru_cache
 from pathlib import Path
 
@@ -25,17 +16,11 @@ from ofmhelpers.media.video_probe import duration_s
 
 logger = get_logger(__name__)
 
-# What the AI watches: a 4K reel (28 Mb/s, ~50 MB) went through Gemini's
-# Files API upload + poll; this goes inline. Gemini samples 1 frame a
-# second, so 10 fps loses nothing; the sound stays for the transcript.
 _AI_HEIGHT = 640
 _AI_FPS = 10
-# The page is where a copy is judged: 1080p, not the gallery's 720p.
 _PREVIEW_HEIGHT = 1920
 _PREVIEW_MAXRATE = "8M"
 
-# The pipeline's device (snapchat_iphone16_usa.json): its recorder profile
-# says how the copy was coloured.
 _DEVICE = "iphone16_usa"
 
 
@@ -77,9 +62,6 @@ def poster_path(copy: Path) -> Path:
 
 
 def poster(copy: Path, *, again: bool = False) -> Path:
-    """A frame from the middle (the first is often black or a title): it is
-    all that is kept of a copy after a day (`cleanup`). `again`: made even
-    when one is there (one from before it was the middle)."""
     dest = poster_path(copy)
     if again or not _fresh(dest, copy):
         middle = duration_s(copy, settings.web.ffmpeg_timeout_s) / 2
@@ -90,8 +72,6 @@ def poster(copy: Path, *, again: bool = False) -> Path:
 
 
 def ai_proxy(src: Path) -> Path:
-    """A small copy of the downloaded reel for the AI to watch, made once;
-    the reel itself when it cannot be made."""
     dest = src.with_suffix(".ai.mp4")
     if _fresh(dest, src):
         return dest

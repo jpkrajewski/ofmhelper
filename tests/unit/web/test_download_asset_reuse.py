@@ -1,9 +1,3 @@
-"""
-Downloaded/cleaned output lands in the shared asset store, so it shows up in
-the "reuse an uploaded image/video" pickers without a download-then-reupload
-round trip (see task_helpers.register_generated_asset).
-"""
-
 import io
 
 import pytest
@@ -95,8 +89,6 @@ def test_registering_the_same_content_twice_dedupes(tmp_path, assets_dir):
 
 
 def test_a_missing_output_path_does_not_fail_the_job(tmp_path, assets_dir):
-    """register_grouped_results is bookkeeping after the real work finished --
-    a vanished file must not turn a successful download into a failure."""
     vanished = tmp_path / "never-written.mp4"
     task_helpers.register_grouped_results(
         [DownloadResult(url="https://x/reel", success=True, output_paths=[vanished])],

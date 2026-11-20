@@ -1,7 +1,3 @@
-"""The ffmpeg command for one copy, from its drawn parts: the trimmed
-source (+ room tone), the video graph, the audio chain, the device's encode,
-container flags and tags."""
-
 import datetime
 import random
 from pathlib import Path
@@ -20,13 +16,10 @@ lazy from ofmhelpers.media.repurpose.transformations.video import VideoTransform
 
 _SEI_STRIP = "filter_units=remove_types=6"
 _ISO = "%Y-%m-%dT%H:%M:%S.000000Z"
-# Room tone runs this much past the video; -shortest cuts it.
 _ROOM_TONE_SLACK_S = 1.0
 
 
 class EncodeDraws(BaseModel, frozen=True):
-    """One copy's drawn device values."""
-
     x264_preset: str
     crf: int | None
     bitrate_kbps: int | None
@@ -43,8 +36,6 @@ def draw_encode(
     rng: random.Random,
     recorded_at: datetime.datetime | None = None,
 ) -> EncodeDraws:
-    """`recorded_at`: the creation time to write; None = now (or within the
-    device's recent days)."""
     v, tags = device.video, device.tags
     if recorded_at is not None:
         now = recorded_at.astimezone(datetime.UTC)
@@ -66,7 +57,6 @@ def draw_encode(
 
 
 def input_args(src: Path, video: VideoTransformer) -> list[str]:
-    """The source, trimmed at the input."""
     t = video.timeline
     args = ["-ss", f"{t.start_s:.3f}"] if t.start_s > 0 else []
     return [*args, "-t", f"{t.duration_s:.3f}", "-i", str(src)]
@@ -92,15 +82,11 @@ def build(
         args += room_tone_input(seconds, device.audio.sample_rate)
     caption_input = None
     if caption_png:
-        # After the source (and the room-tone input, if any): a single-frame
-        # PNG; the overlay filter repeats it for the whole video.
         caption_input = 2 if room_tone else 1
         args += ["-i", str(caption_png)]
     if encode.fps:
         args += ["-r", encode.fps]
     graph = video.filters(work_dir, device.video.scaler, caption_input)
-    # The caption overlay pulls a second input into the graph: simple -vf
-    # then no longer applies, it has to be -filter_complex.
     args += ["-filter_complex" if caption_input is not None else "-vf", graph]
     if source.has_audio:
         args += ["-filter:a", audio.filters(makeup_db), *_audio_encode(device, encode)]
@@ -172,7 +158,6 @@ def _video_encode(device: Device, encode: EncodeDraws) -> list[str]:
 
 def _container(device: Device, encode: EncodeDraws, *, has_audio: bool) -> list[str]:
     c, tags = device.container, device.tags
-    # Never carry the source's own tags over.
     args = ["-map_metadata", "-1"]
     if c.bitexact:
         args += ["-fflags", "+bitexact", "-flags:v", "+bitexact"]

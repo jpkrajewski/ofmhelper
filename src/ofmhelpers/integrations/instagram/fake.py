@@ -1,19 +1,3 @@
-"""Instagram and its CDN, faked at the wire (OFM_FAKE_EXTERNALS, tests).
-
-Answers the requests `client.InstagramClient` makes the way Instagram does
-(the shapes in this package's CLAUDE.md), so the real client parses them:
-the reels page's `profile_id`/`lsd`, the crawler page, the four GraphQL
-queries by friendly name (paged by `first`/`after`), logged-in media info,
-and CDN mp4/jpg bytes. Data: `fake_profiles.json`; every reel's id encodes a
-post time `age_h` hours before the fake was made, as a real media id does.
-An unknown username answers like a missing account (`ProfileNotFoundError`).
-
-`FakeInstagram.proxy_modes` turns a proxy (its URL, or "" for direct) into a
-failure: "dead" (ProxyError), "timeout" (ConnectTimeout), "rate_limited"
-(429) or "banned" (profiles look missing, as on a flagged IP). `calls`
-records (method, path, proxy) for assertions.
-"""
-
 import json
 import threading
 import time
@@ -67,16 +51,12 @@ class FakeVideoVersion(BaseModel):
 
 
 class FakeVideoNode(BaseModel):
-    """A reel's video fields as Instagram's GraphQL answers them."""
-
     video_versions: list[FakeVideoVersion]
     video_dash_manifest: str
     taken_at: int
 
 
 class FakeRow(BaseModel):
-    """One reel as every query sees it."""
-
     reel: FakeReel
     owner_pk: str
     pk: str
@@ -110,8 +90,6 @@ def reel_code(username: str, index: int) -> str:
 
 
 def _pk(posted_at: float, profile: int, reel: int) -> str:
-    """A media id: post time in the top bits, (profile, reel) in the low
-    ones."""
     ms = int(posted_at * 1000) - _ID_EPOCH_MS
     return str((ms << _ID_TIME_SHIFT) | (profile << 8) | reel)
 
@@ -137,16 +115,12 @@ class FakeInstagram:
         data = _Dataset.model_validate_json(_DATA.read_text(encoding="utf-8"))
         self.profiles = {p.username: p for p in data.profiles}
         self._order = [p.username for p in data.profiles]
-        # Ages count from here: ids stay the same for the process's life.
         self._now = time.time()
         self.proxy_modes: dict[str, str] = {}
         self.calls: list[tuple[str, str, str]] = []
         self._lock = threading.Lock()
 
-    # --- data -------------------------------------------------------------
-
     def rows(self, profile: FakeProfile) -> list[FakeRow]:
-        """Pinned first, then newest first, as the reels tab lists them."""
         ordinal = self._order.index(profile.username)
         rows = []
         for i, reel in enumerate(profile.reels):
@@ -175,8 +149,6 @@ class FakeInstagram:
             None,
         )
 
-    # --- pages --------------------------------------------------------------
-
     def _profile_page(
         self, username: str, *, banned: bool, logged_in: bool
     ) -> FakeReply:
@@ -198,8 +170,6 @@ class FakeInstagram:
         if username in self.profiles and not banned:
             return FakeReply.text('<meta property="og:type" content="profile" />')
         return FakeReply.text("<html><title>Instagram</title></html>")
-
-    # --- GraphQL -------------------------------------------------------------
 
     def _graphql(self, form: dict[str, str]) -> FakeReply:
         name = form.get("fb_api_req_friendly_name", "")
@@ -300,8 +270,6 @@ class FakeInstagram:
             }
         )
 
-    # --- transport ----------------------------------------------------------
-
     def _failure(
         self, mode: str, proxy: str, request: requests.PreparedRequest
     ) -> FakeReply | None:
@@ -348,8 +316,6 @@ class FakeInstagram:
 
 
 def cdn_reply(url: str) -> FakeReply:
-    """A CDN object of the fake: an mp4 or a jpg (also served to the
-    browser by the e2e suite)."""
     path = urlsplit(url).path
     if path.endswith(".mp4"):
         return FakeReply(body=fake_media.mp4(), headers={"Content-Type": "video/mp4"})

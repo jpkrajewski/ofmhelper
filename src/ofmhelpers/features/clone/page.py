@@ -1,7 +1,3 @@
-"""What the /clone page's form shows when it opens (`clone.html`): the
-providers and their prices, the limits, the one-click picks and the videos
-another page handed over."""
-
 from typing import Any
 lazy from pathlib import Path
 
@@ -24,8 +20,6 @@ from ofmhelpers.schemas import ProviderChoice
 
 
 class FormView(BaseModel):
-    """The form's part of the page; each field is a name the template reads."""
-
     providers: list[ProviderChoice]
     selected_provider: str
     pricing: dict[str, dict[str, Any]]
@@ -47,10 +41,6 @@ class FormView(BaseModel):
 def form_view(
     actor: str, team: frozenset[str], assets_root: Path, videos: list[str]
 ) -> FormView:
-    """`videos`: the `?video=` paths /reels or a download hands over; a stale
-    link just opens with fewer videos picked. `team`: whose runs the subject
-    tiles come from (the owner and their VAs, `Viewer.team`); the provider
-    the form starts on stays the person's own last one (`actor`)."""
     targets = clone_targets()
     return FormView(
         providers=provider_choices(targets.names()),

@@ -1,8 +1,3 @@
-"""/clone "Upload to Drive": a finished run's video goes into an Instagram
-account's Drive folder as the clicker's Google account -- once per folder,
-only into folders they may use, only their own runs, and a failure is
-shown and may be retried."""
-
 import re
 import time
 from pathlib import Path
@@ -53,8 +48,6 @@ def _client(email: str, *, google: bool = True) -> TestClient:
 
 
 def _account_folder(client: TestClient, handle: str = "ann.ig") -> int:
-    """A phone with an Instagram login, its Drive folder made by a sweep;
-    the login's id."""
     phone = client.post("/phones/add", json=PHONE).json()["id"]
     login = client.post(
         f"/phones/{phone}/logins", json={"service": "instagram", "username": handle}
@@ -82,7 +75,6 @@ def _finished_run(email: str, tmp_path: Path, name: str = "clone.mp4") -> str:
 
 
 def _root_of(email: str) -> str:
-    """The person's "DEV - ALL ACCOUNTS" in their own Drive."""
     root = users.by_email(email).drive_root_id
     assert root, f"{email} has no Drive root yet"
     return root
@@ -101,22 +93,22 @@ def test_a_run_uploads_into_the_account_folder_once(drive, tmp_path):
     r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
 
     assert r.status_code == 200, r.text
-    assert r.json()["queued"] in (0, 1)  # the test worker ran it inline
+    assert r.json()["queued"] in (0, 1)
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
     assert state["folder_name"] == "ann.ig - Anna"
     assert state["drive_url"]
     [uploaded] = _files_in(drive, "ann.ig - Anna")
-    assert uploaded.startswith("VID_")  # the camera-roll name Download uses
+    assert uploaded.startswith("VID_")
     (folder,) = drive.named("ann.ig - Anna", _root_of("ann@example.com"))
     (file_id,) = drive.named(uploaded, folder)
-    assert drive.item(file_id).owner == "ann@example.com"  # her own Drive
+    assert drive.item(file_id).owner == "ann@example.com"
 
     again = ann.post(
         "/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]}
     )
     assert again.json()["queued"] == 0
-    assert len(_files_in(drive, "ann.ig - Anna")) == 1  # never twice
+    assert len(_files_in(drive, "ann.ig - Anna")) == 1
     assert "In Drive:" in ann.get("/clone").text
 
 
@@ -127,7 +119,7 @@ def test_without_google_drive_connected_nothing_is_queued(drive, tmp_path):
     r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     assert r.status_code == 400
     assert "Connect Google Drive" in r.json()["detail"]
-    assert users.by_email("ann@example.com").drive_root_id is None  # nothing made
+    assert users.by_email("ann@example.com").drive_root_id is None
 
 
 def test_nobody_uploads_into_anothers_folder_or_anothers_run(drive, tmp_path):
@@ -186,11 +178,10 @@ def test_the_drive_picker_offers_only_the_users_folders(drive, tmp_path):
     _finished_run("bob@example.com", tmp_path, "b.mp4")
 
     ann_page = ann.get("/clone").text
-    assert "Upload to Drive" in ann_page  # in the finished card's menu
+    assert "Upload to Drive" in ann_page
     assert f'data-login="{login}"' in ann.get("/drive").text
     bob_page = bob.get("/clone").text
     assert "ann.ig - Anna" not in bob_page
-    # Bob has no account folder: no picker, no menu item.
     assert 'id="drive-picker"' not in bob_page
     assert "Upload to Drive" not in bob_page
 
@@ -202,15 +193,12 @@ def test_queueing_into_several_folders_at_once(drive, tmp_path):
     r = ann.post(
         "/clone/drive-upload", json={"job_ids": [job], "login_ids": [first, 999]}
     )
-    assert r.status_code == 400  # one not hers: nothing queued
+    assert r.status_code == 400
     r = ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [first]})
-    # The suite runs the upload job inline: it is done by the answer.
     assert [u["status"] for u in r.json()["uploads"]] == ["done"]
 
 
 def test_queueing_returns_only_the_users_own_runs(drive, tmp_path):
-    """Another user's run id in the request: its upload rows (folder,
-    Drive link, error) are not in the answer."""
     ann = _client("ann@example.com")
     bob = _client("bob@example.com")
     ann_login = _account_folder(ann)
@@ -259,8 +247,6 @@ def test_an_upload_that_cannot_be_queued_fails_and_can_be_retried(
 def test_a_stranded_queued_upload_is_queued_again_once_stale(
     drive, tmp_path, monkeypatch
 ):
-    """The worker died mid-batch (deploy): the row stays `queued`. Upload
-    leaves it while it may still run, and queues it again once stale."""
     monkeypatch.setenv("OFM_GDRIVE_UPLOAD_STALE_S", "60")
     ann = _client("ann@example.com")
     login = _account_folder(ann)
@@ -272,7 +258,7 @@ def test_a_stranded_queued_upload_is_queued_again_once_stale(
 
     ann.post("/clone/drive-upload", json={"job_ids": [job], "login_ids": [login]})
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
-    assert state["status"] == "queued"  # not stale yet: never doubled
+    assert state["status"] == "queued"
     assert _files_in(drive, "ann.ig - Anna") == []
 
     with time_machine.travel(time.time() + 120):
@@ -283,8 +269,6 @@ def test_a_stranded_queued_upload_is_queued_again_once_stale(
 
 
 def test_any_error_uploading_a_file_fails_that_upload(drive, tmp_path, monkeypatch):
-    """Not only Drive errors: a file removed after the check, a bug -- the
-    row says why instead of staying `queued`."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path)
@@ -305,9 +289,6 @@ def test_any_error_uploading_a_file_fails_that_upload(drive, tmp_path, monkeypat
 
 
 def test_dev_never_uploads_into_a_live_root_kept_from_a_prod_copy(drive, tmp_path):
-    """A dev database copied from prod, before any sweep: the stored root is
-    the live "ALL ACCOUNTS" and the account folder sits in it. The worker
-    checks the root by name and refuses; nothing is written to Drive."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path)
@@ -336,8 +317,6 @@ def test_dev_never_uploads_into_a_live_root_kept_from_a_prod_copy(drive, tmp_pat
 
 
 def test_clone_and_drive_offer_connecting_google_drive_until_it_is(drive):
-    """Sign-in asks no Drive access: /clone and /drive link straight to the
-    one consent that does, and stop once it is given."""
     connect = "/auth/google/start?link=1&amp;next="
     ann = _client("ann@example.com", google=False)
     assert f"{connect}/clone" in ann.get("/clone").text
@@ -362,8 +341,6 @@ def _upload(client: TestClient, job: str, login: int) -> dict:
 def test_a_video_put_in_the_wrong_folder_is_taken_back_out_from_the_card(
     drive, tmp_path
 ):
-    """Prod, 2026-10-22: the VA sent one video to two accounts and could
-    only fix it in Drive itself."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     job = _finished_run("ann@example.com", tmp_path)
@@ -378,10 +355,9 @@ def test_a_video_put_in_the_wrong_folder_is_taken_back_out_from_the_card(
 
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "removed"
-    assert drive.item(file_id).trashed  # in Drive's trash: restorable
+    assert drive.item(file_id).trashed
     assert _files_in(drive, "ann.ig - Anna") == []
     assert "In Drive:" not in ann.get("/clone").text
-    # And it may go into that folder again.
     assert _upload(ann, job, login)["status"] == "done"
 
 
@@ -490,8 +466,8 @@ def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
         j: next(i for _n, i in (first, second) if i in by_job[j]["drive_url"])
         for j in (posted_job, deleted_job)
     }
-    drive.move(file_of[posted_job], posted)  # the VA posted it
-    drive.trash(file_of[deleted_job])  # deleted by hand in Drive
+    drive.move(file_of[posted_job], posted)
+    drive.trash(file_of[deleted_job])
 
     with time_machine.travel(time.time() + 5):
         drive_folders.sync()
@@ -506,8 +482,6 @@ def test_deleted_in_drive_stops_showing_in_drive_moved_to_posted_does_not(
 
 
 def test_upload_to_drive_opens_drive_with_the_video_and_followers(drive, tmp_path):
-    """/clone "Upload to Drive" -> /drive?upload=<job>: the video on top,
-    each account card (handle + followers) is where a click puts it."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     owner = users.by_email("ann@example.com").id
@@ -527,7 +501,6 @@ def test_upload_to_drive_opens_drive_with_the_video_and_followers(drive, tmp_pat
     assert f'data-job="{job}"' in page
     assert "<h2>Click phone to upload reel there</h2>" in page
     assert 'data-name="VID_' in page
-    # Its video plays on top: the page's source is one the server serves.
     (src,) = re.findall(r'<video src="([^"]+)"', page)
     assert src.startswith(f"/clone/files/{job}/0")
     played = ann.get(src)
@@ -540,7 +513,7 @@ def test_upload_to_drive_opens_drive_with_the_video_and_followers(drive, tmp_pat
 
     _upload(ann, job, login)
     page = ann.get("/drive", params={"upload": job}).text
-    assert f'data-already="{login}"' in page  # greyed, not a target again
+    assert f'data-already="{login}"' in page
 
 
 def test_upload_mode_only_for_the_sessions_own_finished_run(drive, tmp_path):
@@ -554,8 +527,6 @@ def test_upload_mode_only_for_the_sessions_own_finished_run(drive, tmp_path):
 
 
 def test_an_owner_posts_their_vas_clone_and_the_va_cannot(drive, tmp_path):
-    """The VA makes the clone, the owner uploads it: the VA has no Drive
-    upload at all (`Action.DRIVE_UPLOAD`), a stranger still gets nothing."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     owner = users.by_email("ann@example.com")
@@ -576,21 +547,14 @@ def test_an_owner_posts_their_vas_clone_and_the_va_cannot(drive, tmp_path):
     [state] = ann.get("/clone/drive-uploads", params={"job": job}).json()
     assert state["status"] == "done"
     assert len(_files_in(drive, "ann.ig - Anna")) == 1
-    # The VA sees where it went, never a link into Drive (owner 2026-11-15:
-    # "cutting VAs from direct google drive access"); the owner keeps it.
     vas_page, owners_page = va.get("/clone").text, ann.get("/clone").text
     assert "In Drive: ann.ig - Anna" in vas_page
     assert state["drive_url"] not in vas_page
     assert 'id="card-drive-remove"' not in vas_page
     assert f'href="{state["drive_url"]}"' in owners_page
-    # The VA's card follows the owner's upload as it goes (clone.js polls),
-    # the same rows the page drew; a stranger's poll stays empty.
     [polled] = va.get("/clone/drive-uploads", params={"job": job}).json()
     assert (polled["id"], polled["status"]) == (state["id"], "done")
     assert bob.get("/clone/drive-uploads", params={"job": job}).json() == []
-
-
-# --- /clone's filters: made by, not uploaded to Drive (owner 2026-11-14) ---------
 
 
 def _va_of(owner_email: str, email: str = "va@example.com") -> int:
@@ -604,8 +568,6 @@ def _cards(html: str) -> list[str]:
 
 
 def test_the_owner_opens_drive_with_their_vas_video_to_upload(drive, tmp_path):
-    """Upload to Drive on a VA's card opened /drive with no video: the pick
-    looked the run up as the owner's own."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     _va_of("ann@example.com")
@@ -630,15 +592,13 @@ def test_made_by_shows_one_persons_clones(drive, tmp_path):
     assert _cards(ann.get("/clone/gallery", params={"va": owner}).text) == [mine]
     page = ann.get("/clone", params={"va": va}).text
     assert _cards(page) == [theirs]
-    # The "VAs" button now names who is picked; its list links each choice.
     button = page[page.index('class="menu menu-button made-by"') :]
     assert (
         "</svg> va@example.com</summary>" in button[: button.index("</summary>") + 10]
     )
     assert f'href="/clone?va={va}" aria-current="true"' in page
     assert f'<a class="menu-item menu-choice" href="/clone?va={owner}">' in page
-    assert '<a class="menu-item menu-choice" href="/clone">' in page  # Everyone
-    # The scroll and the live poll stay inside the filter.
+    assert '<a class="menu-item menu-choice" href="/clone">' in page
     assert f'data-gallery-endpoint="/clone/gallery?va={va}"' in page
     assert f'data-live-endpoint="/clone/gallery/latest?va={va}"' in page
     assert _cards(ann.get("/clone/gallery/latest", params={"va": va}).text) == [theirs]
@@ -658,8 +618,6 @@ def test_made_by_takes_only_someone_whose_clones_the_reader_sees(drive, tmp_path
 
 
 def test_not_uploaded_leaves_only_finished_videos_in_no_drive_folder(drive, tmp_path):
-    """Queued, failed or taken out again is still to post; in a folder is
-    not. Right after the upload ends the card is gone (no stale cache)."""
     ann = _client("ann@example.com")
     login = _account_folder(ann)
     va = _va_of("ann@example.com")
@@ -686,7 +644,6 @@ def test_not_uploaded_leaves_only_finished_videos_in_no_drive_folder(drive, tmp_
     both = {"not_uploaded": 1, "va": va}
     assert _cards(ann.get("/clone/gallery", params=both).text) == [waiting]
     page = ann.get("/clone", params=both).text
-    # The switch is on, and a click on it takes only that filter off.
     assert f'class="btn not-uploaded" href="/clone?va={va}" aria-pressed="true"' in page
     assert f"/clone/gallery?va={va}&amp;not_uploaded=1" in page
     off = ann.get("/clone", params={"va": va}).text
@@ -694,7 +651,6 @@ def test_not_uploaded_leaves_only_finished_videos_in_no_drive_folder(drive, tmp_
         f'class="btn not-uploaded" href="/clone?va={va}&amp;not_uploaded=1"'
         ' aria-pressed="false"' in off
     )
-    # A date picked next keeps both: they ride in the dates' form.
     assert f'<input type="hidden" name="va" value="{va}">' in page
     assert '<input type="hidden" name="not_uploaded" value="1">' in page
 
@@ -730,8 +686,6 @@ def test_a_va_and_a_person_without_vas_get_no_made_by(drive, tmp_path):
     ],
 )
 def test_the_vas_button_filters_gen_ai_and_download_too(page, fragment, task):
-    """Owner 2026-11-14: "why VAs is missing from gen ai ... from download".
-    The Drive switch stays /clone's: only clones go to Drive."""
     ann = _client("ann@example.com")
     owner = users.by_email("ann@example.com").id
     va = _va_of("ann@example.com")

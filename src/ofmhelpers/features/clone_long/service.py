@@ -1,21 +1,3 @@
-"""A long clone: one subject image + one video of any length (up to
-`settings.clone_long.max_video_s`) through Wan 3.0, which takes at most
-15 s. The video is split (`Plan`), every piece generated with the same
-image and prompt -- in parallel, each as its own remembered request, so a
-re-run resumes every piece and never pays for one twice -- and the results
-joined into one video of exactly the source's aspect ratio: every piece is
-asked at Wan's nearest ratio (16:9 in: "16:9"), the join fits them to the
-source's own. No export, no audio.
-
-A run's files wait in its work folder (`work_dir() / job_id`): each cut
-piece and each generated piece as it is saved, so a re-run neither cuts nor
-downloads a piece twice. Generated pieces are never results of their own
-(not in the asset store, not in the AI output folder): only the joined
-video is. The folder goes once the video is joined, or when the run fails
-in a way nothing will resume (`stores.jobs.resumable`); one left by a
-cut-off run nobody resumed goes after `resume_max_age_s`.
-"""
-
 import contextvars
 import math
 import shutil
@@ -56,9 +38,6 @@ logger = get_logger(__name__)
 
 
 class Target(CloneTarget):
-    """One row of /clone's table (`features/clone/targets.py`) as a piece is
-    asked for it."""
-
     @property
     def image_field(self) -> str:
         return self.images
@@ -72,15 +51,12 @@ class Target(CloneTarget):
         return self.audio
 
     def duration(self, seconds: float) -> int:
-        """`seconds` as the nearest whole duration the model accepts."""
         field = self.spec.properties["duration"]
         low = int(field.minimum) if field.minimum is not None else 1
         high = int(field.maximum) if field.maximum is not None else self.max_reference_s
         return min(max(round(seconds), low), high)
 
     def aspect_ratio(self, shape: Shape) -> str:
-        """The model's ratio nearest `shape`, the same for every piece
-        ("adaptive" could pick a different one per piece)."""
         allowed = self.spec.properties["aspect_ratio"].enum or []
         return shape.nearest([str(r) for r in allowed if ":" in str(r)])
 
@@ -91,9 +67,6 @@ class Target(CloneTarget):
         video: str,
         chain_image: str | None = None,
     ) -> PieceValues:
-        """One piece's request. `chain_image` (the previous piece's last
-        frame) is added as a second reference image with a 'start from it'
-        prompt (`params.chain`)."""
         images = [params.image]
         prompt = params.prompt
         if chain_image is not None:
@@ -112,9 +85,6 @@ class Target(CloneTarget):
 
 
 class PieceValues(BaseModel):
-    """One piece's inputs. Its dump (`model_dump()`) is what the provider's
-    model takes: the same values under the target model's own field names."""
-
     target: Target
     prompt: str
     resolution: str
@@ -137,7 +107,6 @@ class PieceValues(BaseModel):
         }
 
 
-# A provider joins by `long_clone` on its row of the table.
 TARGETS = {
     name: Target(**row.model_dump())
     for name, row in clone_targets().entries.items()
@@ -148,7 +117,6 @@ RESOLUTIONS = offered_resolutions(TARGETS.values())
 
 
 def rate(provider: str) -> Rate:
-    """The provider's Wan 3.0 price (the same rates /clone shows)."""
     price = clone_price(provider)
     return Rate(
         credits_per_s=price.credits_per_video_s,
@@ -157,13 +125,10 @@ def rate(provider: str) -> Rate:
 
 
 def work_dir() -> Path:
-    """Where runs' pieces wait, one folder per job (see the module doc)."""
     return Path(settings.infra.uploads_root) / ".clone-long"
 
 
 def prune_work(keep: str) -> None:
-    """Drop the work folders untouched for longer than a request is
-    remembered (their runs can no longer resume), except `keep`'s."""
     root = work_dir()
     if not root.is_dir():
         return
@@ -174,18 +139,14 @@ def prune_work(keep: str) -> None:
             logger.info("clone-long: dropped the stale work folder %s", folder.name)
 
 
-class _NotStartedError(Exception):
-    """A piece left out: an earlier one failed."""
+class _NotStartedError(Exception): ...
 
 
 def _hosted(urls: list[str]) -> list[str]:
-    """Result URLs a browser can open (the fake provider's are not)."""
     return [u for u in urls if u.startswith(("https://", "http://"))]
 
 
 class LongClone:
-    """One run: its plan, its price, its time limit, and the run itself."""
-
     def __init__(self, params: LongCloneParams) -> None:
         self.params = params
         self.target = TARGETS[params.provider]
@@ -204,8 +165,6 @@ class LongClone:
         seconds: float,
         shape: Shape,
     ) -> LongClone:
-        """A run priced and checked against the model piece by piece before
-        anything is paid. Raises `InvalidInputError`."""
         target = TARGETS[provider]
         plan = Plan.split(seconds, target.max_reference_s)
         quote = rate(provider).quote(seconds, resolution, plan.count)
@@ -241,10 +200,6 @@ class LongClone:
         return Quote(seconds=p.seconds, pieces=p.pieces, credits=p.credits, usd=p.usd)
 
     def time_limit(self) -> int:
-        """RQ's limit: the queue's default (one generation and its download)
-        plus a provider wait per extra round of parallel pieces, and an
-        ffmpeg limit per round's cuts and for the join. Chained, every piece
-        is a round of its own."""
         cfg = settings.clone_long
         rounds = (
             self.plan.count
@@ -258,11 +213,6 @@ class LongClone:
         )
 
     def run(self, job_id: str, api_key: str, assets_root: str) -> list[ResultFile]:
-        """Cut, generate every piece, join. A piece refused for good (flagged,
-        failed) fails the run and every piece is forgotten -- else recovery
-        would re-run the job and pay for the refused one again. A piece
-        still generating (timeout) stays remembered for recovery, and so do
-        the saved pieces."""
         prune_work(keep=job_id)
         work = work_dir() / job_id
         out = Path(settings.aigen.out_dir) / f"clone_long_{job_id}.mp4"
@@ -279,10 +229,6 @@ class LongClone:
             refused = isinstance(exc, ProviderGenerationError)
             if refused:
                 tasks.forget(job_id)
-            # RQ's time limit lands mid-run: pieces may still be using the
-            # folder. Otherwise every piece has ended, and the folder is kept
-            # only for recovery, which needs a remembered request (a wrong
-            # key fails before any is made).
             keep = isinstance(exc, JobTimeoutException) or (
                 not refused and resumable(exc) and self._remembered(job_id)
             )
@@ -298,16 +244,8 @@ class LongClone:
         return any(tasks.recall(job_id, part) for part in range(self.plan.count))
 
     def _generate(self, job_id: str, api_key: str, work: Path) -> list[Path]:
-        """Every piece, `parallel_pieces` at a time, in order. The first
-        failure starts no further piece (none is paid for after a refusal or
-        an empty balance); the ones already generating are waited for. A
-        refusal is raised before any other error. RQ ending the job meanwhile
-        (its time limit) leaves those to the work horse's exit, and their
-        requests to recovery."""
         if self.params.chain:
             return self._generate_chained(job_id, api_key, work)
-        # Set by the first failure; checked before a piece does anything (a
-        # pool thread takes the next piece the moment its own one fails).
         stop = threading.Event()
 
         def piece(part: int) -> Path:
@@ -322,8 +260,6 @@ class LongClone:
         workers = min(settings.clone_long.parallel_pieces, self.plan.count)
         pool = ThreadPoolExecutor(workers)
         try:
-            # Each piece in its own copy of this context: its spans and logs
-            # stay in the job's trace.
             futures = [
                 pool.submit(contextvars.copy_context().run, piece, part)
                 for part in range(self.plan.count)
@@ -343,11 +279,6 @@ class LongClone:
         return [f.result() for f in futures]
 
     def _generate_chained(self, job_id: str, api_key: str, work: Path) -> list[Path]:
-        """Pieces in order, each started from the previous piece's last frame
-        (`params.chain`): the subject carries across the seam.
-        No parallelism -- piece N needs piece N-1's output. A failure raises
-        at once, so no later piece is paid for; saved pieces (a re-run) are
-        taken as they are and still give the next piece its start frame."""
         results: list[Path] = []
         chain_image: Path | None = None
         for part in range(self.plan.count):
@@ -363,10 +294,6 @@ class LongClone:
         part: int,
         chain_image: Path | None = None,
     ) -> Path:
-        """Piece `part` generated and saved in `work`; one saved by an
-        earlier run of this job is taken as it is, nothing asked again. The
-        first piece is the card's preview while the rest generate.
-        `chain_image`: the previous piece's last frame, when chaining."""
         saved = work / f"result_{part}.mp4"
         if saved.is_file():
             return saved
@@ -393,8 +320,6 @@ class LongClone:
         )
         for path in extra:
             path.unlink(missing_ok=True)
-        # Moved, not linked: the AI output folder keeps only results. Via a
-        # temp name, so a move cut short is never taken as saved.
         moving = saved.with_suffix(".part.mp4")
         first.move(moving)
         moving.replace(saved)
@@ -404,11 +329,9 @@ class LongClone:
 def run_long_clone(
     job_id: str, api_key: str, assets_root: str, **params: Any
 ) -> list[ResultFile]:
-    """The worker's entry (and recovery's re-run): the job's stored params."""
     run = LongClone(LongCloneParams.model_validate(params))
     return run.run(job_id, api_key, assets_root)
 
 
 def time_limit(params: dict[str, Any]) -> int:
-    """`Tool.job_timeout` for a stored job."""
     return LongClone(LongCloneParams.model_validate(params)).time_limit()

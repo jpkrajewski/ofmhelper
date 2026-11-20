@@ -1,12 +1,3 @@
-"""The machine's numbers from Linux's /proc and the disk, stdlib only.
-
-Inside a container /proc/stat, /proc/meminfo, /proc/loadavg and
-/proc/uptime are the host's (Docker shows them as they are), and the
-uploads root is a bind mount of the host's disk: the numbers are the box's,
-not the container's. Outside Linux (a Windows host running the tests) a
-file is missing and its numbers read 0.
-"""
-
 import os
 import shutil
 import time
@@ -27,13 +18,10 @@ def _read(name: str) -> str:
         return ""
 
 
-# /proc/stat's "cpu" line: user nice system idle iowait irq ...
 _IDLE, _IOWAIT = 3, 4
 
 
 def _cpu_ticks() -> tuple[int, int]:
-    """(busy, total) jiffies since boot, all CPUs; waiting on the disk
-    counts as idle."""
     for line in _read("stat").splitlines():
         if line.startswith("cpu "):
             values = [int(v) for v in line.split()[1:]]
@@ -44,7 +32,6 @@ def _cpu_ticks() -> tuple[int, int]:
 
 
 def cpu_percent(sample_s: float) -> float:
-    """How busy all CPUs were over the next `sample_s` seconds."""
     busy0, total0 = _cpu_ticks()
     time.sleep(sample_s)
     busy1, total1 = _cpu_ticks()
@@ -53,7 +40,6 @@ def cpu_percent(sample_s: float) -> float:
 
 
 def _meminfo() -> dict[str, int]:
-    """/proc/meminfo in bytes."""
     found: dict[str, int] = {}
     for line in _read("meminfo").splitlines():
         key, _, rest = line.partition(":")
@@ -65,14 +51,12 @@ def _meminfo() -> dict[str, int]:
 
 def _load() -> tuple[float, float, float]:
     parts = _read("loadavg").split()
-    if len(parts) < 3:  # noqa: PLR2004 -- 1, 5, 15 minutes
+    if len(parts) < 3:  # noqa: PLR2004
         return 0.0, 0.0, 0.0
     return float(parts[0]), float(parts[1]), float(parts[2])
 
 
 def _existing(path: Path) -> Path:
-    """`path`, or its nearest folder that exists (a fresh server has no
-    uploads folder yet: the disk it would be on)."""
     path = path.absolute()
     while not path.exists() and path != path.parent:
         path = path.parent
@@ -97,8 +81,6 @@ def host(disk_path: Path, sample_s: float) -> Host:
 
 
 def _size(path: Path) -> tuple[int, int]:
-    """(bytes, files) under `path`, links not followed; a file gone mid-walk
-    is skipped."""
     size = files = 0
     for dirpath, _dirs, names in os.walk(path):
         for name in names:
@@ -111,8 +93,6 @@ def _size(path: Path) -> tuple[int, int]:
 
 
 def folders(root: Path) -> list[Folder]:
-    """Every top-level folder of `root` holding anything, biggest first; its
-    loose files as one row named "(files)"."""
     found: list[Folder] = []
     loose_bytes = loose_files = 0
     try:

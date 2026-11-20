@@ -1,5 +1,3 @@
-"""What pinterest.com's web calls answer, and the pin we ask it to make."""
-
 from pydantic import BaseModel, ConfigDict, Field
 
 UPLOADED = "succeeded"
@@ -23,8 +21,6 @@ class ResourceResponse(BaseModel):
 
 
 class Envelope(BaseModel):
-    """Every `/resource/...` answer: `resource_response`."""
-
     model_config = ConfigDict(extra="ignore")
 
     resource_response: ResourceResponse
@@ -46,8 +42,6 @@ class PinterestBoard(BaseModel):
 
 
 class UploadSlot(BaseModel):
-    """Where one file goes (Pinterest's own S3), signed for one upload."""
-
     model_config = ConfigDict(extra="ignore")
 
     upload_id: str
@@ -56,9 +50,6 @@ class UploadSlot(BaseModel):
 
 
 class UploadState(BaseModel):
-    """An upload as Pinterest has it: `succeeded` gives its `signature`,
-    what a pin is made of."""
-
     model_config = ConfigDict(extra="ignore")
 
     upload_id: str
@@ -76,9 +67,6 @@ class UploadState(BaseModel):
 
 
 class Media(BaseModel):
-    """A file Pinterest processed, ready for a pin: its signature and size.
-    A video also has its cover picture's signature."""
-
     signature: str
     width: int
     height: int
@@ -147,9 +135,6 @@ class _Story(BaseModel):
 
 
 class PinCreate(BaseModel):
-    """`/v3/storypins/`'s body for one picture or one video, as the page
-    sends it: one page, one block filling it."""
-
     alt_text: str = ""
     allow_shopping_rec: bool = True
     board_id: str
@@ -165,7 +150,6 @@ class PinCreate(BaseModel):
     is_unified_builder: bool = True
     link: str
     method: str = "uploaded"
-    # JSON in a string, as the page sends it.
     story_pin: str
     user_mention_tags: str = "[]"
 

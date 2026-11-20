@@ -30,7 +30,6 @@ def test_every_sample_lands_inside_the_jitter_radius_and_accuracy_range():
 
     assert all(_metres(s.point, NYC) <= 1500.01 for s in samples)
     assert all(2.0 <= s.accuracy_m <= 2.7 for s in samples)
-    # Spread out, not stuck at the centre.
     assert len({s.point.iso6709 for s in samples}) > 450
 
 

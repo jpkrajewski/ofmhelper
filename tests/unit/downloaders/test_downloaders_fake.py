@@ -1,6 +1,3 @@
-"""OFM_FAKE_EXTERNALS: yt-dlp and gallery-dl are never run; a URL "downloads"
-to real local media, and "fake-fail" fails like a removed post."""
-
 import io
 
 import pytest
@@ -46,13 +43,10 @@ def test_a_failing_url_fails_with_a_reason(tmp_path):
     assert result.error == "ERROR: Video unavailable"
 
 
-# --- the look at a link agrees with the download (review #49) ----------------
-
 REEL = "https://www.instagram.com/reel/ABC123/"
 
 
 def _video_of(url: str, monkeypatch, tmp_path):
-    """The fake download's first video of `url` (None: no video)."""
     monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path / "downloads")
     with media.downloaded(url, single=True) as result:
         return next((p.name for p in result.output_paths if p.suffix == ".mp4"), None)

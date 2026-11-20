@@ -1,9 +1,3 @@
-"""Security audit 2026-11-18, hardening notes: a deactivated owner's accounts
-and events go nowhere, an unlink ends the other sessions, /account/password is
-braked and swapped compare-and-swap, the thumbnail cache is outside the
-agency's reach, /trials takes only one's own logins, a device delete drops only
-its owner's orphans, and a job opens only under its own tool's prefix."""
-
 import time
 
 import pytest
@@ -32,9 +26,6 @@ PASSWORD = "correct horse battery"
 NEW = "a brand new password"
 
 
-# --- 1. a deactivated owner's accounts post nothing ------------------------------------
-
-
 def test_a_deactivated_owners_accounts_are_not_running():
     owner = make_user("pins@example.com")
     repo = distribution_store.repository()
@@ -44,9 +35,6 @@ def test_a_deactivated_owners_accounts_are_not_running():
     users.set_active(owner.id, active=False)
 
     assert repo.running() == []
-
-
-# --- 2. a deactivated person's events and /start token ---------------------------------
 
 
 @pytest.fixture
@@ -78,9 +66,6 @@ def test_an_inactive_persons_start_token_links_nothing(telegram_on):
     assert event_targets.of(owner.id, "telegram") is None
 
 
-# --- 3. unlinking ends the other sessions ----------------------------------------------
-
-
 def test_unlinking_ends_the_other_sessions_and_keeps_this_one(monkeypatch):
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_ID", "google-client")
     monkeypatch.setenv("OFM_GOOGLE_CLIENT_SECRET", "google-secret")
@@ -102,9 +87,6 @@ def _google(subject: str):
     from ofmhelpers.integrations.signin import Identity
 
     return Identity(provider="google", subject=subject, email="u@gmail.com")
-
-
-# --- 4 and 5. /account/password ---------------------------------------------------------
 
 
 def test_wrong_current_passwords_are_braked_per_user(monkeypatch):
@@ -141,9 +123,6 @@ def test_the_password_is_written_only_while_it_is_the_one_verified(monkeypatch):
     assert real("someone else won", users.password_hash(me.id))
 
 
-# --- 6. the thumbnail cache is not the agency's -----------------------------------------
-
-
 def test_the_agency_root_excludes_the_thumbnail_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     root = store.assets_root()
@@ -153,9 +132,6 @@ def test_the_agency_root_excludes_the_thumbnail_cache(tmp_path, monkeypatch):
 
     assert not store.in_asset_root(root, root / ".thumbs" / "a.webp")
     assert store.in_asset_root(root, root / "b.png")
-
-
-# --- 7. /trials: a login that is not theirs ---------------------------------------------
 
 
 def test_a_login_that_is_not_theirs_is_a_404_and_writes_nothing(tmp_path, monkeypatch):
@@ -176,9 +152,6 @@ def test_a_login_that_is_not_theirs_is_a_404_and_writes_nothing(tmp_path, monkey
 
     assert [r.status_code for r in answers] == [404, 404]
     assert not (work_dir(user.id, login) / "state.json").exists()
-
-
-# --- 8. a device delete drops only its owner's orphans ----------------------------------
 
 
 def _orphan(owner_id: int, username: str) -> int:

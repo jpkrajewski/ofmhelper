@@ -1,13 +1,3 @@
-/*
- * Google Drive pop-ups (base.html, web/drive_space.py): every signed-in page
- * asks /account/drive-space in the background (cached on the server: no
- * page waits on Google) and shows the one that applies -- "Google Drive is
- * full" (.drive-full-banner) while the person's Drive is under the floor,
- * "Google Drive disconnected" (.drive-reconnect-banner) while Google refuses
- * their sign-in -- with a chime and a desktop notification (notify.js) once
- * a day per browser. Dismissed (x), it stays away for the rest of that day,
- * on every page.
- */
 (() => {
     if (!window.Notifier) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -27,7 +17,7 @@
         try {
             window.localStorage.setItem(key, today);
         } catch {
-            // private window: only for this page
+
         }
     }
 
@@ -57,8 +47,7 @@
             one.banner.hidden = true;
         });
     }
-    // Straight to Google's consent, then back to this page (the markup's
-    // /account is the no-script way there).
+
     const here = window.location.pathname + window.location.search;
     reconnect.banner.querySelector(".drive-reconnect-link").href =
         `/auth/google/start?link=1&next=${encodeURIComponent(here)}`;

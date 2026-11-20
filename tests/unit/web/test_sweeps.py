@@ -1,7 +1,3 @@
-"""web/sweeps.py: the one runner behind every background sweep. A broken
-sweep never takes its loop down, a gated round is skipped, and nothing
-outlives the app."""
-
 import asyncio
 import threading
 from collections.abc import Coroutine
@@ -16,19 +12,15 @@ from ofmhelpers.schemas.chatting import ChatPlatform
 
 
 def _run(scenario: Coroutine) -> None:
-    """In a thread of its own: e2e tests in the same worker leave Playwright's
-    event loop running in this one, and `asyncio.run` refuses to nest. A stuck
-    runner fails on the timeout instead of hanging the suite."""
     with ThreadPoolExecutor(1) as pool:
         pool.submit(asyncio.run, asyncio.wait_for(scenario, timeout=5)).result()
 
 
 def _until(seen: list, count: int, *all_sweeps: Sweep) -> None:
-    """Run `all_sweeps` until `seen` has `count` entries."""
 
     async def scenario() -> None:
         async with running(list(all_sweeps)):
-            while len(seen) < count:  # noqa: ASYNC110 -- filled from the sweep's thread
+            while len(seen) < count:  # noqa: ASYNC110
                 await asyncio.sleep(0.01)
 
     _run(scenario())
@@ -48,8 +40,6 @@ def test_a_failed_run_is_logged_and_the_next_one_still_comes(caplog):
 
 
 def test_a_failed_gate_is_logged_and_the_next_round_still_comes(caplog):
-    """A bad setting read by `enabled` (a malformed daily time) costs that
-    round, never the sweep."""
     checks = []
     ran = []
 
@@ -177,8 +167,6 @@ def _account_sweep() -> Sweep:
 
 
 def test_scheduled_account_scans_run_on_production_only(monkeypatch):
-    """Dev runs on a copy of prod's data: its own scans would pay Apify again
-    for the same accounts (owner, 2026-11-07)."""
     monkeypatch.delenv("OFM_ACCOUNTS_SCHEDULED_SCANS", raising=False)
     monkeypatch.setenv("OFM_ENV", "development")
     assert not _account_sweep().enabled()
@@ -200,8 +188,6 @@ def _downloads_sweep() -> Sweep:
 
 
 def test_the_downloads_sweep_runs_on_production_only(monkeypatch):
-    """Dev has prod's rows next to the developer's own files: a round there
-    would delete those (owner, 2026-11-11). The dry count runs anywhere."""
     monkeypatch.delenv("OFM_DOWNLOADS_SWEEP", raising=False)
     monkeypatch.setenv("OFM_ENV", "development")
     assert not _downloads_sweep().enabled()
@@ -229,9 +215,6 @@ def test_a_downloaded_video_is_kept_a_day_two_weeks_a_month(monkeypatch):
         30 * 24 * 3600,
     )
     assert _downloads_sweep().interval_s() == 3600
-
-
-# --- a sweep that does the work itself runs on a worker, not in the web process
 
 
 def test_a_sweep_with_no_queue_runs_here():

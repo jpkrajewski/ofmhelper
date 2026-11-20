@@ -17,7 +17,6 @@ def _next_counter(folder: Path) -> int:
 
 
 def clean_metadata(path: Path) -> None:
-    """Strip metadata from all supported images in `path`, renaming to IMG_XXXX.png in place."""
     path = Path(path)
     counter = _next_counter(path)
 

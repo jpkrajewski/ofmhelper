@@ -1,10 +1,3 @@
-"""One lock across the app and every worker process, by key: what makes a
-check-then-act (is one running? then start one) a single step. The same
-rules as the /trials folder lock (`features/trials/state.py` `locked`): held
-at most `wait_s`, waited for at most `wait_s`; Redis down or the wait over:
-logged, and the work goes ahead unlocked (a duplicate is better than a page
-that never answers)."""
-
 from collections.abc import Iterator
 from contextlib import contextmanager
 

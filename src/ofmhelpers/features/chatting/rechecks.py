@@ -1,28 +1,3 @@
-"""A fan's chat looked at again `OFM_CHATTING_UNANSWERED_AFTER_S` (5 min) after
-each of their messages, however it came in (webhook or sync), so "Chats
-unanswered" goes out when the 5 minutes are up, not at the next 10-minute look
-(prod 2026-11-06: three fans who wrote at 18:50-18:55 were told at 19:07).
-
-Redis holds:
-- the rechecks due: one sorted set, member a `Recheck` as JSON, score = when it
-  is due; each taken by the one caller whose `ZREM` removed it. One whose chat
-  could not be read is put back for the next poll (`again`), until it is older
-  than a look plus the 5 minutes: the look has it from there.
-- a mark per wait already told (`OpenWait.id`): a fan writing three times in a
-  row is told once, and a wait the look named is not named again by its recheck.
-- one lock while a list is made (`one_teller`): a look and a recheck at once
-  would both read, both find the fan untold and both send. Renewed while the
-  list is made, however long Stacked's 429s make it (one took over 120 s, the
-  lock's life then, and two lists went out a second apart: prod 2026-11-07
-  18:07); a process killed mid-list leaves it at most `_TELL_LOCK_S`. A caller
-  that cannot take it within a few seconds makes no list: a recheck is due
-  again at the next poll, a look leaves it to the next look.
-
-Redis down: logged, nothing planned or marked, the list made unlocked; the
-10-minute look still tells. A message older than the 5 minutes plus a look is
-not planned: the look has it (a first read of a chat's history would otherwise
-plan thousands)."""
-
 import threading
 import time
 from contextlib import contextmanager
@@ -43,28 +18,18 @@ logger = get_logger(__name__)
 _DUE = "chatting:wait-rechecks"
 _TOLD = "chatting:wait-told:"
 _TELLING = "lock:chatting:telling"
-# Outlives any wait someone still acts on.
 _TOLD_TTL_S = 2 * 24 * 60 * 60
-# A list is a read of each model with fans waiting (seconds each, minutes when
-# Stacked answers 429) and one emit: the lock lives this long and is renewed
-# every third of it while the list is made (a killed holder's lapses).
 _TELL_LOCK_S = 120
-# How long a second caller waits for the list being made before it skips.
 _TELL_WAIT_S = 5.0
-# Due just past the 5 minutes: the wait counts only once strictly older.
 _MARGIN_S = 1
 
 
 class ChatKey(BaseModel, frozen=True):
-    """Which chat: the platform and its channel there."""
-
     platform: str
     channel_id: str
 
 
 class Recheck(BaseModel):
-    """One fan message's recheck; its JSON is the sorted set's member."""
-
     model_config = ConfigDict(frozen=True)
 
     platform: str
@@ -78,13 +43,11 @@ class Recheck(BaseModel):
 
 
 def _oldest(now: float) -> float:
-    """A message older than this is the look's."""
     config = settings.chatting
     return now - config.unanswered_after_s - config.wait_events_check_s
 
 
 def plan(platform: ChatPlatform, read: ChatRead, now: float | None = None) -> None:
-    """A recheck for each fan message of `read`, due when it is 5 min old."""
     if platform.value in settings.chatting.events_off():
         return
     oldest = _oldest(time.time() if now is None else now)
@@ -110,7 +73,6 @@ def plan(platform: ChatPlatform, read: ChatRead, now: float | None = None) -> No
 
 
 def take_due(now: float) -> list[Recheck]:
-    """Every recheck due by `now`, each taken once, whichever process asks."""
     try:
         redis = get_redis()
         members = cast("list[bytes]", redis.zrangebyscore(_DUE, "-inf", now))
@@ -128,7 +90,6 @@ def take_due(now: float) -> list[Recheck]:
 
 
 def again(rechecks: Iterable[Recheck], now: float) -> None:
-    """`rechecks` due again at the next poll, but those the look has by now."""
     oldest = _oldest(now)
     due = now + settings.chatting.wait_recheck_poll_s
     kept = {r.model_dump_json(): due for r in rechecks if r.at >= oldest}
@@ -142,10 +103,6 @@ def again(rechecks: Iterable[Recheck], now: float) -> None:
 
 @contextmanager
 def one_teller() -> Generator[bool]:
-    """One list made at a time, across processes. True: this caller makes it (the
-    lock held and renewed until the list is made, or Redis down: unlocked,
-    logged). False: another list is being made, so this one is skipped."""
-    # Not thread-local: the renewing thread holds the same token.
     lock = get_redis().lock(
         _TELLING,
         timeout=_TELL_LOCK_S,
@@ -182,7 +139,6 @@ def one_teller() -> Generator[bool]:
 
 
 def _renew(lock: Lock, done: threading.Event) -> None:
-    """`lock` back to its full life every third of it, until `done`."""
     while not done.wait(_TELL_LOCK_S / 3):
         try:
             lock.reacquire()
@@ -192,7 +148,6 @@ def _renew(lock: Lock, done: threading.Event) -> None:
 
 
 def untold(waits: list[OpenWait]) -> list[OpenWait]:
-    """Those of `waits` nobody was told about yet (Redis down: all of them)."""
     if not waits:
         return []
     try:

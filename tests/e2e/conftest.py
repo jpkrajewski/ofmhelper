@@ -1,20 +1,3 @@
-"""Fixtures for the end-to-end suite: a real Chromium driving the app.
-
-Hermetic: the session starts its own app (uvicorn) and RQ worker in this
-container, on the throwaway test database and Redis db the rest of the
-suite uses, with every outside service faked (OFM_FAKE_EXTERNALS: Drive,
-AI providers, Instagram) and in a fresh working directory, so no `.env`,
-no dev data, no uploads of yours are ever read. Each test starts on empty
-tables and creates what it needs (seeding through the stores is fine: the
-test and the app share the database and the cache).
-
-    scripts/test.sh e2e
-
-On a failure the Allure report gets the page's screenshot, the Playwright
-trace (`playwright show-trace`), its console errors, failed requests and
-the app's log.
-"""
-
 import os
 import shutil
 import socket
@@ -42,8 +25,6 @@ from ofmhelpers.integrations.gdrive.fake import FakeDrive
 from ofmhelpers.integrations.llm.gemini.fake import FAKE_KEY as GEMINI_FAKE_KEY
 from ofmhelpers.integrations.short_links.fake import BOUNCY_FAKE_KEY, OOPSIE_FAKE_KEY
 
-# Who each role signs in as, through the real login form: the admin
-# password account, and a user with a password of their own.
 ACCOUNTS = {
     "ADMIN": ("admin", "e2e-admin-password"),
     "VA": ("va@example.com", "e2e-va-password"),
@@ -59,18 +40,11 @@ def _free_port() -> int:
 
 
 class E2EBackend(BaseModel):
-    """The app's own database and Redis db: never the ones the integration
-    tests of the same xdist worker truncate and flush, and its RQ worker
-    never takes their jobs."""
-
     database_url: str
     redis_url: str
 
 
 def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
-    """The suite's own environment (vault key: the root conftest set it)
-    plus the app's. Nothing from a .env file: the app runs in `workdir`,
-    which has none."""
     return {
         **os.environ,
         "OFM_DATABASE_URL": backend.database_url,
@@ -87,29 +61,17 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
         "APP_PASSWORD_ADMIN": ACCOUNTS["ADMIN"][1],
         "SESSION_SECRET": "e2e-session-secret",
         "OFM_GDRIVE_SERVICE_ACCOUNT": "{}",
-        # The developer's .env holds the Logfire write token: never send.
         "LOGFIRE_TOKEN": "",
-        # The same for Sentry's DSN; and a crash answers the plain sentence.
         "SENTRY_DSN": "",
         "OFM_DEBUG": "0",
-        # Sweeps only when a test asks (the Sync button), never between.
         "OFM_GDRIVE_CHECK_INTERVAL_S": "86400",
-        # The daily posting window (18:45-00:45 UTC) never opens here: inside
-        # it every page adds its "Start posting content" desktop notification,
-        # and the chat pop-up tests failed only when the suite ran at night
-        # (2026-11-05 22:40 UTC). The window's own rules: test_drive.py.
         "OFM_GDRIVE_POSTING_BEFORE_H": "0",
         "OFM_GDRIVE_POSTING_AFTER_H": "0",
         "OFM_LOG_ACCESS": "true",
-        # The admin's link providers: the fakes' keys (links/fake.py).
         "OOPSIE_API_KEY_ADMIN": OOPSIE_FAKE_KEY,
         "BOUNCY_API_KEY_ADMIN": BOUNCY_FAKE_KEY,
-        # /clone-links' AI check: the Gemini fake's key (llm/gemini/fake.py).
         "GEMINI_API_KEY": GEMINI_FAKE_KEY,
-        # /viral's Apify account: any key but the fake's broke/wrong ones.
         "APIFY_API_KEYS": "fake-apify-key",
-        # Both sign-in providers set up; under OFM_FAKE_EXTERNALS their
-        # consent is /auth/fake-consent and their token endpoints fakes.
         "OFM_GOOGLE_CLIENT_ID": "e2e-google-client",
         "OFM_GOOGLE_CLIENT_SECRET": "e2e-google-secret",
         "OFM_APPLE_SERVICES_ID": "e2e.apple.services",
@@ -120,8 +82,6 @@ def _app_env(workdir: Path, fakes: Path, backend: E2EBackend) -> dict[str, str]:
 
 
 def _apple_key_pem() -> str:
-    """A throwaway Sign in with Apple key: the fake token endpoint never
-    checks the client secret, but the app still signs one."""
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -165,8 +125,6 @@ def app_log(app_dir: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def e2e_backend(_test_environment) -> E2EBackend:
-    """A fresh database next to the suite's (`<test db>_e2e`), built by the
-    migrations, and Redis db 15 (the suite's workers use 1..8)."""
     base = make_url(os.environ["OFM_DATABASE_URL"])
     url = base.set(database=f"{base.database}_e2e")
     admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
@@ -191,8 +149,6 @@ def e2e_backend(_test_environment) -> E2EBackend:
 def base_url(
     e2e_backend: E2EBackend, app_dir: Path, fakes_dir: Path, app_log: Path
 ) -> Iterator[str]:
-    """The app, its sweeps and its workers (jobs, /clone-links runs,
-    previews), up for the whole session."""
     port = _free_port()
     url = f"http://127.0.0.1:{port}"
     env = _app_env(app_dir, fakes_dir, e2e_backend)
@@ -207,12 +163,8 @@ def base_url(
             "--port",
             str(port),
         ],
-        # Their own process, as in compose (`sweeps`): the web app runs none.
         [sys.executable, "-m", "ofmhelpers.sweeps"],
         [sys.executable, "-m", "ofmhelpers.worker"],
-        # /clone-links is parked (tests/conftest.py `collect_ignore_glob`):
-        # no e2e test needs its queue. Back with the page: one more worker
-        # here, as the others, for the "clone-links" queue.
         [sys.executable, "-m", "ofmhelpers.worker", "previews"],
         [sys.executable, "-m", "ofmhelpers.worker", "media"],
         [sys.executable, "-m", "ofmhelpers.worker", "edit"],
@@ -237,9 +189,6 @@ def base_url(
 
 @pytest.fixture(autouse=True)
 def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
-    """Overrides the root one: the test seeds and reads the app's database
-    and Redis, starting from empty tables and caches -- but the RQ keys stay
-    (flushing them would pull the registry from under the running worker)."""
     monkeypatch.setenv("OFM_DATABASE_URL", e2e_backend.database_url)
     monkeypatch.setenv("OFM_REDIS_URL", e2e_backend.redis_url)
     from ofmhelpers.cache import get_redis
@@ -248,8 +197,6 @@ def _clean_tables(base_url, e2e_backend: E2EBackend, monkeypatch):
 
     tables = ", ".join(Base.metadata.tables)
     with get_engine().begin() as conn:
-        # As the root wipe does: `phone_revisions` refuses a TRUNCATE by a
-        # trigger of its own (alembic b7c8d9e0f1a3), which this role skips.
         conn.execute(text("SET LOCAL session_replication_role = replica"))
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     redis = get_redis()
@@ -267,10 +214,6 @@ def _va_password_hash() -> str:
 
 
 def _seed_users(database_url: str) -> None:
-    """The signed-in roles' users with fixed ids (1: the password admin, 2:
-    the user), so the session cookies saved once (`auth_states`) keep
-    pointing at them after every truncate. Plain SQL: the test process's
-    repositories cache in whichever Redis they first met, not the app's."""
     va_email, _password = ACCOUNTS["VA"]
     with create_engine(database_url).begin() as conn:
         conn.execute(
@@ -289,10 +232,6 @@ def _seed_users(database_url: str) -> None:
 
 @pytest.fixture
 def jobs_idle(e2e_backend: E2EBackend) -> Callable[[], None]:
-    """Waits until the app's RQ workers have nothing queued or running on
-    any job queue: work the app starts by itself (e.g. the Drive sync on
-    connecting Google) must be over before a test changes what it would
-    see."""
     from redis import Redis
     from rq import Queue
     from rq.registry import StartedJobRegistry
@@ -315,8 +254,6 @@ def jobs_idle(e2e_backend: E2EBackend) -> Callable[[], None]:
 
 @pytest.fixture
 def fake_drive(fakes_dir: Path, base_url) -> FakeDrive:
-    """The app's Drive, emptied: each person's My Drive appears when their
-    Google account first uses it (`FakePersonDrive`)."""
     (fakes_dir / "drive.json").unlink(missing_ok=True)
     return FakeDrive(fakes_dir)
 
@@ -333,12 +270,9 @@ def browser() -> Iterator[Browser]:
 def auth_states(
     browser: Browser, base_url: str, tmp_path_factory, e2e_backend: E2EBackend
 ) -> dict[str, Path]:
-    """One login per role for the whole session, from users made in a fixed
-    order (`_seed_users`; every test's truncate makes them again)."""
     root = tmp_path_factory.mktemp("e2e-auth")
     states = {}
     with create_engine(e2e_backend.database_url).begin() as conn:
-        # `phone_revisions` hangs on users and refuses a TRUNCATE itself.
         conn.execute(text("SET LOCAL session_replication_role = replica"))
         conn.execute(text("TRUNCATE users RESTART IDENTITY CASCADE"))
     _seed_users(e2e_backend.database_url)
@@ -362,7 +296,6 @@ def _failed(request) -> bool:
 def _finish(
     session: Session, name: str, request, tmp_path: Path, app_log: Path
 ) -> None:
-    """Closes the tab; on a failure attaches what explains it."""
     if not _failed(request):
         session.close(trace=None)
         return
@@ -372,7 +305,7 @@ def _finish(
             name=f"{name}: screenshot",
             attachment_type=allure.attachment_type.PNG,
         )
-    except Exception as exc:  # the page may be the thing that broke
+    except Exception as exc:
         allure.attach(str(exc), name=f"{name}: screenshot failed")
     allure.attach(
         "\n".join(session.js_errors) or "(none)",
@@ -420,7 +353,6 @@ def va(browser, base_url, auth_states, request, tmp_path, app_log) -> Iterator[S
 def coworker(
     browser, base_url, auth_states, request, tmp_path, app_log
 ) -> Iterator[Session]:
-    """A second VA, in its own browser context -- another person's tab."""
     yield from _session(
         "VA", "coworker", browser, base_url, auth_states, request, tmp_path, app_log
     )
@@ -438,7 +370,6 @@ def subject_images(tmp_path: Path) -> list[Path]:
 
 @pytest.fixture
 def source_videos(tmp_path: Path) -> list[Path]:
-    """Two short real clips -- /clone probes each one's length with ffprobe."""
     assert shutil.which("ffmpeg"), "ffmpeg is part of the test image"
     paths = []
     for name, seconds in (("dance.mp4", 3), ("walk.mp4", 5)):

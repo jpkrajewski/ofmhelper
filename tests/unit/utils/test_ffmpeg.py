@@ -1,6 +1,3 @@
-"""The shared ffmpeg/ffprobe runner: a failure reports the tool's own last
-lines, a missing binary is a FileNotFoundError."""
-
 import sys
 
 import pytest

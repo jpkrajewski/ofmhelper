@@ -1,7 +1,3 @@
-"""What /repurpose renders: every knob of `repurpose.transformations`
-(read off the models, so a new knob shows up with no template edit), and
-one copy's card with its checker score."""
-
 import typing
 from enum import StrEnum
 from typing import Any
@@ -17,15 +13,14 @@ from ofmhelpers.schemas.persistence import ResultFile
 
 
 class KnobKind(StrEnum):
-    RANGE = "range"  # a number or [min, max]
+    RANGE = "range"
     NUMBER = "number"
-    WORDS = "words"  # some of a few words, one picked per copy
+    WORDS = "words"
     SWITCH = "switch"
-    CHOICE = "choice"  # one of a few words
+    CHOICE = "choice"
 
 
 class Knob(BaseModel, frozen=True):
-    # "video.zoom", "video.adjust.temp", "audio.pitch": where it goes in the preset.
     path: str
     label: str
     kind: KnobKind
@@ -48,10 +43,7 @@ _WORDS: dict[str, list[str]] = {
     "loud": ["chorus", "flanger", "phaser", "tremolo", "vibrato", "none"],
 }
 _CHOICES: dict[str, list[str]] = {"noise_flags": ["t", "t+u+p", "t+u", "u"]}
-# Set by a pipeline per copy, not a knob: it would show as an empty select.
 _NOT_KNOBS = {"snapchat_caption"}
-# Video knobs by group, in the order the transformer applies them; a knob
-# not listed lands in "Other".
 _VIDEO_GROUPS: dict[str, tuple[str, ...]] = {
     "Timeline": ("trim_head_s", "trim_tail_s", "cut_head", "cut_tail", "speed"),
     "Framing": (
@@ -101,7 +93,6 @@ def _label(name: str) -> str:
 
 
 def _flat(annotation: Any) -> set[Any]:
-    """Every type inside a union / generic, origins included."""
     out = {annotation}
     origin = typing.get_origin(annotation)
     if origin is not None:
@@ -164,19 +155,12 @@ class Medium(StrEnum):
 
 
 class MethodScore(BaseModel, frozen=True):
-    """One checker method: how much of the copy it finds in the source, 0 =
-    nothing, 100 = all of it; `checker.CAUGHT_SHARE` (50) or more = caught."""
-
     method: str
     medium: Medium
     percent: int
 
 
 class CopyScore(BaseModel, frozen=True):
-    """One copy against its source (`repurpose.checker`)."""
-
-    # Empty on copies scored before methods were shown (their extra keys
-    # are ignored).
     methods: list[MethodScore] = []
     looks_like_source: bool
     sounds_like_source: bool | None
@@ -187,15 +171,10 @@ class CopyScore(BaseModel, frozen=True):
 
 
 class RepurposeResult(ResultFile):
-    """One copy in the job's result, with its score."""
-
     score: CopyScore | None = None
 
 
 class RepurposeCard(TaskCard):
-    """One copy's card (a done job draws one per copy), or the job's one
-    card while it runs or when it failed."""
-
     copy_number: int = 0
     copies: int = 0
     score: CopyScore | None = None

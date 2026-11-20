@@ -1,6 +1,3 @@
-"""The Stacked client on its fake: one client for a creator key and an agency
-key, paging, retries, refusals."""
-
 from datetime import UTC, datetime
 
 import pytest
@@ -81,8 +78,6 @@ def test_a_wrong_key_is_refused_and_never_shown():
 
 @pytest.mark.parametrize("keys", [[CREATOR_KEY, AGENCY_KEY], [AGENCY_KEY, CREATOR_KEY]])
 def test_the_agency_key_serves_every_creator_it_reaches(keys):
-    # Owner 2026-11-16: an agency with A and B plus a key of A's own = A's
-    # key is never called again, whatever order the keys come in.
     pairs = reachable(keys)
 
     assert sorted(r.creator.user_id for r in pairs) == [CREATOR, OTHER_CREATOR]

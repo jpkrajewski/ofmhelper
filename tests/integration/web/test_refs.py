@@ -1,9 +1,3 @@
-"""
-Covers /refs/thumb: the cached small-preview endpoint the reuse-picker grid
-and job-status "Inputs" section use instead of downloading full-res
-originals (see task_helpers.reference_asset, static/js/file-picker.js).
-"""
-
 import io
 import os
 import subprocess
@@ -28,8 +22,6 @@ def _png_bytes(size=(300, 300)) -> bytes:
 
 
 def _write_test_video(dest: Path, width: int = 640, height: int = 360) -> None:
-    """A real (tiny) mp4 -- ffmpeg has to actually be able to decode a frame,
-    so a fake byte blob won't do here."""
     subprocess.run(
         [
             "ffmpeg",
@@ -95,7 +87,6 @@ def test_thumb_rejects_path_outside_assets_root(client, tmp_path, assets_dir):
 
 
 def test_thumb_404s_for_audio(client, assets_dir):
-    """Audio has no frame to show -- the picker uses an icon tile for it."""
     audio = assets_dir / "abc123__voice.mp3"
     audio.write_bytes(b"not a real mp3, doesn't matter here")
 
@@ -104,8 +95,6 @@ def test_thumb_404s_for_audio(client, assets_dir):
 
 
 def test_thumb_404s_for_unreadable_video_instead_of_500(client, assets_dir):
-    """A corrupt/truncated clip must not take down the whole picker grid --
-    the client falls back to its icon tile on a 404."""
     video = assets_dir / "abc123__clip.mp4"
     video.write_bytes(b"definitely not a video container")
 
@@ -114,8 +103,6 @@ def test_thumb_404s_for_unreadable_video_instead_of_500(client, assets_dir):
 
 
 def test_video_thumb_is_a_cached_webp_frame(client, assets_dir):
-    """Video tiles poster through a first-frame grab rather than making the
-    browser range-request the multi-MB original."""
     video = assets_dir / "abc123__clip.mp4"
     _write_test_video(video)
 
@@ -124,12 +111,10 @@ def test_video_thumb_is_a_cached_webp_frame(client, assets_dir):
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/webp"
     assert len(r.content) < video.stat().st_size
-    # cached on disk, keyed by the same content hash as image thumbs
     assert (assets_dir / ".thumbs" / "abc123__200.webp").is_file()
 
 
 def test_video_thumb_preserves_aspect_ratio(client, assets_dir):
-    """A 9:16 reel must not come back stretched into a square."""
     video = assets_dir / "def456__portrait.mp4"
     _write_test_video(video, width=360, height=640)
 
@@ -148,8 +133,6 @@ def test_thumb_404s_for_missing_file(client, assets_dir):
 
 
 def test_list_refs_still_returns_full_res_file_path(client, assets_dir):
-    """/refs itself is unchanged -- the client still gets the real path, and
-    still uses /refs/file for the actual (full-res) selected asset."""
     original = assets_dir / "abc123__photo.png"
     original.write_bytes(_png_bytes())
 
@@ -163,7 +146,6 @@ def test_list_refs_still_returns_full_res_file_path(client, assets_dir):
 
 
 def _write_refs(assets_dir: Path, count: int, ext: str = ".png") -> list[str]:
-    """`count` assets with strictly increasing mtimes, oldest first."""
     names = []
     for i in range(count):
         path = assets_dir / f"hash{i:03d}__file{i}{ext}"
@@ -176,12 +158,6 @@ def _write_refs(assets_dir: Path, count: int, ext: str = ".png") -> list[str]:
 def test_list_refs_opens_on_last_used_then_last_uploaded(
     client, assets_dir, monkeypatch
 ):
-    """The picker opens on the handful you actually just worked with, then the
-    handful you last added -- a wall of tiles buried the file you wanted.
-
-    The two lists are different orderings on purpose: mtime is "uploaded" and
-    nothing rewrites it, so a file you use daily can't sink out of view and a
-    file you just uploaded can't be hidden by one you used once."""
     names = _write_refs(assets_dir, 12)
     used = [str(assets_dir / names[0]), str(assets_dir / names[3])]
     monkeypatch.setattr(
@@ -195,7 +171,6 @@ def test_list_refs_opens_on_last_used_then_last_uploaded(
 
     entries = client.get("/refs?kind=image").json()
 
-    # used first (newest use first), then the newest uploads that aren't in it
     assert [e["name"] for e in entries] == [
         "file0.png",
         "file3.png",
@@ -210,8 +185,6 @@ def test_list_refs_opens_on_last_used_then_last_uploaded(
 
 
 def test_list_refs_opens_on_the_signed_in_users_own_picks(assets_dir):
-    """Usage is kept per user: another user's picks (however many) neither
-    show in the agency's "recently used" nor push the agency's own out."""
     admin, other = TestClient(app), TestClient(app)
     admin_id = sign_in_agency(admin).id
     other_id = sign_in(other, "refs-other@example.com").id
@@ -237,8 +210,6 @@ def test_list_refs_opens_on_the_signed_in_users_own_picks(assets_dir):
 def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
     client, assets_dir, monkeypatch
 ):
-    """A used file can be deleted through the file manager, and one picker's
-    usage record is another picker's wrong kind."""
     _write_refs(assets_dir, 3)
     (assets_dir / "hashaud__voice.mp3").write_bytes(b"id3")
     monkeypatch.setattr(
@@ -257,8 +228,6 @@ def test_list_refs_ignores_used_files_that_are_gone_or_another_kind(
 
 
 def test_list_refs_limit_reaches_the_older_ones(client, assets_dir):
-    """What the picker's "Show older" button asks for: newest-uploaded first,
-    no usage grouping."""
     _write_refs(assets_dir, 12)
 
     entries = client.get(f"/refs?kind=image&limit={settings.web.max_ref_limit}").json()
@@ -281,8 +250,6 @@ def test_list_refs_rejects_an_out_of_range_limit(client, assets_dir, limit):
 def test_a_burst_for_one_new_thumb_decodes_the_original_once(
     client, assets_dir, monkeypatch
 ):
-    """Recreate clicked over and over asks for the same new thumbnail many
-    times at once: one request makes it, the others wait and reuse it."""
     import threading
     import time
     from concurrent.futures import ThreadPoolExecutor
@@ -316,11 +283,9 @@ def test_a_burst_for_one_new_thumb_decodes_the_original_once(
 def test_missing_names_exactly_the_files_a_restore_can_no_longer_use(
     client, assets_dir, tmp_path
 ):
-    """Recreate restores a past run's files; /refs/missing says which are
-    gone, in one request (2026-10-23: they filled the boxes and 404ed)."""
     kept = assets_dir / "a1__face.png"
     kept.write_bytes(_png_bytes())
-    deleted = assets_dir / "b2__clip.mp4"  # never written: deleted since
+    deleted = assets_dir / "b2__clip.mp4"
     someone_elses = assets_dir / "users" / "99" / "c3__theirs.png"
     someone_elses.parent.mkdir(parents=True)
     someone_elses.write_bytes(_png_bytes())
@@ -333,7 +298,6 @@ def test_missing_names_exactly_the_files_a_restore_can_no_longer_use(
     )
 
     assert r.status_code == 200
-    # None of them was a download of theirs: nothing to fetch again.
     assert r.json() == {
         "missing": [str(deleted), str(someone_elses), str(outside)],
         "restorable": [],
@@ -346,8 +310,6 @@ def test_missing_takes_a_bounded_list(client, assets_dir):
 
 
 def test_stored_names_the_picked_files_that_need_no_upload(client, assets_dir):
-    """A file picked from the computer again went up whole on every Generate
-    (prod 2026-11-11); the page asks by sha256 first. Only the asker's own."""
     mine, theirs, new = "a" * 64, "b" * 64, "c" * 64
     kept = assets_dir / f"{mine}__face.png"
     kept.write_bytes(_png_bytes())

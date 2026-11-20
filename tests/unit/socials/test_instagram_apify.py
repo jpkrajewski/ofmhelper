@@ -1,5 +1,3 @@
-"""The Apify source's reading of one key's runs, against a stub client."""
-
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -15,8 +13,6 @@ from ofmhelpers.integrations.socials.platforms.instagram_apify import (
 
 
 class _Client:
-    """Answers the profile run and the reel run with the given items."""
-
     key_hint = "...stub"
 
     def __init__(self, profiles: list[dict], reels: list[dict]) -> None:
@@ -40,7 +36,6 @@ def _posted(hours: float) -> str:
 
 
 def test_a_renamed_account_is_read_under_its_new_name():
-    """Its old handle may be nobody's, or someone else's, by now."""
     client = _Client(
         profiles=[
             {
@@ -108,7 +103,6 @@ def test_an_error_item_is_told_apart_by_its_error_key():
 
 
 def test_the_actors_get_their_inputs_under_their_own_names():
-    """What `ApifyClient.run` posts: the keys, their order, nothing unset."""
     sent = {"by_alias": True, "exclude_none": True}
 
     assert list(profile_input(["a", "b"]).model_dump(**sent).items()) == [

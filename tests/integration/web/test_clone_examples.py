@@ -1,8 +1,3 @@
-"""/clone's SOP: a fixed handful of examples, set on the server and shown to
-everyone who may open /clone (owner 2026-11-13/14). An example keeps its own
-copies of what it shows: a person's old runs are deleted past the job cap
-and source videos are swept, and an example must outlive both."""
-
 import subprocess
 from pathlib import Path
 
@@ -26,14 +21,12 @@ VA = "va@example.com"
 
 @pytest.fixture(autouse=True)
 def stores(tmp_path, monkeypatch):
-    """The asset store and the examples' own folder, both under tmp."""
     monkeypatch.setattr(asset_store, "assets_root", lambda: tmp_path / "assets")
     monkeypatch.setattr(examples, "uploads_root", lambda: tmp_path)
 
 
 @pytest.fixture(scope="module")
 def clip(tmp_path_factory) -> Path:
-    """One short real video: the frames are made with ffmpeg."""
     path = tmp_path_factory.mktemp("clip") / "clip.mp4"
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
@@ -51,8 +44,6 @@ def _shape(video: Path) -> str:
 
 
 def _clone(tmp_path: Path, clip: Path, owner: int, status: str = "done") -> str:
-    """A clone run of `owner`: its source in their part of the asset store
-    and, when done, its result on disk."""
     source = asset_store.assets_root_for_user(owner) / f"{'a' * 64}__source.mp4"
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_bytes(clip.read_bytes())
@@ -96,18 +87,13 @@ def test_an_example_shows_its_frame_result_and_prompt_to_everyone(
     assert "Remove tattoos" in page
     assert "no tattoos" in page
     assert "Use this prompt" in page
-    # Never the model's own picture.
     assert "the-models-face" not in page
     assert (video.status_code, video.headers["content-type"]) == (200, "video/mp4")
     assert (poster.status_code, poster.headers["content-type"]) == (200, "image/webp")
-    # One video every browser plays: the original and the clone next to each
-    # other (two 180x320 clips brought to 720 high: 406 + 406 wide).
     assert _shape(tmp_path / "sop" / str(example.id) / "compare.mp4") == "h264,812,720"
 
 
 def test_an_example_outlives_its_run_and_its_source_video(tmp_path, clip, owner):
-    """A person's old runs are deleted past the job cap and source videos
-    are swept: the example keeps its own copies."""
     job_id = _clone(tmp_path, clip, owner)
     example = examples.add(job_id, "Simple replacement")
 
@@ -153,7 +139,6 @@ def test_only_a_finished_clone_with_its_files_becomes_an_example(tmp_path, clip,
 
 
 def test_nothing_on_the_page_changes_the_examples(tmp_path, clip, owner):
-    """Owner 2026-11-14: not dynamic. No route adds, renames or removes."""
     example = examples.add(_clone(tmp_path, clip, owner), "Kept")
     admin = _client(ADMIN_EMAIL, Role.ADMIN)
 

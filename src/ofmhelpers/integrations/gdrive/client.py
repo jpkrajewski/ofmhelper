@@ -1,14 +1,3 @@
-"""Google Drive as the configured service account (`settings.gdrive`).
-
-`connect()` returns a `Drive`: one googleapiclient service, so one per
-thread (its httplib2 transport is not thread-safe). Every request retries
-itself on 5xx / 429 / a dropped connection (`execute(num_retries=...)`).
-Shared drives work too (`supportsAllDrives`). Any Drive failure surfaces as
-a `DriveError` saying what went wrong, never a raw HttpError; typed where a
-caller acts on it: `FolderGoneError` (404, trashed), `DriveFullError` (no
-room), `DriveAuthError` (Google refused the person's sign-in: reconnect).
-"""
-
 import json
 import re
 import threading
@@ -56,9 +45,6 @@ logger = get_logger(__name__)
 
 
 def read_live_mode() -> bool:
-    """Dev-only live-read: on when OFM_DRIVE_READ_LIVE is set and this is not
-    production. Always off in production -- the live folders are never served
-    through the read-only guard there."""
     return settings.gdrive.read_live and not settings.infra.production
 
 
@@ -66,10 +52,6 @@ _READ_ONLY = "read-live mode (OFM_DRIVE_READ_LIVE): writing to the live Drive is
 
 
 class ReadOnlyDrive:
-    """A Drive whose reads pass through to the real one and whose every write
-    raises `DriveError`: dev reads the live folders to debug prod without any
-    chance of changing them (`read_live_mode`)."""
-
     def __init__(self, inner: DriveApi) -> None:
         self._inner = inner
 
@@ -105,7 +87,6 @@ class ReadOnlyDrive:
     def storage(self) -> DriveStorage:
         return self._inner.storage()
 
-    # Every write raises -- the whole point of the guard.
     def create_folder(self, *args: object, **kwargs: object) -> DriveFolder:
         raise DriveError(_READ_ONLY)
 
@@ -126,12 +107,6 @@ class ReadOnlyDrive:
 
 
 class ScopedDrive(ReadOnlyDrive):
-    """Live-read mode's one way to write: only inside `root_id` -- dev's
-    own root, never a live folder -- and the folders in it (found, read or
-    made through this Drive); every other write still raises. /clone-links
-    files its reviewed videos on dev through it while /drive keeps reading
-    the live folders."""
-
     def __init__(self, inner: DriveApi, root_id: str) -> None:
         super().__init__(inner)
         self._writable = {root_id}
@@ -167,36 +142,26 @@ class ScopedDrive(ReadOnlyDrive):
         return self._inner.upload(parent_id, path, name, mime_type)
 
     def trash_file(self, item_id: str) -> None:  # type: ignore[override]
-        """Only what sits in a folder it may write in."""
         if not self._writable.intersection(self._inner.file(item_id).parents):
             raise DriveError(_READ_ONLY)
         self._inner.trash_file(item_id)
 
 
 def _guard(drive: DriveApi) -> DriveApi:
-    """The Drive as callers get it: read-only in live-read mode, else as is."""
     return ReadOnlyDrive(drive) if read_live_mode() else drive
 
 
-# Full Drive: the folder is the owner's, shared to the account. The
-# narrower drive.file scope sees only files the app itself created.
 SCOPES = ("https://www.googleapis.com/auth/drive",)
 _FILE_FIELDS = "id, name, mimeType, webViewLink, hasThumbnail, createdTime, size"
 _THUMB_SIZE = re.compile(r"=s\d+$")
 _THUMB_TIMEOUT_S = 20
-# Reels are MBs, on hotel Wi-Fi minutes: generous.
 _DOWNLOAD_TIMEOUT_S = 300
-# Resumable upload chunks: a dropped connection resends one chunk, not the
-# whole video.
 _UPLOAD_CHUNK = 8 * 1024 * 1024
-# Parents per `children_of` query: keeps the `q` string well inside what
-# files.list accepts.
 _PARENTS_PER_QUERY = 40
 
 
 @lru_cache(maxsize=1)
 def _credentials(key_json: str) -> service_account.Credentials:
-    """One per key: it holds the access token and refreshes it itself."""
     try:
         return service_account.Credentials.from_service_account_info(
             json.loads(key_json), scopes=SCOPES
@@ -215,7 +180,6 @@ def _key() -> str:
 
 
 def service_account_email() -> str | None:
-    """Who the root folder is shared with; None when not set up."""
     if settings.infra.fake_externals:
         from ofmhelpers.integrations.gdrive.fake import FAKE_BOT_EMAIL
 
@@ -231,8 +195,6 @@ def _quoted(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
-# Drive's 403 reasons meaning the token lacks Drive (unticked on Google's
-# consent screen): reconnecting fixes it, like a refused refresh.
 _SCOPE_REASONS = frozenset(
     {"insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT", "authError"}
 )
@@ -240,17 +202,11 @@ _FULL_REASON = "storageQuotaExceeded"
 
 
 def _reasons(exc: HttpError) -> set[str]:
-    """The `reason` of each entry in Drive's error body (`errors` or
-    `details`)."""
     details = exc.error_details if isinstance(exc.error_details, list) else []
     return {str(d["reason"]) for d in details if isinstance(d, dict) and "reason" in d}
 
 
 def _auth_refused(exc: Exception) -> bool:
-    """Google refused the sign-in itself: a refresh answered for good
-    (invalid_grant: revoked or expired -- a retryable one is Google's token
-    endpoint down, not the grant), the access token refused, or no Drive
-    in what was granted."""
     if isinstance(exc, RefreshError):
         return not exc.retryable
     if not isinstance(exc, HttpError):
@@ -263,7 +219,6 @@ def _auth_refused(exc: Exception) -> bool:
 
 
 def _refused(exc: HttpError, what: str) -> DriveError:
-    """A 403: no room left (`DriveFullError`), or any other refusal."""
     message = f"{what}: Drive refused ({exc.reason})"
     if _FULL_REASON in _reasons(exc) or "storage quota" in exc.reason.lower():
         return DriveFullError(message)
@@ -272,8 +227,6 @@ def _refused(exc: HttpError, what: str) -> DriveError:
 
 def _failure(exc: Exception, what: str) -> DriveError:
     if _auth_refused(exc):
-        # Google's own words (the invalid_grant tuple) only here and on the
-        # chained cause: the message is what a page may show.
         logger.warning("drive: %s: Google refused the sign-in: %s", what, exc)
         return DriveAuthError()
     if isinstance(exc, HttpError) and exc.resp.status == HTTPStatus.NOT_FOUND:
@@ -284,19 +237,12 @@ def _failure(exc: Exception, what: str) -> DriveError:
 
 
 def _transport(timeout_s: float | None) -> httplib2.Http:
-    """httplib2 counts 308 as a redirect (0.16+), but a resumable upload's
-    308 is "Resume Incomplete": following it failed every upload bigger
-    than one chunk with "Redirected but the response is missing a Location:
-    header" (dev, 2026-10-22). googleapiclient handles the 308 itself.
-    https://github.com/googleapis/google-api-python-client/issues/803"""
     http = httplib2.Http(timeout=timeout_s)
     http.redirect_codes = http.redirect_codes - {308}
     return http
 
 
 class Drive:
-    """The real Drive (`DriveApi`)."""
-
     def __init__(
         self,
         credentials: Credentials,
@@ -305,9 +251,6 @@ class Drive:
         timeout_s: float | None = None,
         retries: int | None = None,
     ) -> None:
-        """`http` replaces the authorised transport (tests); `timeout_s`
-        bounds each socket wait (httplib2 waits 60 s by default), `retries`
-        overrides `OFM_GDRIVE_RETRIES`."""
         self._credentials = credentials
         if http is None:
             http = AuthorizedHttp(credentials, http=_transport(timeout_s))
@@ -320,8 +263,6 @@ class Drive:
     def _run(self, request: HttpRequest, what: str) -> dict[str, Any]:
         try:
             return request.execute(num_retries=self._retries)
-        # httplib2 errors (a DNS failure, a dropped connection) are not
-        # OSError: without them they escaped as raw exceptions.
         except (
             GoogleApiError,
             GoogleAuthError,
@@ -331,7 +272,6 @@ class Drive:
             raise _failure(exc, what) from exc
 
     def storage(self) -> DriveStorage:
-        """The person's space: used, and the limit (none: unlimited)."""
         found = self._run(self._about.get(fields="storageQuota"), "Storage")
         quota = found.get("storageQuota", {})
         limit = quota.get("limit")
@@ -340,8 +280,6 @@ class Drive:
         )
 
     def folder(self, folder_id: str) -> DriveFolder:
-        """Raises `FolderGoneError` when it is missing, trashed or not
-        shared."""
         found = self._run(
             self._files.get(
                 fileId=folder_id,
@@ -381,7 +319,6 @@ class Drive:
     def children(
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]:
-        """What is in a folder, newest first, trash left out."""
         query = f"'{_quoted(parent_id)}' in parents and trashed = false"
         if folders_only:
             query += f" and mimeType = '{FOLDER_MIME}'"
@@ -389,10 +326,6 @@ class Drive:
         return [DriveFile.model_validate(row) for row in rows]
 
     def children_of(self, parent_ids: list[str]) -> DriveListing:
-        """What is in each of several folders, newest first, trash left out:
-        one listing per `_PARENTS_PER_QUERY` folders instead of one each.
-        Every id must be a live folder (Drive 404s the whole query
-        otherwise); /drive passes only ids its root listing just returned."""
         found: dict[str, list[DriveFile]] = {p: [] for p in parent_ids}
         for start in range(0, len(parent_ids), _PARENTS_PER_QUERY):
             chunk = parent_ids[start : start + _PARENTS_PER_QUERY]
@@ -412,8 +345,6 @@ class Drive:
         )
 
     def find_folder(self, parent_id: str, name: str) -> DriveFolder | None:
-        """The oldest folder of that name in the parent, so one made by
-        hand is reused rather than duplicated."""
         query = (
             f"'{_quoted(parent_id)}' in parents and name = '{_quoted(name)}'"
             f" and mimeType = '{FOLDER_MIME}' and trashed = false"
@@ -450,8 +381,6 @@ class Drive:
         return DriveFolder(id=done["id"], name=done["name"])
 
     def file(self, file_id: str) -> DriveFile:
-        """One item with its parents and preview link. Raises
-        `FolderGoneError` when it is missing or not shared."""
         found = self._run(
             self._files.get(
                 fileId=file_id,
@@ -466,8 +395,6 @@ class Drive:
         return DriveFile.model_validate(found)
 
     def find_file(self, parent_id: str, name: str) -> DriveFile | None:
-        """The oldest item of that name in the folder that is not a folder
-        (names are not unique in Drive: the one people have been using)."""
         query = (
             f"'{_quoted(parent_id)}' in parents and name = '{_quoted(name)}'"
             f" and mimeType != '{FOLDER_MIME}' and trashed = false"
@@ -479,10 +406,6 @@ class Drive:
         return DriveFile.model_validate(oldest)
 
     def sheet(self, file_id: str) -> DriveSheet:
-        """A Google Sheet's cells, every tab (Drive's xlsx export, at most
-        `OFM_GDRIVE_SHEET_MAX_BYTES`: bigger is a `DriveError`, never
-        parsed). Anything that is not a Google Sheet: Drive refuses the
-        export, a `DriveError`."""
         what = f"Sheet {file_id}"
         try:
             content = self._files.export(fileId=file_id, mimeType=XLSX_MIME).execute(
@@ -506,11 +429,8 @@ class Drive:
             raise DriveError(msg) from exc
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:
-        """`item`'s preview image and its content type, `px` on its
-        longest side; None while Drive has none (a video just uploaded)."""
         if not item.thumbnail_link:
             return None
-        # Short-lived, and only answers with the account's token.
         url = _THUMB_SIZE.sub(f"=s{px}", item.thumbnail_link)
         try:
             response = AuthorizedSession(self._credentials).get(
@@ -529,9 +449,6 @@ class Drive:
         )
 
     def download(self, file_id: str) -> DriveDownload:
-        """A file's whole content and its Drive name; reels are MBs, so
-        a long timeout. `file()` first: a missing/unshared id 404s there,
-        and the name comes back with it."""
         item = self.file(file_id)
         url = f"https://www.googleapis.com/drive/v3/files/{file_id}"
         try:
@@ -550,13 +467,9 @@ class Drive:
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str
     ) -> DriveFile:
-        """`path` into the folder as `name`, resumable. Only an account with
-        storage (a person's, `connect_as`) can: the service account's 403s."""
         media = MediaFileUpload(
             str(path), mimetype=mime_type, resumable=True, chunksize=_UPLOAD_CHUNK
         )
-        # httplib2 is not instrumented: its own span, or the upload's time
-        # hides inside its job's (prod 2026-11-14, /trials job 96a3fa9c).
         with logfire.span(
             "drive upload {name}", name=name, size_bytes=path.stat().st_size
         ):
@@ -573,8 +486,6 @@ class Drive:
         return DriveFile.model_validate(made)
 
     def grant(self, item_id: str, email: str) -> None:
-        """Editor access to the item for `email`, without Google's email
-        about it. Granting what someone already has changes nothing."""
         self._run(
             self._permissions.create(
                 fileId=item_id,
@@ -587,11 +498,6 @@ class Drive:
         )
 
     def trash_file(self, item_id: str) -> None:
-        """Into Drive's trash (restorable there for 30 days), never deleted
-        for good. Raises `FolderGoneError` when it is already gone: asked
-        with a get first, since an update of a missing id answers 500 about
-        one time in five (a get 404s; probed 2026-10-24), and a 500 is
-        retried, then fails as a `DriveError` (~40 s)."""
         self._run(
             self._files.get(fileId=item_id, supportsAllDrives=True, fields="id"),
             f"File {item_id}",
@@ -612,13 +518,6 @@ _THREAD = threading.local()
 
 
 def connect(*, interactive: bool = False) -> DriveApi:
-    """This thread's `Drive` (the fake one under OFM_FAKE_EXTERNALS), made
-    once per thread and setting: one googleapiclient service is not
-    thread-safe, and a new one per call is waste. `interactive`: a page is
-    waiting, so each request gets `interactive_timeout_s` and
-    `interactive_retries` -- a stalled Drive fails the page in seconds
-    instead of holding its thread for minutes. Raises `DriveError` when not
-    set up."""
     if settings.infra.fake_externals:
         from ofmhelpers.integrations.gdrive.fake import fake_drive
 
@@ -642,11 +541,6 @@ def connect(*, interactive: bool = False) -> DriveApi:
 def connect_as(
     refresh_token: str, *, interactive: bool = False, guard: bool = True
 ) -> DriveApi:
-    """This thread's `Drive` acting as a person (their refresh token, from
-    signing in with Google; `signin.google`): everything /drive does goes
-    through the folder owner's own account. `interactive`: a page waits
-    (short timeout, few retries; see `connect`). The fake one, as that
-    person, under OFM_FAKE_EXTERNALS."""
     if settings.infra.fake_externals:
         from ofmhelpers.integrations.gdrive.fake import fake_person
 
@@ -666,5 +560,4 @@ def connect_as(
         drives[key] = Drive(
             drive_credentials(refresh_token), timeout_s=timeout_s, retries=retries
         )
-    # guard=False: only for a caller that wraps it in `ScopedDrive` at once.
     return _guard(drives[key]) if guard else drives[key]

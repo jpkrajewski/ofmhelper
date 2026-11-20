@@ -1,8 +1,3 @@
-"""/pictures in a real browser: a preset made in its dialog, picked, a
-picture added, Generate -- the card resolves on the page (kie.ai faked) --
-and Recreate puts the run's picture back (static/js/pictures.js,
-generation.js)."""
-
 import re
 lazy from pathlib import Path
 
@@ -30,13 +25,11 @@ def test_a_preset_is_made_picked_and_run(va: Session, subject_images: list[Path]
     va.page.set_input_files("#preset-images", [str(p) for p in subject_images])
     va.page.click('#preset-form button[type="submit"]')
 
-    # Loaded, not just navigated: the picker listens from DOMContentLoaded.
     va.page.wait_for_url(re.compile(r"/pictures\?preset=\d+"))
     preset = va.page.locator(".pictures-preset:not([hidden])")
     expect(preset.locator("img")).to_have_count(2)
     expect(preset).to_contain_text("recreate third")
     expect(preset.locator(".badge")).to_have_text("3:4")
-    # Edit opens with the preset's own values.
     preset.locator(".preset-edit").click()
     expect(va.page.locator("#preset-aspect")).to_have_value("3:4")
     va.page.locator("#preset-dialog [data-close]").click()

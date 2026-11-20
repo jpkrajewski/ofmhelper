@@ -1,21 +1,3 @@
-"""
-/pictures: presets -- a name, a prompt and up to `OFM_PICTURES_PRESET_MAX_IMAGES`
-(10) reference images -- run through Nano Banana Pro with each picture to
-recreate. A VA's whole input is the preset and the pictures they found; one
-job per picture (task `pictures`) sends the preset's images, then that
-picture, with the preset's prompt, at the picture's own aspect ratio (the
-nearest the model takes) -- or the preset's fixed shape, else
-`OFM_PICTURES_ASPECT_RATIO` (3:4; "" = the picture's own) -- and
-`OFM_PICTURES_RESOLUTION`.
-
-Runs go through `ai.run_ai` like any /generate job; `PICTURE_TARGETS` names
-each provider's Nano Banana Pro and its fields (Higgsfield has none; a
-provider joins by one entry). Presets: the owner's own, the agency's shared
-with everyone (`stores.picture_presets`); their images are saved in the
-owner's part of the asset store and shown through `/pictures/presets/{id}/
-images/{n}` to whoever may see the preset.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Query, Request
@@ -49,7 +31,6 @@ from ofmhelpers.web.gallery import Gallery, GalleryParams
 from ofmhelpers.web.routers.task_helpers import add_job_routes
 from ofmhelpers.web.templates_config import render, render_polled
 
-# What other modules and the tests read here (same objects as the feature's).
 __all__ = [
     "LABEL",
     "PICTURE_TARGETS",
@@ -72,7 +53,6 @@ router = APIRouter(
 
 gallery = Gallery({TASK})
 
-# Short: an edited preset may put another image under the same index.
 _IMAGE_CACHE = {"Cache-Control": "private, max-age=60"}
 
 
@@ -89,9 +69,6 @@ class PresetEditForm(PresetForm):
 
 class PresetDeleted(BaseModel):
     deleted: int
-
-
-# --- the page and its gallery --------------------------------------------------
 
 
 def _cards(jobs: list[Job]) -> list[TaskCard]:
@@ -142,12 +119,8 @@ def gallery_latest(request: Request, viewer: Viewing) -> Response:
     )
 
 
-# --- presets -------------------------------------------------------------------
-
-
 @router.get("/presets/{preset_id}/images/{index}")
 def preset_image(preset_id: int, index: int, owner_id: OwnerId) -> FileResponse:
-    """A preset image as a small webp, to whoever may see the preset."""
     return FileResponse(
         service.image_thumb(preset_id, index, owner_id),
         media_type="image/webp",
@@ -171,8 +144,6 @@ def update_preset(
     owner_id: OwnerId,
     assets_root: AssetsRoot,
 ) -> PicturePreset:
-    """`keep`: the indexes of the current images to keep, in order; new
-    images go after them."""
     return service.update_preset(preset_id, form, form.keep, owner_id, assets_root)
 
 
@@ -181,11 +152,7 @@ def delete_preset(preset_id: int, owner_id: OwnerId) -> PresetDeleted:
     return PresetDeleted(deleted=service.delete_preset(preset_id, owner_id))
 
 
-# --- runs ------------------------------------------------------------------------
-
-
 class PictureRunForm(PaidForm):
-    # The app's default provider may have no Nano Banana Pro.
     provider: str = Field(default_factory=default_provider)
     preset: int
     pictures: Files
@@ -199,13 +166,10 @@ def run(
     owner_id: OwnerId,
     assets_root: AssetsRoot,
 ) -> JobsQueued:
-    """One job per picture to recreate, each checked against the model
-    before anything is queued."""
     return service.start(form, run_picture, actor, owner_id, assets_root)
 
 
 def describe(job: Job) -> str:
-    """A card's meta line: the preset it ran."""
     return service.describe_preset(job.params)
 
 

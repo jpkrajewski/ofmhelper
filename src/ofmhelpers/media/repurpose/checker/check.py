@@ -1,6 +1,3 @@
-"""`check(source, copy)`: how much a copy still looks and sounds like its
-source, tier 1 (hashes). A measurement only: nothing is redone."""
-
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,15 +14,8 @@ from ofmhelpers.media.repurpose.checker.visual import HashKind, HashScore
 from ofmhelpers.media.repurpose.probe import probe
 
 _DEFAULT_FPS = 1.0
-# The source (the stored side) is sampled denser than the copy: a copy
-# trimmed or sped up by a fraction of a second still finds a source frame
-# within 1/this s, as a real detector's dense index would (2026-10-26: both
-# at 1/s, a 0.1 s trim alone dropped PDQ / dHash to 0-17%).
 _SOURCE_FPS = 10.0
 _DEFAULT_TIMEOUT_S = 600
-# A method "catches" the copy when this share of it finds the source:
-# frames in order (`sequence.best_line`) for a picture hash, ~2 s windows
-# for Chromaprint. Looks like the source = any hash catches it.
 CAUGHT_SHARE = 0.5
 
 
@@ -34,27 +24,20 @@ class CheckReport(BaseModel, frozen=True):
     copy_file: Path
     source_frames: int
     copy_frames: int
-    # Sampled copy frames left out: no picture (`normalize.is_flat`).
     flat_copy_frames: int
     hashes: list[HashScore]
-    # Neural descriptors (SSCD), where the model is installed (the lab).
     descriptors: list[DescriptorScore] = []
-    # The whole-video TMK+PDQF score, where its tools are installed (the lab).
     tmk: TmkScore | None = None
-    # None: one of the two has no sound.
     audio: AudioScore | None
     looks_like_source: bool
     sounds_like_source: bool | None
 
     @property
     def unique(self) -> bool:
-        """Neither the picture nor the sound gives the source away."""
         return not self.looks_like_source and not self.sounds_like_source
 
 
 def _usable(sampled: frames.Sampled) -> tuple[list[Image.Image], np.ndarray]:
-    """The frames with a picture, normalized, and their times (s). All of
-    them when none has one."""
     images = sampled.images
     picked = [i for i, f in enumerate(images) if not is_flat(f)] or list(
         range(len(images))
@@ -67,9 +50,6 @@ def _usable(sampled: frames.Sampled) -> tuple[list[Image.Image], np.ndarray]:
 def _source(
     path: str, mtime: float, fps: float, timeout_s: int
 ) -> tuple[dict[HashKind, np.ndarray], np.ndarray, int]:
-    """A source's stored hashes per kind, frame times and sampled count, kept
-    per process: one source is checked against many copies (the lab, a
-    job's N copies). `mtime` is part of the key: an edited file is new."""
     del mtime
     sampled = frames.sample(Path(path), fps, timeout_s)
     images, times = _usable(sampled)
@@ -88,8 +68,6 @@ def check(
     source_fps: float = _SOURCE_FPS,
     timeout_s: int = _DEFAULT_TIMEOUT_S,
 ) -> CheckReport:
-    """`fps`: copy frames per second checked; `source_fps`: source frames
-    per second looked up among."""
     source, copy = Path(source), Path(copy)
     kept, source_t, source_count = _source(
         str(source), source.stat().st_mtime, source_fps, timeout_s

@@ -1,13 +1,3 @@
-"""
-Hide in a gallery card's ⋯ menu (/generate, /clone, /clone-long,
-/download-assets): `POST /jobs/{id}/hidden` takes the card out of its
-gallery's pages -- the job, its status page and its files stay. While at
-least one is hidden the page offers "Show hidden (N)"; `?hidden=1` on the
-gallery's fragment is the view of only the hidden cards, marked
-`data-hidden` with Unhide in their menu. Only the owner can hide their job,
-and a gallery only counts its own tasks' hidden jobs.
-"""
-
 import re
 from pathlib import Path
 
@@ -30,9 +20,6 @@ class Gallery(BaseModel, frozen=True):
     page: str
     fragment: str
     task: str
-    # The toolbar row's opening tag with a card hidden, and with none: the
-    # row goes then, unless the page has something of its own in it (the
-    # date filter, test_gallery_dates.py: the row stays, only the button goes).
     row: str = '<div class="ph-toolbar" data-keep data-zone-times>'
     idle_row: str = '<div class="ph-toolbar" data-keep data-zone-times>'
 
@@ -44,7 +31,6 @@ GALLERIES = [
         page="/clone-long",
         fragment="/clone-long/gallery",
         task="clone_long",
-        # No date filter there: the row goes with the last hidden card.
         row='<div class="ph-toolbar">',
         idle_row='<div class="ph-toolbar" hidden>',
     ),
@@ -105,8 +91,6 @@ def _hidden_ids(html: str) -> list[str]:
 
 
 def _tools(html: str) -> str:
-    """The toolbar row under the page title (like /phones' Export, Add
-    phone), "Show hidden" at its right -- not inside the gallery."""
     found = re.search(
         r'<div class="ph-toolbar"[^>]*>.*?<div class="toolbar-actions">.*?</div>\s*</div>',
         html,
@@ -133,9 +117,7 @@ def test_hide_takes_the_card_out_and_show_hidden_brings_it_back(ann, tmp_path, g
     assert 'data-hidden-count="1"' in tools
     assert tools.startswith(gallery.row)
     assert "Show hidden (1)" in tools
-    # A plain button, bordered like every other: not the borderless ghost.
     assert 'class="btn hidden-toggle"' in tools
-    # Between the title and the form + gallery, not inside the gallery.
     assert (
         page.index("page-head")
         < page.index("ph-toolbar")
@@ -146,7 +128,6 @@ def test_hide_takes_the_card_out_and_show_hidden_brings_it_back(ann, tmp_path, g
     assert f'data-gallery-endpoint="{gallery.fragment}"' in page
 
     assert _ids(client.get(gallery.fragment).text) == [kept]
-    # Show hidden: only the hidden ones.
     shown = client.get(f"{gallery.fragment}?hidden=1").text
     assert _ids(shown) == [gone]
     assert _hidden_ids(shown) == [gone]
@@ -183,18 +164,14 @@ def test_hidden_cards_carry_unhide_and_shown_ones_hide(ann, tmp_path):
             re.DOTALL,
         )
     )
-    # A hidden card: Hide put away, Unhide offered -- and the other way round.
     assert re.search(r'class="menu-item hide-btn" hidden>', cards[done])
     assert re.search(r'class="menu-item unhide-btn">', cards[done])
-    # A failed card now has a menu too, for Hide.
     assert "recreate-btn" in cards[failed]
     assert re.search(r'class="menu-item hide-btn">', cards[failed])
     assert re.search(r'class="menu-item unhide-btn" hidden>', cards[failed])
 
 
 def test_live_cards_get_hide_from_the_page_templates(ann):
-    """generation.js clones these rows into a card that finishes while the
-    page is open: Hide must be there as on a reloaded card."""
     client, _ = ann
     html = client.get("/generate").text
     for template in ("card-actions-done", "card-actions-failed"):
@@ -263,8 +240,6 @@ def test_another_persons_hidden_jobs_are_not_counted(ann, bob, tmp_path):
 
 
 def test_live_polling_leaves_hidden_cards_out(ann, tmp_path):
-    """live-gallery.js prepends what /latest has and the page lacks: a hidden
-    card must not come back that way."""
     client, actor = ann
     kept = _done("fake_ai", actor, tmp_path / "kept.png")
     gone = _done("fake_ai", actor, tmp_path / "gone.png")
@@ -273,8 +248,6 @@ def test_live_polling_leaves_hidden_cards_out(ann, tmp_path):
 
 
 def test_each_view_pages_over_its_own_cards(ann, tmp_path, monkeypatch):
-    """The normal view pages over the shown jobs, the hidden view over the
-    hidden ones: no sentinel pointing at a page of the other view's cards."""
     monkeypatch.setenv("OFM_GALLERY_LIMIT", str(3))
     client, actor = ann
     jobs = [_done("fake_ai", actor, tmp_path / f"{i}.png") for i in range(8)]
@@ -297,7 +270,6 @@ def test_each_view_pages_over_its_own_cards(ann, tmp_path, monkeypatch):
 
 
 def test_the_empty_text_waits_while_cards_are_only_hidden(ann, tmp_path):
-    """Every clone hidden: not "No clones yet", "Show hidden (1)"."""
     client, actor = ann
     _hide(client, _done("clone", actor, tmp_path / "c.png"))
     html = client.get("/clone").text

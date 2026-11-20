@@ -1,12 +1,3 @@
-"""Self-hosted bridge pages (provider "self"): the app vocabulary over the two
-tables that are ours alone (`self_link_domains`, `self_link_clicks`) plus the
-reads of our own `short_links` rows a local provider needs.
-
-Kept independent of `stores/short_links` and of `integrations.short_links.providers`
-on purpose: the self provider imports this module, and those two import the
-provider registry, so depending on them here would close an import cycle.
-"""
-
 from functools import lru_cache
 lazy from datetime import date
 
@@ -28,7 +19,6 @@ lazy from ofmhelpers.schemas.self_links import (
     SelfTotals,
 )
 
-# Statuses of a self link that exists (is serveable / counts in the plan).
 _LIVE = ("active", "inactive")
 _COUNTED = ("active", "inactive", "creating")
 PROVIDER = "self"
@@ -44,12 +34,7 @@ def _links() -> ShortLinkRepository:
     return ShortLinkRepository()
 
 
-# --- the self provider's reads ----------------------------------------------
-
-
 def live_links(user_id: int) -> list[RemoteLink]:
-    """`user_id`'s self links that exist, as RemoteLinks (the provider lists
-    its own rows)."""
     return [
         row.as_remote() for row in _links().provider_links(user_id, PROVIDER, _LIVE)
     ]
@@ -84,11 +69,7 @@ def hourly(user_id: int, remote_ids: list[str], day: date) -> list[LinkHours]:
 
 
 def live_count(user_id: int) -> int:
-    """How many self links take a place in the plan (live or on their way)."""
     return len(_links().provider_links(user_id, PROVIDER, _COUNTED))
-
-
-# --- domains ----------------------------------------------------------------
 
 
 def active_hosts(owner: int | None = None) -> list[str]:
@@ -111,23 +92,12 @@ def remove_domain(domain_id: int, owner: int | None = None) -> None:
     _self().remove_domain(domain_id, owner)
 
 
-# --- clicks -----------------------------------------------------------------
-
-
 def record_click(click: SelfClick) -> None:
     _self().record_click(click.model_dump())
 
 
-# --- the bridge -------------------------------------------------------------
-
-
 def bridge_target(host: str, slug: str) -> BridgeTarget | None:
-    """The live self link served at `host`/`slug` (id + destination), or None.
-    What the public bridge page looks up on every hit."""
     return _links().active_self_link(host, slug)
-
-
-# --- the Self links page ----------------------------------------------------
 
 
 def domains(owner: int | None = None) -> list[SelfDomain]:
@@ -135,20 +105,14 @@ def domains(owner: int | None = None) -> list[SelfDomain]:
 
 
 def days_of(link_ids: list[int], start: date, end: date) -> list[SelfLinkDays]:
-    """Per link, each UTC day in [start, end] with any hit: views and clicks."""
     return _self().daily(link_ids, start, end)
 
 
 def totals(link_ids: list[int], start: date, end: date) -> SelfTotals:
-    """Views (landings) and clicks (on to the page) of these links over the
-    UTC days [start, end]: /distribution's link clicks."""
     return _self().totals(link_ids, start, end)
 
 
 def stats(owner: int, window: SelfRange, page: str | None = None) -> SelfStats:
-    """Everything the Self links page draws for `owner` over `window`, read
-    from the click log so any time frame works. `page` scopes it to one link
-    by its slug (the "All pages" picker); None is all of them."""
     span = window.resolved()
     start, end = span.start, span.end
     by_hour = window.by_hour()

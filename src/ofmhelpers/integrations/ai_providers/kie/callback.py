@@ -1,12 +1,3 @@
-"""kie.ai's callback: when a task ends, kie.ai POSTs it to the createTask's
-`callBackUrl` (docs.kie.ai market/*: `{code, msg, data: {taskId, state,
-resultJson, creditsConsumed, ...}}`). Signed once a webhookHmacKey is made on
-kie.ai's Settings page (docs common-api/webhook-verification):
-`X-Webhook-Timestamp` (Unix seconds) and `X-Webhook-Signature` = base64
-HMAC-SHA256 of `<taskId>.<timestamp>` -- the body itself is not covered.
-Retries and their timing are undocumented.
-"""
-
 import base64
 import hashlib
 import hmac
@@ -31,8 +22,6 @@ class KieCallback(Lenient):
 
 
 def _signed(task_id: str, headers: Mapping[str, str], key: str) -> bool:
-    """Why one is refused is logged (never a value): a format kie.ai changes
-    must show in Logfire, not as callbacks quietly dropped."""
     stamp = headers.get("x-webhook-timestamp", "")
     signature = headers.get("x-webhook-signature", "")
     if not stamp.isdigit() or not signature:
@@ -57,8 +46,6 @@ def _signed(task_id: str, headers: Mapping[str, str], key: str) -> bool:
 
 
 def task_id(raw: bytes, headers: Mapping[str, str]) -> str | None:
-    """The task a genuine callback names: one that parses, and carries a good
-    signature when the key is set."""
     try:
         callback = KieCallback.model_validate_json(raw)
     except ValidationError:

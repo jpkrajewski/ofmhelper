@@ -1,13 +1,3 @@
-"""A provider that calls nothing: for testing the generation pages for free.
-
-Pick the outcome (success or error), a delay, and image or video (the two
-catalog models); the result is a placeholder frame (a few seconds of it, via
-ffmpeg, for video). It goes through the same router, runner and result
-handling as a real provider, so the whole pipeline is exercised without
-spending credits. References are "uploaded" by path only -- nothing reads
-them.
-"""
-
 import subprocess
 import time
 import uuid
@@ -75,12 +65,10 @@ class FakeProvider(Provider):
     def default_key(cls) -> str | None:
         return None
 
-    def upload(self, path: Path, max_bytes: int | None = None) -> str:  # noqa: ARG002 -- nothing is uploaded
+    def upload(self, path: Path, max_bytes: int | None = None) -> str:  # noqa: ARG002
         return f"{_SCHEME}{path}"
 
     def submit(self, spec: ModelSpec, payload: Payload, idempotency_key: str) -> str:
-        """Generates right here (after the chosen delay): there is no queue
-        to wait on. `error` fails the generation the way a provider would."""
         del idempotency_key
         time.sleep(float(payload.get("delay") or 0))  # type: ignore[arg-type]
         if payload.get("outcome") == "error":

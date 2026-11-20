@@ -1,36 +1,3 @@
-"""
-ofmhelpers/features/jobs/recovery.py (`registry` below: features/jobs/registry.py)
-
-Background recovery sweeper: every few minutes, settle the jobs whose
-provider request outlived their poll (it timed out, the worker restarted
-mid-generation, ...). This is what makes a poll timeout a non-event --
-nobody has to log into a provider and check manually.
-
-It works off `integrations/ai_providers.tasks`: every accepted request is remembered
-with its job, provider and key until its result is saved. For each one whose
-job already **failed** (gave up waiting), one status check decides:
-
-- done   -> the job is re-run with its stored params (`registry.RESUMABLE`);
-            the re-run resumes the same request instead of paying again, so
-            the tool's own tail (CapCut, asset store) runs as usual;
-- failed -> the job's error becomes the provider's reason;
-- still running -> left for the next sweep.
-
-A job is left alone while a worker holds it or it waits in a queue
-(`cache.queue.active_job_ids`), whatever its stored status; a re-run goes
-on its task's own queue (`registry.QUEUES`). A running job neither holds
-(a deploy killed its worker mid-job; prod, 2026-10-22: a clone's CapCut
-export) is cut off, judged against a view of the queues read after the
-slow part of the sweep: with a remembered request
-it is settled like a failed one (resumed, never paid twice); one whose task
-can start over (`RESTARTS`: a /trials Generate, local ffmpeg and download
-work; never a task that pays a provider) is queued again; any other
-fails with "Interrupted by a restart", so no card spins forever. A done or
-deleted job is forgotten, and nothing older than `resume_max_age_s` is
-checked again. Provider-agnostic: a new provider is recovered without a
-line here.
-"""
-
 import time
 from collections.abc import Callable
 
@@ -44,6 +11,7 @@ from ofmhelpers.features.jobs import notices
 from ofmhelpers.features.jobs.registry import JOB_TIMEOUTS, QUEUES, RESUMABLE
 from ofmhelpers.features.jobs.registry import RESTARTS as LOCAL_RESTARTS
 from ofmhelpers.features.jobs.runner import run_job
+from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.features.trials import folder as trials_folder
 from ofmhelpers.integrations.ai_providers import tasks
 from ofmhelpers.integrations.ai_providers.base import get_provider
@@ -55,10 +23,6 @@ from ofmhelpers.utils.registry import Registry
 logger = get_logger(__name__)
 
 INTERRUPTED = "Interrupted by a restart: run it again."
-# Cut off with nothing to resume, these start over (True: queued again): a
-# /trials Generate, and the tasks whose work is local and free to repeat
-# (`registry.RESTARTS`, features/jobs/restart.py). Never one that pays a
-# provider.
 RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(
     {
         trials_folder.TASK: trials_folder.restart,
@@ -67,8 +31,12 @@ RESTARTS: frozendict[str, Callable[[Job], bool]] = frozendict(
 )
 
 
+def _ended(job: Job) -> None:
+    if job.user_id is not None:
+        notifications.changed(job.user_id)
+
+
 def _cut_off(job: Job, active: set[str] | None) -> bool:
-    """Running, yet no worker holds it and the queue does not either."""
     return (
         active is not None
         and job.status == JobStatus.running
@@ -78,18 +46,12 @@ def _cut_off(job: Job, active: set[str] | None) -> bool:
 
 
 def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
-    """Settle a job by every request it remembers (one per piece of a long
-    /clone video): any failed fails it, any still generating waits, all
-    done re-runs it (each piece resumes, none is paid twice)."""
     job_id = parts[0].job_id
     job = get_job(job_id)
     if job is None or job.status == JobStatus.done:
         tasks.forget(job_id)
         return "forgotten"
     if active is not None and job.id in active:
-        # A worker holds it or the queue has it, whatever its stored status
-        # (one failed by mistake still runs): a re-run now would run it
-        # twice at once, and pay again once the first forgot its request.
         return "running"
     if job.status != JobStatus.failed and not _cut_off(job, active):
         return "running"
@@ -104,6 +66,7 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
             tasks.forget(job_id)
             error = f"{provider.label} failed this generation: {state.error}"
             fail_job(job.id, error)
+            _ended(job)
             if state.no_credits:
                 notices.out_of_money(job.id, provider.label, error)
             return "failed"
@@ -111,9 +74,6 @@ def settle_job(parts: list[tasks.ProviderTask], active: set[str] | None) -> str:
     if pending:
         return "pending"
     if tasks.waiting(job_id):
-        # A piece whose submit answer was lost (`tasks.remember_sent`): a
-        # re-run now would send it again and maybe pay twice. Its callback
-        # names it, and the next sweep re-runs the job then.
         return "waiting"
     run = RESUMABLE.get(job.task)
     if run is None:
@@ -150,16 +110,12 @@ def _restarted(job: Job) -> bool:
 
 
 def fail_cut_off(active: set[str] | None, remembered: set[str]) -> Registry[str]:
-    """Every cut-off running job with no request to resume started over
-    (`RESTARTS`) or failed."""
     outcomes: dict[str, str] = {}
     restarting = settings.web.restarting(settings.infra.production)
     for job in running_jobs():
         if job.id in remembered or not _cut_off(job, active):
             continue
         if job.task in RESTARTS and not restarting:
-            # A dev copy of prod: this job ran on prod at dump time. Started
-            # here it would use prod people's cookies and Drive (OFM_RECOVERY_RESTARTS).
             logger.info("recovery: job %s left as copied (restarts off)", job.id)
             outcomes[job.id] = "left"
             continue
@@ -170,15 +126,13 @@ def fail_cut_off(active: set[str] | None, remembered: set[str]) -> Registry[str]
             outcomes[job.id] = "restarted"
             continue
         fail_job(job.id, INTERRUPTED)
+        _ended(job)
         logger.warning("recovery: job %s was cut off by a restart", job.id)
         outcomes[job.id] = "interrupted"
     return Registry[str](entries=outcomes)
 
 
 def run_recovery_once() -> Registry[str]:
-    """One sweep: job id -> outcome. Blocking -- features/jobs/sweeps.py runs it in a
-    thread every `recovery_sweep_interval_s`. One bad task never stops the
-    sweep."""
     outcomes: dict[str, str] = {}
     active = active_job_ids()
     remembered = tasks.remembered()
@@ -189,16 +143,10 @@ def run_recovery_once() -> Registry[str]:
         try:
             outcomes[job_id] = settle_job(sorted(parts, key=lambda t: t.part), active)
         except ProviderError:
-            # Network blip, provider down: the next sweep tries again.
             logger.warning("recovery: job %s check failed", job_id, exc_info=True)
         except Exception:
             logger.exception("recovery could not settle job %s", job_id)
     try:
-        # A fresh view, not the one taken before the settle loop: a slow
-        # provider can hold that loop past the grace, and a Generate queued
-        # meanwhile would be failed as cut off while its runs wait in RQ.
-        # Read before fail_cut_off reads the running rows, so a row made in
-        # between is younger than the grace.
         cut_off = fail_cut_off(active_job_ids(), {t.job_id for t in remembered})
         outcomes |= cut_off.entries
     except Exception:

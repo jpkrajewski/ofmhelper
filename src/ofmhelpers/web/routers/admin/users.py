@@ -1,14 +1,3 @@
-"""
-ofmhelpers/web/routers/admin/users.py
-
-/users: who may sign in. An admin adds an email (a Gmail, an Apple ID's
-email, any address) with a role; the page then shows a one-time link that
-sets their password -- sent to them however you talk to them. They can also
-just sign in with Google or Apple under that email. Role, deactivate, a new
-link, remove. Nobody can lock themselves out from here: your own row's role,
-access and delete are refused. The work: `features/users/service.py`.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -29,7 +18,6 @@ router = APIRouter(
     dependencies=[Access(Area.USERS)],
 )
 
-# A page that shows a set-password link: never cached, never sent on.
 _PRIVATE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 
 RoleField = Annotated[Role, Form()]
@@ -45,11 +33,9 @@ def _page(request: Request, me_id: int, shown: Shown) -> Response:
 
 
 def _other(user_id: int, me: CurrentUser) -> User:
-    """A user that is not the one signed in (no locking yourself out)."""
     return service.other(user_id, me.id)
 
 
-# The user in the path, when it is not the admin's own row.
 OtherUser = Annotated[User, Depends(_other)]
 
 
@@ -74,8 +60,6 @@ def add(
 
 @router.post("/{user_id}/link")
 def new_link(request: Request, user_id: int, me: CurrentUser) -> Response:
-    """A new set-password link (the old one stops working): a first
-    password, or a forgotten one."""
     return _page(request, me.id, service.new_link(user_id, str(request.base_url)))
 
 
@@ -86,7 +70,6 @@ def set_password(
     me: CurrentUser,
     password: Annotated[str, Form()],
 ) -> Response:
-    """The password an admin gives a VA: what the VA signs in with."""
     return _page(request, me.id, service.set_va_password(user, password))
 
 
@@ -94,16 +77,12 @@ def set_password(
 def change_owner(
     user: OtherUser, owner_id: Annotated[int | None, Form()] = None
 ) -> Response:
-    """Whose manager this is, or a VA's first employer (a VA's is never
-    changed afterwards: `service.set_owner`)."""
     service.set_owner(user, owner_id)
     return see_other("/users")
 
 
 @router.post("/{user_id}/viewing")
 def view_as(request: Request, user_id: int, me: CurrentUser) -> Response:
-    """The admin's pages become this person's, to look at: every write is
-    refused until "Back to my view" (`middleware/auth.py`)."""
     AuthMiddleware.view_as(request, viewing.viewable(user_id, me.id))
     return see_other("/home")
 
@@ -116,8 +95,6 @@ def change_active(user: OtherUser, active: Annotated[bool, Form()]) -> Response:
 
 @router.post("/{user_id}/delete")
 def remove(request: Request, user: OtherUser, me: CurrentUser) -> Response:
-    """Their sign-ins and keys go with them. Refused while they own phones,
-    accounts or watched profiles: deactivating keeps those."""
     refused = service.remove(user)
     if refused is not None:
         return _page(request, me.id, refused)

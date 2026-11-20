@@ -1,8 +1,3 @@
-"""The FIFO job queues (cache/queue.py) against a real Redis and a real RQ
-worker: first in first out, who is ahead of whom, a waiting job still counting as
-alive, and what Logfire gets. Prod 2026-11-04: six 4K encodes at once on 7.75 GB,
-the kernel killing them every 30 s; the media queue makes them wait their turn."""
-
 import json
 
 import pytest
@@ -28,7 +23,6 @@ from ofmhelpers.worker import ConfiguredWorker
 
 @pytest.fixture(autouse=True)
 def _async_broker(monkeypatch):
-    # The suite runs jobs inline (OFM_RQ_ASYNC=false); these need the real queue.
     monkeypatch.setenv("OFM_RQ_ASYNC", "true")
     get_redis().flushdb()
     yield
@@ -36,9 +30,6 @@ def _async_broker(monkeypatch):
 
 
 class _InlineWorker(SimpleWorker, ConfiguredWorker):
-    """The real `perform_job`, with SimpleWorker's no fork, and the test's
-    logging left as it is (`ConfiguredWorker.work` configures its own process)."""
-
     def work(self, *args, **kwargs):
         return Worker.work(self, *args, **kwargs)
 
@@ -79,7 +70,7 @@ def test_a_waiting_job_dropped_never_runs_and_leaves_nothing_in_redis():
     media.put(worker_tasks.note_down, "kept")
 
     assert media.drop(dropped) is True
-    assert media.drop(dropped) is False  # not waiting any more
+    assert media.drop(dropped) is False
     _drain_media()
 
     assert get_redis().lrange("ran", 0, -1) == [b"kept"]
@@ -119,7 +110,6 @@ def test_the_job_being_run_counts_as_ahead():
 
 
 def test_a_job_waiting_on_the_media_queue_is_not_taken_for_cut_off():
-    """`active_job_ids` is what recovery asks before failing a running job."""
     job_id = _waiting_job()
     JobQueue(name=QueueName.MEDIA).put(
         run_job, job_id, worker_tasks.make_result, {"name": "a.mp4"}
@@ -140,8 +130,6 @@ def test_default_is_on_top_and_media_at_the_bottom_one_at_a_time():
 
 
 def test_a_cut_someone_waits_for_gets_the_cpu_before_exports_and_trials():
-    """Prod 2026-11-06: at nice 15 next to four clone exports at nice 0, a 14 s
-    1440p cut took 40 s."""
     queues = settings.infra.queues
     assert queues[QueueName.EDIT].priority == QueuePriority.HIGHEST
     assert queues[QueueName.EDIT].workers == 1

@@ -1,6 +1,3 @@
-"""Stacked's API as the client reads it: on the fake, and on the real accounts
-(`STACKED_API_KEY_<NAME>` in .env; read-only calls, free)."""
-
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -24,7 +21,6 @@ _NOBODY = "user_no_such_creator"
 
 
 def _key_of_kind(backend: str, kind: AccountType) -> str:
-    """A real key of that kind from .env; the test is skipped without one."""
     if backend == "fake":
         return CREATOR_KEY if kind == AccountType.CREATOR else AGENCY_KEY
     for key in (k.key for k in settings.stacked.api_keys):
@@ -95,7 +91,6 @@ def test_a_creator_the_key_cannot_reach_is_refused(creator_key):
 
 
 def test_insights_answer_for_any_window(creator_key):
-    """The daily report's subscribers and sales (scope `insights:read`)."""
     client = StackedClient(creator_key)
     creator = client.me().account.id
     end = datetime.now(UTC)

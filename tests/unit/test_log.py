@@ -1,11 +1,3 @@
-"""
-Covers ofmhelpers/log.py: the app-wide logging setup every entrypoint calls.
-
-The behaviors worth pinning are the ones that break silently in production --
-records going nowhere, the wrong stream, a format nothing can parse, or a
-duplicate handler quietly doubling every line.
-"""
-
 import json
 import logging
 
@@ -16,10 +8,6 @@ from ofmhelpers.log import configure_logging, get_logger
 
 @pytest.fixture(autouse=True)
 def _restore_logging():
-    """configure_logging() mutates process-global logging state, so snapshot
-    the root handlers/level and put them back after each test -- otherwise a
-    test that switches to JSON leaks that format into every later test's
-    captured output."""
     root = logging.getLogger()
     saved_handlers, saved_level = root.handlers[:], root.level
     yield
@@ -28,8 +16,6 @@ def _restore_logging():
 
 
 def test_records_go_to_stdout_not_stderr(monkeypatch, capsys):
-    """Docker captures both, but the app deliberately uses one stream so
-    lines can't interleave out of order between two buffers."""
     monkeypatch.setenv("OFM_LOG_LEVEL", "INFO")
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
@@ -69,8 +55,6 @@ def test_json_format_emits_one_parseable_object_per_record(monkeypatch, capsys):
 
 
 def test_json_format_promotes_extra_fields_to_top_level(monkeypatch, capsys):
-    """`extra={...}` is what makes a log line queryable by job id rather than
-    something you have to regex out of a message string."""
     monkeypatch.setenv("OFM_LOG_FORMAT", "json")
     configure_logging(force=True)
 
@@ -81,8 +65,6 @@ def test_json_format_promotes_extra_fields_to_top_level(monkeypatch, capsys):
 
 
 def test_json_format_survives_a_non_serializable_extra_value(monkeypatch, capsys):
-    """A stray Path/datetime in `extra` must degrade to its string form, not
-    raise inside the logging call and lose the record entirely."""
     monkeypatch.setenv("OFM_LOG_FORMAT", "json")
     configure_logging(force=True)
 
@@ -120,11 +102,9 @@ def test_level_is_configurable(monkeypatch, capsys):
 
 
 def test_repeated_configure_does_not_duplicate_handlers(monkeypatch, capsys):
-    """The real failure this guards against: two entrypoints both configuring
-    and every line getting logged twice."""
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
-    configure_logging()  # idempotent -- must be a no-op
+    configure_logging()
     configure_logging()
 
     get_logger("ofmhelpers.test").warning("once")
@@ -133,8 +113,6 @@ def test_repeated_configure_does_not_duplicate_handlers(monkeypatch, capsys):
 
 
 def test_configure_replaces_handlers_rather_than_appending(monkeypatch, capsys):
-    """force=True reconfigures; it must not leave the previous handler
-    attached alongside the new one."""
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
     configure_logging(force=True)
@@ -145,15 +123,12 @@ def test_configure_replaces_handlers_rather_than_appending(monkeypatch, capsys):
 
 
 def test_noisy_third_party_loggers_are_raised_to_warning(monkeypatch, capsys):
-    """httpx/urllib3 at INFO log a line per request, which would bury the
-    app's own output in the container log."""
     monkeypatch.setenv("OFM_LOG_LEVEL", "INFO")
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
 
     logging.getLogger("httpx").info("chatty request line")
     logging.getLogger("urllib3").info("chatty connection line")
-    # httpx2, not httpx, is the fork this project depends on -- easy to miss.
     logging.getLogger("httpx2").info("chatty fork line")
 
     out = capsys.readouterr().out
@@ -165,8 +140,6 @@ def test_noisy_third_party_loggers_are_raised_to_warning(monkeypatch, capsys):
 def test_app_loggers_still_emit_at_info_when_third_parties_are_muted(
     monkeypatch, capsys
 ):
-    """Guards the obvious way to implement the test above wrong: muting the
-    noise by raising the root level, which would silence the app too."""
     monkeypatch.setenv("OFM_LOG_LEVEL", "INFO")
     monkeypatch.setenv("OFM_LOG_FORMAT", "text")
     configure_logging(force=True)
@@ -189,8 +162,6 @@ def test_access_log_can_be_disabled(monkeypatch, capsys):
 
 
 def test_uvicorn_error_logger_propagates_into_our_format(monkeypatch, capsys):
-    """Uvicorn's startup/shutdown messages should come out in the app's
-    format, not uvicorn's own."""
     monkeypatch.setenv("OFM_LOG_FORMAT", "json")
     configure_logging(force=True)
 

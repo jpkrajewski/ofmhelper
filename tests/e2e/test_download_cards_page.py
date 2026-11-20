@@ -1,6 +1,3 @@
-"""/download-assets in a browser: every file of a download is its own card, on a
-reload and when it finishes on the page, and Clone sends that card's video."""
-
 from pathlib import Path
 
 import pytest
@@ -11,7 +8,7 @@ from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
-VA_ID = 2  # e2e conftest `_seed_users`
+VA_ID = 2
 RESULT_TIMEOUT_MS = 30_000
 
 
@@ -51,9 +48,6 @@ def test_each_file_is_a_card_and_clones_itself(va: Session, tmp_path: Path):
 def test_download_fetches_a_removed_video_again(
     va: Session, tmp_path: Path, app_dir: Path
 ):
-    """The sweep kept only the poster: the card shows it with one Download,
-    which fetches the video into the same job; the card is then a video
-    again, with its Clone control."""
     removed = removed_download(
         tmp_path, app_dir / "uploads", VA_ID, "https://www.example.com/watch/again"
     )
@@ -94,7 +88,7 @@ def test_a_link_pasted_again_moves_its_card_first_and_downloads_nothing(va: Sess
     expect(page.locator(f'[data-job-id="{first}"] video')).to_have_count(
         1, timeout=RESULT_TIMEOUT_MS
     )
-    page.wait_for_timeout(3_100)  # the Run button's own cooldown
+    page.wait_for_timeout(3_100)
     second = paste("https://www.example.com/watch/second")["job_id"]
     expect(page.locator(f'[data-job-id="{second}"] video')).to_have_count(
         1, timeout=RESULT_TIMEOUT_MS
@@ -128,7 +122,6 @@ def _image(path: Path, colour: str) -> str:
 
 
 def test_clean_images_adds_each_pick_and_cleans_them_all(va: Session, tmp_path: Path):
-    """A second pick used to replace the first (a plain file input)."""
     first = _image(tmp_path / "first.png", "red")
     second = _image(tmp_path / "second.png", "green")
     third = _image(tmp_path / "third.png", "blue")
@@ -145,7 +138,7 @@ def test_clean_images_adds_each_pick_and_cleans_them_all(va: Session, tmp_path: 
     listed = picks.locator(".file-order-list li")
     run = page.locator('#download-assets-form [type="submit"]')
 
-    run.click()  # nothing picked: the form stops itself
+    run.click()
     assert add.evaluate("e => e.validationMessage") == "Pick at least one image"
     assert runs == []
 
@@ -160,13 +153,12 @@ def test_clean_images_adds_each_pick_and_cleans_them_all(va: Session, tmp_path: 
 
     cards = page.locator('#results-panel .results > [data-task="clean_images"]')
     expect(cards.locator("img")).to_have_count(3, timeout=RESULT_TIMEOUT_MS)
-    expect(listed).to_have_count(0)  # the next batch starts empty
+    expect(listed).to_have_count(0)
     assert len(runs) == 1
     assert va.js_errors == []
 
 
 def test_the_download_tool_runs_with_the_clean_picker_left_empty(va: Session):
-    """The picker's stop applies only while its tool is the one chosen."""
     va.goto("/download-assets")
     page = va.page
 

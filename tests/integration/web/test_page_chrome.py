@@ -1,10 +1,3 @@
-"""
-The shared page chrome from base.html: the bits that are easy to drop in a
-redesign and only show up as a broken phone layout or a lost accessibility
-point -- viewport meta, skip link, the labelled nav toggle, and
-aria-current on the active nav item.
-"""
-
 import re
 
 import pytest
@@ -34,13 +27,11 @@ def test_every_page_ships_the_responsive_accessible_chrome(client):
 def test_active_nav_item_is_marked_for_assistive_tech(client):
     html = client.get("/action-log").text
 
-    # Exactly one link is current, and it is the Action log one.
     assert html.count('aria-current="page"') == 1
     assert re.search(r'<a href="/action-log"\s+aria-current="page"', html)
 
 
 def _nav(html: str) -> tuple[list[str], list[str]]:
-    """The header's (bar links, links folded under More)."""
     header = html.split('id="site-nav"')[1].split("</nav>", maxsplit=1)[0]
     bar, more = header.split('class="nav-more"')
     return re.findall(r'<a href="([^"]+)"', bar), re.findall(r'<a href="([^"]+)"', more)
@@ -59,8 +50,6 @@ def test_bar_links_then_the_rest_under_more(client):
         "/drive",
         "/chatting",
     ]
-    # The /reels watch list left the bar (2026-10-23); /viral (one profile's
-    # top reels, 2026-10-31) leads More: a 10th bar link wraps "More".
     assert more == [
         "/viral",
         "/uniqify",
@@ -80,7 +69,6 @@ def test_bar_links_then_the_rest_under_more(client):
         "/styleguide",
         "/action-log",
     ]
-    # A page under More marks it.
     assert "<summary data-current>More</summary>" in client.get("/action-log").text
 
 
@@ -123,9 +111,6 @@ def signed_out():
 def test_every_page_head_links_the_favicon_and_it_loads_signed_out(
     request, signed_out, path, who
 ):
-    """App pages, the login page and the public landing page all carry it,
-    and the icon files are public: the tab shows it before you sign in.
-    (Signed in, /login and / send you to /home.)"""
     html = request.getfixturevalue(who).get(path).text
     links = re.findall(r'<link rel="(?:icon|apple-touch-icon)" href="([^"]+)"', html)
 

@@ -1,9 +1,3 @@
-"""`as_mp4`: a .mov/.webm/.mkv/.m4v reference as an MP4 copy for providers
-that take MP4 only (prod 2026-11-02: an iPhone .mov failed a Higgsfield
-/clone run before upload). H.264 video and AAC/MP3 audio are copied
-untouched; anything else is encoded, with HDR turned into SDR. The copy
-only ever appears whole, and is reused until its source changes."""
-
 import json
 import os
 from pathlib import Path
@@ -67,7 +61,6 @@ def test_audio_an_mp4_may_not_play_is_encoded_to_aac(codec):
 
 
 def test_only_the_first_video_and_audio_are_kept():
-    """A .mov's timecode/data tracks would make the MP4 muxer fail."""
     data = _Stream(codec_type="data", codec_name="tmcd")
 
     args = _args(data, H264, AAC, AAC)
@@ -99,7 +92,6 @@ def test_an_mp4_or_a_non_video_is_used_as_it_is(tmp_path, name):
 
 @pytest.fixture
 def fake_ffmpeg(monkeypatch):
-    """ffprobe says H.264; ffmpeg writes its output file. Every call recorded."""
     calls: list[list[str]] = []
 
     def fake_run(args, timeout_s):
@@ -150,8 +142,6 @@ def test_two_sources_with_one_stem_never_share_a_copy(tmp_path, fake_ffmpeg):
 
 
 def test_a_failed_encode_leaves_no_file_and_is_tried_again(tmp_path, monkeypatch):
-    """ffmpeg killed mid-write: neither half a copy nor its temp file stays,
-    so the next upload converts again instead of sending a broken video."""
     attempts = []
 
     def half_then_fail(args, timeout_s):
@@ -181,9 +171,6 @@ def test_a_file_ffprobe_cannot_read_raises_and_leaves_nothing(tmp_path):
     assert list((tmp_path / "out").iterdir()) == []
 
 
-# --- real ffmpeg --------------------------------------------------------------
-
-
 def _ffmpeg(*args: str) -> None:
     run([binary("ffmpeg"), "-y", "-loglevel", "error", *args], timeout_s=120)
 
@@ -199,15 +186,12 @@ def _streams(path: Path) -> list[dict]:
 
 
 def _rotated(src: Path, dest: Path) -> Path:
-    """`src` with a 90 degree display matrix, as a phone held upright writes."""
     _ffmpeg("-display_rotation", "90", "-i", str(src), "-c", "copy", str(dest))
     return dest
 
 
 @pytest.mark.heavy
 def test_an_iphone_hdr_hevc_mov_becomes_upright_sdr_h264(tmp_path):
-    """What an iPhone records by default: HEVC 10-bit HLG BT.2020, AAC, the
-    rotation in the display matrix."""
     hlg = tmp_path / "hlg.mov"
     _ffmpeg(
         "-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=1",

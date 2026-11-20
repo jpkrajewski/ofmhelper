@@ -1,18 +1,9 @@
-"""instagram account details + model contacts
-
-Revision ID: b7c1d2e3f4a5
-Revises: a1b2c3d4e5f6
-Create Date: 2026-07-27 12:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
 revision: str = "b7c1d2e3f4a5"
 down_revision: str | None = "a1b2c3d4e5f6"
 branch_labels: str | Sequence[str] | None = None

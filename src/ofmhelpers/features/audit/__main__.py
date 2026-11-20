@@ -1,8 +1,3 @@
-"""`python -m ofmhelpers.features.audit row <table> <row_id> | actor <id> |
-owner <id> [--limit N]`: the newest changes as JSON lines, one per change,
-each with its `trace_id` (the request or job in Logfire). In the app
-container."""
-
 import argparse
 
 from ofmhelpers.db.stores import audit_log

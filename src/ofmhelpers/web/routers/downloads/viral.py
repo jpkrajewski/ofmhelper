@@ -1,13 +1,3 @@
-"""
-/viral: one Instagram profile in, its most played reels out. A search is a
-job (task `viral_reels`): on the worker Apify reads the profile's newest
-`OFM_VIRAL_SCAN` reels (`ofmhelpers.features.viral`), the `OFM_VIRAL_TOP` (30) most
-played are downloaded, and the page shows them most played first, each with
-Download, all of them as one zip. The page shows the search picked
-(`?job=`), else the newest, and lists the earlier ones
-(`features/viral/page.py`).
-"""
-
 import shutil
 from typing import Annotated
 
@@ -49,7 +39,6 @@ def run(actor: Actor, profile: Annotated[str, Form()] = "") -> JobQueued:
 
 @router.get("/zip/{job_id}")
 def download_all(job_id: str, actor: Actor) -> FileResponse:
-    """Every reel of a finished search as one zip, named after the profile."""
     made = viral_page.archive(job_id, actor, uploads_root() / "viral-zips")
     return FileResponse(
         made.path,

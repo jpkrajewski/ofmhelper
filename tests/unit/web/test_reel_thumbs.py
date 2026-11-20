@@ -1,8 +1,3 @@
-"""A kept cover is fetched only from the public internet: the URL comes
-from a page yt-dlp read (any site's, on /clone-links), so a crafted page
-must not point the server at its own network -- not at first, not through
-a redirect."""
-
 import io
 import socket
 
@@ -33,9 +28,6 @@ def _reply(status: int = 200, location: str | None = None) -> requests.Response:
 
 @pytest.fixture
 def net(monkeypatch):
-    """The network as kept_thumb sees it: `hosts` (host -> its addresses;
-    missing = does not resolve) and `replies` (URL -> response); every GET
-    asked is recorded with its keyword arguments."""
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "0")
     hosts: dict[str, list[str]] = {"cdn.example.com": [PUBLIC]}
     replies: dict[str, requests.Response] = {COVER: _reply()}
@@ -81,7 +73,6 @@ def test_a_host_on_a_private_network_is_never_asked(net, tmp_path, address):
 
 
 def _resolver(monkeypatch, *resolved: tuple) -> None:
-    """getaddrinfo answering `resolved` (IPv4 and IPv6 sockaddrs)."""
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "0")
     answer = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", a) for a in resolved]
     monkeypatch.setattr(socket, "getaddrinfo", lambda _host, _port: answer)
@@ -152,7 +143,6 @@ def test_a_redirect_loop_ends(net, tmp_path):
 
 
 def test_under_fakes_no_address_is_looked_up(net, monkeypatch, tmp_path):
-    """OFM_FAKE_EXTERNALS: outbound's fakes answer, nothing leaves."""
     monkeypatch.setenv("OFM_FAKE_EXTERNALS", "1")
 
     def no_lookup(host: str) -> list[str]:

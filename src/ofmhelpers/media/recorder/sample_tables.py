@@ -1,12 +1,3 @@
-"""Sample-table boxes an iPhone writes for its video track that ffmpeg
-does not, computed from the track's own tables (ISO 14496-12 8.6.1.4 cslg,
-8.9.2/8.9.3 sbgp/sgpd; the `sync` grouping is ISO 14496-15 for HEVC):
-
-- `cslg` from stts (decode durations) + ctts (composition offsets);
-- `sgpd`/`sbgp` of type `sync`, marking every sync sample (stss) with the
-  NAL unit type its keyframes are.
-"""
-
 import struct
 
 from pydantic import BaseModel
@@ -17,11 +8,9 @@ _SYNC = b"sync"
 
 
 class SampleTables(BaseModel):
-    """What the boxes are computed from, read off one stbl."""
-
     durations: list[int]
     offsets: list[int]
-    sync_samples: list[int]  # 1-based
+    sync_samples: list[int]
 
     @classmethod
     def from_stbl(cls, stbl: Atom) -> SampleTables:
@@ -50,7 +39,6 @@ def _entries(payload: bytes, fmt: str) -> list[tuple[int, ...]]:
 
 
 def _runs(payload: bytes, *, signed: bool) -> list[int]:
-    """Expand (count, value) runs, as stts and ctts store them."""
     return [
         value
         for count, value in _entries(payload, ">Ii" if signed else ">II")
@@ -59,7 +47,6 @@ def _runs(payload: bytes, *, signed: bool) -> list[int]:
 
 
 def cslg(tables: SampleTables) -> Atom:
-    """Composition-to-decode timeline mapping (version 0)."""
     decode = 0
     starts: list[int] = []
     ends: list[int] = []
@@ -75,7 +62,6 @@ def cslg(tables: SampleTables) -> Atom:
 
 
 def sync_group_description(nal_unit_type: int) -> Atom:
-    """sgpd v1, one 1-byte `sync` entry: the keyframes' NAL unit type."""
     payload = (
         bytes([1, 0, 0, 0]) + _SYNC + struct.pack(">II", 1, 1) + bytes([nal_unit_type])
     )
@@ -83,7 +69,6 @@ def sync_group_description(nal_unit_type: int) -> Atom:
 
 
 def sync_sample_to_group(tables: SampleTables) -> Atom:
-    """sbgp: runs of samples, sync ones in group 1, the rest in none (0)."""
     sync = set(tables.sync_samples)
     runs: list[list[int]] = []
     for number in range(1, len(tables.durations) + 1):
@@ -98,7 +83,6 @@ def sync_sample_to_group(tables: SampleTables) -> Atom:
     )
 
 
-# The iPhone's stbl order.
 STBL_ORDER = (
     b"stsd", b"sgpd", b"sbgp", b"stts", b"ctts", b"cslg",
     b"stss", b"sdtp", b"stsc", b"stsz", b"co64", b"stco",

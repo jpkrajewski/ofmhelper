@@ -1,8 +1,3 @@
-"""Fanvue's API as the client reads it, on the fake. The real half is skipped: Fanvue has
-no API keys, so it needs an account connected in a browser, and tests never use the dev
-database. It was checked by hand on the real agency account, 2026-11-05: see
-integrations/fanvue/CLAUDE.md."""
-
 import pytest
 
 from ofmhelpers.integrations.fanvue import FanvueClient

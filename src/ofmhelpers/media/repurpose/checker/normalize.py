@@ -1,35 +1,12 @@
-"""Frames made comparable before hashing (the notes' "normalize frames, so
-edits get undone"), then the views every frame is hashed in.
-
-`normalize`: borders and padding cropped (edge rows / columns of almost one
-grey level), grey + histogram equalization (cancels most colour,
-brightness, contrast, gamma and tint edits), a light Gaussian blur (washes
-out noise, grain and sharpening), one small square size (stretches and
-aspect changes vanish too).
-
-`is_flat`: a frame with no picture to compare (left out on both sides).
-
-`views`: the normalized frame and its centre crop (zoom and shift: a
-zoomed-in copy still shares its middle with the source). Stored and queried
-alike. `dihedral`: the 8 rotations / flips, the query side only (store one,
-query with all 8).
-"""
-
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 from pydantic import BaseModel
 
 SIZE = 256
-# The centre crop's share of each side (the notes: 70-80%).
 CENTRE = 0.75
-# An edge row / column whose grey levels spread less than this is padding.
 _FLAT_STD = 6.0
-# Never more than this share off one side: a dark scene is not a border.
 _MAX_CROP = 0.25
-# ~3-5 px kernel on a 320 px frame.
 _BLUR_RADIUS = 1.5
-# A whole frame spread less than this (a fade to black, a plain title card)
-# shows no picture: equalizing it would only blow up noise.
 _FLAT_FRAME_STD = 8.0
 
 _DIHEDRAL = (
@@ -45,7 +22,6 @@ _DIHEDRAL = (
 
 
 def _flat_run(flat: np.ndarray, limit: int) -> int:
-    """How many of the leading entries are flat, at most `limit`."""
     run = 0
     for is_flat in flat[:limit]:
         if not is_flat:
@@ -55,8 +31,6 @@ def _flat_run(flat: np.ndarray, limit: int) -> int:
 
 
 class Box(BaseModel, frozen=True):
-    """A rectangle in a picture, in pixels."""
-
     left: int
     top: int
     right: int
@@ -64,7 +38,6 @@ class Box(BaseModel, frozen=True):
 
 
 def content_box(grey: Image.Image) -> Box:
-    """The picture inside the borders / padding."""
     pixels = np.asarray(grey, dtype=np.float32)
     height, width = pixels.shape
     rows = pixels.std(axis=1) < _FLAT_STD

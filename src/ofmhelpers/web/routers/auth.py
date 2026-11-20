@@ -1,14 +1,3 @@
-"""
-Signing in and out: routes only. `features/signin/` does the work,
-stores/users.py says who may.
-
-- `/login`: a button per configured provider and the email + password form.
-- `/auth/{provider}/start` -> the provider's consent -> `/auth/{provider}/callback`
-  (GET for Google, Apple POSTs its form).
-- `/password/{token}`: the one-time link an admin makes on /users.
-- Under OFM_FAKE_EXTERNALS the consent screens are `/auth/fake-consent`.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
@@ -33,7 +22,6 @@ from ofmhelpers.web.templates_config import render
 
 router = APIRouter(tags=["auth"])
 
-# Public (`settings.web.public_paths`): the page a VA signs in on.
 VA_LOGIN_PATH = "/login/va"
 
 
@@ -51,7 +39,6 @@ def _login_page(
 
 
 def _respond(request: Request, outcome: Outcome) -> Response:
-    """On to `redirect`, signed in if a user is named; else the login page."""
     if outcome.redirect is None:
         return _login_page(
             request, outcome.next_url, outcome.error, outcome.status_code
@@ -84,8 +71,6 @@ def login_submit(
 def va_login_form(
     request: Request, next_url: Annotated[str, Query(alias="next")] = HOME
 ) -> Response:
-    """ "Login as Virtual Assistant": the employer's email and the VA's
-    password (set on /users)."""
     if AuthMiddleware.session_user(request):
         return see_other(safe_next(next_url))
     return render(request, "va_login.html", next=safe_next(next_url), error=None)
@@ -114,7 +99,6 @@ def va_login_submit(
 
 @router.post(STOP_VIEWING_PATH, dependencies=[Access(Area.SESSION)])
 def stop_viewing(request: Request) -> Response:
-    """ "Back to my view": the admin's own pages again."""
     AuthMiddleware.stop_viewing(request)
     return see_other("/users")
 
@@ -125,16 +109,14 @@ def stop_viewing(request: Request) -> Response:
     summary="Keep the session: the person is still here",
     dependencies=[Access(Area.SESSION)],
 )
-def keep_session() -> None:
-    """Sent by session.js while the person clicks or types. The auth
-    middleware slides the cookie on every request that is not a read."""
+def keep_session() -> None: ...
 
 
 @router.post("/logout", dependencies=[Access(Area.SESSION)])
 def logout(request: Request) -> Response:
     user = AuthMiddleware.session_user(request)
     if user is not None:
-        signed_out(user.id)  # before the session is cleared
+        signed_out(user.id)
     request.session.clear()
     return see_other("/login")
 
@@ -146,10 +128,6 @@ def start(
     next_url: Annotated[str, Query(alias="next")] = HOME,
     link: bool = False,
 ) -> Response:
-    """To the provider's consent. `link`: connect it to the signed-in user
-    (/account) -- for Google, asking consent again so a Drive token comes.
-    Only for a session the gate would still let through: this path is public,
-    so the gate itself never looked at it."""
     provider = consent.provider(name)
     linking = AuthMiddleware.valid_user(request) if link else None
     if link and linking is None:
@@ -192,13 +170,11 @@ def callback_post(
     state: Annotated[str, Form()] = "",
     error: Annotated[str, Form()] = "",
 ) -> Response:
-    """Apple's form_post return."""
     return _finish(request, name, code, state, error)
 
 
 @router.get("/auth/owner/consent")
 def owner_consent(request: Request, state: str = "") -> Response:
-    """The app owner's consent screen: the admin password."""
     return render(request, "owner_consent.html", state=state, error=None)
 
 
@@ -222,7 +198,6 @@ def owner_consent_submit(
 
 @router.get("/auth/fake-consent")
 def fake_consent(request: Request, provider: str, state: str) -> Response:
-    """The providers' consent screens under OFM_FAKE_EXTERNALS (e2e)."""
     if not settings.infra.fake_externals:
         raise HTTPException(status_code=404)
     return render(request, "fake_consent.html", provider=provider, state=state)

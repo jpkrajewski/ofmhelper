@@ -1,6 +1,3 @@
-"""/styleguide renders every element of components/ui.html (so a macro
-that breaks shows up here first) and is for admins only."""
-
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
 
@@ -27,6 +24,7 @@ def test_styleguide_shows_every_element_to_an_admin():
         'class="btn btn-ghost back-link"',
         'class="link-card"',
         '<label for="sg-text">Text</label>',
+        '<span class="notifications-item-text">Chats unanswered (3)</span>',
     ):
         assert marker in html, marker
 

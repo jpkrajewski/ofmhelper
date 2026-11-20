@@ -1,27 +1,3 @@
-"""
-ofmhelpers/web/stores/users.py
-
-Who may sign in, and as what. Nobody signs themselves up: an admin adds an
-email on /users. Then it signs in:
-
-- with Google or Apple: by the provider's account id once linked, else by
-  a verified email equal to the user's (linking it);
-- with email + password: once the user set one through a one-time link
-  (made on /users) or on /account (`features/signin/credentials.py` checks
-  and sets passwords; this store keeps their hashes);
-- as the app owner (signin/owner.py): `APP_PASSWORD_ADMIN` alone.
-
-The agency admin is ONE user, the password account, however it signs in
-(user decision 2026-10-22): the app owner, "admin" or any `OFM_ADMIN_EMAILS`
-address with the admin password (or the account's own), Google/Apple with
-any `OFM_ADMIN_EMAILS` address. The first address names it at its first
-sign-in (the agency's phones, accounts and jobs stay where they are); no
-separate admin users are made for the others. Several people signed in at
-once that way are the same user: same data, same Drive.
-
-A deactivated user gets in nowhere.
-"""
-
 from functools import lru_cache
 
 from ofmhelpers.config import settings
@@ -34,9 +10,7 @@ lazy from ofmhelpers.schemas.users import Identity, SavedKeys
 
 logger = get_logger(__name__)
 
-# The password account's email (alembic c2d3e4f5a6b7 makes it).
-PASSWORD_ADMIN = "admin"  # noqa: S105 -- an account name, not a password
-# The app owner sign-in (the admin password alone, signin/owner.py).
+PASSWORD_ADMIN = "admin"  # noqa: S105
 OWNER_PROVIDER = "owner"
 
 
@@ -62,7 +36,6 @@ def list_users() -> list[User]:
 
 
 def add_user(form: UserForm) -> User | None:
-    """None when the email is already a user."""
     return _repository().add(
         form.email,
         form.role,
@@ -72,20 +45,16 @@ def add_user(form: UserForm) -> User | None:
 
 
 def set_role(user_id: int, role: Role) -> User | None:
-    """Only a VA or a manager has an owner: any other role drops it."""
     if role.has_employer:
         return _repository().update(user_id, role=role)
     return _repository().update(user_id, role=role, owner_id=None)
 
 
 def set_owner(user_id: int, owner_id: int | None) -> User | None:
-    """Whose VA `user_id` is (None: nobody's yet)."""
     return _repository().update(user_id, owner_id=owner_id)
 
 
 def vas_of(owner_id: int) -> list[User]:
-    """The VAs working for `owner_id`, deactivated ones too: what they made
-    stays visible to their owner."""
     return [
         user
         for user in _repository().list_all()
@@ -98,7 +67,6 @@ def set_active(user_id: int, *, active: bool) -> User | None:
 
 
 def delete_user(user_id: int) -> bool:
-    """Raises `OwnsDataError` while they own anything: deactivate instead."""
     return _repository().delete(user_id)
 
 
@@ -112,8 +80,6 @@ def admit(
 
 
 def _claim_password_account(email: str, name: str) -> User | None:
-    """The first `OFM_ADMIN_EMAILS` admin, at their first sign-in, becomes
-    the password account (still unclaimed: its email is "admin")."""
     admins = settings.signin.admin_emails
     if not admins or normalized_email(email) != admins[0]:
         return None
@@ -124,28 +90,16 @@ def _claim_password_account(email: str, name: str) -> User | None:
 
 
 def env_admin(email: str, name: str) -> User | None:
-    """The admin every `OFM_ADMIN_EMAILS` address is: the password account
-    (the agency), one user however it signs in -- Google, Apple, an admin
-    email + password, the admin password alone (user decision 2026-10-22).
-    The first address names it at its first sign-in; None for any other
-    email."""
     if not is_env_admin(email):
         return None
     return _claim_password_account(email, name) or agency_admin()
 
 
-# --- Google / Apple ------------------------------------------------------------
-
-
 def sign_in_identity(identity: Identity) -> User | None:
-    """The user a Google/Apple sign-in is, or None when it may not get in."""
     repo = _repository()
     if identity.provider == OWNER_PROVIDER:
-        # The admin password (signin/owner.py): the agency admin.
         return admit(password_admin())
     if identity.email_verified and is_env_admin(identity.email):
-        # An admin address is the agency admin, even if this Google/Apple
-        # account was linked to another user before.
         user = env_admin(identity.email, identity.name)
         if user is not None:
             repo.link_identity(
@@ -166,8 +120,6 @@ def sign_in_identity(identity: Identity) -> User | None:
 
 
 def link_identity(user_id: int, identity: Identity) -> bool:
-    """Links a Google/Apple account to a signed-in user (/account), keeping
-    a Google refresh token for Drive. False when it belongs to someone else."""
     if identity.provider == OWNER_PROVIDER:
         return False
     if not _repository().link_identity(
@@ -186,16 +138,11 @@ def linked_accounts(user_id: int) -> list[LinkedAccount]:
     return _repository().identities(user_id)
 
 
-# --- email + password ------------------------------------------------------------
-
-
 def password_account() -> User | None:
-    """The password account as it is: nothing made or restored."""
     return _repository().password_account()
 
 
 def password_hash(user_id: int) -> str:
-    """The stored hash; "" without a password."""
     return _repository().password_hash(user_id)
 
 
@@ -204,40 +151,26 @@ def set_password_hash(user_id: int, hashed: str) -> None:
 
 
 def replace_password_hash(user_id: int, expected: str, hashed: str) -> bool:
-    """Sets the hash only while it is still `expected`; False when it
-    changed meanwhile."""
     return _repository().replace_password_hash(user_id, expected, hashed)
 
 
 def add_password_link(user_id: int, token_hash: str, expires: float) -> None:
-    """Keeps a one-time set-password link's hash (the previous one stops
-    working)."""
     _repository().add_password_link(user_id, token_hash, expires)
 
 
 def link_user(token_hash: str, now: float) -> int | None:
-    """Whose unexpired, unused link `token_hash` is."""
     return _repository().link_user(token_hash, now)
 
 
 def agency_id() -> int:
-    """Who owns what is made outside any request (scripts, backfills): the
-    password account (the agency): only it sees it. Made when missing, but
-    never reactivated: only the admin password does that (break-glass)."""
     user = _repository().password_account() or password_admin()
-    if user is None:  # only a lost race could leave none
+    if user is None:
         msg = "the password account could not be made"
         raise RuntimeError(msg)
     return user.id
 
 
 def agency_admin() -> User | None:
-    """The password account for a sign-in that is not the admin password (an
-    `OFM_ADMIN_EMAILS` address through Google or Apple): made when missing,
-    an admin again if it was demoted, never reactivated. A deactivated one
-    stays out, `admit` refuses it: only the admin password restores it
-    (`password_admin`). Audit 2026-11-18: any env-admin identity undid the
-    one in-app lock of the agency account."""
     user = _repository().password_account()
     if user is None:
         return password_admin()
@@ -247,31 +180,22 @@ def agency_admin() -> User | None:
 
 
 def password_admin() -> User | None:
-    """The password account, made or restored as an active admin: the admin
-    password's doing only (break-glass)."""
     user = _repository().password_account()
     if user is None:
         added = _repository().add(
             PASSWORD_ADMIN, Role.ADMIN, "Admin (password)", password_account=True
         )
-        # None: a concurrent request made it a moment ago.
         return added or _repository().password_account()
     if not user.is_admin or not user.active:
         return _repository().update(user.id, role=Role.ADMIN, active=True)
     return user
 
 
-# --- what a user keeps ---------------------------------------------------------
-
-
 def set_drive_root(user_id: int, folder_id: str | None) -> None:
-    """Their "ALL ACCOUNTS" folder in their own Drive (None: find it again)."""
     _repository().set_drive_root(user_id, folder_id)
 
 
 def refresh_token(user_id: int) -> str:
-    """The Google refresh token Drive uploads go up with; "" when none, or
-    when the vault key cannot read it: not connected, never a crash."""
     try:
         return _repository().refresh_token(user_id)
     except VaultError as exc:
@@ -282,8 +206,6 @@ def refresh_token(user_id: int) -> str:
 
 
 def api_keys(user_id: int) -> SavedKeys:
-    """The user's saved keys; none when the vault key cannot read them: the
-    forms open with their key box empty, never a crash."""
     try:
         return _repository().api_keys(user_id)
     except VaultError as exc:
@@ -298,8 +220,6 @@ def set_api_key(user_id: int, provider: str, api_key: str) -> None:
 
 
 def keys_in_slot(slot: str) -> list[str]:
-    """The admins' saved keys of `slot`; none when the vault key cannot read
-    them (logged), never a crash."""
     try:
         return _repository().keys_in_slot(slot)
     except VaultError:
@@ -308,22 +228,16 @@ def keys_in_slot(slot: str) -> list[str]:
 
 
 def end_sessions(user_id: int) -> None:
-    """Logout: every session of theirs, on every device, is out."""
     _repository().end_sessions(user_id)
 
 
 def seen(user_id: int, at: float) -> None:
-    """Their last action was at `at` (`features/users/presence.py` decides
-    how often this is written)."""
     _repository().seen(user_id, at)
 
 
 def end_idle_sessions(user_id: int) -> bool:
-    """Ends their sessions unless already ended since their last action;
-    True for the one caller that did it."""
     return _repository().end_idle_sessions(user_id)
 
 
 def idle_vas(before: float) -> list[User]:
-    """Active VAs last seen before `before` and not logged out since."""
     return _repository().idle_vas(before)

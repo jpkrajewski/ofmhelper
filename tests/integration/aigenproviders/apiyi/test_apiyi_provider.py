@@ -1,9 +1,3 @@
-"""APIYI behind the shared interface, on its fake at the wire (apiyi/fake.py
-answers like docs.apiyi.com's wan3 pages): DashScope's nested body with the
-async header, references as this server's own links, every answer mapped onto
-the shared errors, a lost submit never sent again, and Wan 3.0
-reference-to-video as /clone sends it."""
-
 import os
 from pathlib import Path
 
@@ -58,7 +52,6 @@ def video(tmp_path) -> Path:
 
 
 def _served(url: str) -> bytes:
-    """What the provider gets when it fetches one of our links."""
     path = url.removeprefix(BASE.rstrip("/"))
     response = TestClient(app).get(path)
     assert response.status_code == 200
@@ -114,7 +107,6 @@ def test_image_to_video_hands_apiyi_a_link_to_the_first_frame(provider, image):
     [frame] = sent["input"]["media"]
     assert frame["type"] == "first_frame"
     assert frame["url"].startswith(f"{BASE}files/ai/")
-    # Never the file's own name in a public link, only its type.
     assert frame["url"].endswith("/ref.png")
     assert _served(frame["url"]) == image.read_bytes()
 
@@ -175,8 +167,6 @@ def test_a_wrong_key_is_refused_before_a_link_is_handed_out(fake_externals, imag
 def test_without_a_public_https_address_a_reference_is_refused_before_paying(
     provider, monkeypatch, image
 ):
-    """Wan fetches its references by link: on a server with no public
-    address the run stops at submit, before anything is sent."""
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
     spec = get_spec(WAN)
     values = {"prompt": "p", "first_frame_url": str(image)}
@@ -240,7 +230,6 @@ def test_a_submit_whose_answer_is_lost_is_never_sent_again(provider):
         runner.generate(provider, spec, {"prompt": "p"}, "apiyi-lost")
     assert len(fake_apiyi().created) == 1
 
-    # Nothing remembered: recovery has no task to re-run the job on either.
     from ofmhelpers.integrations.ai_providers import tasks
 
     assert tasks.recall("apiyi-lost") is None
@@ -253,9 +242,6 @@ _NOT_FETCHED = (
 
 
 def test_a_reference_alibaba_could_not_download_is_sent_again(provider, monkeypatch):
-    """Prod 2026-11-12, jobs e33af3e0 / 42323138: "Failed to download
-    https://.../ref.png (InvalidParameter)" while the line to Beijing was
-    slow; the task is refunded."""
     monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0, 0]")
     fake_apiyi().fail_next = _NOT_FETCHED
     spec = get_spec(WAN)
@@ -269,7 +255,6 @@ def test_a_reference_alibaba_could_not_download_is_sent_again(provider, monkeypa
 def test_the_last_try_links_a_big_image_as_a_jpeg_under_the_link_limit(
     provider, tmp_path, monkeypatch
 ):
-    """The original first, every time; only the last try goes lighter."""
     monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[0, 0]")
     big = tmp_path / "sheet.png"
     Image.frombytes("RGB", (1600, 1600), os.urandom(1600 * 1600 * 3)).save(big)
@@ -299,8 +284,6 @@ def test_the_last_try_links_a_big_image_as_a_jpeg_under_the_link_limit(
 
 
 def test_a_download_that_is_not_of_our_link_is_never_sent_again(provider):
-    """Review 2026-11-12: only a failed fetch of our own hosted link is ours
-    to send again."""
     fake_apiyi().fail_next = (
         "InternalError",
         "Failed to download https://oss.example/output/result.mp4",
@@ -358,7 +341,6 @@ def test_a_rate_limited_submit_is_sent_again_and_made_once(provider, monkeypatch
             '{"error": {"message": "group Wan&HappyHorse required"}}',
             ProviderAuthError,
         ),
-        # Dev 2026-11-06, a `default` group key asking for Wan 3.0.
         (
             503,
             (
@@ -368,7 +350,6 @@ def test_a_rate_limited_submit_is_sent_again_and_made_once(provider, monkeypatch
             ),
             ProviderAuthError,
         ),
-        # The right group with its channels down for now: sent again later.
         (
             503,
             (
@@ -378,7 +359,6 @@ def test_a_rate_limited_submit_is_sent_again_and_made_once(provider, monkeypatch
             ),
             ProviderRateLimitError,
         ),
-        # A per-call key of the right group: never works.
         (
             503,
             (
@@ -410,7 +390,6 @@ def test_every_documented_answer_maps_onto_the_shared_errors(status, body, raise
 
 
 def test_an_empty_balance_in_the_accounts_language_is_no_credits():
-    """Dev 2026-11-06: an account with no money answered 403 in Polish."""
     with pytest.raises(ProviderNoCreditsError) as caught:
         raise_for(403, '{"error": {"message": "Niewystarczające saldo.", "code": 403}}')
     assert error_reason(str(caught.value)) == "No credits"
@@ -451,9 +430,6 @@ SEEDANCE_KEY = "sk-seedanceGroupKey0123456789abcdefghijklmnop"
 
 
 def test_an_admin_key_runs_wan_on_the_wan_groups_key(provider, monkeypatch):
-    """One APIYI key reaches one group: the admin's Seedance key, pre-filled
-    or picked, is swapped for the Wan key on a Wan model, and the task is
-    remembered with the key it was made with."""
     from ofmhelpers.integrations.ai_providers import tasks
 
     monkeypatch.setenv("APIYI_API_KEY_WAN", FAKE_KEY)
@@ -486,7 +462,6 @@ def test_a_users_own_key_is_never_swapped(provider, monkeypatch):
         ("wan3.0-video", SEEDANCE_KEY, FAKE_KEY),
         ("wan3.0-video-prime", FAKE_KEY, FAKE_KEY),
         ("happyhorse-1.1-r2v", SEEDANCE_KEY, FAKE_KEY),
-        # APIYI's real Seedance ids (the Seedance key's /v1/models, 2026-11-06).
         ("doubao-seedance-2-0-260128", FAKE_KEY, SEEDANCE_KEY),
         ("doubao-seedance-2-5-260628", FAKE_KEY, SEEDANCE_KEY),
         ("some-other-model", FAKE_KEY, FAKE_KEY),
@@ -512,8 +487,6 @@ def test_each_model_family_maps_to_its_groups_key(monkeypatch, model, given, use
     ],
 )
 def test_a_task_read_that_errs_is_asked_again_until_it_ends(provider, refused):
-    """A paid task is never given up on a read's error: only a 401 (the key
-    gone) ends the wait."""
     fake_apiyi().refuse_reads = [refused, refused]
     spec = get_spec(WAN)
 
@@ -525,14 +498,12 @@ def test_a_task_read_that_errs_is_asked_again_until_it_ends(provider, refused):
 @pytest.mark.parametrize(
     "body",
     [
-        # Text fields answered null or as numbers.
         {
             "id": 12345,
             "status": "completed",
             "result_url": "https://x/y.mp4",
             "error": {"code": "", "message": None},
         },
-        # DashScope's own shape, handed on unconverted.
         {
             "status": None,
             "output": {"task_status": "SUCCEEDED", "video_url": "https://x/y.mp4"},
@@ -574,9 +545,6 @@ _FIXTURES = Path(__file__).parents[3] / "fixtures" / "providers" / "apiyi"
 
 
 def test_apiyis_real_moderated_task_reads_as_flagged_content():
-    """Prod 2026-11-07, job 1881dd9b: APIYI sends the code only inside the
-    message ("[DataInspectionFailed] ..."), no `code` field; the card read
-    "Failed"."""
     from ofmhelpers.integrations.ai_providers.apiyi.models import ApiyiTask
 
     body = (_FIXTURES / "task_moderated.json").read_text(encoding="utf-8")
@@ -640,7 +608,6 @@ def test_a_code_cited_in_the_message_that_is_not_moderation_stays_its_reason():
 
 
 def test_status_reads_wait_at_least_apiyis_floor(provider, monkeypatch):
-    """Docs: never faster than every 3 s."""
     import time
     from types import SimpleNamespace
 
@@ -648,8 +615,6 @@ def test_status_reads_wait_at_least_apiyis_floor(provider, monkeypatch):
 
     monkeypatch.setenv("OFM_APIYI_MIN_POLL_INTERVAL_S", "4")
     waits: list[float] = []
-    # The runner's own clock only: patching time.sleep itself also catches
-    # subprocess's waits (fake media made with ffmpeg).
     monkeypatch.setattr(
         runner_module,
         "time",

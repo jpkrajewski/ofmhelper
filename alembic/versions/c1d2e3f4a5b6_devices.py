@@ -1,25 +1,9 @@
-"""phones, the logins signed in on them, and which phone has which (/phones)
-
-`devices`: the agency's physical phones (catalog model/color ids
-from `ofmhelpers.features.phones.catalog.catalog()`). `logins`: each account once --
-`password` and `backup_codes` hold Fernet tokens (web/db/encrypted.py, key
-`OFM_VAULT_KEY`) or "" for none, never plaintext. `device_logins`: which
-phone a login is signed in on (one login, any number of phones). New tables
-only: nothing existing changes.
-
-Revision ID: c1d2e3f4a5b6
-Revises: b0c1d2e3f4a5
-Create Date: 2026-10-21 02:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
 revision: str = "c1d2e3f4a5b6"
 down_revision: str | None = "b0c1d2e3f4a5"
 branch_labels: str | Sequence[str] | None = None
@@ -53,7 +37,6 @@ def upgrade() -> None:
         sa.Column("service", sa.String(length=32), nullable=False),
         sa.Column("provider", sa.String(length=64), nullable=False, server_default=""),
         sa.Column("username", sa.String(length=255), nullable=False),
-        # Fernet tokens (EncryptedText), "" for none.
         sa.Column("password", sa.Text(), nullable=False, server_default=""),
         sa.Column("backup_codes", sa.Text(), nullable=False, server_default=""),
         sa.Column("notes", sa.Text(), nullable=False, server_default=""),

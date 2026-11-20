@@ -1,18 +1,3 @@
-/*
- * /generate's provider -> model -> settings form. The model list comes from
- * the page's #model-catalog JSON (every model of every provider); picking a
- * model loads its settings and file pickers from /ai/fields, built from its
- * input schema server-side, so this file never names a model or a field.
- *
- * Files already picked follow a model switch (images to images, ...), the
- * shared prompt box is required / optional / hidden per model, and a model's
- * default prompt fills the box only while it holds no text of the user's.
- * "↻ Recreate" on a gallery card restores provider, model, settings and
- * reference files (reused from the server, nothing re-uploaded). The job's
- * prompt goes in first, so the model's default never flashes in before it;
- * each model's fields are fetched once per page (`fieldsHtml`), and only the
- * last click fills the form, however fast someone clicks.
- */
 (() => {
     const form = document.getElementById("generate-form");
     const providerSelect = document.getElementById("provider-select");
@@ -25,16 +10,15 @@
 
     const MODELS = JSON.parse(catalogEl.textContent);
     const byKey = Object.fromEntries(MODELS.map((m) => [m.key, m]));
-    // The model last picked per provider, so switching back keeps it.
+
     const lastModel = {};
-    // Whatever default this file last put in the prompt box: still holding
-    // it means the user typed nothing, so a new default may replace it.
+
     let lastPromptDefault = "";
-    // model key -> its fields' HTML (a promise): fetched once per page.
+
     const fieldsCache = new Map();
-    // The newest model switch, which Recreate waits on.
+
     let currentLoad = Promise.resolve();
-    // Bumped by every Recreate click: an older click's fill is dropped.
+
     let recreateSeq = 0;
 
     function fieldsHtml(model) {
@@ -43,7 +27,7 @@
                 if (!r.ok) throw new Error(`Could not load ${model.label}'s settings`);
                 return r.text();
             });
-            // A failed fetch is not kept: the next switch tries again.
+
             pending.catch(() => fieldsCache.delete(model.key));
             fieldsCache.set(model.key, pending);
         }
@@ -79,21 +63,19 @@
         promptBox.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
-    // Swap in the picked model's fields. Returns a promise that resolves once
-    // they are on the page, which Recreate waits for before filling them.
     function loadModel() {
         const model = byKey[modelSelect.value];
         if (!model) return Promise.resolve();
         lastModel[model.provider] = model.key;
         form.dataset.resultKind = model.kind;
         form.dataset.toolLabel = model.label;
-        // Batch (many of the same prompt) is images only.
+
         const batchField = document.getElementById("batch-field");
         if (batchField) batchField.hidden = model.kind !== "image";
         applyPrompt(model);
         currentLoad = fieldsHtml(model)
             .then((html) => {
-                if (modelSelect.value !== model.key) return; // switched again meanwhile
+                if (modelSelect.value !== model.key) return;
                 const next = document.createElement("fieldset");
                 next.className = fieldset.className;
                 next.id = fieldset.id;
@@ -135,8 +117,7 @@
             if (!field) continue;
             if (field.type === "checkbox") field.checked = !!value;
             else field.value = value;
-            // programmatic .value changes fire no events -- the prompt
-            // highlighter (and anything else listening) needs this
+
             field.dispatchEvent(new Event("input", { bubbles: true }));
         }
     }
@@ -147,20 +128,18 @@
         if (!card) return;
         const params = JSON.parse(card.dataset.params || "{}");
         const seq = ++recreateSeq;
-        // The job's own prompt first. A model switch keeps whatever is not
-        // the last default it put in, so none flashes in before it.
+
         fill({ prompt: params.prompt || "" });
         if (params.prompt) lastPromptDefault = null;
         const model = byKey[params.model];
-        // A job from before /ai (or of a model no longer listed): only its
-        // prompt carries over.
+
         if (!model) {
             form.scrollIntoView({ behavior: "smooth" });
             return;
         }
         lastModel[model.provider] = model.key;
         if (providerSelect.value !== model.provider) {
-            // provider:change refills the models and loads lastModel's.
+
             providerSelect.value = model.provider;
             providerSelect.dispatchEvent(new Event("change"));
         } else if (modelSelect.value !== model.key) {
@@ -168,7 +147,7 @@
             loadModel();
         }
         currentLoad.then(() => {
-            if (seq !== recreateSeq) return; // another card was clicked since
+            if (seq !== recreateSeq) return;
             fill(params);
             form.scrollIntoView({ behavior: "smooth" });
         });

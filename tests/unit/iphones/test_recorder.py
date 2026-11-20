@@ -1,6 +1,3 @@
-"""A full recording, read back with exiftool (Docker test image) as the
-independent check."""
-
 import datetime
 import json
 import subprocess
@@ -16,8 +13,6 @@ from ofmhelpers.media.repurpose import Repurpose
 
 
 class ExifRead(BaseModel):
-    """The exiftool -j -G1 fields this test checks."""
-
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     major_brand: str = Field(alias="QuickTime:MajorBrand")
@@ -90,7 +85,6 @@ def test_recording_reads_back_as_the_iphone17_profile(tmp_path: Path):
     assert read.audio_rate == 48000
     assert b"FFMP" not in dst.read_bytes()
 
-    # The same through repurpose: the iphone17 preset, same recording time.
     dst = tmp_path / "repurposed.mov"
     Repurpose(tmp_path / "in.mp4", dst, recorded_at=end).apply_json_preset(
         "iphone17"

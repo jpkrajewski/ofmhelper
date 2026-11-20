@@ -1,10 +1,3 @@
-"""
-/generate: one form for every model of every provider -- provider, then
-model, then the model's own settings (loaded from /ai/fields) -- posting to
-/ai/run, and a non-blocking gallery of past generations that a click reloads
-back into the form.
-"""
-
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -33,7 +26,6 @@ def form(
     query: GalleryParams,
 ) -> Response:
     first = gallery.page(viewer, query)
-    # security audit 2026-11-18: the page pre-fills saved API keys.
     response = render(
         request,
         "generate_form.html",
@@ -50,10 +42,6 @@ def form(
 
 @router.get("/gallery")
 def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
-    """The next page of gallery cards as a fragment gallery-scroll.js appends --
-    same partial the page's first page renders, so an appended card is
-    indistinguishable from a server-rendered one. `hidden`: only the hidden
-    cards (hidden-cards.js's "Show hidden")."""
     found = gallery.page(viewer, query)
     return render(
         request,
@@ -65,8 +53,6 @@ def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Res
 
 @router.get("/gallery/latest")
 def gallery_latest(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
-    """The newest page of cards, no sentinel: what live-gallery.js polls to
-    prepend runs started in other sessions."""
     return render_polled(
         request,
         "generate_gallery_fragment.html",

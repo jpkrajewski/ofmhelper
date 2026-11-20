@@ -1,17 +1,3 @@
-"""A person's own Telegram chat for their events (owner 2026-11-15: "is it
-easy for new users to connect their telegram bot?"; before, one bot sent
-every owner's VA notices to the agency's chats, set by hand in the .env).
-
-/account's Connect Telegram hands out a one-time link to the bot,
-`t.me/<bot>?start=<token>` (`OFM_TELEGRAM_LINK_TTL_S`, the token in Redis
-holding who asked). Opening it and pressing Start sends the bot
-`/start <token>`; the asks sweep reads it (`features/reports/asks.py`,
-`telegram/inbox.py` `Start`) and `link` makes that chat the person's
-(`user_event_targets`), saying so in the chat. Their events (`Event.owner_id`)
-go there from then on (`features/events/dispatch.py`). Disconnect takes it
-back. Only where the bot is read (`asks.enabled()`: production; dev shares
-prod's bot and never reads it)."""
-
 import secrets
 
 from redis.exceptions import RedisError
@@ -39,12 +25,10 @@ def linked(user_id: int) -> bool:
 
 
 def connect_url(user_id: int) -> str:
-    """The bot's one-time link for `user_id`. Raises `UnavailableError`
-    when the bot or Redis cannot be reached (logged)."""
     token = settings.telegram.bot_token
     if token is None:
         raise UnavailableError(NOT_SET_UP)
-    code = secrets.token_urlsafe(16)  # Telegram takes [A-Za-z0-9_-], up to 64
+    code = secrets.token_urlsafe(16)
     try:
         name = bot_name(token.get_secret_value())
         get_redis().set(
@@ -57,16 +41,12 @@ def connect_url(user_id: int) -> str:
 
 
 def link(start: Start) -> bool:
-    """The chat that opened a link becomes its person's, told so there;
-    False (told to open a new one) for a link used, too old or not ours."""
     raw = get_redis().getdel(_LINK_KEY.format(token=start.token))
     if raw is None:
         logger.info("telegram: a /start link that is used or too old")
         deliver_to(SENDER, start.chat_id, _old_link())
         return False
     user_id = int(raw)
-    # security audit 2026-11-18: a token of a person deactivated meanwhile
-    # links nothing.
     person = users.get_user(user_id)
     if person is None or not person.active:
         logger.info("telegram: a /start link of user %s, not active", user_id)
@@ -78,14 +58,12 @@ def link(start: Start) -> bool:
         logger.info("telegram: a /start link of user %s, deleted since", user_id)
         deliver_to(SENDER, start.chat_id, _old_link())
         return False
-    # Never the chat id: the app does not log where messages go.
     logger.info("telegram: user %s linked their chat", user_id)
     deliver_to(SENDER, start.chat_id, _connected())
     return True
 
 
 def unlink(user_id: int) -> bool:
-    """False when nothing was linked."""
     return event_targets.remove(user_id, SENDER)
 
 

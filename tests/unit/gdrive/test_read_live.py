@@ -1,7 +1,3 @@
-"""Live-read mode (OFM_DRIVE_READ_LIVE): dev reads the live "ALL ACCOUNTS"
-folders to debug prod, with every write to Drive blocked so the live folders
-can never be changed from dev."""
-
 from pathlib import Path
 
 import pytest
@@ -19,8 +15,6 @@ from ofmhelpers.integrations.gdrive.models import DriveFolder
 
 
 class _Reads:
-    """A stand-in Drive that records the reads delegated to it."""
-
     def __init__(self) -> None:
         self.calls: list[str] = []
 
@@ -118,7 +112,6 @@ def test_live_mode_reads_the_live_root_name_and_accepts_it(monkeypatch):
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")
     assert root_name() == "ALL ACCOUNTS"
-    # A stored root of any name is accepted for reading in live mode.
     assert _is_root(DriveFolder(id="x", name="ALL ACCOUNTS")) is True
     assert _is_root(DriveFolder(id="x", name="something else")) is True
 
@@ -131,8 +124,6 @@ def test_dev_without_live_mode_keeps_the_sandbox_root(monkeypatch):
 
 
 def _scoped(tmp_path: Path) -> tuple[FakeDrive, FakePersonDrive, str, Path]:
-    """A person's fake Drive (shared state, the person), dev's root in their
-    My Drive, and a video to upload."""
     fake = FakeDrive()
     person = FakePersonDrive(fake, "ann@example.com")
     root = person.create_folder("root", "DEV - ALL ACCOUNTS").id
@@ -150,7 +141,6 @@ def test_scoped_drive_writes_into_folders_it_makes_finds_or_reads_in_its_root(
     by_hand = fake.seed_folder("TRIAL REELS", parent=root)
     found = scoped.find_folder(root, "TRIAL REELS")
     assert found is not None
-    # The next review: the folder id it remembered, read once.
     later = ScopedDrive(person, root)
     remembered = later.folder(made.id)
 
@@ -170,7 +160,7 @@ def test_scoped_drive_trashes_only_inside_its_root(tmp_path):
     live = fake.seed_folder("ALL ACCOUNTS", shared=True)
     inside_live = fake.seed_folder("TRIALS", parent=live)
     other = fake.add_file(inside_live, "VID_1.mp4", "video/mp4")
-    scoped.folder(inside_live)  # read: still not its to write
+    scoped.folder(inside_live)
 
     scoped.trash_file(made.id)
 
@@ -195,4 +185,4 @@ def test_scoped_drive_writes_nowhere_outside_its_root(tmp_path):
     with pytest.raises(DriveError):
         scoped.upload(inside_live, video, "a.mp4", "video/mp4")
     assert fake.names_in(inside_live) == []
-    assert fake.writes == ["create"]  # dev's root, made before the guard
+    assert fake.writes == ["create"]

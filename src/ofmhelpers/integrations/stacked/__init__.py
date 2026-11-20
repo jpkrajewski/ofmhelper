@@ -1,6 +1,3 @@
-"""Stacked's public API: which creators a key reaches, their chats and
-messages. See CLAUDE.md."""
-
 from ofmhelpers.integrations.stacked.client import StackedClient, reach, reachable
 from ofmhelpers.integrations.stacked.errors import (
     StackedAuthError,

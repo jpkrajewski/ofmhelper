@@ -1,6 +1,3 @@
-"""Read a video's length, frame rate, size, colour tags and frame times with
-ffprobe."""
-
 from fractions import Fraction
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -12,9 +9,6 @@ from ofmhelpers.media.size import Size
 
 
 def _source(src: Path | str) -> str:
-    """The ffprobe input: a Path is a local file, a str only an http(s) URL.
-    security audit 2026-11-18: a str is never a path or a protocol (`file:`,
-    `concat:`) a caller's data could name. Raises `ValueError`."""
     if isinstance(src, Path):
         return str(src)
     if urlsplit(src).scheme not in {"http", "https"}:
@@ -24,9 +18,6 @@ def _source(src: Path | str) -> str:
 
 
 class ColourTags(BaseModel):
-    """The first video stream's colour tags as ffprobe names them (None:
-    untagged); `hdr.sdr_filters` takes them."""
-
     color_transfer: str | None = None
     color_primaries: str | None = None
     color_space: str | None = None
@@ -58,9 +49,6 @@ def colour_tags(src: Path | str, timeout_s: int) -> ColourTags:
 
 
 def duration_s(src: Path | str, timeout_s: int) -> float:
-    """Container duration in seconds of a file or an http(s) URL (ffprobe
-    reads only the header). Raises if ffprobe is missing, fails, or reports
-    no duration -- a caller sizing a generation by it must not guess."""
     out = run(
         [
             binary("ffprobe"),
@@ -79,8 +67,6 @@ def duration_s(src: Path | str, timeout_s: int) -> float:
 
 
 def frame_rate(src: Path | str, timeout_s: int) -> float | None:
-    """The first video stream's average frames per second ("24117/1000"),
-    None when ffprobe reports none ("0/0")."""
     out = run(
         [
             binary("ffprobe"),
@@ -106,8 +92,6 @@ def frame_rate(src: Path | str, timeout_s: int) -> float | None:
 
 
 def video_size(src: Path | str, timeout_s: int) -> Size:
-    """The first video stream's stored width and height (a file this app
-    encoded: upright, no rotation to apply)."""
     out = run(
         [
             binary("ffprobe"),
@@ -129,8 +113,6 @@ def video_size(src: Path | str, timeout_s: int) -> Size:
 
 
 def frame_times(src: Path | str, timeout_s: int) -> list[float]:
-    """Every frame's start time (s) of the first video stream, in order:
-    read from the packets, nothing decoded (0.12 s for 1504 frames)."""
     out = run(
         [
             binary("ffprobe"),

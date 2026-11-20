@@ -1,15 +1,3 @@
-"""/download-assets "Download from Drive sheet": people add links from their
-phones to a Google Sheet in the owner's Drive root (`settings.downloaders.
-sheet_name`, found by name), one column per day with the date on top. A
-click reads today's column and downloads every link not downloaded or
-queued before, as one ordinary download job; a second click after more
-links were added fetches only those. The button rests `sheet_cooldown_s`
-after a click.
-
-Nothing about the sheet's layout is fixed: every tab is looked at, the
-column is the one whose first row holds today's date, the links are the
-filled cells under it."""
-
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -46,21 +34,15 @@ BUSY = "Could not start the download. Try again."
 
 
 class Column(BaseModel, frozen=True):
-    """A day's column of the sheet: its links, top to bottom, each once, and
-    how many filled cells were not a link."""
-
     links: list[str]
     skipped: int = 0
 
 
 def today() -> date:
-    """The day people mean by the sheet's dates: the Drive timezone's."""
     return datetime.now(ZoneInfo(settings.gdrive.timezone)).date()
 
 
 def _cell_links(cell: date | str | None) -> list[str] | None:
-    """The links of one cell (several lines: several links); none for an
-    empty one, None for a cell holding something else."""
     if cell is None:
         return []
     if not isinstance(cell, str):
@@ -72,8 +54,6 @@ def _cell_links(cell: date | str | None) -> list[str] | None:
 
 
 def column_of(sheet: DriveSheet, day: date) -> Column | None:
-    """The column whose first row is `day`, in whichever tab has one (all of
-    them, when several do); None when no tab has it."""
     found = False
     links: list[str] = []
     skipped = 0
@@ -93,13 +73,11 @@ def column_of(sheet: DriveSheet, day: date) -> Column | None:
 
 
 def _drive_owner(user_id: int) -> int:
-    """Whose Drive holds the sheet: the person's own, a VA's employer's."""
     user = users.get_user(user_id)
     return user.owner_id if user and user.owner_id else user_id
 
 
 def _read(user_id: int, day: date) -> Column:
-    """Today's column of the person's sheet, read from Drive now."""
     name = settings.downloaders.sheet_name
     owner = _drive_owner(user_id)
     with logfire.span("drive sheet {sheet}", sheet=name, drive_owner=owner):
@@ -126,9 +104,6 @@ def _read(user_id: int, day: date) -> Column:
 
 
 class Clicker(BaseModel, frozen=True):
-    """One person's button: its rest between clicks and the links their
-    earlier clicks queued, both kept in Redis."""
-
     user_id: int
 
     @property
@@ -139,8 +114,6 @@ class Clicker(BaseModel, frozen=True):
         return f"downloads:sheet:{self.user_id}:{day.isoformat()}"
 
     def cooldown_left(self) -> int:
-        """Seconds until the button works again; 0 = now. Redis down: 0 (the
-        click itself then decides)."""
         try:
             left = int(get_redis().ttl(self._cooldown_key))
         except RedisError:
@@ -149,8 +122,6 @@ class Clicker(BaseModel, frozen=True):
         return max(left, 0)
 
     def rest(self) -> None:
-        """Starts the cooldown; `TooSoonError` while one is on. Redis down:
-        allowed (a broken broker must not lock the button)."""
         try:
             redis = get_redis()
             seconds = settings.downloaders.sheet_cooldown_s
@@ -164,25 +135,18 @@ class Clicker(BaseModel, frozen=True):
         raise TooSoonError(msg)
 
     def wake(self) -> None:
-        """Ends the cooldown: the click was refused before it read any
-        links, and the person may try again once they fixed what it named."""
         try:
             get_redis().delete(self._cooldown_key)
         except RedisError:
             logger.warning("sheet cooldown not ended", exc_info=True)
 
     def claim(self, day: date, links: list[str]) -> list[str]:
-        """The links no earlier click queued, now marked as queued (a link
-        whose job still runs has no `downloads` row to tell by). All or
-        none: when Redis fails part-way, what this call marked is unmarked."""
         key = self._claims_key(day)
         fresh: list[str] = []
         try:
             redis = get_redis()
             for link in links:
                 if redis.sadd(key, link):
-                    # Not a comprehension: what was marked before a failure
-                    # must be known to unmark it.
                     fresh.append(link)  # noqa: PERF401
             redis.expire(key, settings.downloaders.sheet_claim_s)
         except RedisError as exc:
@@ -207,16 +171,10 @@ class Clicker(BaseModel, frozen=True):
 
 
 def cooldown_left(user_id: int) -> int:
-    """Seconds until the person's button works again (the page's first draw)."""
     return Clicker(user_id=user_id).cooldown_left()
 
 
 def start(actor: str, owner_id: int, assets_root: Path) -> SheetQueued:
-    """The click: today's links not downloaded or queued before become one
-    download job (none: no job). Raises the page's refusals: `TooSoonError`
-    in the cooldown, `RefusedError` without Drive, `NotFoundError` without
-    the sheet or today's column, `UnavailableError` when Drive failed. Only
-    a click that read the day's links rests the button."""
     clicker = Clicker(user_id=owner_id)
     clicker.rest()
     day = today()

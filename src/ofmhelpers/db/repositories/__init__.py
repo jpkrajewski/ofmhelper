@@ -1,28 +1,3 @@
-"""
-The ONLY code allowed to touch the database, one module per domain.
-
-`db/stores/*` keep their existing public function signatures and delegate
-their bodies to the repositories here, so the ~13 routers that call those
-functions never change.
-
-Each method runs in its own `session_scope` unit of work. Status/field
-updates are single UPDATE statements (atomic) -- the read-modify-write race
-the old JSON files documented (two jobs finishing at once losing an update)
-is gone.
-
-A method returns Pydantic models (`schemas/`), a list of them, None or one
-plain value: never a row, a dict or a tuple. The stores pass them on.
-
-Reads are cached (see cached_repository.py); `@cached` marks a read method
-(Redis holds the JSON of what its return annotation names),
-`@invalidates_cache` marks a write method. Repositories never touch
-`self._cache` directly -- that plumbing lives in `CachedRepository` and the
-two decorators.
-
-Import the repositories from here rather than from a submodule; the split is
-by domain and a domain may grow a second module.
-"""
-
 from ofmhelpers.db.repositories.applications import ApplicationRepository
 from ofmhelpers.db.repositories.audit_log import AuditLogRepository
 from ofmhelpers.db.repositories.chats import ChatRepository

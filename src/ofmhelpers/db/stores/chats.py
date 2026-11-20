@@ -1,6 +1,3 @@
-"""/chatting's history: what webhooks and the sync have stored of each model's chats,
-the webhook destinations feeding them, and accounts connected without an API key."""
-
 import time
 from functools import lru_cache
 lazy from collections.abc import Callable
@@ -35,7 +32,6 @@ def last_read(platform: ChatPlatform) -> list[ChatPosition]:
 
 
 def record_events(platform: ChatPlatform, read: ChatRead) -> bool:
-    """False: the chat is another model's, nothing kept."""
     return _repository().record_events(platform, read)
 
 
@@ -68,7 +64,6 @@ def fan_messages(
 
 
 def open_waits(before: float) -> list[OpenWait]:
-    """Every platform's."""
     return _repository().open_waits(before)
 
 
@@ -88,7 +83,6 @@ def save_notification(
 
 
 def save_sale(platform: ChatPlatform, delivery: ChatDelivery, username: str) -> None:
-    """Every sale, small ones too (the daily report sums them)."""
     _repository().save_sale(
         platform,
         delivery.event_id,
@@ -101,12 +95,10 @@ def save_sale(platform: ChatPlatform, delivery: ChatDelivery, username: str) -> 
 
 
 def sales_between(since: float, until: float) -> list[ModelTotal]:
-    """Each model's sales in [since, until), every platform."""
     return _repository().sales_between(since, until)
 
 
 def counts_between(kind: DeliveryKind, since: float, until: float) -> list[ModelTotal]:
-    """Each model's new subscribers or mass messages in [since, until)."""
     return _repository().counts_between(kind, since, until)
 
 
@@ -123,7 +115,6 @@ def recent_mass_messages(
 
 
 def notifications(since: float) -> list[StoredNotification]:
-    """Every platform's."""
     return _repository().notifications(since)
 
 
@@ -144,7 +135,6 @@ def save_webhook(platform: ChatPlatform, webhook: ChatWebhook) -> None:
 
 
 def accounts(platform: ChatPlatform) -> list[ChatAccount]:
-    """Those connected on this server."""
     return _repository().accounts(platform, settings.web.base_url)
 
 

@@ -1,6 +1,3 @@
-"""pinterest.com, through its own web calls and an account's cookies
-(`client.py`); `fake.py` under OFM_FAKE_EXTERNALS."""
-
 from ofmhelpers.integrations.pinterest.client import (
     LOGIN_COOKIE,
     PinterestClient,

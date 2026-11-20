@@ -1,9 +1,3 @@
-"""/edit (routers/video_tools/edit.py, features/edit): open a stored video,
-its light copy, strip and frame times (edit_prepare), a frame grab and a cut
-turned, cropped, sped and sized as asked, queued on the edit worker (inline
-in the suite) and polled, the limits a request cannot get past, nothing kept
-in the Reuse pickers (the sweep: test_edit_sweep.py)."""
-
 import io
 import json
 import subprocess
@@ -22,7 +16,7 @@ from ofmhelpers.features.edit import service as edit_service
 from ofmhelpers.web.main import app
 from ofmhelpers.web.routers.task_helpers import assets_root_for_user
 
-pytestmark = pytest.mark.heavy  # real ffmpeg encodes
+pytestmark = pytest.mark.heavy
 
 
 def _video(
@@ -79,7 +73,6 @@ def _shape(path: str) -> tuple[int, int, float]:
 def store(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "assets"
     monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: root)
-    # Light copies, strips and work folders of this test only.
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     return root
 
@@ -93,7 +86,6 @@ def client() -> TestClient:
 
 @pytest.fixture
 def mine(client) -> Path:
-    """My part of the store, where a 4 s 640x360 video waits."""
     root = assets_root_for_user(make_user().id)
     _video(root / f"{'a' * 64}__clip.mp4")
     return root
@@ -150,7 +142,7 @@ def test_the_strip_is_made_by_the_job_the_page_queues_never_in_the_request(
     video = _clip(mine)
     assert client.get("/edit/strip", params={"video": video}).status_code == 404
 
-    client.get("/edit", params={"video": video})  # queues edit_prepare (run inline)
+    client.get("/edit", params={"video": video})
     first = client.get("/edit/strip", params={"video": video})
     strips = list(edit_service.prepared_dir().glob("*.jpg"))
 
@@ -169,7 +161,7 @@ def test_a_cut_is_a_job_that_makes_the_part_in_edit_staging(client, mine):
     assert Path(path).parent == (mine / ".edit")
     assert path.endswith("__clip_cut.mp4")
     width, height, seconds = _shape(path)
-    assert (width, height) == (1280, 720)  # the size asked, aspect kept
+    assert (width, height) == (1280, 720)
     assert seconds == pytest.approx(2, abs=0.1)
     assert get_job(queued.json()["job_id"]).task == "edit_cut"
 
@@ -284,9 +276,6 @@ def test_what_edit_makes_never_shows_in_the_reuse_pickers(client, mine):
     assert [f["name"] for f in listed] == ["clip.mp4"]
 
 
-# --- the light copy, its strip and frame times (edit_prepare) -------------------
-
-
 def _prepares(video: str) -> list:
     jobs = list_jobs_page({"edit_prepare"}, 0, 50).jobs
     return [j for j in jobs if j.params.get("video") == video]
@@ -312,8 +301,8 @@ def test_opening_a_video_makes_its_light_copy_strip_and_frame_times(client, mine
     assert part.status_code == 206
     assert len(part.content) == 100
     made = next(edit_service.prepared_dir().glob("*.mp4"))
-    assert _shape(str(made))[:2] == (640, 360)  # under 540 short side: kept
-    assert len(times) == 100  # 4 s at 25 fps
+    assert _shape(str(made))[:2] == (640, 360)
+    assert len(times) == 100
     assert times[0] == 0
     assert times == sorted(times)
     assert len(_prepares(video)) == 1
@@ -427,11 +416,7 @@ def test_the_page_plays_the_original_when_the_queue_is_down(client, mine, monkey
     assert 'src="/refs/file?path=' in page.text
 
 
-# --- turn, mirror, crop, size, speed --------------------------------------------
-
-
 def _halves(dest: Path) -> Path:
-    """Left half white, right half black: a turn and a mirror show."""
     subprocess.run(
         [
             "ffmpeg",
@@ -477,10 +462,10 @@ def test_a_frame_is_turned_then_mirrored_as_the_page_shows_it(client, mine):
     turned = _frame(client, video, turn="90", size="720")
 
     assert plain.size == (1280, 720)
-    assert _bright(plain, (0, 0, 0.4, 1)) > 200  # white on the left
-    assert _bright(mirrored, (0, 0, 0.4, 1)) < 50  # mirrored: black on the left
-    assert turned.size == (720, 1280)  # a quarter turn: portrait
-    assert _bright(turned, (0, 0, 1, 0.4)) > 200  # clockwise: the left went on top
+    assert _bright(plain, (0, 0, 0.4, 1)) > 200
+    assert _bright(mirrored, (0, 0, 0.4, 1)) < 50
+    assert turned.size == (720, 1280)
+    assert _bright(turned, (0, 0, 1, 0.4)) > 200
 
 
 def test_a_frame_is_cropped_and_sized_and_named_by_its_time(client, mine):
@@ -569,9 +554,6 @@ def test_frame_grabs_wait_their_turn_briefly_then_say_busy(client, mine, monkeyp
     assert busy.json() == {"detail": "Busy saving frames: try again"}
 
 
-# --- clips: one track, joined one after another (features/edit/clips.py) ----
-
-
 def _streams(path: str) -> list[str]:
     out = subprocess.run(
         [
@@ -600,8 +582,6 @@ def _clips(client, *clips: tuple[str, float, float], **picked: object):
 
 
 def test_removing_the_middle_keeps_the_part_before_and_the_part_after(client, mine):
-    """Owner 2026-11-15: "cut a selected piece ... inverse": the page sends
-    what is left, the two parts around the selection."""
     video = _clip(mine)
 
     queued = _clips(client, (video, 0, 1), (video, 3, 4), size="720")
@@ -625,9 +605,9 @@ def test_clips_of_other_videos_join_in_the_first_ones_frame_even_without_sound(
     path = client.get(f"/edit/cut/{queued.json()['job_id']}").json()["video"]["path"]
 
     width, height, seconds = _shape(path)
-    assert (width, height) == (1280, 720)  # the first clip's; the upright one fitted in
+    assert (width, height) == (1280, 720)
     assert seconds == pytest.approx(3.5, abs=0.15)
-    assert sorted(_streams(path)) == ["audio", "video"]  # silence where it had none
+    assert sorted(_streams(path)) == ["audio", "video"]
 
 
 def test_too_many_clips_or_too_long_together_is_refused(client, mine, monkeypatch):
@@ -645,8 +625,6 @@ def test_too_many_clips_or_too_long_together_is_refused(client, mine, monkeypatc
 def test_add_video_opens_a_stored_one_for_the_timeline_and_refuses_anothers(
     client, mine
 ):
-    """Add video on the page open: the video's times, its light copy queued;
-    another person's video is refused like the page refuses it."""
     other = assets_root_for_user(make_user("other@example.com").id)
     theirs = _video(other / f"{'c' * 64}__theirs.mp4")
 

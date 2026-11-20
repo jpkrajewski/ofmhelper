@@ -1,14 +1,3 @@
-"""short_links, short_link_days, link_syncs: /links
-
-Links on link providers (Oopsie, Bouncy), their daily views and clicks, and
-each user's sync state per provider.
-
-Revision ID: c3d4e5f6a7b9
-Revises: b1c2d3e4f5a7
-Create Date: 2026-10-22 14:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

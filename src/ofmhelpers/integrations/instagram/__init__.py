@@ -1,6 +1,3 @@
-"""Instagram profiles' reels with their play counts: `scan_profile` picks the
-ones that went viral, `InstagramClient` is the only code calling Instagram."""
-
 from ofmhelpers.integrations.instagram.client import (
     InstagramClient,
     InstagramError,

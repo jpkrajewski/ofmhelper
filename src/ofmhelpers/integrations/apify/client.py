@@ -1,11 +1,3 @@
-"""Apify's REST API (v2), the calls this app makes: run an actor to the
-end, read its dataset, read an account's credit. Through `integrations.outbound`,
-so OFM_FAKE_EXTERNALS answers it from `apify/fake.py`.
-
-Starting a run is a paid POST: it is sent once, never retried (a lost answer
-would start, and pay for, a second run). Reads retry nothing either: a run
-is waited for with `waitForFinish`, one long poll at a time."""
-
 import time
 from typing import Any
 
@@ -26,30 +18,23 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 API = "https://api.apify.com/v2"
-# How long one status poll may hang server-side (Apify's cap is 60 s).
 _WAIT_S = 60
 _READ_TIMEOUT_S = 30
 _HTTP_UNAUTHORIZED = 401
 _HTTP_PAYMENT_REQUIRED = 402
 _HTTP_FORBIDDEN = 403
 _HTTP_SERVER_ERROR = 500
-# Reads of a run already paid for: retried, the run keeps going without us.
 _READ_TRIES = 5
 _READ_RETRY_WAIT_S = 3.0
 
 
-class ApifyError(AppError):
-    """Apify refused or failed; the message is safe to show."""
+class ApifyError(AppError): ...
 
 
-class ApifyAuthError(ApifyError):
-    """The API token is wrong or revoked."""
+class ApifyAuthError(ApifyError): ...
 
 
 class ApifyCreditError(ApifyError):
-    """The account has no credit left for this run. `provider`: whose account,
-    as `ProviderNoCreditsError` names it (`features/jobs/notices.py`)."""
-
     provider = "Apify"
 
 
@@ -57,8 +42,6 @@ _ITEMS: TypeAdapter[list[DatasetItem]] = TypeAdapter(list[DatasetItem])
 
 
 class ApifyClient:
-    """One Apify account (its API token)."""
-
     def __init__(self, token: str) -> None:
         self._token = token
         self._session = outbound.mount(requests.Session())
@@ -66,20 +49,15 @@ class ApifyClient:
 
     @property
     def key_hint(self) -> str:
-        """The token's tail, for logs (never the token)."""
         return f"...{self._token[-6:]}"
 
     def remaining_usd(self) -> float:
-        """This month's credit left."""
         r = self._session.get(f"{API}/users/me/limits", timeout=_READ_TIMEOUT_S)
         return LimitsEnvelope.model_validate(self._ok(r)).data.remaining_usd
 
     def run(
         self, actor: str, run_input: BaseModel | dict[str, Any], timeout_s: int
     ) -> ActorRun:
-        """Runs `actor` (`owner~name`) on `run_input` (a model is sent under
-        its aliases, unset options left out) and waits for it to end, at
-        most `timeout_s` (Apify stops it then too)."""
         if isinstance(run_input, BaseModel):
             run_input = run_input.model_dump(by_alias=True, exclude_none=True)
         r = self._session.post(
@@ -105,7 +83,6 @@ class ApifyClient:
         return run
 
     def items(self, run: ActorRun) -> list[DatasetItem]:
-        """Every item `run` stored in its dataset."""
         r = self._read(
             f"{API}/datasets/{run.default_dataset_id}/items",
             params={"clean": "true", "format": "json"},
@@ -122,9 +99,6 @@ class ApifyClient:
             raise ApifyError(msg) from exc
 
     def _read(self, url: str, **kwargs: Any) -> requests.Response:
-        """One GET of a paid run's state or results, tried again when the
-        connection drops or Apify answers 5xx: failing the job here pays for
-        the whole run again on a retry. The last answer is returned or raised."""
         for attempt in range(1, _READ_TRIES):
             try:
                 r = self._session.get(url, **kwargs)
@@ -139,7 +113,6 @@ class ApifyClient:
 
     @staticmethod
     def _ok(r: requests.Response) -> Any:
-        """The answer's JSON, or the matching `ApifyError`."""
         if r.ok:
             return r.json()
         try:
@@ -167,8 +140,6 @@ class ApifyClient:
 
 
 class Funded(BaseModel):
-    """An account and its credit left this month."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     client: ApifyClient
@@ -176,8 +147,6 @@ class Funded(BaseModel):
 
 
 def by_credit(tokens: list[str]) -> list[Funded]:
-    """Every account with its credit left this month, most first; one that
-    cannot be read is skipped (logged)."""
     found: list[Funded] = []
     for token in tokens:
         client = ApifyClient(token)
@@ -192,7 +161,6 @@ def by_credit(tokens: list[str]) -> list[Funded]:
 
 
 def richest(tokens: list[str]) -> ApifyClient:
-    """The account with the most credit left this month."""
     found = by_credit(tokens)
     if not found:
         msg = "No usable Apify API key (APIFY_API_KEYS)"

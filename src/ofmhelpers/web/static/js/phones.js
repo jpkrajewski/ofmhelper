@@ -1,21 +1,3 @@
-/*
- * /phones page controller.
- *
- * The page carries no password or recovery code. Show, Copy and Edit fetch
- * one login's from GET /phones/logins/{id}/secret each time and keep it
- * only in the element showing it; hiding empties it again.
- *
- * Everyone: instant search over the rendered cards (data-search: phone,
- * model, people, login names -- never a secret); filters and sort submit
- * the toolbar form; grid/list layout (layout.js); copy
- * login names; reveal / copy passwords; open recovery codes; "N more".
- * Admins (dialogs only rendered for them), posting JSON then reloading:
- *   Add phone / Edit      -> POST /phones/add | /phones/{id}
- *   Retire / Restore      -> POST /phones/{id}/retire | /restore
- *   Delete                -> POST /phones/{id}/delete
- *   Add login / Edit      -> POST /phones/{id}/logins | /phones/logins/{id}
- *   Remove login          -> POST /phones/{id}/logins/{login}/delete
- */
 (() => {
 
     const $ = (id) => document.getElementById(id);
@@ -42,7 +24,7 @@
         try {
             data = await response.json();
         } catch {
-            // not JSON: the status line below says enough
+
         }
         if (!response.ok) {
             const detail = data?.detail;
@@ -63,9 +45,6 @@
         window.setTimeout(() => button.classList.remove("is-done"), 1200);
     }
 
-    // The Clipboard API exists only on https or localhost; anywhere else
-    // (the app over plain http on a LAN address) copy through a selected,
-    // off-screen textarea instead.
     function copyFallback(text) {
         const area = document.createElement("textarea");
         area.value = text;
@@ -95,7 +74,6 @@
         else setStatus(statusEl, "Copy failed: the browser blocked the clipboard.", true);
     }
 
-    // --- search ---------------------------------------------------------------
     const search = $("ph-search");
     if (search) {
         const noMatch = $("ph-no-match");
@@ -111,10 +89,8 @@
         });
     }
 
-    // --- filters / sort -------------------------------------------------------
     document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
-        // Blank fields and the default sort (the server's, in data-default)
-        // stay out of the URL: the server reads them as unset too.
+
         form.addEventListener("submit", () => {
             form.querySelectorAll("select").forEach((field) => {
                 field.disabled = field.value === "" || field.value === field.dataset.default;
@@ -125,9 +101,6 @@
         });
     });
 
-    // --- login rows -----------------------------------------------------------
-    // Copy = the whole login in one line: username:password:codes (codes
-    // space-joined; parts that are empty are left out).
     document.querySelectorAll(".ph-copy-all").forEach((button) => {
         const row = rowOf(button);
         button.addEventListener("click", async () => {
@@ -147,8 +120,6 @@
         });
     });
 
-    // Show = password and recovery codes together, below the row; the row's
-    // icons stay where they are.
     document.querySelectorAll(".ph-reveal").forEach((button) => {
         const row = rowOf(button);
         const panel = row.querySelector(".ph-revealed");
@@ -187,7 +158,6 @@
         });
     });
 
-    // --- admin ----------------------------------------------------------------
     const phoneDialog = $("ph-dialog");
     const loginDialog = $("ph-login-dialog");
     if (!phoneDialog) return;
@@ -227,8 +197,6 @@
         });
     }
 
-    // Phone dialog: family -> model -> color swatch, the drawing following
-    // the picked model and color.
     const form = $("ph-form");
     const family = $("ph-family");
     const model = $("ph-model");
@@ -342,7 +310,6 @@
         });
     });
 
-    // Login dialog: a custom service asks for its company / site.
     const loginForm = $("ph-login-form");
     const service = $("ph-login-service");
     const providerField = loginDialog.querySelector("[data-provider]");
@@ -375,7 +342,7 @@
     }
 
     loginDialog.addEventListener("close", () => {
-        // The decrypted values leave the page with the dialog.
+
         loginForm.elements.password.value = "";
         loginForm.elements.backup_codes.value = "";
     });
@@ -409,9 +376,6 @@
         });
     });
 
-    // Pick mode (/phones?assign=<account>, from /accounts "Assign phone"):
-    // every active phone is a target; a click asks to confirm (and to
-    // replace the account the phone already has), then the account is on it.
     const pick = $("ph-pick");
     if (pick) {
         const handle = pick.dataset.handle;

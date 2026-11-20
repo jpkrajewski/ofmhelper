@@ -1,6 +1,3 @@
-"""links/: the self provider's shapes: the window the Self links page reads
-and one of our own link rows as the provider lists it."""
-
 from datetime import date
 
 import pytest

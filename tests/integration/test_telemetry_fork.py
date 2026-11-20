@@ -1,13 +1,3 @@
-"""Telemetry across forks (ofmhelpers/telemetry.py). `rq worker-pool` forks
-its workers from the pool parent and each worker forks a work horse per
-job, while their export threads run. Prod 2026-10-26: two of ten workers
-were forked while the parent's export thread held the connection pool's
-lock; the copy stayed locked for good, so those workers sent nothing for two
-days and every job's horse hung in its last flush until RQ's job timeout.
-
-A real fork against a fake Logfire (`LOGFIRE_BASE_URL`), in a subprocess:
-configuring Logfire for real must not touch the test process."""
-
 import gzip
 import json
 import os
@@ -25,8 +15,6 @@ from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
 
 from ofmhelpers import telemetry
 
-# The pool parent at the fork: its export thread inside the connection
-# pool's lock (urllib3 `PoolManager.pools.lock`), as py-spy showed on prod.
 _FORK_DURING_AN_EXPORT = r"""
 import gc, os, threading
 
@@ -69,8 +57,6 @@ done.set()
 
 
 class _FakeLogfire(ThreadingHTTPServer):
-    """Takes OTLP over HTTP and keeps the names of the spans it got."""
-
     def __init__(self) -> None:
         super().__init__(("127.0.0.1", 0), _Handler)
         self.span_names: list[str] = []
@@ -95,7 +81,7 @@ class _Handler(BaseHTTPRequestHandler):
             ]
         self._answer(b"", "application/x-protobuf")
 
-    def do_GET(self) -> None:  # the token check
+    def do_GET(self) -> None:
         self._answer(json.dumps({"project_name": "test"}).encode(), "application/json")
 
     def _answer(self, body: bytes, content_type: str) -> None:
@@ -137,8 +123,6 @@ def test_a_child_forked_during_an_export_still_sends_and_exits(fake_logfire):
 
 
 def test_a_stuck_flush_never_holds_up_a_horse(monkeypatch):
-    """The SDK's batch flush ignores its timeout: a horse waiting on it
-    holds its worker until RQ's job timeout (45 min)."""
     monkeypatch.setenv("LOGFIRE_TOKEN", "pylf_v1_eu_test")
     monkeypatch.setenv("OFM_TELEMETRY_FLUSH_S", "0.2")
     stuck = threading.Event()

@@ -1,10 +1,3 @@
-"""
-The recovery sweeper: a job whose provider request outlived its poll is
-settled later, on any provider -- re-run once the request is done (resuming
-it, never paying twice), failed with the provider's reason, or left for the
-next sweep. Every provider call is stubbed.
-"""
-
 import inspect
 
 import pytest
@@ -51,8 +44,6 @@ def _remember(job_id, provider="kie", model=MODEL, age_s=0.0, part=0):
 
 @pytest.fixture
 def status(monkeypatch):
-    """Every provider's status call answers `answer`; `seen` records (provider,
-    key, task id)."""
     state = {"answer": TaskState(state="pending"), "seen": []}
 
     def fake(self, task_id):
@@ -67,9 +58,6 @@ def status(monkeypatch):
 
 
 class _Reruns(list):
-    """The re-runs recovery queued (their args), and each one's queue and
-    time limit."""
-
     def __init__(self):
         super().__init__()
         self.queues = []
@@ -107,8 +95,6 @@ def test_a_finished_request_reruns_its_failed_job_with_its_key(status, reruns):
 
 
 def test_a_rerun_resumes_the_same_request(status, monkeypatch, tmp_path):
-    """Recovery re-runs the job; the runner finds the remembered request and
-    never submits a second one."""
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path))
     job_id = _job()
     _remember(job_id)
@@ -121,7 +107,7 @@ def test_a_rerun_resumes_the_same_request(status, monkeypatch, tmp_path):
         lambda _self, _url, dest: dest.write_bytes(b"v") and dest,
     )
 
-    recovery.run_recovery_once()  # enqueue runs inline in tests
+    recovery.run_recovery_once()
 
     assert get_job(job_id).status == "done"
     assert submitted == []
@@ -205,8 +191,6 @@ def test_a_clone_job_is_rerun_through_clone(status, reruns):
 
 
 def test_a_clone_links_job_is_rerun_on_its_own_queue(status, reruns):
-    """Its first run went on the clone-links pool; the re-run must too, or
-    it waits behind (and holds) the default queue."""
     job_id = _job(task="clone_links")
     _remember(job_id)
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
@@ -228,12 +212,8 @@ def test_one_unreachable_provider_never_stops_the_sweep(status, reruns, monkeypa
     assert {t.job_id for t in tasks.remembered()} == {first, second}
 
 
-# --- jobs cut off by a restart ----------------------------------------------
-
-
 @pytest.fixture
 def active(monkeypatch):
-    """The job ids the queue / workers hold, as recovery reads them."""
     held: set[str] = set()
     monkeypatch.setattr(recovery, "active_job_ids", lambda: held)
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
@@ -241,8 +221,6 @@ def active(monkeypatch):
 
 
 def test_a_job_cut_off_after_its_request_finished_is_resumed(status, reruns, active):
-    """Prod, 2026-10-22: a deploy killed the worker during a clone's CapCut
-    export; the job stayed running with nobody on it."""
     job_id = _job(status="running", task="clone", provider="higgsfield")
     _remember(job_id, provider="higgsfield")
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
@@ -256,8 +234,6 @@ def test_a_job_cut_off_after_its_request_finished_is_resumed(status, reruns, act
 def test_a_cut_off_job_with_nothing_to_resume_fails_instead_of_spinning(
     status, reruns, active
 ):
-    """A /viral search pays Apify for every run and keeps no run id: it is
-    never started over."""
     job_id = _job(status="running", task="viral_reels")
 
     assert recovery.run_recovery_once().entries == {job_id: "interrupted"}
@@ -267,8 +243,6 @@ def test_a_cut_off_job_with_nothing_to_resume_fails_instead_of_spinning(
     assert reruns == []
 
 
-# What each task's route stores as the job's params, and what it queues its
-# run with (user 7's job: their part of the store, their cookies).
 _LOCAL_JOBS = {
     "uniqify": (
         {
@@ -330,8 +304,6 @@ _LOCAL_JOBS = {
             "assets_root": "ASSETS",
         },
     ),
-    # /threads: the set's own params (seed, preset, its folder once made);
-    # its Drive token is read by the run, never queued.
     "threads": (
         {
             "batch": "3",
@@ -395,7 +367,6 @@ _LOCAL_JOBS = {
 
 @pytest.fixture
 def restarts(monkeypatch, reruns):
-    """What `Restart.again` queues, recorded like recovery's re-runs."""
     monkeypatch.setattr(restart_module, "enqueue_to", recovery.enqueue_to)
     return reruns
 
@@ -405,16 +376,11 @@ def test_every_local_task_has_its_case_here():
 
 
 def test_no_task_that_pays_a_provider_is_ever_started_over():
-    """A paid task continues from its stored provider task id (`RESUMABLE`)
-    or fails as interrupted: started over, it would pay again. /viral pays
-    Apify per run."""
     paid = {*RESUMABLE, "viral_reels"}
     assert paid & set(recovery.RESTARTS) == set()
 
 
 def _seven() -> str:
-    """Whose the local jobs below are: a real user (`jobs.user_id` is a
-    foreign key) with the id their expected kwargs name, 7."""
     made = [make_user(f"user{n}@example.com") for n in range(1, 8)]
     assert made[-1].id == 7
     return "7"
@@ -424,8 +390,6 @@ def _seven() -> str:
 def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
     task, status, restarts, active
 ):
-    """A deploy gives workers 120 s; an encode or a download cut off then
-    used to fail "Interrupted by a restart". Local work, free to repeat."""
     params, kwargs = _LOCAL_JOBS[task]
     job_id = create_job(task, params, actor=_seven())
 
@@ -433,9 +397,8 @@ def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
 
     [(_run_job, rerun_id, fn, queued)] = restarts
     assert (rerun_id, fn) == (job_id, RESTARTS[task].run)
-    inspect.signature(fn).bind(**queued)  # the run takes exactly these
+    inspect.signature(fn).bind(**queued)
     root = queued.get("assets_root")
-    # A download's run is told its own job: it writes that job's rows.
     stand_ins = (("ASSETS", root), ("JOB", job_id))
     assert queued == {
         name: next((real for mark, real in stand_ins if value == mark), value)
@@ -449,9 +412,6 @@ def test_a_cut_off_local_job_is_queued_again_as_its_route_queued_it(
 def test_outside_production_a_cut_off_local_job_is_left_as_copied(
     status, restarts, active, monkeypatch
 ):
-    """A dev copy of the prod database: every job running at dump time
-    looks cut off. Started over on dev it would use prod people's cookies
-    and live Drive folders (audit 2026-11-18), so it is left alone."""
     monkeypatch.delenv("OFM_RECOVERY_RESTARTS")
     params, _kwargs = _LOCAL_JOBS["download_media"]
     job_id = create_job("download_media", params, actor=_seven())
@@ -491,8 +451,6 @@ def test_a_restarted_local_job_keeps_its_queue_and_time_limit(
 
 
 def test_a_local_job_cut_off_again_and_again_fails(status, restarts, active):
-    """Something kills it (memory, a file ffmpeg cannot get through): it must
-    not start over for ever."""
     params = {**_LOCAL_JOBS["uniqify"][0], "restarts": restart_module.RESTARTS_MAX}
     job_id = create_job("uniqify", params, actor=_seven())
 
@@ -503,7 +461,6 @@ def test_a_local_job_cut_off_again_and_again_fails(status, restarts, active):
 
 
 def test_a_second_restart_runs_with_the_same_arguments(status, restarts, active):
-    """The count is the job's own param, never an argument of its run."""
     params = {**_LOCAL_JOBS["uniqify"][0], "restarts": 1}
     job_id = create_job("uniqify", params, actor=_seven())
 
@@ -553,12 +510,9 @@ def test_without_a_view_of_the_queue_nothing_is_cut_off(status, reruns, monkeypa
 def test_a_job_queued_while_a_slow_sweep_settles_is_not_cut_off(
     status, reruns, monkeypatch
 ):
-    """Review #24: a provider status call can hold the settle loop past the
-    grace; a Generate queued meanwhile is not in the view taken before it.
-    Cut-off is judged against a view read after the loop."""
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
     queued = _job(status="running", task="clone_links")
-    views = [set()]  # the view at sweep start, from before `queued` was queued
+    views = [set()]
     monkeypatch.setattr(
         recovery, "active_job_ids", lambda: views.pop(0) if views else {queued}
     )
@@ -570,8 +524,6 @@ def test_a_job_queued_while_a_slow_sweep_settles_is_not_cut_off(
 
 
 def test_a_failed_job_a_worker_still_holds_is_never_rerun(status, reruns, active):
-    """A job failed by mistake (or still in its tail) whose request is done:
-    re-running it now would run it twice at once."""
     job_id = _job(task="clone_links")
     _remember(job_id)
     status["answer"] = TaskState(state="done", urls=["https://cdn/x.mp4"])
@@ -602,8 +554,6 @@ def _provider_still_generating(**_kwargs):
 
 
 def test_a_job_failing_after_its_result_forgets_its_request(status, reruns):
-    """Its tail (export, asset store) failed: re-running it every sweep
-    would fail the same way, for 48 h."""
     job_id = _job(status="running")
     _remember(job_id)
     run_job(job_id, _fails_after_the_result, {})
@@ -619,9 +569,6 @@ def test_a_job_failing_at_the_provider_keeps_its_request_for_recovery():
     run_job(job_id, _provider_still_generating, {})
     assert get_job(job_id).status == "failed"
     assert tasks.recall(job_id) is not None
-
-
-# --- a job of several requests (a long /clone video's pieces) ---------------
 
 
 def test_every_piece_is_remembered_on_its_own_and_forgotten_together():
@@ -685,8 +632,6 @@ def test_a_job_with_a_refused_piece_fails_and_forgets_every_piece(
 
 
 def test_a_job_rq_ends_at_its_time_limit_keeps_every_piece_for_recovery():
-    """RQ ending a long run (2026-10-23: 5 pieces, then CapCut) must not
-    forget the pieces already paid for: recovery finishes the job instead."""
     job_id = _job(status="running", task="clone", model="kie:wan/3-0-video")
     for part in range(3):
         _remember(job_id, part=part)
@@ -712,9 +657,6 @@ def test_a_one_piece_job_is_rerun_with_the_queues_limit(status, reruns):
 
 
 def test_a_job_with_a_piece_whose_answer_was_lost_is_not_run_again_yet(status, reruns):
-    """A long clone's piece 1 sent createTask and lost its answer (noted,
-    `tasks.remember_sent`): a re-run now would send it again and maybe pay
-    twice. Once its callback names it, the next sweep re-runs the job."""
     job_id = _job()
     _remember(job_id, part=0)
     tasks.remember_sent(

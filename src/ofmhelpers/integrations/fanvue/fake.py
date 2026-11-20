@@ -1,13 +1,3 @@
-"""Fanvue's API and token endpoint faked at the wire (OFM_FAKE_EXTERNALS, tests).
-
-Answers the calls `client.FanvueClient` and `oauth` make the way Fanvue does (real
-answers checked 2026-11-05, see CLAUDE.md). One agency, `AGENCY`, managing `CREATOR`
-and `OTHER_CREATOR`. `add_message` writes in a chat. Refresh tokens rotate, and
-presenting a spent one kills the authorisation, like the real thing. An agency's token
-gets 403 on webhook subscriptions, as seen. `fail_next` answers the next API calls with
-an error, `token_failures` the next token calls; `calls` records (method, path, query).
-"""
-
 import threading
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -42,8 +32,6 @@ def _iso(epoch: float) -> str:
 
 
 class FakeTokens(BaseModel):
-    """The token endpoint's answer."""
-
     access_token: str
     refresh_token: str
     expires_in: int
@@ -57,15 +45,12 @@ class FakeFanvue:
         self.token_failures: list[FakeReply] = []
         self.refreshes = 0
         self.authorisation_dead = False
-        # {creator: {fan: messages, newest first}}
         self._chats: dict[str, dict[str, list[dict[str, Any]]]] = {}
         self._tokens_made = 0
         self._access: set[str] = set()
         self._refresh: str | None = None
         self._last_id = 0
         self._lock = threading.Lock()
-
-    # --- test data ----------------------------------------------------------
 
     def add_message(
         self,
@@ -78,7 +63,6 @@ class FakeFanvue:
         message_type: str = "SINGLE_RECIPIENT",
         status: str = "SENT",
     ) -> str:
-        """Someone writes in the chat of `creator` and `fan`, which starts it."""
         self._last_id += 1
         uuid = f"fake-message-{self._last_id}"
         self._chats.setdefault(creator, {}).setdefault(fan, []).insert(
@@ -95,7 +79,6 @@ class FakeFanvue:
         return uuid
 
     def new_tokens(self) -> FakeTokens:
-        """A fresh pair; the previous refresh token is spent."""
         self._tokens_made += 1
         access = f"fake-access-{self._tokens_made}"
         refresh = f"fake-refresh-{self._tokens_made}"
@@ -104,8 +87,6 @@ class FakeFanvue:
         return FakeTokens(
             access_token=access, refresh_token=refresh, expires_in=_EXPIRES_IN_S
         )
-
-    # --- the token endpoint -------------------------------------------------
 
     def handle_auth(self, request: requests.PreparedRequest) -> FakeReply:
         with self._lock:
@@ -128,8 +109,6 @@ class FakeFanvue:
                 self._access.clear()
                 return _invalid_grant("The refresh chain is broken")
             return FakeReply.json_body(self.new_tokens().model_dump())
-
-    # --- the API ------------------------------------------------------------
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         url = urlsplit(request.url or "")
@@ -161,7 +140,6 @@ class FakeFanvue:
         return FakeReply.json_body({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
     def _chat_list(self, creator: str, query: Mapping[str, str]) -> FakeReply:
-        """Latest activity first; the cursor is an offset, opaque to the client."""
         chats = sorted(
             self._chats.get(creator, {}).items(),
             key=lambda chat: chat[1][0]["sentAt"],
@@ -187,7 +165,6 @@ class FakeFanvue:
         )
 
     def _messages(self, creator: str, fan: str, query: Mapping[str, str]) -> FakeReply:
-        """Newest first. `dateFilter` is null on the last page, as seen."""
         messages = self._chats.get(creator, {}).get(fan)
         if messages is None:
             return FakeReply.json_body(

@@ -1,10 +1,3 @@
-"""Each model's one self link (owner 2026-11-18: "links are per model not
-per account"): a bridge on the model's domain (`<slug>`, numbered when
-taken) to the model's page, made the first time one of its files is
-pinned, the way /links' Generate makes one (`short_links.add_creating` +
-the self provider), so /links and /self-links list and count it too. Every
-pin of the model that carries a link carries this one."""
-
 from ofmhelpers.db.stores import distribution as store
 from ofmhelpers.db.stores import self_links, short_links
 from ofmhelpers.features.links import sync
@@ -20,9 +13,6 @@ PROVIDER = "self"
 
 
 def model_link(user_id: int, model: ModelPreset) -> str:
-    """The model's self link's address: its own, or one made now (the first
-    pin of the model). Raises `RefusedError` when the model's domain is not
-    one of the owner's self link domains."""
     found = next(
         (m for m in store.repository().model_links(user_id) if m.preset == model.key),
         None,

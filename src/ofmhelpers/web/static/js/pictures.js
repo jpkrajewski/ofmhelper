@@ -1,10 +1,3 @@
-/*
- * /pictures: the preset select shows that preset's pictures and prompt; the
- * preset dialog makes a new preset or edits one's own (name, prompt, shape,
- * which current pictures to keep, new ones), Delete removes it; Recreate on a card
- * picks its preset again and puts its pictures back in the picker. The
- * Generate submit itself is generation.js's (the form's data-prefix).
- */
 (() => {
     const select = document.getElementById("pictures-preset");
     const dialog = document.getElementById("preset-dialog");

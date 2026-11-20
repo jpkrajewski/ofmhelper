@@ -1,17 +1,6 @@
 {% import "_icons.html" as ic %}
 {% macro asset_media(a) %}
-{# a.local_fallback_url is only set when view_url points at kie.ai and a
-   local copy also exists (see task_helpers.asset_card) -- once kie.ai's URL
-   goes stale (its result URLs are only reliably valid ~24h) the element
-   swaps to our own copy instead of showing a broken video/image: the URL
-   sits in data-local-fallback-url and generation.js swaps it on "error"
-   (security audit 2026-11-18: no URL inside an inline JS string).
-   With a local copy, an image shows its small preview and a video plays its
-   preview behind a poster frame (see web/previews.py): a grid of 4K results
-   must not load every original. Download links stay on the original. #}
 {% if a.removed %}
-{# A download whose video the retention sweep removed: what was kept of it,
-   a still picture (as /trials shows a deleted copy), else its name. #}
 {% if a.poster_url or a.preview_url %}<img src="{{ a.poster_url or a.preview_url }}" loading="lazy" decoding="async" class="result-video" alt="{{ a.name }}">
 {% else %}<div class="result-file">{{ ic.icon("file") }} {{ a.name }}</div>{% endif %}
 {% elif a.kind == 'video' %}

@@ -1,6 +1,3 @@
-"""A downloaded reel's sound: whether the file has any, and putting a
-separately served audio stream back in (ffmpeg, streams copied)."""
-
 lazy from pathlib import Path
 
 from ofmhelpers.media.ffmpeg import binary, run
@@ -28,7 +25,6 @@ def has_audio(path: Path) -> bool:
 
 
 def add_audio(video: Path, audio: Path) -> None:
-    """`video` with `audio`'s sound, in place."""
     out = video.with_name(f"{video.stem}.muxed.mp4")
     run(
         [

@@ -1,9 +1,3 @@
-"""APIYI's other families behind the one provider, on the fake at the wire
-(apiyi/fake_families.py answers like docs.apiyi.com): Nano Banana over
-Gemini, GPT-Image / Seedream / FLUX over the OpenAI images API (answered in
-the request), Seedance's Ark tasks and Veo's /v1/videos -- what goes over the
-wire, what comes back saved, and the key each model runs on."""
-
 import base64
 from pathlib import Path
 
@@ -64,9 +58,6 @@ def _run(provider, key: str, values: dict, job: str) -> list[Path]:
     return runner.generate(provider, spec, sent, job)
 
 
-# --- Nano Banana (Gemini) --------------------------------------------------------
-
-
 def test_nano_banana_pro_sends_gemini_body_and_keeps_the_last_image(provider):
     draft = base64.b64encode(fake_media.image("red", fmt="PNG")).decode()
     final_bytes = fake_media.image("blue", fmt="PNG")
@@ -105,7 +96,6 @@ def test_nano_banana_pro_sends_gemini_body_and_keeps_the_last_image(provider):
 def test_nano_banana_references_go_inline_with_no_public_address(
     provider, monkeypatch, image
 ):
-    """Images need no link to this server: a dev box works as is."""
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
 
     _run(
@@ -120,7 +110,6 @@ def test_nano_banana_references_go_inline_with_no_public_address(
     assert text == {"text": "her"}
     assert picture["inlineData"]["mimeType"] == "image/png"
     assert base64.b64decode(picture["inlineData"]["data"]) == image.read_bytes()
-    # "auto" = the shape follows the input image: not sent.
     assert "imageConfig" not in body["generationConfig"] or (
         "aspectRatio" not in body["generationConfig"]["imageConfig"]
     )
@@ -142,8 +131,6 @@ def test_a_refused_nano_banana_image_reads_as_flagged(provider, answer):
 
 
 def test_a_sync_image_is_a_task_like_any_other(provider):
-    """Answered in the request, yet read back by id: a resume or recovery
-    finds the saved image."""
     _run(provider, "apiyi:gemini-3.1-flash-lite-image", {"prompt": "x"}, "nb-task")
 
     remembered = tasks.recall("nb-task")
@@ -154,9 +141,6 @@ def test_a_sync_image_is_a_task_like_any_other(provider):
     assert provider.status(remembered.task_id).state == "done"
     assert family.tag == "img"
     assert own
-
-
-# --- GPT-Image-2 / Seedream / FLUX ---------------------------------------------
 
 
 def test_gpt_image_2_official_never_sends_response_format(provider):
@@ -198,7 +182,6 @@ def test_gpt_image_references_go_as_files_to_edits(provider, image, model, field
 
 @pytest.mark.parametrize(
     "model",
-    # 5.5 marks its pictures unless told not to (docs.apiyi.com, 2026-11-16).
     ["seedream-5-0-flash-260915", "seedream-5-5-261028"],
 )
 def test_seedream_sends_data_urls_without_a_watermark_and_saves_the_url(
@@ -243,9 +226,6 @@ def test_flux_text_to_image_sends_its_size_not_a_ratio(provider):
     assert body["size"] == "1536x1024"
     assert "aspect_ratio" not in body
     assert "input_image" not in body
-
-
-# --- Seedance --------------------------------------------------------------------
 
 
 def test_seedance_reference_run_sends_ark_content_and_saves_the_video(
@@ -322,9 +302,6 @@ def test_no_channel_is_judged_against_the_models_own_group(group, raised):
         raise_for(503, body)
 
 
-# --- Veo -------------------------------------------------------------------------
-
-
 def test_veo_text_to_video_sends_seconds_as_text_and_saves_the_video(provider):
     [saved] = _run(
         provider,
@@ -381,9 +358,6 @@ def test_veo_1080p_takes_only_8_seconds():
     spec.check({"prompt": "x", "resolution": "1080p", "duration": 8})
 
 
-# --- Keys ------------------------------------------------------------------------
-
-
 def test_an_image_model_on_the_admins_wan_key_runs_on_the_default_groups(
     provider, monkeypatch
 ):
@@ -409,8 +383,6 @@ def test_every_catalog_model_has_a_family():
 
 
 def test_a_pictures_run_on_apiyi_is_nano_banana_pro_at_2k(provider, image):
-    """/pictures' APIYI row: the preset's references + the picture, the
-    shape and 2K, run through Gemini inline."""
     from ofmhelpers.web.routers.image_tools import pictures
 
     target = pictures.PICTURE_TARGETS["apiyi"]

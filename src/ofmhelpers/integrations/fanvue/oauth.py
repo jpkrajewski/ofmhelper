@@ -1,9 +1,3 @@
-"""Fanvue has no API keys: someone authorises the app once in their browser and it
-keeps tokens. OAuth 2.0 authorization code with PKCE; the client authenticates by
-HTTP Basic only. Refresh tokens are single-use and rotate, and reusing one kills the
-whole authorisation, so whoever refreshes must save the new one first
-(`db/repositories/chats.py` `fresh_token` holds a lock across it)."""
-
 import base64
 import hashlib
 import secrets
@@ -25,8 +19,6 @@ logger = get_logger(__name__)
 
 
 class Pkce(BaseModel):
-    """A PKCE pair: the challenge is the verifier's SHA-256."""
-
     model_config = ConfigDict(frozen=True)
 
     verifier: str
@@ -99,9 +91,6 @@ def exchange(code: str, redirect_uri: str, verifier: str) -> ChatTokens:
 
 
 def _refresh_call(refresh_token: str) -> requests.Response:
-    """A token whose answer got lost may be spent already. Fanvue says to present it
-    again straight away, inside its grace window, and that waiting breaks the chain:
-    so several tries, with no pause."""
     tries = settings.fanvue.refresh_tries
     for attempt in range(1, tries + 1):
         try:
@@ -120,8 +109,6 @@ def _refresh_call(refresh_token: str) -> requests.Response:
 
 
 def refresh(refresh_token: str) -> ChatTokens | None:
-    """New tokens; None when the authorisation is gone (`invalid_grant`) and someone
-    has to connect again. Raises `FanvueError` for what a later try may fix."""
     r = _refresh_call(refresh_token)
     if r.status_code == HTTPStatus.BAD_REQUEST and _error_field(r, "error") == (
         "invalid_grant"

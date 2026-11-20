@@ -1,14 +1,3 @@
-"""/clone-links over HTTP: Check answers the cleaned links or refuses the
-paste, nothing is read or queued without Google Drive, Generate queues one
-run per link on the clone-links queue, a Generate sent twice pays once,
-Stop, a card's Recreate, the failure labels on the cards, and nobody sees
-or acts on another person's runs. The run itself is in
-test_clone_links_run.py, the reviews in test_clone_links_review.py, the
-previews in test_clone_links_previews.py.
-
-Runs here are held in the queue (`queued`): they stay `running`, nothing is
-downloaded or paid; finished runs are made with the job store."""
-
 import json
 import pickle
 import re
@@ -20,7 +9,7 @@ from clone_links_helpers import (
     OTHER,
     REEL,
     client,
-    clone_links_env,  # noqa: F401 -- the fixture, used by `pytestmark`
+    clone_links_env,  # noqa: F401
     post_run,
     run,
 )
@@ -76,9 +65,6 @@ def _card(job_id: str) -> str:
 
 @pytest.fixture
 def queued(monkeypatch) -> list[tuple]:
-    """What `/run` hands the queue (queue, function, arguments), held
-    there: the runs stay queued -- `running` -- nothing downloaded or
-    paid."""
     calls: list[tuple] = []
     monkeypatch.setattr(
         clone_links_service,
@@ -105,7 +91,6 @@ def _done(link: str, batch: str) -> str:
 
 
 def _remember(job_id: str) -> None:
-    """The run's paid request, kept for recovery to finish."""
     tasks.remember(
         tasks.ProviderTask(
             job_id=job_id, provider="kie", model="wan", task_id="t", api_key=KIE_KEY
@@ -119,16 +104,9 @@ def _recreate(c, job_id: str) -> list[str]:
     return r.json()["links"]
 
 
-# --- Check ---------------------------------------------------------------------
-
-
 def test_check_answers_the_cleaned_links_each_once_and_queues_nothing():
     ann = client()
-    pasted = (
-        f"{REEL}?igsh=abc123\n"
-        "instagram.com/reels/ABC123\n"  # the same reel, another spelling
-        f"\n{OTHER}"
-    )
+    pasted = f"{REEL}?igsh=abc123\ninstagram.com/reels/ABC123\n\n{OTHER}"
 
     r = ann.post("/clone-links/check", data={"links": pasted})
 
@@ -138,9 +116,6 @@ def test_check_answers_the_cleaned_links_each_once_and_queues_nothing():
 
 
 def test_a_line_of_two_links_refuses_the_paste():
-    """The VA's paste (2026-10-25): a reel copied twice onto one line. Never
-    split or deduped behind their back: the whole paste is refused, naming
-    the line."""
     ann = client()
     glued = f"{OTHER}https://www.instagram.com/reel/XYZ789/?utm_source=ig_web"
 
@@ -155,8 +130,6 @@ def test_a_line_of_two_links_refuses_the_paste():
 
 
 def test_junk_and_a_site_with_no_videos_refuse_the_paste():
-    """The VA's paste (2026-10-25): two lines of junk and a runpod docs page
-    -- every one named with why."""
     ann = client()
     docs = "https://abc-8077.proxy.runpod.net/docs#/default/twotensors_post"
 
@@ -180,9 +153,6 @@ def test_too_many_links_are_refused(monkeypatch):
 
     assert r.status_code == 400
     assert r.json()["detail"] == "At most 1 links at a time (2 pasted)"
-
-
-# --- Google Drive first ----------------------------------------------------------
 
 
 def test_previews_without_google_drive_read_nothing(monkeypatch):
@@ -210,8 +180,6 @@ def test_generate_without_google_drive_is_refused_and_queues_nothing(queued):
 
 
 def test_previews_stream_a_line_per_link_unbuffered(monkeypatch):
-    """`X-Accel-Buffering: no`: the host's nginx passes each line on as it
-    comes, so the dialog's tiles fill one by one."""
     monkeypatch.setattr(
         clone_links_service,
         "preview_all",
@@ -229,9 +197,6 @@ def test_previews_stream_a_line_per_link_unbuffered(monkeypatch):
     assert [json.loads(line)["url"] for line in r.text.splitlines()] == [REEL, OTHER]
 
 
-# --- Generate ------------------------------------------------------------------
-
-
 def test_generate_queues_one_run_per_link_on_the_clone_links_queue(queued):
     answer = run(client(), [REEL, OTHER])
 
@@ -247,15 +212,11 @@ def test_generate_queues_one_run_per_link_on_the_clone_links_queue(queued):
     assert [j.params["batch"] for j in jobs] == [answer["batch"]] * 2
     assert [j.status for j in jobs] == ["running", "running"]
     assert all("api_key" not in j.params for j in jobs)
-    # Cards newest first, like the gallery.
     html = answer["html"]
     assert html.index(_card(ids[1])) < html.index(_card(ids[0]))
 
 
 def test_the_same_generate_sent_twice_queues_its_runs_once(queued, monkeypatch):
-    """The answer lost, the VA presses Generate again: the page resends its
-    batch id and gets the runs already queued, paying nothing again --
-    also once the batch's sent mark is gone (the runs in the DB answer)."""
     ann = client()
     batch = "0123456789abcdef"
 
@@ -305,8 +266,6 @@ def test_a_batch_id_that_is_not_8_to_32_hex_is_refused(queued, batch):
 
 
 def test_a_run_the_queue_refuses_is_failed_at_once(monkeypatch):
-    """Never left `running` for recovery to call a restart: the card says
-    to run it again, and the links after it are not made at all."""
 
     def refuse(*_args, **_kwargs):
         msg = "Connection refused"
@@ -321,9 +280,6 @@ def test_a_run_the_queue_refuses_is_failed_at_once(monkeypatch):
     assert job.params["link"] == REEL
     assert job.status == "failed"
     assert job.error == clone_links.NOT_QUEUED
-
-
-# --- Stop --------------------------------------------------------------------
 
 
 def test_stop_stops_the_cards_whole_generate_and_fails_or_forgets_nothing(queued):
@@ -350,13 +306,7 @@ def test_stop_is_only_for_a_clone_links_card():
     assert not stopped("0123abcd")
 
 
-# --- Recreate ----------------------------------------------------------------
-
-
 def test_a_failed_cards_recreate_brings_back_its_generates_links_left_to_redo():
-    """Paste order; hidden ones left out (the clicked one kept); never one
-    recovery is still finishing (paid, its request remembered), nor one
-    queued again since in a newer Generate, done or still running."""
     ann = client()
     batch = "aaaa1111"
     first = _failed(_reel(1), batch)
@@ -368,8 +318,8 @@ def test_a_failed_cards_recreate_brings_back_its_generates_links_left_to_redo():
     _failed(_reel(5), batch)
     _failed(_reel(6), batch)
     last = _failed(_reel(7), batch)
-    _done(_reel(5), "bbbb2222")  # redone since, and done
-    create_job(  # redone since, still running
+    _done(_reel(5), "bbbb2222")
+    create_job(
         clone_links.TASK, {"link": _reel(6), "batch": "cccc3333"}, actor=_actor()
     )
 
@@ -390,9 +340,6 @@ def test_a_done_cards_recreate_brings_back_its_link_until_it_is_made_again():
     assert _recreate(ann, done) == []
 
 
-# --- The page and its cards ----------------------------------------------------
-
-
 def test_the_page_has_the_form_and_the_nav_entry():
     html = client().get("/clone-links").text
 
@@ -408,8 +355,6 @@ def test_the_page_has_the_form_and_the_nav_entry():
 
 
 def test_the_page_never_waits_on_google_for_the_drive_space(monkeypatch):
-    """Drive space as cached only (`ask=False`), and the reel size the page
-    estimates Drive space with."""
     asked: list[dict] = []
     seen: dict = {}
     real_render = clone_links.render
@@ -457,9 +402,6 @@ def test_a_run_is_resumable_and_listed_like_every_tool():
 
 
 def test_a_queued_run_loads_in_a_fresh_worker_process(queued):
-    """An RQ worker unpickles the job's function before importing anything
-    of the web app: the queued one must load on its own (the run module
-    alone was a circular import)."""
     run(client(), [REEL])
     [(_queue, _fn, (_job_id, fn, _kwargs))] = queued
 
@@ -478,9 +420,6 @@ def test_a_queued_run_loads_in_a_fresh_worker_process(queued):
     assert loaded.stdout.decode().splitlines()[-1] == clone_links_job.__name__
 
 
-# --- Nobody else's -------------------------------------------------------------
-
-
 def test_nobody_sees_recreates_or_stops_another_persons_runs(queued):
     ann = client()
     bob = client(BOB)
@@ -494,15 +433,12 @@ def test_nobody_sees_recreates_or_stops_another_persons_runs(queued):
     assert _card(job_id) not in bob.get("/clone-links").text
     assert _card(job_id) not in bob.get("/clone-links/gallery/latest").text
     assert not stopped(answer["batch"])
-    # Ann's Generate id sent by Bob is a Generate of his own.
     [his] = run(bob, [REEL], batch=answer["batch"])["job_ids"]
     assert his != job_id
     assert get_job(his).actor == _actor(BOB)
 
 
 def test_a_card_never_shows_another_persons_review(queued):
-    """A review row under a reused job id that is not the card owner's is
-    not theirs to see (`for_jobs(user_id=)`)."""
     ann = client()
     client(BOB)
     mine, reused = run(ann, [REEL, OTHER])["job_ids"]

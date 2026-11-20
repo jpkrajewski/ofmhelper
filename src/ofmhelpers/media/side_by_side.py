@@ -1,17 +1,7 @@
-"""Two videos as one, next to each other and in step: the left one, the right
-one, both at the same height (/clone's SOP: the video that was cloned next
-to its clone, so the difference is seen at a glance).
-
-One H.264 8-bit file every browser plays, whatever the two were (a phone
-recording export is HEVC 10-bit HDR), with the right video's sound, as long
-as the shorter of the two."""
-
 from pathlib import Path
 
 from ofmhelpers.media import ffmpeg
 
-# Both halves are brought to one frame rate: `hstack` takes its timing from
-# the first input and would drop or repeat the other's frames.
 _FPS = 30
 
 
@@ -22,7 +12,6 @@ def _half(index: int, height: int, label: str) -> str:
 def side_by_side(
     left: Path, right: Path, dest: Path, *, height: int, timeout_s: int
 ) -> None:
-    """Writes `left` and `right` next to each other into `dest` (mp4)."""
     joined = ";".join(
         [
             _half(0, height, "l"),

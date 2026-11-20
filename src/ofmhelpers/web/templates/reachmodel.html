@@ -9,7 +9,6 @@
 </head>
 <body>
 
-<!-- NAV -->
 <header class="rm-header">
   <div class="rm-brand rm-brand-header">
     <div class="rm-logo">A</div>
@@ -27,7 +26,6 @@
   </div>
 </header>
 
-<!-- HERO -->
 <section id="blueprint" class="rm-hero">
   <div class="rm-hero-inner">
     <div class="rm-eyebrow">Ascend Global's Proven System</div>
@@ -56,7 +54,6 @@
   </div>
 </section>
 
-<!-- ANALYTICS -->
 <section class="rm-section rm-section-alt">
   <div class="rm-section-head">
     <div class="rm-eyebrow">Real Analytics. Real Results.</div>
@@ -115,7 +112,6 @@
   </div>
 </section>
 
-<!-- AGENCY RESULTS -->
 <section id="agency-results" class="rm-section rm-section-divided">
   <div class="rm-section-head">
     <div class="rm-eyebrow">Agency Results</div>
@@ -169,7 +165,6 @@
   </div>
 </section>
 
-<!-- MENTORSHIP -->
 <section class="rm-section">
   <div class="rm-section-head">
     <div class="rm-eyebrow">Exclusive Access</div>
@@ -225,7 +220,6 @@
   </div>
 </section>
 
-<!-- PRICING -->
 <section id="pricing" class="rm-section rm-section-alt rm-section-center rm-pricing">
   <h2 class="rm-h2">Choose Your Path to Dominance</h2>
   <p class="rm-section-lead">One destination: the top 0.1%.</p>
@@ -247,7 +241,6 @@
   </div>
 </section>
 
-<!-- TEAM -->
 <section class="rm-section">
   <div class="rm-section-head">
     <div class="rm-eyebrow">Meet Our Team</div>
@@ -280,7 +273,6 @@
   </div>
 </section>
 
-<!-- PROOF -->
 <section id="proof" class="rm-section rm-section-alt rm-section-center rm-proof">
   <h2 class="rm-h2">The Proof is in the Numbers</h2>
   <div class="rm-proof-stats">
@@ -296,13 +288,6 @@
 
   <h3 class="rm-subhead">Real Results from Our Creators</h3>
 
-  <!--
-    CAROUSEL — add as many pictures as you want.
-    Just add or remove <div class="rm-carousel-item" style="--rm-ratio: W/H"><img src="..." alt="..."></div>
-    entries below (W/H = the image's width/height, so it shows uncropped).
-    The script automatically duplicates whatever is here to create a seamless, continuous loop
-    and adjusts speed to the number of images — no other changes needed.
-  -->
   <div class="rm-carousel">
     <div id="resultsTrack" class="rm-carousel-track">
       <div class="rm-carousel-item" style="--rm-ratio: 1280/879">
@@ -328,7 +313,6 @@
   <a href="https://t.me/ascendonboard" class="rm-btn-primary rm-btn-lg">Message Us Now</a>
 </section>
 
-<!-- APPLICATION FORM -->
 <section id="apply" class="rm-section rm-apply">
   <div class="rm-section-head rm-section-head-narrow">
     <h2 class="rm-h2 rm-h2-sm">Ready to Dominate?</h2>
@@ -337,7 +321,6 @@
 
   <form class="rm-form-card" method="post" action="/apply">
     <input type="hidden" name="form_token" value="{{ form_token }}">
-    {# A honeypot: off-screen, out of the tab order, never filled by a person. #}
     <div class="rm-hp" aria-hidden="true">
       <label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
     </div>
@@ -395,9 +378,6 @@
 </section>
 
 {% if request.query_params.get("applied") %}
-<!-- THANK-YOU MODAL -- rendered only right after a successful POST /apply
-     (routers/apply.py redirects to /?applied=1). The script below strips the
-     query param, so a refresh or a shared link never reopens it. -->
 <div id="rm-thanks" class="rm-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-thanks-title">
   <div class="rm-dialog">
     <div class="rm-dialog-icon">✓</div>
@@ -410,7 +390,6 @@
 </div>
 {% endif %}
 
-<!-- FOOTER -->
 {% include "_landing_footer.html" %}
 
 <script>

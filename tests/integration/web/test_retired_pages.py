@@ -1,8 +1,3 @@
-"""Retired pages (`auth/access.py` `RETIRED`; owner 2026-11-13: /reels,
-/clone-links, /repurpose and /pictures, nobody uses them): switched off whole, code and data kept.
-Nobody opens one, no menu lists it, and nothing of it runs in the
-background."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in, sign_in_admin
@@ -51,7 +46,6 @@ def test_a_retired_pages_other_routes_are_off_too():
 def test_no_menu_and_no_role_has_a_retired_page(role):
     assert not RETIRED & set(areas_of(role))
     assert not set(PAGES) & {item.href for item in nav(role)}
-    # Its menu entry is kept for the day it comes back.
     assert set(PAGES) <= {item.href for item in NAV}
 
 

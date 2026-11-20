@@ -1,36 +1,14 @@
-"""CapCut's Adjust panel as ffmpeg filters, one knob per slider, in CapCut's
-own units: -50..50 (temp, tint, saturation, lightness, exposure, contrast,
-highlight, shadow, whites, blacks, brilliance, vignette), 0..100 (sharpen,
-clarity, particles, fade).
-
-Calibrated against a real CapCut export (`utils.capcut`, 2026-10): exposure
-(1/150 stop per unit), contrast (gamma +1/200 and saturation +1/90 per
-unit: CapCut's contrast lifts midtones and colour, barely moves black and
-white), sharpen (unsharp 1/50 per unit at output size), particles (grain
-0.1 per unit at output size).
-
-NOT calibrated yet, linear first guesses: temp (40 K per unit, warmer =
-lower K), tint (colorbalance green 1/250 per unit, + = magenta), saturation
-(1/100), lightness (eq brightness 1/500), highlight / shadow (curve point at
-0.75 / 0.25, 0.002 per unit), whites / blacks (white / black point, 0.002),
-brilliance (shadows up, highlights down), clarity (large-radius unsharp),
-fade (black point lifted 0.0025 per unit), vignette (angle pi/4 at 50;
-negative brightens the corners). CapCut's "Effects" is not a slider: left out.
-"""
-
 import random
 
 from pydantic import BaseModel
 
 from ofmhelpers.media.repurpose.values import Value, draw
 
-# Calibrated (utils.capcut).
 _EXPOSURE_STOPS_PER_UNIT = 1 / 150
 _CONTRAST_GAMMA_PER_UNIT = 1 / 200
 _CONTRAST_SATURATION_PER_UNIT = 1 / 90
 _SHARPEN_PER_UNIT = 1 / 50
 _PARTICLES_GRAIN_PER_UNIT = 0.1
-# First guesses.
 _TEMP_K_PER_UNIT = 40
 _NEUTRAL_K = 6500
 _TINT_PER_UNIT = 1 / 250
@@ -44,7 +22,6 @@ _FADE_WHITE_PER_UNIT = 0.0005
 _CLARITY_PER_UNIT = 0.006
 _CLARITY_SIZE = 13
 _VIGNETTE_ANGLE_PER_UNIT = 0.7854 / 50
-# Curve points must keep this much apart (curves needs a rising x).
 _MIN_STEP = 0.01
 
 
@@ -68,8 +45,6 @@ class AdjustSettings(BaseModel, frozen=True):
 
 
 class AdjustDraws(BaseModel, frozen=True):
-    """One copy's slider values (None: slider untouched)."""
-
     temp: float | None
     tint: float | None
     saturation: float | None
@@ -97,7 +72,6 @@ class AdjustDraws(BaseModel, frozen=True):
         )
 
     def colour(self) -> list[str]:
-        """temp, tint, saturation/lightness/contrast, the tone curve."""
         chain = []
         if self.temp:
             chain.append(
@@ -126,8 +100,6 @@ class AdjustDraws(BaseModel, frozen=True):
         return f"eq=saturation={saturation:.4f}:gamma={gamma:.4f}:brightness={brightness:.4f}"
 
     def _curve(self) -> str | None:
-        """One luma curve for highlight / shadow / whites / blacks /
-        brilliance / fade; None when all are untouched."""
         knobs = (
             self.highlight,
             self.shadow,
@@ -171,9 +143,6 @@ class AdjustDraws(BaseModel, frozen=True):
         return [f"vignette=a={angle:.4f}{mode}"]
 
     def output_filters(self, seed: int) -> list[str]:
-        """At the output size, as CapCut renders them: sharpen, clarity,
-        particles. `seed`: the grain's (ffmpeg's own default is fixed: the
-        same grain in every copy)."""
         chain = []
         if self.sharpen:
             chain.append(f"unsharp=5:5:{self.sharpen * _SHARPEN_PER_UNIT:.4f}")

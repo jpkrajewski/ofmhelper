@@ -1,12 +1,3 @@
-"""
-ofmhelpers/web/stores/short_links.py
-
-Links on link providers (/links, routers/tracking/links.py; made, synced
-and deleted by features/links/sync.py). Each belongs to a user: `owner` limits a
-call to theirs (None: everyone's, for the sweeper). Every provider call
-runs on the owner's own key (`features/links/keys.py`).
-"""
-
 from datetime import date, timedelta
 from functools import lru_cache
 lazy from collections.abc import Collection
@@ -26,18 +17,12 @@ lazy from ofmhelpers.schemas import GenerateLinks, TrackedAccount
 lazy from ofmhelpers.schemas.link_catalog import LinkDays
 lazy from ofmhelpers.schemas.links import LinkSyncKey
 
-# The platform links bridge from (Generate links: one per account).
 SOURCE_PLATFORM = "instagram"
 
 
 @lru_cache(maxsize=1)
 def _repository() -> ShortLinkRepository:
-    """Built on first use rather than at import (constructing it binds a Redis
-    connection for its cache)."""
     return ShortLinkRepository()
-
-
-# --- reads ------------------------------------------------------------------
 
 
 def _since() -> date:
@@ -45,8 +30,6 @@ def _since() -> date:
 
 
 def list_links(owner: int | None = None) -> list[ShortLink]:
-    """`owner`'s links of a registered provider, newest first, with their
-    days of the longest period."""
     return [
         link
         for link in _repository().list_all(owner, _since())
@@ -63,8 +46,6 @@ def get_links(ids: list[int], owner: int | None = None) -> list[ShortLink]:
 
 
 def links_by_account(owner: int | None = None) -> list[AccountLinks]:
-    """`owner`'s links that exist on their provider, by the account they
-    bridge from (/accounts shows them like its phones)."""
     found: dict[int, AccountLinks] = {}
     for link in list_links(owner):
         if link.account_id is not None and link.status in ("active", "inactive"):
@@ -74,14 +55,10 @@ def links_by_account(owner: int | None = None) -> list[AccountLinks]:
     return list(found.values())
 
 
-# Links that take a place in the provider's plan: live, or on their way.
 _COUNTED = ("active", "inactive", "creating")
 
 
 def _local_usage(usage: Usage | None, links: list[ShortLink]) -> Usage | None:
-    """The plan's limits from the provider's last answer, the counts from
-    our own rows: a link deleted (or made) here counts at once, not only
-    after the next sync (2026-10-22: 50 / 50 stayed after a delete)."""
     if usage is None:
         return None
     return usage.model_copy(
@@ -97,8 +74,6 @@ def _local_usage(usage: Usage | None, links: list[ShortLink]) -> Usage | None:
 
 
 def provider_states(user_id: int, keyed: Collection[str]) -> list[ProviderState]:
-    """Every provider as /links shows it for `user_id`; `keyed`: the ones
-    they have a key for (`features/links/keys.py`)."""
     syncs = {s.provider: s for s in _repository().syncs(user_id)}
     links = list_links(user_id)
     states = []
@@ -125,9 +100,6 @@ def provider_states(user_id: int, keyed: Collection[str]) -> list[ProviderState]
     return states
 
 
-# --- making links -----------------------------------------------------------
-
-
 def account_slug(provider: str, handle: str) -> str:
     return provider_infos()[provider].slug.make(handle)
 
@@ -135,9 +107,6 @@ def account_slug(provider: str, handle: str) -> str:
 def plan(
     user_id: int, form: GenerateLinks, accounts: list[TrackedAccount]
 ) -> list[PlannedLink]:
-    """One new link per account: its slug from the handle, numbered past
-    the ones `user_id` has on the provider (per domain or provider-wide,
-    as its slugs are unique)."""
     rules = provider_infos()[form.provider].slug
     taken = taken_slugs(user_id, form.provider, form.domain)
     planned = []
@@ -178,10 +147,6 @@ def set_status(link_ids: list[int], status: str, error: str | None = None) -> No
 
 
 def taken_slugs(user_id: int, provider: str, domain: str) -> set[str]:
-    """Slugs of `user_id`'s links a new one on `domain` must not take: on
-    that domain, or anywhere on a provider whose slugs are provider-wide. A
-    self link's address is public, so there every owner's slugs on the domain
-    count."""
     if provider == "self":
         return set(_repository().slugs_on_domain(provider, domain))
     per_domain = provider_infos()[provider].slug.unique_per == "domain"
@@ -210,9 +175,6 @@ def assign_creator(
     return _repository().set_creator(link_ids, creator, owner)
 
 
-# --- syncs ------------------------------------------------------------------
-
-
 def record_sync(
     user_id: int,
     provider: str,
@@ -220,8 +182,6 @@ def record_sync(
     days: list[LinkDays],
     accounts: list[TrackedAccount],
 ) -> None:
-    """What `provider` lists for `user_id` now (see the repository): a new
-    link whose slug is one of `accounts`' handles' slug is put on it."""
     by_slug = {account_slug(provider, a.handle): a.id for a in accounts}
     _repository().record_sync(
         user_id,
@@ -251,7 +211,6 @@ def finish_sync(
 
 
 def source_accounts(accounts: list[TrackedAccount]) -> list[TrackedAccount]:
-    """The accounts links bridge from."""
     return [a for a in accounts if a.platform == SOURCE_PLATFORM]
 
 

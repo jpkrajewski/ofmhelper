@@ -1,5 +1,3 @@
-"""Google Drive as a service account: the shared folder /drive manages."""
-
 from ofmhelpers.integrations.gdrive.base import (
     RECONNECT,
     DriveApi,

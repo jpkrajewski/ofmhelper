@@ -1,7 +1,3 @@
-"""/download-media end to end on the fake downloaders (OFM_FAKE_EXTERNALS):
-a reel comes back as its video, a photo post as its images, in one run,
-without anyone picking a tool."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
@@ -57,13 +53,10 @@ def test_a_download_run_shows_on_the_page_and_reopens_in_the_one_tool(client):
 
     assert f'data-job-id="{r.json()["job_id"]}"' in html
     assert 'data-task="download_media"' in html
-    # Old runs of the two tools it replaced map onto it for Recreate.
     assert 'data-tasks="download_media download_videos download_images"' in html
 
 
 def test_a_login_walled_reel_is_rescued_by_the_saver_fallback(client, monkeypatch):
-    """Prod 2026-10-28: every downloader refused a reel Instagram hides
-    from the logged-out API; the saver fallback fetches it."""
     from ofmhelpers.integrations.downloaders import generic, images, kvs
     from ofmhelpers.integrations.downloaders.models import DownloadResult
 

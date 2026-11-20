@@ -1,6 +1,3 @@
-"""/reels/clone and /reels/download leave no job folder behind, whether the
-downloads worked or not; the videos /clone opens with stay in the asset store."""
-
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -30,7 +27,6 @@ def uploads(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "uploads"
     monkeypatch.setattr(reels, "uploads_root", lambda: root)
     monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: tmp_path / "assets")
-    # The picked reels are of a profile the person watches.
     found = ProfileReels(
         profile=Profile(user_id="1", username="u", followers=1000, is_private=False),
         scanned=2,

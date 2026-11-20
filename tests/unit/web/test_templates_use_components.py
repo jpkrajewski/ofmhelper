@@ -1,16 +1,9 @@
-"""Pages build their UI from components/ui.html, never from hand-written
-markup with the components' own classes: the look of a button, notice,
-badge, empty state or page header lives in one macro (and components.css), so a
-change there reaches every page. Also no inline styles beyond CSS custom
-properties carrying data (a chart point's position)."""
-
 import re
 
 import pytest
 from repo_paths import SRC
 
 TEMPLATES = SRC / "web" / "templates"
-# Classes only components/ui.html may write.
 OWNED = {
     "btn", "btn-primary", "btn-outline", "btn-ghost", "btn-danger", "btn-block",
     "icon-btn", "ph-icon-btn",
@@ -21,15 +14,10 @@ OWNED = {
     "table-wrap", "menu", "menu-list", "menu-item", "menu-item-danger",
 }  # fmt: skip
 CLASS_ATTR = re.compile(r'class="([^"]*)"')
-# A Download link written by hand next to the macro's (2026-11-01: the job
-# page's "⬇ Download" looked like no other button).
 HAND_BUTTON = re.compile(r'class="download-btn"')
 STYLE_ATTR = re.compile(r'style="(?!--)')
 
 
-# Public conversion pages served on our own link domains (the bridge), not app
-# UI: self-contained like the rented providers' pages (own dark look, inline
-# styles), so the design-system rules do not apply. See bridge.html.
 EXEMPT = {"bridge.html"}
 
 
@@ -45,7 +33,6 @@ def _problems(text: str) -> list[str]:
     found = []
     for n, line in enumerate(text.splitlines(), 1):
         for value in CLASS_ATTR.findall(line):
-            # Tokens of the literal value and of quoted strings in Jinja.
             tokens = set(re.findall(r"[\w-]+", value))
             if owned := tokens & OWNED:
                 found.append(f"{n}: {sorted(owned)}")

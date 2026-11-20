@@ -1,12 +1,3 @@
-"""One source video re-encoded into N subtly different variants.
-
-Each copy gets its own speed / zoom / colour / grain / mirror / head-trim /
-volume jitter, drawn from the ranges of a Strength preset, so no two outputs
-are byte- or frame-identical. Ported from the standalone `captions/` uniqify
-tool; the encoder settings match it (h264 High CRF 23, 30 fps, <=720 px wide,
-aac 192k 44.1 kHz stereo, +faststart).
-"""
-
 import datetime
 import json
 import random
@@ -23,8 +14,6 @@ _MAX_WIDTH = 720
 _AUDIO_BITRATE = "192k"
 _AUDIO_RATE = 44100
 _AUDIO_CHANNELS = 2
-# "Device" metadata backdates creation_time by up to this much, so a batch
-# doesn't all carry the second it was rendered.
 _DEVICE_TIME_SPREAD = datetime.timedelta(days=7)
 
 Range = tuple[float, float]
@@ -38,18 +27,12 @@ class Strength(StrEnum):
 
 
 class MetadataMode(StrEnum):
-    """strip: no container/stream tags at all. device: tags shaped like a
-    phone capture (QuickTime brand, Core Media handler, recent creation_time)."""
-
     STRIP = "strip"
     DEVICE = "device"
 
 
-# Every preset's jitter, scaled away from "unchanged" by this factor: 1.02
-# makes each range 2% wider than the original tool's.
 _STRENGTH_BOOST = 1.02
 
-# The value of each knob that leaves the video unchanged.
 _NEUTRAL = {
     "speed": 1.0,
     "saturation": 1.0,
@@ -62,8 +45,6 @@ _NEUTRAL = {
 
 
 class StrengthPreset(BaseModel, frozen=True):
-    """Per-variant (min, max) sample ranges."""
-
     speed: Range
     saturation: Range
     contrast: Range
@@ -73,7 +54,6 @@ class StrengthPreset(BaseModel, frozen=True):
     volume: Range
 
     def boosted(self, factor: float) -> StrengthPreset:
-        """Every range pushed `factor` times as far from neutral."""
         return StrengthPreset.model_validate(
             {
                 name: tuple(
@@ -127,8 +107,6 @@ PRESETS = {s: p.boosted(_STRENGTH_BOOST) for s, p in _BASE_PRESETS.items()}
 
 
 class VariantParams(BaseModel):
-    """The jitter one copy was encoded with."""
-
     speed: float
     saturation: float
     contrast: float
@@ -173,7 +151,6 @@ class VariantParams(BaseModel):
         if self.noise > 0:
             vf.append(f"noise=alls={self.noise}:allf=t")
         vf.append(f"setpts=PTS/{self.speed}")
-        # Cap the width and force even dimensions -- x264 rejects odd ones.
         vf.append(f"scale='min({_MAX_WIDTH},trunc(iw/2)*2)':-2")
         return ",".join(vf)
 
@@ -266,7 +243,6 @@ def encode_variant(
         str(_CRF),
         "-pix_fmt",
         "yuv420p",
-        # Never carry the source's own tags over, whichever mode.
         "-map_metadata",
         "-1",
     ]
@@ -292,8 +268,6 @@ def generate_variants(
     timeout_s: int,
     seed: int | None = None,
 ) -> list[Path]:
-    """Encode `copies` variants of `src` into `out_dir` as
-    `<stem>_001.mp4`, `<stem>_002.mp4`, ... and return their paths."""
     rng = random.Random(seed)  # noqa: S311 - jitter, not cryptography
     preset = PRESETS[strength]
     audio = has_audio(src, timeout_s)

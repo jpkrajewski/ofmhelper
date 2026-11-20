@@ -1,5 +1,3 @@
-"""Each report's runs: the last one, and claiming today's (once a day)."""
-
 from functools import lru_cache
 lazy from datetime import date
 
@@ -17,5 +15,4 @@ def last_run(name: str) -> ReportRun | None:
 
 
 def claim(name: str, day: date, ran_at: float, sent: bool, marks: ReportMarks) -> bool:
-    """`name`'s run for `day`, unless it ran that day already."""
     return _repository().claim(name, day, ran_at, sent, marks.model_dump(mode="json"))

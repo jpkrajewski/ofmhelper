@@ -1,7 +1,3 @@
-"""integrations/outbound.py: with OFM_FAKE_EXTERNALS every outside request is
-answered by its host's fake, and a host without one is refused -- the app
-under e2e can never reach the internet by accident."""
-
 import pytest
 import requests
 

@@ -1,13 +1,7 @@
-"""Things looked up by name: provider classes, platforms, catalog rows."""
-
 from pydantic import BaseModel, ConfigDict
 
 
 class Registry[T](BaseModel):
-    """A read-only table, name -> entry, in the order it was built. What a
-    function returns in place of a dict: `registry[name]` (KeyError when
-    unknown), `registry.get(name)`, `registry.names()`, `registry.all()`."""
-
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     entries: dict[str, T]

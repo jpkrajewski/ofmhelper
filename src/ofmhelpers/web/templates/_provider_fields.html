@@ -1,9 +1,3 @@
-{# Provider select + its API key, shared by /generate and /clone.
-   `providers`: ProviderChoice list; `api_keys`: provider -> pre-filled key.
-   Switching provider swaps the key to that provider's pre-fill, unless the
-   user typed one; a provider that needs no key hides the field. A provider's
-   `notice` shows under the select while it is picked. Emits
-   "provider:change" on the select for the page to react to. #}
 {% import "components/ui.html" as ui %}
 <div class="field">
     <label for="provider-select">Provider</label>
@@ -16,8 +10,6 @@
     </select>
 </div>
 {{ ui.notice("", "warn", attrs={"id": "provider-notice", "hidden": true}) }}
-{# A VA runs on the owner's saved key and an admin viewing as someone on
-   nobody's: no field, no key in the page (`Viewer.types_key`). #}
 {% set types_key = viewer_of(request).types_key %}
 <div class="field" id="api-key-field"{% if not types_key %} hidden data-server-key{% endif %}>
     <label for="api-key">API key</label>

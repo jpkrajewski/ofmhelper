@@ -1,7 +1,3 @@
-"""The per-model tools /ai replaced (`legacy_tools.json`), task name -> row:
-each one's old prefix and label, and how its jobs read as /ai jobs. A row with
-no `as_ai` (no jobs on record) keeps prompt-only Recreate."""
-
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -12,9 +8,6 @@ from ofmhelpers.utils.registry import Registry
 
 
 class AiParams(BaseModel):
-    """An old job's params as /ai stores them: the catalog model, then its
-    fields under the schema's names. `model_dump()` is that one flat dict."""
-
     model: str
     values: dict[str, Any]
 
@@ -24,10 +17,6 @@ class AiParams(BaseModel):
 
 
 class ModelPick(BaseModel):
-    """One old tool for several catalog models, picked off the job: `{variant}`
-    in `AsAi.model` is a param's value (and leaves the params), `{mode}` says
-    whether references were picked."""
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     variant_field: str
@@ -45,9 +34,6 @@ class ModelPick(BaseModel):
 
 
 class AsAi(BaseModel):
-    """An old tool's params as a catalog model's fields, some under an older
-    name."""
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     model: str
@@ -75,7 +61,6 @@ class LegacyTool(BaseModel):
 
 @lru_cache(maxsize=1)
 def legacy_tools() -> Registry[LegacyTool]:
-    """The table, old task name -> tool: one for the whole process."""
     raw = Path(__file__).with_name("legacy_tools.json").read_text(encoding="utf-8")
     rows = TypeAdapter(dict[str, LegacyTool]).validate_json(raw)
     return Registry[LegacyTool](entries=rows)

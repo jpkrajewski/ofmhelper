@@ -1,25 +1,3 @@
-"""Outbound HTTP (requests) and its fakes switch.
-
-Every `requests` call the app makes to an outside service goes through a
-session `mount`ed here, or through `get` / `head`. Normally that changes
-nothing. Under OFM_FAKE_EXTERNALS (`settings.infra.fake_externals`, e2e) every
-such request is answered in-process by the fake of its host -- Instagram and
-its CDN (`instagram/fake.py`), kie.ai (`integrations/ai_providers/kie/fake.py`),
-Higgsfield's file host (`integrations/ai_providers/higgsfield/fake.py`), Google's and
-Apple's sign-in token endpoints (`signin/fake.py`), Oopsie and Bouncy
-(`links/fake.py`), Apify (`apify/fake.py`), Stacked (`stacked/fake.py`), Fanvue (`fanvue/fake.py`), RunningHub
-(`integrations/ai_providers/runninghub/fake.py`), Elyum (`integrations/ai_providers/elyum/fake.py`), APIYI
-(`integrations/ai_providers/apiyi/fake.py`),
-Telegram (`integrations/senders/telegram/fake.py`), Pinterest
-(`integrations/pinterest/fake.py`) -- and a
-host without a fake is refused with a connection error: nothing reaches the
-internet. Higgsfield's API (httpx, its SDK) and Drive (googleapiclient)
-are switched in their own clients.
-
-A fake is a function (request, proxies) -> `FakeReply`; it may raise a
-`requests` exception to stand for a dead proxy or a timeout.
-"""
-
 import io
 import json
 from collections.abc import Callable, Mapping
@@ -65,8 +43,6 @@ FakeHandler = Callable[[requests.PreparedRequest, Mapping[str, str]], FakeReply]
 
 
 class FakeRoute(BaseModel):
-    """One host and the fake answering it: what a fake's `routes()` lists."""
-
     model_config = ConfigDict(frozen=True)
 
     host: str
@@ -75,8 +51,6 @@ class FakeRoute(BaseModel):
 
 @lru_cache(maxsize=1)
 def _routes() -> Registry[FakeHandler]:
-    """Host -> its fake. Imported on first use: the fakes import the
-    clients' models, which import this module."""
     from ofmhelpers.integrations.ai_providers.apiyi.fake import routes as apiyi_routes
     from ofmhelpers.integrations.ai_providers.elyum.fake import routes as elyum_routes
     from ofmhelpers.integrations.ai_providers.higgsfield.fake import routes as hf_routes
@@ -112,8 +86,6 @@ def _routes() -> Registry[FakeHandler]:
 
 
 class FakeAdapter(BaseAdapter):
-    """A transport answering from the fakes, never from the network."""
-
     def send(
         self,
         request: requests.PreparedRequest,
@@ -145,8 +117,6 @@ class FakeAdapter(BaseAdapter):
 
 
 def mount(session: requests.Session) -> requests.Session:
-    """`session`, answered by the fakes under OFM_FAKE_EXTERNALS (as is
-    otherwise)."""
     if settings.infra.fake_externals:
         adapter = FakeAdapter()
         session.mount("https://", adapter)
@@ -155,21 +125,18 @@ def mount(session: requests.Session) -> requests.Session:
 
 
 def get(url: str, **kwargs: Any) -> requests.Response:
-    """`requests.get`, through the fakes when they are on."""
     if settings.infra.fake_externals:
         return mount(requests.Session()).get(url, **kwargs)
-    return requests.get(url, **kwargs)  # noqa: S113 -- the caller passes timeout
+    return requests.get(url, **kwargs)  # noqa: S113
 
 
 def post(url: str, **kwargs: Any) -> requests.Response:
-    """`requests.post`, through the fakes when they are on."""
     if settings.infra.fake_externals:
         return mount(requests.Session()).post(url, **kwargs)
-    return requests.post(url, **kwargs)  # noqa: S113 -- the caller passes timeout
+    return requests.post(url, **kwargs)  # noqa: S113
 
 
 def head(url: str, **kwargs: Any) -> requests.Response:
-    """`requests.head`, through the fakes when they are on."""
     if settings.infra.fake_externals:
         return mount(requests.Session()).head(url, **kwargs)
-    return requests.head(url, **kwargs)  # noqa: S113 -- the caller passes timeout
+    return requests.head(url, **kwargs)  # noqa: S113

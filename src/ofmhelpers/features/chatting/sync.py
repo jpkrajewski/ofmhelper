@@ -1,16 +1,3 @@
-"""The sync behind /chatting's history, whichever platform: new messages into the
-store, for what webhooks missed.
-
-A model whose webhook is delivering is read rarely. One with no webhook, one gone
-quiet, or one with a fan left waiting is read every minute: a dead webhook costs
-minutes, never an hour, and nobody is called unanswered on what a webhook did not say.
-
-A failed round (a platform answering 500) is logged by the sweep and costs nothing:
-what was read is saved, and the next round carries on from there. A model failing does
-not stop the others, and each platform has its own sweep, so one failing, slow or
-hanging does not hold up the next.
-"""
-
 import time
 from datetime import UTC, datetime, timedelta
 lazy from collections.abc import Collection
@@ -31,6 +18,7 @@ from ofmhelpers.features.chatting.webhooks import (
     note_bulk_sends,
     sync_done_key,
 )
+from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.log import get_logger
 from ofmhelpers.schemas.chatting import ReadScope
@@ -46,8 +34,6 @@ def enabled(platform: ChatPlatform) -> bool:
 
 
 def _sync_model(source: ChatSource, model: ChatModel, scope: ReadScope) -> int:
-    """Saved chat by chat, and how many changed. A chat that cannot be saved stays
-    unread and comes back next round, and does not stop the ones behind it."""
     platform = source.platform
     changed = 0
     for read in source.new_reads(model, scope):
@@ -68,8 +54,6 @@ def _sync_model(source: ChatSource, model: ChatModel, scope: ReadScope) -> int:
 def sync(
     source: ChatSource, skip: Collection[str] = (), *, thorough: bool = True
 ) -> None:
-    """One round of a platform, of every model but the ones in `skip`. The round
-    raises if anything failed, so it counts as failed."""
     platform = source.platform
     started = time.monotonic()
     lookback = timedelta(seconds=settings.chatting.lookback_s)
@@ -84,7 +68,6 @@ def sync(
     cover_models(source, reached.found)
     failed = reached.failed
     if not failed:
-        # Only a full answer: a key that did not answer would hide its creators.
         remember_reached(platform, [model.username for model in reached.found])
     read = 0
     changed = 0
@@ -115,9 +98,6 @@ def sync(
 
 
 def read_now(source: ChatSource, usernames: set[str]) -> set[str]:
-    """Those of `usernames` (as the platform names them) read again now, what
-    changed only; one that cannot be read is left out (logged) and does not take
-    the others with it."""
     platform = source.platform
     oldest = datetime.now(UTC) - timedelta(seconds=settings.chatting.lookback_s)
     scope = ReadScope.since(
@@ -142,7 +122,6 @@ def read_now(source: ChatSource, usernames: set[str]) -> set[str]:
 
 
 def _models_resting(platform: ChatPlatform) -> set[str]:
-    """Those delivering, with no fan past the limit: nothing a read would change."""
     late = time.time() - settings.chatting.unanswered_after_s
     waiting = {
         wait.model_username
@@ -153,14 +132,9 @@ def _models_resting(platform: ChatPlatform) -> set[str]:
 
 
 def _run_platform(source: ChatSource) -> None:
-    """Every model is read once per `webhook_sync_interval_s`; in between, all but
-    those resting. A failed full round is not remembered as done, so it is tried again
-    next minute."""
     platform = source.platform
-    # First: what is stored already says it, whatever the read below does.
     note_bulk_sends(source)
     if get_text(mass_pending_key(platform)):
-        # Done forgotten first: a failed round is then tried again next minute.
         delete_text(sync_done_key(platform))
         delete_text(mass_pending_key(platform))
     if get_text(sync_done_key(platform)):
@@ -173,8 +147,10 @@ def _run_platform(source: ChatSource) -> None:
 
 
 def run_when_due(platform: ChatPlatform) -> None:
-    """A platform's sweep, asked every minute. A failed round raises, so the sweep
-    logs it."""
     source = source_for(platform)
-    if source is not None:
+    if source is None:
+        return
+    try:
         _run_platform(source)
+    finally:
+        notifications.changed()

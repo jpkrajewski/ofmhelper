@@ -1,7 +1,3 @@
-"""The access map reads as one list per role (`auth/access.py` `VA`,
-`USER`, `ADMIN`, `MANAGER`): each role's pages are the one below's plus its
-own; a manager's are a user's but their own business, plus the chats."""
-
 from ofmhelpers.auth.access import (
     ACCESS,
     ADMIN,
@@ -52,17 +48,12 @@ def test_the_map_is_read_off_the_lists_and_a_retired_page_is_nobodys():
 
 
 def test_a_manager_sees_a_users_pages_and_the_chats_and_does_nothing():
-    """Owner 2026-11-15: "can only not generate anything ... see everything
-    a normal user can see ... also chatting and /vas spending". The list is
-    one entry; that nothing runs is the read-only viewer
-    (`features/users/viewing.py`)."""
     assert set(MANAGER) == (set(USER) - {Area.ACCOUNT, Area.COOKIES}) | {Area.CHATTING}
     assert Area.USERS not in MANAGER
     assert not any(allowed(Role.MANAGER, action) for action in Action)
 
 
 def test_only_a_va_uploads_handmade_reels():
-    """Their own Drive folder; the owner sees what went up, uploads nothing."""
     assert allowed(Role.VA, Action.UPLOAD_HANDMADE)
     assert not allowed(Role.USER, Action.UPLOAD_HANDMADE)
     assert not allowed(Role.ADMIN, Action.UPLOAD_HANDMADE)
@@ -80,8 +71,6 @@ def test_the_globe_offers_the_teams_zones():
 
 
 def test_any_real_zone_is_taken_and_anything_else_is_the_first():
-    """The browser says the person's own zone: wherever they are, their
-    days are theirs."""
     york = time_zone("America/New_York")
 
     assert (york.zone, york.label) == ("America/New_York", "New York")

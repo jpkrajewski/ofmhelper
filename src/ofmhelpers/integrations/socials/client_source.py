@@ -1,12 +1,3 @@
-"""A platform's own client as a source (`Platform.fetch`): each account in
-turn through the job's proxies, retried on the next proxy after a jittered
-pause, a dead proxy dropped for the rest of the job.
-
-`ProxySource` reads logged out. `LoginSource` reads as the account's owner
-(their cookies.txt) and is the last resort: a login is flaky and can get
-banned. Every try rate-limited, or even a direct connection down, ends the
-source for the rest of the batch -- those accounts go on to the next source."""
-
 import random
 import time
 from typing import ClassVar
@@ -33,17 +24,10 @@ type Fetch = Callable[[str, str | None, str | None], AccountStats]
 logger = get_logger(__name__)
 
 
-class _OfflineError(Exception):
-    """Even a direct connection fails: our own network is down, so the rest
-    of the batch would only fail the same way."""
+class _OfflineError(Exception): ...
 
 
 def _failure(answered: list[RetryableError], tries: int) -> str:
-    """What the row shows once the platform itself answered a failure on
-    every try that reached it: the last answer about the account, not a
-    rate limit that only says the proxy was busy (a deleted account read
-    "rate-limiting" after 3 "not found", dev 2026-11-07). The previous
-    numbers stay."""
     told = [f for f in answered if not isinstance(f, RateLimitedError)] or answered
     return f"{told[-1]} ({tries} tries) -- retried at the next rescan"
 
@@ -52,7 +36,6 @@ class ClientSource(AccountSource):
     logged_in: ClassVar[bool]
 
     def __init__(self, fetch: Fetch, proxies: list[str], start: int = 0) -> None:
-        """`start`: the first proxy, so parallel jobs begin on different IPs."""
         self._fetch = fetch
         self._proxies = proxies
         self._start = start
@@ -60,8 +43,6 @@ class ClientSource(AccountSource):
     def scan(self, targets: list[ScanTarget]) -> Answers:
         pool = ProxyPool(self._proxies, self._start)
         answers = Answers()
-        # Logged out, a handle two users track is read once for both; a
-        # login's read is its owner's only.
         seen: dict[str, AccountStats | Refusal | None] = {}
         for done, target in enumerate(targets):
             if self.logged_in and not target.cookies:
@@ -101,14 +82,10 @@ class ClientSource(AccountSource):
     def _one(
         self, handle: str, pool: ProxyPool, tries: int, cookies: str | None
     ) -> AccountStats | Refusal | None:
-        """One account, up to `tries` times, each through the pool's next
-        proxy. None: no try reached the platform (nothing to record).
-        Raises RateLimitedError when every try was rate-limited and
-        _OfflineError when a direct connection fails."""
         failures: list[RetryableError] = []
         for attempt in range(tries):
             if attempt:
-                time.sleep(random.uniform(0, settings.accounts.retry_jitter_s))  # noqa: S311 -- jitter, not crypto
+                time.sleep(random.uniform(0, settings.accounts.retry_jitter_s))  # noqa: S311
             proxy = pool.next()
             try:
                 return self._fetch(handle, proxy, cookies)

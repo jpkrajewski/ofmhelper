@@ -1,7 +1,3 @@
-"""Driving a chat platform's fake and signing its deliveries, the same way for each,
-so a test says what happens and runs against every platform. A new platform = one class
-here and one entry in `PLATFORMS`; the tests in test_chat_platforms.py then cover it."""
-
 import base64
 import hashlib
 import hmac
@@ -70,8 +66,6 @@ class StackedDriver:
         self._next_id += 1
         return str(self._next_id)
 
-    # --- what happens on the platform, for the sync to find ------------------
-
     def _chat_of(self, fan: str) -> str:
         channel = self.channel(fan)
         known = self.fake.chats.get(self.model_id, [])
@@ -97,10 +91,7 @@ class StackedDriver:
         return list(self.fake.calls)
 
     def chat_reads(self) -> int:
-        """How many times this model's chats were read."""
         return len([p for _, p in self.fake.calls if "/chats" in p])
-
-    # --- what the platform delivers ------------------------------------------
 
     def _message_event(
         self, kind: str, fan: str, message_id: str, *, from_fan: bool, at: float
@@ -185,12 +176,9 @@ class StackedDriver:
             "content-type": "application/json",
         }
 
-    # --- a model's emoji ------------------------------------------------------
-
     def react(
         self, fan: str, message_id: str, at: float, by_model: bool = True
     ) -> None:
-        """Stacked says it only on the chat's messages, so the sync has to look."""
         who = self.model_id if by_model else fan
         self.fake.add_reaction(self.channel(fan), int(message_id), who, int(at * 1000))
 
@@ -244,8 +232,6 @@ class FanvueDriver:
         self._next_id += 1
         return str(self._next_id)
 
-    # --- what happens on the platform, for the sync to find ------------------
-
     def fan_writes(self, fan: str, at: float) -> str:
         return self.fake.add_message(self.model_id, fan, from_fan=True, at=at)
 
@@ -261,11 +247,8 @@ class FanvueDriver:
         return [(method, path) for method, path, _ in self.fake.calls]
 
     def chat_reads(self) -> int:
-        """How many times this model's chats were read."""
         mine = f"/creators/{self.model_id}/chats"
         return len([p for _, p, _ in self.fake.calls if mine in p])
-
-    # --- what the platform delivers ------------------------------------------
 
     def _party(self, fan: str) -> dict[str, Any]:
         return {"uuid": fan, "email": None, "display_name": fan, "handle": fan}
@@ -346,12 +329,9 @@ class FanvueDriver:
             "content-type": "application/json",
         }
 
-    # --- a model's emoji ------------------------------------------------------
-
     def react(
         self, fan: str, message_id: str, at: float, by_model: bool = True
     ) -> None:
-        """Fanvue says it only by webhook."""
         del fan, at
         self._reactions[message_id] = by_model
 

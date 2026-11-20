@@ -1,9 +1,3 @@
-"""The /edit sweep (features/edit/cleanup.py): what /edit made is deleted a
-day later -- uploads, cuts, light copies, strips, a killed cut's work folder
--- unless a job still names it: a job of another tool (a clone of a cut) for
-as long as it is there, /edit's own cut or light copy while it runs or waits.
-No ffmpeg: the files are stand-ins, so this runs in the default suite."""
-
 import os
 import time
 from pathlib import Path
@@ -24,7 +18,6 @@ DAY = 86400
 def store(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "assets"
     monkeypatch.setattr(task_helper_uploads, "assets_root", lambda: root)
-    # Light copies, strips and work folders of this test only.
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     return root
 
@@ -52,7 +45,7 @@ def test_the_sweep_deletes_what_edit_made_a_day_ago_unless_a_job_needs_it(store)
     fresh.write_bytes(b"v")
     create_job("clone", {"reference_videos": [str(needed)]})
     strips = Path(settings.infra.uploads_root) / ".previews" / "strips"
-    strips.mkdir(parents=True, exist_ok=True)  # the strips made before .previews/edit
+    strips.mkdir(parents=True, exist_ok=True)
     old_strip = strips / "s.jpg"
     old_strip.write_bytes(b"j")
     _age(old_strip, 2 * DAY)
@@ -71,10 +64,6 @@ def test_the_sweep_deletes_what_edit_made_a_day_ago_unless_a_job_needs_it(store)
 
 @pytest.mark.parametrize("part", ["users/7", "."], ids=["a person's", "the agency's"])
 def test_a_cut_a_finished_clone_used_stays_for_its_recreate(store, part):
-    """Prod 2026-11-07: a clone made from a cut the day before (job 45963883,
-    in the agency's `.edit/`) lost the cut to this sweep -- kept only while
-    the clone ran -- and its Recreate said "..._cut.mp4 is not on this
-    server". A job of another tool holds what it names, done or failed."""
     cut, failed_cut = _old_files(store / part / ".edit", "cut", "failed_cut")
     done = create_job("clone", {"reference_videos": [str(cut)]})
     run_job(done, list, {})
@@ -89,9 +78,6 @@ def test_a_cut_a_finished_clone_used_stays_for_its_recreate(store, part):
 
 
 def test_an_upload_stays_while_its_cut_waits_and_goes_once_it_is_done(store):
-    """/edit's own jobs name the upload they read: a cut or light copy still
-    in the edit line keeps it (review 2026-11-07: an upload a day old was
-    deleted under its queued cut); done, they keep nothing."""
     waiting, cut_done, prepared = _old_files(
         store / "users" / "7" / ".edit", "waiting", "cut_done", "prepared"
     )

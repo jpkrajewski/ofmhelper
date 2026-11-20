@@ -1,15 +1,9 @@
-"""/clone's prompt add-ons (features/clone/addons.json): each chip lights up
-for the wordings the clone prompts on prod used (2026-11-06), never for a
-plain prompt, and the Start dialog asks the four that same-video re-runs
-most often had to add."""
-
 import re
 
 import pytest
 
 from ofmhelpers.features.clone.addons import prompt_addons
 
-# Wordings typed on prod and the add-on each one asks for.
 ASKED = [
     ("he is wearing same clothes from @video1", "same_clothes"),
     ("he is wearing the same clothes as the guy in @video1", "same_clothes"),
@@ -31,7 +25,6 @@ ASKED = [
     ("NO TATOOS, NO EARINGS", "jewelry"),
     ("remove gold chain from his neck", "jewelry"),
     ("SHOWING FACE", "face"),
-    # 2026-11-10: 10 clone runs asked for body hair.
     ("make his body as hairy as possible", "hairy"),
     ("NO TATTOS, remove text overlay, make him as hairy as possible", "hairy"),
     ("no tattos, hairy chest, iphone quality", "hairy"),
@@ -39,7 +32,6 @@ ASKED = [
     ("leave the body hair of second picture", "hairy"),
 ]
 
-# Prompts that ask for none of them ("wearing" is not "earing").
 PLAIN = [
     "Replace the subject in @Video1 with subject from @Image1",
     "he is wearing cowboy hat",

@@ -1,7 +1,3 @@
-"""The public bridge served on our own link domains (web/middleware/bridge.py):
-an 18+ gate with the destination inlined, a click beacon, byte-identical to a
-crawler, and inert on every other host."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user
@@ -66,11 +62,9 @@ def test_bridge_serves_the_gate_with_the_destination_inlined(bridge):
     assert "Adults Only" in page.text
     assert "Continue (18+)" in page.text
     assert "instagram://extbrowser" in page.text
-    # The destination is in the page source (JSON-encoded for the script).
     assert '"https://onlyfans.com/dany"' in page.text
     assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
     assert page.headers["referrer-policy"] == "no-referrer"
-    # Never framed by another site (Kimi review 2026-11-18).
     assert page.headers["x-frame-options"] == "DENY"
     assert page.headers["content-security-policy"] == "frame-ancestors 'none'"
 
@@ -102,7 +96,7 @@ def test_a_landing_is_counted_once_with_cloudflare_geo(bridge):
     assert views[0].city == "Austin"
     assert views[0].platform == "instagram"
     assert views[0].device == "mobile"
-    assert views[0].browser is not None  # computed from the UA at write time
+    assert views[0].browser is not None
 
 
 def test_a_chrome_user_agent_is_stored_as_chrome(bridge):
@@ -118,7 +112,6 @@ def test_the_beacon_is_rate_limited_per_ip(bridge, monkeypatch):
         bridge.post(
             "/api/track-direct", json={"slug": "dany"}, headers={"user-agent": IG_UA}
         )
-    # Over the cap the beacon still answers 204 but stops recording.
     assert len(_clicks("click")) == 3
 
 
@@ -168,7 +161,6 @@ def test_an_unknown_slug_is_a_bridge_404(bridge):
     page = bridge.get("/nope", headers={"user-agent": IG_UA})
     assert page.status_code == 404
     assert "Link not found" in page.text
-    # The 404 is kept off indexes and caches too.
     assert page.headers["x-robots-tag"] == "noindex, nofollow, noarchive"
 
 
@@ -181,8 +173,6 @@ def test_a_disabled_link_does_not_serve(bridge):
 
 
 def test_the_bridge_is_inert_on_a_normal_host():
-    # testserver is not a bridge domain: the app handles /dany itself (an
-    # unauthenticated app request is sent to login, never the gate).
     _seed_link()
     client = TestClient(app, follow_redirects=False)
     page = client.get("/dany")

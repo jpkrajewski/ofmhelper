@@ -1,5 +1,3 @@
-"""/viral: a search's stored reels and the page's view of a search."""
-
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -10,9 +8,6 @@ from ofmhelpers.schemas.persistence import Job, JobStatus, ResultFile
 
 
 class ViralFile(ResultFile):
-    """One downloaded reel in a search's stored result: the file, plus what
-    Instagram counted for it."""
-
     code: str
     url: str
     plays: int
@@ -23,10 +18,7 @@ class ViralFile(ResultFile):
 
 
 class ViralReel(BaseModel):
-    """One reel card: its file (play/preview/download URLs) and counts."""
-
     file: AssetCard
-    # The page links https://www.instagram.com/reel/{code}/, never `url`.
     code: str
     url: str
     plays: int
@@ -36,14 +28,11 @@ class ViralReel(BaseModel):
 
 
 class ViralSearch(BaseModel):
-    """One search (a `viral_reels` job) as the page shows it."""
-
     job_id: str
     profile: str
     status: JobStatus
     error: str | None = None
     created_at: float
-    # How many reels Apify read, and what that cost.
     scanned: int | None = None
     cost_usd: float | None = None
     reels: list[ViralReel] = []
@@ -54,7 +43,6 @@ class ViralSearch(BaseModel):
 
     @classmethod
     def of(cls, job: Job, files: list[AssetCard]) -> ViralSearch:
-        """`job` with `files` (its result's asset cards, in result order)."""
         reels = [
             ViralReel(file=file, **stored.model_dump(include=_COUNTS))
             for stored, file in zip(_stored(job), files, strict=False)

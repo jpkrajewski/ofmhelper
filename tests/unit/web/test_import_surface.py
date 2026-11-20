@@ -1,12 +1,3 @@
-"""Two modules were split into packages whose `__init__` re-exports the old
-names: `db/repositories` and `routers/task_helpers`.
-
-The re-export is the whole point -- ~13 routers and every store import through
-it, and they were deliberately left untouched by the split. A name that quietly
-stops being re-exported breaks them at import time, in a way no single feature
-test would attribute to the split.
-"""
-
 import importlib
 import pickle
 
@@ -67,14 +58,9 @@ def test_task_helpers_package_re_exports(name):
 
 
 def test_task_helpers_all_matches_what_is_actually_exported():
-    """`__all__` is what `from task_helpers import *` and the docs promise."""
     assert set(task_helpers.__all__) == set(TASK_HELPERS)
 
 
-# Jobs waiting in Redis across a deploy name their functions by the path they
-# had when queued: RQ looks `run_job` up by its dotted name, and unpickles the
-# run function it was handed by module + name. Both moved to `features/`
-# (2026-11-11); every old path must keep answering with the feature's function.
 QUEUED_PATHS = {
     "ofmhelpers.web.routers.generation.ai.run_ai": (
         "ofmhelpers.features.generate.service.run_ai"
@@ -111,10 +97,9 @@ def _named(path: str) -> object:
 @pytest.mark.parametrize(("old", "new"), QUEUED_PATHS.items())
 def test_a_run_function_pickled_under_its_router_path_is_the_features(old, new):
     module, name = old.rsplit(".", 1)
-    # What RQ stored for a job queued before the move: a reference by name.
     stored = f"c{module}\n{name}\n.".encode()
 
-    assert pickle.loads(stored) is _named(new)  # noqa: S301 -- built right here
+    assert pickle.loads(stored) is _named(new)  # noqa: S301
 
 
 def test_run_job_still_answers_at_the_stores_path_rq_looks_up():

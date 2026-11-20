@@ -1,6 +1,3 @@
-"""`create_app()` (web/main.py): what a deployment's settings turn on and off,
-and the order a request passes the middleware."""
-
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -38,8 +35,6 @@ def test_production_serves_no_docs(monkeypatch):
 
 
 def test_the_docs_are_behind_sign_in():
-    """App-level routes have no access area: the session gate is what keeps
-    the schema from someone signed out."""
     client = TestClient(create_app(), follow_redirects=False)
 
     response = client.get("/docs")
@@ -65,7 +60,6 @@ def test_production_refuses_debug(monkeypatch):
 
 
 def test_production_refuses_a_short_session_secret(monkeypatch):
-    """Prod ran on a 6-character one until 2026-11-18."""
     monkeypatch.setenv("OFM_ENV", "production")
     monkeypatch.setenv("SESSION_SECRET", "short1")
 
@@ -91,7 +85,6 @@ def test_production_refuses_session_cookies_that_may_go_over_http(monkeypatch):
 
 
 def test_no_answer_of_the_app_may_be_framed_by_another_site():
-    """Clickjacking: until 2026-11-18 only SameSite=Lax stood in the way."""
     client = TestClient(create_app())
 
     for path in ("/login", "/home", "/static/css/tokens.css"):

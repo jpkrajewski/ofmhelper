@@ -1,8 +1,3 @@
-"""Every Alembic revision on an empty database, on every run: upgrade to
-head, downgrade to base, upgrade again, through `alembic.command` exactly as
-the `migrate` service runs it; head matches the models. (The same round trip
-on a copy of production's data is `-m snapshot`, test_prod_snapshot.py.)"""
-
 import json
 import logging
 from collections.abc import Iterator
@@ -89,9 +84,6 @@ class _Records(logging.Handler):
 
 
 def test_migrating_in_process_leaves_the_apps_loggers_on(db):
-    """alembic/env.py's fileConfig used to disable every existing logger,
-    silencing the app for the rest of the process (found as a /phones log
-    assertion failing after the migration tests under xdist)."""
     app_logger = logging.getLogger("ofmhelpers.web.routers.inventory.phones")
     command.upgrade(_alembic(), "head")
     assert not app_logger.disabled
@@ -105,11 +97,6 @@ def test_migrating_in_process_leaves_the_apps_loggers_on(db):
 
 
 def test_downloads_are_read_from_the_jobs_that_made_them(db):
-    """f4b5c6d7e8a1: one `downloads` row per output file of a done download
-    job, numbered across the job's links (the `{i}` of `/files/{job}/{i}`);
-    a failed link, a job still running, a job that is nobody's, another
-    tool's job and an old one-entry-per-file result give none. Seeded in
-    SQL: today's stores speak today's schema, not that revision's."""
     cfg = _alembic()
     command.upgrade(cfg, "e3f4a5b6c7d9")
 
@@ -231,10 +218,6 @@ def test_downloads_are_read_from_the_jobs_that_made_them(db):
 
 
 def test_phone_logins_already_saved_are_tracked_once(db):
-    """f4a5b6c7d8e9: Instagram logins on active phones become /accounts
-    accounts (handle as Instagram writes it); a retired phone's do not, an
-    account removed by hand stays removed, other services track nothing.
-    Seeded in SQL: today's stores speak today's schema, not that revision's."""
     cfg = _alembic()
     command.upgrade(cfg, "e3f4a5b6c7d8")
 
@@ -293,9 +276,6 @@ def test_phone_logins_already_saved_are_tracked_once(db):
 
 
 def test_posted_files_belong_to_the_folder_their_login_has_now(db):
-    """a1c2e3f4b5d6: posted files already recorded are tagged with their
-    login's account folder (on prod: the one they were seen in); a login
-    without a folder leaves them untagged, so they never count."""
     cfg = _alembic()
     command.upgrade(cfg, "f5a6b7c8d9e0")
 
@@ -341,10 +321,6 @@ def test_posted_files_belong_to_the_folder_their_login_has_now(db):
 def test_the_shared_cookies_file_becomes_the_password_admins_own(
     db, monkeypatch, tmp_path
 ):
-    """b1c2d3e4f5a7: the old agency-wide cookies.txt is stored, encrypted,
-    as the password admin's cookies; the file stays; running it again
-    (downgrade + upgrade) stores it once, and a user's cookies saved since
-    are never overwritten."""
     shared = tmp_path / "cookies.txt"
     jar = "# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tagency\n"
     shared.write_text(jar, encoding="utf-8")
@@ -386,8 +362,6 @@ def test_without_a_shared_cookies_file_nobody_gets_cookies(db, monkeypatch, tmp_
 
 
 def test_spam_applications_go_and_real_leads_stay(db):
-    """d4e5f6a7b8c0: links in a field or a Telegram handle with spaces (the
-    bots' shapes on prod) go; everything else stays."""
     cfg = _alembic()
     command.upgrade(cfg, "c3d4e5f6a7b9")
     rows = {

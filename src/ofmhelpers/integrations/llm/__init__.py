@@ -1,7 +1,3 @@
-"""Language models behind one interface:
-`get_llm(LLMUse.VIDEO).ask(Prompt.of(...), Answer)`.
-See llm/CLAUDE.md."""
-
 from ofmhelpers.integrations.llm.base import (
     LLMProvider,
     default_for,

@@ -1,8 +1,3 @@
-// Mobile navigation drawer for base.html's sticky header.
-//
-// Desktop (>=980px) needs no JS at all -- the CSS puts the links back into
-// a plain inline row and hides the toggle -- so this only manages the
-// small-screen open/closed state and the aria-expanded that goes with it.
 (() => {
 
     const toggle = document.querySelector(".nav-toggle");
@@ -18,8 +13,6 @@
         setOpen(!nav.classList.contains("open"));
     });
 
-    // Escape closes and returns focus to the button, so keyboard users
-    // aren't stranded inside an open drawer.
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && nav.classList.contains("open")) {
             setOpen(false);
@@ -27,14 +20,11 @@
         }
     });
 
-    // Crossing the breakpoint while the drawer is open would otherwise
-    // leave aria-expanded="true" on a button the CSS has just hidden.
     const wide = window.matchMedia("(min-width: 980px)");
     wide.addEventListener("change", (e) => {
         if (e.matches) setOpen(false);
     });
 
-    // The "More" dropdown closes on a click anywhere else, like a menu.
     const more = nav.querySelector(".nav-more details");
     if (more) {
         document.addEventListener("click", (e) => {

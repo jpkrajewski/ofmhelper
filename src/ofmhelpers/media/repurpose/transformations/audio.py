@@ -1,35 +1,14 @@
-"""The sound side of a repurposed copy.
-
-`AudioSettings` is the audio part of a preset (every knob optional, missing
-= off; values: `repurpose.values`). `AudioTransformer` draws the knobs once
-for one copy and builds the -filter:a chain, always in this order:
-
-pitch (asetrate + aresample) -> tempo (the video's speed, pitch undone) ->
-volume -> phaser shift -> treble / bass shelves -> echo (reverb or room) ->
-mid EQ -> the one obvious effect -> compressor -> de-esser -> make-up gain ->
-limiter.
-
-Duplyfi's phaser (in/out gain 0.4 x 0.74), chorus and compressor each cost
-5-11 dB (measured 2026-10-26); `match_level` measures the copy against the
-source and adds that back before the limiter (`repurpose.Repurpose`).
-
-Knobs come from legacy `utils.uniqify` (volume, pitch) and Duplyfi 1.5.1
-(everything else, its default ranges in the presets).
-"""
-
 import random
 
 from pydantic import BaseModel
 
 from ofmhelpers.media.repurpose.values import Value, draw, pick
 
-# A pitch shift under this many semitones stays out of the chain.
 _PITCH_MIN = 0.01
 _PHASER_DELAY_PER_UNIT = 0.4
 _PHASER_DELAY_MS: tuple[float, float] = (0.5, 5.0)
 _ROOM_ECHO_SECOND_TAP = 0.7
 
-# Duplyfi's default ranges for the obvious effects (ms or Hz).
 _LOUD_RANGE: dict[str, tuple[float, float]] = {
     "chorus": (30, 50),
     "flanger": (2, 10),
@@ -42,30 +21,23 @@ _LOUD_RANGE: dict[str, tuple[float, float]] = {
 class AudioSettings(BaseModel, frozen=True):
     volume: Value | None = None
     pitch: Value | None = None
-    # Duplyfi's "waveform shift" setting; aphaser delay = 0.4 x this (ms).
     phaser_shift: Value | None = None
     treble_db: Value | None = None
     bass_cut_db: Value | None = None
     mid_db: Value | None = None
-    # "reverb" / "room", one per copy.
     echo: list[str] | str | None = None
     reverb_ms: Value | None = None
     reverb_decay: Value | None = None
     room_ms: Value | None = None
-    # One of chorus / flanger / phaser / tremolo / vibrato / none per copy.
     loud: list[str] | str | None = None
-    # Depth of the obvious effect, 1 = Duplyfi's.
     loudness: float = 1.0
     compress_db: Value | None = None
     deess_db: Value | None = None
     limit: Value | None = None
-    # A silent source gets faint pink-noise room tone.
     room_tone: bool = False
-    # Measure the copy against the source and add the lost level back.
     match_level: bool = False
 
     def merged(self, extra: AudioSettings | None) -> AudioSettings:
-        """These settings with `extra`'s set knobs on top."""
         if extra is None:
             return self
         return self.model_copy(update=extra.model_dump(exclude_unset=True))
@@ -120,8 +92,6 @@ def _draw(s: AudioSettings, rng: random.Random) -> AudioDraws:
 
 
 class AudioTransformer:
-    """One copy's sound: drawn on creation, then `filters()`."""
-
     def __init__(
         self,
         settings: AudioSettings,
@@ -135,9 +105,7 @@ class AudioTransformer:
         self.draws = _draw(settings, rng)
 
     def filters(self, makeup_db: float = 0.0) -> str:
-        """The -filter:a chain; `makeup_db` goes in before the limiter."""
         d = self.draws
-        # Start at 0, as the video does (`VideoTransformer.filters`).
         chain = ["asetpts=PTS-STARTPTS", *self._pitch_and_tempo()]
         if d.volume is not None and d.volume != 1:
             chain.append(f"volume={d.volume:.4f}")
@@ -160,17 +128,12 @@ class AudioTransformer:
         if makeup_db > 0:
             chain.append(f"volume={makeup_db:.2f}dB")
         if d.limit is not None:
-            # level=false: the default (true) auto-normalizes the output to
-            # 0 dBFS, crushing every copy to full scale (a near-DC wall on a
-            # quiet chain) -- this is a ceiling, not a loudness knob.
             chain.append(
                 f"alimiter=limit={d.limit:.3f}:attack=5:release=50:level=false"
             )
         return ",".join(chain)
 
     def _pitch_and_tempo(self) -> list[str]:
-        """Played at a higher/lower rate then resampled back moves pitch and
-        speed together, so atempo puts the speed back."""
         chain = []
         tempo = self.speed
         pitch = self.draws.pitch
@@ -201,7 +164,6 @@ class AudioTransformer:
         v, k = d.loud_value, self.settings.loudness
         effect = {
             "chorus": f"chorus=0.5:0.85:{v:.0f}|{v + 5:.0f}:{0.2 * k:.3f}|{0.15 * k:.3f}:0.25|0.3:1|0.75",
-            # ffmpeg's flanger depth tops out at 10 (loudness > 1 went past it).
             "flanger": f"flanger=delay={v:.1f}:depth={min(min(v, 10) * k, 10):.2f}:width=25:speed=0.5",
             "phaser": f"aphaser=in_gain=0.4:out_gain=0.74:delay={v:.1f}:decay={0.2 * k:.3f}:speed=0.5",
             "tremolo": f"tremolo=f={v:.1f}:d={0.15 * k:.3f}",
@@ -211,7 +173,5 @@ class AudioTransformer:
 
 
 def room_tone_input(seconds: float, sample_rate: int) -> list[str]:
-    """A faint pink-noise track for a silent source (a phone always records
-    sound): one more ffmpeg input."""
     source = f"anoisesrc=color=pink:amplitude=0.002:sample_rate={sample_rate}"
     return ["-f", "lavfi", "-t", f"{seconds:.3f}", "-i", source]

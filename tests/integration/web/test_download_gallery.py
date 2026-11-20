@@ -1,10 +1,3 @@
-"""
-/download-assets renders only `download_gallery_page` cards (prod: a page of
-20 media cards was slow to open, 2026-10-22); gallery-scroll.js fetches the
-rest from GET /download-assets/gallery?offset=N. Pages don't overlap, every
-job is reachable, and the sentinel is gone after the last page.
-"""
-
 import re
 
 import pytest
@@ -29,7 +22,6 @@ def client():
 
 @pytest.fixture
 def jobs(tmp_path):
-    """Two full pages and one more, oldest first."""
     ids = []
     for i in range(PAGE * 2 + 1):
         out = tmp_path / f"img{i}.png"
@@ -71,7 +63,6 @@ def test_scrolling_reaches_every_job_once_then_stops(client, jobs):
 
 
 def test_fragment_cards_match_the_page_cards(client, jobs):
-    """Same partial: a card appended on scroll is the card the page draws."""
     page = client.get("/download-assets").text
     fragment = client.get("/download-assets/gallery?offset=0").text
     card = re.compile(r'<div class="result-item".*?</p>\s*</div>', re.DOTALL)

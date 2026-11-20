@@ -1,11 +1,3 @@
-"""What /clone-links does behind its routes
-(web/routers/generation/clone_links.py): the paste read and refused, the
-previews priced, a Generate queued once, the cards, Recreate's links, Stop.
-
-A Generate is one `batch` (the page's id for it, sent with `/run`): a resend
-of the same batch -- the answer lost, a retry after an error -- returns the
-runs already queued and pays for nothing again."""
-
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -71,38 +63,22 @@ LABEL = "Clone links"
 PREFIX = "/clone-links"
 FILES_PREFIX = f"{PREFIX}/files"
 THUMBS_PREFIX = f"{PREFIX}/thumb"
-# A Generate's id, made by the page (`/run`'s `batch`).
 BATCH = r"^[0-9a-f]{8,32}$"
-# How long a sent batch is remembered as sent (a resend within it, even one
-# racing the first, queues nothing; after it, its runs still answer).
 _SENT_TTL_S = 24 * 3600
-# A run's row made but never queued (Redis/RQ refused): its card says so.
 NOT_QUEUED = "Not queued: run it again"
 
 
 class BatchStopped(BaseModel):
-    """`POST /stop/{job_id}`: the Generate stopped, and how many of its runs
-    are still running (a paid one finishes; the rest fail "Stopped" as the
-    worker reaches them)."""
-
     batch: str
     running: int
 
 
 class Sent(BaseModel):
-    """A Generate's runs in paste order, under its id."""
-
     jobs: list[Job]
     batch: str
 
 
-# --- Check and preview -----------------------------------------------------------
-
-
 def read(text: str) -> list[str]:
-    """The pasted links, cleaned, each once. Refused: a paste with a line
-    that is not one post of a video site (`CheckRefused`: every such line),
-    nothing pasted, too many."""
     pasted = read_pasted(text)
     if pasted.bad_lines:
         msg = "Please put one link per line"
@@ -133,8 +109,6 @@ def _resolution(resolution: str) -> str:
 
 
 def _price(provider: str, resolution: str) -> Price:
-    """A source second's price at `provider` and `resolution` (what /clone's
-    panel charges), and the longest video it takes."""
     target = _target(provider)
     try:
         price = clone_price(provider)
@@ -157,11 +131,6 @@ def _require_drive(user_id: int) -> None:
 def previews(
     urls: list[str], provider: str, resolution: str, user_id: int, owner_id: int
 ) -> Iterator[LinkPreview]:
-    """Generate's dialog: every link's cover, length and price, read without
-    downloading (as the clicker, with their cookies.txt), all in parallel,
-    each as it is done, cached ones first. Nothing is read without Google
-    Drive connected: `/run` would refuse it anyway. Every refusal is raised
-    here, before the first preview."""
     _require_drive(user_id)
     links = read("\n".join(urls))
     provider = provider or settings.aigen.default_provider
@@ -170,10 +139,6 @@ def previews(
 
 
 def cover(key: str, owner_id: int) -> Path:
-    """A previewed link's cover, kept small on disk (`preview`): only a file
-    already made, never a fetch, and only of a link `owner_id` previewed
-    (the kept file is shared, who may fetch is not): somebody else's
-    answers like one that is not there."""
     mine = bool(THUMB_KEY.match(key)) and previewed(key, owner_id)
     path = thumb_file(key) if mine else None
     if path is None or not path.is_file():
@@ -182,13 +147,7 @@ def cover(key: str, owner_id: int) -> Path:
     return path
 
 
-# --- Generate ------------------------------------------------------------------
-
-
 def _first_send(actor: str, batch: str) -> bool:
-    """Whether this is `batch`'s first `/run` (atomic: of two racing sends,
-    one). Redis down: True -- the batch's runs in the DB still stop a
-    later resend, and queueing needs Redis anyway."""
     try:
         return bool(
             get_redis().set(
@@ -201,7 +160,6 @@ def _first_send(actor: str, batch: str) -> bool:
 
 
 def _forget_send(actor: str, batch: str) -> None:
-    """`batch`'s send failed halfway: its resend counts as a first send."""
     try:
         get_redis().delete(f"clone-links:run:{actor}:{batch}")
     except RedisError:
@@ -209,8 +167,6 @@ def _forget_send(actor: str, batch: str) -> None:
 
 
 class Submitted(Protocol):
-    """The /clone-links form as its route read it (`CloneLinksForm`)."""
-
     provider: str
     api_key: str
     export: str
@@ -225,9 +181,6 @@ class Submitted(Protocol):
 
 
 class Generate(BaseModel):
-    """One /clone-links submit: whose it is, and `run`, the worker function
-    its router owns (RQ stores a job's function by its path)."""
-
     model_config = ConfigDict(frozen=True)
 
     actor: str
@@ -237,10 +190,6 @@ class Generate(BaseModel):
     run: Callable[..., Any]
 
     def _queue(self, api_key: str, params: dict[str, Any]) -> str:
-        """One run's job, on the clone-links queue. The key goes to the worker
-        only, never into the params its page shows. Not queued (Redis/RQ
-        refused): the job is failed at once -- never left `running` for
-        recovery to call a restart -- and the error raised."""
         job_id = create_job(TASK, params, actor=self.actor)
         try:
             enqueue_to(
@@ -264,15 +213,11 @@ class Generate(BaseModel):
         return job_id
 
     def _key(self, form: Submitted) -> str:
-        """The key the runs go out on: the owner's for the target's model
-        (`Keys.for_run`); "" without one."""
         return Keys.of(self.owner_id).for_run(
             form.provider, _target(form.provider).model, form.api_key
         )
 
     def _checked(self, form: Submitted) -> dict[str, Any]:
-        """What every run of this Generate shares; every refusal is raised
-        here, before anything is marked sent or queued."""
         target = _target(form.provider)
         if not self._key(form):
             msg = "API key is required"
@@ -304,14 +249,9 @@ class Generate(BaseModel):
         return paths
 
     def start(self, form: Submitted) -> Sent:
-        """One run per ticked link. Each link's video is downloaded by its
-        own run. `form.batch`: the page's id of this Generate -- one already
-        sent answers with its runs and queues nothing (none: a new id)."""
         shared = self._checked(form)
         urls = read("\n".join(form.links))
         images = self._subject(form)
-        # Only now, every refusal behind it: a refused send leaves its batch
-        # free for the corrected resend.
         batch = form.batch
         sent: list[Job] = []
         if batch is not None:
@@ -320,8 +260,6 @@ class Generate(BaseModel):
             if not first:
                 return Sent(jobs=sent, batch=batch)
         batch = batch or uuid.uuid4().hex
-        # `batch`, one per Generate: a failed run's Recreate brings back its
-        # batch's failed links (`recreate`), Stop stops them all.
         shared = {**shared, "reference_images": images, "batch": batch}
         queued = {job.params.get("link") for job in sent if job.error != NOT_QUEUED}
         api_key = self._key(form)
@@ -332,15 +270,10 @@ class Generate(BaseModel):
                 if url not in queued
             ]
         except Exception:
-            # Some may be queued already: the page's resend gets those back and
-            # queues only the rest, never one twice.
             _forget_send(self.actor, batch)
             raise
         jobs = [job for j in job_ids if (job := get_job(j, self.actor)) is not None]
         return Sent(jobs=[*sent, *jobs], batch=batch)
-
-
-# --- Cards, Recreate, Stop -----------------------------------------------------
 
 
 def card(job: Job, review: CloneFromLink | None) -> CloneLinksCard:
@@ -357,9 +290,6 @@ def card(job: Job, review: CloneFromLink | None) -> CloneLinksCard:
 
 
 def cards(jobs: list[Job], user_id: int) -> list[CloneLinksCard]:
-    """`user_id`'s runs as cards, each with its review -- only one of
-    theirs, never another person's row under a reused job id."""
-    # A run has one video: its review is file 0's.
     reviews = {
         r.job_id: r
         for r in clone_from_links.for_jobs([j.id for j in jobs], user_id=user_id)
@@ -369,7 +299,6 @@ def cards(jobs: list[Job], user_id: int) -> list[CloneLinksCard]:
 
 
 def cards_of(job_ids: list[str], actor: str, user_id: int) -> list[CloneLinksCard]:
-    """The cards of the asker's own runs among `job_ids`, each once."""
     runs = [
         job
         for job_id in dict.fromkeys(job_ids)
@@ -387,18 +316,10 @@ def _own_run(job_id: str, actor: str) -> Job:
 
 
 def _finishing(run: Job) -> bool:
-    """A failed run recovery still finishes: its provider request was made
-    (paid) and is remembered -- e.g. a poll that gave up while the provider
-    was still generating."""
     return run.status == "failed" and tasks.recall(run.id) is not None
 
 
 def _links_to_recreate(job: Job, actor: str) -> list[str]:
-    """A failed run's: every failed run of its Generate, in paste order
-    (ones hidden since left out, this one kept). A done run's: its own.
-    Never a run recovery still finishes (nothing at all when it is this
-    one), nor a link queued again since that is running or done -- an old
-    card's Recreate never pays for a reel twice."""
     if _finishing(job):
         return []
     batch = job.params.get("batch")
@@ -420,15 +341,10 @@ def _links_to_recreate(job: Job, actor: str) -> list[str]:
 
 
 def recreate(job_id: str, actor: str) -> RecreateLinks:
-    """The links a card's Recreate puts back in the box (none: nothing to
-    redo)."""
     return RecreateLinks(links=_links_to_recreate(_own_run(job_id, actor), actor))
 
 
 def stop(job_id: str, actor: str) -> BatchStopped:
-    """Stop: the Generate of this card stopped (`stop.py`). Rows are never
-    failed or their requests forgotten here: a worker may hold a run, and a
-    paid one is finished by its worker or by recovery."""
     batch = _own_run(job_id, actor).params.get("batch")
     if not isinstance(batch, str) or not batch:
         msg = "Not found"

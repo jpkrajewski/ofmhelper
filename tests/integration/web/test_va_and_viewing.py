@@ -1,8 +1,3 @@
-"""The VA role (a few tools, the owner's keys and store, nothing of the
-owner's seen) and an admin's "View as" (another person's pages, read only).
-Who may open what is `auth/access.py`; who a request acts as is the
-`Viewer` the auth middleware builds (`features/users/viewing.py`)."""
-
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -55,7 +50,6 @@ VA_REFUSED = [
 
 
 def _va_of(owner_email: str = OWNER, va_email: str = VA):
-    """An owner and their VA."""
     owner = make_user(owner_email)
     va = make_user(va_email, Role.VA)
     found = users.set_owner(va.id, owner.id)
@@ -67,9 +61,6 @@ def _client(email: str, role: Role = Role.USER) -> TestClient:
     client = TestClient(app)
     sign_in(client, email, role)
     return client
-
-
-# --- the VA role -----------------------------------------------------------------
 
 
 def test_the_map_gives_a_va_only_their_tools():
@@ -105,9 +96,6 @@ def test_a_va_is_refused_every_other_page(path):
 
 
 def test_a_page_that_is_not_theirs_sends_the_browser_home():
-    """Owner 2026-11-14: a VA typing /accounts read
-    {"detail":"Not available to you"}. A page load goes to their home; a
-    script's call still gets the 403."""
     _va_of()
     va = _client(VA, Role.VA)
 
@@ -127,7 +115,6 @@ def test_a_page_that_is_not_theirs_sends_the_browser_home():
 
 @pytest.mark.parametrize("role", [Role.VA, Role.USER, Role.ADMIN])
 def test_an_address_that_is_no_page_sends_the_browser_home(role):
-    """Owner 2026-11-14: /logs answered {"detail":"Not Found"}."""
     person = _client(OTHER, role)
     load = {"sec-fetch-mode": "navigate"}
 
@@ -137,7 +124,6 @@ def test_an_address_that_is_no_page_sends_the_browser_home(role):
 
     assert (lost.status_code, lost.headers["location"]) == (303, "/home")
     assert (call.status_code, call.json()) == (404, {"detail": "Not Found"})
-    # A page that exists and says "not found" about a thing keeps saying so.
     assert missing_job.status_code == 404
 
 
@@ -161,9 +147,6 @@ def test_a_vas_menu_lists_only_what_they_may_open():
 
 
 def test_a_va_has_no_account_page():
-    """Owner 2026-11-14: "they dont need a account page". The page load goes
-    home, the header names them without a link, and no page of theirs asks
-    for the Drive space (`drive-alert.js` reads /account/drive-space)."""
     _va_of()
     va = _client(VA, Role.VA)
 
@@ -182,7 +165,6 @@ def test_a_va_has_no_account_page():
 
 
 def test_a_vas_edit_and_handmade_are_links_in_the_bar_not_a_more_menu():
-    """Owner 2026-11-15: "why va has more in nav? just make this in main nav"."""
     _va_of()
 
     home = _client(VA, Role.VA).get("/home").text
@@ -209,11 +191,9 @@ def test_a_vas_run_goes_out_on_the_owners_key_which_the_va_never_sees():
     users.set_api_key(owner.id, "kie", "owner-kie-key-1234")
 
     assert Keys.of(va.id).for_run("kie", KIE, "") == "owner-kie-key-1234"
-    # Nothing of it reaches the VA's browser, and the field is not shown.
     page = _client(VA, Role.VA).get("/generate").text
     assert "owner-kie-key-1234" not in page
     assert "data-server-key" in page
-    # The owner's own form still has it.
     assert "owner-kie-key-1234" in _client(OWNER).get("/generate").text
 
 
@@ -253,9 +233,6 @@ def test_an_owner_sees_their_vas_jobs_and_a_va_only_their_own():
     assert viewer_for(other, None).user_ids == {other.id}
 
 
-# --- /users: making a VA -----------------------------------------------------------
-
-
 def test_users_adds_a_va_with_an_owner_that_never_changes():
     admin = TestClient(app)
     sign_in_admin(admin)
@@ -276,8 +253,6 @@ def test_users_adds_a_va_with_an_owner_that_never_changes():
     assert va is not None
     assert (va.role, va.owner_id) == (Role.VA, owner.id)
 
-    # Once added, a VA stays with that employer (owner 2026-11-18): their
-    # runs were made on its keys. The page shows no control for it.
     page = admin.get("/users")
     assert f'action="/users/{va.id}/owner"' not in page.text
     r = admin.post(f"/users/{va.id}/owner", data={"owner_id": str(other.id)})
@@ -285,11 +260,9 @@ def test_users_adds_a_va_with_an_owner_that_never_changes():
     assert "deactivate them and add them again" in r.text
     assert users.get_user(va.id).owner_id == owner.id
 
-    # Nor can it be cleared.
     r = admin.post(f"/users/{va.id}/owner", data={"owner_id": ""})
     assert r.status_code == 400
     assert users.get_user(va.id).owner_id == owner.id
-    # The role itself never changes after the user is added.
     r = admin.post(f"/users/{va.id}/role", data={"role": "user"})
     assert r.status_code in (404, 405)
     assert users.get_user(va.id).role == Role.VA
@@ -306,8 +279,6 @@ def test_a_va_cannot_own_a_va_and_only_a_va_has_an_owner():
 
 
 def test_an_owner_picked_for_a_user_is_ignored():
-    """The add form sends an owner only for a VA; one sent anyway for a
-    user or an admin makes nobody anyone's."""
     admin = TestClient(app)
     sign_in_admin(admin)
     owner = make_user(OWNER)
@@ -320,14 +291,10 @@ def test_an_owner_picked_for_a_user_is_ignored():
     assert (added.role, added.owner_id) == (Role.USER, None)
 
 
-# --- an admin's "View as" ------------------------------------------------------------
-
-
 _LOOK_ONLY = "You are viewing as {name}. Go back to your view to do this."
 
 
 def _viewing(target_email: str = OWNER, role: Role = Role.USER):
-    """An admin's client, viewing as `target_email`."""
     admin = TestClient(app)
     sign_in_admin(admin)
     target = make_user(target_email, role)
@@ -343,13 +310,11 @@ def test_view_as_shows_the_other_persons_pages():
     home = admin.get("/home").text
     assert f"Viewing as {target.label}" in home
     assert "Back to my view" in home
-    # Their menu, not an admin's; their account, their key's tail only.
     assert 'href="/users"' not in home
     assert admin.get("/users").status_code == 403
     account = admin.get("/account").text
     assert target.email in account
     assert "…1234" in account
-    # No key of theirs is ever sent to the admin's browser.
     assert "their-kie-key-1234" not in admin.get("/generate").text
 
 
@@ -370,9 +335,6 @@ def test_view_as_changes_nothing():
 
 
 def test_an_admin_viewing_as_their_own_va_also_acts_as_the_va():
-    """Owner 2026-11-13: "Viewing as noelyn: look only" on a click in the
-    VA's Download page. The VA works on the admin's keys and files, so the
-    admin may do there what the VA may; what is made is the VA's."""
     admin = TestClient(app)
     me = sign_in_admin(admin)
     va = make_user(VA, Role.VA)
@@ -392,15 +354,12 @@ def test_an_admin_viewing_as_their_own_va_also_acts_as_the_va():
     )
 
     assert (viewer.acts, viewer.read_only, viewer.keys_of) == (True, False, me.id)
-    # The request is the VA's: a VA hides nothing (the access map's refusal,
-    # not "look only"), and what a VA may send gets past the view.
     assert (hidden.status_code, hidden.json()) == (
         403,
         {"detail": "Not available to you"},
     )
     assert get_job(vas_job).hidden_at is None
     assert started.status_code != 403
-    # Still inside the view, with the way back.
     assert f"Viewing as {va.label}" in admin.get("/home").text
 
 
@@ -431,8 +390,6 @@ def test_an_owner_reads_done_by_va_on_their_vas_card():
 
 
 def test_view_as_never_shows_a_phone_password_or_the_export(monkeypatch):
-    """An admin viewing as someone sees their phones, not what opens the
-    accounts on them (2026-11-14: Show and Export both answered)."""
     monkeypatch.setenv("OFM_VAULT_KEY", Fernet.generate_key().decode())
     admin, target = _viewing()
     phone = devices.add_device(DeviceFields(label="Phone 01"), target.id)
@@ -489,8 +446,6 @@ def test_logging_out_while_viewing_works():
     assert (r.status_code, r.headers["location"]) == (303, "/login")
 
 
-# --- "Login as Virtual Assistant": the employer's email + the VA's password ------
-
 VA_PASSWORD = "va-password-one"
 
 
@@ -503,7 +458,6 @@ def _va_login(client: TestClient, employer: str, password: str):
 
 
 def _big_g(client: TestClient, password: str):
-    """Big G Login: start -> the password page -> its callback."""
     started = client.get("/auth/owner/start", follow_redirects=False)
     state = parse_qs(urlsplit(started.headers["location"]).query)["state"][0]
     sent = client.post(
@@ -519,7 +473,6 @@ def _big_g(client: TestClient, password: str):
 
 
 def _added_va(password: str = VA_PASSWORD, email: str = VA, employer: str = OWNER):
-    """A VA added on /users by an admin, with their employer and password."""
     admin = TestClient(app)
     sign_in_admin(admin)
     owner = make_user(employer)
@@ -549,7 +502,6 @@ def test_a_va_is_added_with_a_password_and_signs_in_with_the_employers_email():
     assert added.status_code == 200
     assert f"{OWNER} and the password you set." in added.text
     assert "Login as Virtual Assistant" in added.text
-    # No set-password link: there is nothing for the VA to set up.
     assert "/password/" not in added.text
     va = users.by_email(VA)
     assert va is not None
@@ -568,20 +520,16 @@ def test_a_vas_password_opens_no_other_way_in():
     _added_va()
     client = TestClient(app)
 
-    # Not the email form, with the VA's own email or the employer's.
     for email in (VA, OWNER):
         r = client.post(
             "/login", data={"email": email, "password": VA_PASSWORD, "next": "/"}
         )
         assert r.status_code == 401
-    # Not Big G Login: that is the admin password only.
     assert _big_g(client, VA_PASSWORD).status_code == 401
     assert client.get("/generate", follow_redirects=False).status_code == 303
 
 
 def test_the_va_login_takes_no_one_but_a_va():
-    """The employer's own password, the admin password, a wrong one, an
-    unknown employer, the VA's own email: none opens anything."""
     _added_va()
     owner = users.by_email(OWNER)
     users.set_password_hash(owner.id, hash_password("the-employers-own-pw"))
@@ -664,7 +612,6 @@ def test_an_admin_sets_a_vas_new_password_and_the_old_one_stops_working():
     assert "Password saved." in r.text
     assert _va_login(TestClient(app), OWNER, VA_PASSWORD).status_code == 401
     assert _va_login(TestClient(app), OWNER, "va-password-two").status_code == 303
-    # A VA gets no set-password link, a user no admin-set password.
     assert admin.post(f"/users/{va.id}/link").status_code == 400
     owner = users.by_email(OWNER)
     r = admin.post(f"/users/{owner.id}/password", data={"password": "x" * 20})

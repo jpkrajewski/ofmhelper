@@ -1,9 +1,3 @@
-"""
-Unit tests for web/schemas.py -- the Pydantic contract at the persistence
-boundary. Verifies the models accept exactly what the current code writes and
-reject malformed payloads (the validation the raw-dict/JSON layer never had).
-"""
-
 import time
 
 import pytest
@@ -37,9 +31,9 @@ def test_job_validates_a_current_running_record():
 @pytest.mark.parametrize(
     "result",
     [
-        [{"name": "a.mp4", "path": "/app/kieai_out/a.mp4"}],  # flat one-file-per-entry
-        [{"url": "u", "success": True, "output_paths": ["/x"]}],  # grouped by url
-        "1AbCdriveFileId",  # bare scalar (todo_drive_upload)
+        [{"name": "a.mp4", "path": "/app/kieai_out/a.mp4"}],
+        [{"url": "u", "success": True, "output_paths": ["/x"]}],
+        "1AbCdriveFileId",
         None,
     ],
 )

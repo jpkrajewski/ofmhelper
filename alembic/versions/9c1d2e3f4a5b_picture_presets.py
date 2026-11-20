@@ -1,17 +1,3 @@
-"""picture_presets: /pictures presets -- a name, a prompt and up to 10
-reference images (asset-store paths, in order) that every run of the preset
-sends to Nano Banana Pro with the picture to recreate. Owned (user_id,
-ON DELETE RESTRICT: a user with presets is deactivated, not deleted); names
-unique per owner.
-
-New table: nothing existing changes.
-
-Revision ID: 9c1d2e3f4a5b
-Revises: a2b3c4d5e6f7
-Create Date: 2026-10-31 23:30:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

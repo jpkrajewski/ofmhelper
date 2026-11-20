@@ -49,7 +49,6 @@
         </div>
     </div>
     {{ ui.button("Generate", "primary", type="submit") }}
-    {# "Queued N runs." and that Generate's Stop (clone-links.js shows it). #}
     <div class="clone-links-status">
         <div class="generation-status" role="status" aria-live="polite"></div>
         {{ ui.button("Stop", hook="clone-links-stop", attrs={"id": "clone-links-stop", "hidden": true}) }}
@@ -80,11 +79,7 @@
 <dialog class="accounts-dialog pick-dialog" id="clone-links-confirm">
     <form method="dialog">
         <h2 id="clone-links-confirm-title"></h2>
-        {# drive_space: the cached read only (None when not known); `reconnect`:
-           Google refused the stored token (base.html's banner says so on
-           every page too). #}
         {% if drive_ready and drive_space and drive_space.reconnect %}{{ ui.notice("Google Drive disconnected: these videos will not go to Drive.", kind="fail") }}{% endif %}
-        {# Shown by clone-links.js while the ready runs x reel_mb do not fit. #}
         {% if drive_space and drive_space.free_mb is number %}{{ ui.notice("Google Drive will be full (" ~ drive_space.free_text ~ " left): some of these videos will not go to Drive.", kind="fail", attrs={"id": "clone-links-confirm-space", "hidden": true, "data-free-mb": drive_space.free_mb, "data-reel-mb": reel_mb}) }}{% endif %}
         <ol class="pick-lines" id="clone-links-confirm-lines" aria-live="polite"></ol>
         <footer class="pick-footer">
@@ -100,10 +95,8 @@
     </form>
 </dialog>
 
-{# A Generate tile's Remove (clone-links.js clones it into every tile). #}
 <template id="pick-remove">{{ ui.button("Remove", block=true, hook="pick-remove") }}</template>
 
-{# Check refused the paste (one link per line): the lines and why. #}
 <dialog class="accounts-dialog" id="clone-links-refused">
     <form method="dialog">
         <h2 id="clone-links-refused-title"></h2>
@@ -115,10 +108,7 @@
     </form>
 </dialog>
 
-{# The review block clone-links.js adds to a card that finishes while the
-   page is open; its first poll fills it. #}
 <template id="card-review">{% include "_clone_from_link_pending.html" %}</template>
-{# The decision button's icon while its text shows / is hidden (clone-links.js). #}
 <template id="icon-eye-off">{{ ic.icon("eye-off") }}</template>
 <template id="icon-eye">{{ ic.icon("eye") }}</template>
 

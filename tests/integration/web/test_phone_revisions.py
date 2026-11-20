@@ -1,8 +1,3 @@
-"""/phones History: every change to a person's phones leaves their state,
-recorded by the database itself, and any state can be gone back to (owner
-2026-11-13: "someone removes a phone ... we can go back to any state").
-Plus the daily encrypted backup file of those states."""
-
 from pathlib import Path
 
 import pytest
@@ -68,9 +63,6 @@ def _usernames(owner: int) -> list[str]:
     return sorted(x.username for d in devices.list_devices(owner) for x in d.logins)
 
 
-# --- the database records ------------------------------------------------------
-
-
 def test_every_kind_of_change_leaves_exactly_one_revision(owner):
     steps = []
     phone = _phone(owner)
@@ -103,8 +95,6 @@ def test_every_kind_of_change_leaves_exactly_one_revision(owner):
 
 
 def test_one_transaction_names_every_table_it_touched_once(owner):
-    """A link and then its login changed in one transaction: both named
-    ("logins UPDATE" is also the end of "device_logins UPDATE")."""
     phone = _phone(owner)
     login = _login(phone, owner)
 
@@ -151,9 +141,6 @@ def test_the_history_cannot_be_changed_or_deleted(owner, statement):
         s.execute(text(statement))
 
     assert [r.change for r in _revisions(owner)] == ["devices INSERT"]
-
-
-# --- going back ------------------------------------------------------------------
 
 
 def test_a_deleted_phone_comes_back_with_its_accounts_and_passwords(owner):
@@ -216,9 +203,6 @@ def test_nobody_restores_another_persons_revision(owner):
     assert _labels(owner) == ["Phone 01"]
 
 
-# --- the page ----------------------------------------------------------------------
-
-
 def test_history_lists_the_changes_and_restore_goes_back(client, owner):
     phone = _phone(owner)
     _login(phone, owner)
@@ -248,9 +232,6 @@ def test_restoring_a_revision_that_is_not_theirs_is_a_404(client):
     assert "Theirs" not in client.get("/phones/revisions").text
 
 
-# --- the backup file ---------------------------------------------------------------
-
-
 @pytest.fixture
 def uploads(tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "uploads_root", lambda: tmp_path)
@@ -258,12 +239,10 @@ def uploads(tmp_path, monkeypatch):
 
 
 def _lose_everything() -> None:
-    """The database as after a disaster: no phone, no History (the users
-    are still there)."""
     with session_scope() as s:
         s.execute(text("SET LOCAL session_replication_role = replica"))
         for name in ("device_logins", "logins", "devices", "phone_revisions"):
-            s.execute(text(f"DELETE FROM {name}"))  # noqa: S608 -- fixed names
+            s.execute(text(f"DELETE FROM {name}"))  # noqa: S608
 
 
 def test_the_backup_file_holds_the_whole_history_and_brings_it_back(owner, uploads):
@@ -285,7 +264,6 @@ def test_the_backup_file_holds_the_whole_history_and_brings_it_back(owner, uploa
     assert "danewalker" not in content
     assert "Phone 01" not in content
     assert (len(loaded.revisions), again.revisions) == (4, [])
-    # Each person's own History, as it was: same moments, same words.
     assert [(r.created_at, r.change) for r in _revisions(owner)] == history
     assert [r.phones for r in _revisions(other)] == [1]
     assert _labels(owner) == []

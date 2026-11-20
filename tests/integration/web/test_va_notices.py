@@ -1,11 +1,3 @@
-"""
-What the owner is told about a VA (features/vas/notices.py, owner
-2026-11-14): the VA signed in; every 10 reels the VA finished that day;
-every $10 the VA's day cost. Each step goes out under its own key (the bus
-sends a key once), only a VA's work counts, and a notice that cannot be
-made never fails the job.
-"""
-
 from decimal import Decimal
 
 import pytest
@@ -30,7 +22,6 @@ OWNER = "owner@example.com"
 
 @pytest.fixture
 def sent(monkeypatch) -> list[Event]:
-    """Every event handed to the bus."""
     out: list[Event] = []
     monkeypatch.setattr(notices, "emit", out.append)
     return out
@@ -44,7 +35,6 @@ def _va() -> User:
 
 
 def _finish(user: User, task: str = "clone") -> str:
-    """A job of `user`'s run to its end by the real runner."""
     job_id = create_job(task, {}, actor=str(user.id))
     run_job(job_id, list, {})
     return job_id
@@ -61,7 +51,6 @@ def _fail(user: User) -> str:
 
 
 def _costing(user: User, usd: str, task: str = "ai") -> str:
-    """A finished job of `user`'s that cost `usd`."""
     job_id = create_job(task, {}, actor=str(user.id))
     generation = GenerationRecord(provider="kie", model="m", task_id="t")
     keep_cost(job_id, JobMeta(generations=[generation]), JobCost(usd=Decimal(usd)))
@@ -92,8 +81,8 @@ def test_the_tenth_reel_of_the_day_is_told_and_the_ninth_is_not(sent):
     for _ in range(9):
         _finish(va)
     before = list(sent)
-    _fail(va)  # no reel
-    _finish(va, task="download_media")  # no reel either
+    _fail(va)
+    _finish(va, task="download_media")
     still = list(sent)
 
     _finish(va)
@@ -148,7 +137,7 @@ def test_an_unpriced_run_and_an_owners_work_tell_nothing(sent):
     for _ in range(10):
         _finish(owner)
     notices.after_job(_costing(owner, "50"))
-    notices.after_job(_finish(va, task="ai"))  # no price, no reel
+    notices.after_job(_finish(va, task="ai"))
 
     assert sent == []
 

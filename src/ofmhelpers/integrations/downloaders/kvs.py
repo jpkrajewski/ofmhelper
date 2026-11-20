@@ -1,17 +1,3 @@
-"""Videos from KVS (Kernel Video Sharing) sites -- gayhub.com and the many
-tube sites built on it.
-
-Their player data (`flashvars`) lists the video in several qualities
-(`video_url`, `video_alt_url`, `video_alt_url2`, ... with `*_text` = "480p",
-"720p", "1080p"), each address scrambled ("function/0/https://.../get_file/
-1/<hash>/...") against the page's `license_code`. yt-dlp can unscramble it
-(`GenericIE._kvs_get_real_url`) but its generic extractor takes the page's
-plain `<source>` tag first and saves the HTML it gets back as an .mp4
-(2026-10-23: a 268 KB "video" from gayhub.com). This reads the player data,
-unscrambles the best quality with yt-dlp's own code and downloads it with
-the page as Referer.
-"""
-
 import re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -38,22 +24,17 @@ _CHUNK = 1 << 20
 
 
 class KvsSource(BaseModel):
-    """One quality the player offers."""
-
     url: str
     height: int
 
 
 class KvsPage(BaseModel):
-    """What a KVS page's player data says."""
-
     video_id: str
     license_code: str
     sources: list[KvsSource]
 
     @classmethod
     def parse(cls, html: str) -> KvsPage | None:
-        """None when the page has no KVS player."""
         if "license_code" not in html or "flashvars" not in html:
             return None
         found = dict(_VAR.findall(html))
@@ -75,15 +56,13 @@ class KvsPage(BaseModel):
         )
 
     def best(self) -> str:
-        """The highest quality's real address."""
         source = max(self.sources, key=lambda s: s.height)
         if not source.url.startswith("function/"):
             return source.url
-        return GenericIE._kvs_get_real_url(source.url, self.license_code)  # noqa: SLF001 -- yt-dlp's own unscrambler
+        return GenericIE._kvs_get_real_url(source.url, self.license_code)  # noqa: SLF001
 
 
 def download(url: str, output_dir: Path | None = None) -> DownloadResult:
-    """`url`'s video at its best quality, or why not."""
     output_dir = output_dir or Path("downloads")
     timeout = settings.downloaders.http_timeout_s
     headers = {"User-Agent": _BROWSER}
@@ -100,7 +79,7 @@ def download(url: str, output_dir: Path | None = None) -> DownloadResult:
         )
     try:
         real = kvs.best()
-    except Exception as exc:  # yt-dlp's private helper changed or refused
+    except Exception as exc:
         logger.warning("kvs: could not unscramble %s", url, exc_info=True)
         return DownloadResult(url=url, success=False, error=f"KVS address: {exc}")
     site = (urlparse(url).hostname or "site").removeprefix("www.").split(".")[0]
@@ -115,7 +94,6 @@ def download(url: str, output_dir: Path | None = None) -> DownloadResult:
 
 
 def _save(url: str, dest: Path, headers: dict[str, str], timeout: int) -> None:
-    """Streamed to a temp name, renamed when complete."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
     try:

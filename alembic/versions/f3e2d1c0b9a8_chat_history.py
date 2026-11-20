@@ -1,14 +1,3 @@
-"""chat_threads, chat_fan_messages: the history /chatting shows
-
-Each chat's read position, and every fan message with when the model answered
-it, kept by the chat history sweep. New tables only; nothing moves.
-
-Revision ID: f3e2d1c0b9a8
-Revises: 7a8b9c0d1e2f
-Create Date: 2026-11-05 00:30:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

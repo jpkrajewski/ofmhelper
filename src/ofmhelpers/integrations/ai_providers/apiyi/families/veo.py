@@ -1,19 +1,3 @@
-"""Google Veo 3.1, the official channel (docs.apiyi.com veo-3-1-official,
-2026-11-06), on a default-group key (per-call or usage-first billing): $0.30
-a video on Fast, $1.20 standard, whatever the length or resolution.
-
-- Submit `POST /v1/videos`: JSON for text-to-video; image-to-video is
-  multipart with the one image as the file `input_reference` (no URL). `seconds`
-  is a STRING ("4"/"6"/"8"; a number is refused); `size` "1280x720"..;
-  `metadata` {resolution 720p/1080p/4k, aspectRatio 16:9/9:16, seed,
-  negativePrompt}. 1080p/4k take only 8 s. No audio switch (never send
-  `generateAudio`: refused); audio is always on.
-- Read `GET /v1/videos/{id}`: queued/in_progress (pending), completed,
-  failed (`error.message`). A completed task's `video_url` (no key, ~24 h)
-  is not always there; else `GET /v1/videos/{id}/content` with our key (it
-  answers 400 "IN_PROGRESS" for ~20 s after completed: tried again).
-"""
-
 import time
 from pathlib import Path
 
@@ -53,7 +37,6 @@ _SIZES = {
     ("4k", "9:16"): "2160x3840",
 }
 _IMAGE = ImageLimits(max_bytes=10 * 1000 * 1000, max_side=4096)
-# /content right after completed: "task status is IN_PROGRESS" for ~20 s.
 _CONTENT_TRIES = 8
 _CONTENT_WAIT_S = 4
 
@@ -87,8 +70,6 @@ class VeoTask(Lenient):
 
 
 class Metadata(BaseModel):
-    """`metadata`: a seed or negative prompt not given is left out."""
-
     resolution: str
     aspect_ratio: str = Field(serialization_alias="aspectRatio")
     seed: JsonValue = None
@@ -96,8 +77,6 @@ class Metadata(BaseModel):
 
 
 class Body(BaseModel):
-    """`POST /v1/videos`, dumped by alias without the Nones."""
-
     model: str
     prompt: str
     seconds: str
@@ -106,7 +85,6 @@ class Body(BaseModel):
 
 
 def fields(spec: ModelSpec, payload: Payload) -> Body:
-    """Our form's values as the official channel's fields."""
     values = with_defaults(spec, payload).values
     resolution = str(values.get("resolution", "720p"))
     ratio = str(values.get("aspect_ratio", "16:9"))
@@ -176,7 +154,6 @@ class Veo(Family):
         raise ProviderUnavailableError(msg)
 
     def download(self, client: ApiyiClient, url: str, dest: Path) -> Path | None:
-        """`/content` is behind our key; a `video_url` is not (plain download)."""
         if not (url.startswith(f"{_base()}{VIDEOS}/") and url.endswith(CONTENT)):
             return None
         path = url.removeprefix(_base())

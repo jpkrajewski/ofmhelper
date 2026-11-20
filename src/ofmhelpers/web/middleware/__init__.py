@@ -1,19 +1,3 @@
-"""Cross-cutting request handling, one concern per file.
-
-Everything here runs on *every* request, before routing. `auth.py` owns the
-whole auth story (the allowlist check, the password check, `require`) on
-`AuthMiddleware` itself; `ratelimit.py` holds the Redis counters (failed
-logins, writes per IP) and the middleware that applies them.
-
-Order matters and is decided in `web/main.py`, not here: Starlette applies
-middleware outside-in in *added* order, so the last `add_middleware` call ends
-up outermost. A request passes SessionMiddleware (reads/signs the cookie) ->
-WriteRateLimitMiddleware (drops a flood before any auth work) -> AuthMiddleware
-(gates everything not on the public allowlist). `compression.py` wraps those:
-it gzips whatever the rest produced. `canonical_host.py` is outermost: a
-request on the wrong host is redirected before anything else runs.
-"""
-
 from ofmhelpers.web.middleware.auth import AuthMiddleware
 from ofmhelpers.web.middleware.bridge import BridgeMiddleware
 from ofmhelpers.web.middleware.canonical_host import CanonicalHostMiddleware

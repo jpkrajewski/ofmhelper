@@ -1,6 +1,3 @@
-"""One Download tool for any link: each URL tries yt-dlp and gallery-dl in
-the order its kind of post suggests, and keeps the first that gets files."""
-
 import subprocess
 from pathlib import Path
 
@@ -12,8 +9,6 @@ from ofmhelpers.integrations.downloaders.models import DownloadResult
 
 @pytest.fixture(autouse=True)
 def _no_kvs_site(monkeypatch):
-    """The KVS reader finds no player (and never reaches the network)
-    unless a test says otherwise."""
     monkeypatch.setattr(
         kvs,
         "download",
@@ -25,9 +20,6 @@ def _no_kvs_site(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_saver_sites(monkeypatch):
-    """The saver fallback refuses (as it does for a non-Instagram link,
-    `savers.download`) and never reaches the network unless a test says
-    otherwise. Yields the real download()."""
     original = savers.download
     monkeypatch.setattr(
         savers,
@@ -41,7 +33,6 @@ def _no_saver_sites(monkeypatch):
 
 @pytest.fixture
 def tried(monkeypatch) -> list[str]:
-    """Which downloader ran, in order; each fails unless the URL names it."""
     calls: list[str] = []
 
     def fake(name: str):
@@ -119,7 +110,6 @@ def test_when_both_fail_both_reasons_are_kept(tried):
 def test_a_tool_that_does_not_know_the_site_does_not_hide_the_real_reason(
     monkeypatch,
 ):
-    """Prod, 2026-10-22: PornHub's 403 was shown as "Unsupported URL"."""
 
     def fails(error):
         return lambda url, config=None, cookiefile=None: DownloadResult(
@@ -146,8 +136,6 @@ def test_download_all_keeps_the_order(tried):
 
 
 def test_download_all_logs_in_with_the_given_cookies_then_deletes_them(monkeypatch):
-    """Both downloaders get one file holding exactly the user's cookies.txt;
-    it is gone once the run ends."""
     seen: list[tuple[str, str]] = []
 
     def fail(url: str, config=None, cookiefile=None) -> DownloadResult:
@@ -178,9 +166,6 @@ def test_download_all_without_cookies_runs_logged_out(monkeypatch):
     assert logins == [None]
 
 
-# --- a "video" that is not one (2026-10-23) ----------------------------------
-
-
 def _real_video(path: Path) -> Path:
     subprocess.run(
         [
@@ -204,8 +189,6 @@ def _real_video(path: Path) -> Path:
 def test_a_web_page_saved_as_mp4_is_no_download_and_the_next_tool_runs(
     monkeypatch, tmp_path
 ):
-    """yt-dlp saved gayhub's HTML as a 268 KB .mp4 and called it done: now
-    it is deleted, and the KVS reader's real video is what comes back."""
     page = tmp_path / "NA_clip-1NA.mp4"
     page.write_text("<!DOCTYPE html><html>a web page</html>")
     video = _real_video(tmp_path / "gayhub_168792.mp4")
@@ -266,12 +249,8 @@ def test_a_real_video_passes_the_check(monkeypatch, tmp_path):
     assert video.exists()
 
 
-# --- one post only (/clone-links, review #12) --------------------------------
-
-
 @pytest.fixture
 def configs(monkeypatch) -> dict[str, object]:
-    """The config each tool got; both fail, so both run."""
     seen: dict[str, object] = {}
 
     def keep(name: str):
@@ -318,12 +297,7 @@ def test_the_download_tool_keeps_playlists_and_every_extractor(configs):
     assert "--range" not in pictures.gallery_dl_cmd("https://www.instagram.com/p/abc/")
 
 
-# --- downloaded(): the URL's directory is gone after the block (review #45) --
-
-
 def _writes(name: str, *, ok: bool):
-    """A tool that writes into its directory (a partial file when it
-    fails) and reports it."""
 
     def run(url: str, config=None, cookiefile=None) -> DownloadResult:
         out = config.output_dir
@@ -369,8 +343,7 @@ def test_a_failed_download_leaves_no_folder_or_partial_file(monkeypatch, tmp_pat
     assert list(tmp_path.iterdir()) == []
 
 
-class _StoreFullError(RuntimeError):
-    """The caller's own work inside the block failed."""
+class _StoreFullError(RuntimeError): ...
 
 
 def _keep_then_fail(url: str) -> None:
@@ -403,9 +376,6 @@ def test_each_downloaded_url_gets_its_own_folder(monkeypatch, tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-# --- the saver-site fallback (Instagram posts, tried last) -------------------
-
-
 def test_savers_run_last_after_every_other_tool(monkeypatch):
     calls: list[str] = []
 
@@ -434,8 +404,6 @@ def test_savers_run_last_after_every_other_tool(monkeypatch):
 def test_a_login_walled_instagram_post_is_rescued_by_savers(
     monkeypatch, tmp_path, fake_externals, _no_saver_sites
 ):
-    """Prod 2026-10-28: every tool failed 'content isn't available to
-    everyone' -- the saver fallback fetches the reel."""
     walled = "content isn't available to everyone"
     monkeypatch.setattr(media, "_OUTPUT_ROOT", tmp_path)
     monkeypatch.setattr(savers, "download", _no_saver_sites)

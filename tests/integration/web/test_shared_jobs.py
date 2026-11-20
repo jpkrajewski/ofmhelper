@@ -1,12 +1,3 @@
-"""
-A VA's jobs are their owner's to see (`jobs.user_id`, `Viewer.actors`): the
-owner's galleries show them with the VA's name, and their status page and
-files open. A VA hides nothing; the owner hides a card of their own or of a
-VA's, which only changes what the owner looks at. The VA
-sees nothing of the owner's, a third person nothing of either, and a job
-with no owner is nobody's.
-"""
-
 import re
 from pathlib import Path
 
@@ -62,7 +53,6 @@ def _done(task: str, user: User, out: Path) -> str:
 
 
 def _card(html: str, job_id: str) -> str:
-    """The markup of `job_id`'s card."""
     found = re.search(
         rf'<div class="result-item" data-job-id="{job_id}".*?(?=<div class="result-item"|\Z)',
         html,
@@ -141,7 +131,6 @@ def test_a_third_person_sees_neither(team, tmp_path):
 
 
 def test_another_owners_va_is_not_shared(team, tmp_path):
-    """Sharing follows `users.owner_id`, not the role."""
     boss = make_user("second@example.com")
     stranger = _va("their-va@example.com", "", boss)
     job = _done("clone", stranger, tmp_path / "x.png")
@@ -152,10 +141,6 @@ def test_another_owners_va_is_not_shared(team, tmp_path):
 
 
 def test_a_va_hides_nothing_and_the_owner_hides_the_vas_card(team, tmp_path):
-    """Owner 2026-11-14: "what if VA hides clones from me? dont give them
-    this posibilty". The VA's card has no Hide, their page no "Show hidden",
-    and the route refuses them; the owner hides and unhides the VA's card
-    like their own, and the VA keeps seeing a card the owner hid."""
     job = _done("clone", team.va, tmp_path / "va.png")
     mine = _done("clone", team.owner, tmp_path / "owner.png")
     owner, va = _client(OWNER), _client(VA, Role.VA)
@@ -176,8 +161,6 @@ def test_a_va_hides_nothing_and_the_owner_hides_the_vas_card(team, tmp_path):
     assert "Show hidden (1)" in html
     assert _ids(owner.get("/clone/gallery?hidden=1").text) == [job]
 
-    # The owner's choice of what they look at: the VA still has their card,
-    # never marked hidden, also when asking for the hidden view.
     assert _ids(va.get("/clone").text) == [job]
     assert _ids(va.get("/clone/gallery?hidden=1").text) == [job]
     assert "data-hidden" not in va.get("/clone/gallery").text
@@ -209,8 +192,6 @@ def test_a_job_with_no_owner_is_nobodys(team):
 
 
 def test_an_actor_that_is_no_user_id_stores_and_reads_nobodys_job(team):
-    """A system name never becomes an owner, and never reads an ownerless
-    job back by it."""
     job = log_event("sweep", actor="system")
 
     assert get_job(job).user_id is None
@@ -219,7 +200,6 @@ def test_an_actor_that_is_no_user_id_stores_and_reads_nobodys_job(team):
 
 
 def test_a_user_who_has_jobs_is_deactivated_not_deleted(team, tmp_path):
-    """`jobs.user_id` is ON DELETE RESTRICT: a job never loses its owner."""
     job = _done("clone", team.va, tmp_path / "va.png")
     admin = _client("boss@example.com", Role.ADMIN)
 

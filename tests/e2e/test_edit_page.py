@@ -1,8 +1,3 @@
-"""/edit in the browser (static/js/edit.js): frame steps through the video's
-own frame times, the crop box and the turn as the size shown, and a click
-on the picture that plays without dropping the last cut. The server side
-(what Frame and Cut make) is tests/integration/web/test_edit.py."""
-
 import re
 import subprocess
 import uuid
@@ -16,16 +11,14 @@ from playwright.sync_api import Route, expect
 
 pytestmark = pytest.mark.e2e
 
-VA_ID = 2  # e2e conftest `_seed_users`
+VA_ID = 2
 
-# The light copy and a cut are jobs on the edit worker, polled.
 JOB_TIMEOUT_MS = 60_000
-TIMES = chr(0xD7)  # the multiplication sign of the size shown: 1440 x 1080
+TIMES = chr(0xD7)
 
 
 @pytest.fixture
 def clip(tmp_path: Path) -> Path:
-    """4 s, 320x240 (landscape), 25 fps."""
     return _make_clip(tmp_path / "clip.mp4", 4)
 
 
@@ -53,7 +46,6 @@ def _make_clip(path: Path, seconds: int) -> Path:
 
 
 def _open(va: Session, clip: Path) -> None:
-    """Uploads `clip` on /edit and waits for its light copy in the player."""
     va.goto("/edit")
     va.page.locator(".file-picker .file-add-input").set_input_files(str(clip))
     va.page.wait_for_url(re.compile(r"/edit\?video="))
@@ -69,7 +61,6 @@ def _marker(va: Session) -> str:
 
 
 def _timecode(va: Session) -> tuple[int, int]:
-    """(seconds, frame within the second) of the marker."""
     _, seconds, frame = _marker(va).split(":")
     return int(seconds), int(frame)
 
@@ -78,7 +69,7 @@ def test_each_frame_step_moves_the_marker_by_one_frame(va: Session, clip: Path):
     _open(va, clip)
     strip = va.page.locator("#edit-timeline")
     width = strip.bounding_box()["width"]  # type: ignore[index]
-    strip.click(position={"x": width * 0.3, "y": 10})  # a press: the marker
+    strip.click(position={"x": width * 0.3, "y": 10})
     expect(va.page.locator("#edit-at")).not_to_have_text("00:00:00")
     seen = [_timecode(va)]
 
@@ -125,13 +116,8 @@ def test_the_crop_box_and_the_turn_change_the_size_it_comes_out_at(
 
 
 def test_playing_at_2x_goes_on_when_the_light_copy_comes_in(va: Session, app_dir: Path):
-    """Prod 2026-11-10: Play pressed on the original at 2x, then the light
-    copy swapped in -- a new src stops the player without a "pause" event,
-    so the picture froze under a Pause button. It plays on from there and
-    stops on the part's end, not timeupdate's quarter second past it."""
     store = app_dir / "uploads" / "assets" / "users" / str(VA_ID)
     store.mkdir(parents=True, exist_ok=True)
-    # Its own name: a light copy made for an earlier run would be in at once.
     video = _make_clip(store / f"long-{uuid.uuid4().hex}.mp4", 20)
     held = {"copy": True}
 
@@ -171,7 +157,7 @@ def test_a_click_on_the_picture_plays_and_keeps_the_last_cut(va: Session, clip: 
     download = va.page.locator("#edit-download")
     expect(download).to_be_visible(timeout=JOB_TIMEOUT_MS)
 
-    va.page.locator("#edit-crop").click()  # the box covers the whole picture
+    va.page.locator("#edit-crop").click()
 
     expect(va.page.locator(".edit-pause")).to_be_visible()
     expect(download).to_be_visible()
@@ -197,9 +183,6 @@ def _labels(va: Session) -> list[str]:
 def test_the_timeline_is_the_result_delete_undo_add_and_cut(
     va: Session, clip: Path, tmp_path: Path
 ):
-    """Owner 2026-11-15: a deleted part disappears from the timeline (one
-    video stays one label), Undo puts it back, Add video joins another on
-    this same page, Cut makes what the timeline shows."""
     _open(va, clip)
     page_url = va.page.url
     length = va.page.locator("#edit-length")
@@ -209,7 +192,7 @@ def test_the_timeline_is_the_result_delete_undo_add_and_cut(
 
     assert _labels(va) == ["clip.mp4 · 3.0 s"]
     expect(length).to_have_text("3.0 s")
-    assert va.page.locator(".edit-seg").count() == 2  # cut where the part was
+    assert va.page.locator(".edit-seg").count() == 2
     va.page.click(".edit-undo")
     assert _labels(va) == ["clip.mp4 · 4.0 s"]
 
@@ -217,7 +200,7 @@ def test_the_timeline_is_the_result_delete_undo_add_and_cut(
     second = _make_clip(tmp_path / "second.mp4", 2)
     va.page.locator("#edit-add .file-add-input").set_input_files(str(second))
     expect(va.page.locator(".edit-label")).to_have_count(2, timeout=JOB_TIMEOUT_MS)
-    assert va.page.url == page_url  # no new page
+    assert va.page.url == page_url
     assert _labels(va) == ["clip.mp4 · 4.0 s", "second.mp4 · 2.0 s"]
     expect(length).to_have_text("6.0 s")
 

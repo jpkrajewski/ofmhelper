@@ -1,6 +1,3 @@
-"""The lists the stores hand out in place of id-keyed dicts: each finds its
-row by id and says "none" the way its page expects."""
-
 from ofmhelpers.schemas.devices import AccountPhones, Device, PhonesByAccount
 from ofmhelpers.schemas.drive import StoredFolder, StoredFolders
 

@@ -1,8 +1,3 @@
-"""End to end, the parts of the 2026-11-13 backlog that are browser
-JavaScript: a click keeps the session, a clone card that is generated and
-still being exported says so (one picture, not two), /clone's SOP dialog,
-and /phones History going back to a deleted phone."""
-
 from pathlib import Path
 
 import pytest
@@ -13,13 +8,12 @@ from ofmhelpers.integrations.ai_providers.kie.fake import RESULT_HOST
 
 pytestmark = pytest.mark.e2e
 
-ADMIN_ID = 1  # e2e conftest `_seed_users`
+ADMIN_ID = 1
 USER_ID = 2
 PROMPT = "Replace the guy in @Video1 with subject from @Image1, no tattoos"
 
 
 def _clone(owner: int, out: Path | None = None) -> str:
-    """A clone run of `owner`: done with `out` as its result, else running."""
     from ofmhelpers.db.stores.jobs import create_job
     from ofmhelpers.features.jobs.runner import run_job
 
@@ -34,7 +28,6 @@ def _clone(owner: int, out: Path | None = None) -> str:
 
 def test_a_click_keeps_the_session(va: Session):
     va.goto("/clone")
-    # The page keeps at most one a minute: this one is due.
     va.page.clock.install()
     va.page.clock.fast_forward(61_000)
 
@@ -62,7 +55,6 @@ def test_a_generated_clone_still_being_exported_shows_one_video_and_says_so(
     expect(card.locator("[data-stage]")).to_have_text(
         "Generated. Encoding: CapCut export…"
     )
-    # The frame of the video being cloned never stays next to the result.
     card.evaluate(
         """card => {
             const frame = document.createElement("img");
@@ -83,7 +75,6 @@ def test_the_sop_shows_the_fixed_examples_and_a_prompt_is_used(
     job_id = _clone(ADMIN_ID, tmp_path / "result.png")
     clone_examples.add(job_id, "Remove tattoos", PROMPT)
 
-    # Set on the server only: nobody, an admin included, edits one here.
     admin.goto("/clone")
     expect(admin.page.locator(".sop-add-btn")).to_have_count(0)
 
@@ -97,8 +88,6 @@ def test_the_sop_shows_the_fixed_examples_and_a_prompt_is_used(
 
     expect(va.page.locator("#sop-dialog")).not_to_be_visible()
     expect(va.page.locator('#clone-form [name="prompt"]')).to_have_value(PROMPT)
-    # This example was seeded as a row alone: its frame and poster answer
-    # 404, which the browser logs. Nothing else may.
     missing = "Failed to load resource"
     assert [e for e in admin.js_errors + va.js_errors if missing not in e] == []
 

@@ -1,13 +1,3 @@
-"""/distribution: Pinterest accounts added in bulk (cookies.txt files, no
-model to pick) each get every model's content queued (the models'
-Instagram accounts' POSTED + THREADS); a pin takes one file and its
-model's board, title, caption and the model's one self link, or "ig:
-<handle>" alone; the accounts do not pin the same file first; rate limited
-= the pin back in line and the account waiting; logged out = the account
-stopped; the sweep pins only on schedule, at jittered times; the page says
-whether it works, pins today and link clicks; the report has each model's
-pins and clicks per day. Pinterest and Drive are their fakes."""
-
 import io
 import time
 
@@ -38,7 +28,6 @@ DOMAIN = "go.ascendglobal.cash"
 
 
 def _model(key: str, title: str, handle: str) -> ModelPreset:
-    """A model's preset as its owner loads it (the real ones are private)."""
     return ModelPreset(
         key=key,
         creator=key,
@@ -58,8 +47,6 @@ CLARK = _model("clark", "Clark Example", "clark.example")
 
 
 def cookies_txt(session: str) -> bytes:
-    """A whole browser's export: Pinterest's login on .pinterest.com, a
-    csrftoken for www., and another site's cookie."""
     rows = [
         (".pinterest.com", "TRUE", "_pinterest_sess", session),
         ("www.pinterest.com", "FALSE", "csrftoken", "csrf-www"),
@@ -73,15 +60,12 @@ def cookies_txt(session: str) -> bytes:
 
 @pytest.fixture
 def pinterest(fake_externals, monkeypatch) -> FakePinterest:
-    """The fake Pinterest; every pin the full kind (title, caption, link)
-    unless a test says otherwise."""
     monkeypatch.setenv("OFM_PINTEREST_UPLOAD_POLL_S", "0.01")
     monkeypatch.setenv("OFM_DISTRIBUTION_HANDLE_SHARE", "0")
     return fake_pinterest()
 
 
 def _instagram(fake: FakeDrive, phone: int, handle: str, creator: str) -> str:
-    """@handle on the phone, tracked as `creator`'s: its account folder."""
     assert devices.add_login(phone, LoginFields(service="instagram", username=handle))
     tracked_accounts.track("instagram", handle, creator)
     drive_folders.sync()
@@ -91,8 +75,6 @@ def _instagram(fake: FakeDrive, phone: int, handle: str, creator: str) -> str:
 
 @pytest.fixture
 def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
-    """The agency's Google Drive (fake): @ann.ig (Dane: two pictures in
-    POSTED, a THREADS set of two) and @bob.ig (Clark: one picture)."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
@@ -124,7 +106,6 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
 
 @pytest.fixture
 def pictures(monkeypatch):
-    """Drive's fake files have no bytes: each download is a real picture."""
 
     def download(_user_id, _post, here):
         here.mkdir(parents=True, exist_ok=True)
@@ -330,7 +311,6 @@ def test_an_ig_pin_names_the_handle_with_no_caption_and_no_link(
 
 
 def test_about_half_the_pins_are_ig_pins(monkeypatch):
-    """The draw itself, many times: 50/50 within a wide margin."""
     monkeypatch.setenv("OFM_DISTRIBUTION_HANDLE_SHARE", "0.5")
 
     titles = [sweep._what(DANE, "https://x")[0] for _ in range(400)]
@@ -436,11 +416,7 @@ def test_after_a_pin_the_accounts_cookies_are_saved_again(pinterest, drive, pict
     assert "_pinterest_sess" in store.repository().cookies(channel.id)
 
 
-# Review 2026-11-18 (an independent reviewer, before the first deploy).
-
-
 def test_a_job_for_a_post_no_longer_claimed_pins_nothing(pinterest, drive, pictures):
-    """A cut-off post claimed again: the old job must not pin it too."""
     _add("one")
     (channel,) = _channels()
     post = store.repository().next_post(channel, 3)
@@ -514,8 +490,6 @@ def test_a_post_whose_job_still_runs_is_not_cut_off(pinterest, drive):
 
 
 def test_the_sweep_never_makes_a_threads_folder(pinterest, drive):
-    """@bob.ig has no THREADS: reading it every 5 minutes must not make one
-    in the live Drive."""
     _add("one")
 
     (bob,) = drive.named("bob.ig - Anna", ROOT)

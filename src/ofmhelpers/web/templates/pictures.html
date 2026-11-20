@@ -1,11 +1,6 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
 {% import "_file_picker.html" as fp %}
-{# /pictures (routers/image_tools/pictures.py): pick a preset, add the
-   pictures to recreate, Generate -- one Nano Banana Pro run per picture
-   (generation.js posts the form and polls the cards). Each preset's images
-   and prompt are drawn once, the selected one shown (static/js/pictures.js
-   switches them, runs the preset dialog and Recreate). #}
 {% block content %}
 {{ ui.page_header("Pictures") }}
 {% include "_gallery_hidden.html" %}

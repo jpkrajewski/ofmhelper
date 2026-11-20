@@ -1,8 +1,3 @@
-/*
- * /home's Server section (admins): its body comes from /home/server after
- * the page is open (reading the CPU takes a moment, the uploads folders a
- * walk), and again on Refresh.
- */
 (() => {
     async function load(section, body, button) {
         button.disabled = true;

@@ -1,8 +1,3 @@
-"""Each person links their own Telegram from /account, and their events go
-there (owner 2026-11-15: "is it easy for new users to connect their telegram
-bot?"; before, every owner's VA notices went to the agency's chats from the
-server's .env)."""
-
 import time
 from urllib.parse import parse_qs, urlsplit
 
@@ -33,7 +28,6 @@ def _telegram(fake_externals, monkeypatch):
 
 
 def _connect(client: TestClient) -> str:
-    """Connect Telegram on /account: the bot's link and its token."""
     answer = client.post("/account/telegram", follow_redirects=False)
     assert answer.status_code == 303
     url = urlsplit(answer.headers["location"])
@@ -60,7 +54,7 @@ def test_a_person_links_their_chat_from_account_and_is_told_there():
     assert _sent_to() == [("555", "Connected")]
     assert "Disconnect Telegram" in client.get("/account").text
     (entry,) = audit_log.history("user_event_targets", f"{owner.id}:telegram")
-    assert entry.changes["target"] == "set"  # where messages go: never in the log
+    assert entry.changes["target"] == "set"
     assert entry.via == "telegram"
 
 
@@ -78,8 +72,6 @@ def test_a_link_works_once():
 
 
 def test_a_link_of_a_person_deleted_since_is_refused_and_read_once():
-    # Before: the row's FK failed inside the read, the update was never
-    # confirmed, and every read (20 s apart) failed on it again.
     get_redis().set("telegram:link:gone-person", "987654321")
     fake_telegram().wrote(555, text="/start gone-person")
 
@@ -91,8 +83,6 @@ def test_a_link_of_a_person_deleted_since_is_refused_and_read_once():
 
 
 def test_the_bot_keeps_one_connection_for_its_calls(monkeypatch):
-    # A new Session per call was ~7,600 handshakes a day to Telegram, each a
-    # chance of a reset (prod, 2026-11-08..16).
     made: list[requests.Session] = []
     real_session = requests.Session
 
@@ -165,7 +155,6 @@ def test_the_agencys_events_still_go_to_the_agencys_chats():
 
 
 def test_no_card_where_the_bot_is_not_read(monkeypatch):
-    """Dev shares prod's bot and never reads it: nothing could link there."""
     monkeypatch.setenv("OFM_EVENTS_SENDERS_OFF", "telegram")
     client = TestClient(app)
     sign_in(client, OWNER)

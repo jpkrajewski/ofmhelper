@@ -1,7 +1,3 @@
-"""Stacked as a chat source (`integrations/chat_source.py`): its API keys come
-from a `KeyRing` (the app's: `.env` lines and keys saved on /account,
-`features/chatting/stacked_keys.py`)."""
-
 from typing import Protocol
 lazy from collections.abc import Iterator, Mapping
 
@@ -32,9 +28,7 @@ class KeyRing(Protocol):
 
 class StackedSource:
     platform = ChatPlatform.STACKED
-    # Expected from the spec's `message.created`; not yet seen on a real mass send.
     mass_reaches_chats = True
-    # Seen 2026-11-05: 650 chats in 10 minutes, no flag and no `mass_message.completed`.
     bulk_sends_unflagged = True
     events = webhooks.EVENTS
 
@@ -84,15 +78,6 @@ class StackedSource:
         return CreatedSubscription(id=made.id, url=made.url, secret=made.secret)
 
     def _retire_elsewhere(self, model: ChatModel, url: str) -> None:
-        """A destination is one key's: when a creator moves to another key (an
-        agency key added that reaches it), the one its old key made at `url`
-        goes, before the new one is made. Left, it would keep delivering here
-        with a secret no longer held, and 30 failed signatures from one address
-        turn that address away. Only at `url`, this server's own address; asked
-        only while a destination is being made, never in a normal round. Stacked
-        failing on the way raises: no new destination this round, the move is
-        tried again next round (Kimi review 2026-11-17: made anyway, the old one
-        was never asked again). A key Stacked refuses can delete nothing: skipped."""
         every_key = self._keys.keys()
         for api_key in every_key:
             other = StackedClient(api_key)

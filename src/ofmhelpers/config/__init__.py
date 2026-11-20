@@ -1,30 +1,3 @@
-"""
-Single import point for app config: `from ofmhelpers.config import settings`.
-
-`settings` is a lazy container -- each group property (settings.web,
-settings.kieai, ...) answers that group's BaseSettings as the environment is
-*now*: several tests call monkeypatch.setenv()/delenv() inside a test
-function body and expect the very next call into application code to
-observe the new value (see tests/test_auth.py, test_recovery.py). A frozen
-`settings = Settings()` singleton would ignore every later monkeypatch.
-
-A group is built once per state of its inputs, though, not once per access:
-the process environment, the group's `env_file` (tests blank it) and that
-file's mtime (looked at no more than every `_DOTENV_CHECK_S`). Building one
-reads and parses `.env` and validates every field -- /reels built groups
-310 times per request, ~0.4 s of a 0.5 s page (prod profile, 2026-10-22).
-
-Call-site convention: reference `settings.<group>.<field>` inline inside the
-function that needs it, every time -- never stash it in a module-level or
-long-lived variable: a value kept at import is the environment of that
-moment, whatever it says later. Where a name helps, it is a small accessor
-(`features/assets/store.py` `uploads_root()`, `assets_root()`), and a limit on
-a form field is a validator (`web/forms.py` `at_most`), not `Field(le=...)`.
-`tests/unit/config/test_settings_read_at_call_time.py` fails on a new
-module-level value built from `settings`. The one left: `web/main.py`, whose
-session middleware is built with the app.
-"""
-
 import os
 import time
 from pathlib import Path
@@ -75,14 +48,10 @@ from ofmhelpers.config.settings import (
 
 _Group = TypeVar("_Group", bound=BaseSettings)
 
-# How stale a `.env` edit may go unseen: a stat per access is slow on a
-# bind mount (dev on Windows).
 _DOTENV_CHECK_S = 1.0
 
 
 class _Dotenv:
-    """Env files' mtimes, each re-read at most every `_DOTENV_CHECK_S`."""
-
     def __init__(self) -> None:
         self._seen: dict[str, tuple[float, int | None]] = {}
 
@@ -110,8 +79,6 @@ class Settings:
         return (hash(frozenset(os.environ.items())), env_file, mtime)
 
     def _group(self, cls: type[_Group]) -> _Group:
-        """`cls` as the environment is now; built again only when that
-        changed."""
         inputs = self._inputs(cls)
         built = self._built.get(cls)
         if built is not None and built[0] == inputs:

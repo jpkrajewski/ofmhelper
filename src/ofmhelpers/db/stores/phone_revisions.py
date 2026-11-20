@@ -1,7 +1,3 @@
-"""A person's phones as they were: the History list, going back to a
-revision, and the states the backup file holds. The database writes the
-revisions itself (`db/repositories/phone_revisions.py`)."""
-
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import PhoneRevisionRepository
@@ -24,8 +20,6 @@ def page(owner: int, limit: int) -> list[PhoneRevision]:
 
 
 def restore(revision_id: int, owner: int) -> Restored | None:
-    """None when the revision is not `owner`'s. /drive's cache of who has
-    which login is dropped: logins came and went."""
     done = _repository().restore(revision_id, owner)
     if done is not None:
         from ofmhelpers.db.stores import drive_folders

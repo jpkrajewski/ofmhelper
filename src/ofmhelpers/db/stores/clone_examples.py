@@ -1,6 +1,3 @@
-"""/clone's SOP examples: the rows. What an example shows and keeps on disk
-is `features/clone/examples.py`."""
-
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import CloneExampleRepository

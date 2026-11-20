@@ -1,8 +1,3 @@
-"""/links: links on Oopsie and Bouncy (faked at the wire), made one per
-Instagram account of a model, always 18+ gated; synced with their daily
-views and clicks; shown on /accounts next to each account's phones. Jobs
-run inline (the suite's RQ is synchronous)."""
-
 from datetime import timedelta
 
 import pytest
@@ -46,7 +41,6 @@ def client():
 
 @pytest.fixture
 def admin(client):
-    """The agency admin: the one the .env keys run for."""
     return sign_in_agency(client)
 
 
@@ -74,9 +68,6 @@ def _links(user_id: int) -> dict[str, object]:
     return {x.slug: x for x in short_links.list_links(user_id)}
 
 
-# --- the page ---------------------------------------------------------------
-
-
 def test_page_lists_links_with_quota_and_nav(client, admin):
     page = client.get("/links")
     assert page.status_code == 200
@@ -88,8 +79,6 @@ def test_page_lists_links_with_quota_and_nav(client, admin):
 
 def test_a_user_without_their_own_key_gets_no_env_key(client):
     user = sign_in(client)
-    # self is always keyed (served from our own data); the remote providers
-    # need the user's own key and fall back to no env key for a non-admin.
     keyed = {s.key: s.has_key for s in link_keys.provider_states(user.id)}
     assert keyed == {"self": True, "oopsie": False, "bouncy": False}
     page = client.get("/links")
@@ -106,9 +95,6 @@ def test_a_user_with_their_own_key_makes_links_on_it(client):
     ids = _accounts(user.id, "Dane", "dane.walker")
     assert _generate(client, ids).json() == {"count": 1}
     assert _links(user.id)["dane-walker"].status == "active"
-
-
-# --- generating -------------------------------------------------------------
 
 
 def test_bouncy_links_are_made_per_account_and_18_plus_gated(client, admin):
@@ -172,7 +158,6 @@ def test_a_slug_taken_on_the_provider_is_numbered(client, admin):
     ids = _accounts(admin.id, "Dane", "dane.walker")
     _generate(client, ids)
     links = _links(admin.id)
-    # The taken one is the account's too now: the sync lists it.
     assert set(links) == {"dane-walker", "dane-walker-2"}
     assert links["dane-walker-2"].adult is True
     assert (
@@ -203,7 +188,6 @@ def test_a_full_plan_fails_the_rest_with_the_providers_words(client, admin):
 
 
 def test_a_provider_whose_plan_is_full_makes_nothing(client, admin):
-    """The last sync saw the plan full: Generate refuses before any call."""
     fake_bouncy().set_limit(1)
     fake_bouncy().add_link("already", FANVUE)
     link_sync.sync_now(admin.id)
@@ -219,7 +203,6 @@ def test_a_provider_whose_plan_is_full_makes_nothing(client, admin):
 
 
 def test_no_more_links_than_bouncy_has_active_slots(client, admin):
-    """Past the active limit Bouncy makes links inactive: dead on arrival."""
     for slug in ("one", "two", "three"):
         fake_bouncy().add_link(slug, FANVUE)
     link_sync.sync_now(admin.id)
@@ -243,8 +226,6 @@ def test_the_dialog_carries_each_targets_prefix_and_pattern(client, admin):
 
 
 def test_a_link_whose_gate_fails_is_deleted_again(client, admin, monkeypatch):
-    """Bouncy takes the link but not the 18+ fields: none goes live
-    ungated."""
     original = FakeBouncy._link
 
     def gate_ignored(self, state, method, link_id, request):
@@ -290,9 +271,6 @@ def test_another_users_account_cannot_be_linked(client, admin):
     assert _generate(client, theirs).status_code == 404
 
 
-# --- syncing ----------------------------------------------------------------
-
-
 def test_sync_imports_links_matches_accounts_and_stores_days(client, admin):
     today = utc_today()
     [account_id] = _accounts(admin.id, "Dane", "danywalking")
@@ -308,7 +286,6 @@ def test_sync_imports_links_matches_accounts_and_stores_days(client, admin):
     assert dany.creator == "Dane"
     assert dany.target == "stacked"
     assert (dany.views(7), dany.clicks(7), dany.clicks(30)) == (10, 8, 48)
-    # Links are always 18+ gated: the sync turns it on where it is off.
     assert links["ungated"].adult is True
     assert fake_oopsie().pages["ungated"].theme["age_gate"] is True
     page = client.get("/links?period=30")
@@ -337,12 +314,10 @@ def test_a_link_its_job_lost_is_found_by_address_or_failed(client, admin, monkey
     ]  # fmt: skip
     short_links.add_creating(admin.id, "bouncy", planned)
     with session_scope() as s:
-        # An hour old: the stamp trigger owns the stamps, so it is off here.
         s.execute(text("SET LOCAL session_replication_role = replica"))
         s.query(ShortLinkRow).update(
             {ShortLinkRow.created_at: func.now() - text("interval '1 hour'")}
         )
-    # The job made the first one, then died.
     fake_bouncy().add_link("dane-walker", FANVUE)
     link_sync.sync_now(admin.id)
     links = _links(admin.id)
@@ -364,9 +339,6 @@ def test_two_sweeps_never_claim_the_same_sync(admin):
     pairs = [LinkSyncKey(user_id=admin.id, provider="oopsie")]
     assert short_links.claim_due(pairs) == pairs
     assert short_links.claim_due(pairs) == []
-
-
-# --- bulk actions -----------------------------------------------------------
 
 
 def test_turn_on_18_plus_for_an_ungated_page(client, admin):
@@ -393,8 +365,6 @@ def _oopsie_state(user_id: int):
 
 
 def test_quota_counts_our_own_rows_before_the_next_sync(client, admin):
-    """2026-10-22: "50 / 50" stayed after a delete until the provider's
-    next answer. The limit comes from the provider, the count from here."""
     fake_oopsie().add_page("one", "https://onlyfans.com/x")
     fake_oopsie().add_page("two", "https://onlyfans.com/y")
     link_sync.sync_now(admin.id)
@@ -404,7 +374,7 @@ def test_quota_counts_our_own_rows_before_the_next_sync(client, admin):
     ) == (2, 50)
 
     [one] = [x for x in short_links.list_links(admin.id) if x.slug == "one"]
-    short_links.removed([one.id])  # gone here, provider not asked again yet
+    short_links.removed([one.id])
 
     usage = _oopsie_state(admin.id).usage
     assert (usage.used, usage.limit) == (1, 50)
@@ -464,9 +434,6 @@ def test_nobody_acts_on_another_users_links(client, admin):
     assert fake_bouncy().links
 
 
-# --- elsewhere --------------------------------------------------------------
-
-
 def test_accounts_page_shows_each_accounts_links_with_clicks_and_ctr(client, admin):
     today = utc_today()
     ids = _accounts(admin.id, "Dane", "dane.walker")
@@ -493,12 +460,7 @@ def test_account_page_takes_link_provider_keys_and_syncs(client):
     assert set(_links(user.id)) == {"mine"}
 
 
-# --- ultrareview fixes ------------------------------------------------------
-
-
 def test_only_the_agency_admin_runs_on_the_env_keys(client, admin):
-    """Another admin (added on /users) has data of their own: the agency's
-    .env keys would sync, show and let them delete the agency's links."""
     other = users.add_user(UserForm(email="second.admin@example.com", role=Role.ADMIN))
     assert link_keys.api_key(other.id, "bouncy") is None
     agency = users.agency_id()
@@ -512,8 +474,6 @@ def test_only_the_agency_admin_runs_on_the_env_keys(client, admin):
 def test_a_link_left_ungated_is_recorded_flagged_and_gated_at_the_next_sync(
     client, admin, monkeypatch
 ):
-    """The gate fails and so does deleting the link: it is live without the
-    gate. It is kept, flagged No 18+, and the next sync gates it."""
     original = FakeBouncy._link
 
     def broken(self, state, method, link_id, request):
@@ -524,7 +484,6 @@ def test_a_link_left_ungated_is_recorded_flagged_and_gated_at_the_next_sync(
     monkeypatch.setattr(FakeBouncy, "_link", broken)
     ids = _accounts(admin.id, "Dane", "dane.walker")
     _generate(client, ids)
-    # Kept and flagged (the sync's gate failed too while Bouncy is down).
     [link] = short_links.list_links(admin.id)
     assert (link.status, link.adult) == ("active", False)
     assert "No 18+" in client.get("/links").text
@@ -536,13 +495,10 @@ def test_a_link_left_ungated_is_recorded_flagged_and_gated_at_the_next_sync(
 
 
 def test_a_numbered_slug_never_lands_on_the_owners_own(client, admin):
-    """'anna' is someone else's on Bouncy; the owner already has 'anna-2'
-    from an earlier Generate: the next one becomes 'anna-3', no crash."""
     fake_bouncy().add_link("anna", FANVUE)
     ids = _accounts(admin.id, "Dane", "anna")
     _generate(client, ids)
     _generate(client, ids)
-    # (The fake lists the foreign "anna" in this account too.)
     slugs = {x.slug for x in short_links.list_links(admin.id) if x.account_id}
     assert slugs - {"anna"} == {"anna-2", "anna-3"}
 
@@ -586,7 +542,7 @@ def test_a_sync_on_an_odd_answer_is_recorded_not_lost(client, admin, monkeypatch
     [state] = [s for s in link_keys.provider_states(admin.id) if s.key == "bouncy"]
     assert state.error == "Sync failed (KeyError): 'pagination'"
     due = [LinkSyncKey(user_id=admin.id, provider="bouncy")]
-    assert short_links.claim_due(due) == []  # claim dropped
+    assert short_links.claim_due(due) == []
 
 
 def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
@@ -597,12 +553,11 @@ def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
     links = {x.slug: x for x in short_links.list_links(admin.id) if x.account_id}
     short_links.set_status([x.id for x in links.values()], "deleting")
     with session_scope() as s:
-        # An hour old: the stamp trigger owns the stamps, so it is off here.
         s.execute(text("SET LOCAL session_replication_role = replica"))
         s.query(ShortLinkRow).update(
             {ShortLinkRow.updated_at: func.now() - text("interval '1 hour'")}
         )
-    fake_bouncy().remove("b-two")  # its delete went through, the job then died
+    fake_bouncy().remove("b-two")
 
     link_sync.sync_now(admin.id)
 
@@ -613,8 +568,6 @@ def test_a_lost_delete_goes_back_to_its_status_and_a_done_one_goes(
 
 
 def test_one_key_waits_its_turn_across_clients(monkeypatch):
-    """Oopsie allows 60 calls a minute per key: two clients (two jobs) on
-    one key share the spacing."""
     from ofmhelpers.integrations.short_links.providers.oopsie import OopsieProvider
 
     waits: list[float] = []
@@ -625,7 +578,7 @@ def test_one_key_waits_its_turn_across_clients(monkeypatch):
     assert waits
     assert waits[-1] > 0.9
     OopsieProvider("gmp_live_another")._wait_turn(1.05)
-    assert len(waits) == 1  # another key: no wait
+    assert len(waits) == 1
 
 
 def test_accounts_link_column_says_today_for_one_day(client, admin):

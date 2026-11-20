@@ -1,33 +1,3 @@
-"""Self-heal: one policy for every provider, for the calls whose answer can be
-lost after the provider acted on them -- a submit (paid) and a result
-download (paid for already).
-
-A provider only declares, on the `Provider` interface, how a lost submit is
-found again; nothing here names one:
-
-- `idempotent_submit` (Higgsfield, Elyum): a resend with the same key answers
-  the request already made, so a submit whose answer was lost is sent again;
-- `callback_url` / `callback_task_id` / `callback_signed` (kie.ai): the
-  provider calls back when the request ends. The submit is noted first
-  (`tasks.remember_sent`); a lost answer keeps the job running until the
-  callback names the request (`heard`, behind `POST /events/ai/<provider>/<job
-  key>`), and a callback after the job gave up hands it to recovery
-  (`features/jobs/recovery.py`), which re-runs the job resuming it -- never
-  paying twice. A noted submit is never sent again;
-- neither (RunningHub, APIYI: no idempotency key, no webhook, no task list
-  on their APIs): a submit is never resent, so never paid twice, and a lost
-  answer fails the job.
-
-Every provider: a rate-limited submit is resent (nothing was made); a submit
-that never left (connection refused, DNS, connect timeout:
-`ProviderUnavailableError.maybe_made` False) is never waited on; a result
-download failing transiently is fetched again.
-
-Why: prod 2026-11-05, kie.ai made and billed a Wan 3.0 clip 2 s after our
-createTask gave up; it was found only on kie.ai's own site. User rule: nobody
-ever checks a provider's site.
-"""
-
 import random
 import re
 import time
@@ -52,35 +22,20 @@ lazy from ofmhelpers.integrations.ai_providers.spec import (
 
 logger = get_logger(__name__)
 
-# Each resend wait is stretched by up to this much, so the runs one burst
-# refused do not all come back in the same second.
 _JITTER = 0.25
-# Under /events/, which is public and outside the write rate limit.
 CALLBACK_PATH = "/events/ai"
-# A job id, then `:<part>` for a job that makes several requests.
 _JOB_KEY = re.compile(r"^(?P<job>[A-Za-z0-9-]{1,64})(?::(?P<part>\d{1,4}))?$")
 
 
 def _sleep(seconds: float) -> None:
-    """Every wait here (tests replace it)."""
     time.sleep(seconds)
 
 
 def job_key(job_id: str, part: int) -> str:
-    """What a request is known by at the provider: its idempotency key and
-    the end of its callback address. Part 0 is the job id alone."""
     return job_id if part == 0 else f"{job_id}:{part}"
 
 
-# --- submit --------------------------------------------------------------------
-
-
 def _submit(provider: Provider, spec: ModelSpec, payload: Payload, key: str) -> str:
-    """`provider.submit`, sent again only where that cannot pay twice: after a
-    rate limit (the provider created nothing), or after any lost answer on a
-    provider whose submit is idempotent. Once per `rate_limit_waits_s`
-    entry, never waiting more than `rate_limit_max_wait_s` in all. Elsewhere
-    a timeout or a 5xx may have created a paid task: raised at once."""
     s = settings.aigen
     waits = iter(s.rate_limit_waits_s)
     left = s.rate_limit_max_wait_s
@@ -98,7 +53,7 @@ def _submit(provider: Provider, spec: ModelSpec, payload: Payload, key: str) -> 
                 exc.retry_after_s if isinstance(exc, ProviderRateLimitError) else None
             )
             if wait_s is None:
-                spread = random.uniform(1, 1 + _JITTER)  # noqa: S311 -- spread, not crypto
+                spread = random.uniform(1, 1 + _JITTER)  # noqa: S311
                 wait_s = backoff * spread
             if wait_s > left:
                 raise
@@ -117,9 +72,6 @@ def _submit(provider: Provider, spec: ModelSpec, payload: Payload, key: str) -> 
 def _await_callback(
     job_id: str, part: int, kind: OutputKind, since: float
 ) -> str | None:
-    """The id of a submit whose answer was lost, once the provider's callback
-    names it (`heard` -> `tasks.found`); None once a generation's wait from
-    `since` (when it was sent) is over. The job keeps running meanwhile."""
     s = settings.aigen
     timeout_s = s.video_poll_timeout_s if kind == "video" else s.poll_timeout_s
     while time.time() < since + timeout_s:
@@ -140,9 +92,6 @@ def _not_answered(provider: Provider) -> ProviderUnavailableError:
 
 
 def _lost_task(provider: Provider, noted: tasks.ProviderTask, kind: OutputKind) -> str:
-    """A noted submit whose answer never came: it may be made and paid, so it
-    is never sent again -- its callback names it (a long clone re-run by
-    recovery would otherwise pay for the piece twice)."""
     found = _await_callback(noted.job_id, noted.part, kind, noted.created_at)
     if found is None:
         raise _not_answered(provider)
@@ -183,8 +132,6 @@ def _submit_noted(
             lost,
             exc_info=True,
         )
-        # Noted still when nothing came: a later callback finishes the job
-        # through recovery.
         return _lost_task(provider, noted, spec.kind)
     except Exception:
         tasks.forget_sent(job_id, part)
@@ -200,11 +147,6 @@ def new_task(
     job_id: str,
     part: int,
 ) -> str:
-    """The provider's id for a request the job has not remembered yet: the
-    one an earlier submit made (noted, its answer lost: waited for, never
-    sent again, its references never uploaded again), else a new submit.
-    `payload` may be a function: it uploads the references, so it runs only
-    when a request is really sent."""
     noted = tasks.sent(job_id, part)
     if (
         noted is not None
@@ -216,13 +158,7 @@ def new_task(
     return _submit_noted(provider, spec, body, job_id, part)
 
 
-# --- result download -------------------------------------------------------------
-
-
 def download(provider: Provider, url: str, dest: Path) -> Path:
-    """`provider.download`, tried again after each `download_retry_waits_s`
-    while it fails transiently: the result is paid for and its URL stays
-    valid for hours, so one reset or CDN 5xx must not cost the file."""
     for wait_s in settings.aigen.download_retry_waits_s:
         try:
             return provider.download(url, dest)
@@ -237,9 +173,6 @@ def download(provider: Provider, url: str, dest: Path) -> Path:
     return provider.download(url, dest)
 
 
-# --- callbacks -------------------------------------------------------------------
-
-
 class Heard(StrEnum):
     FOUND = "found"
     IGNORED = "ignored"
@@ -248,8 +181,6 @@ class Heard(StrEnum):
 
 
 def callback_url(provider: str, key: str) -> str:
-    """This server's address for `provider`'s callback about `key`; empty
-    unless APP_BASE_URL is public HTTPS (dev: no callback, nothing waits)."""
     base = settings.web.base_url
     if not base.startswith("https://"):
         return ""
@@ -257,13 +188,6 @@ def callback_url(provider: str, key: str) -> str:
 
 
 def _ours(cls: type[Provider], api_key: str, task_id: str, key: str) -> bool:
-    """A callback's task, checked with the job's own key: a made-up id is
-    refused as not on our account. Signed callbacks too: kie.ai signs only
-    `taskId.timestamp`, never which job's account it is (security audit
-    2026-11-18), and the check is a free status read. A provider too slow to say is taken
-    at its word -- the run's own poll checks the task anyway -- rather than
-    answered with an error it may never retry (kie.ai's Veo page: three
-    tries, then no more callbacks)."""
     try:
         cls(api_key).status(task_id)
     except ProviderError as exc:
@@ -288,9 +212,6 @@ def _ours(cls: type[Provider], api_key: str, task_id: str, key: str) -> bool:
 
 
 def heard(provider: str, key: str, raw: bytes, headers: Mapping[str, str]) -> Heard:
-    """A provider's callback about `key`. The normal case -- a request the
-    job knows -- changes nothing; one naming the request of a noted submit
-    remembers it as the job's task."""
     cls = provider_classes().get(provider)
     if cls is None:
         return Heard.UNKNOWN

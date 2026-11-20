@@ -1,24 +1,3 @@
-"""An in-process Google Drive (`DriveApi`) for tests and OFM_FAKE_EXTERNALS.
-
-It behaves the way the real one does where /drive depends on it
-(tests/contract/test_drive_contract.py runs the same checks on both):
-
-- names are not unique: `create_folder` always makes a new item;
-- every item has parents; `children` lists newest first;
-- trash is not delete: a trashed item (or one under a trashed folder) is
-  hidden but still exists, a deleted one is gone;
-- the account sees only what is shared with it (an item or a folder above
-  it), anything else answers like a 404 (`FolderGoneError`);
-- each item has an owner; the bot owns what it creates;
-- previews exist only for items that have one (a fresh video has none).
-
-State lives in memory, or, with `OFM_FAKES_DIR` set, in `drive.json` there
-under an exclusive file lock, so the app under test and the test seeding
-it share one Drive across processes. `trash`, `delete`, `add_file`,
-`seed_folder`, `move`, `share`/`unshare`, `fail_on`, `set_storage`,
-`refuse_sign_in` stand in for what a person (or an outage) does in Drive.
-"""
-
 import fcntl
 import io
 import threading
@@ -63,42 +42,27 @@ class FakeItem(BaseModel):
     mime_type: str = FOLDER_MIME
     parents: list[str] = Field(default_factory=list)
     owner: str = DEFAULT_OWNER
-    # Order of creation, without a clock.
     created: int = 0
-    # Drive's createdTime: when the item was made (`add_file(created=)` for
-    # one a person uploaded on another day).
     created_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     trashed: bool = False
     has_thumbnail: bool = False
-    # Who else may edit it (`grant`), besides the bot.
     editors: list[str] = Field(default_factory=list)
-    # A Google Sheet's cells (`add_sheet`).
     sheet: DriveSheet | None = None
-    # Bytes, as Drive lists a file's `size` (an upload's; None for the rest).
     size: int | None = None
 
 
 class FakeDriveState(BaseModel):
     items: dict[str, FakeItem] = Field(default_factory=dict)
-    # Items shared with the bot (it sees them and all below).
     shared: list[str] = Field(default_factory=list)
     next_id: int = 1
-    # Every call, in order ("create", "rename", ...): a test tells a
-    # sweep that did nothing from one that wrote.
     calls: list[str] = Field(default_factory=list)
-    # Folder names whose creation Drive refuses (an outage, a quota).
     fail_on: list[str] = Field(default_factory=list)
-    # Every person's space (`storage`): uploads add their size; None = no
-    # limit. An upload past the limit is refused the way Drive does.
     storage_used: int = 0
     storage_limit: int | None = None
-    # People whose sign-in Google refuses (revoked, expired): every call as
-    # them is a `DriveAuthError`.
     refused: list[str] = Field(default_factory=list)
 
 
 _WRITES = frozenset({"create", "rename", "upload", "grant"})
-# A person's uploads, as `connect_as` makes them.
 UPLOADER = "uploader@example.com"
 
 
@@ -115,12 +79,8 @@ class FakeDrive:
         self._memory = FakeDriveState()
         self._lock = threading.Lock()
 
-    # --- state ------------------------------------------------------------
-
     @contextmanager
     def _state(self, call: str | None = None) -> Iterator[FakeDriveState]:
-        """The state, locked (thread and, with a file, process); saved
-        when the block ends."""
         with self._lock:
             if self._path is None:
                 if call:
@@ -152,7 +112,6 @@ class FakeDrive:
 
     @staticmethod
     def _chain(state: FakeDriveState, item_id: str) -> Iterator[FakeItem | None]:
-        """The item and every folder above it (None for a deleted one)."""
         seen: set[str] = set()
         current: str | None = item_id
         while current is not None and current not in seen:
@@ -164,8 +123,6 @@ class FakeDrive:
             current = item.parents[0] if item.parents else None
 
     def _visible(self, state: FakeDriveState, item_id: str) -> FakeItem | None:
-        """The item if the bot can see it: it exists, nothing on its way up
-        is trashed or deleted, and it or a folder above it is shared."""
         chain = list(self._chain(state, item_id))
         if any(i is None or i.trashed for i in chain):
             return None
@@ -182,7 +139,6 @@ class FakeDrive:
 
     @staticmethod
     def _as_file(item: FakeItem) -> DriveFile:
-        # Drive's own field names, as the real client gets them.
         return DriveFile.model_validate(
             {
                 "id": item.id,
@@ -199,8 +155,6 @@ class FakeDrive:
             }
         )
 
-    # --- DriveApi -----------------------------------------------------------
-
     def folder(self, folder_id: str) -> DriveFolder:
         with self._state("folder") as state:
             item = self._live(state, folder_id, f"Folder {folder_id}")
@@ -213,9 +167,6 @@ class FakeDrive:
         self, parent_id: str, *, folders_only: bool = False
     ) -> list[DriveFile]:
         with self._state("children") as state:
-            # As Drive (checked live 2026-10-21): a missing or unshared parent
-            # is a 404, but a TRASHED one still lists its children -- so a
-            # listing never tells a deleted folder; callers check `folder`.
             chain = list(self._chain(state, parent_id))
             if any(i is None for i in chain) or not any(
                 i is not None and i.id in state.shared for i in chain
@@ -242,8 +193,6 @@ class FakeDrive:
             folders=[FolderItems(folder_id=p, items=listed[p]) for p in listed]
         )
         with self._state() as state:
-            # One query, as the real one: the per-parent listings above are
-            # an implementation detail, not calls a test should count.
             del state.calls[-len(parent_ids) :]
             state.calls.append("children_of")
         return found
@@ -307,7 +256,6 @@ class FakeDrive:
         with self._state("sheet") as state:
             item = self._live(state, file_id, f"Sheet {file_id}")
             if item.sheet is None:
-                # As Drive: only its own editors' files export.
                 msg = f"Sheet {file_id}: Drive refused (Export only supports Docs Editors files.)"
                 raise DriveError(msg)
             return item.sheet
@@ -317,19 +265,17 @@ class FakeDrive:
             return DriveStorage(usage=state.storage_used, limit=state.storage_limit)
 
     def set_storage(self, limit: int | None, used: int = 0) -> None:
-        """A test's Drive space: `limit` bytes (None: unlimited), `used` taken."""
         with self._state() as state:
             state.storage_limit = limit
             state.storage_used = used
 
-    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:  # noqa: ARG002 -- one size fits every px
+    def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None:  # noqa: ARG002
         with self._state("thumbnail"):
             if not item.thumbnail_link:
                 return None
             return DriveThumb(content=_thumb_jpeg(), media_type="image/jpeg")
 
     def download(self, file_id: str) -> DriveDownload:
-        """Fake files carry no content: the bytes are empty, the name real."""
         item = self.file(file_id)
         return DriveDownload(content=b"", name=item.name)
 
@@ -375,8 +321,6 @@ class FakeDrive:
             if email not in item.editors:
                 item.editors.append(email)
 
-    # --- what a person does in Drive (tests, seeding) ------------------------
-
     def seed_folder(
         self,
         name: str,
@@ -386,8 +330,6 @@ class FakeDrive:
         item_id: str | None = None,
         shared: bool = False,
     ) -> str:
-        """A folder made by hand (`item_id` fixes its id: a configured
-        root). `shared` shares it with the bot."""
         with self._state() as state:
             if item_id is not None and item_id in state.items:
                 return item_id
@@ -431,8 +373,6 @@ class FakeDrive:
         *,
         owner: str = DEFAULT_OWNER,
     ) -> str:
-        """A Google Sheet made by hand, or (same name there) typed into
-        again: its cells are now `tabs`."""
         with self._state() as state:
             content = DriveSheet(tabs=tabs)
             for item in state.items.values():
@@ -449,22 +389,18 @@ class FakeDrive:
             ).id
 
     def trash_file(self, item_id: str) -> None:
-        """The API call (the app trashing what it uploaded)."""
         with self._state("trash_file") as state:
             self._live(state, item_id, f"File {item_id}").trashed = True
 
     def trash(self, item_id: str) -> None:
-        """Trashed by hand in Drive (a test's doing, not the app's)."""
         with self._state() as state:
             state.items[item_id].trashed = True
 
     def delete(self, item_id: str) -> None:
-        """Gone for good (emptied trash): everything under it with it."""
         with self._state() as state:
             del state.items[item_id]
 
     def move(self, item_id: str, parent: str) -> None:
-        """Dragged into another folder (a VA moving a posted video)."""
         with self._state() as state:
             state.items[item_id].parents = [parent]
 
@@ -486,22 +422,16 @@ class FakeDrive:
             state.fail_on = list(names)
 
     def refuse_sign_in(self, email: str) -> None:
-        """Google refuses `email`'s token from now on (revoked in their
-        Google Account, expired): `connect_as` them fails every call."""
         with self._state() as state:
             if email not in state.refused:
                 state.refused.append(email)
 
     def check_sign_in(self, email: str) -> None:
-        """Raises `DriveAuthError` while `email`'s sign-in is refused."""
         with self._state() as state:
             if email in state.refused:
                 raise DriveAuthError
 
-    # --- what a test reads back ---------------------------------------------
-
     def named(self, name: str, parent: str) -> list[str]:
-        """Ids of the live items called `name` in `parent`, oldest first."""
         with self._state() as state:
             found = [
                 i
@@ -511,7 +441,6 @@ class FakeDrive:
             return [i.id for i in sorted(found, key=lambda i: i.created)]
 
     def names_in(self, parent: str) -> list[str]:
-        """Names of the live items directly in `parent`, oldest first."""
         with self._state() as state:
             found = [
                 i for i in state.items.values() if parent in i.parents and not i.trashed
@@ -546,25 +475,16 @@ def _fake_drive(state_dir: str, root_id: str) -> FakeDrive:
 
 
 def fake_drive() -> FakeDrive:
-    """The process's fake Drive (`connect()` under OFM_FAKE_EXTERNALS), its
-    root the configured one, shared with the bot."""
     return _fake_drive(settings.infra.fakes_dir, settings.gdrive.root_folder_id)
 
 
 class FakePersonDrive:
-    """The fake Drive as one person (`connect_as` under OFM_FAKE_EXTERNALS):
-    "root" is their own My Drive (a folder of theirs, made on first use),
-    and what they make or upload is theirs. Everything else is the shared
-    fake's, so a test reads back through `FakeDrive` as usual. Every call
-    first passes Google's sign-in check (`FakeDrive.refuse_sign_in`)."""
-
     def __init__(self, drive: FakeDrive, email: str) -> None:
         self._drive = drive
         self.email = email
         self.my_drive = f"mydrive-{email}"
 
     def _me(self) -> FakeDrive:
-        """The shared fake, once Google takes this person's token."""
         self._drive.check_sign_in(self.email)
         return self._drive
 
@@ -633,7 +553,4 @@ class FakePersonDrive:
 
 
 def fake_person(refresh_token: str) -> FakePersonDrive:
-    """The fake Drive as whoever `refresh_token` is ("fake-refresh:<email>",
-    what the fake token endpoint hands out; any other token is its own
-    person)."""
     return FakePersonDrive(fake_drive(), refresh_token.removeprefix("fake-refresh:"))

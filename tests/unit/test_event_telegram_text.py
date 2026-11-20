@@ -1,6 +1,3 @@
-"""An event as the Telegram message a person reads, what an `Event` accepts, and
-the bot token and job arguments never reaching a span or a log in clear."""
-
 import logging
 
 import pytest
@@ -63,7 +60,6 @@ def test_emoji_count_twice_and_the_message_still_fits():
 
 
 def test_a_site_path_without_the_site_address_is_left_out():
-    """A bare `/links` would read as a bot command."""
     assert message_text(Event(name="n", title="t", url="/links")) == "t"
 
 
@@ -110,8 +106,6 @@ def test_a_time_a_ratio_or_a_dated_id_is_not_taken_for_a_token(text):
 
 
 def test_rq_failure_lines_lose_the_jobs_arguments():
-    """RQ logs a failed job with `extra={'arguments': ..., 'kwargs': ...}`: an API
-    key, a chat id, a webhook URL."""
     record = logging.LogRecord("rq.worker", logging.ERROR, "", 0, "boom", None, None)
     record.__dict__.update(
         arguments=("telegram", "-1001234567", {"title": "t"}),

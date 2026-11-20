@@ -1,7 +1,3 @@
-"""Which provider a generation page starts on (features/generate/providers.py):
-the one the person last ran there (the clone pages share it), if the page
-offers it; else OFM_DEFAULT_PROVIDER; else the page's first."""
-
 import re
 
 import pytest
@@ -31,8 +27,6 @@ SLOW = "APIYI can be slow right now. Fastest from {17:00Z} to {11:00Z}, {zone} t
 
 @pytest.fixture
 def slow_hours(monkeypatch):
-    """The clock inside APIYI's slow hours (15:18 UTC, as on prod
-    2026-11-12)."""
     from datetime import UTC, datetime
 
     from ofmhelpers.integrations.ai_providers.apiyi import provider
@@ -60,7 +54,6 @@ def test_in_its_slow_hours_apiyi_carries_a_warning_on_the_select(
     assert 'id="provider-notice" hidden' in html
 
 
-# /pictures is retired (auth/access.py `RETIRED`, owner 2026-11-13): parked.
 PICTURES_PARKED = pytest.mark.skip(
     reason="/pictures is retired: auth/access.py RETIRED"
 )
@@ -123,7 +116,6 @@ def test_generate_starts_on_the_provider_of_the_last_ai_run(client, actor):
 
 
 def test_a_last_provider_the_page_does_not_offer_is_passed_over(client, actor):
-    """/clone-long has no RunningHub: the newest run it can take wins."""
     _ran("clone", "apiyi", actor)
     _ran("clone", "runninghub", actor)
 

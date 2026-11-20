@@ -1,7 +1,3 @@
-"""`fitted` / `fit_image`: a shrunk or converted JPEG copy that only ever
-appears whole (2026-10-25 review #6: PIL truncates its target before it
-encodes, so a worker reading the copy mid-write uploaded half a JPEG)."""
-
 import io
 import threading
 import time
@@ -24,8 +20,6 @@ def oversized(tmp_path):
 
 @pytest.fixture
 def slow_writes(monkeypatch):
-    """PIL's own order, slowed down: open (truncate) the target, write half,
-    then the rest -- the window a second worker used to read in."""
     real_save = Image.Image.save
 
     def save(self, fp, fmt=None, **params):
@@ -53,7 +47,7 @@ def test_workers_fitting_one_image_at_once_all_read_the_whole_copy(
 
     def worker(delay: float) -> None:
         start.wait()
-        time.sleep(delay)  # some arrive while the first is still writing
+        time.sleep(delay)
         read.append(fitted(oversized, dest_dir, LIMITS).read_bytes())
 
     threads = [threading.Thread(target=worker, args=(d,)) for d in (0, 0.03, 0.06)]
@@ -71,8 +65,6 @@ def test_workers_fitting_one_image_at_once_all_read_the_whole_copy(
 
 
 def test_an_encode_that_fails_leaves_no_copy_to_reuse(tmp_path, oversized, monkeypatch):
-    """A full disk (or a deploy's SIGKILL) mid-encode: the next run makes the
-    copy again instead of reusing a broken one forever."""
     real_save = Image.Image.save
 
     def failing(self, fp, fmt=None, **params):
@@ -112,7 +104,6 @@ def test_an_image_that_fits_is_sent_as_it_is(tmp_path):
 
 
 def test_jpeg_leaves_a_gif_alone(tmp_path):
-    """A JPEG copy would drop a GIF's animation."""
     src = tmp_path / "loop.gif"
     Image.new("RGB", (8, 6)).save(src, "GIF")
 

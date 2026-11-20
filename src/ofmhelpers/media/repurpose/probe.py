@@ -1,5 +1,3 @@
-"""What one ffprobe call says about the source."""
-
 import json
 from pathlib import Path
 
@@ -10,7 +8,6 @@ from ofmhelpers.media.size import Size
 
 
 def _rate(fraction: str) -> float | None:
-    """ffprobe's "30000/1001" as a number; None for "0/0"."""
     num, _, den = fraction.partition("/")
     try:
         value = float(num) / float(den or 1)
@@ -24,10 +21,7 @@ class Source(BaseModel, frozen=True):
     width: int
     height: int
     has_audio: bool
-    # Degrees a player turns the stored picture (a phone's display matrix);
-    # ffmpeg turns it upright before any filter.
     rotation: int = 0
-    # Average frames per second; None when ffprobe reports none (0/0).
     fps: float | None = None
 
     @classmethod
@@ -50,14 +44,12 @@ class Source(BaseModel, frozen=True):
 
     @property
     def display_size(self) -> Size:
-        """Width and height as played, i.e. as the filters see the frames."""
         if self.rotation % 180:
             return Size(width=self.height, height=self.width)
         return Size(width=self.width, height=self.height)
 
     @property
     def aspect(self) -> float:
-        """Long side over short side."""
         return max(self.width, self.height) / min(self.width, self.height)
 
 

@@ -1,10 +1,3 @@
-"""Link providers (Oopsie, Bouncy): what /links reads and makes, on the
-fakes and on the real accounts (the `*_API_KEY_ADMIN` keys in .env).
-
-Reads only, except the Bouncy round trip: one throwaway link on bouncy.ai,
-18+ gated, deleted again (Bouncy is free per link; the Oopsie plan has a
-page quota, so its making is checked on the fake only)."""
-
 import uuid
 from datetime import timedelta
 
@@ -24,7 +17,6 @@ from ofmhelpers.schemas.links import utc_today
 
 PROVIDERS = ["oopsie", "bouncy"]
 _FAKE_KEYS = {"oopsie": OOPSIE_FAKE_KEY, "bouncy": BOUNCY_FAKE_KEY}
-# What Bouncy's 18+ page says (its "Yes, I'm 18+" button is drawn by JS).
 _BOUNCY_GATE = "Age verification required"
 _PHONE = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
@@ -33,7 +25,6 @@ _PHONE = (
 
 
 def _seed(provider: str) -> None:
-    """The fake account: one link with traffic yesterday and today."""
     today = utc_today()
     if provider == "oopsie":
         fake = fake_oopsie()
@@ -69,10 +60,6 @@ def test_usage_is_a_quota(provider):
 
 @pytest.fixture
 def listed(provider, backend):
-    """`provider` with at least one link of the test's own. The fakes are
-    seeded; the real Bouncy account may have none (2026-10-23: it had none),
-    so a throwaway link is made there and deleted after (free per link).
-    The real Oopsie account keeps its own pages: its plan has a page quota."""
     if backend == "fake" or provider.key == "oopsie":
         yield provider
         return
@@ -122,10 +109,6 @@ def test_daily_numbers_fall_in_the_range(provider):
 
 
 def test_daily_leaves_out_a_link_gone_since_it_was_listed(provider):
-    """Deleted between the list and the numbers (by hand on the provider, or
-    a delete job): left out instead of failing the read. 2026-10-24 Bouncy's
-    404 on one such link (the round trip's, deleted mid-read) failed the
-    whole read, so the whole sync."""
     end = utc_today()
     ids = [x.remote_id for x in provider.list_links()][:2]
     gone = f"ofmh-gone-{uuid.uuid4().hex[:8]}"
@@ -147,8 +130,6 @@ def test_fake_reports_the_seeded_traffic(name, fake_externals):
 
 
 def test_one_day_comes_back_by_the_hour(provider):
-    """What `money` reads (features/reports/hours.py): both providers answer a
-    one-day range by the hour (Oopsie checked on its real API 2026-11-08)."""
     day = utc_today()
     ids = [x.remote_id for x in provider.list_links()][:3]
     found = provider.hourly(ids, day)
@@ -166,7 +147,6 @@ def test_fake_reports_the_seeded_hours(name, fake_externals):
     [found] = provider.hourly([link.remote_id], utc_today())
     assert found.remote_id == link.remote_id
     hours = found.hours
-    # The seed's day as a whole: its first hour.
     assert [(h.hour.hour, h.views, h.clicks) for h in hours] == [(0, 10, 7)]
 
 
@@ -200,8 +180,6 @@ def test_fake_makes_gated_links_and_deletes_them(key, fake_externals):
 
 @pytest.mark.live
 def test_real_bouncy_link_shows_the_18_plus_page(real_env):
-    """The undocumented REST fields (`forceAdultWarning`) still work: the
-    made link's page asks for the age first."""
     provider = get_link_provider("bouncy")(settings.links.admin_key("bouncy"))
     slug = f"ofmh-contract-{uuid.uuid4().hex[:8]}"
     made = provider.create(

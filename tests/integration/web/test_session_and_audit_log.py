@@ -1,10 +1,3 @@
-"""
-Covers two related changes: the session cookie's max_age was cut from 14
-days down to 5 hours (shared admin/VA passwords, kept short on purpose),
-and every login/logout now gets recorded into the Action log so it's clear
-who was actually using the tool and when -- not just what jobs they ran.
-"""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user_with_password, sign_in
@@ -16,9 +9,6 @@ from ofmhelpers.web.main import app
 
 @pytest.fixture
 def client_factory():
-    """Each test needs precise control over its own login/logout sequence,
-    unlike the other test files' `client` fixture which pre-logs-in -- so
-    this hands back a fresh, NOT-yet-authenticated TestClient per call."""
     return lambda: TestClient(app)
 
 
@@ -57,10 +47,6 @@ def test_failed_login_does_not_record_a_login_event(client_factory):
 
 
 def test_login_redirects_to_the_next_target_after_success(client_factory):
-    """The post-login redirect target travels as the wire name `next` on both
-    the query string and the form body -- the handlers bind it to a
-    `next_url` identifier via an alias (`next` shadows a builtin), so this
-    pins the external name against an accidental rename."""
     client = client_factory()
 
     r = client.post(
@@ -99,10 +85,6 @@ def test_logout_is_recorded_with_the_actor_that_was_logged_in(client_factory):
 def test_logout_while_unauthenticated_is_blocked_before_logging_anything(
     client_factory,
 ):
-    """/logout isn't in AuthMiddleware's public-path allowlist, so hitting it
-    with no session redirects to /login like any other protected route --
-    the logout handler (and its log_event call) never even runs. Confirms
-    that path doesn't spuriously record a logout with no one attached to it."""
     client = client_factory()
     before = len([j for j in list_jobs() if j.task == "logout"])
 
@@ -115,7 +97,6 @@ def test_logout_while_unauthenticated_is_blocked_before_logging_anything(
 
 
 def test_login_and_logout_appear_in_the_action_log_page(client_factory):
-    # A user's login and logout populate the log...
     user = make_user_with_password(password="correct horse battery")
     va = client_factory()
     va.post(
@@ -124,7 +105,6 @@ def test_login_and_logout_appear_in_the_action_log_page(client_factory):
     )
     va.post("/logout")
 
-    # ...then view the page as admin (it's admin-only).
     admin = client_factory()
     admin.post("/login", data={"password": "test-admin", "next": "/"})
     html = admin.get("/action-log").text

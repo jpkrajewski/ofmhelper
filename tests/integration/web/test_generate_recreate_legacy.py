@@ -1,12 +1,3 @@
-"""
-Recreate on a job of a per-model tool /ai replaced (task `seedream5`,
-`wan3`, ...) restored only the prompt: those params name no `provider`/`model`,
-so ai-form.js fell back to prompt-only, and the next run went to whatever model
-was picked, with no references -- a different picture. Their cards now carry
-the params as the /ai job they would be today: a catalog model, and inputs
-under that model's schema names, so Recreate restores all of it.
-"""
-
 import html
 import json
 import re
@@ -47,8 +38,6 @@ def _card_params(page: str, job_id: str) -> dict:
 
 
 def _assert_fits_its_model(params: dict) -> None:
-    """Every input is a field of the model's schema, so ai-form.js finds a
-    field or picker for each."""
     spec = get_spec(params["model"])
     assert params["provider"] == spec.provider
     inputs = set(params) - {"provider", "model"}
@@ -89,7 +78,7 @@ def test_seedream5_without_references_is_text_to_image(client, tmp_path):
     params = _card_params(client.get("/generate").text, job_id)
 
     assert params["model"] == "kie:seedream/5-lite-text-to-image"
-    assert "image_urls" in params  # empty list: clears the picker, harmless
+    assert "image_urls" in params
 
 
 def test_wan3_references_move_to_the_schema_names(client, tmp_path):

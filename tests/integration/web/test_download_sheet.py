@@ -1,11 +1,3 @@
-"""/download-assets "Download from Drive sheet" (features/downloads/sheet.py;
-owner 2026-11-12): a click reads today's column of the links sheet in the
-person's own Drive root and downloads every link not downloaded or queued
-before as one download job; the button then rests.
-
-The Drive is the fake one, the downloads write small files
-(`download_files.py`): no network."""
-
 import re
 from datetime import date, timedelta
 from pathlib import Path
@@ -68,7 +60,6 @@ def _client(email: str = OWNER, *, google: bool = True) -> TestClient:
 
 
 def _root(email: str) -> str:
-    """The person's root folder in their own Drive, made by hand."""
     person = fake_person(f"fake-refresh:{email}")
     person.children("root")
     found = fake_drive().named(root_name(), person.my_drive)
@@ -78,8 +69,6 @@ def _root(email: str) -> str:
 
 
 def _type(email: str, *today: str, name: str = "content_links") -> None:
-    """The sheet as people left it: yesterday's column, then today's with
-    `today` under it."""
     day = sheet.today()
     cells: list[list[date | str | None]] = [[day - timedelta(days=1), day]]
     cells.extend([OLD, link] for link in today)
@@ -94,16 +83,12 @@ def _click(client: TestClient) -> dict:
 
 
 def _rested(client: TestClient) -> None:
-    """A minute later: the button works again."""
     sheet.Clicker(user_id=client.user.id).wake()  # type: ignore[attr-defined]
 
 
 def _jobs(client: TestClient) -> int:
     actor = str(client.user.id)  # type: ignore[attr-defined]
     return list_jobs_page(TASKS, 0, 50, actor).total
-
-
-# --- the click -------------------------------------------------------------------
 
 
 def test_a_click_downloads_todays_links_as_one_job(downloads):
@@ -123,7 +108,6 @@ def test_a_click_downloads_todays_links_as_one_job(downloads):
     assert job.task == "download_media"
     assert job.user_id == client.user.id
     assert job.params == {"urls": [A, B], "sheet_date": day}
-    # Yesterday's column is not today's.
     assert downloads.fetched == [A, B]
     assert [f.url for f in rows(job.id)] == [A, B]
     assert f'data-job-id="{job.id}"' in client.get("/download-assets").text
@@ -173,7 +157,6 @@ def test_a_link_pasted_by_hand_before_is_not_downloaded_again(downloads):
 
 
 def test_a_link_that_failed_is_not_queued_by_every_click(downloads):
-    """It has no `downloads` row to tell by: the click remembers it."""
     client = _client()
     _type(OWNER, BROKEN, A)
     first = _click(client)
@@ -229,9 +212,6 @@ def test_links_queued_stay_new_when_the_queue_failed(downloads, monkeypatch):
     assert downloads.fetched == [A]
 
 
-# --- the cooldown ----------------------------------------------------------------
-
-
 def test_the_button_rests_after_a_click_and_drive_is_not_asked(drive, downloads):
     client = _client()
     _type(OWNER, A)
@@ -248,8 +228,6 @@ def test_the_button_rests_after_a_click_and_drive_is_not_asked(drive, downloads)
 
 
 def test_a_refused_click_does_not_rest_the_button(downloads):
-    """Nothing was read: once the person fixed what it named, the next
-    click works at once."""
     client = _client()
     assert client.post(URL).status_code == 404
     assert client.post(URL).status_code == 404
@@ -262,7 +240,6 @@ def test_a_refused_click_does_not_rest_the_button(downloads):
 
 
 def test_links_marked_before_redis_failed_are_unmarked(downloads, monkeypatch):
-    """A claim cut off part-way must not hide its first links for days."""
     client = _client()
     _type(OWNER, A, B)
     redis = get_redis()
@@ -336,9 +313,6 @@ def test_other_gallery_pages_have_no_sheet_button():
     assert "sheet-download" not in client.get("/generate").text
 
 
-# --- whose sheet -----------------------------------------------------------------
-
-
 def test_everyone_reads_the_sheet_in_their_own_drive(downloads):
     owner, other = _client(OWNER), _client(OTHER)
     _type(OWNER, A)
@@ -367,9 +341,6 @@ def test_a_va_reads_the_employers_sheet_and_the_job_is_the_vas(downloads):
     assert answer["new"] == 1
     assert get_job(answer["job_id"]).user_id == va.user.id  # type: ignore[attr-defined]
     assert downloads.fetched == [A]
-
-
-# --- refusals --------------------------------------------------------------------
 
 
 def test_without_google_drive_the_click_says_to_connect_it(downloads):

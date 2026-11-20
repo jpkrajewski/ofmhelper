@@ -1,17 +1,3 @@
-"""How a finished video is exported: a registry of `Export`s, each turning
-a file into its exported copy, plus `ExportOptions` that every export
-honours. Pages offer `exports()` as one choice and each option as a switch;
-a job stores the chosen `name` and the options.
-
-- `original` — the file as generated.
-- `capcut` — `utils.capcut`'s CapCut-style edit + export.
-- one `DeviceExport` per `iphones/<model>/` profile — a camera recording of
-  that phone; a new profile folder is a new choice with no code change.
-
-A new kind of export is one `Export` subclass added to `_build`; a new
-option is one `ExportOptions` field, applied by every `render`.
-"""
-
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from pathlib import Path
@@ -31,40 +17,29 @@ __all__ = ["Export", "ExportOptions", "exports", "get_export"]
 
 
 class ExportOptions(BaseModel):
-    """Switches on top of any export; each field is one switch."""
-
     model_config = ConfigDict(frozen=True)
 
-    # Flipped left-right.
     mirror: bool = False
 
     @property
     def suffix(self) -> str:
-        """Added to the exported file's name, one part per switch that is on."""
         return "".join(f"_{name}" for name, on in self if on)
 
 
 class Export(BaseModel, ABC):
-    """One export choice: its stored `name`, the `label` a page shows."""
-
     model_config = ConfigDict(frozen=True)
 
     name: str
     label: str
 
     @abstractmethod
-    def render(self, src: Path, options: ExportOptions) -> Path:
-        """Write the exported copy of `src` next to it and return its path
-        (`src` itself when nothing is written). Raises on failure."""
+    def render(self, src: Path, options: ExportOptions) -> Path: ...
 
     def _dst(self, src: Path, options: ExportOptions, ext: str) -> Path:
         return src.with_name(f"{src.stem}_{self.name}{options.suffix}{ext}")
 
 
 class OriginalExport(Export):
-    """The file as generated; with a switch on, re-encoded with only that
-    change (audio copied as is)."""
-
     def render(self, src: Path, options: ExportOptions) -> Path:
         if options == ExportOptions():
             return src
@@ -102,9 +77,6 @@ class CapcutExport(Export):
 
 
 class DeviceExport(Export):
-    """A recording of the `profile` phone, dated now in the configured time
-    zone, filmed somewhere in the configured place."""
-
     profile: str
 
     def render(self, src: Path, options: ExportOptions) -> Path:
@@ -135,7 +107,6 @@ def _build() -> list[Export]:
 
 @lru_cache
 def exports() -> Registry[Export]:
-    """Every export, by name, in the order a page lists them."""
     return Registry[Export](entries={e.name: e for e in _build()})
 
 

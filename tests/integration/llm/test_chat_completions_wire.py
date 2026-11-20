@@ -1,9 +1,3 @@
-"""Groq and Cerebras through `ofmhelpers.integrations.llm` (one OpenAI-style
-`/chat/completions` client, llm/chat_completions.py) with each vendor faked
-at the wire: images inline and shrunk, a video as a contact sheet, the
-strict schema sent, the image cap held before sending, retries, and every
-failure as the error the caller gets."""
-
 import base64
 import io
 import json
@@ -45,8 +39,6 @@ class Verdict(BaseModel):
 
 
 class _Clock:
-    """A sleep is noted and moves the clock on, never waited."""
-
     def __init__(self) -> None:
         self.slept: list[float] = []
 
@@ -59,7 +51,6 @@ class _Clock:
 
 @pytest.fixture(params=list(VENDORS))
 def vendor(request, fake_externals, monkeypatch) -> str:
-    """Each vendor on its fake, as the chat default."""
     env, key, *_ = VENDORS[request.param]
     monkeypatch.setenv(env, key)
     monkeypatch.setenv("LLM_DEFAULT_CHAT", request.param)
@@ -113,19 +104,19 @@ def test_text_and_images_go_inline_with_a_strict_schema(fake, tmp_path):
     [body] = fake.requests
     text, image = _content(body)
     assert text == {"type": "text", "text": "Subject:"}
-    assert max(_image(image).size) == 1024  # shrunk: tokens grow with size
+    assert max(_image(image).size) == 1024
     strict = body["response_format"]["json_schema"]
     assert strict["strict"] is True
     assert strict["schema"]["additionalProperties"] is False
-    assert body["temperature"] == 0  # the vendors' default here: a checker
-    assert fake.timeouts == [300.0]  # OFM_LLM_TIMEOUT_S
+    assert body["temperature"] == 0
+    assert fake.timeouts == [300.0]
 
 
 def test_the_answer_says_the_tokens_the_vendor_counted(fake):
     found = get_llm(LLMUse.CHAT).answered(Prompt.of("Check"), Verdict)
     assert (found.input_tokens, found.thinking_tokens, found.output_tokens) == (
         USAGE["prompt_tokens"],
-        None,  # counted inside completion_tokens, not apart
+        None,
         USAGE["completion_tokens"],
     )
 
@@ -140,7 +131,6 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(fake, label, cloc
 
     assert str(err.value) == f"{label} took too long"
     assert f"{label} is unavailable (503)" in err.value.detail
-    # 5 s and 10 s fit; the 3rd try's 20 s wait would end past the deadline.
     assert clock.slept == [5.0, 10.0]
     assert fake.timeouts == [
         pytest.approx(20, abs=1),
@@ -150,8 +140,6 @@ def test_an_outage_stops_at_the_deadline_not_after_every_retry(fake, label, cloc
 
 
 def test_the_model_is_shown_the_schema_it_must_answer_in(fake):
-    """Groq checks the answer after writing it: a model never shown the
-    field names made up its own, and only "no glitches" got through."""
     _ask(Prompt.of("Check", system="You check reels."))
 
     [body] = fake.requests
@@ -174,7 +162,6 @@ def test_a_video_goes_as_a_note_and_one_contact_sheet(fake, tmp_path):
     lead, note, sheet = _content(body)
     assert lead["text"] == "Check this reel:"
     assert note["text"].startswith("The next image is the video clip.mp4 as 9 evenly")
-    # 3x3 portrait stills (1080x1920), shrunk like any image.
     assert _image(sheet).size == (576, 1024)
 
 
@@ -261,8 +248,6 @@ def test_an_answer_failing_the_vendors_schema_check_is_an_output_error(fake, lab
 
 
 def test_groq_asks_qwen_not_to_think(fake_externals, monkeypatch):
-    """At the default effort Groq's qwen answered a schema request in plain
-    text (2026-10-25); thinking would also spend the free 8K tokens/min."""
     monkeypatch.setenv("GROQ_API_KEY", GROQ_KEY)
     get_llm(provider="groq").ask(Prompt.of("Check"), Verdict)
     [body] = fake_groq().requests

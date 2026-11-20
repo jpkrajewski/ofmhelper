@@ -1,21 +1,3 @@
-"""One queued file made into a pin on its account's Pinterest: downloaded
-from Drive through its owner's Google account, uploaded to Pinterest (a
-video with a cover picture of its first frame), the pin made on its
-model's board on the account (made on first use) with what it was claimed
-with: the model's title, a caption and the model's self link, or "ig:
-<handle>" alone. Started by the sweep (`sweep.py`) for a post it
-claimed; the post row says how it went (published + pin id, or failed +
-why), the job row has the same, Logfire the span `pinterest pin
-@{account}` with every step's time.
-
-What a refusal does: rate limited -> the post goes back in line untried and
-the account waits (`resume_at`); logged out -> the account stops (`error`)
-until new cookies; anything else -> the post failed, tried again at a later
-slot up to `max_attempts`. Free to run again: a post already published is
-not pinned twice. Not restarted after a deploy (a pin made just before the
-kill would be made again): the sweep fails a post left `publishing` past the
-job's time and tries it again at the next slot."""
-
 import shutil
 import time
 from pathlib import Path
@@ -53,8 +35,6 @@ NO_MODEL = "This file's model has no preset"
 
 
 class PublishedPin(BaseModel):
-    """A done job's result."""
-
     post_id: int
     pin_id: str
     url: str
@@ -64,8 +44,7 @@ def pin_url(pin_id: str) -> str:
     return f"https://www.pinterest.com/pin/{pin_id}/"
 
 
-def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: ARG001 -- start_job hands every run its job id
-    """Raises `PinterestError`, `DriveError`, `NotFoundError`."""
+def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: ARG001
     repo = store.repository()
     post = repo.post(post_id)
     if post is None:
@@ -75,8 +54,6 @@ def publish_post(*, post_id: int, job_id: str = "") -> PublishedPin:  # noqa: AR
             post_id=post.id, pin_id=post.remote_id, url=pin_url(post.remote_id)
         )
     if post.status is not PostStatus.publishing:
-        # Cut off and claimed again meanwhile, or never claimed: pinning it
-        # here could pin it twice.
         raise NotFoundError(NOT_CLAIMED)
     channel = repo.channel(post.channel_id)
     if channel is None:
@@ -175,8 +152,6 @@ def _publish(channel: Channel, post: Post) -> PublishedPin:
 
 
 def _pause_if_failing(channel: Channel) -> None:
-    """The account's last pins all failed: it waits like a rate limited one
-    (a hold on the account, not a bad file), so its queue keeps its tries."""
     n = settings.distribution.failures_before_pause
     if store.repository().failed_in_a_row(channel.id, n):
         wait_s = settings.distribution.rate_limit_pause_s
@@ -190,13 +165,10 @@ def _pause_if_failing(channel: Channel) -> None:
 
 
 def _keep_session(channel: Channel, client: PinterestClient) -> None:
-    """The cookies as Pinterest left them (it renews its session on its
-    answers) saved over the stored ones: the account stays signed in as long
-    as Pinterest keeps renewing."""
     try:
         cookies = client.cookies_txt()
         store.repository().set_cookies(channel.id, cookies, session_expires_at(cookies))
-    except Exception:  # the pin is up; the stored session is one pin older
+    except Exception:
         logger.exception(
             "pinterest @%s: could not save the renewed session", channel.account_name
         )
@@ -212,8 +184,6 @@ def _download(user_id: int, post: Post, here: Path) -> Path:
 
 
 def _media(client: PinterestClient, path: Path, kind: PostKind, here: Path) -> Media:
-    """`path` uploaded and processed by Pinterest; a video with a cover
-    picture (its first frame)."""
     timeout_s = settings.distribution.ffmpeg_timeout_s
     if kind is PostKind.image:
         with Image.open(path) as im:

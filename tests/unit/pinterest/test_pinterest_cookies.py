@@ -1,8 +1,3 @@
-"""A whole browser's cookies.txt: only Pinterest's kept, and of a name
-several hosts hold (csrftoken of www. and pl.pinterest.com, prod
-2026-11-18: `CookieConflictError`) only what the browser sends to the host
-the client talks to."""
-
 import pytest
 
 from ofmhelpers.integrations.downloaders.cookies import CookieFileError, load_jar
@@ -96,8 +91,6 @@ def test_the_login_cookies_expiry_is_read():
 
 
 def test_a_bad_cookies_file_never_carries_its_lines_into_a_log():
-    """The parser's own error quotes the bad line: a cookie of the person's
-    file (review 2026-11-18). It must not ride along as the cause."""
     with pytest.raises(CookieFileError) as caught:
         load_jar("not a cookies file\tsecret-value\n")
 

@@ -1,18 +1,9 @@
-"""competitor instagram profiles per model
-
-Revision ID: c8d9e0f1a2b3
-Revises: b7c1d2e3f4a5
-Create Date: 2026-07-28 10:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
 revision: str = "c8d9e0f1a2b3"
 down_revision: str | None = "b7c1d2e3f4a5"
 branch_labels: str | Sequence[str] | None = None

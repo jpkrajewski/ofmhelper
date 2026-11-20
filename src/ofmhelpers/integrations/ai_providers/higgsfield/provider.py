@@ -1,18 +1,3 @@
-"""Higgsfield behind the shared `Provider` interface, on its official SDK
-(`higgsfield-client`, docs: how-to/sdk).
-
-Public SDK calls: `SyncClient(api_key=...)` per account, `upload_file` and a
-request controller's `status` / `get`. The submit is `_Client.submit_keyed`
-(the SDK's own transport class): it sends an `Idempotency-Key`
-(docs: concepts/idempotency), so a resend after a 408/5xx -- the transport
-resends those at once -- returns the request a lost answer already made
-instead of paying for another. A 429 is not resent here: Higgsfield made
-nothing, and the runner waits its Retry-After. The SDK raises one
-`HiggsfieldClientError` for every HTTP failure (the httpx error is its cause)
-and lets httpx transport errors through; `_mapped_errors` turns both, and
-answers nothing here can read, into the shared error types.
-"""
-
 import hashlib
 import json
 import math
@@ -23,8 +8,6 @@ from functools import cached_property
 from pathlib import Path
 
 import httpx
-
-# Unused here, but tests patch `requests.head` through this module's name.
 import requests  # noqa: F401
 from higgsfield_client import Completed, HiggsfieldClientError, SyncClient
 from higgsfield_client.http.retry import ExponentialBackoffRetry
@@ -64,7 +47,6 @@ lazy from ofmhelpers.integrations.ai_providers.spec import ModelSpec, Payload
 
 logger = get_logger(__name__)
 
-# The upload endpoint's accepted types (docs: concepts/file-uploads).
 UPLOAD_TYPES = frozenset(
     {
         "image/jpeg",
@@ -76,30 +58,20 @@ UPLOAD_TYPES = frozenset(
         "video/mp4",
     }
 )
-# The image's Python (3.12, no /etc/mime.types) does not know .webp: a WebP
-# subject was refused as "not WebP" (dev 2026-10-25).
 mimetypes.add_type("image/webp", ".webp")
-# docs: concepts/errors. 403 is "Insufficient balance", unless it carries
-# `Cache-Control: no-store` -- a disabled or expired key (api-reference/headers).
 _KEY_REFUSED = 401
 _KEY_DISABLED = 403
 _NO_BALANCE = frozenset({402, 403})
 _RATE_LIMITED = 429
 _TIMED_OUT = 408
 _SERVER_ERROR = 500
-# What a keyed submit is resent on at once: an answer that may have been lost
-# after the request was made (the key returns that request).
 _SUBMIT_RESENT = frozenset({408, 500, 502, 503, 504})
 _ENDED = (Completed, Failed, NSFW, Cancelled)
 
 
 class _Client(SyncClient):
-    """The SDK client plus a submit that carries an Idempotency-Key."""
-
     @cached_property
     def _submit_transport(self) -> HttpTransport:
-        # Built at first use, so it wraps whatever `_client` holds by then:
-        # the fake's (`install`) or a test's.
         retry = ExponentialBackoffRetry(retryable_status_codes=set(_SUBMIT_RESENT))
         return HttpTransport(self._client, retry)
 
@@ -123,8 +95,6 @@ def _seconds(value: str) -> float | None:
 
 
 def _retry_after(response: httpx.Response) -> float | None:
-    """A 429's wait: the Retry-After header (seconds, docs: api-reference/
-    headers), else the body's `detail.retry_after_seconds` (rate-limits)."""
     header = _seconds(response.headers.get("Retry-After", ""))
     if header is not None:
         return header
@@ -138,8 +108,6 @@ def _retry_after(response: httpx.Response) -> float | None:
 
 
 def _from_api(response: httpx.Response) -> bool:
-    """Higgsfield's API answered, not the storage behind a presigned PUT
-    (whose 403 is a stale signature, never a key or the balance)."""
     return response.request.url.host == httpx.URL(settings.higgsfield.base_url).host
 
 
@@ -172,14 +140,9 @@ def _mapped_errors(action: str) -> Iterator[None]:
         raise _refused(action, exc) from exc
     except httpx.TransportError as exc:
         msg = f"Higgsfield {action}: unreachable ({exc.__class__.__name__})"
-        # No connection made: the request never left.
         never_sent = isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
         raise ProviderUnavailableError(msg, maybe_made=not never_sent) from exc
     except (ValueError, KeyError, httpx.HTTPError) as exc:
-        # After TransportError (an HTTPError): the SDK's "Unknown status", a
-        # 200 that is not JSON, a shape the models refuse. The request may
-        # exist, so it is retryable -- the job stays remembered, never failed
-        # and forgotten after it was paid.
         msg = f"Higgsfield {action}: unreadable answer ({exc.__class__.__name__})"
         raise ProviderUnavailableError(msg) from exc
 
@@ -193,10 +156,6 @@ def _takes(path: Path) -> bool:
 
 
 def _sendable(path: Path, max_bytes: int | None) -> Path:
-    """`path`, or its copy: a BMP/TIFF or an image over the limits as a JPEG, a
-    video in another container as an MP4 (an iPhone .mov failed a /clone run on
-    prod, 2026-11-02). A video ffmpeg cannot read is the input's fault: the job
-    fails with a plain reason, nothing is paid."""
     s = settings.higgsfield
     try:
         return reference_copy(
@@ -215,10 +174,6 @@ def _sendable(path: Path, max_bytes: int | None) -> Path:
 
 
 def _submit_key(job_key: str, model_id: str, payload: Payload) -> str:
-    """One generation intent (docs: concepts/idempotency): the job's key plus
-    a digest of exactly what is sent. A resend of the same request gets the
-    request it made; changed inputs (a reference uploaded again, a job id a
-    later job reuses) are a new intent instead of Higgsfield's 422."""
     body = json.dumps(
         {"model": model_id, "input": payload}, sort_keys=True, separators=(",", ":")
     )
@@ -230,8 +185,6 @@ class HiggsfieldProvider(Provider):
     name = "higgsfield"
     label = "Higgsfield"
     rank = 10
-    # `_submit_key` is stable for one intent: a resend answers the request a
-    # lost answer made (docs concepts/idempotency), even one already ended.
     idempotent_submit = True
 
     def __init__(self, api_key: str) -> None:
@@ -253,13 +206,6 @@ class HiggsfieldProvider(Provider):
         return upload_cache_key("higgsfield", self.api_key, path, max_bytes)
 
     def upload(self, path: Path, max_bytes: int | None = None) -> str:
-        """Memoized like kie.ai's: a reference reused across generations is
-        uploaded once, and a cached URL is confirmed live before reuse. The
-        cache and its lock are keyed by `path` itself and looked up first: a
-        batch makes one shrunk copy and one upload, and a resumed run whose
-        subject is gone still gets its URL. An image over `ref_image_limits`
-        or in a format Higgsfield does not take goes up as a JPEG copy; a
-        .mov/.webm/.mkv/.m4v video as an MP4 copy."""
         if not _takes(path) and path.suffix.lower() not in COPYABLE_SUFFIXES:
             msg = (
                 f"Higgsfield takes JPEG/PNG/WebP/GIF images, WAV audio and MP4 "
@@ -286,7 +232,7 @@ class HiggsfieldProvider(Provider):
             with _mapped_errors("submit"):
                 return self.client.submit_keyed(spec.model_id, payload, key)
         except ProviderUnavailableError as exc:
-            if not isinstance(exc, ProviderRateLimitError):  # that one made none
+            if not isinstance(exc, ProviderRateLimitError):
                 logger.warning(
                     "higgsfield submit for %s got no answer (%s): a request may "
                     "exist under Idempotency-Key %s",
@@ -302,7 +248,6 @@ class HiggsfieldProvider(Provider):
         with _mapped_errors("status"):
             if not isinstance(controller.status(), _ENDED):
                 return TaskState(state="pending")
-            # Ended: `get` returns at once with the full body (outputs/error).
             request = HiggsfieldRequest.model_validate(controller.get())
         if request.status == "completed":
             return TaskState(state="done", urls=request.urls)

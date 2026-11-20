@@ -20,9 +20,12 @@ Other Claude sessions share this checkout.
   session pushed. `git pull --ff-only` first; never rebase someone else's work.
 
 ## 2. Gate
-`scripts/test.sh deploy` (all + heavy + live; free, no `paid`). Report
-pass/fail/skip counts, each failure with its error text, the 10 slowest
-(from `reports/latest/report.json`). Red = stop.
+`scripts/test.sh deploy` (all + heavy + live; free, no `paid`). Report what
+`reports/latest/summary.txt` says (`scripts/test_summary.py`: counts, files
+that did not import, each failure with its error, the 10 slowest). Green =
+`test.sh` exit 0 AND `RESULT GREEN`; anything else = stop. Never read
+report.json with a reader of your own: its per-test list leaves out files
+that failed to import (2026-11-20: "6285 passed" reported green over 5 errors).
 
 ## 2b. Independent review by Kimi
 While the gate runs: the `kimi` skill, a read-only review of the diff that is

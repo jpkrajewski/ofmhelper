@@ -1,26 +1,3 @@
-"""Gemini through Google AI Studio (`google-genai`, Google's official SDK).
-
-The free tier reads real video, not just frames (ai.google.dev, checked
-2026-10-24): `gemini-3.8-flash` is free there. Free ("Unpaid Services")
-terms, ai.google.dev/gemini-api/terms (2026-04-28): inputs and answers are
-used to improve Google's products and human reviewers may read them; do
-not send sensitive, confidential or personal information. The user accepted
-that for /clone-links checks (2026-10-25, llm/CLAUDE.md). Key:
-https://aistudio.google.com/apikey (`GEMINI_API_KEY`); model
-`OFM_GEMINI_MODEL`.
-
-A media file up to `settings.llm.inline_max_bytes` travels inside the
-request; a bigger one is uploaded through the Files API, waited on until
-Google has processed it, and deleted once answered (Google drops it after
-48 h anyway). The answer is asked as JSON following the caller's schema
-(`response_json_schema`). No temperature is sent: Google deprecated the
-sampling parameters for Gemini 3.x (ignored from 3.6 Flash / 3.5
-Flash-Lite on, a 400 in later generations; llm/CLAUDE.md).
-
-The SDK's own retries are off: `LLMProvider.ask` retries once for every
-provider, honouring Google's `RetryInfo` delay on a 429.
-"""
-
 import re
 import time
 from http import HTTPStatus
@@ -56,7 +33,6 @@ lazy from ofmhelpers.integrations.llm.models import Prompt
 
 logger = get_logger(__name__)
 
-# Finish reasons meaning a safety filter stopped the answer.
 _REFUSED = {
     "SAFETY",
     "PROHIBITED_CONTENT",
@@ -67,7 +43,6 @@ _REFUSED = {
     "IMAGE_PROHIBITED_CONTENT",
 }
 _FILE_POLL_S = 2.0
-# Google's "client closed request": worth another try, like a timeout.
 _CANCELLED = 499
 _AUTH = (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
 _TRANSIENT = (HTTPStatus.REQUEST_TIMEOUT, _CANCELLED)
@@ -122,7 +97,6 @@ class GeminiLLM(LLMProvider):
                     temperature=self._temperature(prompt),
                     response_mime_type="application/json",
                     response_json_schema=answer.model_json_schema(),
-                    # What an upload left of this attempt's time.
                     http_options=types.HttpOptions(
                         timeout=_ms(ends - time.monotonic())
                     ),
@@ -168,8 +142,6 @@ class GeminiLLM(LLMProvider):
     def _ready(
         self, client: genai.Client, file: types.File, label: str, ends: float
     ) -> types.File:
-        """`file` once Google has processed it (a video takes seconds), by
-        `ends` at the latest (the attempt's own end)."""
         deadline = min(time.monotonic() + settings.llm.file_ready_timeout_s, ends)
         while file.state != types.FileState.ACTIVE:
             if file.state == types.FileState.FAILED:
@@ -187,7 +159,6 @@ class GeminiLLM(LLMProvider):
             try:
                 client.files.delete(name=name)
             except genai_errors.APIError, httpx.HTTPError:
-                # Google deletes it after 48 h anyway.
                 logger.warning("gemini: could not delete %s", name, exc_info=True)
 
     def _text(self, response: types.GenerateContentResponse) -> str:
@@ -229,13 +200,10 @@ class GeminiLLM(LLMProvider):
 
 
 def _ms(seconds: float) -> int:
-    """`HttpOptions.timeout` is in milliseconds, and 0 means none at all."""
     return max(1, int(seconds * 1000))
 
 
 def _usage(response: types.GenerateContentResponse) -> Usage:
-    """The tokens Google counted: the prompt, the thinking (billed as
-    output) and the answer itself."""
     meta = response.usage_metadata
     if meta is None:
         return Usage()
@@ -247,7 +215,6 @@ def _usage(response: types.GenerateContentResponse) -> Usage:
 
 
 def _retry_delay(body: Any) -> float | None:
-    """Google's `RetryInfo.retryDelay` ("32s") in an error body, if any."""
     error = body.get("error", {}) if isinstance(body, dict) else {}
     for item in error.get("details", []) or []:
         found = _DURATION.match(str(item.get("retryDelay", "")))

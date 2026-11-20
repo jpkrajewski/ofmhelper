@@ -1,8 +1,3 @@
-"""Each person sees and changes only their own phones, logins, tracked
-accounts, watched profiles, jobs and Drive cards -- admins included: an
-admin manages people, never reads their work. Only the background sweeps
-see everyone's. What was unique for the whole agency is unique per owner."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import make_user, sign_in, sign_in_admin, sign_in_agency
@@ -42,7 +37,6 @@ def bob() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def _no_scans(monkeypatch):
-    """Adding accounts or profiles queues scans: none reach Instagram."""
     monkeypatch.setattr(reel_watch, "queue_due_scans", list)
     from ofmhelpers.features.accounts import page as accounts
     from ofmhelpers.features.accounts import tracker as account_tracker
@@ -61,7 +55,6 @@ def _admin() -> TestClient:
 
 
 def _agency() -> TestClient:
-    """The password account: the agency's admin."""
     c = TestClient(app)
     sign_in_agency(c)
     return c
@@ -80,9 +73,6 @@ def _add_login(client: TestClient, device: int, username: str, password: str) ->
     )
     assert r.status_code == 201, r.text
     return r.json()["id"]
-
-
-# --- phones and logins -----------------------------------------------------------
 
 
 def test_a_users_phones_are_theirs_alone(ann, bob):
@@ -113,8 +103,6 @@ def test_an_admin_does_not_see_or_change_a_users_phone(ann):
 
 
 def test_two_users_may_use_the_same_label_and_the_same_login(ann, bob):
-    """Unique per owner: adding the same account never links to (or
-    reveals) the other user's login with its password."""
     a = _add_phone(ann)
     b = _add_phone(bob)
     a_login = _add_login(ann, a, "shared.ig", "ann-pw")
@@ -137,16 +125,13 @@ def test_a_phone_login_is_tracked_for_the_phones_owner(ann, bob):
     assert "ann.ig" not in bob.get("/accounts").text
 
 
-# --- tracked accounts ------------------------------------------------------------
-
-
 def test_tracked_accounts_and_creators_are_per_user(ann, bob):
     ann.post(
         "/accounts/add",
         json={"platform": "instagram", "handles": "yuki", "creator": "Mia"},
     )
     r = bob.post("/accounts/add", json={"platform": "instagram", "handles": "yuki"})
-    assert r.json() == {"added": ["yuki"], "existing": 0}  # Bob's own row
+    assert r.json() == {"added": ["yuki"], "existing": 0}
 
     ann_account = next(a for a in list_accounts(users.by_email("ann@example.com").id))
     assert ann_account.creator == "Mia"
@@ -180,9 +165,6 @@ def test_an_admin_does_not_see_or_change_a_users_account(ann):
     assert "ann.only" in ann.get("/accounts").text
 
 
-# --- reels watch list ------------------------------------------------------------
-# /reels is retired (auth/access.py `RETIRED`, owner 2026-11-13): its routes
-# answer 403, so these are kept and not run. Back with the page: marker off.
 REELS_PARKED = pytest.mark.skip(reason="/reels is retired: auth/access.py RETIRED")
 
 
@@ -199,10 +181,10 @@ def test_watch_lists_and_groups_are_per_user_one_scan_each(ann, bob, monkeypatch
     assert [(p.username, p.group) for p in list_watched(owner=bob_id)] == [
         ("star", "gay")
     ]
-    assert [p.username for p in list_watched()] == ["star"]  # the sweeper: once
+    assert [p.username for p in list_watched()] == ["star"]
 
     claimed = reel_watch.claim_due(0, 3600)
-    assert claimed == ["star"]  # scanned once for both
+    assert claimed == ["star"]
 
     bob.post("/reels/unwatch/star")
     assert list_watched(owner=bob_id) == []
@@ -212,8 +194,6 @@ def test_watch_lists_and_groups_are_per_user_one_scan_each(ann, bob, monkeypatch
 
 @REELS_PARKED
 def test_an_admin_moves_and_removes_only_their_own_watched_row(ann, bob):
-    """An admin's watch list is their own: another user's profile is not on
-    it, and a row's dropdown and Remove act on the admin's own row only."""
     admin = TestClient(app)
     admin_id = sign_in_admin(admin).id
     ann.post("/reels/watch", data={"profiles": "shared.star", "group": "asian"})
@@ -244,9 +224,6 @@ def test_an_admin_moves_and_removes_only_their_own_watched_row(ann, bob):
 
 @REELS_PARKED
 def test_an_admins_group_feed_keeps_a_profile_an_older_row_has_elsewhere(ann, bob):
-    """Everyone's list (the sweeper's) lists a username once, but only after
-    the group filter: bob's "gay" row of a profile ann added first
-    (ungrouped) is in its "gay" list."""
     ann.post("/reels/watch", data={"profiles": "grouped.later"})
     bob.post("/reels/watch", data={"profiles": "grouped.later", "group": "gay"})
 
@@ -256,13 +233,8 @@ def test_an_admins_group_feed_keeps_a_profile_an_older_row_has_elsewhere(ann, bo
     assert [p.group for p in list_watched() if p.username == "grouped.later"] == [None]
 
 
-# --- Drive -----------------------------------------------------------------------
-
-
 @pytest.fixture
 def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
-    """The fake Drive; Ann and Bob each signed in with Google (their own
-    Drive connected)."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     for email in ("ann@example.com", "bob@example.com"):
         user = make_user(email)
@@ -308,16 +280,13 @@ def test_an_admin_sees_and_syncs_only_their_own_drive_cards(ann, bob, drive):
         assert "ann.ig" not in html
         assert "bob.ig" not in html
 
-    drive_folders.sync()  # the background sweep: everyone's
+    drive_folders.sync()
     (ann_folder,) = drive.named(
         "ann.ig - Anna", users.by_email("ann@example.com").drive_root_id
     )
     file_id = drive.add_file(ann_folder, "a.jpg", thumbnail=True)
     assert admin.get(f"/drive/thumb/{ann_login}/{file_id}").status_code == 404
     assert ann.get(f"/drive/thumb/{ann_login}/{file_id}").status_code == 200
-
-
-# --- removing a user ---------------------------------------------------------------
 
 
 def test_a_user_who_owns_data_is_deactivated_not_deleted(ann):
@@ -340,8 +309,6 @@ def test_a_user_who_owns_data_is_deactivated_not_deleted(ann):
 
 
 def test_existing_data_belongs_to_the_password_admin():
-    """What a store makes without an owner (scripts, the migration's
-    backfill) is the agency's: the password admin's."""
     device = devices.add_device(DeviceFields(label="Old phone"))
     found = next(d for d in devices.list_devices() if d.id == device)
     assert found.user_id == users.agency_id()

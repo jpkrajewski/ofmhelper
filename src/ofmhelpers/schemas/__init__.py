@@ -1,25 +1,3 @@
-"""The web layer's typed shapes, split by what they are a contract *with*:
-
-- `persistence.py` -- what a job looks like in the database.
-- `generation.py` -- the providers and models a generation page offers.
-- `gallery.py` -- what a tool page's gallery renders for a job.
-- `jobs.py` -- what the job endpoints return (status payloads, asset cards).
-- `files.py` -- stored files as the reuse picker and file manager list them.
-- `tools.py` -- a background-job tool as the task registry knows it.
-- `applications.py` -- the landing-page application form and stored lead.
-- `watched.py` -- an Instagram profile /reels rescans, with its latest scan.
-- `accounts.py` -- a tracked social account (/accounts), its list query and history.
-- `devices.py` -- a phone (/phones) with its logins, their form bodies and list query.
-- `chatting.py` -- chat platforms, stored fan messages and what /chatting shows.
-- `drive.py` -- an Instagram login's Drive folders (/drive): what waits, what was posted.
-- `events.py` -- an `Event` going out to the senders (features/events): any producer.
-- `users.py` -- who signs in (/users, /login, /account) and their role.
-- `cookies.py` -- a user's own cookies.txt as /cookies shows it (no values).
-- `links.py` -- a link on a link provider (/links), its list query and the Generate form.
-
-Import from here; the split is an implementation detail of this package.
-"""
-
 from ofmhelpers.schemas.accounts import (
     NO_CREATOR,
     AccountHistory,

@@ -1,7 +1,5 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
-{# /drive's phone cards: the phone opens the account's POSTED reels, one
-   click makes pictures for Threads of a reel. #}
 {% block title %}Threads — Ascend Global LLC{% endblock %}
 {% block content %}
 {{ ui.page_header("Threads") }}
@@ -35,7 +33,12 @@
             {% elif not c.account_folder_id %}
             <p class="dr-note">No Drive folder yet</p>
             {% else %}
-            <p class="dr-count"><span>Posted: <strong>{{ posted|length }}</strong></span></p>
+            {% set p = progress[t.login_id] %}
+            <p class="dr-count">
+                <span>Posted: <strong>{{ posted|length }}</strong></span>
+                <span>Generating: <strong>{{ p.making }}</strong></span>
+                <span>Generated: <strong>{{ p.made }}</strong></span>
+            </p>
             {{ ui.button("Pick a reel", "primary", href="/threads/" ~ t.login_id, icon="image") }}
             {% endif %}
         </div>

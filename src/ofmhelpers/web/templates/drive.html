@@ -22,8 +22,6 @@
 </div>
 
 {% if pick %}
-{# Upload mode (?upload=<job>): this video goes into the account card
-   clicked, after a confirm (drive.js). #}
 {% call ui.card(hook="dr-pick", attrs={"id": "dr-pick", "data-job": pick.job_id, "data-name": pick.name, "data-already": pick.already|join(","), "data-already-vas": pick.already_vas|join(","), "data-back": pick.back_url}) %}
     <video src="{{ pick.preview_url }}"{% if pick.poster_url %} poster="{{ pick.poster_url }}"{% endif %} controls playsinline preload="metadata"></video>
     <div class="dr-pick-text">

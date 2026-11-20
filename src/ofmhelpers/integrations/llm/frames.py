@@ -1,15 +1,3 @@
-"""A whole video as one image: stills from its first frame to its last,
-evenly spaced, tiled in time order (left to right, top to bottom), each
-labelled with its time ("0:07.5"), so a model shown one picture can say
-where something goes wrong. Motion between stills is lost; a glitch
-lasting a moment may fall between two.
-
-The stills span the video stream, not the file: audio running past the
-picture would plan stills after its last frame. An HDR stream (HLG, as the
-iPhone export writes, or PQ) is turned into BT.709 SDR before each still is
-scaled: shown as if SDR it reads dim and washed out (about 40% less
-saturated), not as the reel looks on a phone."""
-
 import logging
 import math
 import tempfile
@@ -24,16 +12,11 @@ from ofmhelpers.media.hdr import sdr_filters
 
 logger: logging.Logger = get_logger(__name__)
 
-# The last still is taken this far before the end: a seek to the very end
-# can decode no frame at all.
 _END_MARGIN_S = 0.1
 _LABEL_PAD = 4
 
 
 class _Stream(BaseModel):
-    """ffprobe's first video stream: its length and colour tags (each
-    missing when unknown)."""
-
     model_config = ConfigDict(extra="ignore")
 
     duration: float | None = None
@@ -49,8 +32,6 @@ class _Format(BaseModel):
 
 
 class _Probe(BaseModel):
-    """`ffprobe -of json` of a video's first video stream and its file."""
-
     model_config = ConfigDict(extra="ignore")
 
     streams: list[_Stream] = []
@@ -62,8 +43,6 @@ class _Probe(BaseModel):
 
     @property
     def seconds(self) -> float:
-        """The picture's length: the video stream's, else the file's (some
-        containers, webm/mkv, give a stream none)."""
         found = self.stream.duration or self.format.duration
         if not found:
             msg = "ffprobe reports no duration"
@@ -94,24 +73,16 @@ def _probed(video: Path, timeout_s: int) -> _Probe:
 
 
 def video_seconds(video: Path, timeout_s: int) -> float:
-    """How long `video`'s picture lasts (its first video stream; the file's
-    duration when the stream gives none) -- the span stills are taken from.
-    Raises `RuntimeError`/`OSError`/`ValueError`/`subprocess.SubprocessError`
-    when ffprobe cannot read it."""
     return _probed(video, timeout_s).seconds
 
 
 def _to_sdr(stream: _Stream) -> str:
-    """The filters (ending in ",") turning `stream`'s HDR picture into
-    BT.709 SDR, "" for SDR (`utils.hdr`)."""
     return sdr_filters(
         stream.color_transfer, stream.color_primaries, stream.color_space
     )
 
 
 def still_times(seconds: float, count: int) -> list[float]:
-    """`count` moments spread from the start to the end of a video
-    `seconds` long, both ends included."""
     if count <= 1:
         return [0.0]
     last = max(seconds - _END_MARGIN_S, 0.0)
@@ -126,10 +97,6 @@ def time_label(seconds: float) -> str:
 def contact_sheet(
     video: Path, dest: Path, frames: int, frame_px: int, timeout_s: int
 ) -> Path:
-    """`frames` labelled stills of the whole `video` (its video stream, SDR),
-    each `frame_px` wide, tiled into the JPEG `dest`. Raises `RuntimeError`/
-    `OSError`/`ValueError`/`subprocess.SubprocessError` when ffmpeg cannot
-    read the video."""
     probe = _probed(video, timeout_s)
     colour = _to_sdr(probe.stream)
     stills: list[tuple[float, Image.Image]] = []

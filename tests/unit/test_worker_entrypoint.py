@@ -1,12 +1,3 @@
-"""
-Covers ofmhelpers/worker.py, the RQ worker container's entrypoint.
-
-The thing worth pinning is easy to break and fails silently: RQ's WorkerPool
-runs each worker in its OWN child process, so logging configured in the pool
-parent never reaches them. ConfiguredWorker is what fixes that, and it only
-takes effect if the pool is actually given it.
-"""
-
 import inspect
 import logging
 import multiprocessing
@@ -25,31 +16,22 @@ from ofmhelpers.worker import ConfiguredWorker, QueueGroup
 
 
 def test_configured_worker_is_a_real_rq_worker():
-    """rq's WorkerPool runs it, so rq must accept it as a Worker."""
     assert issubclass(ConfiguredWorker, Worker)
 
 
 def test_perform_job_takes_what_rq_passes_it():
-    """rq's horse calls `perform_job` with rq's own parameters; an override
-    left on an older signature fails every job (rq 3.0 added `execution`)."""
     ours = inspect.signature(ConfiguredWorker.perform_job).parameters
     rqs = inspect.signature(Worker.perform_job).parameters
     assert list(ours) == list(rqs)
 
 
 def test_work_configures_logging_in_its_own_process(monkeypatch):
-    """The whole point of the subclass: each forked child installs the app's
-    logging config before it starts pulling jobs."""
     calls = []
     monkeypatch.setattr(
         worker_module, "configure_logging", lambda *a, **kw: calls.append(1)
     )
-    # Stop before rq's real work loop -- we only care that logging was set up
-    # first, not that a worker actually runs.
     monkeypatch.setattr(Worker, "work", lambda self, *a, **kw: True)
 
-    # Bypass Worker.__init__ (it demands a live Redis connection); this test
-    # is about the work() override, not worker construction.
     w = ConfiguredWorker.__new__(ConfiguredWorker)
     w.work(burst=True)
 
@@ -57,8 +39,6 @@ def test_work_configures_logging_in_its_own_process(monkeypatch):
 
 
 def test_work_forwards_its_arguments_to_rq(monkeypatch):
-    """The override must stay transparent -- rq calls work() with burst,
-    logging_level, with_scheduler etc. and all of it has to survive."""
     seen = {}
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
     monkeypatch.setattr(
@@ -74,8 +54,6 @@ def test_work_forwards_its_arguments_to_rq(monkeypatch):
 
 
 class _Pool:
-    """Stands in for RQ's WorkerPool: what it was given, and that it started."""
-
     made: ClassVar[list[_Pool]] = []
     niced: ClassVar[list[int]] = []
 
@@ -90,7 +68,6 @@ class _Pool:
 
 
 def _pool(monkeypatch, *argv: str) -> _Pool:
-    """The pool `python -m ofmhelpers.worker <argv>` starts."""
     _Pool.made.clear()
     _Pool.niced.clear()
     monkeypatch.setattr(worker_module, "configure_logging", lambda *a, **kw: None)
@@ -104,8 +81,6 @@ def _pool(monkeypatch, *argv: str) -> _Pool:
 
 
 def test_the_pool_runs_our_worker_class_on_the_configured_redis(monkeypatch):
-    """Without it, children fall back to rq's own Worker and job logs silently
-    revert to rq's format."""
     monkeypatch.setenv("OFM_REDIS_URL", "redis://example:6379/3")
 
     pool = _pool(monkeypatch)
@@ -116,8 +91,6 @@ def test_the_pool_runs_our_worker_class_on_the_configured_redis(monkeypatch):
 
 
 def test_the_clone_links_queue_has_its_own_pool(monkeypatch):
-    """A 120-link /clone-links Generate runs on its own queue and pool
-    (next to the default one in compose `worker`), never on the default workers."""
     monkeypatch.setenv("OFM_RQ_WORKERS", "10")
     monkeypatch.setenv("OFM_CLONE_LINKS_WORKERS", "4")
 
@@ -160,18 +133,11 @@ def test_an_unknown_queue_is_refused(monkeypatch, capsys):
 
 
 def test_worker_logger_is_named_for_the_module_not_main():
-    """Under `python -m ofmhelpers.worker`, __name__ is "__main__" -- a
-    useless name to see in a log line."""
     assert worker_module.logger.name == "ofmhelpers.worker"
     assert isinstance(worker_module.logger, logging.Logger)
 
 
-# --- several queues in one container: a pool each, one parent -------------------
-
-
 def _group(monkeypatch, tmp_path, pool) -> multiprocessing.Process:
-    """`python -m ofmhelpers.worker default clone-links events` in a process of
-    its own, each queue's pool replaced by `pool(queue, tmp_path)`."""
     monkeypatch.setattr(worker_module, "_preload_jobs", lambda: None)
     monkeypatch.setattr(
         worker_module.QueueWorkers, "run", lambda self: pool(self.queue, tmp_path)
@@ -183,16 +149,12 @@ def _group(monkeypatch, tmp_path, pool) -> multiprocessing.Process:
 
 
 def _serving(queue: QueueName, folder) -> None:
-    """A pool at work until told to stop, which it does cleanly (rq's does)."""
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
     (folder / f"{queue.value}.pid").write_text(str(os.getpid()))
     time.sleep(30)
 
 
 def _pools(folder, count: int) -> dict[str, int]:
-    """queue -> its pool's pid, once `count` pools are up and have written
-    it (a file is there before its pid is: read in between it was "",
-    deploy gate 2026-11-18)."""
     deadline = time.monotonic() + 10
     while True:
         found = {p.stem: p.read_text().strip() for p in folder.glob("*.pid")}
@@ -213,9 +175,6 @@ def _gone(pid: int) -> bool:
 def test_each_queue_of_a_group_has_its_own_pool_and_a_stop_reaches_them_all(
     monkeypatch, tmp_path
 ):
-    """`compose stop` signals the container's first process: every pool must
-    hear it (a warm shutdown each), or its jobs are killed at the grace
-    period's end."""
     group = _group(monkeypatch, tmp_path, _serving)
     pools = _pools(tmp_path, 3)
     assert set(pools) == {"default", "clone-links", "events"}
@@ -239,8 +198,6 @@ def _events_dies(queue: QueueName, folder) -> None:
 def test_a_pool_that_dies_takes_the_container_down_to_be_started_again(
     monkeypatch, tmp_path
 ):
-    """Half a container would look healthy to Docker while one queue fills up
-    with nobody taking from it."""
     group = _group(monkeypatch, tmp_path, _events_dies)
     pools = _pools(tmp_path, 3)
 

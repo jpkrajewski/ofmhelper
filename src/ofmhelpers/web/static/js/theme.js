@@ -1,8 +1,3 @@
-/*
- * Light / dark: the header's `.theme-toggle` flips <html data-theme> and
- * remembers it in the `ofm_theme` cookie, which base.html reads so the
- * next page is rendered in that mode from the first paint (no flash).
- */
 (() => {
     const toggle = document.querySelector(".theme-toggle");
     if (!toggle) return;

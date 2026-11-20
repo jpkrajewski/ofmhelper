@@ -1,9 +1,3 @@
-"""Google Drive: what /drive relies on, on `FakeDrive` and on the real
-Drive. The real half works only in a sandbox folder (OFM_GDRIVE_ROOT_FOLDER
-in the dev .env, shared with OFM_GDRIVE_SERVICE_ACCOUNT; the app itself
-never uses either),
-inside a fresh "contract-<id>" folder per test; nothing is deleted."""
-
 import secrets
 import uuid
 from collections.abc import Iterator
@@ -23,9 +17,6 @@ FAKE_ROOT = "contract-root"
 
 
 def _missing_id() -> str:
-    """An id no item has, in Drive's own shape ("1" + 32 base64url). Made-up
-    hex ids are malformed to Drive now and then, and that one answers 400
-    every time, never 404 (probed 2026-10-24: 1 in 60)."""
     return "1" + secrets.token_urlsafe(24)[:32]
 
 
@@ -35,9 +26,6 @@ def drive(backend, monkeypatch) -> DriveApi:
         fake = FakeDrive()
         fake.seed_folder("ALL ACCOUNTS", item_id=FAKE_ROOT, shared=True)
         return fake
-    # The sandbox is written to: dev's read-live switch (the app reading the
-    # live folders, write-guarded) is not for this client. With it set in the
-    # dev .env, every real case failed on its first create_folder.
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "0")
     return connect()
 
@@ -69,7 +57,6 @@ def test_children_are_newest_first(drive, parent):
 
 
 def test_children_of_lists_several_folders_at_once(drive, parent):
-    """/drive lists every account folder in one query."""
     one = drive.create_folder(parent, "one")
     two = drive.create_folder(parent, "two")
     empty = drive.create_folder(parent, "empty")
@@ -111,15 +98,11 @@ def test_a_file_knows_its_parent_and_a_folder_has_no_preview(drive, parent):
 
 
 def test_a_folder_knows_its_parent(drive, parent):
-    """How /drive tells a POSTED folder dragged out of its account folder."""
     made = drive.create_folder(parent, "POSTED")
     assert drive.folder(made.id).parents == [parent]
 
 
 def _never_existed(call) -> FolderGoneError:
-    """What `call(id)` raises for an id no item ever had. Drive calls some
-    made-up ids malformed (400, `_missing_id`; live gate 2026-11-18): another
-    is drawn, as the listing test does."""
     for _ in range(5):
         try:
             call(_missing_id())
@@ -137,9 +120,6 @@ def test_a_missing_folder_is_gone(drive, parent):
 
 
 def test_listing_a_missing_folder_shows_nothing(drive, parent):
-    """Drive 404s most unknown parents, but lists ~1 in 5 ids as empty, the
-    same every time (probed 2026-10-24). Gone is told by `folder()`, which
-    /drive asks before listing; a listing only never shows anything."""
     listed: list = []
     for _ in range(5):
         try:
@@ -148,8 +128,6 @@ def test_listing_a_missing_folder_shows_nothing(drive, parent):
         except FolderGoneError:
             break
         except DriveError as exc:
-            # Drive calls some made-up ids malformed (400, `_missing_id`):
-            # not a missing folder, so another id is drawn.
             if "HttpError 400" not in str(exc):
                 raise
     else:
@@ -158,8 +136,6 @@ def test_listing_a_missing_folder_shows_nothing(drive, parent):
 
 
 def _trash(drive, backend, folder_id: str) -> None:
-    """What the VA does in the Drive UI (not part of DriveApi: the app
-    never deletes)."""
     if backend == "fake":
         drive.trash(folder_id)
     else:
@@ -169,8 +145,6 @@ def _trash(drive, backend, folder_id: str) -> None:
 
 
 def test_a_trashed_folder_still_lists_but_is_gone_as_a_folder(drive, backend, parent):
-    """Why /drive checks `folder` before listing: the listing alone never
-    says the folder was deleted."""
     trashed = drive.create_folder(parent, "trashed")
     child = drive.create_folder(trashed.id, "child")
     _trash(drive, backend, trashed.id)
@@ -181,9 +155,6 @@ def test_a_trashed_folder_still_lists_but_is_gone_as_a_folder(drive, backend, pa
 
 
 def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
-    """What /clone's remove does with an uploaded video: Drive trash, so it
-    no longer lists and is gone as an item; trashing what is missing is
-    `FolderGoneError`."""
     child = drive.create_folder(parent, "to-trash")
     drive.trash_file(child.id)
     assert child.id not in [c.id for c in drive.children(parent)]
@@ -193,16 +164,12 @@ def test_trash_file_takes_an_item_out_of_its_folder(drive, parent):
 
 
 def test_find_file_is_none_for_a_name_not_there_and_never_a_folder(drive, parent):
-    """How /download-assets looks for the links sheet in a root: by name,
-    among what is not a folder."""
     assert drive.find_file(parent, "content_links") is None
     drive.create_folder(parent, "content_links")
     assert drive.find_file(parent, "content_links") is None
 
 
 def test_reading_what_is_no_google_sheet_as_a_sheet_is_refused(drive, parent):
-    """Drive exports only its own editors' files: anything else is a
-    `DriveError`, never an empty sheet."""
     folder = drive.create_folder(parent, "not a sheet")
     with pytest.raises(DriveError):
         drive.sheet(folder.id)

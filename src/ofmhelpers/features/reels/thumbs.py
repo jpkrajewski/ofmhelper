@@ -1,20 +1,3 @@
-"""Small, kept copies of /reels' thumbnails.
-
-Instagram's CDN serves a reel's cover at full size (64-284 KB each, prod
-2026-10-22): a feed page of them was megabytes before anything played, and
-its signed URLs expire (`oe=`), leaving old cards blank. `GET
-/reels/thumb/{code}` serves this instead: fetched once (`outbound.get`, so the
-fakes answer under OFM_FAKE_EXTERNALS), shrunk to `feed_thumb_px` webp (a few
-KB) and kept under `<uploads>/.previews/reels/`, so every later view is a
-file read.
-
-A cover URL comes from the page yt-dlp read (/clone-links: any site's), so
-it is fetched only from a host on the public internet: every address the
-host resolves to global, checked again on each redirect (never followed
-blindly), so a crafted page cannot point the server at postgres:5432 or
-169.254.169.254.
-"""
-
 import io
 import ipaddress
 import socket
@@ -31,12 +14,10 @@ from ofmhelpers.log import get_logger
 
 logger = get_logger(__name__)
 
-# Redirects one cover fetch follows (a CDN's own hop or two).
 _MAX_REDIRECTS = 3
 
 
-class NotPublicError(requests.RequestException):
-    """The cover's host is not on the public internet (or does not resolve)."""
+class NotPublicError(requests.RequestException): ...
 
 
 def thumb_path(code: str) -> Path:
@@ -51,20 +32,14 @@ def _shrink(content: bytes, dest: Path) -> None:
 
 
 def reel_thumb(code: str, source_url: str) -> Path | None:
-    """The kept thumbnail, fetched and shrunk first when missing; None when
-    Instagram no longer serves it (expired URL, 403) or it is not an image."""
     return kept_thumb(thumb_path(code), source_url)
 
 
 def _addresses(host: str) -> list[str]:
-    """Every address `host` resolves to (`OSError` when it does not)."""
     return [str(info[4][0]) for info in socket.getaddrinfo(host, None)]
 
 
 def _check_public(url: str) -> None:
-    """Raises `NotPublicError` unless `url` is http(s) to a host whose every
-    address is global. Under OFM_FAKE_EXTERNALS nothing leaves the process
-    (`outbound`'s fakes answer), so there is no address to check."""
     if settings.infra.fake_externals:
         return
     parts = urlsplit(url)
@@ -82,7 +57,6 @@ def _check_public(url: str) -> None:
 
 
 def _fetch(url: str) -> requests.Response:
-    """GET `url`, each redirect's target checked like the first host."""
     for _hop in range(_MAX_REDIRECTS + 1):
         _check_public(url)
         response = outbound.get(
@@ -97,9 +71,6 @@ def _fetch(url: str) -> requests.Response:
 
 
 def kept_thumb(dest: Path, source_url: str) -> Path | None:
-    """`source_url`'s image shrunk into `dest`, fetched only when `dest` is
-    missing (any site's cover: /clone-links' previews too), only from a
-    public host; None when it cannot be fetched or is not an image."""
     if dest.is_file():
         return dest
     try:

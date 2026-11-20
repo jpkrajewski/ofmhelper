@@ -1,8 +1,3 @@
-"""Higgsfield behind the shared interface, on the real SDK with its HTTP faked
-at the wire (`httpx.Client.request`, which every SDK call goes through): the
-auth header, the submit, the six statuses, the two-step upload and how
-failures map to error types."""
-
 import threading
 import time
 from unittest import mock
@@ -43,10 +38,6 @@ QUEUED = {
 
 
 class Wire:
-    """Answers each (method, path) from a table -- `(status, body)` or
-    `(status, body, headers)`, a bytes body sent as is; records every call
-    with the headers the client sent."""
-
     def __init__(self, routes):
         self.routes = routes
         self.calls = []
@@ -83,7 +74,6 @@ def wire(monkeypatch):
         fake = Wire(routes)
 
         def request(client, method, url, **kwargs):
-            # A method, so the fake sees which client (headers) called it.
             return fake(client, method, url, **kwargs)
 
         monkeypatch.setattr(httpx.Client, "request", request)
@@ -121,8 +111,6 @@ def _submit_keys(wire, provider, submits):
 
 
 def test_the_idempotency_key_is_one_per_job_and_request(wire, provider):
-    """A resend of the same request reuses it; another job or changed inputs
-    (Higgsfield answers 422 to a key reused with other inputs) get their own."""
     same, again, changed, other_job = _submit_keys(
         wire,
         provider,
@@ -136,7 +124,6 @@ def test_the_idempotency_key_is_one_per_job_and_request(wire, provider):
 
     assert same == again
     assert len({same, changed, other_job}) == 3
-    # docs: 1-255 visible ASCII characters, no whitespace.
     assert len(same) <= 255
     assert same.isascii()
     assert same.isprintable()
@@ -144,8 +131,6 @@ def test_the_idempotency_key_is_one_per_job_and_request(wire, provider):
 
 
 def test_a_resent_submit_gets_the_request_it_made(fake_externals):
-    """The fake keeps Higgsfield's documented replay: same key, same request,
-    nothing new made (or paid)."""
     first = HiggsfieldProvider(FAKE_KEY).submit(SPEC, {"prompt": "a"}, "job-1")
     again = HiggsfieldProvider(FAKE_KEY).submit(SPEC, {"prompt": "a"}, "job-1")
     other = HiggsfieldProvider(FAKE_KEY).submit(SPEC, {"prompt": "a"}, "job-2")
@@ -201,7 +186,6 @@ def test_ended_without_output_is_failed_with_a_reason(wire, provider, body, erro
 
 
 def test_a_generation_refused_for_credit_is_out_of_credits(wire, provider):
-    """The words Higgsfield ended three prod /clone runs with (2026-10-31)."""
     wire(_status_routes({"status": "failed", "error": _LOW_BALANCE}))
 
     state = provider.status("r1")
@@ -231,8 +215,6 @@ _LOW_BALANCE = (
     ids=["unknown-status", "not-json", "unexpected-shape"],
 )
 def test_an_unreadable_status_is_retryable(wire, provider, body):
-    """2026-10-25 review #56: a ValueError here failed the run as not
-    resumable and forgot a request that was already paid."""
     wire(_status_routes(body))
 
     with pytest.raises(ProviderUnavailableError, match="unreadable answer"):
@@ -267,8 +249,6 @@ def test_an_unreadable_status_keeps_the_paid_request_for_recovery(
     ids=["401", "403-disabled-key", "403-balance", "402", "422"],
 )
 def test_http_errors_map_to_error_types(wire, provider, status, headers, error):
-    """docs.higgsfield.ai concepts/errors: 403 is "Insufficient balance";
-    api-reference/headers: a disabled or expired key's 403 is `no-store`."""
     wire({SUBMIT: (status, {"detail": "nope"}, headers)})
 
     with pytest.raises(error) as raised:
@@ -322,8 +302,6 @@ QUEUE_FULL = {
 def test_a_rate_limited_submit_is_sent_once_with_the_wait(
     wire, provider, no_backoff, body, headers, wait
 ):
-    """Higgsfield made nothing (docs: concepts/rate-limits); the runner waits
-    `retry_after_s` and sends it again, so the transport does not."""
     fake = wire({SUBMIT: (429, body, headers)})
 
     with pytest.raises(ProviderRateLimitError) as raised:
@@ -338,11 +316,6 @@ def test_a_rate_limited_submit_is_sent_once_with_the_wait(
 def test_an_unanswered_submit_is_resent_under_one_key_then_remembers_nothing(
     wire, provider, no_backoff, status, monkeypatch
 ):
-    """2026-10-25 review #61: the SDK resent a 5xx/408 submit with no key --
-    up to 3 paid requests. With the key a resend returns the request a lost
-    answer made (docs: concepts/idempotency), so the runner sends it again
-    too (`idempotent_submit`, waits 10/30/60 s): the SDK's 3 tries, 4 times,
-    one key."""
     waits: list[float] = []
     monkeypatch.setattr(self_heal, "_sleep", waits.append)
     fake = wire({SUBMIT: (status, {"detail": "busy"})})
@@ -398,8 +371,6 @@ def test_upload_presigns_then_puts_the_bytes_without_the_key(wire, provider, ima
 
 
 def test_a_refused_storage_put_is_no_key_or_balance_problem(wire, provider, image):
-    """A presigned PUT's 403 is a stale signature: neither "wrong API key"
-    nor "No credits" (either would stop a whole /clone-links batch)."""
     wire(_upload_routes(put=(403, {"detail": "Request has expired"})))
 
     with pytest.raises(ProviderInputError) as raised:
@@ -410,8 +381,6 @@ def test_a_refused_storage_put_is_no_key_or_balance_problem(wire, provider, imag
 
 @pytest.mark.parametrize("name", ["face.webp", "FACE.WEBP"])
 def test_a_webp_subject_goes_up_as_webp(wire, provider, tmp_path, name):
-    """The image's Python knows no .webp; a WebP subject was refused
-    (dev 2026-10-25)."""
     path = tmp_path / name
     Image.new("RGB", (4, 4)).save(path, "WEBP")
     fake = wire(_upload_routes())
@@ -426,8 +395,6 @@ def test_a_webp_subject_goes_up_as_webp(wire, provider, tmp_path, name):
 def test_a_bmp_or_tiff_subject_goes_up_as_a_jpeg_copy(
     wire, provider, tmp_path, monkeypatch, suffix, fmt
 ):
-    """2026-10-25 review #28: the asset store takes BMP/TIFF, Higgsfield does
-    not -- every run of a batch failed after downloading its reel."""
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     subject = tmp_path / f"abc__subject{suffix}"
     Image.new("RGB", (40, 30), "red").save(subject, fmt)
@@ -463,8 +430,6 @@ def test_a_reused_reference_is_uploaded_once(wire, provider, image):
 def test_a_resumed_run_whose_subject_is_gone_still_gets_its_url(
     wire, provider, tmp_path, monkeypatch
 ):
-    """The cache is looked up before the file is read: a run resumed after
-    its subject left the store still builds its payload."""
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
     monkeypatch.setattr(
         "ofmhelpers.integrations.ai_providers.higgsfield.provider._live",
@@ -506,11 +471,9 @@ def test_a_file_type_higgsfield_refuses_is_rejected_before_any_call(
 
 
 def test_a_mov_reference_goes_up_as_its_mp4_copy(wire, provider, tmp_path, monkeypatch):
-    """Prod 2026-11-02: an iPhone .mov reference failed a /clone run with
-    "Higgsfield takes ... MP4 video -- not ...__Video-21956.mov"."""
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     clip = tmp_path / "abc__Video-21956.mov"
-    clip.write_bytes(fake_media.mp4())  # H.264 + AAC: remuxed, nothing encoded
+    clip.write_bytes(fake_media.mp4())
     original = clip.read_bytes()
     fake = wire(_upload_routes())
 
@@ -541,7 +504,6 @@ def test_a_video_that_cannot_be_converted_fails_before_any_call(
 def test_an_image_over_the_limits_goes_up_as_a_shrunk_copy(
     wire, provider, tmp_path, monkeypatch
 ):
-    """An 8262 px character sheet failed Wan 3.0 after submit (2026-10-19)."""
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
     sheet = tmp_path / "sheet.png"
@@ -561,15 +523,13 @@ def test_an_image_over_the_limits_goes_up_as_a_shrunk_copy(
 
 
 def _upload_at_once(monkeypatch, path, count=3):
-    """`count` workers upload `path` together over a slow wire; returns their
-    URLs, the wire, and whether the Redis lock was held during each call."""
     fake = Wire(_upload_routes())
     lock = f"lock:{HiggsfieldProvider('key-id:key-secret')._upload_cache_key(path)}"
     locked = []
 
     def slow(client, method, url, **kwargs):
         locked.append(bool(get_redis().exists(lock)))
-        time.sleep(0.2)  # long enough for all of them to be in flight
+        time.sleep(0.2)
         return fake(client, method, url, **kwargs)
 
     monkeypatch.setattr(httpx.Client, "request", slow)
@@ -594,11 +554,6 @@ def _upload_at_once(monkeypatch, path, count=3):
 
 
 def test_one_file_asked_for_at_once_is_uploaded_once(monkeypatch, image):
-    """2026-10-23: a /clone-long run's 3 pieces started together and each
-    uploaded the same subject image (3 x ~15 s). Now the first uploads, the
-    others wait and take its URL -- under the Redis lock, which every worker
-    process shares (an in-process lock let two /clone-links runs upload one
-    image twice, dev 2026-10-25)."""
     urls, fake, locked = _upload_at_once(monkeypatch, image)
 
     assert urls == ["https://cdn/input/face.png"] * 3
@@ -609,9 +564,6 @@ def test_one_file_asked_for_at_once_is_uploaded_once(monkeypatch, image):
 def test_an_oversized_subject_asked_for_at_once_is_shrunk_and_sent_once(
     monkeypatch, tmp_path
 ):
-    """2026-10-25 review #6: the shrunk copy was written outside the lock and
-    in place, so a batch could upload (and cache for 24 h) a half-written
-    JPEG."""
     monkeypatch.setenv("OFM_AIGEN_OUT_DIR", str(tmp_path / "out"))
     monkeypatch.setenv("OFM_HF_REF_IMAGE_MAX_SIDE", "500")
     sheet = tmp_path / "sheet.png"

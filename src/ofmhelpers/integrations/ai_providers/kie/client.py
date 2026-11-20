@@ -1,11 +1,3 @@
-"""The kie.ai Market API: upload a reference file, create a task, read it.
-
-Single calls only. Which model, with what input, comes from the catalog
-(`catalog.json`); waiting, resuming and downloading are `runner.py`'s. Every
-response is parsed into `models.py`, which also maps kie.ai's in-body error
-codes onto the shared error types.
-"""
-
 import pathlib
 from typing import Any, NoReturn
 
@@ -39,9 +31,6 @@ logger = get_logger(__name__)
 
 
 def _session() -> requests.Session:
-    """Retries connection errors and 429/5xx on reads only: a createTask
-    that reached kie.ai and timed out must not be sent twice (it would be
-    paid twice), so POSTs are never retried here."""
     retry = Retry(
         total=3,
         backoff_factor=1,
@@ -56,7 +45,6 @@ def _session() -> requests.Session:
 
 
 def _retry_after_s(response: requests.Response) -> float | None:
-    """An HTTP answer's Retry-After in seconds, when it gives a number."""
     value = response.headers.get("Retry-After")
     try:
         return float(value) if value is not None else None
@@ -65,15 +53,10 @@ def _retry_after_s(response: requests.Response) -> float | None:
 
 
 def _refused(response: requests.Response) -> NoReturn:
-    """Normally kie.ai answers 200 with its code in the body; a real HTTP error
-    is mapped by its status the same way."""
     raise_for(response.status_code, response.text[:200], _retry_after_s(response))
 
 
 class KieAIClient:
-    """One kie.ai account. Paths and URLs are injected so tests and several
-    keys can coexist in one process."""
-
     def __init__(
         self,
         api_key: str,
@@ -82,8 +65,6 @@ class KieAIClient:
         out_dir: str | pathlib.Path = "./out",
     ) -> None:
         self.api_key = api_key
-        # Read here rather than as a default expression: a default is bound at
-        # import, which would capture the env before a test override lands.
         self.JOBS_BASE = jobs_base or settings.kieai.jobs_base
         self.UPLOAD_BASE = upload_base or settings.kieai.upload_base
         self.HEADERS = {"Authorization": f"Bearer {self.api_key}"}
@@ -97,11 +78,6 @@ class KieAIClient:
             self._http, PROVIDER, _refused, method, url, headers=self.HEADERS, **kwargs
         )
 
-    # ------------------------------------------------------------------
-    # The audit trail: every task created and every credit spent, as log
-    # events (stdout, Logfire). Until 2026-11-11 two files, tasks.jsonl and
-    # completions.jsonl, appended for ever and read by nothing.
-    # ------------------------------------------------------------------
     def _log_task(self, task_id: str, model: str, prompt: str, job_id: str) -> None:
         logger.info(
             "kie.ai task created: taskId=%s model=%s jobId=%s prompt=%r",
@@ -119,12 +95,6 @@ class KieAIClient:
             record.cost_time_ms,
         )
 
-    # ------------------------------------------------------------------
-    # File upload. kie.ai's input fields take hosted URLs, so a local
-    # reference goes through this first. The same file is reused across many
-    # generations, so its URL is memoized (`uploads.memoized`), and every hit
-    # is confirmed live with a HEAD before it is trusted.
-    # ------------------------------------------------------------------
     def _upload_cache_key(self, path: str, max_bytes: int | None = None) -> str:
         return upload_cache_key("kieai", self.api_key, path, max_bytes)
 
@@ -156,25 +126,15 @@ class KieAIClient:
     def _fit_for_upload(
         self, path: pathlib.Path, max_bytes: int | None = None
     ) -> pathlib.Path:
-        """`path`, or a shrunk JPEG copy of it when it is an image over
-        kie.ai's reference limits -- an oversized reference is otherwise a 422
-        from createTask ("file size exceeds limit") after the upload already
-        succeeded. The original stays untouched (a character sheet is kept
-        lossless), and the copy is reused on the next upload of the same file."""
         limits = settings.kieai.ref_image_limits.with_max_bytes(max_bytes)
         return fitted(path, self.OUT_DIR / "fitted", limits)
 
     def _remote_file_exists(self, url: str) -> bool:
         return remote_file_exists(url, settings.kieai.remote_check_timeout_s)
 
-    # ------------------------------------------------------------------
-    # The task queue every Market model shares.
-    # ------------------------------------------------------------------
     def create_task(
         self, model: str, payload: Payload, job_id: str = "", callback_url: str = ""
     ) -> str:
-        """`callback_url`: where kie.ai POSTs the task when it ends -- how a
-        task made after this call gave up is still found (`kie/callback.py`)."""
         body: dict[str, Any] = {"model": model, "input": payload}
         if callback_url:
             body["callBackUrl"] = callback_url
@@ -194,7 +154,6 @@ class KieAIClient:
         return task_id
 
     def get_task(self, task_id: str) -> KieRecord:
-        """One recordInfo call, no waiting."""
         response = self._call(
             "GET",
             f"{self.JOBS_BASE}/recordInfo",

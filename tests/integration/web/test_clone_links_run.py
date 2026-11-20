@@ -1,9 +1,3 @@
-"""/clone-links runs on the worker (web/clone_links/run.py): a paid re-run
-never downloads its reel again nor loses its request, a stopped or halted
-Generate pays for nothing more, a run whose row is gone does nothing, a
-download leaves no folder behind and fails with a short fixed reason, a
-result only hosted is saved here after all, and a failed export is said."""
-
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -57,8 +51,6 @@ def ann():
 
 @pytest.fixture
 def downloads(monkeypatch):
-    """Every download a run starts (url, keyword arguments), still made by
-    the faked downloaders."""
     calls = []
     real = run_module.downloaded
 
@@ -98,8 +90,6 @@ def _done_run(c, link: str = REEL, **form) -> Job:
 
 
 def _rerun(job_id: str) -> Job:
-    """The job run again the way recovery re-runs it (its params, the key
-    its request was made with, the owner's asset store)."""
     job = get_job(job_id)
     run_job(
         job.id,
@@ -115,8 +105,6 @@ def _rerun(job_id: str) -> Job:
 
 
 def _job_like(job: Job, **changes) -> str:
-    """Another run of `job`'s Generate (same batch, image, settings), not
-    run yet."""
     params = {
         k: v
         for k, v in job.params.items()
@@ -126,8 +114,6 @@ def _job_like(job: Job, **changes) -> str:
 
 
 def _remember_paid(job: Job) -> None:
-    """Its kie.ai request remembered again, as after a deploy cut it off or
-    its poll timed out (the fake's task is done)."""
     tasks.remember(
         tasks.ProviderTask(
             job_id=job.id,
@@ -137,9 +123,6 @@ def _remember_paid(job: Job) -> None:
             api_key=KIE_KEY,
         )
     )
-
-
-# --- A paid re-run (#1) ------------------------------------------------------
 
 
 def test_a_run_saves_its_reel_on_the_job(ann):
@@ -178,9 +161,6 @@ def test_a_paid_rerun_that_cannot_download_its_reel_again_keeps_its_request(
     assert len(fake_kie().created) == 1
 
 
-# --- Stop (#23) ---------------------------------------------------------------
-
-
 def test_a_stopped_generate_pays_for_nothing_more(ann, downloads):
     job = _done_run(ann)
     batch = job.params["batch"]
@@ -217,9 +197,6 @@ def test_a_run_of_no_generate_is_never_stopped():
     assert stopped("") is False
 
 
-# --- Halt after an account refusal (#22) --------------------------------------
-
-
 def test_a_wrong_key_fails_the_rest_of_its_generate_without_downloading(ann, downloads):
     queued = run(ann, [REEL, OTHER], api_key="not-the-key")
 
@@ -254,9 +231,6 @@ def test_no_credits_fails_the_rest_of_its_generate_without_downloading(
     )
 
 
-# --- A run whose row is gone (#3) ---------------------------------------------
-
-
 def test_a_run_whose_job_is_gone_downloads_and_pays_nothing(downloads, tmp_path):
     with pytest.raises(run_module.RunGoneError):
         run_module.run_clone_link(
@@ -273,9 +247,6 @@ def test_a_run_whose_job_is_gone_downloads_and_pays_nothing(downloads, tmp_path)
 
     assert downloads == []
     assert fake_kie().created == []
-
-
-# --- The download (#12, #45, #55, #25) -------------------------------------------
 
 
 def test_a_download_is_one_post_and_leaves_no_folder_behind(ann, downloads, tmp_path):
@@ -338,13 +309,7 @@ def test_a_photo_post_has_no_video(ann, tmp_path):
     assert list((tmp_path / "downloads").iterdir()) == []
 
 
-# --- A result only hosted (#11) -------------------------------------------------
-
-
 def _hosted_only(monkeypatch):
-    """run_ai's answer when the paid result's local download failed: the
-    hosted copy only (the request still remembered, as the runner leaves
-    it)."""
 
     def hosted(job_id, api_key, _assets_root, provider, model, **_values):
         tasks.remember(
@@ -398,9 +363,6 @@ def test_a_result_that_cannot_be_saved_keeps_its_paid_request(ann, monkeypatch):
     assert clone_from_links.for_jobs([job_id]) == []
 
 
-# --- A failed export (#65) ------------------------------------------------------
-
-
 def _broken_capcut(monkeypatch):
     def broken(*_a, **_k):
         msg = "ffmpeg failed: boom"
@@ -410,8 +372,6 @@ def _broken_capcut(monkeypatch):
 
 
 def test_a_failed_export_fails_the_run_and_never_files_the_raw_video(ann, monkeypatch):
-    """User rule 2026-10-25: no raw Wan file in Drive. The export is tried
-    again, then the run fails keeping its paid request for recovery."""
     _broken_capcut(monkeypatch)
 
     [job_id] = run(ann, [REEL], export="capcut")["job_ids"]

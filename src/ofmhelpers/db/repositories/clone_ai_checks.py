@@ -1,6 +1,3 @@
-"""AI checks (`clone_ai_checks`). Uncached: each row is written once and read
-rarely (debugging, a card's verdict)."""
-
 import time
 from typing import Any
 
@@ -24,7 +21,6 @@ class CloneAiCheckRepository(CachedRepository):
     cache_namespace = "clone_ai_check"
 
     def add(self, values: dict[str, Any]) -> StoredCloneAiCheck:
-        """The new row, stamped now."""
         with session_scope() as s:
             row = CloneAiCheckRow(**values, created_at=time.time())
             s.add(row)
@@ -37,7 +33,6 @@ class CloneAiCheckRepository(CachedRepository):
             return _check(row) if row else None
 
     def for_jobs(self, job_ids: list[str]) -> list[StoredCloneAiCheck]:
-        """Every check of these jobs' results, oldest first."""
         if not job_ids:
             return []
         with session_scope() as s:

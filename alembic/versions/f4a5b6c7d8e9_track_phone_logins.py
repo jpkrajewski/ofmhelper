@@ -1,21 +1,3 @@
-"""/accounts: every Instagram login already on an active phone is tracked
-
-From now on adding such a login to a phone tracks its account
-(`account_tracker.track_login`); this does the same once for the logins
-added before. Which services count and how a username becomes a handle
-are frozen here as they were at this revision (services.json's
-`tracked_platform`, `instagram.models.ProfileHandle`), so replaying it
-later does the same whatever the app has become.
-An account already in tracked_accounts -- tracked, or removed by hand
-(untracked) -- is left exactly as it is. New rows have never been scanned,
-so the tracker scans them on its next sweep.
-
-Revision ID: f4a5b6c7d8e9
-Revises: e3f4a5b6c7d8
-Create Date: 2026-10-21 15:00:00.000000
-
-"""
-
 import re
 import time
 from collections.abc import Sequence
@@ -30,9 +12,7 @@ down_revision: str | None = "e3f4a5b6c7d8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# service -> tracked platform, from services.json at this revision.
 _TRACKED = {"instagram": "instagram"}
-# ProfileHandle's rule at this revision.
 _USERNAME = re.compile(r"[A-Za-z0-9._]{1,30}")
 
 
@@ -72,6 +52,4 @@ def upgrade() -> None:
         )
 
 
-def downgrade() -> None:
-    """Nothing to undo: the accounts are real ones the agency runs, and
-    once scanned they carry history; removing one is "Remove" on /accounts."""
+def downgrade() -> None: ...

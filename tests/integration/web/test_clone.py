@@ -1,6 +1,3 @@
-"""/clone: subject images + N videos -> one Wan 3.0 run per video, each its
-own card in the gallery (the shared card of every tool page)."""
-
 import html as html_lib
 import json
 import re
@@ -45,7 +42,6 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture
 def fake_runs(monkeypatch):
-    """Video "a.mp4" is 2.6 s long, "b.mp4" 3.6 s, and so on; no provider."""
     monkeypatch.setattr(
         clone,
         "duration_s",
@@ -95,7 +91,6 @@ def test_run_queues_one_card_per_video_newest_first(client):
     assert all("clone_batch" not in j.params for j in jobs)
     html = r.json()["html"]
     assert html.count('class="result-item"') == 2
-    # Newest first, like the gallery: the last picked video's run on top.
     cards = html.split('class="result-item"')[1:]
     assert ["a.mp4" in cards[0], "b.mp4" in cards[1]] == [True, True]
     page = client.get("/clone").text
@@ -105,8 +100,6 @@ def test_run_queues_one_card_per_video_newest_first(client):
 
 @pytest.mark.usefixtures("fake_runs")
 def test_latest_gallery_shows_another_sessions_run(client, tmp_path):
-    """What live-gallery.js polls: a coworker's run appears without a
-    reload, and an admin's never reaches a user."""
     coworker = TestClient(app)
     sign_in(coworker)
     [theirs] = _post(coworker, ["a.mp4"]).json()["job_ids"]
@@ -218,7 +211,7 @@ def test_run_caps_videos_per_submit(client, monkeypatch):
 def test_a_video_over_15_s_queues_nothing_on_any_provider(client, provider):
     before = len(list_jobs())
 
-    r = _post(client, ["a.mp4", "p.mp4"], {"provider": provider})  # p: 17.6 s
+    r = _post(client, ["a.mp4", "p.mp4"], {"provider": provider})
 
     assert r.status_code == 400
     assert r.json()["detail"] == "p.mp4 is 17.6 s; Wan 3.0 takes at most 15 s"
@@ -259,8 +252,6 @@ def _job(job_id, status="running", **extra):
 
 
 def test_a_generated_clone_still_being_exported_says_what_for():
-    """Owner 2026-11-13: the card showed the generated video with nothing
-    telling it was still being encoded."""
     hosted = JobPreview(remote_url="https://cdn/x.mp4", kind="video")
     waiting = job_status_payload(_job("s1"), "/clone/files")
     encoding = job_status_payload(_job("s2", preview=hosted), "/clone/files")
@@ -302,8 +293,6 @@ def _with_video(job: Job, tmp_path: Path) -> Path:
 def test_a_running_and_a_failed_card_show_the_video_being_cloned(
     status, error, line, tmp_path
 ):
-    """Ten runs side by side, some failing, were told apart by nothing
-    (owner 2026-11-12): a big first frame of the video on top, no file name."""
     job = _job("s1", status=status, error=error)
     video = _with_video(job, tmp_path)
 
@@ -315,9 +304,7 @@ def test_a_running_and_a_failed_card_show_the_video_being_cloned(
         f' src="/refs/thumb?path={asked}&amp;size=400" alt="beach day.mp4"'
     )
     assert picture in html
-    # On top: above the "generating…" / failure line.
     assert html.index("data-clone-source") < html.index(line)
-    # The name is nowhere on the card but the picture's alt text.
     assert html.count("beach day.mp4") == 1 + html.count("__beach day.mp4")
 
 
@@ -338,8 +325,6 @@ def test_a_finished_card_shows_its_result_not_the_video_it_cloned(tmp_path):
 
 
 def test_a_video_gone_from_the_store_asks_for_no_picture(tmp_path):
-    """A frame of a video the sweep removed would answer 404 on every page
-    showing the card, one from outside the store 403."""
     swept = _job("s3")
     swept.params["reference_videos"] = [str(tmp_path / ("0" * 64 + "__gone.mp4"))]
     outside = _job("s4")
@@ -386,8 +371,6 @@ def test_duration_s_reads_the_container_length(tmp_path):
 
 
 def _stub(provider_cls, monkeypatch, sent):
-    """The provider's single calls answered locally; its download fails, so
-    each job ends on the hosted copy (no file needed)."""
 
     def submit(_self, spec, payload, idempotency_key):
         sent.append((spec.model_id, payload))
@@ -426,8 +409,6 @@ def _post_clips(client, clips, data=None):
 
 
 def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatch):
-    """Real upload, real ffprobe, real runner -- only kie.ai's calls are
-    stubbed, so this is exactly the payload a paid run would send."""
     sent = []
     _stub(KieProvider, monkeypatch, sent)
     clips = [_clip(tmp_path / "a.mp4", 3), _clip(tmp_path / "b.mp4", 5)]
@@ -448,8 +429,6 @@ def test_run_sends_kie_one_wan3_task_per_real_video(client, tmp_path, monkeypatc
 
 
 def test_run_on_apiyi_sends_dashscopes_body(client, tmp_path, monkeypatch):
-    """The `apiyi` row of targets.json through /clone, real ffprobe and the
-    provider's own wire body; only APIYI's calls are stubbed."""
     from ofmhelpers.integrations.ai_providers.apiyi.client import ApiyiClient
     from ofmhelpers.integrations.ai_providers.apiyi.provider import ApiyiProvider
 
@@ -528,8 +507,6 @@ def test_run_rejects_a_provider_that_cannot_clone(client):
 
 @pytest.mark.usefixtures("fake_runs")
 def test_run_checks_the_models_limits_before_queuing(client, monkeypatch):
-    """A batch over the picked model's own limits (its schema) fails the
-    submit up front, nothing paid. Seedance 2.0 takes at most 9 images."""
     monkeypatch.setitem(
         clone.CLONE_TARGETS.entries,
         "higgsfield",
@@ -650,7 +627,7 @@ def test_capcut_export_serves_the_capcut_copy(tmp_path, monkeypatch):
     out = Path(result.path)
     assert result == ResultFile(name="gen_capcut.mp4", path=str(out), remote_url=None)
     assert out.exists()
-    assert src.exists()  # the original stays, and stays registered elsewhere
+    assert src.exists()
     assert [p.name.split("__", 1)[1] for p in assets.iterdir()] == [out.name]
 
 
@@ -671,8 +648,6 @@ def test_device_export_serves_the_device_copy(tmp_path, monkeypatch):
 
 
 def test_a_failed_export_is_tried_again_and_never_delivers_the_raw_video(monkeypatch):
-    """User rule 2026-10-25: every export gets its tries; the provider's
-    raw file is never the result. The run fails keeping its paid request."""
     result = [ResultFile(name="v.mp4", path="/x/v.mp4", remote_url="https://r/v")]
     _generated(monkeypatch, result)
     tries = []
@@ -732,8 +707,6 @@ def _pricing(client):
 
 
 def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatch):
-    """clone-cost.js prices a pick from these, so a rate change in the env
-    reaches the estimate without touching the JS."""
     monkeypatch.setenv("OFM_CLONE_CREDITS_PER_VIDEO_S", '{"720P": 40.0}')
     monkeypatch.setenv("OFM_KIE_USD_PER_CREDIT", "0.004")
     monkeypatch.setenv("OFM_CLONE_HF_CREDITS_PER_VIDEO_S", '{"720P": 2.0}')
@@ -748,7 +721,6 @@ def test_form_carries_each_providers_cost_rates_from_settings(client, monkeypatc
     assert pricing["kie"]["max_reference_s"] == 15
     assert pricing["higgsfield"]["credits_per_video_s"] == {"720P": 2.0}
     assert pricing["higgsfield"]["max_reference_s"] == 15
-    # RunningHub, Elyum and APIYI price in dollars.
     assert pricing["runninghub"]["unit"] == "USD"
     assert pricing["elyum"]["unit"] == "USD"
     assert pricing["apiyi"]["unit"] == "USD"
@@ -760,8 +732,6 @@ def _usd_per_video_s(price: dict, resolution: str) -> float:
 
 
 def test_higgsfield_default_rate_matches_the_measured_runs(client):
-    """Prod 2026-11-02: the new key paid $29 for 7 runs at 720P, 67 s of
-    source in all. The per-source-second rate must reproduce it."""
     price = _pricing(client)["higgsfield"]
 
     assert 67 * _usd_per_video_s(price, "720P") == pytest.approx(29, abs=0.1)
@@ -774,9 +744,6 @@ def test_higgsfield_default_rate_matches_the_measured_runs(client):
 def test_billed_by_video_plus_result_costs_twice_the_rate_per_source_second(
     client, provider, usd_per_billed_s
 ):
-    """kie.ai, RunningHub, Elyum and APIYI bill the reference video's seconds and
-    the result's: a source second costs two billed seconds at 720P, and
-    480P/1080P are half/double."""
     price = _pricing(client)[provider]
 
     assert _usd_per_video_s(price, "720P") == pytest.approx(2 * usd_per_billed_s)

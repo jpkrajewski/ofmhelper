@@ -1,6 +1,3 @@
-"""/pictures presets (`picture_presets`). Nothing cached: a handful of rows,
-read once per page."""
-
 from contextlib import contextmanager
 lazy from collections.abc import Iterator
 
@@ -14,7 +11,6 @@ from ofmhelpers.schemas.pictures import PicturePreset
 
 
 def _preset(row: PicturePresetRow) -> PicturePreset:
-    """Nobody's view yet: `mine` is the store's to set."""
     return PicturePreset(
         id=row.id,
         owner_id=row.user_id,
@@ -36,7 +32,6 @@ def _unique_name(name: str) -> Iterator[None]:
 
 class PicturePresetRepository:
     def visible(self, viewer: int, shared_by: int) -> list[PicturePreset]:
-        """`viewer`'s own presets and `shared_by`'s, by name."""
         with session_scope() as s:
             rows = s.execute(
                 select(PicturePresetRow)
@@ -84,7 +79,6 @@ class PicturePresetRepository:
         images: list[str],
         aspect_ratio: str | None = None,
     ) -> PicturePreset | None:
-        """None when `owner` has no such preset."""
         with _unique_name(name), session_scope() as s:
             row = s.execute(
                 update(PicturePresetRow)

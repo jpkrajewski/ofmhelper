@@ -85,5 +85,8 @@ if [[ -n "${store_durations:-}" && "$status" -eq 0 ]]; then
         || status=1
 fi
 
+"${compose[@]}" run --rm --no-deps -T tests uv run --frozen python scripts/test_summary.py reports/latest/report.json     | tee reports/latest/summary.txt "$run_dir/summary.txt"
+[[ ${PIPESTATUS[0]} -eq 0 ]] || status=1
+
 echo "test.sh: report -> reports/latest/report.json, open with scripts/report.sh"
 exit "$status"

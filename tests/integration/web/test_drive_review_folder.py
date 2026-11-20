@@ -1,10 +1,3 @@
-"""drive_folders.review_folder: where a reviewed /clone-links video goes --
-the owner's root and GOOD/TRIAL REELS in it, found or made one review of a
-person at a time (a Redis lock: ten parallel reviews of a first batch made
-ten folders of one name, review 2026-10-25 #15), the folder's id remembered
-and checked before reuse. Redis down or the lock held too long: the review
-goes ahead unlocked."""
-
 import threading
 from contextlib import nullcontext, suppress
 
@@ -31,16 +24,12 @@ def drive(fake_externals) -> FakeDrive:
 
 
 def _owner() -> int:
-    """A VA with Google Drive connected and no root yet (no phones: the
-    sweep never made one)."""
     user = make_user(EMAIL)
     users._repository().signed_in(user.id, "", TOKEN)
     return user.id
 
 
 def _side_by_side(monkeypatch) -> None:
-    """Every listing of the fake Drive waits (up to 2 s) for a second review
-    to be listing too: without a lock both find nothing, then both make."""
     together = threading.Barrier(2, timeout=2)
 
     def waiting(read):
@@ -57,7 +46,6 @@ def _side_by_side(monkeypatch) -> None:
 
 
 def _two_reviews(user_id: int) -> list[str]:
-    """Two reviews of one person at the same moment; their folder ids."""
     start = threading.Barrier(2)
     found: list[str] = []
     errors: list[Exception] = []
@@ -91,7 +79,6 @@ def test_two_reviews_at_once_make_one_root_and_one_good_reels(drive, monkeypatch
 
 
 def test_without_the_lock_the_same_two_reviews_duplicate(drive, monkeypatch):
-    """The harness above catches the race: unlocked, it happens."""
     user_id = _owner()
     _side_by_side(monkeypatch)
     monkeypatch.setattr(drive_folders, "_review_lock", lambda _user_id: nullcontext())
@@ -109,7 +96,6 @@ def test_the_folder_is_remembered_and_checked_with_one_read(drive):
     again = review_folder(TOKEN, user_id, GOOD).folder_id
 
     assert again == first
-    # The root (usable_root) and the remembered folder: one read each.
     assert drive.calls == ["folder", "folder"]
 
 
@@ -152,8 +138,6 @@ def test_a_folder_made_by_hand_is_adopted(drive):
 def test_dev_reading_the_live_folders_files_reviews_in_its_own_root(
     drive, monkeypatch, tmp_path
 ):
-    """Live-read mode: dev's own "DEV - ALL ACCOUNTS", writable through
-    `ScopedDrive` -- also when the folder id comes back remembered."""
     monkeypatch.setenv("OFM_DRIVE_READ_LIVE", "1")
     monkeypatch.setenv("OFM_ENV", "development")
     user_id = _owner()

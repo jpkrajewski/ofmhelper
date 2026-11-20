@@ -1,12 +1,3 @@
-"""GitHub Actions workflows stay off deprecated runtimes and moving runners.
-
-GitHub warned on every job (2026-10): actions built for Node 20 are forced
-onto Node 24, and `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19. Each
-action here is pinned to a major whose `action.yml` declares `node24`
-(checked against the action's own repository), and every job names its
-runner image.
-"""
-
 import re
 from pathlib import Path
 
@@ -17,7 +8,6 @@ from repo_paths import REPO
 
 WORKFLOWS = sorted((REPO / ".github/workflows").glob("*.yml"))
 
-# The first major of each action that runs on Node 24.
 NODE24_MAJOR = {
     "actions/checkout": 5,
     "astral-sh/setup-uv": 7,
@@ -46,7 +36,6 @@ class Workflow(BaseModel):
 
 
 def _load(path: Path) -> Workflow:
-    # Only `jobs`: YAML 1.1 reads the `on:` key as the boolean True.
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return Workflow.model_validate({"jobs": data["jobs"]})
 
@@ -56,10 +45,8 @@ def test_there_are_workflows():
 
 
 def test_a_promote_pr_starts_no_ci_run_and_main_still_gates_the_deploy():
-    """promote.yml's PR into main is opened by github-actions[bot]; its run sat
-    waiting for approval and failed on merge (ci.yml says why, 2026-11-04)."""
     ci = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
-    on = ci[True]  # YAML 1.1 reads the `on:` key as the boolean True
+    on = ci[True]
     assert on["pull_request"]["branches"] == ["dev"]
     assert on["push"]["branches"] == ["dev", "main"]
 
@@ -70,8 +57,6 @@ def test_every_job_names_its_runner_image(path: Path):
         assert job.runs_on == RUNNER, f"{path.name}:{name} runs on {job.runs_on}"
 
 
-# `uses: owner/action@ref  # vX.Y.Z` -- the comment carries the version of a
-# commit-pinned action (YAML drops comments, so these are read as text).
 _USES = re.compile(r"^\s*(?:-\s*)?uses:\s*([^@\s]+)@(\S+)(?:\s+#\s*(\S+))?\s*$")
 _SHA = re.compile(r"[0-9a-f]{40}")
 _VERSION = re.compile(r"v(\d+)(\.\d+){0,2}")
@@ -97,8 +82,6 @@ def test_every_action_is_on_a_node24_major(path: Path):
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_action_is_pinned_to_a_commit(path: Path):
-    """A moved tag cannot swap in other code (zizmor unpinned-uses);
-    Renovate bumps the hash and its version comment together."""
     for action, ref, _ in _uses(path):
         assert _SHA.fullmatch(ref), f"{path.name}: {action}@{ref} is a tag"
 
@@ -110,15 +93,11 @@ def _ci() -> dict:
 
 
 def test_ci_passed_waits_for_every_other_job():
-    """The deploy keys off one job: a job missing from its `needs` would no
-    longer gate a deploy."""
     jobs = _ci()["jobs"]
     assert set(jobs["ci-passed"]["needs"]) == set(jobs) - {"ci-passed"}
 
 
 def test_the_test_groups_cover_the_whole_split():
-    """`--splits N` with N matrix groups: a group left out is a third of the
-    suite never run."""
     job = _ci()["jobs"]["test"]
     groups = job["strategy"]["matrix"]["group"]
     run = " ".join(s["run"] for s in job["steps"] if "pytest" in s.get("run", ""))
@@ -139,7 +118,7 @@ def test_only_the_gate_lets_main_skip_the_suite():
 
 def _on(path: Path) -> dict:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return data[True]  # YAML 1.1 reads the `on:` key as the boolean True
+    return data[True]
 
 
 @pytest.mark.parametrize(
@@ -148,8 +127,6 @@ def _on(path: Path) -> dict:
     ids=lambda p: p.name,
 )
 def test_a_workflow_run_takes_only_this_repositorys_own_runs(path: Path):
-    """`branches:` matches the head branch of ANY CI run, a fork's pull
-    request named `dev`/`main` included; the deploy holds the SSH key."""
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     for name, job in data["jobs"].items():
         guard = " ".join(job["if"].split())
@@ -165,8 +142,6 @@ def _deploy_text() -> str:
 
 
 def test_the_deploy_job_has_no_checkout():
-    """security audit 2026-11-18: every step goes over SSH; nothing needs the
-    workspace, so none is fetched next to the SSH key."""
     steps = _load(REPO / ".github/workflows/deploy.yml").jobs["deploy"].steps
     assert not [s for s in steps if s.uses]
 

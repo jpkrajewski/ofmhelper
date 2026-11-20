@@ -1,14 +1,3 @@
-"""The QuickTime atoms an iPhone writes that ffmpeg does not, built from a
-`DeviceProfile` + `Recording`.
-
-Custom on purpose: no proven tool writes these. ffmpeg's MOV muxer writes
-`url ` data references, 0x7FFF languages and every `mdta` value as text;
-exiftool writes Keys values but not handlers, data references, `tapt` or
-track-level keys with a locale. The byte layouts are QuickTime File Format
-(Apple, "Movie atoms" / "Metadata"); each builder is checked against the
-real recordings in tests/iphones.
-"""
-
 import struct
 
 from ofmhelpers.media.mov_atoms import Atom
@@ -20,16 +9,13 @@ from ofmhelpers.media.recorder.models import (
     Recording,
 )
 
-_FULL_BOX = bytes(4)  # version 0, flags 0
+_FULL_BOX = bytes(4)
 _KEY_NAMESPACE = b"mdta"
-# mdta meta hdlr: pre_defined, handler "mdta", 3 reserved words, empty name.
 _META_HDLR = _FULL_BOX + bytes(4) + b"mdta" + bytes(12) + bytes(2)
-# dref entry flag: the media is in this same file.
 _SELF_REFERENCE = 1
 
 
 def pack_language(code: str) -> int:
-    """ISO-639-2 code packed into 15 bits, as mdhd and locales store it."""
     a, b, c = (ord(ch) - 0x60 for ch in code)
     return (a << 10) | (b << 5) | c
 
@@ -50,9 +36,6 @@ def _value(key: MetadataKey, recording: Recording) -> bytes | None:
 
 
 def meta(keys: list[MetadataKey], recording: Recording) -> Atom | None:
-    """An `mdta` meta (hdlr, keys, ilst) holding `keys` in order; a key
-    whose per-recording value is unset is left out, as an iPhone leaves out
-    location with Location Services off."""
     present = [(k, v) for k in keys if (v := _value(k, recording)) is not None]
     if not present:
         return None
@@ -90,7 +73,6 @@ def _pascal(text: str) -> bytes:
 
 
 def media_handler(profile: DeviceProfile, kind: str, name: str) -> Atom:
-    """The mdia hdlr: component "mhlr", subtype `kind` (vide/soun)."""
     payload = (
         _FULL_BOX
         + b"mhlr"
@@ -103,7 +85,6 @@ def media_handler(profile: DeviceProfile, kind: str, name: str) -> Atom:
 
 
 def data_handler(profile: DeviceProfile) -> Atom:
-    """The minf hdlr: component "dhlr", subtype = the data reference type."""
     h = profile.handlers
     payload = (
         _FULL_BOX
@@ -117,7 +98,6 @@ def data_handler(profile: DeviceProfile) -> Atom:
 
 
 def data_information(profile: DeviceProfile) -> Atom:
-    """dinf > dref with one self-referencing entry of the profile's type."""
     entry = Atom(
         type=profile.handlers.data_reference.encode(),
         payload=struct.pack(">I", _SELF_REFERENCE),
@@ -129,7 +109,6 @@ def data_information(profile: DeviceProfile) -> Atom:
 
 
 def video_media_header(profile: DeviceProfile) -> Atom:
-    """vmhd: flags 1 (QuickTime "no lean ahead"), graphics mode, op color."""
     v = profile.video
     payload = struct.pack(">I", 1) + struct.pack(
         ">HHHH", v.graphics_mode, v.op_color, v.op_color, v.op_color
@@ -138,7 +117,6 @@ def video_media_header(profile: DeviceProfile) -> Atom:
 
 
 def track_aperture(width: int, height: int) -> Atom:
-    """tapt: clean, production and encoded-pixels apertures, all w x h."""
     dims = _FULL_BOX + struct.pack(">II", width << 16, height << 16)
     body = b"".join(
         Atom(type=kind, payload=dims).to_bytes() for kind in (b"clef", b"prof", b"enof")

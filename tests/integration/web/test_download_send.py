@@ -1,9 +1,3 @@
-"""/download-media/send: a finished download's video(s) handed to /clone or
-/clone-long, which open with them already picked. A download's files live in
-the download area, not the asset store clone's picker reuses from, so the
-endpoint registers each video into the store (as /reels does) and hands over
-those store paths."""
-
 import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -27,8 +21,6 @@ def client():
 
 
 def _downloaded(tmp_path: Path, name: str) -> str:
-    """A result file in the download area -- outside the asset store, exactly
-    where a real download leaves it."""
     src = tmp_path / "downloads" / name
     src.parent.mkdir(exist_ok=True)
     src.write_bytes(b"\x00\x00\x00\x18ftypmp42" + name.encode())
@@ -37,7 +29,6 @@ def _downloaded(tmp_path: Path, name: str) -> str:
 
 
 def _download_job(paths: list[str], *, actor: str | None = None) -> str:
-    """A grouped download_media job whose result is those files."""
     job_id = create_job("download_media", {"urls": ["https://x/1"]}, actor=actor)
     result = [
         DownloadResult(url="https://x/1", success=True, output_paths=[Path(p)])
@@ -65,7 +56,6 @@ def test_send_to_clone_registers_the_videos_and_opens_clone_with_them(client, tm
     r = client.post("/download-media/send", data={"job_id": job, "target": "clone"})
     assert r.status_code == 200
     videos = _redirect_videos(r)
-    # Each handed-over path is now a real file inside the session's store.
     assert len(videos) == 2
     assert all(
         in_asset_root(assets_root(), Path(v)) and Path(v).is_file() for v in videos
@@ -116,7 +106,6 @@ def test_an_unknown_target_is_refused(client, tmp_path):
 
 
 def _card(html: str, job_id: str) -> str:
-    """The one result card's markup, from its data-job-id to the next card."""
     after = html.split(f'data-job-id="{job_id}"', 1)[1]
     return after.split("data-job-id=", 1)[0]
 

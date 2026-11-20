@@ -17,6 +17,7 @@ import sys
 from html import escape
 from pathlib import Path
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, sync_playwright
 from pydantic import BaseModel
 
@@ -92,11 +93,20 @@ def shoot(page: Page, shot: Shot, revision: Path) -> None:
         page.set_viewport_size({"width": width, "height": 900})
         page.goto(shot.path, wait_until="load")
         # Lazy images load only once scrolled near: walk down, then back.
-        page.evaluate(
-            "async () => { for (let y = 0; y < document.body.scrollHeight; y += 600)"
-            " { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); }"
-            " window.scrollTo(0, 0); }"
-        )
+        reloads_itself = False
+        try:
+            page.evaluate(
+                "async () => { for (let y = 0; y < document.body.scrollHeight; y += 600)"
+                " { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 60)); }"
+                " window.scrollTo(0, 0); }"
+            )
+        except PlaywrightError:
+            print(f"ui_screens: {shot.name}-{width}: reloads itself, the screen only")
+            reloads_itself = True
+        if reloads_itself:
+            page.wait_for_event("load", timeout=15000)
+            page.screenshot(path=revision / f"{shot.name}-{width}.png")
+            continue
         page.wait_for_timeout(SETTLE_MS)
         broken = page.evaluate(
             "() => [...document.images].filter(i => i.complete && i.naturalWidth === 0"

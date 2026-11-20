@@ -1,7 +1,3 @@
-"""Sentry (ofmhelpers/sentry.py) through the SDK itself, with its transport
-swapped for one that keeps what would have been sent: nothing leaves the
-machine. What an event carries and, above all, what it must not."""
-
 from collections.abc import Callable
 from typing import Any
 
@@ -33,8 +29,6 @@ API_KEY = "sk-" + "a1B2c3D4" * 6
 
 
 class _Kept(Transport):
-    """Keeps the events instead of sending them."""
-
     def __init__(self) -> None:
         super().__init__()
         self.events: list[dict[str, Any]] = []
@@ -50,7 +44,6 @@ class _Kept(Transport):
 
 @pytest.fixture
 def sent(monkeypatch):
-    """The events Sentry would have been sent, with Sentry on for the test."""
     monkeypatch.setenv("SENTRY_DSN", DSN)
     monkeypatch.setenv("OFM_RELEASE", "abc1234")
     configure_sentry("ascend-test")
@@ -61,7 +54,6 @@ def sent(monkeypatch):
 
 
 def _client() -> TestClient:
-    """A small app answering as the real one does (web/exceptions.py)."""
     app = FastAPI(exception_handlers=exception_handlers())
 
     @app.post("/crash")
@@ -134,7 +126,6 @@ def test_a_logged_error_is_an_event(sent):
 
 
 def test_a_failed_job_is_an_event_without_its_arguments(sent):
-    """Through RQ's own failure path, as a worker runs a job."""
     queue = Queue(connection=get_redis())
     job = queue.enqueue(
         worker_tasks.fails_with, "argument-value", secret="keyword-value"
@@ -159,8 +150,6 @@ def _failing(exc: Exception) -> Callable[[], None]:
 
 
 def test_a_job_a_provider_refused_is_no_event(sent):
-    """No credits, flagged content, a wrong key: the card says why; it is
-    the provider's answer, not our crash (owner 2026-11-18)."""
     refusals = [
         ProviderNoCreditsError("kie.ai: Credits insufficient", provider="kie.ai"),
         ProviderGenerationError("APIYI: [DataInspectionFailed] Green net check"),
@@ -187,14 +176,12 @@ def test_a_job_that_crashed_is_one_event(sent):
 
 
 def test_a_jobs_event_names_its_person_by_id_only(sent):
-    """Sentry counts the people a crash hit; never their email."""
     person = make_user("crashed@example.com")
     job_id = create_job("ai", {"prompt": "p"}, actor=str(person.id))
 
     run_job(job_id, _failing(RuntimeError("boom")), {})
 
     assert sent[0]["user"] == {"id": str(person.id)}
-    # Nor anywhere else: a Redis breadcrumb's key held it (by_email:<email>).
     assert "crashed@example.com" not in str(sent[0])
     crumbs = sent[0].get("breadcrumbs", {}).get("values", [])
     assert not [c for c in crumbs if c.get("category") == "redis"]
@@ -219,7 +206,7 @@ def test_the_heartbeat_is_a_check_in_that_makes_its_monitor(sent):
 
 
 def test_no_dsn_no_heartbeat():
-    heartbeat()  # nothing to send to, nothing raised
+    heartbeat()
 
 
 def test_configuring_twice_keeps_the_first_client(sent):

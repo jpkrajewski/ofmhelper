@@ -1,13 +1,3 @@
-"""Which tables `audit_log` records (alembic a1b2c3d4e5f8) and why every
-other one is left out. A new table is one line in one of the two:
-`tests/integration/db/test_audit.py` fails on a mapped table in neither,
-and reads the triggers the database really has.
-
-Audited: the rows people make and edit (`<table>_audit` + `<table>_stamp`
-triggers, `db/models.py` `Timestamps` + `Authored`), and `jobs` for its
-`hidden_at` alone (who hid a card)."""
-
-# Audited in full (both triggers, both stamps).
 AUDITED: frozenset[str] = frozenset(
     {
         "users",
@@ -30,7 +20,6 @@ AUDITED: frozenset[str] = frozenset(
     }
 )
 
-# Audited for one column only: its trigger, no stamps.
 AUDITED_COLUMNS: frozendict[str, str] = frozendict({"jobs": "hidden_at"})
 
 EXCLUDED: frozendict[str, str] = frozendict(

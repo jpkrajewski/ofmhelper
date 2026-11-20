@@ -1,19 +1,3 @@
-"""RunningHub faked at the wire (OFM_FAKE_EXTERNALS, tests): the Standard
-Model API's upload (`/openapi/v2/media/upload/binary`), any model submit
-(`POST /openapi/v2/<model path>`) and `/openapi/v2/query`, answered the way
-RunningHub does (HTTP 200, the code in the body), plus the file host its
-upload and result URLs point at.
-
-Only `FAKE_KEY` is accepted; any other key gets 806 APIKEY_USER_NOT_FOUND
-(an upload: code 1 "ApiKey verification failed", as the real one answers).
-A task is QUEUED/RUNNING for `polls_until_done` queries, then SUCCESS with
-one result: an mp4 for a video model of the catalog, else a png.
-`refuse_next` makes the next submit answer that (code, message) instead
-(no balance, concurrency, content policy), `fail_next` the next task end
-FAILED with it; `submitted` records each (model path, body), `uploads`
-each uploaded file name.
-"""
-
 import itertools
 import json
 import threading
@@ -49,7 +33,6 @@ def _task(task_id: str = "", status: str = "", **fields: Any) -> dict[str, Any]:
 
 
 def _refused(code: int, message: str, task_id: str = "") -> FakeReply:
-    """A refusal echoes the queried `taskId`, as the real API does."""
     return FakeReply.json_body(
         _task(task_id, errorCode=str(code), errorMessage=message)
     )

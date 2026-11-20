@@ -1,7 +1,3 @@
-"""What /cookies does behind its routes (web/routers/cookies.py): the page
-(never a cookie value, only which sites the file covers), an upload stored
-and what it sets going, a removal."""
-
 from typing import BinaryIO
 
 from pydantic import BaseModel
@@ -17,7 +13,6 @@ from ofmhelpers.features.reels.watch import unlock_gated
 from ofmhelpers.features.refusals import RefusedError
 from ofmhelpers.schemas import SavedCookies
 
-# The job an upload starts: the person's login-only reels opened up.
 UNLOCK_TASK = "reels_unlock"
 
 _NOTES = {
@@ -27,8 +22,6 @@ _NOTES = {
 
 
 class PageView(BaseModel):
-    """/cookies: each field is a name `cookies_form.html` reads."""
-
     saved: SavedCookies | None
     message: str | None
     error: str | None
@@ -43,19 +36,13 @@ def page_view(
 
 
 def _after_upload(user_id: int) -> None:
-    # /reels' login-only reels of profiles they watch open up now; not
-    # while /reels is retired (auth/access.py `RETIRED`).
     if not retired(Area.REELS):
         job_id = create_job(UNLOCK_TASK, {}, actor=str(user_id))
         enqueue(run_job, job_id, unlock_gated, {"user_id": user_id})
-    # Their /accounts synced without a working login: every reel counted now.
     rescan_limited(user_id)
 
 
 def upload(owner_id: int, file: BinaryIO, name: str | None, size: int | None) -> None:
-    """The file read, parsed and stored. One over the limit is refused by its
-    size before it is read into memory. Raises `RefusedError`, worded for
-    the uploader."""
     try:
         if size is not None:
             jar.check_size(size)

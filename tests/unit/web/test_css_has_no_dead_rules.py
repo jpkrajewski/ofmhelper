@@ -1,7 +1,3 @@
-"""Every class the app's stylesheets style is used somewhere (a template or
-a script): a rule nothing renders is dead weight that drifts and misleads
-whoever edits the CSS next."""
-
 import re
 
 from repo_paths import SRC
@@ -11,8 +7,6 @@ CSS = [
     WEB / "static" / "css" / n
     for n in ("tokens.css", "base.css", "components.css", "pages.css")
 ]
-# Built from a variable, never written out whole: badge-{{ kind }},
-# notice-{{ kind }}, sg-{{ name }}, `ref-mark-${kind}`.
 DYNAMIC = ("badge-", "notice-", "sg-", "ref-mark-")
 
 

@@ -1,61 +1,18 @@
-/*
- * /edit page (templates/edit.html).
- *
- * No video yet: picking one in the file picker opens it at once -- a reused
- * file by its stored path, a new one uploaded first (/edit/upload, its
- * progress on the status line; leaving mid-upload asks first:
- * upload-guard.js).
- *
- * The timeline is what Cut makes (owner 2026-11-15: "it should just
- * disappear from the timeline"): the clips one after another, each showing
- * its own stretch of its video's frames, its label above (name, length).
- * Delete selection takes the marked part out and the rest closes up; Add
- * video puts another video at the end on this same page (a stored one by
- * /edit/video, a new one uploaded); a label dragged moves its clip, its x
- * drops it, a click marks it. Undo takes the last of those back. The
- * timeline outlives a reload of the page (sessionStorage, this tab only).
- *
- * The player shows the clip under the marker: its video's light copy once
- * the edit worker made it (/edit/prepared, polled per video), else the
- * original. Play plays the marked part across the clips, the player
- * switching video where a clip of another one comes. Seeks never pile up:
- * while one runs only the last position asked waits.
- *
- * The strip: a press moves the marker there and shows that frame (a drag
- * scrubs); a press on a handle's grip drags that handle instead. Start and
- * End are never closer than data-min seconds; a focused one moves a frame
- * with the arrow keys, ‹ › and the arrow keys elsewhere step the marker a
- * frame (Shift + arrow: a second). Every time lands on a frame's start of
- * its clip's video: the light copy's own frame times (/edit/frames), else a
- * 1/fps grid. Times show as editors' timecode, MM:SS:FF.
- *
- * Turn, Crop, Speed and Size apply to the whole cut; the crop box is drawn
- * on the clip shown. Frame downloads the frame shown (/edit/frame). Cut
- * queues the marked part of the timeline (one stretch of one video, or the
- * clips in it, joined) on the edit worker (/edit/cut) and polls it: "In
- * line · N ahead", "Cutting…", then Clone it and Download; any change hides
- * them again.
- *
- * Messages: a refusal's own sentence (the server words those); anything
- * else (a 5xx, a proxy page, no connection) one fixed sentence.
- */
 (() => {
     const POLL_MS = 2000;
-    // The light copy is ready seconds after the page opens: asked sooner.
+
     const COPY_POLL_MS = 1000;
     const GRIP_PX = 12;
     const DRAG_PX = 6;
-    // The smallest crop box, of the biggest one (options.py `Framing`).
+
     const MIN_SCALE = 0.1;
-    // Seek a hair past a frame's start (its timestamp may round up) and ask
-    // the server a hair before it, so both land on the frame shown.
+
     const INTO_FRAME_S = 0.0005;
     const BEFORE_FRAME_S = 0.001;
     const FAILED = "Something went wrong: try again";
     const OFFLINE = "No connection: try again";
     const TOO_BIG = "This video is too big to open here";
 
-    // A refusal / failure (red), or a plain line ("Uploading… 42%").
     function setStatus(message, plain = false) {
         const status = document.getElementById("edit-status");
         status.replaceChildren();
@@ -72,7 +29,6 @@
         return new Error(worded ? body.detail : FAILED);
     }
 
-    // The answer's JSON, or an Error with a sentence for the page.
     async function answer(request) {
         let response;
         try {
@@ -96,8 +52,6 @@
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
-    // A new video uploaded: the stored video (EditVideo), null when the
-    // session ended on the way.
     async function uploadVideo(item) {
         const data = new FormData();
         data.append("file", item.file, item.name);
@@ -115,15 +69,11 @@
         throw failure(xhr.status, body);
     }
 
-    // The picked video (EditVideo): a stored one asked of /edit/video, a new
-    // one uploaded.
     function pickedVideo(item) {
         if (item.path) return answer(fetch(`/edit/video?video=${encodeURIComponent(item.path)}`));
         return uploadVideo(item);
     }
 
-    // A file picker's pick, handed to `use` (an EditVideo), the picker
-    // emptied again.
     function onPick(form, use) {
         const picker = form.querySelector(".file-picker");
         picker.addEventListener("filepicker:change", async () => {
@@ -144,7 +94,6 @@
         });
     }
 
-    // A download of a fetched file under the name the server gave it.
     async function saveFile(url) {
         let response;
         try {
@@ -167,7 +116,6 @@
         setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     }
 
-    // A button's label while it works ("Saving…"), back when done.
     async function busy(button, label, work) {
         const text = button.lastChild;
         const was = text.textContent;
@@ -183,7 +131,6 @@
         }
     }
 
-    // The last frame starting at or before t of `frames` (sorted).
     function frameIndex(frames, t) {
         let lo = 0;
         let hi = frames.length - 1;
@@ -219,9 +166,6 @@
         let speed = 1;
         let size = root.querySelector('.edit-size-pick[aria-pressed="true"]').dataset.size;
 
-        // --- the videos on the timeline, and its clips ---
-        // Per video: its length, what plays (the light copy once made, else
-        // the original), its strip and frame times once in.
         const videos = new Map();
         function know(v) {
             if (videos.has(v.path)) return videos.get(v.path);
@@ -247,7 +191,7 @@
             url: root.dataset.original,
         });
         let clips = [{ video: first, start: 0, end: videos.get(first).seconds }];
-        // Earlier timelines, newest last: what Undo puts back.
+
         const history = [];
         const lengthOf = (c) => c.end - c.start;
         const total = () => clips.reduce((sum, c) => sum + lengthOf(c), 0);
@@ -256,7 +200,6 @@
         const b = () => Number(end.value);
         const pct = (t) => `${(t / total()) * 100}%`;
 
-        // The clip at timeline time t (the last one for its very end).
         function locate(t) {
             let at = 0;
             for (let i = 0; i < clips.length; i++) {
@@ -266,7 +209,7 @@
             }
             return { i: 0, at: 0 };
         }
-        // Timeline time t in its clip's video.
+
         function source(t) {
             const { i, at } = locate(t);
             const clip = clips[i];
@@ -278,7 +221,6 @@
             };
         }
 
-        // --- frames: a time lands on a frame's start of its clip's video ---
         function snapSource(v, s) {
             return v.frames
                 ? v.frames[frameIndex(v.frames, s)]
@@ -293,8 +235,7 @@
             const s = clamp(snapSource(videos.get(c.video), c.start + at - from), c.start, c.end);
             return from + s - c.start;
         }
-        // One frame on (n = 1) or back (n = -1) from t; past its clip's edge,
-        // the next clip's first frame or the previous one's last.
+
         function stepFrom(t, n) {
             const { i, at } = locate(t);
             const c = clips[i];
@@ -309,12 +250,12 @@
             }
             return at + next - c.start;
         }
-        // The first frame start at or after t.
+
         function atLeast(t) {
             const s = snap(t);
             return s < t - 1e-6 ? stepFrom(s, 1) : s;
         }
-        // MM:SS:FF, FF = the frame within its second.
+
         function timecode(t) {
             const at = Math.max(t, 0);
             const sec = Math.floor(at + 1e-6);
@@ -323,10 +264,9 @@
             return `${two(Math.floor(sec / 60))}:${two(sec % 60)}:${two(ff)}`;
         }
 
-        // --- the player: the clip under the marker, its video loaded ---
         let loaded = first;
         let shown = 0;
-        // Resolves once `path` plays in the player (its metadata in).
+
         function load(path) {
             if (loaded === path && player.readyState >= HTMLMediaElement.HAVE_METADATA) {
                 return Promise.resolve();
@@ -360,7 +300,6 @@
             apply();
         }
 
-        // The frame on screen (player time) as timeline time.
         function timelineTime(media) {
             const c = clips[shown];
             if (!c) return 0;
@@ -375,10 +314,9 @@
             }
         }
 
-        // --- Play: the marked part, across clips ---
         let playTo = null;
         let advancing = false;
-        // On to the next clip (its video loaded when another one), or stop.
+
         async function advance() {
             if (advancing) return;
             const next = shown + 1;
@@ -412,12 +350,11 @@
         const exactFrames = "requestVideoFrameCallback" in player;
         let frameCallback = 0;
         const onFrame = (_now, meta) => {
-            // Every frame, not timeupdate's ~250 ms: at 2x that ran half a
-            // second past the end.
+
             onMedia(meta.mediaTime);
             frameCallback = player.requestVideoFrameCallback(onFrame);
         };
-        // Armed again after a new src: one loop, never two.
+
         function watchFrames() {
             if (!exactFrames) return;
             player.cancelVideoFrameCallback(frameCallback);
@@ -448,12 +385,11 @@
             if (!advancing) playTo = null;
             playing(false);
         });
-        // A new src stops the player with no "pause" event: the button
-        // showed Pause over a still picture (prod 2026-11-10).
+
         player.addEventListener("emptied", () => {
             if (!advancing) playing(false);
         });
-        // The copy gone (swept a day after its last open): the original.
+
         player.addEventListener("error", () => {
             const v = videos.get(loaded);
             if (!v || !player.currentSrc.includes("/edit/proxy")) return;
@@ -462,8 +398,6 @@
             watchFrames();
         });
 
-        // --- the cut's / frame's size: the crop of the picture shown, its
-        // short side `size` (ffmpeg: media/trim.py scaled_to) ---
         function shownSize() {
             const sideways = shape.turn % 180 !== 0;
             const w = player.videoWidth;
@@ -492,7 +426,6 @@
             document.getElementById("edit-size").textContent = outSize();
         }
 
-        // The last cut's Clone it / Clone long / Download, or none.
         function done(made) {
             const clone = document.getElementById("edit-clone");
             const cloneLong = document.getElementById("edit-clone-long");
@@ -501,8 +434,7 @@
             cloneLong.hidden = !made;
             download.hidden = !made;
             if (!made) return;
-            // `from`: the video this cut replaces, so /clone puts back the
-            // form Trim it! left (clone-return.js).
+
             clone.href =
                 `/clone?video=${encodeURIComponent(made.path)}` +
                 `&from=${encodeURIComponent(first)}`;
@@ -511,7 +443,6 @@
             download.setAttribute("download", made.name);
         }
 
-        // --- the timeline drawn: a block per clip, its label above ---
         const STORE = `edit:timeline:${first}`;
         function save() {
             try {
@@ -521,7 +452,7 @@
                 });
                 sessionStorage.setItem(STORE, JSON.stringify({ clips, videos: used }));
             } catch {
-                // No storage (private mode): the timeline lives as long as the page.
+
             }
         }
         function stripOf(seg, v, c) {
@@ -532,9 +463,7 @@
             seg.style.setProperty("--strip-w", `${(v.seconds / len) * 100}%`);
             seg.style.setProperty("--strip-x", room > 1e-6 ? `${(c.start / room) * 100}%` : "0%");
         }
-        // Clips next to each other from one video: one label (a part deleted
-        // from a video leaves one video, not two clips), `from`..`to` the
-        // clips' indexes, both included.
+
         function groups() {
             const found = [];
             clips.forEach((c, i) => {
@@ -592,8 +521,6 @@
             return el;
         }
 
-        // A label pressed: dragged, its video's clips move to where it is
-        // let go; a click marks them (Delete selection then drops them).
         function grab(e, el, g) {
             if (e.target.closest(".edit-label-drop")) return;
             e.preventDefault();
@@ -617,7 +544,7 @@
                     return;
                 }
                 const centre = (s0 + s1) / 2 + (dx / track.clientWidth) * total();
-                // The other labels whose middle is left of where it was let go.
+
                 const others = groups().filter((o) => o.from !== g.from);
                 const before = others.filter((o) => {
                     const [o0, o1] = spanOf(o);
@@ -638,7 +565,6 @@
             el.addEventListener("pointercancel", stop);
         }
 
-        // The part from..to marked, the marker at its start.
         function mark(from, to) {
             start.value = String(from);
             end.value = String(to);
@@ -648,8 +574,6 @@
             show();
         }
 
-        // A change of the timeline, undoable: the old one kept, the new one
-        // drawn, all of it marked (what Cut makes), the marker kept in it.
         function change(fn) {
             history.push({ clips: clips.map((c) => ({ ...c })), a: a(), b: b() });
             fn();
@@ -669,8 +593,6 @@
             mark(last.a, last.b);
         });
 
-        // Delete selection: the marked part out of the timeline; what is left
-        // of a clip shorter than data-min goes too.
         function without(from, to) {
             const kept = [];
             let at = 0;
@@ -705,7 +627,6 @@
             seek(Math.min(joint, total()));
         });
 
-        // --- each video's light copy, strip and frame times ---
         async function loadFrames(v, url) {
             const body = url ? await answer(fetch(url)).catch(() => null) : null;
             if (!body?.times?.length) return;
@@ -717,9 +638,9 @@
             v.strip = state.strip_url;
             loadFrames(v, state.frames_url);
             drawClips();
-            // Not in the player, or in it already (the page opened with it).
+
             if (loaded !== v.path || player.getAttribute("src") === v.src) return;
-            // Swapped in mid-play: on from the same time.
+
             const at = player.currentTime;
             const wasPlaying = !player.paused;
             player.preload = "auto";
@@ -734,8 +655,7 @@
                 { once: true }
             );
         }
-        // Asked while the tab is shown; no connection or a 5xx asks again,
-        // any other refusal (the video gone) ends it.
+
         async function prepare(v) {
             const url = `/edit/prepared?video=${encodeURIComponent(v.path)}`;
             for (;;) {
@@ -760,7 +680,6 @@
             if (v.path === first) waitLine.hidden = true;
         }
 
-        // Add video: at the end of this timeline, on this page.
         const addForm = document.getElementById("edit-add");
         root.querySelector(".edit-add-video").addEventListener("click", () => {
             addForm.hidden = !addForm.hidden;
@@ -778,7 +697,6 @@
             if (!v.strip) prepare(v);
         });
 
-        // --- the strip: marker, handles ---
         function moved(handle) {
             done(null);
             if (b() - a() < min) {
@@ -807,7 +725,7 @@
             const box = timeline.getBoundingClientRect();
             return clamp(((x - box.left) / box.width) * total(), 0, total());
         }
-        // The handle whose grip is under x, else null (the marker's press).
+
         function gripAt(x) {
             const box = timeline.getBoundingClientRect();
             const off = (t) => Math.abs(x - (box.left + (t / total()) * box.width));
@@ -816,7 +734,7 @@
             if (Math.min(toStart, toEnd) > GRIP_PX) return null;
             return toStart <= toEnd ? start : end;
         }
-        // Pointer capture: a fast drag never loses it.
+
         function dragOn(el, e, onMove) {
             el.setPointerCapture(e.pointerId);
             const stop = () => {
@@ -844,14 +762,13 @@
             dragOn(timeline, e, (ev) => seek(timeAt(ev.clientX)));
         });
 
-        // n frames, or n seconds.
         function step(n, seconds = false) {
             player.pause();
             seek(seconds ? snap(markAt + n) : stepFrom(markAt, n));
         }
         root.querySelector(".edit-back").addEventListener("click", () => step(-1));
         root.querySelector(".edit-next").addEventListener("click", () => step(1));
-        // A focused handle steps itself (its range input).
+
         document.addEventListener("keydown", (e) => {
             if (e.target.closest?.("input, textarea, select, dialog[open]")) return;
             if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -859,8 +776,6 @@
             step(e.key === "ArrowLeft" ? -1 : 1, e.shiftKey);
         });
 
-        // --- crop: the box over the player, in fractions of the picture ---
-        // The biggest box of the shape in the picture (Original: all of it).
         function maxBox() {
             if (shape.aspect === "original" || !player.videoWidth) return [1, 1];
             const [w, h] = shape.aspect.split(":").map(Number);
@@ -868,14 +783,14 @@
             const r = w / h / (sw / sh);
             return [Math.min(1, r), Math.min(1, 1 / r)];
         }
-        // The box: `scale` of the biggest, at x / y in the room it has.
+
         function cropBox() {
             const [mw, mh] = maxBox();
             const w = mw * shape.scale;
             const h = mh * shape.scale;
             return { w, h, left: (1 - w) * shape.x, top: (1 - h) * shape.y };
         }
-        // Where a box of w x h at left / top sits in its room (0..1).
+
         function placeAt(box, left, top) {
             shape.x = box.w < 1 - 1e-9 ? clamp(left / (1 - box.w), 0, 1) : 0.5;
             shape.y = box.h < 1 - 1e-9 ? clamp(top / (1 - box.h), 0, 1) : 0.5;
@@ -894,15 +809,12 @@
             placeCrop();
             show();
         }
-        // A drag's step: only a box that really moved or grew is a change
-        // (a click to play must not hide the last cut's Clone it / Download).
+
         function cropMoved(before) {
             if (before.x === shape.x && before.y === shape.y && before.scale === shape.scale) return;
             cropChanged();
         }
-        // The stage: the turned picture as big as fits (the card's width,
-        // 60% of the window's height); the player's own box, unturned, in
-        // its middle (pages.css turns and mirrors it).
+
         function layout() {
             if (!player.videoWidth) return;
             const [sw, sh] = shownSize();
@@ -924,20 +836,16 @@
             show();
         }
         player.addEventListener("loadedmetadata", metadataIn);
-        // A copy already made can be in before this script runs (no event
-        // left to wait for: the stage stayed unsized, the crop box hidden).
+
         if (player.readyState >= HTMLMediaElement.HAVE_METADATA) metadataIn();
 
-        // Inside: move. A corner: that corner follows the pointer, the
-        // opposite one stays, the shape is kept, never past the picture.
         crop.addEventListener("pointerdown", (e) => {
             e.preventDefault();
             const area = stage.getBoundingClientRect();
             const from = cropBox();
             const corner = e.target.closest(".edit-crop-grip")?.dataset.corner;
             if (!corner) {
-                // A click without a drag plays / pauses (the box covers the
-                // whole player).
+
                 crop.addEventListener(
                     "pointerup",
                     (up) => {
@@ -968,7 +876,7 @@
                 const px = (ev.clientX - area.left) / area.width;
                 const py = (ev.clientY - area.top) / area.height;
                 const want = Math.max(Math.abs(px - ax) / mw, Math.abs(py - ay) / mh);
-                // `room` can come out a hair under MIN_SCALE (1 - 0.9).
+
                 shape.scale = Math.max(MIN_SCALE, Math.min(want, room));
                 const box = cropBox();
                 placeAt(box, west ? ax - box.w : ax, north ? ay - box.h : ay);
@@ -1028,8 +936,6 @@
             });
         }
 
-        // --- Frame and Cut ---
-        // Rounded: the server takes 0..1 and scale >= MIN_SCALE exactly.
         const round4 = (v) => Math.round(v * 10000) / 10000;
         const shapeParams = () => ({
             ...shape,
@@ -1053,8 +959,6 @@
             })
         );
 
-        // The marked part of the timeline in its videos: one stretch, or the
-        // clips in it (joined by the cut).
         function cutWhat() {
             const parts = [];
             let at = 0;
@@ -1084,7 +988,7 @@
                             body: JSON.stringify({ ...cutWhat(), speed, ...shapeParams() }),
                         })
                     );
-                    // Polled until it is done or failed; a lost poll is tried again.
+
                     for (;;) {
                         await wait(POLL_MS);
                         const state = await answer(fetch(`/edit/cut/${queued.job_id}`)).catch(
@@ -1104,7 +1008,6 @@
             })
         );
 
-        // --- start: this tab's timeline of this video back, else the video ---
         try {
             const kept = JSON.parse(sessionStorage.getItem(STORE) || "null");
             if (kept?.clips?.length) {
@@ -1112,7 +1015,7 @@
                 clips = kept.clips.filter((c) => videos.has(c.video));
             }
         } catch {
-            // Nothing kept, or unreadable: the video alone.
+
         }
         const firstVideo = videos.get(first);
         if (root.dataset.ready === "true") {
@@ -1134,7 +1037,7 @@
     document.addEventListener("DOMContentLoaded", () => {
         const root = document.getElementById("edit");
         if (root) initEditor(root);
-        // No video yet: the one picked opens the page.
+
         const open = document.getElementById("edit-open");
         if (open) {
             onPick(open, (video) => {

@@ -1,10 +1,3 @@
-"""scripts/ci_reuse_dev_run.sh: main's CI skips the suite only for a tree a
-green CI run already tested.
-
-Each test builds its own git history in tmp_path and puts a fake `gh` first
-on PATH that answers "CI passed" for the commits listed in GREEN.
-"""
-
 import os
 import subprocess
 from pathlib import Path
@@ -14,7 +7,6 @@ from repo_paths import REPO
 
 SCRIPT = REPO / "scripts/ci_reuse_dev_run.sh"
 
-# The URL is the 2nd argument: repos/<repo>/commits/<sha>/check-runs?...
 _FAKE_GH = """#!/usr/bin/env bash
 [ -f "$FAKE_GH_FAIL" ] && exit 1
 case "$2" in
@@ -92,7 +84,6 @@ def repo(tmp_path) -> Repo:
 
 
 def _promote(repo: Repo) -> str:
-    """The promote PR's merge: a merge commit of dev into main."""
     repo.git("checkout", "-q", "main")
     repo.git("merge", "-q", "--no-ff", "-m", "Merge dev", "dev")
     return repo.git("rev-parse", "HEAD")

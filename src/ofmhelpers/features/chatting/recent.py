@@ -1,8 +1,3 @@
-"""The creators a person opened last on /chatting, offered first so they take one
-click. One Redis sorted set per person, like features/assets/ref_usage.py: it is
-page ordering, not a noun the app owns, and losing it only empties the row. Redis
-failing never fails a page."""
-
 import time
 from typing import Any
 
@@ -33,7 +28,6 @@ def remember(user_id: int, platform: ChatPlatform, username: str) -> None:
 
 
 def recent_models(user_id: int) -> list[RecentModel]:
-    """Newest first. Empty when Redis is unreachable."""
     try:
         members: Any = get_redis().zrevrange(
             _key(user_id), 0, settings.chatting.recent_models_shown - 1

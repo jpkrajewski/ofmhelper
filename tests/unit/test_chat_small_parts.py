@@ -1,11 +1,9 @@
-"""The small parts of /chatting that need nothing around them."""
-
 import logging
 from datetime import UTC, datetime
 
 import pytest
 
-from ofmhelpers.features.chatting.alerts import money
+from ofmhelpers.features.notifications.service import money
 from ofmhelpers.log import _HideLoginCodes
 from ofmhelpers.schemas.chatting import ChatEvent, ChatPosition, ChatRead, ReadScope
 

@@ -1,6 +1,3 @@
-"""The EXIF an iPhone camera writes into a photo, in its own spelling and
-types, written by Pillow (exiftool is only in the test image)."""
-
 import io
 import math
 from fractions import Fraction
@@ -15,8 +12,6 @@ _B = ExifTags.Base
 
 
 def _q(value: float) -> IFDRational:
-    """A number as EXIF stores it: a rational (Pillow writes a plain float
-    as a double, which readers take for a rational and get wrong)."""
     return IFDRational(Fraction(value).limit_denominator(1_000_000))
 
 
@@ -29,8 +24,6 @@ def _dms(value: float) -> tuple[IFDRational, IFDRational, IFDRational]:
 
 
 def _without_jfif(jpeg: bytes) -> bytes:
-    """The JPEG without the JFIF block libjpeg writes first: an iPhone's
-    photo starts with its EXIF."""
     if jpeg[2:4] != b"\xff\xe0":
         return jpeg
     return jpeg[:2] + jpeg[4 + int.from_bytes(jpeg[4:6], "big") :]
@@ -39,7 +32,6 @@ def _without_jfif(jpeg: bytes) -> bytes:
 def exif_for(
     device: Device, lens: Lens, shot: Shot, size: tuple[int, int]
 ) -> Image.Exif:
-    """The tags an iPhone camera writes into a photo, in its own spelling."""
     when = shot.taken.strftime("%Y:%m:%d %H:%M:%S")
     offset = shot.taken.strftime("%z")
     offset = f"{offset[:3]}:{offset[3:]}"
@@ -105,7 +97,6 @@ def exif_for(
     if shot.place is not None:
         point = shot.place.point
         gps = exif.get_ifd(ExifTags.IFD.GPSInfo)
-        # Bytes: as a tuple Pillow writes only its first number ("2").
         gps[ExifTags.GPS.GPSVersionID] = b"\x02\x02\x00\x00"
         gps[ExifTags.GPS.GPSLatitudeRef] = "N" if point.latitude >= 0 else "S"
         gps[ExifTags.GPS.GPSLatitude] = _dms(point.latitude)
@@ -118,8 +109,6 @@ def exif_for(
 
 
 def jpeg(picture: Image.Image, exif: Image.Exif, quality: int) -> bytes:
-    """`picture` as a JPEG carrying `exif` and nothing else (no JFIF, no
-    comment carried over from ffmpeg's still)."""
     picture.info.clear()
     out = io.BytesIO()
     picture.save(out, "JPEG", quality=quality, exif=exif)

@@ -1,13 +1,3 @@
-"""What /ai does behind its routes (web/routers/generation/ai.py): a submit's
-checks and jobs, and the worker side of a job.
-
-The model picked on /generate is a catalog key (`<provider>:<model id>`); its
-input schema decides what a submit accepts. A job stores `provider`, `model`
-and the inputs under the schema's own field names -- reference files as lists
-of asset-store paths, which /generate's Recreate restores into the pickers --
-and the worker runs it through `integrations/ai_providers.runner`. Nothing here
-names a provider."""
-
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -45,24 +35,17 @@ _PENDING_MESSAGE = {
 }
 
 
-class GenerateRefusedError(Exception):
-    """A submit that queues nothing; its text is what the page shows."""
+class GenerateRefusedError(Exception): ...
 
 
 class AiRunForm(BaseModel):
-    """The fields every /ai/run carries, whatever the model."""
-
     provider: str
     model: str
     api_key: str = ""
-    # Images only: queue this many of the same prompt, each its own job.
     batch: int = 1
 
 
 class PreparedRun(BaseModel):
-    """A checked submit: what each of its `count` jobs stores, and its key,
-    which goes to the worker only."""
-
     params: dict[str, Any]
     api_key: str
     count: int
@@ -87,8 +70,6 @@ def _spec_for(head: AiRunForm) -> ModelSpec:
 
 
 def _settings(form: FormData, spec: ModelSpec) -> dict[str, Any]:
-    """The scalar settings, typed. A checkbox posts a hidden "false" before
-    its own "true", so the last value is the one that counts."""
     raw = {
         f.name: str(values[-1])
         for f in spec.form_fields
@@ -100,9 +81,6 @@ def _settings(form: FormData, spec: ModelSpec) -> dict[str, Any]:
 def _media(
     form: FormData, spec: ModelSpec, assets_root: Path, user_id: int
 ) -> dict[str, list[str]]:
-    """Each media picker resolved to asset-store paths (always a list, so a
-    job's params restore into the same picker). Starlette's `UploadFile`:
-    a raw form holds those, not FastAPI's subclass."""
     media = {}
     for field in spec.media_fields:
         files = [v for v in form.getlist(field.name) if isinstance(v, UploadFile)]
@@ -114,7 +92,6 @@ def _media(
 
 
 def model_spec(model: str) -> ModelSpec:
-    """The catalog entry of a model the form picked."""
     try:
         return get_spec(model)
     except KeyError:
@@ -123,8 +100,6 @@ def model_spec(model: str) -> ModelSpec:
 
 
 def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
-    """A submit checked before anything is queued or paid; refused with the
-    reason otherwise. Uploads are saved only once the head is good."""
     head = _head(form)
     spec = _spec_for(head)
     api_key = Keys.of(user_id).for_run(spec.provider, spec.key, head.api_key)
@@ -139,7 +114,6 @@ def prepare_run(form: FormData, assets_root: Path, user_id: int) -> PreparedRun:
         spec.check(values)
     except InvalidInputError as exc:
         raise GenerateRefusedError(str(exc)) from None
-    # Batch is images only: a video model always runs once.
     largest = settings.aigen.max_batch
     return PreparedRun(
         params={"provider": spec.provider, "model": spec.key, **values},
@@ -155,8 +129,6 @@ def start_runs(
     actor: str,
     worker: Callable[..., list[ResultFile]],
 ) -> JobsQueued:
-    """One job per run of a checked submit. `worker`: the router's `run_ai`,
-    the path RQ stores and a queued job is re-run through."""
     run = prepare_run(form, assets_root, user_id)
     job_ids: list[str] = []
     for _ in range(run.count):
@@ -177,7 +149,6 @@ def start_runs(
 
 
 def _hosted(urls: list[str]) -> list[str]:
-    """Result URLs a browser can open (the fake provider's are not)."""
     return [u for u in urls if u.startswith(("https://", "http://"))]
 
 
@@ -216,13 +187,6 @@ def run_ai(
     part: int = 0,
     **values: Any,
 ) -> list[ResultFile]:
-    """The worker side of a job: upload its references, generate, register
-    the results in the requester's part of the asset store. Also what
-    recovery re-runs a job with, and /clone runs each video through.
-
-    The hosted result is the job's preview the moment it exists; if only the
-    local download then fails, the job still succeeds on the hosted copy
-    instead of losing a finished (paid) generation."""
     spec = get_spec(model)
     client = get_provider(provider, api_key)
     remote: list[str] = []
@@ -236,8 +200,6 @@ def run_ai(
         paths = runner.generate(
             client,
             spec,
-            # A callable: references upload only when a request is really
-            # sent, so a resumed job never uploads them again.
             lambda: spec.request(values, uploader(client, spec)).model_dump(),
             job_id,
             on_result_urls,
@@ -252,7 +214,6 @@ def run_ai(
 
 
 def describe(job: Job) -> str:
-    """A job's card label: the model, and the provider it ran on."""
     spec = catalog().get(str(job.params.get("model")))
     if spec is None:
         return "AI generation"

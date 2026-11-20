@@ -1,23 +1,3 @@
-"""What people type to the bot: one word asks for something (`money`), and
-`/start <token>` in a private chat links that chat to a person (the link
-/account hands out: `features/account/telegram.py`).
-
-`read(words)` waits for new messages (getUpdates, long polling) and keeps the
-asks: a message whose first word is one of `words` (`money`, `Money`, `/money`,
-`/money@bot`), sent in a chat of `OFM_TELEGRAM_CHAT_IDS` (nobody else is
-answered: the numbers are the agency's), no older than `ask_max_age_s` (a server
-that was down does not answer what was typed an hour ago). Anything else is
-dropped; an ask from another chat is logged with that chat's id, which is how a
-new chat id is found once a server reads the bot (`TelegramClient.chats` then
-finds nothing: the updates are taken).
-
-Where to read from is kept in Redis (`_OFFSET`); `confirm` moves it past what was
-read, only once the asks are handled. Telegram keeps an unread update 24 h.
-
-In a group, Telegram hands a bot only commands (`/money`) unless its privacy
-mode is off (@BotFather, /setprivacy, Disable, then add the bot again).
-"""
-
 import time
 
 from pydantic import BaseModel
@@ -40,8 +20,6 @@ class Ask(BaseModel):
 
 
 class Start(BaseModel):
-    """Someone opened the bot from /account's link: `token` says who."""
-
     chat_id: str
     token: str
 
@@ -49,14 +27,10 @@ class Start(BaseModel):
 class Inbox(BaseModel):
     asks: list[Ask]
     starts: list[Start] = []
-    # Where the next read starts; None: nothing was read.
     next_offset: int | None = None
 
 
 def word_of(text: str, bot_name: str) -> str:
-    """The ask in a message: its first word, any case, without the command's
-    `/` and `@<this bot>` (`/money@ofm_bot` = `money`); a command for another
-    bot (`/money@other_bot`) asks nothing."""
     first = text.strip().split(maxsplit=1)[0] if text.strip() else ""
     word, _, to = first.removeprefix("/").partition("@")
     if to and to.casefold() != bot_name.casefold():
@@ -86,8 +60,6 @@ def _ask(
 
 
 def _start(message: Message) -> Start | None:
-    """`/start <token>` in a private chat (Telegram sends it when someone
-    opens `t.me/<bot>?start=<token>`), else None."""
     command, _, token = message.text.strip().partition(" ")
     if message.chat.type != "private" or command != "/start" or not token.strip():
         return None
@@ -95,8 +67,6 @@ def _start(message: Message) -> Start | None:
 
 
 def read(client: TelegramClient, words: set[str], bot_name: str) -> Inbox:
-    """The asks typed since the last `confirm`, waiting up to `ask_wait_s` for
-    one. `bot_name`: this bot's username (`/money@<it>`)."""
     s = settings.telegram
     saved = get_text(_OFFSET)
     updates = client.updates(int(saved) if saved else None, s.ask_wait_s)
@@ -118,6 +88,5 @@ def read(client: TelegramClient, words: set[str], bot_name: str) -> Inbox:
 
 
 def confirm(inbox: Inbox) -> None:
-    """The next read starts after what `inbox` read."""
     if inbox.next_offset is not None:
         set_text(_OFFSET, str(inbox.next_offset), _OFFSET_TTL_S)

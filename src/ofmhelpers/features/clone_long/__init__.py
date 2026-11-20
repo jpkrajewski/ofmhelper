@@ -1,6 +1,3 @@
-"""/clone-long: one image + one long video through Wan 3.0, in pieces.
-See service.py."""
-
 from ofmhelpers.features.clone_long.models import (
     LongCloneParams,
     Piece,

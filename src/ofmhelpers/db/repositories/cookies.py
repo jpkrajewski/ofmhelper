@@ -1,7 +1,3 @@
-"""Each user's own cookies.txt (`user_cookies`). Nothing here is cached:
-every read returns or derives from the decrypted cookies, which must never
-reach Redis."""
-
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -12,7 +8,6 @@ from ofmhelpers.schemas.cookies import StoredCookies
 
 class CookieRepository:
     def get(self, user_id: int) -> StoredCookies | None:
-        """The stored file, its cookies decrypted, or None."""
         with session_scope() as s:
             row = s.get(UserCookiesRow, user_id)
             if row is None:
@@ -24,7 +19,6 @@ class CookieRepository:
             )
 
     def first_holder(self, user_ids: list[int]) -> int | None:
-        """The first of `user_ids`, in that order, who has cookies."""
         if not user_ids:
             return None
         with session_scope() as s:
@@ -38,8 +32,6 @@ class CookieRepository:
         return next((u for u in user_ids if u in holders), None)
 
     def save(self, user_id: int, cookies: str, file_name: str) -> float:
-        """Stores or replaces `user_id`'s cookies; returns when (the row's
-        `updated_at`, the database's clock)."""
         values: dict = {"cookies": cookies, "file_name": file_name}
         with session_scope() as s:
             saved = s.execute(

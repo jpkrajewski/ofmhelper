@@ -1,6 +1,3 @@
-"""/clean-images: pictures stripped of their metadata, then kept in the
-person's part of the asset store."""
-
 from pathlib import Path
 
 lazy from fastapi import UploadFile
@@ -32,9 +29,6 @@ def run_clean(job_dir: str, assets_root: str) -> list[ResultFile]:
     directory = Path(job_dir)
     clean_metadata(directory)
     files = sorted(p for p in directory.iterdir() if p.info.is_file())
-    # Adopt the stripped copies into the requester's part of the asset store
-    # so they're directly reusable in the generation pickers -- cleaning an
-    # image is usually the step right before generating with it.
     for p in files:
         register_generated_asset(p, Path(assets_root))
     return [ResultFile(name=p.name, path=str(p)) for p in files]
@@ -45,10 +39,6 @@ def start(files: list[UploadFile], actor: str, assets_root: Path) -> JobQueued:
     if not uploads:
         msg = "At least one image is required"
         raise RefusedError(msg)
-    # Validate every name before writing any of them: the cleaner skips a
-    # file it doesn't recognise rather than failing, which would otherwise
-    # leave an unprocessed upload sitting in the job dir and listed in the
-    # result (a .html there used to come back as a page on our own origin).
     for f in uploads:
         require_upload_kind(f.filename, IMAGE_KINDS)
     job_dir = make_job_dir(upload_root())

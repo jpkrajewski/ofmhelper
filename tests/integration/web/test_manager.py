@@ -1,15 +1,15 @@
-"""A manager (owner 2026-11-15: "a new user type called Manager: cannot
-generate anything, sees everything a normal user can see, plus chatting and
-/vas spending"): their employer's (an admin's) pages, looked at, nothing
-changed or run; the chats; never /account, /cookies or the admin tools."""
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from notifications_socket import first_sent
 from signin import make_user, sign_in, sign_in_admin
 
 from ofmhelpers.db.stores import devices
 from ofmhelpers.db.stores import users as user_store
+from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.schemas import DeviceFields, Role
+from ofmhelpers.schemas.notifications import Notification
 from ofmhelpers.web.main import app
 
 BOSS = "boss@example.com"
@@ -38,7 +38,7 @@ def test_a_manager_sees_their_employers_pages(boss, manager):
 
     assert page.status_code == 200
     assert "Boss phone 7" in page.text
-    assert MANAGER in page.text  # signed in as themselves
+    assert MANAGER in page.text
     assert "Viewing as" not in page.text
     for path in ("/vas", "/chatting", "/drive", "/accounts", "/generate", "/clone"):
         assert manager.get(path, headers=PAGE).status_code == 200, path
@@ -97,8 +97,6 @@ def test_a_manager_without_an_employer_sees_nothing_of_anyone(boss):
 
 
 def test_a_users_manager_sees_their_pages_but_no_chats():
-    """Any user may have a manager (owner 2026-11-16); the chats are an
-    admin's, so a plain user's manager has none."""
     owner = make_user("owner@example.com").id
     devices.add_device(DeviceFields(label="Owner phone 3"), owner)
     found = make_user("their.manager@example.com", Role.MANAGER)
@@ -120,35 +118,52 @@ def test_a_users_manager_sees_their_pages_but_no_chats():
 FETCH = {"sec-fetch-mode": "cors"}
 
 
-def test_a_manager_whose_employer_was_deactivated_gets_no_chats():
-    """Audit 2026-11-18: with the employer deactivated the manager is shown
-    themselves, and the employer rule was then checked against the manager's
-    own list, which has the chats: 403 turned into 200 on the agency's
-    chats."""
+CHAT_LINE = Notification(
+    id="reconnect:fanvue:1",
+    event_ids=["reconnect:fanvue:1"],
+    title="@agency",
+    text="Connect Fanvue again",
+    url="/chatting/fanvue",
+    at=datetime.now(UTC),
+)
+
+
+@pytest.fixture
+def chat_line(monkeypatch) -> None:
+    monkeypatch.setattr(notifications, "_reconnects", lambda _now: [CHAT_LINE])
+
+
+def _chats_on_notifications(client: TestClient) -> bool:
+    return CHAT_LINE.id in [n["id"] for n in first_sent(client)]
+
+
+def test_a_manager_whose_employer_was_deactivated_gets_no_chats(chat_line):
     owner = make_user("leaving.owner@example.com").id
     found = make_user("left.manager@example.com", Role.MANAGER)
     user_store.set_owner(found.id, owner)
     client = TestClient(app)
     sign_in(client, "left.manager@example.com", Role.MANAGER)
-    assert client.get("/chatting/alerts", headers=FETCH).status_code == 403
+    assert not _chats_on_notifications(client)
 
     user_store.set_active(owner, active=False)
 
-    assert client.get("/chatting/alerts", headers=FETCH).status_code == 403
+    assert not _chats_on_notifications(client)
     assert client.get("/chatting", headers=FETCH).status_code == 403
     home = client.get("/home", headers=PAGE)
     assert home.status_code == 200
     assert 'href="/chatting"' not in home.text
 
 
-def test_an_admins_manager_keeps_the_chats_after_the_fix(manager):
-    assert manager.get("/chatting/alerts", headers=FETCH).status_code == 200
+def test_an_admins_manager_keeps_the_chats_after_the_fix(manager, chat_line):
+    assert _chats_on_notifications(manager)
 
 
-def test_an_admins_manager_loses_the_chats_when_the_admin_is_deactivated(boss, manager):
+def test_an_admins_manager_loses_the_chats_when_the_admin_is_deactivated(
+    boss, manager, chat_line
+):
     user_store.set_active(boss, active=False)
 
-    assert manager.get("/chatting/alerts", headers=FETCH).status_code == 403
+    assert not _chats_on_notifications(manager)
     assert manager.get("/home", headers=PAGE).status_code == 200
 
 
@@ -168,7 +183,7 @@ def test_an_admin_adds_a_manager_for_any_user():
         data={"email": "m2@example.com", "role": "manager", "owner_id": str(plain)},
     )
 
-    assert for_a_va.status_code == 400  # a VA employs nobody
+    assert for_a_va.status_code == 400
     assert user_store.by_email("m1@example.com") is None
     assert nobody.status_code == 400
     assert "employer" in nobody.text

@@ -1,6 +1,3 @@
-"""web/clone_long/video.py: real ffmpeg -- cut one piece, join pieces,
-keep the picture's shape (16:9 in, 16:9 out)."""
-
 import json
 import subprocess
 from pathlib import Path
@@ -61,7 +58,6 @@ def _probe(path: Path) -> dict:
 
 
 def _rgb(path: Path, at: float = 0) -> tuple[int, int, int]:
-    """The average colour of the frame at `at` seconds."""
     raw = subprocess.run(
         [
             "ffmpeg",
@@ -108,7 +104,6 @@ def test_a_plans_pieces_add_up_to_the_source(tmp_path):
 
 @pytest.mark.parametrize("size", ["1280x720", "720x1280", "640x640"])
 def test_cut_and_join_keep_the_pictures_shape(tmp_path, size):
-    """16:9 in, 16:9 out: nothing is scaled, cropped or padded."""
     src = _clip(tmp_path / "src.mp4", 4, size=size)
     parts = [
         TOOLS.cut(src, Piece(start=0, length=2), tmp_path / "a.mp4"),
@@ -142,7 +137,7 @@ def test_join_plays_the_parts_one_after_another_silent(tmp_path, audio):
     )
 
     assert TOOLS.length(out) == pytest.approx(6, abs=0.2)
-    assert _probe(out)["audio"] is False  # a long clone has no sound
+    assert _probe(out)["audio"] is False
     assert [p.name for p in out.parent.iterdir()] == ["joined.mp4"]
 
 
@@ -164,8 +159,6 @@ def test_join_keeps_the_pieces_sound_when_asked(tmp_path, colour_match):
 
 
 def test_colour_match_pulls_every_piece_to_the_first_pieces_colour(tmp_path):
-    """The second piece came out tinted: joined, it plays in the first
-    piece's colour; the matched copies are not left behind."""
     parts = [
         _clip(tmp_path / "first.mp4", 2, colour="0x808080"),
         _clip(tmp_path / "second.mp4", 2, colour="0x8c7464"),
@@ -186,8 +179,6 @@ def test_colour_match_pulls_every_piece_to_the_first_pieces_colour(tmp_path):
 
 
 def test_colour_match_never_pushes_a_dark_piece_to_white(tmp_path):
-    """A piece that is mostly dark (a fade, a night shot) is pulled at most
-    x1.33 per channel, not by the 12x its average asks for."""
     parts = [
         _clip(tmp_path / "first.mp4", 2, colour="0x787878"),
         _clip(tmp_path / "dark.mp4", 2, colour="0x0a0a0a"),
@@ -207,8 +198,6 @@ def test_colour_match_never_pushes_a_dark_piece_to_white(tmp_path):
 def test_colour_match_writes_its_copies_only_in_the_runs_work_folder(
     tmp_path, monkeypatch
 ):
-    """The output folder is every job's: two joins at once must never
-    share a copy's name there."""
     written = []
     real_write = VideoTools._write
 
@@ -236,8 +225,6 @@ def test_colour_match_writes_its_copies_only_in_the_runs_work_folder(
 
 
 def test_a_colour_match_failing_part_way_leaves_nothing_behind(tmp_path):
-    """The third piece cannot be read: the copy already made of the second
-    is removed, and the failure names ffmpeg, not its command line."""
     good = _clip(tmp_path / "good.mp4", 1)
     broken = tmp_path / "broken.mp4"
     broken.write_bytes(b"not a video")
@@ -270,8 +257,6 @@ def test_without_colour_match_each_piece_keeps_its_own_colour(tmp_path):
 
 
 def test_last_frame_is_the_videos_very_last_frame(tmp_path):
-    """The next chained piece starts from it: only the last 0.1 s (one
-    frame at 10 fps) is blue, and that is the frame taken."""
     video = tmp_path / "video.mp4"
     subprocess.run(
         [
@@ -310,8 +295,6 @@ def test_join_takes_names_with_quotes_and_spaces(tmp_path):
 
 
 def test_a_failed_join_leaves_nothing_behind(tmp_path):
-    """ffmpeg dies mid-join (here: the second part is gone): no output, no
-    half-written temp file, no listing."""
     first = _clip(tmp_path / "first.mp4", 1)
 
     with pytest.raises(RuntimeError, match="ffmpeg failed"):
@@ -326,8 +309,6 @@ def test_a_failed_join_leaves_nothing_behind(tmp_path):
 
 
 def test_join_fits_pieces_of_a_near_ratio_into_the_sources_exact_shape(tmp_path):
-    """A 4:5 source: Wan makes 3:4 (its nearest), the joined video is 4:5
-    again -- scaled to fit, never cropped."""
     parts = [_clip(tmp_path / f"p{i}.mp4", 1, size="768x1024") for i in range(2)]
 
     out = TOOLS.join(
@@ -364,8 +345,6 @@ def test_shape_reads_a_sideways_phone_video_as_it_plays(tmp_path):
 
 
 def test_cut_scales_a_piece_to_the_size_given(tmp_path):
-    """A 4K source's pieces go up at most 1080 on the short side (here in
-    small): the piece is that size, the same length."""
     src = _clip(tmp_path / "src.mp4", 4, size="128x72")
 
     piece = TOOLS.cut(
@@ -377,8 +356,6 @@ def test_cut_scales_a_piece_to_the_size_given(tmp_path):
 
 
 def test_join_reads_many_pieces_of_any_size_into_one_shape(tmp_path):
-    """Pieces are read one after another (never all open at once), each
-    fitted to the one frame; the listing it reads them from is not left."""
     parts = [
         _clip(tmp_path / f"p{i}.mp4", 1, size=size, colour=colour)
         for i, (size, colour) in enumerate(
@@ -400,8 +377,6 @@ def test_join_reads_many_pieces_of_any_size_into_one_shape(tmp_path):
 
 
 def test_a_broken_piece_fails_the_join_instead_of_ending_it_early(tmp_path):
-    """ffmpeg's concat input stops quietly at a piece it cannot read (exit
-    0, a short video): the join must fail instead."""
     first = _clip(tmp_path / "first.mp4", 2)
     broken = tmp_path / "broken.mp4"
     broken.write_bytes(b"not a video")

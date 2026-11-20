@@ -1,9 +1,3 @@
-"""A failed card (`schemas/errors.py` `error_text`, _gallery_card.html): who
-refused and why in bold, what they said under it, and an "API keys" link to
-/account when the reader's own keys are the fix -- only for whoever has
-/account (a VA runs on its owner's keys). Owner 2026-11-18: twelve failed
-cards of five red lines each read as one wall."""
-
 import re
 
 from fastapi.testclient import TestClient
@@ -42,9 +36,7 @@ def test_who_and_why_come_first_and_a_key_failure_links_to_the_keys():
     page = ann.get("/clone").text
 
     assert _heads(page) == ["APIYI: No credits", "kie.ai: Wrong API key", "Stopped"]
-    # Said nothing beyond the reason: nothing under the head.
     assert _saids(page) == ["insufficient balance (HTTP 403)"]
-    # The live gallery builds the same link from this template.
     template = re.search(r'<template id="card-failed-keys">.*?</template>', page)
     assert template is not None
     assert KEY_LINK in template.group()

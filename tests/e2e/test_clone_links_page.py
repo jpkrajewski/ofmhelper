@@ -1,10 +1,3 @@
-"""/clone-links in a real browser, every outside service faked (see
-conftest.py): Check cleans or refuses the paste, Generate's dialog prices
-each link from the preview stream, Remove leaves a link out of what is
-sent, a good reel lands in the VA's own GOOD REELS, Stop stops a Generate,
-nothing is asked without Google Drive, and an open AI decision stays open
-while its card is polled."""
-
 import re
 import time
 from email.parser import BytesParser
@@ -25,18 +18,13 @@ from ofmhelpers.integrations.gdrive.fake import FakeDrive
 pytestmark = pytest.mark.e2e
 
 GOOGLE = "va.google@example.com"
-# A fake reel is generated in ~1 s plus the poll's backoff.
 RESULT_TIMEOUT_MS = 30_000
-# The page asks /clone-links/reviews every 4 s while a block is unsettled.
 REVIEW_POLL_TIMEOUT_MS = 15_000
 PRICE = re.compile(r"^\$\d+\.\d\d$")
-# What the page sends once Generate is pressed (live-gallery.js's own
-# /gallery/latest poll is not one of them).
 ASKS = re.compile(r"/clone-links/(?:check|previews|run)$")
 
 
 def _open(va: Session, subject: Path, api_key: str) -> None:
-    """/clone-links with kie.ai, `api_key` and one subject picked."""
     assert va.goto("/clone-links") == 200
     va.page.select_option("#provider-select", "kie")
     va.page.fill("#api-key", api_key)
@@ -46,7 +34,6 @@ def _open(va: Session, subject: Path, api_key: str) -> None:
 
 
 def _generate(va: Session) -> Locator:
-    """Presses Generate: the confirm dialog's tiles."""
     va.page.click('#clone-links-form button[type="submit"]')
     expect(va.page.locator("#clone-links-confirm")).to_be_visible()
     return va.page.locator("#clone-links-confirm-lines .pick-tile")
@@ -59,7 +46,6 @@ def _tile(va: Session, url: str) -> Locator:
 
 
 def _confirm(va: Session) -> tuple[Request, Response]:
-    """Presses the dialog's Generate: the /run request sent and its answer."""
     run = va.page.locator("#clone-links-confirm-go")
     with (
         va.page.expect_request(lambda r: r.url.endswith("/clone-links/run")) as sent,
@@ -71,8 +57,6 @@ def _confirm(va: Session) -> tuple[Request, Response]:
 
 
 def _form_fields(request: Request) -> dict[str, list[str]]:
-    """The multipart form's text fields (files left out), each name's values
-    in the order sent."""
     head = f"Content-Type: {request.header_value('content-type')}\r\n\r\n"
     message = BytesParser(policy=HTTP).parsebytes(
         head.encode() + (request.post_data_buffer or b"")
@@ -90,7 +74,6 @@ def _card(va: Session, job_id: str) -> Locator:
 
 
 def _ready_tiles(tiles: Locator, count: int) -> None:
-    """Waits until `count` tiles are priced (their preview line came)."""
     expect(tiles).to_have_count(count)
     for i in range(count):
         expect(tiles.nth(i).locator(".pick-price")).to_have_text(
@@ -99,8 +82,6 @@ def _ready_tiles(tiles: Locator, count: int) -> None:
 
 
 def _run_good_reel(va: Session, link: str) -> str:
-    """Generates `link` with the fake's own key: its job, once its reel is in
-    GOOD REELS."""
     va.page.fill("#clone-links-text", link)
     _ready_tiles(_generate(va), 1)
     _request, run = _confirm(va)
@@ -114,10 +95,6 @@ def _run_good_reel(va: Session, link: str) -> str:
 def test_clone_links_checks_prices_runs_and_files_a_good_reel(
     va: Session, fake_drive: FakeDrive, subject_images: list[Path]
 ):
-    """Check refuses a paste with bad lines (they go to the top of the box,
-    selected) and cleans a good one; Generate prices the reel from its
-    preview and leaves the dead one out; the reel sent is checked GOOD and
-    lands in the VA's own GOOD REELS."""
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], KIE_FAKE_KEY)
     box = va.page.locator("#clone-links-text")
@@ -187,7 +164,6 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
     expect(review.locator(".why-toggle")).to_have_text("AI decision: good")
     (good,) = fake_drive.named("GOOD REELS", my_root(fake_drive, GOOGLE))
     assert len(fake_drive.names_in(good)) == 1
-    # The refused Check's 400, which Chromium logs; nothing else.
     assert va.js_errors == [
         (
             "Failed to load resource: the server responded with a status of 400"
@@ -200,9 +176,6 @@ def test_clone_links_checks_prices_runs_and_files_a_good_reel(
 def test_a_removed_tile_is_left_out_of_what_generate_sends(
     va: Session, subject_images: list[Path]
 ):
-    """Remove takes a link out of the dialog: the title, the total and the
-    button follow, and /run gets exactly the link left. (A wrong key: the
-    run fails at once, nothing generated.)"""
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], "e2e-wrong-key")
     kept = "https://www.instagram.com/reel/E2EKEEP/"
@@ -218,8 +191,6 @@ def test_a_removed_tile_is_left_out_of_what_generate_sends(
     expect(title).to_have_text("Generate 2 clones?")
     expect(total).to_have_text(f"${2 * float(one[1:]):.2f}")
     expect(go).to_be_enabled()
-    # The tiles are sorted once the stream ends, and a Remove within 400 ms
-    # of that is ignored (it may be aimed at a tile that just moved).
     previews.value.finished()
     va.page.wait_for_timeout(500)
 
@@ -242,8 +213,6 @@ def test_a_removed_tile_is_left_out_of_what_generate_sends(
 def test_generate_without_google_drive_asks_the_server_nothing(
     va: Session, subject_images: list[Path]
 ):
-    """No Drive to put the reels in: Generate says so at once -- no Check,
-    no preview read, no dialog, nothing sent."""
     _open(va, subject_images[0], KIE_FAKE_KEY)
     expect(va.page.locator(".drive-connect")).to_be_visible()
     va.page.fill("#clone-links-text", "https://www.instagram.com/reel/E2ENODRIVE/")
@@ -264,8 +233,6 @@ def test_generate_without_google_drive_asks_the_server_nothing(
 def test_stop_after_queueing_stops_that_generate(
     va: Session, subject_images: list[Path]
 ):
-    """Stop shows next to "Queued N runs." and stops that Generate: it posts
-    the first run's stop, the server names the batch /run made."""
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], "e2e-wrong-key")
     links = [
@@ -289,7 +256,7 @@ def test_stop_after_queueing_stops_that_generate(
     assert answer.value.json()["batch"] == queued["batch"]
     expect(status).to_have_text("Stopped: runs not started yet won't run.")
     expect(stop).to_be_hidden()
-    for job_id in queued["job_ids"]:  # every run ends, none left running
+    for job_id in queued["job_ids"]:
         expect(_card(va, job_id).locator(".result-failed")).to_have_count(
             1, timeout=RESULT_TIMEOUT_MS
         )
@@ -300,12 +267,9 @@ def test_stop_after_queueing_stops_that_generate(
 def test_an_open_ai_decision_stays_open_while_its_card_is_polled(
     va: Session, subject_images: list[Path], e2e_backend
 ):
-    """While a reel uploads its block is polled every few seconds and drawn
-    again: the AI decision the VA opened stays open (it closed every 4 s)."""
     connect_google(va, GOOGLE)
     _open(va, subject_images[0], KIE_FAKE_KEY)
     job_id = _run_good_reel(va, "https://www.instagram.com/reel/E2EOPEN/")
-    # Back to "uploading" (checked, not in Drive yet): what the page polls.
     now = time.time()
     with create_engine(e2e_backend.database_url).begin() as conn:
         conn.execute(
@@ -324,7 +288,6 @@ def test_an_open_ai_decision_stays_open_while_its_card_is_polled(
 
     toggle.click()
     expect(panel).to_have_js_property("hidden", value=False)
-    # The second answer is asked for only after the first was drawn.
     for _ in range(2):
         with va.page.expect_response(
             lambda r: "/clone-links/reviews?" in r.url, timeout=REVIEW_POLL_TIMEOUT_MS

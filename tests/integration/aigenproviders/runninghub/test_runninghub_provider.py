@@ -1,8 +1,3 @@
-"""RunningHub behind the shared interface, on its fake at the wire
-(runninghub/fake.py answers like the Standard Model API: HTTP 200, the
-code in the body): upload, submit, query, every documented error code onto
-the shared errors, and Wan 3.0 reference-to-video as /clone sends it."""
-
 from pathlib import Path
 
 import pytest
@@ -67,9 +62,7 @@ def test_the_body_fills_required_defaults_and_sends_seconds_as_a_string():
     body = wire_body(spec, {"prompt": "p", "duration": 15}).model_dump()
 
     assert body["duration"] == "15"
-    # Required by RunningHub, left out by a form that kept the default.
     assert (body["resolution"], body["aspectRatio"]) == ("1080P", "adaptive")
-    # The docs' sample asset URLs never become defaults.
     assert "videoUrls" not in body
     assert "imageUrls" not in body
 

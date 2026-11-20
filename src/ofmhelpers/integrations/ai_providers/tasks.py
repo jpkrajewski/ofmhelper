@@ -1,21 +1,3 @@
-"""Which provider request a job is waiting on, kept in Redis.
-
-Written the moment a request is accepted and removed once its result is
-saved (or it failed for good). While it is here:
-
-- a re-run of the job (recovery, a worker restart) picks the same request
-  back up instead of paying for a second generation;
-- `features/jobs/recovery.py` can finish a job whose poll gave up, with the key the
-  request was made on -- a key pasted into a form is in no env var.
-
-The key is why this is Redis with a TTL and not the job row: a job's params
-are shown on its page and must never carry it.
-
-A job may make several requests, one per `part` (a long /clone video is
-generated in pieces, 2026-10-23): each part is remembered on its own key, so
-a re-run resumes every piece already paid for; `forget` drops them all.
-"""
-
 import time
 
 from pydantic import BaseModel, Field
@@ -32,14 +14,12 @@ _PREFIX = "aigen:task:"
 
 class ProviderTask(BaseModel):
     job_id: str
-    # Which of the job's requests: 0 for a job that makes one.
     part: int = 0
     provider: str
     model: str
     task_id: str
     api_key: str
     created_at: float = Field(default_factory=time.time)
-    # How it ended (`settle`): what the job row keeps of it once saved.
     state: str | None = None
     cost_usd: float | None = None
     seconds: float | None = None
@@ -50,13 +30,10 @@ class ProviderTask(BaseModel):
 
 
 def _key(job_id: str, part: int = 0) -> str:
-    """Part 0 keeps the key every job had before parts."""
     return f"{_PREFIX}{job_id}" if part == 0 else f"{_PREFIX}{job_id}:{part}"
 
 
 def remember(task: ProviderTask) -> None:
-    """A failed write is logged, not raised: the generation is already paid
-    for, and losing only its resumability beats failing it."""
     try:
         get_redis().set(
             _key(task.job_id, task.part),
@@ -77,8 +54,6 @@ def recall(job_id: str, part: int = 0) -> ProviderTask | None:
 
 
 def settle(job_id: str, part: int, state: str, cost_usd: float | None) -> None:
-    """How the job's request ended and what it cost, noted on the remembered
-    task: `of_job` reads it when the job is saved."""
     task = recall(job_id, part)
     if task is None:
         return
@@ -94,7 +69,6 @@ def settle(job_id: str, part: int, state: str, cost_usd: float | None) -> None:
 
 
 def of_job(job_id: str) -> list[ProviderTask]:
-    """Every remembered request of the job, by part."""
     try:
         redis = get_redis()
         keys = [_key(job_id), *redis.scan_iter(f"{_PREFIX}{job_id}:*")]
@@ -115,8 +89,6 @@ def _sent_key(job_id: str, part: int) -> str:
 
 
 def forget_part(job_id: str, part: int) -> None:
-    """One ended request of the job, so its part can be sent again (the
-    other parts stay remembered)."""
     try:
         get_redis().delete(_key(job_id, part))
     except RedisError:
@@ -124,10 +96,6 @@ def forget_part(job_id: str, part: int) -> None:
 
 
 def forget(job_id: str) -> None:
-    """Every part of the job, and every submit of it still waiting for its
-    answer: a callback after this finds nothing to finish (a job forgotten
-    after a refusal must not come back to life and pay for its pieces
-    again)."""
     try:
         redis = get_redis()
         redis.delete(
@@ -140,9 +108,6 @@ def forget(job_id: str) -> None:
 
 
 def waiting(job_id: str) -> bool:
-    """Whether a submit of the job is still waiting for its answer: until its
-    callback names it, the job must not be run again (that would send it again
-    and maybe pay twice)."""
     try:
         return any(get_redis().scan_iter(f"{_SENT_PREFIX}{job_id}:*"))
     except RedisError:
@@ -151,10 +116,6 @@ def waiting(job_id: str) -> bool:
 
 
 def remember_sent(task: ProviderTask) -> None:
-    """A submit is on its way and its id not known yet (`task_id` empty): if
-    the answer is lost (a timeout after the provider made it), the provider's
-    callback names the id and `found` turns this into the job's task. Not
-    under `_PREFIX`, so recovery never sweeps it."""
     try:
         get_redis().set(
             _sent_key(task.job_id, task.part),
@@ -168,7 +129,6 @@ def remember_sent(task: ProviderTask) -> None:
 
 
 def sent(job_id: str, part: int = 0) -> ProviderTask | None:
-    """The submit of `job_id`'s `part` whose answer never came, if any."""
     try:
         raw = get_redis().get(_sent_key(job_id, part))
     except RedisError:
@@ -185,9 +145,6 @@ def forget_sent(job_id: str, part: int = 0) -> None:
 
 
 def found(job_id: str, part: int, task_id: str) -> ProviderTask | None:
-    """The lost answer of a noted submit, told by the provider: remembered as
-    the job's task (the waiting run picks it up, or recovery once the job
-    failed). None when nothing was waiting for it."""
     noted = sent(job_id, part)
     if noted is None:
         return None
@@ -198,7 +155,6 @@ def found(job_id: str, part: int, task_id: str) -> ProviderTask | None:
 
 
 def remembered() -> list[ProviderTask]:
-    """Every task still remembered: what recovery sweeps."""
     redis = get_redis()
     tasks = []
     for key in redis.scan_iter(f"{_PREFIX}*"):

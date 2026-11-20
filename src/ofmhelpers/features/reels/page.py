@@ -1,9 +1,3 @@
-"""What /reels shows and does behind its routes
-(web/routers/downloads/reels.py): the watch list and its groups, the one feed
-of every watched profile's reels under the page's filters, and the picked
-reels downloaded -- handed back as a file or put into the asset store for
-/clone."""
-
 import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -49,7 +43,6 @@ logger = get_logger(__name__)
 
 _DOWNLOADS = TypeAdapter(list[ReelDownload])
 
-# The follower multiples offered as chips.
 _RATIO_STEPS = (2, 3, 5, 10)
 
 _MILLION = 1_000_000
@@ -66,15 +59,11 @@ class ProfileMoved(BaseModel):
 
 
 class Filters(BaseModel):
-    """The feed's filters. Every chip link keeps the other two."""
-
     group: str | None = None
     rank: str | None = None
     ratio: int | None = None
 
     def includes(self, item: FeedItem) -> bool:
-        """Whether the feed shows `item` under these filters; never a reel
-        past `max_duration_s`, even one stored by an older scan."""
         length = item.reel.duration_s
         return (
             (length is None or length <= settings.instagram.max_duration_s)
@@ -83,7 +72,6 @@ class Filters(BaseModel):
         )
 
     def url(self, path: str, **changes: str | int | None) -> str:
-        """`path` with these filters, `changes` applied, as its query."""
         query = {
             k: v for k, v in self.model_copy(update=changes).model_dump().items() if v
         }
@@ -91,24 +79,16 @@ class Filters(BaseModel):
 
 
 class FeedPage(BaseModel):
-    """One page of the feed plus the next page's offset, None on the last --
-    the absence of a next offset is what ends the scroll."""
-
     feed: list[FeedItem]
     next_offset: int | None
 
 
 class WatchRows(BaseModel):
-    """The watch list as its rows render it."""
-
     board: Leaderboard
     groups: list[str]
 
 
 class PageView(FeedPage, WatchRows):
-    """/reels: each field is a name `reels.html` reads. The chips are
-    (label, href, current) -- the rank ones (label, tier, href, current)."""
-
     feed_endpoint: str
     group_links: list[tuple[str, str, bool]]
     rank_links: list[tuple[str, str | None, str, bool]]
@@ -124,8 +104,6 @@ def _filters(group: str | None, rank: str | None, ratio: int | None) -> Filters:
 
 
 def _feed_page(filters: Filters, offset: int, owner: int | None) -> FeedPage:
-    """The filters apply before paging, so every page holds only reels they
-    keep."""
     size = settings.instagram.feed_page_size
     feed = [
         item
@@ -140,7 +118,6 @@ def _feed_page(filters: Filters, offset: int, owner: int | None) -> FeedPage:
 
 
 def _group_links(filters: Filters, owner: int | None) -> list[tuple[str, str, bool]]:
-    """The feed's group chips (label, href, current)."""
     return [("All", filters.url("/reels", group=None), not filters.group)] + [
         (g, filters.url("/reels", group=g), g == filters.group)
         for g in list_groups(owner)
@@ -148,13 +125,10 @@ def _group_links(filters: Filters, owner: int | None) -> list[tuple[str, str, bo
 
 
 def _short(views: int) -> str:
-    """1_000_000 -> "1M", 200_000 -> "200k"."""
     return f"{views // _MILLION}M" if views >= _MILLION else f"{views // 1000}k"
 
 
 def _rank_links(filters: Filters) -> list[tuple[str, str | None, str, bool]]:
-    """The feed's rank chips (label, tier, href, current), best rank first,
-    each labelled with its view range top-down ("1M-500k")."""
     ceilings = [None] + [floor for floor, _ in VIEW_TIERS[:-1]]
     return [("All", None, filters.url("/reels", rank=None), not filters.rank)] + [
         (
@@ -170,7 +144,6 @@ def _rank_links(filters: Filters) -> list[tuple[str, str | None, str, bool]]:
 
 
 def _ratio_links(filters: Filters) -> list[tuple[str, str, bool]]:
-    """The feed's follower-multiple chips (label, href, current)."""
     return [("Any", filters.url("/reels", ratio=None), not filters.ratio)] + [
         (
             f"\N{MULTIPLICATION SIGN}{n}+",
@@ -205,16 +178,10 @@ def page_view(
 def feed_page(
     scope: int, group: str | None, rank: str | None, ratio: int | None, offset: int
 ) -> FeedPage:
-    """The next page of cards."""
     return _feed_page(_filters(group, rank, ratio), offset, scope)
 
 
 def cover(code: str, scope: int) -> Path:
-    """A feed card's cover, small and kept (`thumbs.py`). Only reels of the
-    profiles `scope` watches (the scan and the kept file are shared, who may
-    fetch is not): one of somebody else's answers like one that is not
-    there. The source URL comes from the stored scan, never from the
-    request."""
     found = next(
         (i.reel for i in FeedItem.of(list_watched(None, scope)) if i.reel.code == code),
         None,
@@ -236,8 +203,6 @@ def watch_rows(scope: int, group: str | None) -> WatchRows:
 
 
 def new_group(name: str, owner_id: int) -> str:
-    """A group every dropdown offers before any profile is in it: its stored
-    name (trimmed, lower case)."""
     group = GroupForm(group=name).group
     if not group:
         msg = "Name the group"
@@ -247,16 +212,10 @@ def new_group(name: str, owner_id: int) -> str:
 
 
 def add(profiles: str, group: str, owner_id: int) -> WatchAdded:
-    """Adds every profile on its own line to `group` and queues the first
-    scan of the new ones. A profile already watched is only moved to
-    `group` (when one is given) and left to its rescan, if rescans are on
-    (`watch.py`). One bad line rejects the lot, before anything is added."""
     form = WatchForm(profiles=profiles, group=group)
     try:
         usernames = form.usernames
     except ValueError as exc:
-        # `WatchForm.usernames` words its own refusal (the lines that are no
-        # profile): that sentence is the page's.
         raise RefusedError(str(exc)) from exc
     if not usernames:
         msg = "Add at least one profile"
@@ -275,7 +234,6 @@ def _handle(username: str) -> str:
 
 
 def move(username: str, group: str, owner_id: int) -> ProfileMoved:
-    """A watch-list row's group dropdown: moves the profile ("" = no group)."""
     handle = _handle(username)
     target = GroupForm(group=group).group
     if not set_group(handle, target or None, owner_id):
@@ -285,7 +243,6 @@ def move(username: str, group: str, owner_id: int) -> ProfileMoved:
 
 
 def remove(username: str, owner_id: int) -> str:
-    """The handle no longer watched."""
     handle = _handle(username)
     if not unwatch(handle, owner_id):
         msg = f"@{handle} is not watched"
@@ -293,12 +250,7 @@ def remove(username: str, owner_id: int) -> str:
     return handle
 
 
-# --- the picked reels ----------------------------------------------------------
-
-
 class PickedFile(BaseModel):
-    """The picked reels as one file to send; `folder` goes once it is sent."""
-
     path: Path
     media_type: str
     folder: Path
@@ -312,9 +264,6 @@ def _download(client: InstagramClient, reel: ReelDownload, job_dir: Path) -> Pat
 
 
 def _picked(reels: str, scope: int) -> list[ReelDownload]:
-    """The page's picks, each a reel of a profile `scope` watches: one of
-    somebody else's (or of no scan) answers like one that is not there, as
-    its cover does (`cover`)."""
     try:
         picked = _DOWNLOADS.validate_json(reels)
     except ValidationError as exc:
@@ -332,7 +281,6 @@ def _picked(reels: str, scope: int) -> list[ReelDownload]:
 
 
 def _download_picked(reels: str, scope: int) -> list[Path]:
-    """The picked reels (the page's JSON) saved as mp4s in a fresh job dir."""
     picked = _picked(reels, scope)
     client = InstagramClient()
     job_dir = make_job_dir(uploads_root() / "reels")
@@ -346,14 +294,11 @@ def _download_picked(reels: str, scope: int) -> list[Path]:
         msg = "Could not download a reel — rescan the profile and retry"
         raise UnavailableError(msg) from exc
     except Exception:
-        # Any other failure is still a crash, but leaves no folder behind.
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
 
 
 def picked_file(reels: str, scope: int) -> PickedFile:
-    """The picked reels as a file: the mp4 itself for one, a zip for more
-    (stored, not deflated: H.264 does not compress further)."""
     files = _download_picked(reels, scope)
     job_dir = files[0].parent
     if len(files) == 1:
@@ -366,9 +311,6 @@ def picked_file(reels: str, scope: int) -> PickedFile:
 
 
 def clone(reels: str, scope: int, assets_root: Path) -> Redirect:
-    """Downloads the picked reels into the asset store and answers with the
-    /clone URL that opens with them picked. The store keeps its own link to
-    each file, so the job dir goes."""
     files = _download_picked(reels, scope)
     try:
         paths = [

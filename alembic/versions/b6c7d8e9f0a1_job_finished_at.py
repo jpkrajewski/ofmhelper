@@ -1,15 +1,3 @@
-"""jobs.finished_at: when a job reached done/failed
-
-With `created_at` (the submit) it gives how long a run took, which /clone
-shows on each card and turns into the next run's estimate. Existing rows
-get NULL: their finish time was never recorded, so they carry no duration.
-
-Revision ID: b6c7d8e9f0a1
-Revises: a5b6c7d8e9f0
-Create Date: 2026-10-22 01:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

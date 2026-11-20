@@ -1,8 +1,3 @@
-"""/privacy and /terms (routers/legal.py): open to anyone signed out -- the
-Google OAuth consent screen links to them and its reviewers fetch them
-without a session (2026-11-08: both answered 401, the app's verification
-stalled for months) -- and linked from the landing page's footer."""
-
 import pytest
 from fastapi.testclient import TestClient
 from signin import sign_in
@@ -33,8 +28,6 @@ def test_the_legal_pages_open_signed_out(anon, path, title):
 
 
 def test_the_privacy_policy_says_what_google_review_asks_for(anon):
-    """Restricted scope: what is accessed and why, the Limited Use
-    statement, how it is stored and deleted, a contact."""
     text = anon.get("/privacy").text
     assert "<code>https://www.googleapis.com/auth/drive</code>" in text
     assert LIMITED_USE in text
@@ -47,7 +40,7 @@ def test_the_privacy_policy_says_what_google_review_asks_for(anon):
 
 
 def test_the_contact_email_shows_only_when_set(anon, monkeypatch):
-    monkeypatch.setenv("OFM_CONTACT_EMAIL", "")  # outranks a .env value
+    monkeypatch.setenv("OFM_CONTACT_EMAIL", "")
     for path in ("/privacy", "/terms"):
         assert "mailto:" not in anon.get(path).text
 

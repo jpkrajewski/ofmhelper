@@ -1,8 +1,3 @@
-"""A /clone-links run as the queue names it: `run.run_clone_link` with the
-/clone run it is made with. What Generate queues and recovery re-runs
-(`features/jobs/registry.py` `RESUMABLE`). `run_clone` is looked up here when
-called."""
-
 from typing import Any
 
 from ofmhelpers.features.clone.run import run_clone

@@ -1,33 +1,13 @@
-"""The Snapchat caption bar: a translucent black strip across the frame's
-lower part with white centred text (the classic snap-caption look).
-
-Measured off a reference snap video (2026-10-29, 2160x3840) -- the fractions
-below are of the frame's height, so any output size gets the same look:
-
-- bar: full width, 5.0% of the frame's height, black at 61% opacity; centred
-  at 70% of it (the reference had it at 49.4%, user 2026-11-03: "lower, not in
-  middle"; still above the 22% Instagram's Reels UI covers at the bottom);
-- text: white, centred in the bar, bounding box 2.29% of the frame's height;
-- font: regular-weight Arial/Helvetica class (Liberation Sans is metrically
-  identical to Arial and ships with Linux images; DejaVu is the last resort
-  and is noticeably wider, so it is only a fallback).
-
-`render` writes a full-frame RGBA PNG; the video transformer overlays it as
-the last filter-graph segment (over vignette, grain, everything).
-"""
-
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 from ofmhelpers.config import settings
 
-# Fractions of the frame height, measured from the reference (BAR_CENTER: chosen).
 BAR_H = 0.0500
 BAR_CENTER = 0.70
 BAR_ALPHA = 0.61
 TEXT_BBOX_H = 0.0229
-# Arial / Liberation Sans: rendered bbox height = 0.94 * point size.
 _FONT_BBOX_RATIO = 0.94
 
 _FONT_ENV = "OFM_SNAPCHAT_FONT"
@@ -40,7 +20,6 @@ _FONT_CANDIDATES = (
 
 
 def find_font() -> str:
-    """The caption font: $OFM_SNAPCHAT_FONT, else the first installed candidate."""
     chosen = settings.repurpose.snapchat_font
     if chosen and Path(chosen).is_file():
         return chosen
@@ -55,7 +34,6 @@ def find_font() -> str:
 
 
 def render(text: str, size: tuple[int, int], path: Path) -> Path:
-    """The caption as a full-frame transparent PNG at `path`."""
     w, h = size
     bar_h = round(BAR_H * h)
     bar_y0 = round(BAR_CENTER * h - bar_h / 2)

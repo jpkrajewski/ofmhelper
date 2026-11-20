@@ -1,9 +1,3 @@
-"""The back of an iPhone as an SVG, drawn from the catalog: the body at the
-model's real size class (millimetres), in the finish's color, with the
-camera layout that tells models apart at a glance (`CameraLayout`). Every
-card and the phone dialog's preview use it, so no photo is stored or
-fetched anywhere. A new layout = one drawing function in `_LAYOUTS`."""
-
 from collections.abc import Callable
 from functools import lru_cache
 
@@ -16,19 +10,14 @@ from ofmhelpers.schemas.phone_catalog.models import (
     SizeClass,
 )
 
-# Width, height and corner radius (mm) of each size class: SE, the minis,
-# the 6.1" phones, Plus / Max / Air.
 _BODY: dict[SizeClass, tuple[float, float, float]] = {
     SizeClass.COMPACT: (67.3, 138.4, 9.0),
     SizeClass.MINI: (64.2, 131.5, 9.5),
     SizeClass.STANDARD: (71.5, 147.0, 11.0),
     SizeClass.MAX: (77.6, 160.8, 12.0),
 }
-# Room around the largest body, so every phone sits on the same canvas and
-# a mini looks smaller than a Max.
 _CANVAS = (90.0, 170.0)
 _UNKNOWN = "#4b4b57"
-# Luma above which a finish counts as light (raised parts drawn darker).
 _LIGHT_LUMA = 150
 
 
@@ -37,7 +26,6 @@ def _rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _mix(a: str, b: str, t: float) -> str:
-    """`a` moved `t` (0..1) of the way to `b`."""
     ca, cb = _rgb(a), _rgb(b)
     mixed = (round(x + (y - x) * t) for x, y in zip(ca, cb, strict=True))
     return "#{:02x}{:02x}{:02x}".format(*mixed)
@@ -49,12 +37,9 @@ def _light(hex_color: str) -> bool:
 
 
 class _Pen:
-    """Collects the SVG elements of one drawing, in paint order."""
-
     def __init__(self, finish: str) -> None:
         self.finish = finish
         self.parts: list[str] = []
-        # Bumps and plateaus: a shade off the back, darker on light finishes.
         self.raised = _mix(finish, "#000000" if _light(finish) else "#ffffff", 0.1)
         self.edge = _mix(finish, "#000000", 0.35)
 
@@ -85,7 +70,6 @@ class _Pen:
         )
 
     def dot(self, cx: float, cy: float, r: float) -> None:
-        """LiDAR or a microphone: a small dark disc."""
         self.add(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" fill="#16161b"/>')
 
 
@@ -95,10 +79,6 @@ class _Corner(BaseModel, frozen=True):
 
 
 class _Camera(BaseModel, frozen=True, arbitrary_types_allowed=True):
-    """One phone's camera, drawn with `pen` inside the body whose top-left
-    corner is (x, y) and width `w`; coordinates are millimetres. Each layout
-    is a method."""
-
     pen: SkipValidation[_Pen]
     x: float
     y: float
@@ -128,7 +108,6 @@ class _Camera(BaseModel, frozen=True, arbitrary_types_allowed=True):
         pen.lens(cx, py + ph - pw / 2, pw * 0.38)
 
     def _square(self, s: float) -> _Corner:
-        """The square bump of side `s`; its top-left corner."""
         bx, by = self.x + 4.5, self.y + 4.5
         self.pen.plate(bx, by, s, s, s * 0.24)
         return _Corner(x=bx, y=by)
@@ -216,8 +195,6 @@ _LAYOUTS: dict[CameraLayout, Callable[[_Camera], None]] = {
 
 @lru_cache(maxsize=512)
 def render(model: PhoneModel | None, finish: Finish | None) -> str:
-    """The SVG document of `model`'s back in `finish`; a plain phone in a
-    neutral color for one the catalog does not list (or no color)."""
     color = finish.hex if finish else _UNKNOWN
     size = model.size if model else SizeClass.STANDARD
     w, h, r = _BODY[size]

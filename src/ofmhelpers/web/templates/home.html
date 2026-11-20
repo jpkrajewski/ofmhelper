@@ -3,16 +3,12 @@
 {% block content %}
 {{ ui.page_header("Content Ops") }}
 
-{# Every page this person may open (schemas/nav.py): on a phone the nav
-   sits behind a toggle, so home keeps every tool one tap away. #}
 <div class="card-grid">
     {% for item in nav_of(viewer_of(request)) %}
     {{ ui.link_card(item.href, item.label, item.icon) }}
     {% endfor %}
 </div>
 
-{# Admins: where the box stands (routers/home.py /home/server, fetched by
-   static/js/home-server.js so /home itself never waits for it). #}
 {% if can(request, "server-status") %}
 <section class="server" id="server" data-src="/home/server">
     <div class="server-head">

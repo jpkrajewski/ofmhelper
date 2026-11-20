@@ -1,7 +1,3 @@
-"""What /viral shows and does behind its routes
-(web/routers/downloads/viral.py): the search picked and the earlier ones, a
-search started, the worker's half of it, and a finished search as one zip."""
-
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -19,13 +15,10 @@ from ofmhelpers.integrations.instagram import ProfileHandle
 from ofmhelpers.schemas import Job, JobQueued, ViralFile, ViralSearch
 
 TASK = "viral_reels"
-# The earlier searches the page lists.
 _HISTORY = 20
 
 
 class PageView(BaseModel):
-    """/viral: each field is a name `viral.html` reads."""
-
     current: ViralSearch | None
     searches: list[ViralSearch]
     top: int
@@ -34,16 +27,11 @@ class PageView(BaseModel):
 
 
 class Archive(BaseModel):
-    """A search's reels as one zip, in a `folder` of its own (the route
-    deletes it once sent)."""
-
     path: Path
     folder: Path
 
 
 def _shown(actor: str, job_id: str | None, newest: list[Job]) -> Job | None:
-    """The search picked (`?job=`), else the newest; a `job_id` that is not a
-    search of theirs shows none."""
     if not job_id:
         return newest[0] if newest else None
     picked = get_job(job_id, actor)
@@ -65,7 +53,6 @@ def page_view(actor: str, job_id: str | None, files_prefix: str) -> PageView:
 
 
 def start(profile: str, actor: str, run: Callable[..., list[ViralFile]]) -> JobQueued:
-    """`run`: the worker's half, as RQ stores it (the router's `run_viral`)."""
     try:
         handle = ProfileHandle(username=profile).username
     except ValidationError as exc:
@@ -76,8 +63,6 @@ def start(profile: str, actor: str, run: Callable[..., list[ViralFile]]) -> JobQ
 
 
 def found(job_id: str, profile: str, folder: Path) -> list[ViralFile]:
-    """The worker's half: the profile's top reels saved in `folder`; what
-    Apify read and charged goes on the job's params."""
     search = find_viral(profile, folder)
     merge_params(job_id, {"scanned": search.scanned, "cost_usd": search.cost_usd})
     return [
@@ -97,8 +82,6 @@ def found(job_id: str, profile: str, folder: Path) -> list[ViralFile]:
 
 
 def archive(job_id: str, actor: str, zips_root: Path) -> Archive:
-    """Every reel of a finished search as one zip (stored: H.264 does not
-    compress further), named after the profile."""
     job = get_job(job_id, actor)
     if job is None or job.task != TASK:
         msg = "No such search"
@@ -117,6 +100,5 @@ def archive(job_id: str, actor: str, zips_root: Path) -> Archive:
 
 
 def run_viral(job_id: str, profile: str) -> list[ViralFile]:
-    """The worker's half, in a fresh folder."""
     folder = make_job_dir(uploads_root() / "viral")
     return found(job_id, profile, folder)

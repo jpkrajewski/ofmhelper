@@ -1,6 +1,3 @@
-"""Downloaded images/videos are saved camera-roll style, not under the
-generator's name: IMG_1234.png, VID_1234.mp4. Other files keep their name."""
-
 import re
 
 from ofmhelpers.schemas import Job
@@ -28,7 +25,7 @@ def test_prefixes_come_from_config(monkeypatch):
 
 def test_asset_card_carries_the_download_name():
     card = asset_card("kie_result.jpg", 0, "/nanobanana/files/j1")
-    assert card.name == "kie_result.jpg"  # still shown on the card
+    assert card.name == "kie_result.jpg"
     assert re.fullmatch(r"IMG_\d{4}\.jpg", card.download_name)
 
 
@@ -52,16 +49,12 @@ def test_digit_count_comes_from_config(monkeypatch):
 
 
 def test_one_file_always_gets_the_same_name_and_files_differ():
-    """A polled gallery must render the same bytes while nothing changed
-    (ETag/304); the digits still differ from file to file."""
     assert download_name("a.png") == download_name("a.png")
     names = {download_name(f"result_{i}.png") for i in range(50)}
     assert len(names) > 40
 
 
 def test_one_name_in_two_jobs_saves_under_two_names():
-    """Every clean run's first image is IMG_0001.png; each saved as the same
-    IMG_3133.png, and the browser made it "IMG_3133 (9).png"."""
     assert download_name("IMG_0001.png") == "IMG_3133.png"
     one = download_name("IMG_0001.png", "job-one")
     assert one == download_name("IMG_0001.png", "job-one")

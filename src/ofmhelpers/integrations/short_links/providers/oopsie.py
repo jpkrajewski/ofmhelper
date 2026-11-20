@@ -1,7 +1,3 @@
-"""Oopsie (oopsie.bio): each link is a page; ours are Direct Deeplinks
-(`theme.page_type` "direct") with the 18+ gate (`theme.age_gate`) on.
-API reference: links/CLAUDE.md."""
-
 import re
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
@@ -24,7 +20,6 @@ from ofmhelpers.schemas.link_catalog.models import (
 lazy from ofmhelpers.schemas.link_catalog.models import NewLink
 
 _CREATED = 201
-# An hourly bucket's label: "07:00".
 _HOUR_LABEL = re.compile(r"\d{2}:00")
 _NOT_FOUND = 404
 _CONFLICT = 409
@@ -40,8 +35,6 @@ def _timestamp(value: str | None) -> float | None:
 
 
 def _destination(page: dict[str, Any]) -> str:
-    """Where a page sends visitors: a deeplink's destination, else its first
-    enabled link."""
     theme = page.get("theme") or {}
     if theme.get("page_type") == "direct":
         return theme.get("destination_url") or ""
@@ -126,7 +119,6 @@ class OopsieProvider(LinkProvider):
         )
 
     def enable_adult(self, remote_id: str) -> None:
-        # `theme` is replaced whole on PATCH: send it back with the gate on.
         theme = {**(self._page(remote_id).get("theme") or {}), "age_gate": True}
         response = self._call(
             "PATCH", f"/api/pages/{quote(remote_id, safe='')}", json={"theme": theme}
@@ -143,7 +135,6 @@ class OopsieProvider(LinkProvider):
 
     def daily(self, remote_ids: list[str], start: date, end: date) -> list[LinkDays]:
         days = [start + timedelta(d) for d in range((end - start).days + 1)]
-        # Labels are "MM-DD": unambiguous within the 93 days a range may span.
         by_label = {d.strftime("%m-%d"): d for d in days}
         return [
             LinkDays(
@@ -158,8 +149,6 @@ class OopsieProvider(LinkProvider):
         ]
 
     def hourly(self, remote_ids: list[str], day: date) -> list[LinkHours]:
-        # A one-day range comes back by the hour, labels "HH:00" (UTC: `tz`),
-        # checked on the real API 2026-11-08.
         return [
             LinkHours(
                 remote_id=slug,
@@ -179,8 +168,6 @@ class OopsieProvider(LinkProvider):
     def _activity(
         self, remote_ids: list[str], start: date, end: date
     ) -> dict[str, list[tuple[str, int, int]]]:
-        """Per page, its buckets (label, views, clicks) over [start, end]: by
-        day, or by the hour for one day (Oopsie picks)."""
         found: dict[str, list[tuple[str, int, int]]] = {}
         batch = self.info().stats_batch
         for i in range(0, len(remote_ids), batch):
@@ -203,7 +190,7 @@ class OopsieProvider(LinkProvider):
             )
             per = data.get("perSlug") or data["timeSeries"]
             series = per["series"]
-            if isinstance(series, dict):  # one page: the plain shape
+            if isinstance(series, dict):
                 series = [{"slug": slugs[0], **series}]
             for item in series:
                 found[item["slug"]] = list(

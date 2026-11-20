@@ -1,12 +1,3 @@
-"""Values in preset and device JSON, drawn once per run:
-
-- a number: used as is;
-- [lo, hi]: uniform between the two (a symmetric range like [-1, 1] covers
-  both directions);
-- a list of words: one of them, picked;
-- a chance: 0..1, true that often.
-"""
-
 import random
 
 Span = tuple[float, float]
@@ -37,5 +28,4 @@ def chance(probability: float | None, rng: random.Random) -> bool:
 
 
 def even(v: float) -> int:
-    """Nearest even integer, at least 2 (yuv420p needs even sides)."""
     return max(2, round(v / 2) * 2)

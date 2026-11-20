@@ -1,24 +1,3 @@
-"""`Repurpose`: one source -> one repurposed copy, built up from JSON presets.
-
-    Repurpose("in.mp4", "out.mp4").apply_json_preset("hard").run()
-
-    (
-        Repurpose(src, dst, seed=7)
-        .apply_video_preset("extreme", special=True)
-        .apply_audio_preset("low")
-        .apply_device_preset("iphone17")
-        .run()
-    )
-
-Nothing is drawn until `run()`: then the source is probed, every knob drawn
-once from the run's seed, the ffmpeg command built (`command.py`) and run,
-and the device's byte patches applied. A recorder device (`iphone17`) hands
-the copy to `ofmhelpers.media.recorder` instead: straight from the source when no
-knob is set, else from a near-lossless `master` with the knobs applied.
-`run()` returns what was drawn and the exact command, so a copy can be
-reproduced or checked (`checker/`).
-"""
-
 import datetime
 import random
 import tempfile
@@ -52,14 +31,11 @@ from ofmhelpers.media.repurpose.transformations.video import (
 )
 
 _DEFAULT_DEVICE = "strip"
-# What a recorder device encodes the edited copy into first.
 _MASTER_DEVICE = "master"
 _DEFAULT_TIMEOUT_S = 600
 
 
 class EncodeStep(BaseModel):
-    """One ffmpeg encode: its command and everything drawn for it."""
-
     command: list[str]
     video: VideoDraws
     audio: AudioDraws
@@ -71,16 +47,12 @@ class RunResult(BaseModel):
     output: Path
     source: Source
     device: str
-    # Our encode (the master, for a recorder device); None: recorder only.
     step: EncodeStep | None
-    # The camera recording, for a recorder device.
     recording: Recording | None
     seconds: float
 
 
 class Repurpose:
-    """One source -> one repurposed copy; chain the apply_* calls, then run()."""
-
     def __init__(
         self,
         src: str | Path,
@@ -90,8 +62,6 @@ class Repurpose:
         recorded_at: datetime.datetime | None = None,
         timeout_s: int = _DEFAULT_TIMEOUT_S,
     ) -> None:
-        """`recorded_at`: the copy's creation time (timezone-aware); None =
-        now (a recorder device: now in its time zone)."""
         self.src = Path(src)
         self.dst = Path(dst)
         self.seed = seed
@@ -103,19 +73,16 @@ class Repurpose:
         self.device: Device = load_device(_DEFAULT_DEVICE)
 
     def apply_video_preset(self, name: str, *, special: bool = False) -> Self:
-        """The preset's video knobs (+ its `video_special` ones)."""
         preset = load_preset(name)
         self.video = preset.video.merged(preset.video_special if special else None)
         return self
 
     def apply_audio_preset(self, name: str, *, special: bool = False) -> Self:
-        """The preset's audio knobs (+ its `audio_special` ones)."""
         preset = load_preset(name)
         self.audio = preset.audio.merged(preset.audio_special if special else None)
         return self
 
     def apply_json_preset(self, name: str, *, special: bool = False) -> Self:
-        """A whole ready-made preset: video, audio and the device it names."""
         preset = load_preset(name)
         self.apply_video_preset(name, special=special)
         self.apply_audio_preset(name, special=special)
@@ -129,7 +96,6 @@ class Repurpose:
         return self
 
     def apply_device_preset(self, name: str) -> Self:
-        """How the copy is encoded and tagged (`devices/<name>.json`)."""
         self.device = load_device(name)
         self.device_name = name
         return self

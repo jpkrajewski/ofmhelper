@@ -1,6 +1,3 @@
-"""downloaders/kvs.py: a KVS tube page's player data -> its best video.
-The page is a real one's player data (gayhub.com, 2026-10-23)."""
-
 from pathlib import Path
 
 import pytest
@@ -11,8 +8,6 @@ from ofmhelpers.integrations.downloaders.kvs import KvsPage
 
 PAGE = Path(__file__).parents[2] / "fixtures" / "downloads" / "kvs_page.html"
 URL = "https://www.gayhub.com/video/168792/clip/"
-# What yt-dlp's own unscrambler makes of the 1080p address with this page's
-# license code -- checked live: it answered 200 video/mp4, 13,911,295 bytes.
 REAL_1080P = (
     "https://www.gayhub.com/get_file/1/23f0108764a6db818572bdae4b6fe10887cfd94aca"
     "/168000/168792/168792_1080p.mp4/"
@@ -38,8 +33,8 @@ def test_the_best_quality_is_unscrambled_with_the_license_code():
     "html",
     [
         "<html>an ordinary page</html>",
-        "<script>var flashvars = {video_id: '1'};</script>",  # no license
-        "<script>var flashvars = {license_code: '$1'};</script>",  # no video
+        "<script>var flashvars = {video_id: '1'};</script>",
+        "<script>var flashvars = {license_code: '$1'};</script>",
     ],
 )
 def test_a_page_without_a_kvs_player_is_not_one(html):

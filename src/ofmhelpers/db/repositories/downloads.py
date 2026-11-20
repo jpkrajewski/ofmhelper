@@ -1,7 +1,3 @@
-"""Downloaded files (`downloads`): one row per file of a download job.
-Uncached: the sweep, a paste and a job's finish all write, and every read
-decides something (fetch again or not, remove or keep)."""
-
 from datetime import datetime
 
 from sqlalchemy import and_, delete, exists, func, select, update
@@ -24,9 +20,6 @@ class DownloadRepository(CachedRepository):
     def record(
         self, user_id: int, job_id: str, files: list[DownloadedFile], now: datetime
     ) -> None:
-        """The files a job fetched just now, each at its position: a new row,
-        or the row a replay finds there updated in place (stored again, its
-        paths, `last_used_at`; `created_at` kept). One transaction."""
         row = DownloadRow
         with session_scope() as s:
             for file in files:
@@ -53,8 +46,6 @@ class DownloadRepository(CachedRepository):
                 )
 
     def drop_from(self, job_id: str, position: int) -> None:
-        """The job's rows at `position` and after: a replay that got fewer
-        files than the run before."""
         with session_scope() as s:
             s.execute(
                 delete(DownloadRow).where(
@@ -81,8 +72,6 @@ class DownloadRepository(CachedRepository):
             return _download(row) if row else None
 
     def newest_of(self, user_id: int, urls: list[str]) -> list[Download]:
-        """For each of `urls` `user_id` downloaded: the files of the newest
-        job that fetched it, by url then position. Their own only."""
         if not urls:
             return []
         row, later = DownloadRow, aliased(DownloadRow)
@@ -102,15 +91,9 @@ class DownloadRepository(CachedRepository):
             return [_download(r) for r in rows]
 
     def stored_by(self, user_ids: frozenset[int], urls: list[str]) -> list[Download]:
-        """For each of `urls` one of `user_ids` (a team: an owner and their
-        VAs) has stored: the files of the newest job that fetched it and
-        still has them all, by url then position. Inside a team a link is
-        the same video whoever pasted it (owner 2026-11-12); beyond it the
-        file may have been fetched with someone else's login cookies."""
         if not urls or not user_ids:
             return []
         row, later, gone = DownloadRow, aliased(DownloadRow), aliased(DownloadRow)
-        # A job counts only while every file it fetched for the link is stored.
         whole = ~exists().where(
             gone.job_id == row.job_id, gone.url == row.url, ~gone.stored
         )
@@ -137,8 +120,6 @@ class DownloadRepository(CachedRepository):
             return [_download(r) for r in rows]
 
     def file_shared(self, download_id: int, file_path: str) -> bool:
-        """Whether another row still stored is the same file on disk
-        (someone else's card of a link reused, not fetched again)."""
         with session_scope() as s:
             return s.execute(
                 select(
@@ -151,7 +132,6 @@ class DownloadRepository(CachedRepository):
             ).scalar_one()
 
     def touch(self, job_id: str, url: str, now: datetime) -> None:
-        """Asked for again: `last_used_at` of the job's files of `url`."""
         with session_scope() as s:
             s.execute(
                 update(DownloadRow)
@@ -160,7 +140,6 @@ class DownloadRepository(CachedRepository):
             )
 
     def removed_in(self, job_ids: list[str]) -> list[RemovedFile]:
-        """The files of these jobs removed on purpose (`stored` false)."""
         if not job_ids:
             return []
         with session_scope() as s:
@@ -172,8 +151,6 @@ class DownloadRepository(CachedRepository):
             return [RemovedFile(job_id=j, position=p) for j, p in rows]
 
     def by_asset(self, user_id: int, fragment: str) -> list[Download]:
-        """`user_id`'s removed files whose asset-store copy holds `fragment`
-        in its path (a content digest), the newest first."""
         with session_scope() as s:
             rows = s.execute(
                 select(DownloadRow)
@@ -186,12 +163,7 @@ class DownloadRepository(CachedRepository):
             ).scalars()
             return [_download(r) for r in rows]
 
-    # --- the retention sweep (features/downloads/cleanup.py) ---------------------
-
     def idle(self, before: datetime, after_id: int, limit: int) -> list[Download]:
-        """Stored files nobody asked for and no job used since `before`, by
-        id from `after_id` on, at most `limit`: what a sweep round looks at.
-        Never one whose own job is running (it is being fetched again)."""
         running = exists().where(
             JobRow.id == DownloadRow.job_id, JobRow.status == "running"
         )
@@ -218,7 +190,6 @@ class DownloadRepository(CachedRepository):
             )
 
     def note_use(self, download_id: int, used_at: datetime) -> None:
-        """A job used it at `used_at`: `last_used_at` moves there if later."""
         with session_scope() as s:
             s.execute(
                 update(DownloadRow)
@@ -229,9 +200,6 @@ class DownloadRepository(CachedRepository):
     def mark_removed(
         self, download_id: int, idle_since: datetime, now: datetime
     ) -> bool:
-        """Not stored any more, unless it was asked for or used after
-        `idle_since` (what the sweep saw) or is gone already: False then,
-        and nothing is to be deleted."""
         with session_scope() as s:
             found = s.execute(
                 update(DownloadRow)
@@ -246,7 +214,6 @@ class DownloadRepository(CachedRepository):
             return found.scalar_one_or_none() is not None
 
     def put_back(self, download_id: int) -> None:
-        """Stored after all: its file could not be deleted."""
         with session_scope() as s:
             s.execute(
                 update(DownloadRow)
@@ -255,8 +222,6 @@ class DownloadRepository(CachedRepository):
             )
 
     def asset_shared(self, download_id: int, asset_path: str) -> bool:
-        """Whether another file still stored has the same asset-store copy
-        (the same content downloaded twice)."""
         with session_scope() as s:
             return s.execute(
                 select(

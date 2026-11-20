@@ -1,15 +1,3 @@
-"""chat_accounts: someone who connected a chat platform that has no API keys
-
-Fanvue issues no keys: an account authorises the app once and it keeps tokens, which
-rotate on every refresh. Encrypted (`EncryptedText`, `OFM_VAULT_KEY`). New table only;
-nothing moves.
-
-Revision ID: b7a6c5d4e3f2
-Revises: d9c8b7a6e5f4
-Create Date: 2026-11-05 03:40:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

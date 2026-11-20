@@ -1,5 +1,3 @@
-"""`/password/{token}`: the one-time link an admin makes on /users."""
-
 from pydantic import BaseModel, ValidationError
 
 from ofmhelpers.features.signin import credentials
@@ -11,8 +9,6 @@ _DEAD_LINK = "This link is used, expired or wrong. Ask an admin for a new one."
 
 
 class LinkPage(BaseModel):
-    """The set-password page: whose link it is, and what went wrong."""
-
     owner: User | None
     error: str | None = None
     status_code: int = 200

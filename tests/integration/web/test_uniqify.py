@@ -1,5 +1,3 @@
-"""/uniqify: one video in, N re-encoded variants out (utils/uniqify.py)."""
-
 import io
 import json
 import random
@@ -151,7 +149,6 @@ def test_run_end_to_end_serves_every_copy(client, tmp_path, monkeypatch):
     assert download.status_code == 200
     with zipfile.ZipFile(io.BytesIO(download.content)) as zf:
         assert zf.namelist() == ["promo_001.mp4", "promo_002.mp4"]
-    # Only the uploaded source and the zip are left on disk.
     [job_dir] = [p for p in tmp_path.iterdir() if p.is_dir()]
     assert sorted(p.name for p in job_dir.iterdir()) == ["promo.zip", "source_in.mp4"]
     assert "promo.zip" in client.get("/uniqify").text

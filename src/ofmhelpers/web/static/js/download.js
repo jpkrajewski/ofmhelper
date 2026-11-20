@@ -1,24 +1,6 @@
-/*
- * /download-assets: hand a finished download's video to /clone or
- * /clone-long. Each file is its own card; its [Clone | Clone long] posts the
- * job id and the card's file index, and the server answers the URL to open
- * with that video already picked.
- *
- * A reloaded card carries the control from the server
- * (_download_gallery_card.html); a card that finishes while the page is open
- * has it cloned in on gallery:card-ready -- its video is what decides it,
- * the same test the server makes.
- *
- * A video is kept on the server for a while, then only its poster is
- * (features/downloads/cleanup.py). Such a card has one Download: it asks
- * for the video again (POST /download-media/{job}/replays) and the card is
- * polled like a new download until the video is back. A link pasted again
- * downloads nothing twice: the answer names the jobs that hold it
- * (`again`), and their cards go to the first place.
- */
 (() => {
     const PREFIX = "/download-media";
-    // Pages of the gallery read to find the cards of jobs asked for again.
+
     const PAGES = 5;
 
     const SEND_TO = ".send-to-clone, .send-to-long, .send-to-edit";
@@ -54,8 +36,6 @@
         }
     }
 
-    // A live-finished video download: give it the same control reloaded cards
-    // already have.
     function decorate(card) {
         if (card.dataset.task !== "download_media") return;
         if (card.querySelector(".send-to")) return;
@@ -71,9 +51,6 @@
         return [...gallery.querySelectorAll(`.result-item[data-job-id="${jobId}"]`)];
     }
 
-    // Every card of the job becomes one "downloading…" card, polled by
-    // generation.js like a download just started: it draws the files again
-    // when the job is done.
     function showFetching(gallery, jobId) {
         const [first, ...rest] = cardsOf(gallery, jobId);
         if (!first) return;
@@ -112,15 +89,13 @@
         }
     }
 
-    // The server's cards of these jobs, from the gallery's own pages (the
-    // same partial the page renders).
     async function freshCards(gallery, jobIds) {
         const endpoint = gallery.dataset.galleryEndpoint;
         const wanted = new Set(jobIds);
         const found = [];
         let offset = 0;
         for (let page = 0; page < PAGES && offset !== null; page++) {
-            // The endpoint may carry its own query (the date filter).
+
             const url = new URL(endpoint, window.location.origin);
             url.searchParams.set("offset", String(offset));
             const r = await fetch(url);
@@ -137,9 +112,6 @@
         return found;
     }
 
-    // Links downloaded before: their cards, as the server draws them now,
-    // at the first place. One being fetched again comes back running and is
-    // polled.
     async function showFirst(gallery, jobIds) {
         if (!jobIds?.length) return;
         const fresh = await freshCards(gallery, jobIds);
@@ -151,9 +123,6 @@
         window.Generation.resumePendingCards();
     }
 
-    // A player whose video was removed while the page was open: the server
-    // answers 410, and the card is drawn again as the server has it now (its
-    // poster and the Download that fetches it), where it is.
     async function onMediaError(gallery, video) {
         const card = video.closest(".result-item[data-job-id]");
         if (!card || card.dataset.checkedGone) return;
@@ -170,9 +139,6 @@
         first.replaceWith(...fresh);
     }
 
-    // "Download from Drive sheet": the button rests (disabled, counting
-    // down in its label) after every click, and after a reload for what is
-    // left of that rest (`data-cooldown-s`).
     const SHEET_LABEL = "Download from Drive sheet";
 
     function sheetLabel(btn, text) {
@@ -220,7 +186,7 @@
                 return;
             }
             if (answer.job_id) {
-                // The server draws the running card; generation.js polls it.
+
                 window.location.reload();
                 return;
             }
@@ -251,7 +217,7 @@
         });
         if (!gallery) return;
         gallery.addEventListener("gallery:card-ready", (e) => decorate(e.target));
-        // `error` does not bubble: caught on the way down.
+
         gallery.addEventListener(
             "error",
             (e) => {

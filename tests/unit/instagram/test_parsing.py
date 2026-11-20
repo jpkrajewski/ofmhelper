@@ -1,7 +1,3 @@
-"""Parsing only, fully offline: Instagram's answers in tests/fixtures/scraper
-read by `instagram.pages` (HTML) and `instagram.models` (GraphQL/REST JSON),
-noise and all."""
-
 import pytest
 from repo_paths import FIXTURES
 
@@ -97,7 +93,6 @@ def test_timeline_page_videos_have_an_mp4_and_a_length_photos_none():
     assert second is not None
     assert first.duration_s == 9.5
     assert second.duration_s == 64.5
-    # Regional hosts are moved onto the global one.
     assert first.video_url.startswith(f"https://{GLOBAL_CDN_HOST}/")
     assert page.next_cursor is None
 

@@ -1,7 +1,3 @@
-"""job_assets / serve_job_file: one result-to-files mapping for both result
-shapes (one entry per file, or grouped per source URL), so a card's file index
-always resolves to the file it shows."""
-
 import re
 
 import pytest

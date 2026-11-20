@@ -1,8 +1,3 @@
-"""/trials/{login} in a real browser: the page never reloads, a click shows
-on its card at once, Select + Upload asks first, then files exactly the
-selected copies (the bug of 2026-10-30: the checkboxes were disabled before the
-form was read, so the upload went out empty), a click spammed starts one job."""
-
 import re
 import shutil
 import subprocess
@@ -21,13 +16,12 @@ from ofmhelpers.schemas import DeviceFields, LoginFields
 
 pytestmark = pytest.mark.e2e
 
-VA_ID = 2  # e2e conftest `_seed_users`
+VA_ID = 2
 GOOGLE = "va.google@example.com"
 _CAMERA_NAME = re.compile(r"VID_\d{4}\.mp4")
 
 
 def _clip(path: Path) -> Path:
-    """A real 1 s 9:16 video: the page makes its poster and preview."""
     subprocess.run(
         [
             "ffmpeg", "-y", "-loglevel", "error",
@@ -40,8 +34,6 @@ def _clip(path: Path) -> Path:
 
 
 def _folder_with_copies(va: Session, app_dir: Path, jobs_idle, count: int) -> int:
-    """Their phone with @vee.ig, its Drive folder made by Sync, and `count`
-    made copies in its trials state (the app's own uploads folder)."""
     connect_google(va, GOOGLE)
     jobs_idle()
     phone = devices.add_device(
@@ -111,7 +103,6 @@ def test_selected_copies_upload_without_a_reload(
     names = fake_drive.names_in(trials)
     assert len(names) == 2
     assert all(_CAMERA_NAME.fullmatch(n) for n in names)
-    # Reloaded: in Drive, nothing selected, all can join the next batch.
     va.goto(f"/trials/{login}")
     expect(page.locator(".tr-pick")).to_have_count(3)
     expect(upload).to_be_disabled()
@@ -164,9 +155,6 @@ def test_upload_cancelled_uploads_nothing_and_a_new_batch_replaces_the_old(
 def test_generate_reads_posted_and_a_new_copy_lands_first_without_a_reload(
     va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
 ):
-    """The fake Drive's files carry no bytes, so the job cannot make the reel it
-    finds: it reads POSTED and says so. Then the copy lands the way a job writes
-    it: the open page puts it first, in POSTED's order, on the next poll."""
     login = _folder_with_copies(va, app_dir, jobs_idle, 1)
     (account,) = fake_drive.named("vee.ig - Vee", my_root(fake_drive, GOOGLE))
     (posted,) = fake_drive.named("POSTED", account)
@@ -187,7 +175,7 @@ def test_generate_reads_posted_and_a_new_copy_lands_first_without_a_reload(
     work = app_dir / "uploads" / "trials" / str(VA_ID) / str(login)
     state = FolderState.model_validate_json((work / "state.json").read_text())
     new = next(r for r in state.reels if r.name == "new.mp4")
-    assert state.reels[0].key == new.key  # newest in POSTED, the old one undated
+    assert state.reels[0].key == new.key
     shutil.copy(work / "out" / "key0.mp4", work / "out" / "new.mp4")
     new.out, new.status, new.caption, new.made = (
         "out/new.mp4",
@@ -219,14 +207,12 @@ def test_choosing_a_caption_shows_on_its_card_at_once(
     card = va.page.locator('.tr-reel[data-key="key0"]')
     choices = card.locator(".tr-choice")
     expect(choices).to_have_count(5)
-    expect(choices.first).to_be_disabled()  # the one on the copy
+    expect(choices.first).to_be_disabled()
 
     choices.nth(2).click()
 
     expect(card.locator(".tr-pending")).to_be_visible()
     jobs_idle()
-    # The job ends (this fake copy has no source to make it from): the card
-    # comes back by itself, with the choice kept.
     expect(card.locator(".tr-video")).to_be_visible(timeout=15_000)
     expect(choices.nth(2)).to_have_attribute("aria-pressed", "true")
     assert va.js_errors == []
@@ -253,8 +239,6 @@ def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
             text("SELECT count(*) FROM jobs WHERE task = 'trials'")
         ).scalar_one()
     assert started == 1
-    # The job ends (this fake copy has no source to make it from): the card
-    # comes back by itself, with its short reason.
     expect(card.locator(".tr-video")).to_be_visible(timeout=15_000)
     expect(button).to_be_enabled()
 
@@ -262,8 +246,6 @@ def test_regenerate_shows_at_once_and_ten_clicks_start_one_job(
 def test_a_copy_made_while_the_page_is_open_moves_to_the_top(
     va: Session, fake_drive: FakeDrive, app_dir: Path, jobs_idle
 ):
-    """Owner 2026-11-15: done trials showed at the end. The open page puts
-    the newest made copy first on its next poll, no reload."""
     login = _folder_with_copies(va, app_dir, jobs_idle, 3)
     va.goto(f"/trials/{login}")
     page = va.page
@@ -272,10 +254,9 @@ def test_a_copy_made_while_the_page_is_open_moves_to_the_top(
     expect(cards.first).to_have_attribute("data-key", "key0")
     work = app_dir / "uploads" / "trials" / str(VA_ID) / str(login)
     state = FolderState.model_validate_json((work / "state.json").read_text())
-    state.reels[2].made_at = datetime.now(UTC)  # key2 made just now
+    state.reels[2].made_at = datetime.now(UTC)
     (work / "state.json").write_text(state.model_dump_json(), encoding="utf-8")
 
-    # Any job starts the page's polling.
     page.locator('.tr-reel[data-key="key1"] form[action$="/regenerate"] button').click()
 
     expect(cards.first).to_have_attribute("data-key", "key2", timeout=15_000)

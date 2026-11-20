@@ -1,24 +1,3 @@
-"""
-ofmhelpers/web/account_removal.py
-
-One account is one thing across /accounts, /phones and Drive (2026-10-22:
-a VA removed accounts on /accounts, they stayed on the phones, and the
-Drive sweep made the folders he deleted again). Removed in any place, it
-goes from all three:
-
-- /accounts Remove (`remove_accounts`): its logins leave every phone,
-  archived -- password kept, an admin restores them on /phones; its Drive
-  folder goes to the trash; tracking stops (history kept).
-- /phones, a login off its last phone or a phone deleted (`logins_leaving`,
-  before the delete): its folder goes to the trash, tracking stops; the
-  login itself is deleted as /phones says.
-- Its Drive folder deleted by hand (`folder_deleted`, from the sweep): the
-  login is archived, tracking stops; the folder is not made again.
-
-Drive failures never block a removal: logged, the folder stays (/drive
-lists it under folders no login owns).
-"""
-
 from ofmhelpers.db.stores import devices
 from ofmhelpers.db.stores.tracked_accounts import untrack
 from ofmhelpers.features.drive import folders as drive_folders
@@ -34,8 +13,6 @@ def _tracked_ids(logins: list[DeviceLogin]) -> list[int]:
 
 
 def _drive_logins(logins: list[DeviceLogin]) -> list[DeviceLogin]:
-    """The logins of a service that has an /accounts platform (Instagram):
-    the ones with a Drive folder."""
     return [
         x
         for x in logins
@@ -53,7 +30,6 @@ def _unique(phones: list[Device], wanted) -> list[DeviceLogin]:
 
 
 def remove_accounts(account_ids: list[int], owner: int) -> int:
-    """/accounts Remove: everywhere. How many accounts stopped."""
     wanted = set(account_ids)
     logins = _unique(
         devices.list_devices(owner),
@@ -67,9 +43,6 @@ def remove_accounts(account_ids: list[int], owner: int) -> int:
 
 
 def logins_leaving(owner: int, device_id: int, login_id: int | None = None) -> None:
-    """Before /phones deletes a phone (`login_id` None) or takes one login
-    off it: the logins no other phone has are leaving for good -- their
-    folders to the trash, their accounts untracked."""
     phones = devices.list_devices(owner)
     count: dict[int, int] = {}
     for phone in phones:
@@ -93,8 +66,6 @@ def logins_leaving(owner: int, device_id: int, login_id: int | None = None) -> N
 
 
 def folder_deleted(owner: int, login_id: int) -> None:
-    """The sweep found the login's Drive folder deleted by hand: the
-    account goes everywhere, its login archived (password kept)."""
     logins = _unique(
         devices.list_devices(owner), lambda _phone, login: login.id == login_id
     )

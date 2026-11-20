@@ -1,6 +1,3 @@
-"""Who did what to the rows people edit (`audit_log`, written by the
-database's triggers: `db/repositories/audit_log.py`)."""
-
 from functools import lru_cache
 
 from ofmhelpers.db.repositories import AuditLogRepository

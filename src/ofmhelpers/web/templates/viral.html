@@ -2,10 +2,6 @@
 {% import "components/ui.html" as ui %}
 {% import "_asset_media.html" as am %}
 {% import "_reel_counts.html" as rc %}
-{# /viral (routers/downloads/viral.py): a profile in, its most played reels
-   out. `current`: the search shown (schemas.ViralSearch) or None;
-   `searches`: the newest ones, each a link. static/js/viral.js posts the
-   form and reloads once a running search is done. #}
 {% block content %}
 {{ ui.page_header("Viral", scan ~ " newest reels a search · up to $" ~ "%.2f"|format(max_usd)) }}
 

@@ -1,14 +1,3 @@
-"""The shared half of APIYI's image families: their APIs answer the image in
-the one request (no task id, no polling: docs.apiyi.com faq image-async-api).
-`submit` makes the call and records what came back under an id of ours
-(`<out_dir>/apiyi/results/<id>.json`: the result URLs, or the files saved
-from base64), so `status`, a resume and recovery read it like any task and
-the runner downloads it with its retries.
-
-A call whose answer is lost is paid and gone (APIYI keeps no record): it is
-never sent again (`client.maybe_paid`).
-"""
-
 import base64
 import secrets
 from abc import abstractmethod
@@ -35,10 +24,8 @@ _SUFFIX = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 
 
 class Made(BaseModel):
-    """What one call answered: URLs to fetch, or images given inline."""
-
     urls: list[str] = []
-    images: list[tuple[str, str]] = []  # (mime type, base64)
+    images: list[tuple[str, str]] = []
 
 
 class Recorded(BaseModel):
@@ -50,18 +37,14 @@ def _results_dir() -> Path:
 
 
 def _strip_data_url(data: str) -> str:
-    """Pure base64 (some answers still carry a `data:...;base64,` prefix)."""
     return data.split(",", 1)[1] if data.startswith("data:") else data
 
 
 class SyncImages(Family):
-    """An image API answering in the request."""
-
     tag = "img"
 
     @abstractmethod
-    def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made:
-        """The call; what it answered. Refusals raise the shared errors."""
+    def make(self, client: ApiyiClient, spec: ModelSpec, payload: Payload) -> Made: ...
 
     def submit(
         self, client: ApiyiClient, spec: ModelSpec, payload: Payload, job: str
@@ -100,7 +83,7 @@ class SyncImages(Family):
     def download(self, client: ApiyiClient, url: str, dest: Path) -> Path | None:  # noqa: ARG002
         path = local_path(url)
         if path is None:
-            return None  # a URL: the plain download (no key on it)
+            return None
         if not path.is_file():
             msg = f"{PROVIDER}: {path.name} is gone from this server"
             raise ProviderUnavailableError(msg)

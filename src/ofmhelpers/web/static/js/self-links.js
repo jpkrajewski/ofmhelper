@@ -1,6 +1,3 @@
-// Self links page: the scope picker navigates to its chosen URL, and the
-// activity line chart gets a hover tooltip (dots and line are drawn
-// server-side in self_links.html).
 (() => {
     const scope = document.getElementById("self-scope");
     if (scope) {

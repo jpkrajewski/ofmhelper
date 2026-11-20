@@ -1,8 +1,3 @@
-"""/pictures: presets (a prompt + reference images) and runs -- one Nano
-Banana Pro job per picture to recreate, the preset's images first, at the
-picture's aspect ratio. The agency's presets are everyone's to use, a
-user's own are theirs only. kie.ai is faked at the wire; jobs run inline."""
-
 import io
 import json
 import os
@@ -138,7 +133,6 @@ def test_a_preset_name_is_unique_per_owner(agency, va):
         "/pictures/presets", data={"name": "danewalker", "prompt": "p"}, files=files
     )
     assert again.status_code == 409
-    # Another user may use the name.
     assert _preset(va, "danewalker")["name"] == "danewalker"
 
 
@@ -176,7 +170,7 @@ def test_deleting_a_preset_leaves_its_images_for_past_jobs(agency):
 
 
 def test_each_picture_is_its_own_run_with_the_preset_first(va, agency, monkeypatch):
-    monkeypatch.setenv("OFM_PICTURES_ASPECT_RATIO", "")  # the picture's own shape
+    monkeypatch.setenv("OFM_PICTURES_ASPECT_RATIO", "")
     preset = _preset(agency)
 
     r = _run(
@@ -202,7 +196,7 @@ def test_each_picture_is_its_own_run_with_the_preset_first(va, agency, monkeypat
 
 
 def test_a_preset_too_big_for_the_model_is_refused_before_anything_runs(agency):
-    preset = _preset(agency, count=8)  # kie.ai takes 8 in all: 7 + the picture
+    preset = _preset(agency, count=8)
 
     r = _run(agency, preset["id"], _png("p.png"))
 
@@ -276,7 +270,7 @@ def test_a_fixed_shape_is_every_runs_whatever_the_picture(agency):
 
 
 def test_a_shape_the_model_lacks_is_its_nearest():
-    spec = get_spec("kie:nano-banana-pro")  # no 4:5
+    spec = get_spec("kie:nano-banana-pro")
     assert pictures.run_aspect("4:5", "/unused.png", spec, "aspect_ratio") == "3:4"
 
 
@@ -303,7 +297,6 @@ def test_editing_sets_and_clears_the_shape(agency):
 
 
 def test_kie_is_asked_for_jpeg_at_2k():
-    """User rule 2026-11-01: JPEG, 2K."""
     target = pictures.PICTURE_TARGETS["kie"]
     values = picture_targets.values(
         target,
@@ -322,8 +315,6 @@ def test_kie_is_asked_for_jpeg_at_2k():
 
 
 def test_a_reference_under_nano_banana_pros_own_limit_goes_up_untouched(tmp_path):
-    """2026-11-01: a 26 MB PNG reference went up as a JPEG copy (kie.ai's
-    default cap is 10 MB; Nano Banana Pro takes 30 MB)."""
     big = tmp_path / "face.png"
     Image.frombytes("RGB", (1900, 1900), os.urandom(1900 * 1900 * 3)).save(big)
     assert big.stat().st_size > 10 * 1024 * 1024
@@ -336,7 +327,6 @@ def test_a_reference_under_nano_banana_pros_own_limit_goes_up_untouched(tmp_path
 
 
 def test_every_picture_is_3_4_unless_its_preset_fixes_another(agency):
-    """User rule 2026-11-01: all pictures 3:4."""
     plain = _preset(agency)
     square = _preset(agency, "square", aspect="1:1")
 

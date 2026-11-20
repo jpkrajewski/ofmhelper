@@ -1,16 +1,3 @@
-"""
-Integration test for the RQ queue + worker (cache/queue.py + run_job): enqueue a
-job, run a real worker against the test Redis, and assert the job transitions
-through Postgres exactly as the API would observe it -- the durability the old
-in-process BackgroundTasks never had.
-
-Requires the compose Redis (and Postgres) up:
-    docker compose up -d postgres redis
-
-Uses SimpleWorker in burst mode -- it runs each job in-process (no os.fork, so
-it works on Windows too) and returns once the queue is drained.
-"""
-
 import pytest
 import worker_tasks
 from rq import SimpleWorker, Worker
@@ -31,8 +18,6 @@ from ofmhelpers.features.jobs.runner import run_job
 
 @pytest.fixture(autouse=True)
 def _async_broker(monkeypatch):
-    # The suite runs jobs inline (OFM_RQ_ASYNC=false); this module needs the
-    # real async path so a separate worker actually drains the queue.
     monkeypatch.setenv("OFM_RQ_ASYNC", "true")
     get_redis().flushdb()
     yield
@@ -48,7 +33,6 @@ def test_enqueued_job_runs_in_a_worker_and_finishes_in_postgres():
     job_id = create_job("seedance", {})
     get_queue().enqueue(run_job, job_id, worker_tasks.make_result, {"name": "out.mp4"})
 
-    # Not run yet -- still queued, so Postgres still shows it running.
     assert get_job(job_id).status == "running"
 
     _drain_queue()
@@ -59,8 +43,6 @@ def test_enqueued_job_runs_in_a_worker_and_finishes_in_postgres():
 
 
 def test_a_job_queued_under_run_jobs_old_path_still_runs():
-    # Jobs waiting in Redis across the deploy that moved `run_job` to
-    # features/jobs/runner.py name it where it was: RQ looks that path up.
     old_path = "ofmhelpers.db.stores.jobs.run_job"
     job_id = create_job("seedance", {})
     rq_job = get_queue().enqueue(
@@ -100,8 +82,6 @@ def test_worker_marks_a_raising_job_failed_never_stuck_running():
 
 
 def test_worker_log_description_never_carries_the_job_arguments():
-    # RQ logs the description of every job it starts; the kwargs hold the
-    # kie.ai API key.
     job_id = create_job("seedance", {})
     rq_job = enqueue(
         run_job, job_id, worker_tasks.make_result, {"name": "secret-api-key"}
@@ -112,11 +92,7 @@ def test_worker_log_description_never_carries_the_job_arguments():
     assert get_job(job_id).status == "done"
 
 
-# --- what recovery sees as live (cache.queue.active_job_ids) -----------------
-
-
 def _queue_run(queue: str) -> tuple[str, str]:
-    """A job queued on `queue` the way a router does: (app id, rq id)."""
     job_id = create_job("clone_links", {})
     rq_job = enqueue_to(
         queue, run_job, job_id, worker_tasks.make_result, {"name": "out.mp4"}
@@ -137,15 +113,12 @@ def test_a_clone_links_run_waits_and_runs_on_its_own_queue():
 
 
 def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
-    """Review #57: rq's dequeue BLMOVEs the job into `<queue>:intermediate`
-    before any worker records it as running. In between it is in neither
-    the queue nor a worker, and a sweep failed it as cut off."""
     monkeypatch.setenv("OFM_RECOVERY_ORPHAN_GRACE_S", "0")
     default_id, _ = _queue_run(QueueName.DEFAULT)
     links_id, _ = _queue_run(QueueName.CLONE_LINKS)
     for name in (QueueName.DEFAULT, QueueName.CLONE_LINKS):
         queue = get_queue(name)
-        get_redis().lmove(queue.key, queue.intermediate_queue_key)  # the dequeue
+        get_redis().lmove(queue.key, queue.intermediate_queue_key)
         assert queue.get_job_ids() == []
 
     assert active_job_ids() == {default_id, links_id}
@@ -157,11 +130,9 @@ def test_a_job_a_worker_is_taking_off_the_queue_still_counts(monkeypatch):
 def test_a_job_a_live_worker_runs_counts():
     job_id, rq_id = _queue_run(QueueName.CLONE_LINKS)
     queue = get_queue(QueueName.CLONE_LINKS)
-    get_redis().lrem(queue.key, 1, rq_id)  # taken off every list
+    get_redis().lrem(queue.key, 1, rq_id)
     worker = Worker([queue], connection=get_redis())
     worker.register_birth()
-    # What rq 3.0's worker does before it forks the horse: the run, recorded
-    # under the worker's name, which `Worker.all()` reads back.
     worker.prepare_execution(Job.fetch(rq_id, connection=get_redis()))
 
     assert active_job_ids() == {job_id}

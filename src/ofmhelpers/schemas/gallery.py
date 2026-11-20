@@ -1,14 +1,3 @@
-"""What a gallery renders for one job.
-
-Every tool page with a gallery (/generate, /download-assets, /clone,
-/character-sheet, /uniqify) shows its recent jobs as cards with the same core:
-the job's id, status, error, params and result assets. Their templates and the
-polling JS key off those fields, so they are one model, not a dict per router.
-
-Data only: the result's asset cards come in already built (`job_assets` in
-`routers/task_helpers`, which owns the file URLs).
-"""
-
 import json
 from typing import Any, Self
 
@@ -30,11 +19,7 @@ class JobCard(BaseModel):
     params: dict[str, Any]
     assets: list[AssetCard]
     failed_sources: list[FailedSource] = []
-    # Hidden from its gallery by its owner: shown only under "Show hidden".
     hidden: bool = False
-    # Who made it, when that is not the reader (a VA's job on its owner's
-    # gallery): the meta line names them, and the card offers no Hide (the
-    # maker's own choice).
     made_by: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
@@ -45,19 +30,16 @@ class JobCard(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def error_reason(self) -> str:
-        """The failure as one short reason ("No credits", ...)."""
         return error_reason(self.error)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def error_line(self) -> str:
-        """The failure as the card shows it: who, the reason, what they said."""
         return error_line(self.error)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def error_text(self) -> ErrorText:
-        """The failure as a failed card lays it out."""
         return error_text(self.error)
 
     @classmethod
@@ -84,20 +66,11 @@ class JobCard(BaseModel):
 
 
 class TaskCard(JobCard):
-    """A card in a gallery mixing several tools (/generate, /download-assets):
-    which tool ran it, and the router prefix generation.js polls to resume it
-    while it is still running."""
-
     task_label: str
     poll_prefix: str
-    # What its result is while it runs (generation.js draws that kind when
-    # the server does not say).
     result_kind: str = "image"
 
     def per_file(self) -> list[Self]:
-        """One card per result file, as generation.js draws a run that finishes
-        on the page. What failed shows once, on the first; a card with no file
-        (still running, failed) stays one card."""
         if not self.assets:
             return [self]
         return [
@@ -112,30 +85,16 @@ class TaskCard(JobCard):
 
 
 class CloneSource(BaseModel):
-    """The video a /clone run is made from, as its card shows it while it
-    runs and once it failed: a first frame (`/refs/thumb`); `name`, the
-    file's own, is only the picture's alt text."""
-
     name: str
     thumb_url: str
 
 
 class CloneCard(TaskCard):
-    """A /clone run's card: the shared card, plus the video it clones
-    (`source`: ten runs side by side, some failing, were told apart by
-    nothing, owner 2026-11-12) and where its result was uploaded in Drive
-    (features/drive/uploads.py)."""
-
     drive_uploads: list[DriveUpload] = []
     source: CloneSource | None = None
 
 
 class CloneLinksCard(TaskCard):
-    """A /clone-links run's card: the link it was made from (`params`) and
-    its result's review (features/clone_links/review.py: checked, then uploaded
-    into GOOD REELS or TRIAL REELS). `saved_here`: its result has a local
-    file (False: only the provider's copy, nothing to check or upload)."""
-
     review: CloneFromLink | None = None
     saved_here: bool = True
 
@@ -159,17 +118,12 @@ class CloneLinksCard(TaskCard):
 
     @property
     def missing_review(self) -> str | None:
-        """Why a done run has no review, after "Not in Drive:" (recovery
-        starts the review it lacks); None when it has one."""
         if self.status != "done" or self.review is not None:
             return None
         return ReviewReason.NOT_STARTED if self.saved_here else ReviewReason.NOT_SAVED
 
     @property
     def review_settled(self) -> bool:
-        """Nothing more will change on its own: what the page stops
-        polling. A review cut off by a restart still runs: recovery queues
-        it again, or fails it for good."""
         if self.status != "done":
             return self.status == "failed"
         return self.review is None or not self.review.running

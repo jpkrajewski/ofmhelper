@@ -1,19 +1,3 @@
-"""The public bridge: self-hosted link pages on our own custom domains.
-
-Outermost middleware, so a request to one of our bridge domains never touches
-the session/auth stack. On any other host -- the app's own domain, the
-loopback /health probe, a test's `testserver` -- it does nothing and the app
-serves the request as usual. The active-host list is cached (this runs on
-every request), and a request to the app's own host skips even that lookup.
-
-A bridge page is an 18+ gate that pops the visitor out of an in-app browser
-(Instagram, X, Telegram, the Facebook app) into their real browser, straight
-to the destination -- the same flow the rented providers use, but every hit is
-logged to our own click table with the visitor's Cloudflare geo. The page is
-byte-identical for every visitor and for a crawler (we never show reviewers a
-different destination): the only thing a crawler changes is that its view is
-not counted."""
-
 import re
 import time
 from typing import Literal
@@ -37,26 +21,17 @@ logger = get_logger(__name__)
 
 
 class _Beacon(BaseModel):
-    """The `/api/track-direct` body."""
-
     slug: str | None = None
     referrer: str | None = None
 
 
 _SLUG = re.compile(r"^[a-z0-9._-]+$", re.IGNORECASE)
 _TRACK_PATH = "/api/track-direct"
-# A crawler/scanner: its view is not counted (the page it gets is the same).
 _BOT = re.compile(
     r"bot|crawler|spider|facebookexternalhit|embed|preview|slurp|scan|lighthouse",
     re.IGNORECASE,
 )
-# The Facebook app's in-app browser: JS cannot pop it open, so we serve the
-# "open in your browser" page that re-opens the link in the real browser (the
-# gate and its tracking then run there).
 _FB_APP = re.compile(r"FBAN|FBAV|FB_IAB|FBIOS", re.IGNORECASE)
-# Kept off every search index and sent with no referrer or caching; never
-# framed by another site (clickjacking: these pages answer outside the app's
-# FrameGuardMiddleware; Kimi review 2026-11-18).
 _HEADERS = {
     "x-robots-tag": "noindex, nofollow, noarchive",
     "referrer-policy": "no-referrer",
@@ -64,7 +39,6 @@ _HEADERS = {
     "content-security-policy": "frame-ancestors 'none'",
     "cache-control": "no-store",
 }
-# In-app browser (matched against the UA) -> the analytics label we store.
 _PLATFORMS = (
     ("instagram", "Instagram"),
     ("tiktok", "TikTok"),
@@ -77,8 +51,6 @@ _PLATFORMS = (
 
 
 def _app_hosts() -> set[str]:
-    """The app's own hostnames (apex and www twin): never a bridge domain, so
-    a request to one skips the host lookup."""
     host = urlsplit(settings.web.base_url).hostname if settings.web.base_url else None
     if not host:
         return set()
@@ -98,7 +70,6 @@ def _device(ua: str) -> str | None:
     return "desktop" if ua else None
 
 
-# Order matters: Edge/Opera UAs contain "Chrome"; Chrome contains "Safari".
 _BROWSERS = (
     ("Edge", r"Edg"),
     ("Opera", r"OPR|Opera"),
@@ -110,23 +81,16 @@ _BROWSERS = (
 
 
 def _browser(ua: str) -> str | None:
-    """The browser label, computed once at write time (like platform/device),
-    so the stats page groups a column instead of re-parsing every UA."""
     if not ua:
         return None
     return next((name for name, pat in _BROWSERS if re.search(pat, ua)), "Other")
 
 
 def _is_http(url: str) -> bool:
-    """Defence in depth: the destination is an http(s) target-page URL upstream
-    (HttpUrl + Target.problem), but the bridge never hands a javascript:/data:
-    URL to the page even if a future write path forgot to validate."""
     return url.lower().startswith(("http://", "https://"))
 
 
 def _cut(value: str | None, limit: int) -> str | None:
-    """Trim an attacker-settable header/body field so one flooded row can't
-    carry kilobytes."""
     return value[:limit] if value else value
 
 
@@ -168,10 +132,6 @@ def _client_ip(request: Request) -> str:
 
 
 def _allow(request: Request) -> bool:
-    """A per-IP, per-minute cap on the public endpoints (the bridge runs
-    outside the app's write rate limiter). Over the cap the hit is still
-    served -- only the recording is skipped, so a flood can neither grow the
-    table nor poison the stats. Redis down: fail open."""
     limit = settings.links.bridge_rate_per_min
     key = f"bridge:rl:{_client_ip(request)}:{int(time.time() // 60)}"
     try:
@@ -186,8 +146,6 @@ def _allow(request: Request) -> bool:
 
 
 class BridgeMiddleware:
-    """Serves the bridge pages and the click beacon on our bridge domains."""
-
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -212,13 +170,9 @@ class BridgeMiddleware:
             slug = path.strip("/")
             if slug and "/" not in slug and _SLUG.match(slug):
                 return await self._page(request, host, slug)
-        # Any other path (static, favicon, the beacon's preflight) is the app's.
         return None
 
     async def _page(self, request: Request, host: str, slug: str) -> Response:
-        # The DB lookup, the insert and the Jinja render are all blocking; a
-        # pure-ASGI middleware is not offloaded by Starlette, so run them off
-        # the event loop or one slow hit stalls every request in the process.
         ua = request.headers.get("user-agent", "")
         link = await run_in_threadpool(self_links.bridge_target, host, slug)
         if link is None or not _is_http(link.destination):
@@ -241,8 +195,6 @@ class BridgeMiddleware:
         return response
 
     async def _track(self, request: Request, host: str) -> Response:
-        # security audit 2026-11-18: a body that is not {"slug", "referrer"}
-        # is a plain 204, one debug line, no error per request.
         try:
             body = _Beacon.model_validate_json(await request.body())
         except ValidationError:

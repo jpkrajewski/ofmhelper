@@ -1,7 +1,3 @@
-"""Nobody sees another person's work, admins included: jobs (galleries,
-status pages, files) and the reuse picker's asset store. The agency
-(password account) keeps the store root, minus everyone's `users/`."""
-
 import io
 import json
 
@@ -47,8 +43,6 @@ def assets_dir(tmp_path, monkeypatch):
 
 
 def _fake_ai_job(client: TestClient, prompt: str) -> str:
-    """A fake-provider job with one uploaded reference. Its outcome is an
-    error, so the only file it adds to the asset store is that reference."""
     r = client.post(
         "/ai/run",
         data={
@@ -126,8 +120,6 @@ def test_an_admin_cannot_reuse_a_users_file_by_path(admin, va, assets_dir):
 
 
 def test_a_second_admin_has_their_own_folder_not_the_agency_root(admin, assets_dir):
-    """Only the agency keeps the store root; any other admin is a person
-    like everyone else."""
     boss = TestClient(app)
     boss_id = sign_in(boss, ADMIN_EMAIL, Role.ADMIN).id
     _fake_ai_job(admin, "a")

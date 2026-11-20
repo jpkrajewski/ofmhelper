@@ -1,5 +1,3 @@
-"""Finishing a sign-in: from the provider's return to an `Outcome`."""
-
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
@@ -18,20 +16,15 @@ logger = get_logger(__name__)
 
 
 class Callback(BaseModel):
-    """What came back: the provider's params and this browser's request."""
-
     code: str
     state: str
     error: str
     cookie: str
-    # This request's base URL, for the redirect URI the exchange repeats.
     site: str
-    # Someone already has a session in this browser.
     signed_in: bool
 
 
 def _identity(provider: Provider, back: Callback) -> tuple[SignInState, Identity]:
-    """Who the callback says signed in. Raises `SignInError`."""
     if back.error:
         msg = f"{provider.label} sign-in was cancelled"
         raise SignInError(msg)
@@ -41,9 +34,6 @@ def _identity(provider: Provider, back: Callback) -> tuple[SignInState, Identity
 
 
 def _sync_new_drive(user_id: int, refresh_token: str | None) -> None:
-    """A Drive token just arrived: build that person's root and account
-    folders now (on the worker) instead of at the next sweep, so /clone's
-    upload and /drive work straight after connecting."""
     if refresh_token:
         enqueue(drive_folders.sync, user_id)
 
@@ -52,16 +42,11 @@ def _link(
     provider: Provider, carried: SignInState, user_id: int, identity: Identity
 ) -> Outcome:
     owner = users.get_user(user_id)
-    # A VA signs in on the password page only: no Google or Apple account
-    # is ever linked to one. Nor to a deactivated account: the link would
-    # be a way back in the day it is reactivated.
     may_link = owner is not None and owner.active and owner.role != Role.VA
     linked = may_link and users.link_identity(user_id, identity)
     note = "linked" if linked else "taken"
     if linked:
         _sync_new_drive(user_id, identity.refresh_token)
-    # Connected from a page (/clone's "Connect Google Drive", the sign-in's
-    # own Drive step): back to that page; else /account says how it went.
     back = carried.next if linked and carried.next not in (HOME, "/account") else None
     return Outcome(redirect=back or f"/account?{provider.name}={note}")
 
@@ -80,10 +65,6 @@ def _sign_in(provider: Provider, carried: SignInState, identity: Identity) -> Ou
     outcome = signed_in(user, carried.next, provider.name)
     drive = users.get_user(user.id)
     if provider.connects_drive and drive and not drive.drive_connected:
-        # Signed in, but this account has no Drive yet: the Drive consent
-        # follows at once instead of a second "Connect" someone has to find
-        # (prod, 2026-10-22: the VA signed in with the admin Google account,
-        # then had to connect again).
         query = urlencode({"link": "1", "next": safe_next(carried.next)})
         outcome.redirect = f"/auth/{provider.name}/start?{query}"
     return outcome
@@ -94,9 +75,6 @@ def finish(provider: Provider, back: Callback) -> Outcome:
         carried, identity = _identity(provider, back)
     except SignInError as exc:
         logger.warning("sign-in with %s failed: %s", provider.name, exc, exc_info=True)
-        # Someone already signed in was connecting an account (Drive): back to
-        # /account to try again, not a login page that invites a plain
-        # sign-in, which never asks for Drive (prod, 2026-10-22).
         if back.signed_in:
             return Outcome(redirect=f"/account?{provider.name}=failed")
         return Outcome(error=str(exc), status_code=400)

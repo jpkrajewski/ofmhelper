@@ -1,16 +1,3 @@
-"""Apify's API faked at the wire (OFM_FAKE_EXTERNALS, tests).
-
-Answers the calls `client.ApifyClient` makes the way Apify does: an
-account's limits, a run of the Instagram reel scraper or profile scraper
-(RUNNING when started, SUCCEEDED at its first poll) and its dataset. The reels are the Instagram
-fake's (`instagram/fake.py` profiles, newest first, videos on its fake CDN);
-a private one stores the actor's `no_items` error item ("Empty or private
-data"), an unknown one its `not_found` item. API keys: `BROKE_KEY` has no
-credit left (runs answer 402), `WRONG_KEY` is refused (401), any other
-works. `calls` records (method, path) and `inputs` each run's input, for
-assertions.
-"""
-
 import json
 import threading
 import time
@@ -32,21 +19,16 @@ REEL_SCRAPER = "apify~instagram-reel-scraper"
 PROFILE_SCRAPER = "apify~instagram-profile-scraper"
 BROKE_KEY = "fake-apify-broke"
 WRONG_KEY = "fake-apify-wrong"
-# The real actor's Free-plan prices.
 USD_PER_REEL = 0.0026
 START_USD = 0.001
 CREDIT_USD = 5.0
 
 
 class _Stored(BaseModel):
-    """A dataset item as the actor stores it (its names as aliases)."""
-
     model_config = ConfigDict(populate_by_name=True)
 
 
 class FakeItemError(_Stored):
-    """What an actor stores for a profile it could not read."""
-
     url: str
     request_error_messages: list[str] | None = Field(
         default=None, serialization_alias="requestErrorMessages"
@@ -99,17 +81,12 @@ class FakeApify:
         self.datasets: dict[str, list[dict[str, Any]]] = {}
         self.calls: list[tuple[str, str]] = []
         self.inputs: list[dict[str, Any]] = []
-        # Tests' switches: a key's credit left (default CREDIT_USD), actors
-        # whose runs end ABORTED with half their items (credit gone mid-run).
         self.credit_left: dict[str, float] = {}
         self.cut_short: set[str] = set()
         self._lock = threading.Lock()
 
-    # --- the reel scraper --------------------------------------------------
-
     @staticmethod
     def profile_items(username: str) -> list[FakeProfileItem | FakeItemError]:
-        """What the profile scraper stores for `username`."""
         profile = fake_instagram().profiles.get(username)
         if profile is None:
             return [_not_found(username)]
@@ -132,8 +109,6 @@ class FakeApify:
     def reel_items(
         username: str, limit: int, newer_than_s: float | None = None
     ) -> list[FakeReelItem | FakeItemError]:
-        """What the reel scraper stores for `username`'s newest `limit`
-        (only those posted after `newer_than_s` when given)."""
         profile = fake_instagram().profiles.get(username)
         if profile is None:
             return [_not_found(username)]
@@ -168,8 +143,6 @@ class FakeApify:
             )
             for row in rows
         ]
-
-    # --- the API -------------------------------------------------------------
 
     def handle(self, request: requests.PreparedRequest) -> FakeReply:
         url = urlsplit(request.url or "")
@@ -230,7 +203,6 @@ class FakeApify:
                     username, int(run_input.get("resultsLimit", 10)), newer
                 )
             ]
-        # As the actor stores them: its names, an error item's unset key absent.
         items = [i.model_dump(by_alias=True, exclude_none=True) for i in stored]
         cut = actor in self.cut_short
         if cut:
@@ -238,8 +210,6 @@ class FakeApify:
         run_id = uuid.uuid4().hex[:17]
         dataset_id = uuid.uuid4().hex[:17]
         reels = [i for i in items if "error" not in i]
-        # As on Apify when the run ends: its total still only the start fee,
-        # its charged reels one behind (a real 71-reel run: 67).
         run = {
             "id": run_id,
             "status": "RUNNING",
@@ -275,7 +245,6 @@ class FakeApify:
 
 
 def _newer_than(value: str | None) -> float | None:
-    """The actor's "N days" filter as a timestamp (the only form we send)."""
     if not value:
         return None
     days = int(value.split()[0])

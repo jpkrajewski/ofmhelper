@@ -1,6 +1,3 @@
-"""The daily report's parts that need nothing stored: how numbers read, when it is
-due on Warsaw's clock (summer time too), and clicks counted between two runs."""
-
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
@@ -149,7 +146,6 @@ def test_a_day_a_provider_rewrote_lower_counts_nothing_not_less():
 
 
 def test_late_clicks_on_the_day_before_the_last_run_still_count():
-    """Run at 00:30 UTC on Nov 6: Nov 5's clicks were still coming in."""
     ran = datetime(2026, 11, 6, 0, 30, tzinfo=UTC).timestamp()
     before = clicks.marks([_link(1, (_NOV5, 100, 80))], ran)
 

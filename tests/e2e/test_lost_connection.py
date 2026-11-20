@@ -1,15 +1,3 @@
-"""A running job's card must never give up on it while the job runs: prod
-2026-10-31, a phone put away mid-clone had no network, five status polls
-failed and the card turned "Lost track"; the clone finished fine three
-minutes later. In a real browser: failed polls are tried again until the
-job answers, a hidden tab does not poll at all and catches up the moment
-it is shown, and only a job that is gone ends the polling.
-
-Nor may a run vanish while its files go up: prod 2026-11-06, a picture on a
-slow uplink still uploading after 80 s showed "generating…", a refresh and
-it was gone (nginx `400 0`, the app never saw it). The card shows the
-upload, and leaving the page meanwhile asks first."""
-
 import os
 import re
 lazy from pathlib import Path
@@ -23,9 +11,7 @@ lazy from playwright.sync_api import Dialog, Route
 pytestmark = pytest.mark.e2e
 
 STATUS = "**/jobs/*/status"
-# More failed polls in a row than the card used to survive (5).
 FAILED_POLLS = 6
-# Polls retry every 2 s: six failed ones, then the answer.
 RESULT_TIMEOUT_MS = 45_000
 HIDE = """() => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
@@ -38,7 +24,6 @@ SHOW = """() => {
 
 
 def _generate(session: Session, delay_s: int) -> str:
-    """A fake image generation from the open /generate; the card's selector."""
     session.page.select_option("#provider-select", "fake")
     session.page.select_option("#model-select", "fake:image")
     session.page.fill('#model-fields [name="delay"]', str(delay_s))
@@ -49,7 +34,6 @@ def _generate(session: Session, delay_s: int) -> str:
 
 
 def _page_errors(session: Session) -> list[str]:
-    """JS errors, minus the browser's own line for each failed request."""
     return [e for e in session.js_errors if "Failed to load resource" not in e]
 
 
@@ -82,7 +66,7 @@ def test_a_hidden_tab_does_not_poll_and_catches_up_when_shown(va: Session):
     va.page.evaluate(HIDE)
 
     card = _generate(va, delay_s=1)
-    va.page.wait_for_timeout(5_000)  # the job finishes meanwhile
+    va.page.wait_for_timeout(5_000)
     assert polls == []
     expect(va.page.locator(f"{card} .spinner")).to_have_count(1)
 
@@ -97,9 +81,6 @@ WAIT = "Images/videos are still uploading to server. Wait till they are uploaded
 
 
 def _slow_generate(va: Session, tmp_path: Path) -> None:
-    """A fake generation from /generate with a ~1.9 MB picture (random pixels
-    do not compress) through a 128 KB/s uplink: ~15 s of upload. The browser's
-    own leave box, when it comes, is answered Stay."""
     side = 800
     picture = tmp_path / "big.png"
     Image.frombytes("RGB", (side, side), os.urandom(side * side * 3)).save(picture)
@@ -142,7 +123,6 @@ def test_a_slow_upload_shows_its_progress_asks_before_leaving_and_becomes_the_jo
         _slow_generate(va, tmp_path)
         expect(va.page.get_by_text("generating…")).to_have_count(0)
         expect(va.page.locator(".upload-wait")).to_have_text(WAIT)
-        # A link away: the page's own box, in these words; Wait = stay.
         va.page.click('.site-header nav a[href="/clone"]')
         leave = va.page.locator("#upload-leave")
         expect(leave).to_be_visible()
@@ -151,7 +131,6 @@ def test_a_slow_upload_shows_its_progress_asks_before_leaving_and_becomes_the_jo
         leave.get_by_role("button", name="Wait").click()
         expect(leave).to_be_hidden()
         assert va.page.url.endswith("/generate")
-        # A refresh or a closed tab: the browser's own box; dismissed = stay.
         with va.page.expect_event("dialog") as leaving:
             va.page.close(run_before_unload=True)
         assert leaving.value.type == "beforeunload"
@@ -190,7 +169,6 @@ def _fake_image_form(va: Session, picture: Path) -> None:
 
 
 def _run(va: Session) -> bytes:
-    """Generate; what the browser sent to /ai/run."""
     with va.page.expect_response(lambda r: r.url.endswith("/ai/run")) as run:
         va.page.click('#generate-form button[type="submit"]')
     assert run.value.status == 202, run.value.text()
@@ -202,9 +180,6 @@ def _run(va: Session) -> bytes:
 
 
 def test_a_picture_uploaded_once_is_never_uploaded_again(va: Session, tmp_path: Path):
-    """Prod 2026-11-11: the same picture went up whole on every Generate,
-    "still uploading" each time. Once it is in the store the page sends its
-    path: on the next Generate, and when it is picked from the computer again."""
     side = 64
     picture = tmp_path / "face.png"
     Image.frombytes("RGB", (side, side), os.urandom(side * side * 3)).save(picture)
@@ -215,11 +190,9 @@ def test_a_picture_uploaded_once_is_never_uploaded_again(va: Session, tmp_path: 
     expect(reused).to_have_count(0)
     assert b'filename="face.png"' in _run(va)
 
-    # Still in the picker: reused from now on.
     expect(reused).to_have_count(1)
     assert b'filename="face.png"' not in _run(va)
 
-    # Picked from the computer again on a fresh page.
     _fake_image_form(va, picture)
     expect(reused).to_have_count(1)
     assert b'filename="face.png"' not in _run(va)
@@ -227,15 +200,10 @@ def test_a_picture_uploaded_once_is_never_uploaded_again(va: Session, tmp_path: 
 
 
 def test_download_saves_our_copy_when_the_providers_link_is_dead(va: Session):
-    """Prod 2026-11-11: the provider's hosted link no longer answered, Download
-    fell back to our copy's bare URL and the browser showed the picture
-    instead of saving it."""
     va.goto("/generate")
     card = _generate(va, delay_s=0)
     button = va.page.locator(f"{card} .download-btn")
     expect(button).to_be_visible(timeout=RESULT_TIMEOUT_MS)
-    # The card as it is with a provider-hosted result: a link on the
-    # provider's host, our own copy as the fallback.
     dead = "https://provider.invalid/result.png"
     va.page.route(dead, lambda route: route.abort("connectionfailed"))
     button.evaluate(
@@ -266,6 +234,6 @@ def test_a_job_that_is_gone_ends_its_polling(va: Session):
     _generate(va, delay_s=0)
 
     expect(va.page.get_by_text("Not found")).to_be_visible(timeout=RESULT_TIMEOUT_MS)
-    va.page.wait_for_timeout(3_000)  # past the next poll it would have made
+    va.page.wait_for_timeout(3_000)
     assert len(polls) == 1
     assert _page_errors(va) == []

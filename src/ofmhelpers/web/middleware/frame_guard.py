@@ -1,14 +1,3 @@
-"""No page of the app shows inside another site's frame.
-
-A signed-in page framed by someone else's site could be clicked through
-unseen (clickjacking). Until 2026-11-18 only the session cookie's
-SameSite=Lax stood in the way; the security audit asked for the headers
-themselves. Nothing of ours frames the app, so every answer says no:
-`X-Frame-Options: DENY` for old browsers, CSP `frame-ancestors 'none'` for
-current ones. The bridge pages answer outside this stack: `bridge.py`
-`_HEADERS` sends the same two.
-"""
-
 from starlette.datastructures import MutableHeaders
 lazy from starlette.types import ASGIApp, Message, Receive, Scope, Send
 

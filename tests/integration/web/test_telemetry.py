@@ -1,8 +1,3 @@
-"""Telemetry (ofmhelpers/telemetry.py): each background job is one span with
-the task, job id and who started it, a failure marked as an error with its
-exception; each request carries the signed-in user. Without a token
-nothing is sent and the logging setup is unchanged."""
-
 import logging
 
 import pytest
@@ -31,7 +26,7 @@ def test_a_job_is_one_span_with_its_task_id_and_who(capfire: CaptureLogfire):
     assert attrs["job_id"] == job_id
     assert attrs["task"] == "download_images"
     assert attrs["actor"] == who
-    assert "logfire.level_num" not in attrs  # info, the default: not an error
+    assert "logfire.level_num" not in attrs
     assert get_job(job_id).status == "done"
 
 
@@ -45,7 +40,7 @@ def test_a_failed_job_is_an_error_span_with_its_exception(capfire: CaptureLogfir
     run_job(job_id, boom, {})
 
     (span,) = [s for s in _spans(capfire) if s["name"] == "job {task} {job_id}"]
-    assert span["attributes"]["logfire.level_num"] >= 17  # error
+    assert span["attributes"]["logfire.level_num"] >= 17
     (event,) = [e for e in span["events"] if e["name"] == "exception"]
     assert event["attributes"]["exception.message"] == "Wrong API Key"
     assert get_job(job_id).error == "Wrong API Key"
@@ -94,7 +89,6 @@ def test_health_checks_and_static_files_make_no_spans(capfire: CaptureLogfire, p
 
 
 def test_a_work_horse_flushes_its_spans_before_it_exits(monkeypatch):
-    """rq ends a work horse with os._exit (no atexit): each job flushes."""
     from rq.worker import Worker
 
     from ofmhelpers import worker
@@ -121,8 +115,6 @@ def test_a_work_horse_flushes_its_spans_before_it_exits(monkeypatch):
 
 @pytest.mark.parametrize(("token", "sends"), [(None, False), ("pylf_v1_eu_test", True)])
 def test_only_logfire_token_sends_never_a_credentials_file(monkeypatch, token, sends):
-    """A `.logfire/` credentials file in the working directory (the repo,
-    mounted into the tests container) must never make tests send spans."""
     if token is None:
         monkeypatch.delenv("LOGFIRE_TOKEN", raising=False)
     else:
@@ -144,8 +136,6 @@ def test_a_blank_token_is_off(monkeypatch):
 
 
 def test_a_query_is_a_span_but_a_pool_checkout_is_not(capfire: CaptureLogfire):
-    """Every SQL statement stays visible; the "connect" span the SQLAlchemy
-    instrumentation wraps around each checkout (~7 per request) does not."""
     import sqlalchemy
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
@@ -167,8 +157,6 @@ def test_a_query_is_a_span_but_a_pool_checkout_is_not(capfire: CaptureLogfire):
 
 
 def test_the_apps_own_engine_traces_its_queries(capfire: CaptureLogfire, monkeypatch):
-    """session.get_engine builds through the instrumented create_engine even
-    though web/db/session.py was imported before telemetry was configured."""
     import sqlalchemy
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 

@@ -1,11 +1,3 @@
-"""
-A VA's day leaves a record (owner 2026-11-14): every action keeps
-`users.last_seen_at` (to the minute), a VA is out after 2 hours without one
-while everyone else keeps 5, and a VA who just stops working gets an
-`idle_logout` event dated at their last action -- from the sweep, or from
-their next sign-in -- once per idle stretch.
-"""
-
 import time
 
 import pytest
@@ -46,7 +38,6 @@ def _fresh(user: User) -> User:
 
 
 def _events(user: User, task: str) -> list[float]:
-    """When `user`'s events of `task` happened, oldest first."""
     with session_scope() as s:
         return list(
             s.scalars(
@@ -62,9 +53,6 @@ def clock(monkeypatch) -> list[float]:
     now = [time.time()]
     monkeypatch.setattr(time, "time", lambda: now[0])
     return now
-
-
-# --- last seen ------------------------------------------------------------------
 
 
 def test_an_action_is_kept_on_the_person_and_a_poll_is_not():
@@ -94,9 +82,6 @@ def test_last_seen_is_written_at_most_once_a_minute():
     assert _fresh(va).last_seen_at == start + settings.web.seen_write_every_s
 
 
-# --- the idle limit -----------------------------------------------------------
-
-
 def test_a_va_is_out_after_two_idle_hours_and_a_user_is_not(clock):
     _va()
     va, owner = TestClient(app), TestClient(app)
@@ -104,7 +89,7 @@ def test_a_va_is_out_after_two_idle_hours_and_a_user_is_not(clock):
     sign_in(owner, OWNER)
 
     clock[0] += 2 * _HOUR - 60
-    still_in = va.put("/session", headers=POLL)  # an action: the two hours restart
+    still_in = va.put("/session", headers=POLL)
     clock[0] += 2 * _HOUR - 60
     kept = va.get("/clone/gallery/latest", headers=POLL)
     clock[0] += 120
@@ -126,9 +111,6 @@ def test_the_page_tells_the_tab_the_limit_of_who_is_signed_in():
     assert presence.idle_limit_s(None) == settings.session.session_max_age_s
 
 
-# --- the record ---------------------------------------------------------------
-
-
 def test_the_sweep_logs_an_idle_va_out_at_their_last_action_once():
     va = _va()
     client = TestClient(app)
@@ -143,20 +125,19 @@ def test_the_sweep_logs_an_idle_va_out_at_their_last_action_once():
     ended = _fresh(va).sessions_ended_at
     assert ended is not None
     assert ended > stopped
-    # Every session of theirs is out, the cookie's own lifetime regardless.
     assert client.get("/clone/gallery/latest", headers=POLL).status_code == 401
 
 
 def test_a_va_still_working_or_logged_out_and_an_idle_user_get_no_idle_logout():
     va = _va()
     owner = make_user(OWNER)
-    users.seen(va.id, time.time() - _HOUR)  # within the two hours
-    users.seen(owner.id, time.time() - 9 * _HOUR)  # not a VA
+    users.seen(va.id, time.time() - _HOUR)
+    users.seen(owner.id, time.time() - 9 * _HOUR)
 
     idle.end_idle()
     working = _events(va, idle.IDLE_LOGOUT)
     users.seen(va.id, time.time() - 3 * _HOUR)
-    signed_out(va.id)  # pressed Logout after that last action
+    signed_out(va.id)
     idle.end_idle()
 
     assert working == []
@@ -166,8 +147,6 @@ def test_a_va_still_working_or_logged_out_and_an_idle_user_get_no_idle_logout():
 
 
 def test_signing_in_again_first_records_the_idle_stretch_before_it():
-    """Back before the sweep's next round: the break's end is not lost, and
-    the new session is not ended by it."""
     va = _va()
     stopped = time.time() - 5 * _HOUR
     users.seen(va.id, stopped)
@@ -184,7 +163,6 @@ def test_signing_in_again_first_records_the_idle_stretch_before_it():
 
 
 def test_the_sweep_and_a_sign_in_at_once_record_one_idle_logout():
-    """Both read the VA as idle before either wrote: one event, not two."""
     va = _va()
     stopped = time.time() - 3 * _HOUR
     users.seen(va.id, stopped)

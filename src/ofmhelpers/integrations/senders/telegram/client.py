@@ -1,16 +1,3 @@
-"""The Bot API calls this app makes: who the bot is, the chats that wrote to it,
-a message to a chat. Through `integrations.outbound`, so OFM_FAKE_EXTERNALS answers it
-from `telegram/fake.py`.
-
-The token is part of every URL (`/bot<token>/<method>`): an error here never
-quotes the request, and `redact.py` masks the token shape in any span or log
-that does.
-
-How a refusal is told apart (Bot API "Making requests"): 429 carries
-`parameters.retry_after` (flood control); a group that became a supergroup
-answers with `parameters.migrate_to_chat_id`; any other 4xx (chat not found, bot
-removed or blocked) cannot succeed on a retry; 5xx and network errors can."""
-
 import os
 from functools import lru_cache
 from http import HTTPStatus
@@ -34,24 +21,16 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 
-class TelegramError(SendError):
-    """The Bot API refused or failed; never holds the token."""
+class TelegramError(SendError): ...
 
 
 class TelegramMovedError(TelegramError):
-    """The group became a supergroup: it is now `chat_id`."""
-
     def __init__(self, message: str, chat_id: str) -> None:
         super().__init__(message, permanent=True)
         self.chat_id = chat_id
 
 
 class TelegramClient:
-    """One bot (its token), over one kept-alive connection: a new one per call
-    was ~7,600 TCP+TLS handshakes a day, each with a small chance of a reset
-    in the handshake (prod, 2026-11-08 to 11-16). Shared through
-    `telegram_client`."""
-
     def __init__(self, token: str) -> None:
         self._base = f"{settings.telegram.api_url.rstrip('/')}/bot{token}"
         self._session = outbound.mount(requests.Session())
@@ -60,7 +39,6 @@ class TelegramClient:
         return Bot.model_validate(self._call("getMe", {}))
 
     def send_message(self, chat_id: str, text: str) -> Message:
-        """Plain text (no parse mode: nothing in it is markup), no link preview."""
         return Message.model_validate(
             self._call(
                 "sendMessage",
@@ -73,21 +51,14 @@ class TelegramClient:
         )
 
     def delete_message(self, chat_id: str, message_id: int) -> None:
-        """A message the bot sent (Telegram: under 48 h old)."""
         self._call("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
 
     def chats(self) -> list[Chat]:
-        """The chats that wrote to the bot or added it in the last 24 h (what
-        Telegram keeps): where `OFM_TELEGRAM_CHAT_IDS` comes from. Not while a
-        server reads the bot's messages (`updates`): those are taken by then."""
         updates = [Update.model_validate(u) for u in self._call("getUpdates", {})]
         found = {u.chat.id: u.chat for u in updates if u.chat is not None}
         return list(found.values())
 
     def updates(self, offset: int | None, wait_s: float) -> list[Update]:
-        """What the bot got from `offset` on (every update before it is taken
-        for good), waiting up to `wait_s` for one when there is none (long
-        polling)."""
         payload: dict[str, Any] = {
             "timeout": int(wait_s),
             "allowed_updates": ["message", "channel_post"],
@@ -107,7 +78,6 @@ class TelegramClient:
                 timeout=settings.telegram.timeout_s + extra_wait_s,
             )
         except requests.RequestException as exc:
-            # str(exc) quotes the URL, and the URL holds the token.
             msg = f"Telegram {method} failed: {type(exc).__name__}"
             raise TelegramError(msg) from None
         try:
@@ -121,16 +91,12 @@ class TelegramClient:
 
 
 def _update(raw: Any) -> Update | None:
-    """One update, or only its id when the rest cannot be read (so the next read
-    starts past it: one odd update must not hold up every one after it); None
-    without even an id."""
     try:
         return Update.model_validate(raw)
     except ValidationError:  # silent: the error quotes someone's words
         update_id = raw.get("update_id") if isinstance(raw, dict) else None
         if not isinstance(update_id, int):
             return None
-        # Its id only: the content may be someone's words.
         logger.warning("telegram update %s unreadable, skipped", update_id)
         return Update(update_id=update_id)
 
@@ -150,19 +116,14 @@ def _refusal(method: str, reply: Reply) -> TelegramError:
 
 
 def telegram_client(token: str) -> TelegramClient:
-    """This process's client of `token`: its connection is kept between calls.
-    Keyed by process too: a forked RQ work horse must not share its parent's
-    socket."""
     return _client(token, os.getpid())
 
 
 @lru_cache(maxsize=4)
-def _client(token: str, pid: int) -> TelegramClient:  # noqa: ARG001 -- pid keys the cache
+def _client(token: str, pid: int) -> TelegramClient:  # noqa: ARG001
     return TelegramClient(token)
 
 
 @lru_cache(maxsize=2)
 def bot_name(token: str) -> str:
-    """The bot's username (`t.me/<it>`, `/money@<it>`), asked once per
-    token. Raises `TelegramError`."""
     return telegram_client(token).me().username

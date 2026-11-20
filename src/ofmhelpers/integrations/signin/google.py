@@ -1,17 +1,3 @@
-"""Sign in with Google, and connect Google Drive so uploads go up as the
-person (a service account has no storage: `storageQuotaExceeded`).
-
-OAuth "Web application" client of the Drive bot's Cloud project
-(`settings.signin.google_*`). Signing in asks only `openid email profile`
-(non-sensitive: no warning screen, no verification). Drive is asked for
-only when someone connects it (/account, `connect=True`): the full `drive`
-scope is restricted, so until Google verifies the app (a paid security
-assessment) that one step shows "Google hasn't verified this app" once
-(Advanced -> continue), and at most 100 accounts may use it.
-https://developers.google.com/identity/protocols/oauth2/web-server
-https://developers.google.com/identity/openid-connect/openid-connect
-"""
-
 from urllib.parse import urlencode
 
 lazy from google.oauth2.credentials import Credentials
@@ -28,7 +14,7 @@ from ofmhelpers.integrations.signin.base import (
 from ofmhelpers.schemas.users import Identity
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 -- a URL
+TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
 SIGN_IN_SCOPES = ("openid", "email", "profile")
 CONNECT_SCOPES = (*SIGN_IN_SCOPES, *DRIVE_SCOPES)
 
@@ -55,9 +41,6 @@ class Google:
     def consent_url(
         self, redirect_uri: str, state: str, nonce: str, *, connect: bool
     ) -> str:
-        """Sign-in: who someone is, nothing else. `connect`: Drive too, on
-        a consent screen with offline access -- the only way Google hands
-        out a refresh token."""
         client_id, _secret = _client()
         query = {
             "client_id": client_id,
@@ -104,8 +87,6 @@ class Google:
 
 
 def drive_credentials(refresh_token: str) -> Credentials:
-    """Credentials that mint access tokens from a person's stored refresh
-    token: what `gdrive.connect_as` uploads with."""
     client_id, secret = _client()
     return Credentials(
         token=None,
@@ -113,7 +94,4 @@ def drive_credentials(refresh_token: str) -> Credentials:
         token_uri=TOKEN_URL,
         client_id=client_id,
         client_secret=secret,
-        # No `scopes`: a refresh keeps what was granted, and google-auth
-        # would warn that "email"/"profile" came back under their long
-        # userinfo.* names.
     )

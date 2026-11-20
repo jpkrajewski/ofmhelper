@@ -1,11 +1,3 @@
-"""
-The owner is told on Telegram when a provider has no money left
-(features/jobs/notices.py, owner 2026-11-15): a job failing on an empty
-account (any AI provider, Apify) sends `provider.no_credits`, from the runner
-and from recovery; the key names the provider and the hour, so a batch
-failing on one empty account goes out once; any other failure sends nothing.
-"""
-
 import pytest
 from signin import make_user
 
@@ -23,9 +15,7 @@ from ofmhelpers.integrations.apify import ApifyCreditError
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
-# kie.ai's own words for an empty account (`kie/models.py` raise_for).
 KIE_EMPTY = "kie.ai: credits insufficient (code 402)"
-# Higgsfield's, as prod stored it (job e564f26c, 2026-10-31).
 HIGGSFIELD_EMPTY = (
     "Your credit balance is too low to complete this request. "
     "Please top up your balance and try again."
@@ -34,14 +24,12 @@ HIGGSFIELD_EMPTY = (
 
 @pytest.fixture
 def sent(monkeypatch) -> list[Event]:
-    """Every event handed to the bus."""
     out: list[Event] = []
     monkeypatch.setattr(notices, "emit", out.append)
     return out
 
 
 def _failing(exc: Exception) -> str:
-    """A clone job of someone's, failed by the real runner with `exc`."""
     user = make_user("someone@example.com")
 
     def refused() -> None:
@@ -73,7 +61,7 @@ def test_one_message_per_provider_per_hour(sent):
     _failing(ProviderNoCreditsError("APIYI: insufficient balance.", provider="APIYI"))
 
     kie, again, apiyi = (event.key for event in sent)
-    assert kie == again  # the bus sends a key once
+    assert kie == again
     assert apiyi != kie
     assert kie.startswith("provider.no_credits:kie.ai:")
 
@@ -92,8 +80,6 @@ def test_any_other_failure_tells_nothing(sent):
 
 
 def test_recovery_tells_a_request_that_failed_for_want_of_credits(sent, monkeypatch):
-    """A paid request accepted, then failed on the empty account while nobody
-    waited (deploy, timeout): recovery fails the job and tells it."""
     user = make_user("someone@example.com")
     job_id = create_job("clone", {}, actor=str(user.id))
     fail_job(job_id, "Timed out")

@@ -1,16 +1,3 @@
-"""Oopsie and Bouncy faked at the wire (OFM_FAKE_EXTERNALS, tests): the
-endpoints the clients in `providers/` call, answered the way each service
-does (verified against the real ones 2026-10-22, links/CLAUDE.md), so the
-real clients run unchanged. Nothing leaves the process.
-
-Only `OOPSIE_FAKE_KEY` / `BOUNCY_FAKE_KEY` are accepted (401 otherwise).
-State lives in memory, or, with `OFM_FAKES_DIR` set, in `oopsie.json` /
-`bouncy.json` there under an exclusive file lock, so the app under e2e, its
-worker processes and the test seeding them share one account. Test hooks:
-`add_page`/`add_link`/`remove` (done on the dashboard), `set_traffic` (what the
-analytics report), `set_limit` (the plan's quota); `pages`/`links`/`adult`
-read the state."""
-
 import fcntl
 import json
 import re
@@ -53,15 +40,11 @@ def _days(start: str, end: str) -> list[date]:
 
 
 class Traffic(BaseModel, frozen=True):
-    """Landing views and clicks through of one day or hour."""
-
     views: int = 0
     clicks: int = 0
 
 
 class OopsiePage(BaseModel, extra="allow"):
-    """A page as Oopsie's API returns it (a PATCH may add more fields)."""
-
     id: str
     slug: str
     display_name: str
@@ -72,8 +55,6 @@ class OopsiePage(BaseModel, extra="allow"):
 
 
 class BouncyLink(BaseModel):
-    """A deeplink as Bouncy's API returns it."""
-
     id: str
     slug: str
     domain: str
@@ -85,16 +66,11 @@ class BouncyLink(BaseModel):
 
 
 class FakeAccount(BaseModel):
-    """One provider account: its links by id, quota, forced 18+ gates
-    (Bouncy), and traffic by "id|YYYY-MM-DD" -> [views, clicks]."""
-
     links: dict[str, dict[str, Any]] = Field(default_factory=dict)
     limit: int
     active_limit: int | None = None
     adult: list[str] = Field(default_factory=list)
     traffic: dict[str, list[int]] = Field(default_factory=dict)
-    # By the hour, "id|YYYY-MM-DDTHH" -> [views, clicks]: what a one-day range
-    # answers (both services answer it hourly).
     hours: dict[str, list[int]] = Field(default_factory=dict)
     calls: list[str] = Field(default_factory=list)
 
@@ -103,8 +79,6 @@ class FakeAccount(BaseModel):
         return Traffic(views=views, clicks=clicks)
 
     def hour_numbers(self, link_id: str, day: date, hour: int) -> Traffic:
-        """That hour's numbers; a day seeded only as a whole sits in its first
-        hour (so a day's hours add up to it)."""
         set_hours = [k for k in self.hours if k.startswith(f"{link_id}|{day}T")]
         if set_hours:
             views, clicks = self.hours.get(f"{link_id}|{day}T{hour:02}", [0, 0])
@@ -113,8 +87,6 @@ class FakeAccount(BaseModel):
 
 
 class _Fake:
-    """State handling both fakes share."""
-
     file_name: str
     default_limit: int
     default_active_limit: int | None = None
@@ -131,8 +103,6 @@ class _Fake:
 
     @contextmanager
     def _state(self) -> Iterator[FakeAccount]:
-        """The state, locked (thread and, with a file, process); saved when
-        the block ends."""
         with self._lock:
             if self._path is None:
                 yield self._memory
@@ -155,7 +125,6 @@ class _Fake:
     def set_hour_traffic(
         self, link_id: str, hour: datetime, views: int, clicks: int
     ) -> None:
-        """One UTC hour's numbers (`hour`: aware; its day's total follows)."""
         at = hour.astimezone(UTC)
         with self._state() as state:
             state.hours[f"{link_id}|{at.date()}T{at.hour:02}"] = [views, clicks]
@@ -166,7 +135,6 @@ class _Fake:
             ]
 
     def remove(self, link_id: str) -> None:
-        """A link deleted on the provider's own dashboard."""
         with self._state() as state:
             del state.links[link_id]
 
@@ -185,8 +153,6 @@ class _Fake:
 
 
 class FakeOopsie(_Fake):
-    """A link is a page, by slug, as the API returns it."""
-
     file_name = "oopsie.json"
     default_limit = 50
 
@@ -283,7 +249,7 @@ class FakeOopsie(_Fake):
     def _activity(self, state: FakeAccount, body: dict[str, Any]) -> FakeReply:
         days = _days(body["from"], body["to"])
         slugs = [s for s in body["scopeValue"].split(",") if s in state.links]
-        if len(days) == 1:  # one day: by the hour, labels "HH:00"
+        if len(days) == 1:
             [day] = days
             series = [
                 {
@@ -316,9 +282,6 @@ class FakeOopsie(_Fake):
 
 
 class FakeBouncy(_Fake):
-    """Deeplinks by id, as the API returns them; `adult`: ids whose 18+
-    gate is forced."""
-
     file_name = "bouncy.json"
     default_limit = 10
     default_active_limit = 5
@@ -467,7 +430,7 @@ class FakeBouncy(_Fake):
         if link_id not in state.links:
             return FakeReply.json_body({"error": "Not Found"}, 404)
         days = _days(query["from"], query["to"])
-        if len(days) == 1:  # one day: by the hour, "YYYY-MM-DD HH"
+        if len(days) == 1:
             [day] = days
             buckets = [
                 {"date": f"{day} {h:02}", "views": n.views, "clicks": n.clicks}

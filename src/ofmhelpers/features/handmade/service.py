@@ -1,18 +1,3 @@
-"""What /handmade does behind its routes (web/routers/inventory/handmade.py):
-a VA's handmade reels, uploaded here and kept on the server. Owner
-2026-11-15: "new page where va can upload their reels that were handmade",
-then "i want to see what is in handmade by who and i choose where to upload
-they dont automaticly upload to folder let it stay on the server".
-
-One job per reel, so each is its own card: the file saved in a folder of its
-own (`uploads/handmade/<dir>`), the job's result is that file (its gallery
-preview made like any result). Nothing goes to Drive by itself: the owner
-(their VAs' reels, "Done by VA", the VAs filter) picks Upload to Drive on a
-card and the account folder on /drive, the same upload as /clone's
-(`features/drive/uploads.py`, `drive_uploads`); the card then says where it
-is. A VA uploads, never sends to Drive (`Action.UPLOAD_HANDMADE`,
-`Action.DRIVE_UPLOAD`)."""
-
 from pathlib import Path
 
 lazy from fastapi import UploadFile
@@ -43,8 +28,6 @@ def upload_root() -> Path:
 
 
 def _checked(files: list[UploadFile]) -> list[UploadFile]:
-    """The picked videos, refused before any is saved: none, too many, not
-    a video, too big."""
     picked = [f for f in files if f.filename]
     if not picked:
         msg = "Pick at least one video"
@@ -63,7 +46,6 @@ def _checked(files: list[UploadFile]) -> list[UploadFile]:
 
 
 def start(files: list[UploadFile], va_id: int) -> JobsQueued:
-    """The VA's videos kept on the server, one job (one card) each."""
     ids = []
     for upload in _checked(files):
         job_dir = make_job_dir(upload_root())
@@ -77,10 +59,8 @@ def start(files: list[UploadFile], va_id: int) -> JobsQueued:
 def run_handmade(
     job_dir: str,
     files: list[str],
-    job_id: str = "",  # noqa: ARG001 -- start_job hands every run its job id
+    job_id: str = "",  # noqa: ARG001
 ) -> list[ResultFile]:
-    """The reel as the job's result (its preview is made after, as for any
-    result). A file gone since the upload fails the job."""
     kept = []
     for name in files:
         path = Path(job_dir) / name
@@ -105,7 +85,6 @@ def _card(job: Job, uploads: list[DriveUpload]) -> CloneCard:
 
 
 def cards(jobs: list[Job]) -> list[CloneCard]:
-    """One card per reel, with where it is in Drive (the owner's uploads)."""
     uploads: dict[str, list[DriveUpload]] = {}
     for upload in upload_store.for_jobs([j.id for j in jobs]):
         uploads.setdefault(upload.job_id, []).append(upload)

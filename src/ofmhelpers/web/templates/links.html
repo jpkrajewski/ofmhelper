@@ -15,7 +15,6 @@
     {{ ui.stat(p.label ~ " links", quota, note) }}
     {% endfor %}
 </div>
-{# A sync running: links.js reloads until it is done. #}
 {% if providers|selectattr("syncing")|list %}<span id="links-syncing" hidden></span>{% endif %}
 
 {% for p in providers %}

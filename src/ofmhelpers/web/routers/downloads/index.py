@@ -1,14 +1,3 @@
-"""
-ofmhelpers/web/routers/downloads/index.py
-
-Unified page for Download videos / Download images / Clean images, in the
-same style as /generate: one form with a tool picker on the left, and a
-non-blocking gallery of past runs across all three tools on the right --
-`download_gallery_page` cards first, the rest fetched on scroll
-(gallery-scroll.js, `/download-assets/gallery`). Submissions POST to each
-tool's existing /run endpoint.
-"""
-
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
@@ -27,7 +16,6 @@ router = APIRouter(
     dependencies=[Access(Area.DOWNLOAD)],
 )
 
-# The download asked for last first: a link pasted again moves its card up.
 gallery = Gallery(
     set(DOWNLOAD_TOOLS),
     limit=lambda: settings.web.download_gallery_page,
@@ -36,7 +24,6 @@ gallery = Gallery(
 
 
 def _cards(jobs: list[Job]) -> list[TaskCard]:
-    """Every file of every job its own card: a download of six is six cards."""
     return [card for job in jobs for card in task_card(job).per_file()]
 
 
@@ -56,8 +43,6 @@ def form(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
 
 @router.get("/gallery")
 def gallery_page(request: Request, viewer: Viewing, query: GalleryParams) -> Response:
-    """The next page of cards as a fragment gallery-scroll.js appends: the
-    same partial the page renders. `hidden`: only the hidden cards."""
     found = gallery.page(viewer, query)
     return render(
         request,

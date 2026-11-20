@@ -1,7 +1,3 @@
-"""A finished clone goes on to /edit or /clone-long with its video already
-picked there (`POST /clone/{job}/handoffs`, features/assets/send.py; owner
-2026-11-16: "there is no option to click edit from clone")."""
-
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 

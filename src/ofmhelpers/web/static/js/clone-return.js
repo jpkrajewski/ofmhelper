@@ -1,27 +1,9 @@
-/*
- * /clone's form across a Trim it! (clone-cost.js) -> /edit -> Clone it.
- *
- * `save(form, source)`: before leaving for /edit, everything the form holds
- * -- the subject images and videos (a File not uploaded yet included), the
- * prompt, provider, resolution, audio, export, mirror -- and which video is
- * being trimmed (`source`, its stored path). In IndexedDB, not
- * sessionStorage: only IndexedDB keeps a File.
- *
- * Back on /clone as `?video=<cut>&from=<source>` (/edit's Clone it): the
- * saved form comes back with that video swapped for the cut, then the save
- * is dropped. Only for that very trim (`from` = the saved `source`) and
- * within MAX_AGE_MS: a /clone opened any other way, or long after, starts
- * as it always does. Nothing works without IndexedDB (a private window):
- * the page then just opens with the cut, as before.
- */
 (() => {
     const DB = "ofm-clone";
     const STORE = "form";
     const KEY = "trim";
     const MAX_AGE_MS = 60 * 60 * 1000;
 
-    // One stored file, however its path is written ("uploads/assets/x" or
-    // "/app/uploads/assets/x"): its name, which starts with its content hash.
     const fileName = (path) => (path || "").split(/[\\/]/).pop();
     const same = (a, b) => Boolean(a) && fileName(a) === fileName(b);
 
@@ -65,7 +47,7 @@
         try {
             await run("readwrite", (store) => store.put(state, KEY));
         } catch {
-            // No IndexedDB: Clone it opens /clone with only the cut.
+
         }
     }
 

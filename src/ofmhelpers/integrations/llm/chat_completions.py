@@ -1,19 +1,3 @@
-"""Providers speaking the OpenAI-style `POST <base>/chat/completions` (Groq,
-Cerebras, ... -- most hosted models do), over httpx.
-
-One small client instead of an SDK per vendor: the wire is the same for all
-of them, and each vendor's SDK (or OpenAI's, which follows them all) would be
-one more dependency for one endpoint. A vendor is a subclass naming its base
-URL, key, model, the media its model reads and how many images a request may
-carry; its subpackage's `fake.py` builds a `chat_completions_fake` for tests.
-
-Images travel inline as base64 data URLs, shrunk first
-(`settings.llm.image_max_side`/`image_max_bytes`): free plans count tokens
-per minute, and a phone photo is thousands of them. The answer is asked as
-strict JSON Schema (`response_format: json_schema, strict: true`), the schema
-made to fit strict mode's rules (`strict_schema`).
-"""
-
 import base64
 import json
 import tempfile
@@ -47,19 +31,9 @@ from ofmhelpers.media.image_fit import ImageLimits, fitted
 lazy from ofmhelpers.integrations.llm.models import Prompt
 
 _AUTH = (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
-# Said on top of the strict schema, with the schema itself: a vendor may
-# check the answer against the schema after generating it rather than
-# constrain it, and a model never shown the field names makes up its own
-# (Groq's qwen: a plain "Hola", then "blocking_problem" / "problems" /
-# "finding" keys on reels it was about to flag, each a 400
-# `json_validate_failed`; asked again, only the short "no glitches" answer
-# got through -- every check GOOD, dev 2026-10-25).
 _JSON_ONLY = "Reply with one JSON object that follows this JSON Schema, nothing else:"
-# The vendor's error code for an answer that failed its own schema check.
 _BAD_JSON = "json_validate_failed"
 _TRANSIENT = (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.CONFLICT)
-# Keywords strict mode rejects (Cerebras' list, the strictest; OpenAI's and
-# Groq's are subsets). Pydantic writes some of them for constrained fields.
 _NOT_STRICT = frozenset(
     {
         "$defs",
@@ -77,18 +51,12 @@ _NOT_STRICT = frozenset(
 
 
 class StrictSchema(BaseModel):
-    """`response_format.json_schema`: the answer's name and its schema in
-    strict mode's form."""
-
     name: str
     strict: bool = True
     json_schema: dict[str, Any] = Field(serialization_alias="schema")
 
 
 def strict_schema(answer: type[BaseModel]) -> StrictSchema:
-    """`answer`'s schema (as Pydantic writes it) in strict mode's form:
-    `$ref`s inlined, every object closed (`additionalProperties: false`) with
-    every property required, keywords strict mode rejects dropped."""
     schema = answer.model_json_schema()
     defs = schema.get("$defs", {})
 
@@ -140,20 +108,13 @@ class _Completion(BaseModel):
 
 
 class ChatCompletionsLLM(LLMProvider):
-    """One vendor's `/chat/completions`; subclasses set the class vars and
-    the key/model/fake hooks."""
-
     base_url: ClassVar[str]
     media = frozenset({MediaKind.IMAGE})
-    # 0: the same input gives (nearly) the same answer -- a checker, not a
-    # writer.
     temperature: ClassVar[float | None] = 0.0
-    # Vendor-specific request fields.
     extra_body: ClassVar[dict[str, Any]] = {}
 
     @classmethod
     def fake_transport(cls) -> httpx.BaseTransport:
-        """The vendor's wire fake (OFM_FAKE_EXTERNALS)."""
         raise NotImplementedError
 
     def _client(self, timeout_s: float) -> httpx.Client:
@@ -228,7 +189,6 @@ class ChatCompletionsLLM(LLMProvider):
         if choice is None or not choice.message.content:
             msg = f"{self.label} gave no answer" + (f" ({reason})" if reason else "")
             raise LLMOutputError(msg)
-        # `completion_tokens` counts any reasoning too (not split out).
         used = found.usage or _Usage()
         usage = Usage(
             input_tokens=used.prompt_tokens, output_tokens=used.completion_tokens
@@ -259,8 +219,6 @@ class ChatCompletionsLLM(LLMProvider):
 
 
 def _error(response: httpx.Response) -> tuple[str, str, str]:
-    """The vendor's `{"error": {"message", "code", "failed_generation"}}`;
-    the body as the message when it is not that."""
     try:
         body = response.json()
     except ValueError:  # silent: not JSON: the body is the message

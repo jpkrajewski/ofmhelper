@@ -1,6 +1,3 @@
-"""The one request lifecycle every provider shares: submit or resume, wait,
-save -- driven against an in-memory provider, no HTTP."""
-
 from decimal import Decimal
 
 import pytest
@@ -24,9 +21,6 @@ SPEC = get_spec("kie:wan/3-0-video")
 
 
 class ScriptedProvider:
-    """Answers `status` from a script of states, `submit` and `download`
-    from scripts of failures to raise first (then they work)."""
-
     name = "kie"
     label = "Scripted"
     idempotent_submit = False
@@ -84,7 +78,6 @@ def _fast(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def slept(monkeypatch) -> list[float]:
-    """The submit/download retry waits, recorded instead of slept."""
     monkeypatch.setenv("OFM_AIGEN_RATE_LIMIT_WAITS_S", "[10, 30, 60]")
     monkeypatch.setenv("OFM_AIGEN_RATE_LIMIT_MAX_WAIT_S", "180")
     monkeypatch.setenv("OFM_AIGEN_DOWNLOAD_RETRY_WAITS_S", "[5, 15]")
@@ -146,9 +139,6 @@ UNFETCHED = TaskState(
 
 
 def test_a_request_whose_reference_was_not_fetched_is_sent_again(monkeypatch):
-    """Prod 2026-11-12, APIYI jobs e33af3e0 / 42323138: Alibaba could not
-    download our reference in time, the task failed (refunded) and the card
-    just said so; the next try minutes later went through."""
     monkeypatch.setenv("OFM_AIGEN_UNFETCHED_RETRY_WAITS_S", "[20, 60, 120]")
     waits: list[float] = []
     monkeypatch.setattr(runner.time, "sleep", waits.append)
@@ -173,7 +163,6 @@ def test_a_reference_never_fetched_fails_after_its_tries_saying_so(monkeypatch):
         "Scripted: Chinese server is slow. Tried 4 times, nothing was charged"
     )
     assert len(provider.submitted) == 4
-    # Three sends as they are, the fourth with lighter references.
     assert provider.lighter_from == 4
     assert tasks.recall("job5d") is None
 
@@ -201,9 +190,6 @@ def test_any_other_failure_is_never_sent_again():
 
 
 def test_a_generation_ended_for_want_of_credits_is_no_credits():
-    """Prod 2026-10-31: Higgsfield accepted three /clone runs, then failed
-    each "credit balance is too low"; as a generation failure the cards said
-    "Failed" and a /clone-links batch would have gone on asking."""
     provider = ScriptedProvider(
         [TaskState(state="failed", error="balance too low", no_credits=True)]
     )
@@ -249,8 +235,6 @@ def test_a_rate_limited_submit_waits_the_providers_hint_and_goes_again(slept):
 
 
 def test_a_rate_limit_hint_past_the_budget_fails_at_once(slept):
-    """Waiting longer than `rate_limit_max_wait_s` would only hold a worker:
-    the run fails 'Rate limited', nothing remembered (nothing was made)."""
     provider = ScriptedProvider(
         [], submit_errors=[ProviderRateLimitError("slow down", retry_after_s=3600)]
     )
@@ -281,7 +265,6 @@ def test_the_budget_caps_all_waits_together(slept, monkeypatch):
     ids=["unavailable", "auth"],
 )
 def test_any_other_submit_failure_is_never_resent(slept, error):
-    """It may have created a paid task: one send, raised as it came."""
     provider = ScriptedProvider([], submit_errors=[error])
 
     with pytest.raises(type(error)):
@@ -317,7 +300,6 @@ def test_a_download_failing_every_try_keeps_the_request(slept):
 
 
 def test_a_download_failing_for_another_reason_is_not_retried(slept):
-    """A full disk is not a provider blip: raised at once."""
     provider = ScriptedProvider([DONE], download_errors=[OSError("No space left")])
 
     with pytest.raises(OSError, match="No space left"):
@@ -325,9 +307,6 @@ def test_a_download_failing_for_another_reason_is_not_retried(slept):
 
     assert len(provider.downloaded) == 1
     assert slept == []
-
-
-# --- what a run cost is kept with its job (Logfire keeps it 30 days) -------------
 
 
 def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
@@ -348,7 +327,7 @@ def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
 
     job = get_job(job_id)
     assert job is not None
-    assert job.params == {"prompt": "p"}  # inputs only: a re-run gets them back
+    assert job.params == {"prompt": "p"}
     assert (job.cost_usd, job.cost_estimated) == (Decimal("0.65"), False)
     assert [
         (g.part, g.provider, g.model, g.task_id, g.state, g.cost_usd)
@@ -358,12 +337,10 @@ def test_a_jobs_requests_and_their_cost_are_kept_in_its_row_never_the_key():
         (1, "kie", SPEC.key, "task-1", "done", 0.25),
     ]
     assert all(g.seconds is not None for g in job.meta.generations)
-    # The run's key is "key": neither it nor an `api_key` field is kept
-    # (`key_tail` holds the end of a real-length key only).
     assert '"key"' not in job.meta.model_dump_json()
     assert "api_key" not in job.meta.model_dump_json()
     assert [g.key_tail for g in job.meta.generations] == [None, None]
-    assert tasks.of_job(job_id) == []  # saved: nothing left to resume
+    assert tasks.of_job(job_id) == []
 
 
 def test_a_job_that_asked_no_provider_keeps_an_empty_meta():

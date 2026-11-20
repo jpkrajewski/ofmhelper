@@ -1,13 +1,3 @@
-"""Short links' static data and plain shapes, shipped as JSON beside this
-file and validated on first use:
-
-- `providers.json` -- each provider's API, domains, slug rules and limits.
-- `targets.json` -- the pages a link may send visitors to (OnlyFans,
-  Fanvue, Stacked).
-
-`models.py` also holds what every provider client (`integrations/short_links`)
-returns: a link as the provider has it, its clicks per day and hour, usage."""
-
 from functools import lru_cache
 from importlib import resources
 
@@ -50,7 +40,6 @@ def _read(name: str) -> str:
 
 @lru_cache(maxsize=1)
 def provider_infos() -> Registry[ProviderInfo]:
-    """Every provider's static facts by key, in display order."""
     found = TypeAdapter(dict[str, ProviderInfo]).validate_json(_read("providers.json"))
     return Registry[ProviderInfo](
         entries={
@@ -61,7 +50,6 @@ def provider_infos() -> Registry[ProviderInfo]:
 
 @lru_cache(maxsize=1)
 def targets() -> Registry[Target]:
-    """Every target page by key, in display order."""
     found = TypeAdapter(dict[str, Target]).validate_json(_read("targets.json"))
     return Registry[Target](
         entries={key: t.model_copy(update={"key": key}) for key, t in found.items()}
@@ -69,5 +57,4 @@ def targets() -> Registry[Target]:
 
 
 def detect_target(url: str) -> str | None:
-    """The key of the target `url` is on; None for any other page."""
     return next((t.key for t in targets().all() if t.matches(url)), None)

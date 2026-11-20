@@ -1,6 +1,3 @@
-"""Where things are in the checkout, for tests that read the repo itself
-(importable from any test: tests/ is on sys.path via its conftest)."""
-
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]

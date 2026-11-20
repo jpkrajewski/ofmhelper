@@ -1,6 +1,3 @@
-"""A job folder is never an existing folder: a name drawn twice must not mix
-two jobs' files (one user's /clean-images result handed to another)."""
-
 from pathlib import Path
 
 import pytest

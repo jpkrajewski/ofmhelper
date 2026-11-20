@@ -1,32 +1,3 @@
-"""The daily report (`OFM_REPORTS_DAILY_AT`, 14:00 Warsaw): three events to the
-senders, each covering the window since the previous report.
-
-- Models: per model, the clicks and landing views its links got (`clicks.py`), each
-  link that got clicks under the total (`- oopsie.bio/danywalking: 3.8k`, most
-  first, ten at most, then `- and N more`; owner 2026-11-08), CTR
-  (clicks per landing view), and from its fan sites the new subscribers, the sales
-  (gross) and the conversion rate (subscribers per click). A model is a `creators`
-  name; links without one go by the profile they send to (`rachel.rosee`). Its fan
-  sites are where its links send people (`fanvue.com/<name>`, `stacked.com/@<name>`);
-  a Fanvue/Stacked model no link sends to gets a row of its own (`@walker_dane`).
-- Views: per model (its accounts' `creators` name), the total and each Instagram
-  account's link with its views of reels posted in the 24 h before its latest scan
-  (the /accounts "Last 24 hours" number), as of the scan the tracker runs 10 min
-  before the report (`OFM_ACCOUNTS_SCAN_TIMES`: 13:50).
-- Chatting: who sent a mass message in the window, one line each, no count
-  (`mass.py`; `OFM_CHATTING_EVENTS_PLATFORMS_OFF` platforms left out: Fanvue for
-  now). The same message as the live one each new mass message sends
-  (`mass.tell_mass`): either takes the other's place. Unanswered chats are told
-  as they happen (`features/chatting/wait_events.py`), not here.
-
-Whose: the agency's, the password account's links and accounts (`users.agency_id`);
-chats have no owner (admin only), so every model there.
-
-`money_now`: the Models block of the last 24 hours, for `money` typed to the
-bot (`asks.py`): clicks asked of the providers by the hour (`hours.py`), nothing
-synced or saved.
-"""
-
 import time
 from urllib.parse import urlsplit
 lazy from collections.abc import Callable
@@ -65,8 +36,6 @@ NAME = "daily"
 _FAILED_KEY = "reports:daily:failed"
 _FAILED_S = 1800
 _FAN_PLATFORMS = {p.value: p for p in (ChatPlatform.FANVUE, ChatPlatform.STACKED)}
-# Links named under a model's clicks, most clicks first; the rest as one line
-# (the cap "Chats unanswered" uses for fans).
 _MAX_LINKS = 10
 
 
@@ -75,7 +44,6 @@ class ModelRow(BaseModel):
     has_links: bool = False
     views: int = 0
     clicks: int = 0
-    # Each link of the model that got clicks in the window: (address, clicks).
     links: list[tuple[str, int]] = []
     subs: int | None = None
     cents: int | None = None
@@ -85,8 +53,6 @@ class ModelRow(BaseModel):
         self.cents = (self.cents or 0) + cents
 
     def _link_lines(self) -> list[str]:
-        """`- oopsie.bio/danywalking: 3.8k` per link, most clicks first (owner
-        2026-11-08: which link brought the clicks)."""
         ranked = sorted(self.links, key=lambda link: (-link[1], link[0]))
         lines = [f"- {address}: {compact(n)}" for address, n in ranked[:_MAX_LINKS]]
         if len(ranked) > _MAX_LINKS:
@@ -112,7 +78,6 @@ class ModelRow(BaseModel):
 
 
 def _profile(link: ShortLink) -> str | None:
-    """The profile name a link sends to (`/walker_dane`, `/@danewalkerjohnson`)."""
     first = urlsplit(link.destination).path.strip("/").split("/")[0]
     return first.removeprefix("@") or None
 
@@ -121,7 +86,6 @@ _Fan = tuple[ChatPlatform, str]
 
 
 def _fan(platform: ChatPlatform, username: str) -> _Fan:
-    """A fan-site account, its name as any case (`@DaneWalker` = `danewalker`)."""
     return platform, username.casefold()
 
 
@@ -131,8 +95,6 @@ def _model_rows(
     since: float,
     until: float,
 ) -> list[ModelRow]:
-    """One row per model; each fan-site account counted in one row only: a model's
-    own (`creators` name) before a link without one, else the first seen."""
     rows: dict[str, ModelRow] = {}
     named: set[str] = set()
     owner: dict[_Fan, str] = {}
@@ -174,8 +136,6 @@ _NO_MODEL = "No model"
 
 
 def _views_blocks() -> list[str]:
-    """Per model (most views first): its total, then each account's link and
-    views (most first). An account without a model goes under "No model"."""
     per_model: dict[str, list[tuple[str, int]]] = {}
     for account in list_accounts(users.agency_id()):
         change = account.views(1)
@@ -197,7 +157,6 @@ def _views_blocks() -> list[str]:
 
 
 def _pieces(chunk: str) -> list[str]:
-    """`chunk` in pieces that fit a message, cut between lines, never in one."""
     if len(chunk) <= MAX_TEXT:
         return [chunk]
     pieces: list[list[str]] = [[]]
@@ -215,8 +174,6 @@ def _events(
     key: str | None = None,
     replaces: str | None = None,
 ) -> list[Event]:
-    """One event per block, in parts when it outgrows a message; `key` + the
-    part's number = each part's key."""
     parts: list[list[str]] = [[]]
     for chunk in (piece for whole in chunks for piece in _pieces(whole)):
         if parts[-1] and len("\n\n".join([*parts[-1], chunk])) > MAX_TEXT:
@@ -229,7 +186,6 @@ def _events(
             title=f"{title} ({n}/{len(parts)}):" if many else f"{title}:",
             text="\n\n".join(part),
             key=f"{key}:{n}" if key else None,
-            # Each part its own place: part 2 must not take part 1's.
             replaces=(replaces if n == 1 else f"{replaces}:{n}") if replaces else None,
         )
         for n, part in enumerate(parts, start=1)
@@ -239,7 +195,6 @@ def _events(
 def _models_block(
     links: list[ShortLink], previous: ReportRun, now: float
 ) -> tuple[str, list[str]]:
-    """The Clicks / Rev block's title and one chunk per model."""
     window = window_title(local(previous.ran_at), local(now))
     rows = _model_rows(
         links,
@@ -255,7 +210,6 @@ def _model_chunks(rows: list[ModelRow]) -> list[str]:
 
 
 def build(links: list[ShortLink], previous: ReportRun, now: float) -> list[Event]:
-    """The report's events for the window since `previous`."""
     day = local(now).date().isoformat()
     title, models = _models_block(links, previous, now)
 
@@ -273,7 +227,6 @@ def build(links: list[ShortLink], previous: ReportRun, now: float) -> list[Event
     return [
         *events("models", title, models),
         *events("views", "Views (last 24H)", _views_blocks()),
-        # The live "Mass message sent" message's place (`mass.py`).
         *events(
             "chatting",
             "Chatting",
@@ -284,11 +237,6 @@ def build(links: list[ShortLink], previous: ReportRun, now: float) -> list[Event
 
 
 def money_now(now: float | None = None) -> list[Event]:
-    """Clicks / Rev of the last 24 hours as it stands now: each link's clicks
-    and views asked of its provider by the hour (`hours.last_day`), the fan
-    sites' subs and sales for the same 24 hours. What `money` typed to the bot
-    answers (`asks.py`; owner 2026-11-08: "current stuff"). Nothing synced or
-    saved: the daily report's window and marks are not touched."""
     now = time.time() if now is None else now
     owner = users.agency_id()
     links = link_store.list_links(owner)
@@ -305,9 +253,6 @@ def money_now(now: float | None = None) -> list[Event]:
 
 
 def _fresh_links(owner: int) -> list[ShortLink]:
-    """The owner's links, synced first so the counters are the providers' now.
-    `mark_due` clears every claim, so this may run beside a sync a worker is
-    running (once a day)."""
     keyed = [
         LinkSyncKey(user_id=owner, provider=p)
         for p in link_providers().names()
@@ -320,9 +265,6 @@ def _fresh_links(owner: int) -> list[ShortLink]:
 
 
 def run(now: float | None = None) -> Due:
-    """The sweep: a baseline the first time, the report when due, else nothing.
-    Nobody to send to (no sender set up): nothing read or counted. A run that
-    failed waits `_FAILED_S` before the next try (it calls the providers)."""
     now = time.time() if now is None else now
     if not listening() or get_text(_FAILED_KEY):
         return Due.NOTHING

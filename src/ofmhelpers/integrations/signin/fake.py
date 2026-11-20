@@ -1,11 +1,3 @@
-"""Google's and Apple's token endpoints, in process (OFM_FAKE_EXTERNALS,
-tests): a code from `fake_code` answers tokens for the account it names,
-with the nonce it carries; any other code is the provider's invalid_grant.
-
-Under OFM_FAKE_EXTERNALS the providers' consent screens are the app's own
-`/auth/fake-consent` page (routers/auth.py), which mints such a code.
-"""
-
 import base64
 import json
 from urllib.parse import parse_qs, urlsplit
@@ -21,16 +13,11 @@ _HOSTS = ("oauth2.googleapis.com", "appleid.apple.com")
 
 
 class FakeAccount(BaseModel):
-    """Who a fake consent signs in as."""
-
     email: str
     nonce: str
     subject: str = ""
     name: str = ""
     email_verified: bool = True
-    # Google sends a refresh token only on a consent screen: False is a
-    # sign-in Google waved through (`prompt=none`), as for an account that
-    # consented before.
     refresh_token: bool = True
 
 
@@ -58,7 +45,6 @@ def _id_token(host: str, account: FakeAccount) -> str:
         "iss": f"https://{host}",
         "sub": account.subject or f"{host}:{account.email}",
         "email": account.email,
-        # Apple sends it as a string.
         "email_verified": "true" if account.email_verified else "false",
         "name": account.name,
         "nonce": account.nonce,

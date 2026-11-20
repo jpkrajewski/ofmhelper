@@ -1,11 +1,6 @@
-"""Same-length byte patches of a finished MP4 (no atom size or chunk offset
-moves): what ffmpeg cannot write itself. Generalised from `utils.capcut`."""
-
 import mmap
 from pathlib import Path
 
-# VisualSampleEntry (ISO 14496-12): compressorname sits 42 bytes past the
-# box type; 32 bytes long.
 _COMPRESSOR_NAME_OFFSET = 42
 _COMPRESSOR_NAME_LEN = 32
 _VIDEO_ENTRIES = (b"avc1", b"hvc1", b"hev1")
@@ -20,7 +15,6 @@ def _find(m: mmap.mmap, needle: bytes, start: int = 0) -> int:
 
 
 def rename_key(m: mmap.mmap, placeholder: str, real: str) -> None:
-    """Rename an mdta key in the keys atom (equal lengths only)."""
     if len(placeholder) != len(real):
         msg = f"key rename must keep the length: {placeholder!r} -> {real!r}"
         raise ValueError(msg)
@@ -29,7 +23,6 @@ def rename_key(m: mmap.mmap, placeholder: str, real: str) -> None:
 
 
 def blank_compressor_name(m: mmap.mmap) -> None:
-    """Zero the video sample entry's compressorname ("Lavc libx264")."""
     stsd = _find(m, b"stsd")
     for entry_type in _VIDEO_ENTRIES:
         entry = m.find(entry_type, stsd)

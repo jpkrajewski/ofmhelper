@@ -1,14 +1,3 @@
-"""/edit: cut one part of a video, cropped and sped up or down, or save one
-frame. /clone's "Trim it!" (a video over Wan 3.0's 15 s) opens it as
-`?video=<stored path>`; without one the page asks for a video (upload or
-reuse) and opens it. The page plays the video (a light copy once the edit
-worker made it) over a strip of its frames with a marker and two handles;
-Cut queues the part on the edit worker and the page polls it: Clone it
-(/clone with it picked) / Download; Frame downloads the frame shown.
-Nothing it makes is kept past a day. The work behind each route:
-`features.edit.service`, `run_cut` and `run_prepare` included: jobs queued
-before 2026-11-11 name them by this module's path, so they stay importable here."""
-
 from typing import Annotated, Self
 from urllib.parse import quote
 
@@ -40,9 +29,6 @@ _PREPARED_CACHE = {"Cache-Control": "private, max-age=86400"}
 
 
 class CutRequest(Framing):
-    """One part (`video`, `start`, `end`: what the page always sent), or
-    `clips`, joined one after another (features/edit/clips.py)."""
-
     video: str = ""
     start: float = Field(default=0, ge=0, allow_inf_nan=False)
     end: float = Field(default=0, ge=0, allow_inf_nan=False)
@@ -63,8 +49,6 @@ class FrameQuery(Framing):
 
 
 def _limit_s() -> int:
-    """The longest video /clone takes (every Wan 3.0 provider: 15 s): what
-    the page picks first and marks when the part is longer."""
     return min(t.max_reference_s for t in clone_targets().all())
 
 
@@ -96,7 +80,6 @@ def page(
 def upload(
     assets_root: AssetsRoot, actor: Actor, file: Annotated[UploadFile, File()]
 ) -> EditVideo:
-    """A video from the person's computer, to open here."""
     return service.upload(file, assets_root, actor, run_prepare)
 
 
@@ -104,7 +87,6 @@ def upload(
 def video_to_add(
     assets_root: AssetsRoot, actor: Actor, video: Annotated[str, Query()]
 ) -> EditVideo:
-    """A stored video to put on the timeline of the page open (Add video)."""
     return service.Asked(video=video, assets_root=assets_root, actor=actor).add(
         run_prepare
     )

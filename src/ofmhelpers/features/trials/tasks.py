@@ -1,14 +1,3 @@
-"""The RQ jobs behind /trials (module-level: the worker imports them by
-reference). Each takes reels of the folder's state through one step --
-download the POSTED reels and run the snapchat pipeline on them with AI
-captions, make one reel again, write one reel's captions, replace what is in
-the TRIALS folder next to POSTED with the approved copies -- and records each
-reel as it lands, so the page can show each copy as soon as it is made. Jobs
-run side by side (a caption applied while Generate trials runs): every write
-goes through `state.change`, never a whole state held across a pipeline run.
-The page shows the short `reel.error`/`state.problem` texts; the detail goes to
-the log."""
-
 import random
 import zlib
 from functools import partial
@@ -62,13 +51,10 @@ CAPTIONS_FAILED = "Could not write captions"
 UPLOAD_FAILED = "Could not upload it"
 NOTHING_NEW = "No new reels in POSTED"
 SOURCE_GONE = "Source video is gone from Drive"
-# The pipeline a copy is made with, kept in its recipe.
 PIPELINE = "snapchat_iphone16_usa"
 
 
 class Made(BaseModel):
-    """What a making job did: its result in the jobs table."""
-
     generated: int
     failed: int
 
@@ -82,7 +68,6 @@ class Uploaded(BaseModel):
 
 
 def _someone_waits() -> bool:
-    """Another job waits for the media worker (the one this runs on)."""
     return bool(JobQueue(name=QueueName.MEDIA).line().waiting)
 
 
@@ -92,14 +77,10 @@ def _not_made(count: int) -> str:
 
 
 def _seed(key: str, made: int) -> int:
-    """A reel's seed per make: Regenerate draws a new variant, a rerun of
-    the same make draws the same one."""
     return zlib.crc32(f"{key}:{made}".encode()) & 0x7FFFFFFF
 
 
 def _page_media(copy: Path) -> None:
-    """The page's preview + poster now; a failure leaves them to the page's
-    first request (`media` makes them on demand)."""
     try:
         media.preview(copy)
         media.poster(copy)
@@ -108,10 +89,6 @@ def _page_media(copy: Path) -> None:
 
 
 def merge_posted(state: FolderState, videos: list[DriveFile]) -> None:
-    """`state` matched to POSTED's videos, newest first as Drive lists them:
-    new ones added, ones gone dropped unless their copy was made, and all in
-    the page's order, newest in POSTED first. The list may be the last sweep's,
-    older than the state: a reel it does not name keeps its place."""
     known = {r.key: r for r in state.reels}
     listed = {f.id for f in videos}
     for reel in state.reels:
@@ -137,8 +114,6 @@ def _why(exc: Exception, had_source: bool) -> str:
 
 
 def _draws(ran: RunResult | None) -> dict[str, Any] | None:
-    """Everything the pipeline drew for the copy, without its ffmpeg command
-    (paths of a temp folder)."""
     if ran is None or ran.step is None:
         return None
     return {
@@ -148,8 +123,6 @@ def _draws(ran: RunResult | None) -> dict[str, Any] | None:
 
 
 def _recipe(reel: ReelState) -> Recipe:
-    """What made the copy the reel has (one from before recipes were kept:
-    its seed worked out again)."""
     return reel.recipe or Recipe(
         seed=_seed(reel.key, reel.made - 1),
         caption=reel.caption or "",
@@ -158,18 +131,13 @@ def _recipe(reel: ReelState) -> Recipe:
 
 
 def _written(src: Path) -> list[str]:
-    """The AI watches the reel and writes its captions."""
     return captions_for(understand(src))
 
 
-# Long enough for three Drive calls; two uploads starting together must
-# not each make a TRIALS folder.
 _FOLDER_LOCK_S = 60
 
 
 def _camera_name(source: str, taken: set[str], rng: random.Random) -> str:
-    """A camera-roll name, VID_XXXX.mp4: never the source's own number,
-    never one already in TRIALS."""
     while True:
         name = f"VID_{rng.randint(1000, 9999)}.mp4"
         if name != source and name not in taken:
@@ -177,7 +145,6 @@ def _camera_name(source: str, taken: set[str], rng: random.Random) -> str:
 
 
 def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
-    """Into Drive's trash (restorable there for 30 days); True when all went."""
     fine = True
     for file_id in file_ids:
         try:
@@ -191,18 +158,12 @@ def _trash(drive: DriveApi, file_ids: list[str]) -> bool:
 
 
 class _Trials(BaseModel, frozen=True, arbitrary_types_allowed=True):
-    """The TRIALS folder in Drive, opened: its id and what is already in it."""
-
     drive: SkipValidation[DriveApi]
     folder_id: str
     files: list[DriveFile]
 
 
 class Folder(BaseModel, frozen=True):
-    """One login's folder as its owner works on it: every step of the jobs
-    below, on that folder (`user_id`'s, of `login_id`), through the owner's
-    Drive (`refresh_token`; "" = no Drive, what is on disk only)."""
-
     user_id: int
     login_id: int
     refresh_token: str = ""
@@ -221,9 +182,6 @@ class Folder(BaseModel, frozen=True):
         return load(self.user_id, self.login_id)
 
     def _drive(self) -> ReviewPlace | None:
-        """The owner's Drive and the root it writes in (`review_target`: dev
-        reading the live folders writes only in its own DEV root), or None
-        with `state.problem` set."""
         try:
             found = review_target(self.refresh_token, self.user_id)
         except DriveError:
@@ -236,7 +194,6 @@ class Folder(BaseModel, frozen=True):
         return found
 
     def _fetch(self, drive: DriveApi, key: str) -> str:
-        """A reel's source from Drive onto disk: its path in the work dir."""
         got = drive.download(key)
         rel = f"src/{key}-{Path(got.name).name}"
         path = work_dir(self.user_id, self.login_id) / rel
@@ -245,8 +202,6 @@ class Folder(BaseModel, frozen=True):
         return rel
 
     def _source(self, reel: ReelState) -> Path:
-        """The reel's source on disk; one deleted since (`cleanup`: a day old)
-        is downloaded again, its Drive id being the reel's key."""
         root = work_dir(self.user_id, self.login_id)
         if self._on_disk(reel):
             return root / str(reel.local)
@@ -258,8 +213,6 @@ class Folder(BaseModel, frozen=True):
         return root / rel
 
     def _download(self, drive: DriveApi) -> None:
-        """Every reel not on disk yet, onto disk; not one whose copy is made
-        (its source comes back only to make it again)."""
         for reel in self._load().reels:
             if reel.out or self._on_disk(reel):
                 continue
@@ -273,9 +226,6 @@ class Folder(BaseModel, frozen=True):
             self._change_reel(reel.key, partial(ReelState.mark_downloaded, local=rel))
 
     def _list_posted(self, drive: DriveApi) -> bool:
-        """POSTED as it is now into the state (the page shows the last sweep's
-        read; a video posted since is picked up here). False when it was not
-        read: nobody can say what is new in it."""
         posted_id = self._load().posted_folder_id
         if not posted_id:
             return False
@@ -292,18 +242,6 @@ class Folder(BaseModel, frozen=True):
         return True
 
     def make_trials(self) -> Made | Requeued:
-        """Generate trials: POSTED read again, the reels not on disk downloaded,
-        then every reel with no copy yet is made; a copy already made is left
-        alone. Drive unreachable: what is on disk is still made, and the page
-        says to connect Drive again. The status line says what it left: nothing
-        new in POSTED, or how many it could not make (the next click tries them
-        again).
-
-        One media worker makes every copy (minutes each): after each reel,
-        when another job waits for it (an upload, a caption, another folder's
-        Generate), this one goes back to the end of the line (`Requeued`) and
-        goes on where it stopped (prod 2026-11-15: an upload of 3 waited 26
-        min behind a Generate of 5). `Made` counts the last run's copies."""
         found = self._drive()
         read = found is not None and self._list_posted(found.drive)
         if found is not None:
@@ -328,22 +266,12 @@ class Folder(BaseModel, frozen=True):
         return Made(generated=made.count(True), failed=made.count(False))
 
     def generate_reels(self, keys: list[str] | None = None) -> Made:
-        """The snapchat pipeline on each downloaded reel (`keys`: only those),
-        the AI writing its captions the first time and the copy made with the
-        first; then with the caption it has (one chosen, the user's own:
-        Regenerate never asks the AI again); one after another, each saved as
-        it lands."""
         state = self._load()
         wanted = [r.key for r in state.reels if keys is None or r.key in keys]
         made = [self.make(key) for key in wanted]
         return Made(generated=made.count(True), failed=made.count(False))
 
     def make(self, key: str, *, restore: bool = False) -> bool:
-        """One reel's copy (and the page's preview of it), from the reel as it
-        is now (a caption applied meanwhile counts), into a temp file then over
-        the old copy, so the page never plays a half-written one. `restore`: the
-        copy it had, deleted since, again from its recipe (for its upload). True
-        when made; the reel is recorded either way."""
         reel = self._load().reel(key)
         if reel is None:
             return False
@@ -372,7 +300,7 @@ class Folder(BaseModel, frozen=True):
             making.replace(out)
             with logfire.span("trials page media {key}", key=key):
                 _page_media(out)
-        except Exception as exc:  # one bad reel must not sink the batch
+        except Exception as exc:
             logger.warning("trials: making %s failed", key, exc_info=True)
             making.unlink(missing_ok=True)
             error = _why(exc, had_source=src is not None)
@@ -386,14 +314,12 @@ class Folder(BaseModel, frozen=True):
         return True
 
     def write_captions(self, key: str) -> Captioned:
-        """Captions to choose from for a reel made before there were any; its
-        copy stays as it is until one is chosen."""
         reel = self._load().reel(key)
         try:
             if reel is None:
                 raise FileNotFoundError(key)  # noqa: TRY301 - same handling
             choices = _written(self._source(reel))
-        except Exception:  # the page says it short; the copy is untouched
+        except Exception:
             logger.warning("trials: captions of %s failed", key, exc_info=True)
             self._change_reel(key, lambda r: r.captions_failed(CAPTIONS_FAILED))
             return Captioned(captions=0)
@@ -401,14 +327,10 @@ class Folder(BaseModel, frozen=True):
         return Captioned(captions=len(choices))
 
     def _trials_folder(self, place: ReviewPlace, account_folder_id: str) -> str:
-        """TRIALS in her folder (`account_subfolder`: dev's twin of it while
-        dev reads the live folders)."""
         with locked(self.user_id, self.login_id, "trials-folder", _FOLDER_LOCK_S):
             return account_subfolder(place, account_folder_id, AccountFolder.TRIALS)
 
     def _open_trials(self, account_folder_id: str) -> _Trials | None:
-        """The owner's Drive, TRIALS' id (remembered in the state) and what is
-        already in it, or None with `state.problem` set."""
         found = self._drive()
         if found is None:
             return None
@@ -435,9 +357,6 @@ class Folder(BaseModel, frozen=True):
         self._change(back)
 
     def _restored(self, keys: list[str]) -> list[str]:
-        """Of `keys`, the reels whose copy is on disk: one deleted since
-        (`cleanup`) is made again from its recipe first; one that cannot be is
-        left out, saying why."""
         state = self._load()
         ready = []
         for key in keys:
@@ -452,11 +371,6 @@ class Folder(BaseModel, frozen=True):
         return ready
 
     def upload_trials(self, account_folder_id: str, keys: list[str]) -> Uploaded:
-        """The reels `keys` (claimed for this job by the page) replace the
-        videos in TRIALS, each under a fresh VID_XXXX.mp4. All or nothing, new
-        ones first: one that fails takes back those it went up with, what was
-        in TRIALS stays, and the batch is selected again. Only then the old
-        ones go to Drive's trash, and their reels can be selected again."""
         keys = self._restored(keys)
         if not keys:
             return Uploaded(uploaded=0)
@@ -497,11 +411,7 @@ class Folder(BaseModel, frozen=True):
         return Uploaded(uploaded=len(landed))
 
 
-# --- the jobs: what RQ imports by name, each one a step of `Folder` -----------
-
-
 def make_trials(*, user_id: int, refresh_token: str, login_id: int) -> Made | Requeued:
-    """Generate trials (`Folder.make_trials`)."""
     return Folder(
         user_id=user_id, login_id=login_id, refresh_token=refresh_token
     ).make_trials()
@@ -514,7 +424,6 @@ def generate_reels(
     keys: list[str] | None = None,
     refresh_token: str = "",
 ) -> Made:
-    """Make these reels' copies (`Folder.generate_reels`)."""
     return Folder(
         user_id=user_id, login_id=login_id, refresh_token=refresh_token
     ).generate_reels(keys)
@@ -523,7 +432,6 @@ def generate_reels(
 def write_captions(
     *, user_id: int, login_id: int, key: str, refresh_token: str = ""
 ) -> Captioned:
-    """Captions for one reel (`Folder.write_captions`)."""
     return Folder(
         user_id=user_id, login_id=login_id, refresh_token=refresh_token
     ).write_captions(key)
@@ -537,7 +445,6 @@ def upload_trials(
     account_folder_id: str,
     keys: list[str],
 ) -> Uploaded:
-    """Replace TRIALS with these reels (`Folder.upload_trials`)."""
     return Folder(
         user_id=user_id, login_id=login_id, refresh_token=refresh_token
     ).upload_trials(account_folder_id, keys)

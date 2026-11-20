@@ -1,14 +1,8 @@
-"""/threads: an account's POSTED reels; Make pictures / Regenerate makes a
-set of a reel (stills as the phone's own photos) into its own folder in
-THREADS in the account's Drive folder. Review 2026-11-18: thirty clicks at
-once start one set, a set never shares a folder, a rerun uploads nothing
-twice, a picture or a missing reel is refused, no Drive is refused before
-anything is queued. The photo writer itself: tests/unit/repurpose."""
-
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
+from notifications_socket import SOCKET, next_lines, next_sent
 from signin import sign_in_agency
 
 from ofmhelpers.cache import get_redis
@@ -29,8 +23,6 @@ ROOT = "agency-root-folder"
 
 @pytest.fixture
 def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
-    """The fake Drive, the agency's Google Drive connected with its
-    "DEV - ALL ACCOUNTS" root (as /trials' tests)."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path))
     fake = fake_drive()
     fake.seed_folder("My Drive", item_id=MY_DRIVE, owner=AGENCY, shared=True)
@@ -42,8 +34,6 @@ def drive(fake_externals, monkeypatch, tmp_path) -> FakeDrive:
 
 @pytest.fixture
 def photos(monkeypatch) -> list[str]:
-    """The photo writer faked: three small files a set; the seeds it ran
-    with, in order."""
     seeds: list[str] = []
 
     def write(src, dest, *, preset, seed, timeout_s):
@@ -61,7 +51,6 @@ def photos(monkeypatch) -> list[str]:
 
 @pytest.fixture
 def real_queue(monkeypatch):
-    """Jobs wait in Redis from here on, instead of running inline."""
 
     def switch_on() -> None:
         monkeypatch.setenv("OFM_RQ_ASYNC", "true")
@@ -83,8 +72,6 @@ def _account(drive: FakeDrive) -> str:
 
 
 def _login(drive: FakeDrive, *files: tuple[str, str]) -> int:
-    """A phone with @ann.ig, its folders made, `files` (name, mime) in its
-    POSTED and read by a sweep (what /threads shows)."""
     phone = devices.add_device(
         DeviceFields(
             label="Phone 01", model_id="iphone-13", color_id="blue", owner="Anna"
@@ -124,8 +111,6 @@ def test_the_page_lists_the_posted_reels_to_make_pictures_of(drive):
 
 
 def test_thirty_clicks_at_once_start_one_set(drive, real_queue):
-    """Two tabs, a retried request: before the lock, 30 POSTs made 30 jobs
-    (review 2026-11-18)."""
     login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
     url = f"/threads/{login_id}/reels/{_key(drive, 'VID_1.mp4')}/pictures"
     real_queue()
@@ -171,9 +156,6 @@ def test_without_google_drive_nothing_is_queued(drive, photos, monkeypatch):
 
 
 def test_each_set_has_its_own_folder_and_a_rerun_uploads_nothing_twice(drive, photos):
-    """A set keeps the folder it made (its id in the job's params): two sets
-    of one reel never mix, and the same set run again (recovery) finds its
-    pictures on disk and in its folder."""
     login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
     url = f"/threads/{login_id}/reels/{_key(drive, 'VID_1.mp4')}/pictures"
     client = _client()
@@ -194,8 +176,8 @@ def test_each_set_has_its_own_folder_and_a_rerun_uploads_nothing_twice(drive, ph
     assert job is not None
     tasks.make_pictures(**registry._threads(job))
 
-    assert len(photos) == 2  # nothing cut again
-    assert len(drive.names_in(one)) == 3  # nothing uploaded again
+    assert len(photos) == 2
+    assert len(drive.names_in(one)) == 3
     assert sorted(drive.names_in(threads)) == ["VID_1", "VID_1 (2)"]
 
 
@@ -214,3 +196,48 @@ def test_a_set_whose_folder_was_deleted_by_hand_makes_another(drive, photos):
     assert again != made.params["folder_id"]
     assert len(drive.names_in(again)) == 3
     assert len(result.names) == 3
+
+
+def test_the_index_shows_generated_next_to_posted(drive, photos):
+    login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
+    threads = service.Threads(uid=users.agency_id(), scope=None, login_id=login_id)
+    threads.start(_key(drive, "VID_1.mp4"))
+
+    page = _client().get("/threads")
+
+    assert page.status_code == 200
+    assert "Posted: <strong>1</strong>" in page.text
+    assert "Generated: <strong>1</strong>" in page.text
+    assert "Generating: <strong>0</strong>" in page.text
+
+
+def test_the_index_shows_what_is_generating(drive, photos, real_queue):
+    login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
+    real_queue()
+    client = _client()
+    client.post(
+        f"/threads/{login_id}/reels/{_key(drive, 'VID_1.mp4')}/pictures",
+        follow_redirects=False,
+    )
+
+    page = client.get("/threads")
+
+    assert "Generating: <strong>1</strong>" in page.text
+    assert "Generated: <strong>0</strong>" in page.text
+
+
+def test_a_set_that_ends_is_on_its_persons_open_notifications_at_once(drive, photos):
+    login_id = _login(drive, ("VID_1.mp4", "video/mp4"))
+    threads = service.Threads(uid=users.agency_id(), scope=None, login_id=login_id)
+    with _client().websocket_connect(SOCKET) as socket:
+        assert next_sent(socket) == []
+
+        threads.start(_key(drive, "VID_1.mp4"))
+
+        (line,) = next_lines(socket)
+    assert (line["title"], line["text"], line["url"], line["kind"]) == (
+        "@ann.ig",
+        "Threads pictures ready: VID_1.mp4",
+        f"/threads/{login_id}",
+        "info",
+    )

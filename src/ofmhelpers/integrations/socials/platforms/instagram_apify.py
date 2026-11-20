@@ -1,24 +1,3 @@
-"""Instagram through Apify, the first source: no proxies, no login, no ban.
-
-Per batch, every key in `APIFY_API_KEYS` most credit first; a key takes as
-many accounts as its credit covers (`apify_usd_per_item` x (profile +
-`apify_est_reels`)). Per key two runs: the profile scraper (followers,
-avatar, private) for all of them, then the reel scraper for the public ones,
-only reels of the last `OFM_ACCOUNTS_APIFY_DAYS` (play counts) -- older ones
-keep the views the last scan saw.
-
-What a key did not read goes to the next key, then to the next source:
-- profile run failed or out of credit: its accounts (nothing was read);
-- reel run failed, out of credit or cut short: only its public accounts
-  (half a reel read would save wrong views); the private ones and the
-  profiles already paid for are kept;
-- an account the profile run, having succeeded, did not return (not found):
-  straight to the next source, never paid for again on another key.
-
-One batch at a time across every worker (`_one_at_a_time`): parallel jobs
-sizing their share from the same credit figure would spend it several times
-over. A handle two users track is read once."""
-
 import time
 from contextlib import contextmanager
 lazy from collections.abc import Generator
@@ -68,8 +47,6 @@ def profile_input(handles: list[str]) -> ProfileScraperInput:
 
 
 def reel_input(handles: list[str], limit: int, days: int) -> ReelScraperInput:
-    """Each account's reels of the last `days`, at most `limit` (always set:
-    without it the actor reads the whole profile), every paid add-on off."""
     return ReelScraperInput(
         username=handles, results_limit=limit, only_posts_newer_than=f"{days} days"
     )
@@ -78,7 +55,6 @@ def reel_input(handles: list[str], limit: int, days: int) -> ReelScraperInput:
 def _parsed[T: BaseModel](
     items: list[DatasetItem], model: type[T], what: str
 ) -> list[T]:
-    """The items `model` reads; error items and unreadable ones logged."""
     found: list[T] = []
     for item in items:
         if item.failed:
@@ -92,8 +68,6 @@ def _parsed[T: BaseModel](
 
 
 def _handle_of(profile: ApifyProfile, asked: set[str]) -> str | None:
-    """Which asked handle `profile` answers: its username, else (renamed
-    since) the profile URL it was asked by."""
     name = profile.username.lower()
     if name in asked:
         return name
@@ -138,8 +112,6 @@ def _stats(profile: ApifyProfile, reels: list[ApifyReel], now: float) -> Account
             for r in dated[:cap]
             if r.posted_at is not None
         ],
-        # Only the last `days` were asked for: every post from then on,
-        # unless the cap cut in first (then from its oldest post).
         complete=False,
         since=None if capped or profile.is_private else now - days * DAY_S,
         scanned_at=now,
@@ -148,10 +120,6 @@ def _stats(profile: ApifyProfile, reels: list[ApifyReel], now: float) -> Account
 
 @contextmanager
 def _one_at_a_time(keys: int, wait_s: float | None = None) -> Generator[bool]:
-    """Held while a batch spends: True. Not had within `wait_s` (default:
-    the longest a batch may take, every key's two runs): False, the batch
-    goes to the next source. Redis down: logged, True (spending unlocked
-    beats not reading)."""
     longest = keys * 2 * (settings.accounts.apify_run_timeout_s + 60) + 60
     wait = longest if wait_s is None else wait_s
     lock = get_redis().lock(_LOCK, timeout=longest, blocking_timeout=wait)
@@ -197,7 +165,6 @@ class ApifyInstagramSource(AccountSource):
     def _through_keys(
         self, keys: list[str], handles: list[str]
     ) -> dict[str, AccountStats]:
-        """`handles` through the keys, most credit first; by handle."""
         s = settings.accounts
         each = s.apify_usd_per_item * (1 + s.apify_est_reels)
         read: dict[str, AccountStats] = {}
@@ -225,16 +192,12 @@ class ApifyInstagramSource(AccountSource):
                 )
                 got, gave_up = {}, set()
             read.update(got)
-            # Not read and not given up on: the next key tries them first.
             left = [h for h in group if h not in got and h not in gave_up] + left
         return read
 
     def _read(
         self, client: ApifyClient, handles: list[str]
     ) -> tuple[dict[str, AccountStats], set[str]]:
-        """The accounts `client` read, and the ones the actor answered it
-        cannot read (not found: no other key will do better). Raises only
-        when the profile run itself fails (nothing read, nothing to keep)."""
         s = settings.accounts
         now = time.time()
         asked = set(handles)
@@ -268,14 +231,9 @@ class ApifyInstagramSource(AccountSource):
     def _reels(
         client: ApifyClient, public: dict[str, ApifyProfile]
     ) -> tuple[dict[str, list[ApifyReel]] | None, float]:
-        """The public accounts' reels of the last days by asked handle, and
-        what the run cost; None when the run did not finish whole (failed,
-        out of credit, cut short): their accounts go on, unread."""
         if not public:
             return {}, 0.0
         s = settings.accounts
-        # Asked by the current username: a renamed account's old handle may
-        # be nobody's, or someone else's, by now.
         handle_of = {p.username.lower(): h for h, p in public.items()}
         try:
             run = client.run(

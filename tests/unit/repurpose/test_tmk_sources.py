@@ -1,7 +1,3 @@
-"""checker/tmk.py keeps each source's hash in the uploads root's `.tmk`
-folder (it was the container's temp dir: never cleaned), made once per file
-version and dropped a day after its last use."""
-
 import os
 import time
 from pathlib import Path
@@ -13,7 +9,6 @@ from ofmhelpers.media.repurpose.checker import tmk
 
 @pytest.fixture
 def hashed(monkeypatch, tmp_path) -> list[Path]:
-    """The uploads root in `tmp_path`; the videos the C++ tool was run on."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     made: list[Path] = []
 
@@ -50,7 +45,7 @@ def test_a_hash_unused_for_a_day_goes_when_the_next_is_made(hashed):
     long_ago = time.time() - tmk._KEEP_S - 60
     os.utime(old, (long_ago, long_ago))
     os.utime(used, (long_ago, long_ago))
-    tmk._source("/videos/used.mp4", 1.0, 30)  # used again: its day starts over
+    tmk._source("/videos/used.mp4", 1.0, 30)
 
     new = tmk._source("/videos/new.mp4", 1.0, 30)
 

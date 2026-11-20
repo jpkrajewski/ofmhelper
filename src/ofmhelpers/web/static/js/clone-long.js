@@ -1,11 +1,3 @@
-/*
- * /clone-long: the picked video's price, live. Its length is read in the
- * browser (video metadata), split like web/clone_long/models.py Plan (the
- * fewest pieces of at most data-max-piece seconds), priced at the picked
- * provider's credits per second for the picked resolution. Over
- * data-max-video it says so. The server measures and prices again on Start;
- * this is only the preview.
- */
 (() => {
     const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
     const credits = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -37,8 +29,7 @@
         const maxPiece = Number(form.dataset.maxPiece);
         const maxVideo = Number(form.dataset.maxVideo);
         let seconds = null;
-        // Which pick the last read was for: a slow read of an earlier pick
-        // (a big file) must not overwrite the current one's length.
+
         let pick = 0;
 
         function render() {
@@ -76,7 +67,6 @@
             });
         }
 
-        // A started run's card goes on top: the empty text goes.
         form.addEventListener("submit", () => {
             const empty = document.getElementById("clone-long-empty");
             if (empty) empty.hidden = true;
@@ -84,15 +74,12 @@
         picker.addEventListener("filepicker:change", update);
         provider.addEventListener("change", render);
         resolution.addEventListener("change", render);
-        // A download sent its video here (?video=): open with it picked.
+
         const prefill = JSON.parse(form.dataset.prefillVideo || "[]");
         if (prefill.length) window.FilePicker.setExisting("video", prefill);
         update();
     }
 
-    // Recreate: a run's image, video, prompt, resolution and provider back in
-    // the form (2026-10-23: the button did nothing here). A file no longer on
-    // the server is left out and named (FilePicker.setExisting).
     function fill(form, params) {
         window.FilePicker.setExisting("image", params.image ? [params.image] : []);
         window.FilePicker.setExisting("video", params.video ? [params.video] : []);

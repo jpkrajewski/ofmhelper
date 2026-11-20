@@ -1,7 +1,3 @@
-"""Every chat platform through the one `ChatSource` interface: the same tests, the same
-words, for each. What one platform does differently lives in tests/chat_platforms.py;
-a test here failing for one platform only means the interface leaks."""
-
 import time
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
@@ -9,17 +5,27 @@ from http import HTTPStatus
 import pytest
 from chat_platforms import PLATFORMS
 from fastapi.testclient import TestClient
+from notifications_socket import (
+    SOCKET,
+    agency_notifications,
+    first_sent,
+    next_lines,
+    next_sent,
+)
 from signin import sign_in, sign_in_admin
+from starlette.websockets import WebSocketDisconnect
 
 from ofmhelpers.cache import get_text
-from ofmhelpers.db.stores import chats
-from ofmhelpers.features.chatting.alerts import chat_alerts
+from ofmhelpers.db.stores import chats, users
+from ofmhelpers.db.stores.jobs import create_job, finish_job
 from ofmhelpers.features.chatting.sync import run_when_due, sync
 from ofmhelpers.features.chatting.webhooks import (
     ensure_destinations,
     models_delivering,
     sync_done_key,
 )
+from ofmhelpers.features.trials.folder import GENERATE
+from ofmhelpers.features.trials.tasks import Made
 from ofmhelpers.integrations.chat_source import ChatSourceError
 from ofmhelpers.schemas.chatting import DeliveryKind, ReadScope
 from ofmhelpers.web.main import app
@@ -49,7 +55,6 @@ def _post(client, side, body, secret=None, age_s=0):
 
 
 def _fan_waits(client, side, fan, ago=LATE):
-    """A fan's message arrives by webhook, `ago` seconds old."""
     message_id = side.new_id()
     body = side.message(fan, message_id, from_fan=True, at=time.time() - ago)
     assert _post(client, side, body).status_code == HTTPStatus.OK
@@ -62,7 +67,7 @@ def _model_replies(client, side, fan, ago=0):
 
 
 def _popups():
-    return [f"{p.text}: @{p.username}" for p in chat_alerts().popups]
+    return [f"{p.text}: {p.title}" for p in agency_notifications()]
 
 
 def _scope(side):
@@ -80,9 +85,6 @@ def _long_ago():
 
 def _model_of(side):
     return next(m for m in side.source.models().found if m.username == side.model)
-
-
-# --- the interface itself ---------------------------------------------------
 
 
 def test_a_platform_finds_its_model(side):
@@ -168,9 +170,6 @@ def test_reading_never_marks_anything_read(side):
     assert not [path for _, path in calls if path.endswith("/read")]
 
 
-# --- /events/{platform} into the pop-up -------------------------------------
-
-
 def test_a_fan_past_the_limit_gets_the_model_a_popup(client, side):
     _fan_waits(client, side, "ann")
 
@@ -189,10 +188,38 @@ def test_one_popup_per_model_counting_fans_not_messages(client, side):
     _fan_waits(client, side, "bob")
 
     assert _popups() == [f"Chats unanswered (2): @{side.model}"]
-    [popup] = chat_alerts().popups
+    [popup] = agency_notifications()
     assert popup.kind == "warn"
     assert popup.url == f"/chatting/{side.platform.value}/{side.model}"
     assert len(popup.event_ids) == 2
+
+
+def test_a_fan_left_waiting_is_sent_to_an_open_notifications_at_once(client, side):
+    sign_in_admin(client)
+    with client.websocket_connect(SOCKET) as socket:
+        assert next_sent(socket) == []
+
+        _fan_waits(client, side, "ann")
+
+        lines = next_lines(socket)
+    assert [(n["title"], n["text"]) for n in lines] == [
+        (f"@{side.model}", "Chats unanswered (1)")
+    ]
+
+
+def test_chats_and_jobs_are_one_list_newest_first(client, side):
+    _fan_waits(client, side, "ann")
+    trials = create_job(
+        "trials", {"label": GENERATE, "login": 999}, actor=str(users.agency_id())
+    )
+    finish_job(trials, Made(generated=1, failed=0))
+    _post(client, side, side.mass("mass-1"))
+
+    assert [n.text for n in agency_notifications()] == [
+        "Mass message sent",
+        "Trials ready: 1 made",
+        "Chats unanswered (1)",
+    ]
 
 
 def test_the_number_goes_down_as_chatters_answer(client, side):
@@ -217,11 +244,11 @@ def test_a_reply_arriving_before_the_fans_message_still_answers_it(client, side)
 
 def test_a_fan_writing_again_keeps_their_place_in_line(client, side):
     _fan_waits(client, side, "ann", ago=LATE)
-    first = chat_alerts().popups[0].event_ids
+    first = agency_notifications()[0].event_ids
 
     _fan_waits(client, side, "ann", ago=MIN)
 
-    assert chat_alerts().popups[0].event_ids == first
+    assert agency_notifications()[0].event_ids == first
 
 
 def test_the_same_delivery_twice_counts_once(client, side):
@@ -243,7 +270,6 @@ def test_a_deleted_fan_message_stops_waiting(client, side):
 
 
 def test_a_destination_at_a_longer_address_is_heard(client, side):
-    """A platform set up on its own site sends to whatever address was typed there."""
     body = side.message("ann", side.new_id(), from_fan=True, at=time.time() - LATE)
     raw, headers = side.signed(body)
 
@@ -317,9 +343,6 @@ def test_a_name_postgres_refuses_does_not_fail_the_delivery(client, side):
     assert len(message.fan_name) == 255
 
 
-# --- the emoji --------------------------------------------------------------
-
-
 def test_the_models_emoji_on_a_fans_message_answers_it(client, side):
     now = time.time()
     message_id = side.fan_writes("ann", now - LATE)
@@ -343,9 +366,6 @@ def test_the_fans_own_emoji_answers_nothing(client, side):
     side.notice_reaction(client, "ann", message_id, now - MIN)
 
     assert _popups() == [f"Chats unanswered (1): @{side.model}"]
-
-
-# --- the sync ---------------------------------------------------------------
 
 
 def test_the_sync_alone_fills_the_popup_and_clears_it(side):
@@ -420,8 +440,6 @@ def test_a_delivered_reply_lets_the_sync_rest_but_a_waiting_fan_does_not(
     _model_replies(client, side, "ann")
     assert models_delivering(side.platform) == {side.model}
 
-    # Delivering, and a fan past the limit: read anyway, or an emoji or a reply no
-    # webhook told of would keep them reported for an hour.
     before = side.chat_reads()
     run_when_due(side.platform)
     assert side.chat_reads() == before
@@ -431,9 +449,6 @@ def test_a_delivered_reply_lets_the_sync_rest_but_a_waiting_fan_does_not(
     assert side.chat_reads() > before
 
 
-# --- destinations -----------------------------------------------------------
-
-
 def test_a_second_round_of_destinations_changes_nothing(side):
     ensure_destinations()
     first = chats.webhooks(side.platform)
@@ -441,9 +456,6 @@ def test_a_second_round_of_destinations_changes_nothing(side):
     ensure_destinations()
 
     assert chats.webhooks(side.platform) == first
-
-
-# --- the pages --------------------------------------------------------------
 
 
 def test_the_pages_show_the_late_fan_and_the_average(client, side):
@@ -473,16 +485,14 @@ def test_a_user_who_is_not_admin_gets_no_chats(client, side):
     _fan_waits(client, side, "ann")
     sign_in(client)
 
-    assert client.get("/chatting/alerts").status_code == HTTPStatus.FORBIDDEN
+    assert first_sent(client) == []
     page = client.get(f"/chatting/{side.platform.value}/{side.model}")
     assert page.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_nobody_signed_in_gets_no_chats_but_deliveries_still_arrive(client, side):
-    assert (
-        client.get("/chatting/alerts", follow_redirects=False).status_code
-        != HTTPStatus.OK
-    )
+    with pytest.raises(WebSocketDisconnect):
+        first_sent(client)
     assert _post(client, side, side.mass("mass-1")).status_code == HTTPStatus.OK
 
 

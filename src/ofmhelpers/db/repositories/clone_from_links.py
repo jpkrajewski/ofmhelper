@@ -1,11 +1,3 @@
-"""/clone-links results on their way to Drive (`clone_from_links`). Uncached:
-the page polls it while reviews run.
-
-A worker owns a row from its `claim` (`started_at` set, `attempts` + 1)
-until it finishes it; `checked` and `finish` change only the row as that
-claim left it (`started_at` equal), so a run whose row was restarted or
-taken over meanwhile writes nothing."""
-
 import time
 
 from sqlalchemy import (
@@ -36,14 +28,11 @@ def _review(row: CloneFromLinkRow) -> CloneFromLink:
 
 
 def _held(claimed: float | None) -> ColumnElement[bool]:
-    """The row as a claim left it: claimed at `claimed`, or never claimed
-    (None: what `start_reviews` finishes when it cannot queue it)."""
     started = CloneFromLinkRow.started_at
     return started.is_(None) if claimed is None else started == claimed
 
 
 def _changed(statement: Update) -> bool:
-    """Whether the UPDATE changed its one row."""
     with session_scope() as s:
         found = s.execute(statement.returning(CloneFromLinkRow.id))
         return found.scalar_one_or_none() is not None
@@ -60,11 +49,6 @@ class CloneFromLinkRepository(CachedRepository):
         path: str | None,
         stale_before: float,
     ) -> int | None:
-        """The review's id, (re)started as `checking` of the file at `path`;
-        None when this file is reviewed already, under review, or another
-        user's row. A failed one starts again, and so does one running since
-        before `stale_before` (claimed then, or queued then and never
-        claimed)."""
         row = CloneFromLinkRow
         fresh = {
             "status": "checking",
@@ -105,9 +89,6 @@ class CloneFromLinkRepository(CachedRepository):
             return _review(row) if row else None
 
     def claim(self, review_id: int) -> CloneFromLink | None:
-        """The row, claimed for this worker (`started_at` now, one more
-        attempt); None when it is not running or another worker holds it
-        (a second queued job for the same review)."""
         row = CloneFromLinkRow
         with session_scope() as s:
             found = s.execute(
@@ -126,8 +107,6 @@ class CloneFromLinkRepository(CachedRepository):
     def for_jobs(
         self, job_ids: list[str], user_id: int | None = None
     ) -> list[CloneFromLink]:
-        """Every review of these jobs' results (only `user_id`'s when
-        given), by job then file."""
         if not job_ids:
             return []
         query = select(CloneFromLinkRow).where(CloneFromLinkRow.job_id.in_(job_ids))
@@ -146,9 +125,6 @@ class CloneFromLinkRepository(CachedRepository):
         check_id: int | None,
         folder_name: str,
     ) -> bool:
-        """Checked: now uploading into `folder_name`. False when the row is
-        no longer this claim's (restarted, taken over, deleted with its
-        job)."""
         row = CloneFromLinkRow
         return _changed(
             update(row)
@@ -165,8 +141,6 @@ class CloneFromLinkRepository(CachedRepository):
         drive_url: str | None = None,
         error: str | None = None,
     ) -> bool:
-        """Done (with the Drive file), or failed with `error`; False when the
-        row is no longer as `claimed` left it."""
         row = CloneFromLinkRow
         return _changed(
             update(row)
@@ -180,10 +154,7 @@ class CloneFromLinkRepository(CachedRepository):
             )
         )
 
-    # --- recovery (features/clone_links/review.py resume_reviews) ----------------
-
     def cut_off(self, stale_before: float) -> list[CloneFromLink]:
-        """Running rows a worker claimed before `stale_before`."""
         row = CloneFromLinkRow
         with session_scope() as s:
             rows = s.execute(
@@ -194,7 +165,6 @@ class CloneFromLinkRepository(CachedRepository):
             return [_review(r) for r in rows]
 
     def never_claimed(self, created_before: float) -> list[CloneFromLink]:
-        """Running rows no worker has claimed, made before `created_before`."""
         row = CloneFromLinkRow
         with session_scope() as s:
             rows = s.execute(
@@ -209,8 +179,6 @@ class CloneFromLinkRepository(CachedRepository):
             return [_review(r) for r in rows]
 
     def release(self, review_id: int, claimed: float | None) -> bool:
-        """The claim made at `claimed` dropped (its worker is gone): the row
-        waits for a worker again, check and folder kept."""
         row = CloneFromLinkRow
         return _changed(
             update(row)
@@ -219,7 +187,6 @@ class CloneFromLinkRepository(CachedRepository):
         )
 
     def failed_since(self, since: float) -> list[CloneFromLink]:
-        """Failed rows with nothing in Drive, finished after `since`."""
         row = CloneFromLinkRow
         with session_scope() as s:
             rows = s.execute(
@@ -234,9 +201,6 @@ class CloneFromLinkRepository(CachedRepository):
             return [_review(r) for r in rows]
 
     def reopen(self, review_id: int, finished_at: float | None) -> bool:
-        """A failed row (as it finished at `finished_at`) running again:
-        `uploading` when its check is saved (`folder_name`), else
-        `checking`; unclaimed, error cleared."""
         row = CloneFromLinkRow
         return _changed(
             update(row)
@@ -256,9 +220,6 @@ class CloneFromLinkRepository(CachedRepository):
         )
 
     def unreviewed_jobs(self, task: str, since: float) -> list[Job]:
-        """`task`'s done jobs finished after `since` with no review row: a
-        run whose review never started. Only what `Job` needs to read its
-        result; never the healing job listing."""
         job = JobRow
         reviewed = exists().where(CloneFromLinkRow.job_id == job.id)
         with session_scope() as s:

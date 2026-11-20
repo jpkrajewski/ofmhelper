@@ -1,8 +1,3 @@
-"""/clone's one-click picks and Start dialog (clone-picks.js), and Trim it!
--> /edit -> Clone it (clone-cost.js, edit.js, clone-return.js), in a real
-browser against the e2e app (every outside service faked, the edit worker
-running)."""
-
 import re
 import subprocess
 from pathlib import Path
@@ -13,14 +8,12 @@ from playwright.sync_api import Request, expect
 
 pytestmark = pytest.mark.e2e
 
-# A cut is a job on the edit worker: queued, encoded, polled every 2 s.
 CUT_TIMEOUT_MS = 60_000
 DEFAULT_PROMPT = "Replace the subject in @Video1 with subject from @Image1"
 
 
 @pytest.fixture
 def long_video(tmp_path: Path) -> Path:
-    """16 s: one over Wan 3.0's 15 s, so /clone offers Trim it!."""
     path = tmp_path / "long.mp4"
     subprocess.run(
         [
@@ -59,7 +52,6 @@ def test_a_chip_adds_its_words_and_takes_them_back_out(va: Session):
     chip.click()
     expect(prompt).to_have_value(DEFAULT_PROMPT)
     expect(chip).to_have_attribute("aria-pressed", "false")
-    # Typed in any wording, the chip lights up too.
     prompt.fill(f"{DEFAULT_PROMPT}, NO TATTOS")
     expect(chip).to_have_attribute("aria-pressed", "true")
     assert va.js_errors == []
@@ -92,7 +84,6 @@ def test_start_asks_first_and_a_tile_then_picks_that_one_subject(
     expect(dialog.locator(".clone-confirm-images img")).to_have_count(2)
     expect(dialog.locator(".clone-confirm-videos video")).to_have_count(1)
     expect(dialog.locator("#clone-confirm-prompt mark")).to_have_count(2)
-    # A chip in the dialog changes the prompt it shows and the form's.
     dialog.locator(".addon-chip", has_text="Remove text overlay").click()
     expect(dialog.locator("#clone-confirm-prompt")).to_contain_text(
         "remove text overlay"
@@ -111,7 +102,6 @@ def test_start_asks_first_and_a_tile_then_picks_that_one_subject(
     assert run.value.request.post_data_buffer is not None
     assert b"remove text overlay" in run.value.request.post_data_buffer
 
-    # The run's first image is now a tile (last used and most used).
     va.goto("/clone")
     tiles = va.page.locator(".subject-tile")
     expect(tiles).to_have_count(2)
@@ -162,7 +152,6 @@ def test_trim_it_cuts_the_long_video_and_clone_it_brings_the_form_back(
         f"{DEFAULT_PROMPT}, no tattoos"
     )
     expect(va.page.locator('[name="mirror"]')).to_be_checked()
-    # Every video now fits: no Trim it! left, both priced.
     expect(va.page.locator("#clone-cost-lines .trim-btn")).to_have_count(0)
     expect(va.page.locator("#clone-cost-summary")).to_have_text(
         "2 runs · 18.0 s of video"

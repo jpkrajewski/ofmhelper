@@ -1,14 +1,3 @@
-"""chat_webhooks: the webhook destination made for each model on a chat platform
-
-Holds the signing secret, shown only once when the destination is made, so it is
-encrypted (`EncryptedText`, `OFM_VAULT_KEY`). New table only; nothing moves.
-
-Revision ID: e2d3c4b5a6f7
-Revises: f3e2d1c0b9a8
-Create Date: 2026-11-05 02:10:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

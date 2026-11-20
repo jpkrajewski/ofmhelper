@@ -1,16 +1,3 @@
-"""Every language-model provider behind `ofmhelpers.integrations.llm`, on its fake and
-on the real API (free tiers; keys from .env under `live`): an image and a
-video are read and answered in the asked-for shape (a video goes to Groq
-and Cerebras as a contact sheet), Gemini takes a too-big file through its
-upload, and a wrong key and an unknown model fail the same way everywhere.
-
-On the real API the free quota is shared with production (one Gemini
-project, 20 requests a day per model): Gemini answers on
-`gemini-3.5-flash-lite`, not the model the AI check asks first, with two
-real calls a run (an image, the uploaded video); nothing is retried, and a
-provider out of quota or down skips with its reason -- that is not the
-contract breaking. A provider with no key in .env is skipped."""
-
 from typing import Literal
 
 import pytest
@@ -48,16 +35,12 @@ class VideoFacts(BaseModel):
 
 @pytest.fixture(autouse=True)
 def _spare_the_quota(monkeypatch) -> None:
-    """Gemini's model with the most free quota, and no retries: a spent
-    quota ends in seconds, not minutes of waiting (both backends alike)."""
     monkeypatch.setenv("OFM_GEMINI_MODEL", "gemini-3.5-flash-lite")
     monkeypatch.setenv("OFM_LLM_RETRIES", "0")
 
 
 @pytest.fixture(params=list(PROVIDERS))
 def provider(request, backend, monkeypatch) -> str:
-    """The fake's key on the fake; the real one comes from .env (skipped
-    when it has none)."""
     name = request.param
     env, fake_key, _ = PROVIDERS[name]
     if backend == "fake":
@@ -77,8 +60,6 @@ def video(tmp_path):
 def _ask[A: BaseModel](
     backend: str, provider: str, prompt: Prompt, answer: type[A]
 ) -> A:
-    """`prompt` answered by `provider`; on the real API, out of quota or
-    down is a skip with the provider's reason."""
     try:
         return get_llm(provider=provider).ask(prompt, answer)
     except LLMUnavailableError as exc:

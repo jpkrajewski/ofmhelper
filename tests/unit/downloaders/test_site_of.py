@@ -1,6 +1,3 @@
-"""`generic.site_of`: which yt-dlp extractor a link's site has, found from
-the URL alone (no request), None when only Generic would try the page."""
-
 import pytest
 
 from ofmhelpers.integrations.downloaders.generic import site_of

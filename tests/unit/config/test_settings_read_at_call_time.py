@@ -1,13 +1,7 @@
-"""No value is built from `settings` at import (module level, a class body, a
-default argument, a decorator): it would keep what the environment said when
-the module loaded. Twelve-Factor "Config"; the convention is in
-`ofmhelpers/config/__init__.py`. A `lambda` is fine: it reads when called."""
-
 import ast
 from pathlib import Path
 
 SRC = Path(__file__).parents[3] / "src" / "ofmhelpers"
-# The app object is built at import, its session middleware with it.
 ALLOWED = {"web/main.py"}
 
 
@@ -15,8 +9,7 @@ class _ReadsSettings(ast.NodeVisitor):
     def __init__(self) -> None:
         self.found = False
 
-    def visit_Lambda(self, node: ast.Lambda) -> None:
-        """Read when called, not now."""
+    def visit_Lambda(self, node: ast.Lambda) -> None: ...
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         if isinstance(node.value, ast.Name) and node.value.id == "settings":
@@ -31,7 +24,6 @@ def _reads(node: ast.AST) -> bool:
 
 
 def _at_import(body: list[ast.stmt]) -> list[int]:
-    """The lines of `body` that read `settings` when the module loads."""
     lines = []
     for statement in body:
         if isinstance(statement, ast.FunctionDef | ast.AsyncFunctionDef):

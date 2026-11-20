@@ -1,19 +1,3 @@
-"""users, their sign-in identities, password links and API keys
-
-People sign in, not roles.
-
-Until now there were two shared passwords (admin, VA) and a job's `actor`
-was the role name. Now each person is a `users` row (Google sign-in; one
-password account, email "admin", for when Google is not at hand) and a
-job's actor is its user's id. The VA role is gone: its jobs and the admin's
-become the password admin's, so nothing is lost and admins see them all.
-
-Revision ID: c2d3e4f5a6b7
-Revises: b6c7d8e9f0a1
-Create Date: 2026-10-22 04:30:00.000000
-
-"""
-
 import time
 from collections.abc import Sequence
 
@@ -26,7 +10,6 @@ down_revision: str | None = "b6c7d8e9f0a1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# The password account: who `APP_PASSWORD_ADMIN` signs in as.
 AGENCY_EMAIL = "admin"
 _OLD_ROLES = ("admin", "va")
 
@@ -96,7 +79,6 @@ def upgrade() -> None:
                 "active": True,
                 "created_at": time.time(),
                 "last_login_at": None,
-                # EncryptedText stores "" as "": no vault key needed here.
                 "google_refresh_token": "",
                 "password_hash": "",
                 "drive_root_id": None,

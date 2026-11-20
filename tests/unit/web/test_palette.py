@@ -1,12 +1,3 @@
-"""Every colour of the site lives in one place: the palette at the top of
-static/css/tokens.css (the app) or the `:root` token block at the top of
-static/css/landing.css (the public landing page, its own dark look). Rules,
-templates and scripts point at those tokens; a colour literal anywhere else
-is a custom colour creeping back in.
-
-Data colours are not design: the phone drawings (phones/render.py, from
-the catalog) and photos are out of scope here."""
-
 import re
 
 import pytest
@@ -40,8 +31,6 @@ def _hits(text: str) -> list[str]:
 
 
 def test_palette_is_five_neutrals_one_accent_and_one_red_per_theme():
-    """Light in `:root`, dark in `:root[data-theme="dark"]`: the same seven
-    slots, each set once per theme."""
     text = TOKENS.read_text("utf-8")
     dark = text.index(':root[data-theme="dark"]')
     slots = [
@@ -62,8 +51,6 @@ def test_palette_is_five_neutrals_one_accent_and_one_red_per_theme():
 
 
 def _without_dark_theme(text: str) -> str:
-    """tokens.css minus `:root[data-theme="dark"]`: the original theme's
-    token block, kept verbatim (custom properties only, checked below)."""
     if ':root[data-theme="dark"]' not in text:
         return text
     start = text.index(':root[data-theme="dark"]')
@@ -92,8 +79,6 @@ def test_landing_colours_live_in_its_token_block():
     assert _hits(text[tokens_end:]) == []
 
 
-# The bridge is a public conversion page on our own link domains, self-contained
-# with its own dark look like the rented providers' pages -- it owns its colours.
 EXEMPT = {"bridge.html"}
 
 

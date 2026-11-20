@@ -1,10 +1,5 @@
 {% extends "base.html" %}
 {% import "components/ui.html" as ui %}
-{# One login's trials, newest in POSTED first: the ones Generate trials is still
-   making, then the copies made (video, captions to choose from, select to
-   upload); Upload asks first, it replaces what is in TRIALS. trials.js runs the page:
-   every button is a fetch answered at once, and while anything runs it
-   polls `data-live` and swaps in only the cards that changed. #}
 {% block title %}Trials — @{{ card.target.handle }} — Ascend Global LLC{% endblock %}
 {% block content %}
 {% set t = card.target %}

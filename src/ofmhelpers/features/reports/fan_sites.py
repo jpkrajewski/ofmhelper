@@ -1,14 +1,3 @@
-"""New subscribers and sales per fan-site model in a window, the same two numbers
-whatever the platform tells them by. One class per platform behind `FanSite`; a
-new platform = one class and one entry in `fan_sites()`.
-
-- Stacked: its API, for the exact window (`/subscribers/summary` new + returning,
-  `/earnings` gross), on the key that reaches the model (`STACKED_API_KEY_*`,
-  scope `insights:read`).
-- Fanvue: what its webhooks stored: `subscribed` notifications and `chat_sales`
-  (every payment, gross). Webhooks reach the production server only.
-"""
-
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -32,13 +21,9 @@ class FanStats(BaseModel):
 class FanSite(Protocol):
     platform: ChatPlatform
 
-    def models(self) -> list[str]:
-        """Every model it can tell numbers of, by username."""
-        ...
+    def models(self) -> list[str]: ...
 
-    def stats(self, username: str) -> FanStats | None:
-        """None: it could not tell (logged)."""
-        ...
+    def stats(self, username: str) -> FanStats | None: ...
 
 
 class StackedSite:
@@ -91,8 +76,6 @@ class FanvueSite:
         return chats.models(self.platform)
 
     def stats(self, username: str) -> FanStats | None:
-        """None on a server Fanvue sends no webhooks to (no `FANVUE_EVENT_SECRET`):
-        its zeros would not be real."""
         if not settings.fanvue.event_secret:
             return None
         return FanStats(
@@ -101,5 +84,4 @@ class FanvueSite:
 
 
 def fan_sites(since: float, until: float) -> list[FanSite]:
-    """Every platform with numbers, for the window [since, until)."""
     return [StackedSite(since, until), FanvueSite(since, until)]

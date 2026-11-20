@@ -70,8 +70,6 @@ def test_default_preset_maps_every_slider():
 
 
 def test_crop_zooms_110_and_moves_the_picture_down():
-    # 720/1.1 -> 654, 1280/1.1 -> 1162; centred y would be 59, the window
-    # moves up 2% of 1280 (25.6 px) so the picture moves down.
     assert DEFAULT_PRESET.crop(PORTRAIT, zoom=1.0) == "crop=654:1162:32:32"
 
 
@@ -81,7 +79,6 @@ def test_crop_offset_is_clamped_inside_the_frame():
 
 
 def test_jitter_grain_goes_in_before_exposure_and_upscale():
-    # exposure outputs float RGB; noise after it turns into colour static.
     jitter = NEUTRAL.model_copy(update={"noise": 2.5})
     vf = DEFAULT_PRESET.video_filter(PORTRAIT, jitter)
     assert vf.index("noise=alls=2.5") < vf.index("exposure=") < vf.index("scale=")
@@ -128,12 +125,11 @@ def test_apply_preset_encodes_like_capcut_4k(tmp_path: Path):
     assert (video["width"], video["height"]) == (2160, 3840)
     assert (video["codec_name"], video["codec_tag_string"]) == ("h264", "avc1")
     assert video["profile"] == "Main"
-    assert video["level"] == 51  # 5.1, as CapCut's 4K export
+    assert video["level"] == 51
     assert video["has_b_frames"] == 0
     assert video["r_frame_rate"] == "60000/1001"
     assert video["color_primaries"] == "bt709"
     assert (audio["sample_rate"], audio["channels"]) == ("44100", 2)
-    # 0.3 s off each end, then 3% faster.
     expected = (2.0 - 0.6) / 1.03
     assert float(probe["format"]["duration"]) == pytest.approx(expected, abs=0.05)
 
@@ -156,7 +152,6 @@ def test_apply_preset_writes_capcut_tags(tmp_path: Path):
     handlers = {s["tags"]["handler_name"] for s in probe["streams"]}
     assert handlers == {"VideoHandler", "SoundHandler"}
     assert all("encoder" not in s["tags"] for s in probe["streams"])
-    # No encoder version strings anywhere: x264's SEI, AAC's "Lavc" fill.
     data = dst.read_bytes()
     assert b"x264" not in data
     assert b"Lavc" not in data

@@ -1,26 +1,3 @@
-"""The code rules of CLAUDE.md ("CODE RULES AGENTS KEEP BREAKING") as checks.
-
-Each test scans `src/ofmhelpers` with `ast` and compares what breaks a rule with
-`baseline.json`, the list of what broke it on 2026-11-11. The list only shrinks:
-a new entry fails ("fix the code"), and an entry that is fixed fails until its
-line is deleted. Never add a line to the baseline to make a test pass.
-
-The two function rules (what a function returns, functions sharing their
-parameters) scan every package but `web/` (`FUNCTION_RULES`): routes and
-FastAPI dependencies have their own tests above. Their baseline groups are
-empty since 2026-11-11 and stay empty. The return rule follows a name to
-what it stands for (`Payload = dict[str, Any]`, `type X = ...`, a class built
-on `dict` / `NamedTuple` / `TypedDict`), also through an import. What it
-cannot see: a private function, a model field.
-
-The failure rule ("NOTHING FAILS SILENTLY", `silent_excepts`, 2026-11-15)
-scans every package: an `except` re-raises or leaves its trace, and a
-deliberate quiet one says why on its `except` line (`# silent: <reason>`).
-Its baseline lines are `path::function`, `path::function xN` for N of them.
-
-`ast` and not import-linter: this code uses Python 3.15 `lazy import`.
-"""
-
 import ast
 import re
 import sys
@@ -35,7 +12,6 @@ from pydantic import BaseModel
 SRC = Path(__file__).parents[3] / "src" / "ofmhelpers"
 BASELINE = Path(__file__).with_name("baseline.json")
 
-# Who may import whom: a file imports its own rank or lower, never higher.
 RANK = {
     "web": 4,
     "features": 3,
@@ -55,7 +31,6 @@ LOOSE = re.compile(
     r"\b(dict|tuple|Dict|Tuple|Mapping|MutableMapping|NamedTuple|TypedDict)\b"
 )
 SHARED_PARAMETERS = 3
-# Everything but `web/`: routes and FastAPI dependencies have their own tests.
 FUNCTION_RULES = (
     "features/",
     "integrations/",
@@ -66,15 +41,12 @@ FUNCTION_RULES = (
     "utils/",
     "config/",
 )
-# An `except` leaves a trace by one of these calls; a log call by `exc_info=`.
 TRACE_CALLS = {"exception", "record_exception"}
 LOG_LEVELS = {"debug", "info", "warning", "error", "critical", "log"}
 SILENT = "# silent:"
 
 
 class Baseline(BaseModel):
-    """What broke each rule when the rule became a test."""
-
     layers: set[str]
     router_imports: set[str]
     long_routes: set[str]
@@ -103,7 +75,6 @@ def under(*prefixes: str) -> dict[str, ast.Module]:
 
 
 def imported_areas(tree: ast.Module) -> set[str]:
-    """The `ofmhelpers.<area>` names a file imports, anywhere in it."""
     modules: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -116,7 +87,6 @@ def imported_areas(tree: ast.Module) -> set[str]:
 def routes(
     tree: ast.Module,
 ) -> list[tuple[ast.FunctionDef | ast.AsyncFunctionDef, ast.Call]]:
-    """Every `@router.get(...)`-style function with its decorator call."""
     return [
         (node, decorator)
         for node in ast.walk(tree)
@@ -131,7 +101,6 @@ def routes(
 def functions(
     tree: ast.Module,
 ) -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
-    """Public functions and methods, named `func` or `Class.func`."""
     found = []
     for node in tree.body:
         members = node.body if isinstance(node, ast.ClassDef) else [node]
@@ -146,19 +115,12 @@ def functions(
 
 
 class Scope(BaseModel, arbitrary_types_allowed=True):
-    """The module-level names of one file that can stand for a type."""
-
-    # A name and the type it stands for: `X = dict[...]`, `type X = ...`,
-    # `X: TypeAlias = ...`, and a class as its bases.
     aliases: dict[str, ast.expr] = {}
-    # A name imported from another file of the app: (that file, its name there).
     imported: dict[str, tuple[str, str]] = {}
-    # A name that is another file of the app (`from ofmhelpers.x import spec`).
     modules: dict[str, str] = {}
 
 
 def module_file(module: str) -> str | None:
-    """`ofmhelpers.a.b` as its key in `trees()`."""
     if module != "ofmhelpers" and not module.startswith("ofmhelpers."):
         return None
     path = module.removeprefix("ofmhelpers").lstrip(".").replace(".", "/")
@@ -167,7 +129,6 @@ def module_file(module: str) -> str | None:
 
 
 def imported_from(name: str, node: ast.ImportFrom) -> str:
-    """The dotted module an import names, a relative one made absolute."""
     if not node.level:
         return node.module or ""
     package = ["ofmhelpers", *name.split("/")[:-1]]
@@ -209,7 +170,6 @@ def scope(name: str) -> Scope:
 
 
 def loose_name(alias: str, name: str, seen: frozenset[tuple[str, str]]) -> bool:
-    """Whether `alias`, as file `name` knows it, stands for a dict or a tuple."""
     if (name, alias) in seen:
         return False
     seen |= {(name, alias)}
@@ -225,8 +185,6 @@ def loose_name(alias: str, name: str, seen: frozenset[tuple[str, str]]) -> bool:
 def loose(
     annotation: ast.expr, name: str, seen: frozenset[tuple[str, str]] = frozenset()
 ) -> bool:
-    """Whether a type written in file `name` is a dict, a tuple or a Mapping,
-    by its own text or through the names it uses."""
     if LOOSE.search(ast.unparse(annotation)):
         return True
     for node in ast.walk(annotation):
@@ -248,7 +206,6 @@ def loose(
 
 
 def queued_function(call: ast.Call) -> ast.expr | None:
-    """The function a call puts on a queue, or None when it is not such a call."""
     match call.func:
         case ast.Name(id="enqueue") if call.args:
             return call.args[0]
@@ -262,8 +219,6 @@ def queued_function(call: ast.Call) -> ast.expr | None:
 
 
 def leaves_a_trace(handler: ast.ExceptHandler) -> bool:
-    """It raises (again or anew), logs with the trace (`logger.exception`,
-    `exc_info=`) or puts it on the span (`span.record_exception`)."""
     for node in ast.walk(ast.Module(body=handler.body, type_ignores=[])):
         match node:
             case ast.Raise():
@@ -278,8 +233,6 @@ def leaves_a_trace(handler: ast.ExceptHandler) -> bool:
 
 
 def quiet(node: ast.AST, lines: list[str]) -> bool:
-    """An `except` that leaves no trace, or a `with suppress(...)`, not
-    marked `# silent: <reason>` on its header lines."""
     match node:
         case ast.ExceptHandler():
             unmarked = not leaves_a_trace(node)
@@ -296,8 +249,6 @@ def quiet(node: ast.AST, lines: list[str]) -> bool:
 
 
 def silent_excepts(name: str, tree: ast.Module, lines: list[str]) -> set[str]:
-    """`name::func` (`Class.func`, `func.inner`, `<module>`) of each quiet
-    handler, with ` xN` when a function has N of them."""
     found: Counter[str] = Counter()
 
     def visit(node: ast.AST, where: str) -> None:
@@ -362,8 +313,6 @@ def test_routes_declare_what_they_return():
 
 
 def test_background_work_has_a_job_row():
-    """Work goes on a queue as `run_job` (the wrapper that writes the job row),
-    except inside the queue machinery itself (sweeps, recovery, the events bus)."""
     found = {
         f"{name}::{ast.unparse(queued)}"
         for name, tree in under("web/routers/", "features/").items()
@@ -388,7 +337,6 @@ def test_functions_return_models_not_dicts_or_tuples():
 
 @pytest.fixture
 def files(monkeypatch):
-    """A made-up app of three files in place of `src/ofmhelpers`."""
     source = {
         "a.py": """
             from typing import Any, NamedTuple, TypeAlias
@@ -429,10 +377,6 @@ def test_the_return_rule_follows_a_name_to_the_dict_behind_it():
 
 
 def test_failures_leave_a_trace():
-    """Every `except` raises, logs with `exc_info` / `.exception(...)` or
-    records on the span; `suppress(...)` is quiet too. A deliberate quiet one
-    (gone already, a parser's None, a refusal shown on the page) is marked
-    `# silent: <reason>` on its `except` line; a real failure gets a log."""
     found = set()
     for name, tree in trees().items():
         lines = (SRC / name).read_text("utf-8").splitlines()
@@ -475,7 +419,6 @@ def test_the_trace_rule_reads_each_handler():
 
 
 def test_functions_sharing_their_parameters_are_one_class():
-    """3+ module-level functions starting with the same three parameters."""
     found = set()
     for name, tree in under(*FUNCTION_RULES).items():
         leading = Counter(

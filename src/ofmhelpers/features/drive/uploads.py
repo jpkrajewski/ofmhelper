@@ -1,24 +1,3 @@
-"""
-ofmhelpers/web/drive_uploads.py
-
-/clone results into an Instagram account's Drive folder ("<handle> -
-<owner>", features/drive/folders.py), so they are on the phone's Drive ready to
-post.
-
-The folder lives in its phone owner's own Drive, so files go up through
-the owner's Google account (`stores.users.refresh_token`), like everything
-/drive does. Only the owner uploads into their folders (admins too:
-nobody uses another person's).
-
-`queue_uploads` checks everything up front (the folder is one the person
-may use, the jobs are theirs and finished, the folder's owner connected
-Google Drive) and queues one worker job; `upload_files` runs there. A file already in that folder,
-or on its way, is never uploaded again; a failed one may be retried, and so
-may one stranded `queued` (`settings.gdrive.upload_stale_s`: the worker was
-killed mid-batch). A job that cannot be queued, and any error uploading one
-file, marks the upload failed with a reason: nothing stays `queued` silently.
-"""
-
 import mimetypes
 from pathlib import Path
 
@@ -42,23 +21,18 @@ from ofmhelpers.log import get_logger
 from ofmhelpers.schemas import DriveUpload, SessionUser, StoredFolder, UploadTarget
 from ofmhelpers.schemas.drive import VaFolder
 
-# An account's folder or a VA's own: both have `folder_id`, `root_folder_id`.
 type Folder = StoredFolder | VaFolder
 
 logger = get_logger(__name__)
 
-# The platform an account folder's login is on (its model comes from there).
 _PLATFORM = "instagram"
-# The job row of one click on Upload.
 TASK = "drive_upload"
 
 
-class UploadRefusedError(ValueError):
-    """Nothing was queued; the message says why (shown on the page)."""
+class UploadRefusedError(ValueError): ...
 
 
 def _creators(owner: int | None) -> dict[str, str]:
-    """handle -> creator of `owner`'s tracked Instagram accounts."""
     return {
         a.handle: a.creator
         for a in list_accounts(owner)
@@ -74,9 +48,6 @@ def _handle(username: str) -> str:
 
 
 def targets(owner: int | None) -> list[UploadTarget]:
-    """The account folders `owner` may upload into: their phones' Instagram
-    logins that have a folder, each with its model, waiting files and
-    followers."""
     folders = drive_folders.account_folders()
     creators = _creators(owner)
     found = []
@@ -104,8 +75,6 @@ def _folder_owner(login_id: int) -> int | None:
 
 
 def _files(job_id: str, readers: Readers) -> list[tuple[int, Path]]:
-    """(index, path) of every result video still on disk of a finished job
-    the session may see (their own, or a VA's of theirs)."""
     job = get_job(job_id, readers)
     if job is None or job.status != "done":
         return []
@@ -117,8 +86,6 @@ def _files(job_id: str, readers: Readers) -> list[tuple[int, Path]]:
 
 
 def _va_folders(user_id: int, va_ids: list[int]) -> list[VaFolder]:
-    """The clicker's VAs' own folders asked for; one that is not their VA's
-    or has no folder in their root is refused."""
     theirs = {f.user_id: f for f in va_folders.of_owner(user_id)}
     if not set(va_ids) <= set(theirs):
         msg = "That VA has no Drive folder you can upload into: Sync on /drive"
@@ -133,11 +100,6 @@ def queue_uploads(
     readers: Readers = None,
     va_ids: list[int] | None = None,
 ) -> list[DriveUpload]:
-    """Queues every result of `job_ids` into each of `login_ids`' folders
-    and each of `va_ids`' own folders, all or nothing. Raises
-    `UploadRefusedError`. `readers`: whose runs the clicker may take videos
-    from -- their own and their VAs' (a VA makes the clone, the owner posts
-    it); default: their own."""
     readers = readers if readers is not None else user.actor
     va_ids = va_ids or []
     if not login_ids and not va_ids:
@@ -183,9 +145,6 @@ def queue_uploads(
 
 
 def _enqueue(upload_ids: list[int], actor: str) -> None:
-    """The worker job, with its row (`actor`'s: which uploads); when it
-    cannot be queued (Redis down), the uploads fail with that reason, so
-    Upload may retry them."""
     job_id = create_job(TASK, {"upload_ids": upload_ids}, actor=actor)
     try:
         enqueue(run_job, job_id, upload_files, {"upload_ids": upload_ids})
@@ -197,8 +156,6 @@ def _enqueue(upload_ids: list[int], actor: str) -> None:
 
 
 def _upload_one(upload: DriveUpload, owner_id: int, folder: Folder) -> None:
-    """Into `folder` only while it sits in the owner's usable root (a dev
-    copy of the prod database holds the live root's id: refused)."""
     files = dict(_files(upload.job_id, None))
     path = files.get(upload.file_index)
     if path is None:
@@ -240,14 +197,6 @@ def _upload_one(upload: DriveUpload, owner_id: int, folder: Folder) -> None:
 def remove_upload(
     user: SessionUser, upload_id: int, readers: Readers = None
 ) -> DriveUpload:
-    """Takes one uploaded video back out of its account folder: into the
-    uploader's Drive trash (restorable there), then off the card. Only who
-    may see the run (`readers`: the clicker's own runs and their VAs', as
-    `queue_uploads`; default: their own) and only the one who uploaded it:
-    the file sits in the uploader's own Drive, so the account that trashes
-    it is always the clicker's. Already gone in Drive counts as removed.
-    Raises `UploadRefusedError` (not theirs, not uploaded) or
-    `UnavailableError` (Drive failed)."""
     found = store.get(upload_id)
     readers = readers if readers is not None else user.actor
     if (
@@ -285,15 +234,11 @@ def remove_upload(
 
 
 class VaTarget(BaseModel):
-    """Where an upload into a VA's own folder goes: the owner whose Drive
-    it is, and the folder."""
-
     owner_id: int
     folder: VaFolder
 
 
 def _va_target(va_id: int) -> VaTarget | None:
-    """A VA's own folder and its owner; None when either is gone."""
     va = get_user(va_id)
     if va is None or va.owner_id is None:
         return None
@@ -302,8 +247,6 @@ def _va_target(va_id: int) -> VaTarget | None:
 
 
 def upload_files(upload_ids: list[int]) -> None:
-    """Worker job: each queued upload, one after another (a phone's Drive
-    gets them in the order clicked). One failing never stops the rest."""
     folders = drive_folders.account_folders()
     for upload_id in upload_ids:
         found = store.get(upload_id)
@@ -324,6 +267,5 @@ def upload_files(upload_ids: list[int]) -> None:
         try:
             _upload_one(upload, owner_id, folder)
         except Exception as exc:
-            # Never left `queued`: a file deleted since the check, a bug.
             logger.warning("drive upload %s failed", upload_id, exc_info=True)
             store.finish(upload_id, error=f"Upload failed: {exc}")

@@ -1,13 +1,3 @@
-/*
- * /accounts/{id} follower chart: crosshair + tooltip over the server-drawn
- * SVG (templates/account_analytics.html, figure[data-fchart]).
- *
- * The points are the data table's rows: data-x/data-y = position in percent
- * of the plot, cells = sync time, followers, change. The pointer snaps to
- * the nearest point by x (aim at a date, not at a 2px line); arrow keys,
- * Home and End step through them while the plot has focus. Without this
- * script the table still holds every value.
- */
 (() => {
 
     function setup(figure) {
@@ -34,8 +24,7 @@
             tipWhen.textContent = `${p.cells[0]} UTC`;
             tipChange.textContent = p.cells[2] ? `${p.cells[2]} since previous ${step}` : "Start of the period";
             cross.hidden = focus.hidden = tip.hidden = false;
-            // Keep the tooltip inside the plot: centred on the point, pinned
-            // to an edge near the ends.
+
             const width = plot.clientWidth;
             const half = tip.offsetWidth / 2;
             const left = Math.min(Math.max(p.x / 100 * width, half), width - half);

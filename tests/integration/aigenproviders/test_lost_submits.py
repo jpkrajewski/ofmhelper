@@ -1,11 +1,3 @@
-"""A submit whose answer is lost after the provider made the request (prod
-2026-11-05: kie.ai made and billed a Wan 3.0 clip 2 s after our createTask
-gave up; it was found only on kie.ai's site). kie.ai has no idempotency key,
-so its callback names the task: the run goes on with it, or recovery once the
-run gave up. Elyum takes our key, so its submit is simply sent again.
-
-kie.ai at the wire (`responses`), its callback through the app's route."""
-
 import base64
 import hashlib
 import hmac
@@ -104,7 +96,6 @@ def _callback(
     headers: dict[str, str] | None = None,
     provider: str = "kie",
 ) -> int:
-    """What kie.ai POSTs to callBackUrl when a task ends (docs.kie.ai)."""
     body = {
         "code": 200,
         "msg": "Playground task completed successfully.",
@@ -126,8 +117,8 @@ def test_a_create_answered_too_late_goes_on_once_kie_calls_back(
     kie, client, monkeypatch
 ):
     kie.post(_jobs("createTask"), body=requests.ReadTimeout("read timed out"))
-    _record_success(kie)  # the callback's check that the task is ours
-    _record_success(kie)  # the run's own poll
+    _record_success(kie)
+    _record_success(kie)
     kie.get(RESULT, body=PNG)
     heard: list[int] = []
 
@@ -152,8 +143,6 @@ def test_a_create_answered_too_late_goes_on_once_kie_calls_back(
 def test_no_callback_in_time_fails_the_run_and_a_late_one_still_finds_it(
     kie, client, slept, monkeypatch
 ):
-    """The run gives up; the callback after it remembers the task with the
-    job's key, which is what recovery re-runs the failed job from."""
     monkeypatch.setenv("OFM_AIGEN_POLL_TIMEOUT_S", "0")
     kie.post(_jobs("createTask"), body=requests.ReadTimeout("read timed out"))
 
@@ -250,10 +239,8 @@ def _note(job_id: str = "job-1", part: int = 0, age_s: float = 0) -> None:
 
 
 def test_kie_too_slow_to_check_the_callback_still_counts(client):
-    """Never answered with an error kie.ai may not retry (its Veo page: three
-    tries, then no more callbacks); the run's own poll checks the task."""
     _note()
-    with responses.RequestsMock() as busy:  # answers every call
+    with responses.RequestsMock() as busy:
         busy.get(_jobs("recordInfo"), status=503, json={"code": 503, "msg": "busy"})
 
         assert _callback(client, "job-1") == 200
@@ -267,11 +254,9 @@ def test_kie_too_slow_to_check_the_callback_still_counts(client):
 def test_a_rerun_never_sends_a_lost_submit_again_and_takes_its_callback(
     kie, client, monkeypatch
 ):
-    """Recovery re-runs a long clone whose piece lost its answer: that piece
-    may be made and paid, so it waits for its callback instead."""
     _note()
-    _record_success(kie)  # the callback's check
-    _record_success(kie)  # the run's poll
+    _record_success(kie)
+    _record_success(kie)
     kie.get(RESULT, body=PNG)
     heard: list[int] = []
 
@@ -289,8 +274,6 @@ def test_a_rerun_never_sends_a_lost_submit_again_and_takes_its_callback(
 
 
 def test_a_rerun_with_no_callback_yet_fails_without_sending_it_again(kie, slept):
-    """Sent a generation's wait ago and still not reported: the job fails
-    (card "Timed out"), the note stays for a callback that comes later."""
     _note(age_s=settings.aigen.poll_timeout_s + 1)
 
     with pytest.raises(ProviderUnavailableError, match="not sent again") as caught:
@@ -317,7 +300,6 @@ def test_a_rerun_with_no_callback_yet_fails_without_sending_it_again(kie, slept)
 def test_a_create_that_never_left_fails_at_once_and_waits_for_nothing(
     kie, slept, never_left
 ):
-    """No connection made: kie.ai made nothing, nothing can call back."""
     kie.post(_jobs("createTask"), body=never_left)
 
     with pytest.raises(ProviderUnavailableError, match="unreachable"):
@@ -328,8 +310,6 @@ def test_a_create_that_never_left_fails_at_once_and_waits_for_nothing(
 
 
 def test_a_forgotten_job_is_not_brought_back_by_a_late_callback(kie, client):
-    """A long clone refused on one piece forgets every piece; a lost piece's
-    callback after that must not revive it (recovery would pay again)."""
     _note(part=3)
 
     tasks.forget("job-1")
@@ -359,15 +339,12 @@ def test_a_signed_callback_is_believed_once_the_jobs_key_knows_its_task(
     remembered = tasks.recall("job-1")
     assert remembered is not None
     assert remembered.task_id == TASK
-    assert len(kie.calls) == 1  # one free status read, with the job's key
+    assert len(kie.calls) == 1
 
 
 def test_a_signed_callback_for_a_task_not_on_the_jobs_account_is_ignored(
     kie, client, monkeypatch
 ):
-    """kie.ai signs `taskId.timestamp` only: a genuinely signed callback of
-    someone else's task, sent to this job's address, claims nothing (audit
-    2026-11-18)."""
     monkeypatch.setenv("KIE_AI_WEBHOOK_HMAC_KEY", HMAC_KEY)
     _note()
     kie.get(_jobs("recordInfo"), json={"code": 422, "msg": "recordInfo is null"})
@@ -436,7 +413,6 @@ def test_a_refused_create_leaves_nothing_waiting(kie):
 def test_without_a_public_address_no_callback_is_asked_and_nothing_waits(
     kie, slept, monkeypatch
 ):
-    """Dev (APP_BASE_URL http://localhost): kie.ai could not reach us."""
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000/")
     kie.post(_jobs("createTask"), body=requests.ReadTimeout("read timed out"))
 
@@ -451,7 +427,6 @@ def test_without_a_public_address_no_callback_is_asked_and_nothing_waits(
 
 @pytest.mark.usefixtures("fake_externals")
 def test_an_elyum_create_whose_answer_is_lost_is_sent_again_and_made_once(slept):
-    """Same Idempotency-Key: the resend answers the generation already made."""
     fake_elyum().lose_next = True
     spec = get_spec("elyum:alibaba/wan-3.0/text-to-video")
 
@@ -467,8 +442,6 @@ def test_an_elyum_create_whose_answer_is_lost_is_sent_again_and_made_once(slept)
 
 @pytest.mark.usefixtures("fake_externals")
 def test_a_higgsfield_submit_whose_answer_is_lost_is_sent_again_and_made_once(slept):
-    """Same Idempotency-Key (docs concepts/idempotency): the resend answers
-    the request already made, never a second paid one."""
     fake_higgsfield().lose_next = True
     spec = get_spec("higgsfield:z-image/turbo")
 

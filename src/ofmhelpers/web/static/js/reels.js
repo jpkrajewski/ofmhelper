@@ -1,23 +1,3 @@
-/*
- * /reels page controller.
- *
- * Add & scan: POST /reels/watch adds the profiles (to the typed group) and
- * queues their first scan on the worker. Pending rows carry data-pending;
- * the page polls GET /reels/watchlist until none is left, then reloads so the
- * feed (server-sorted, paged by gallery-scroll.js) shows the new reels. A
- * reload mid-scan picks the polling up again. ✕ stops watching a profile and
- * drops its cards; a row's group dropdown moves it (POST /reels/group/...),
- * the search box filters rows by name.
- *
- * Cards: only a lazy thumbnail is in the page; the first hover creates the
- * <video> (straight from Instagram's CDN) and plays it with sound -- browsers
- * allow sound only once the page has had a click or key press, so before
- * that it plays muted. A click or Enter/Space anywhere on a card picks it.
- * Picks live in sessionStorage (code -> mp4 URL), so they survive paging,
- * switching group and reloads; Clone selected posts them, the server saves
- * them into the asset store and answers the /clone URL that opens with them
- * in the videos picker.
- */
 (() => {
     const PICKS_KEY = "reels-picks";
     const POLL_MS = 4000;
@@ -34,7 +14,7 @@
         try {
             sessionStorage.setItem(PICKS_KEY, JSON.stringify([...picks]));
         } catch {
-            // storage unavailable: picks just don't outlive the page
+
         }
     }
 
@@ -53,7 +33,7 @@
             const data = await response.json();
             if (typeof data.detail === "string") return data.detail;
         } catch {
-            // not JSON: fall through to the status line
+
         }
         return `Request failed (${response.status})`;
     }
@@ -85,7 +65,7 @@
 
     function initFeed(feed, picks, refresh) {
         const toggle = (card) => {
-            if (card.getAttribute("aria-disabled") === "true") return; // login-only reel
+            if (card.getAttribute("aria-disabled") === "true") return;
             const on = !picks.has(card.dataset.code);
             if (on) picks.set(card.dataset.code, card.dataset.videoUrl);
             else picks.delete(card.dataset.code);
@@ -103,7 +83,7 @@
             e.preventDefault();
             toggle(card);
         });
-        // mouseenter/leave don't bubble; capture them on the container.
+
         feed.addEventListener(
             "mouseenter",
             (e) => {
@@ -145,7 +125,7 @@
             body.set("group", select.value);
             const response = await fetch(`/reels/group/${encodeURIComponent(username)}`, { method: "POST", body });
             if (!response.ok) return;
-            // On a group's page, a profile moved out of it leaves the page.
+
             if (filteredGroup && select.value !== filteredGroup) {
                 row.remove();
                 feed.querySelectorAll(".reel-card").forEach((card) => {
@@ -168,9 +148,6 @@
         });
     }
 
-    // Profiles just added are remembered until their first scans are done:
-    // a deleted or private one is dropped by its scan, and once nothing is
-    // pending, the ones missing from the list are the ones not added.
     const ADDED_KEY = "reels-added";
 
     function rememberAdded(usernames) {
@@ -178,7 +155,7 @@
             const earlier = JSON.parse(sessionStorage.getItem(ADDED_KEY) || "[]");
             sessionStorage.setItem(ADDED_KEY, JSON.stringify([...earlier, ...usernames]));
         } catch {
-            // storage unavailable: just no "not added" report
+
         }
     }
 
@@ -192,7 +169,7 @@
             return;
         }
         if (!added.length) return;
-        // The whole list, not this page's: it may be filtered to one group.
+
         const response = await fetch("/reels/watchlist");
         if (!response.ok) return;
         const rows = document.createElement("template");
@@ -209,7 +186,6 @@
         );
     }
 
-    // Poll the watch list while any first scan runs; reload once none is left.
     function pollPending(watchList, statusEl, applySearch, once = false) {
         if (!once && !watchList.querySelector("[data-pending]")) return;
         const tick = async () => {
@@ -220,7 +196,7 @@
                     applySearch();
                 }
             } catch {
-                // keep polling: a blip must not strand the page
+
             }
             const pending = watchList.querySelectorAll("[data-pending]").length;
             if (!pending) {
@@ -240,9 +216,6 @@
         const newRow = document.getElementById("reels-group-new-row");
         const newGroup = document.getElementById("reels-group-new");
 
-        // "Create" stores the group, then offers it in every dropdown on the
-        // page -- the add form's (selected, for the profiles added next) and
-        // each watch-list row's.
         document.getElementById("reels-group-add").addEventListener("click", () => {
             newRow.hidden = false;
             newGroup.focus();
@@ -293,14 +266,11 @@
                 const lines = [`Added ${added.length} profile(s); scanning in the background.`];
                 if (skipped) lines.push(`${skipped} already watched — moved to this group.`);
                 setStatus(statusEl, lines, false);
-                // A new group has to be in every dropdown: the reload after
-                // the scans brings it; until then the rows refresh in place.
+
                 const rows = await fetch(watchList.dataset.endpoint);
                 if (rows.ok) watchList.innerHTML = await rows.text();
                 applySearch();
-                // At least one tick when profiles were added: scans that
-                // finished before the rows came back leave nothing pending,
-                // and the reload that brings their reels is still due.
+
                 pollPending(watchList, statusEl, applySearch, added.length > 0);
             } catch {
                 setStatus(statusEl, ["Network error — try again."], true);
@@ -341,10 +311,6 @@
         });
     }
 
-    // Download selected: the server fetches the picks and answers one mp4 or
-    // a zip, saved through a blob link (the CDN URLs are cross-origin, so an
-    // <a download> straight to them would just open the video). Picks stay,
-    // so the same reels can still be cloned.
     function initDownload(form, picks, downloadBtn, refresh) {
         const statusEl = document.getElementById("reels-clone-status");
         const maxVideos = Number(form.dataset.maxVideos);

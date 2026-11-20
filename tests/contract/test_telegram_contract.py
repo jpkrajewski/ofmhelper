@@ -1,7 +1,3 @@
-"""The Bot API as `TelegramClient` uses it: on the fake, and on the real bot
-(`OFM_TELEGRAM_BOT_TOKEN` + `OFM_TELEGRAM_CHAT_IDS` in .env; free calls, the
-message one posts a line in the first chat)."""
-
 import pytest
 
 from ofmhelpers.config import settings
@@ -55,5 +51,4 @@ def test_a_message_reaches_a_chat(token, chat):
 
 
 def test_the_chats_that_wrote_can_be_listed(token):
-    """getUpdates answers while no webhook is set: what finds a chat's id."""
     assert isinstance(TelegramClient(token).chats(), list)

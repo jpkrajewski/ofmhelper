@@ -1,11 +1,3 @@
-"""Signing a TestClient in as a user without a sign-in round trip.
-
-The app's session is Starlette's signed cookie; this writes the same
-cookie the app writes after a sign-in (`AuthMiddleware.sign_in`), for a
-`users` row it makes when missing. The sign-in flows themselves (Google,
-Apple, password, links) are covered in tests/integration/web/test_signin.py.
-"""
-
 import json
 import time
 from base64 import b64encode
@@ -36,7 +28,6 @@ def make_user_with_password(
     password: str = "a long test password",
     role: Role = Role.USER,
 ) -> User:
-    """A user who signs in with email + password (the real flow)."""
     from ofmhelpers.db.stores.users import _repository
     from ofmhelpers.integrations.signin.passwords import hash_password
 
@@ -61,11 +52,7 @@ def session_cookie(user: User) -> str:
 def sign_in(
     client: TestClient, email: str = USER_EMAIL, role: Role = Role.USER
 ) -> User:
-    """Signs `client` in as that user (made when missing) and returns it."""
     user = make_user(email, role)
-    # The one session cookie, as a browser keeps it: the app sets its own
-    # copy again on every action (the session slides), and a second cookie
-    # of the same name next to it would be sent first.
     client.cookies.delete(SESSION_COOKIE)
     client.cookies.set(SESSION_COOKIE, session_cookie(user))
     return user
@@ -76,9 +63,6 @@ def sign_in_admin(client: TestClient, email: str = ADMIN_EMAIL) -> User:
 
 
 def sign_in_agency(client: TestClient) -> User:
-    """Signs in as the password account: the admin who owns what the stores
-    make without an owner (`users.agency_id`) -- the phones, accounts and
-    watched profiles a test seeds through them."""
     user = users.get_user(users.agency_id())
     assert user is not None
     client.cookies.set(SESSION_COOKIE, session_cookie(user))

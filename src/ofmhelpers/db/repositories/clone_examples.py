@@ -1,6 +1,3 @@
-"""/clone's SOP examples (`clone_examples`). Nothing cached: a handful of
-rows, read when the dialog opens."""
-
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -21,7 +18,6 @@ def _example(row: CloneExampleRow) -> CloneExample:
 
 class CloneExampleRepository:
     def every(self) -> list[CloneExample]:
-        """In the order the page shows them."""
         with session_scope() as s:
             rows = s.execute(
                 select(CloneExampleRow).order_by(
@@ -36,8 +32,6 @@ class CloneExampleRepository:
             return _example(row) if row is not None else None
 
     def add(self, job_id: str, title: str, prompt: str) -> CloneExample:
-        """The run as an example, last in the list; the same run added again
-        is the one already there, under the new title."""
         last = select(CloneExampleRow.position).order_by(
             CloneExampleRow.position.desc()
         )

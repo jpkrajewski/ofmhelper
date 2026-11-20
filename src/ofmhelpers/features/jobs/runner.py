@@ -1,13 +1,3 @@
-"""Running a job: `start_job` writes its row and queues `run_job`, the wrapper
-every background job runs in. It records `done` + result or `failed` + error
-on the row (`db/stores/jobs.py`), keeps what the run cost, forgets or keeps
-its provider requests for recovery, traces the run and queues the result's
-gallery previews.
-
-Jobs queued before this lived in the store name
-`ofmhelpers.db.stores.jobs.run_job`: that name hands them here
-(`register_runner`, last line)."""
-
 from typing import Any
 lazy from collections.abc import Callable
 
@@ -26,6 +16,7 @@ from ofmhelpers.features.assets.store import AssetRefusedError
 from ofmhelpers.features.edit.errors import EditRefusedError
 from ofmhelpers.features.jobs import notices
 from ofmhelpers.features.jobs.cost import cost_of
+from ofmhelpers.features.notifications import service as notifications
 from ofmhelpers.features.previews.render import warm_previews
 from ofmhelpers.features.refusals import (
     ConflictError,
@@ -58,38 +49,21 @@ logger = get_logger(__name__)
 DEACTIVATED = "Not run: the account was deactivated"
 
 
-class Requeued(BaseModel):
-    """What a long batch returns to let the others in its line go first: the
-    same job, kwargs and time limit go back to the end of the line it came
-    from, and its row stays `running` (a /trials Generate after each reel,
-    while someone waits for the one media worker)."""
+class Requeued(BaseModel): ...
 
 
 def resumable(exc: BaseException) -> bool:
-    """Whether a job failing with `exc` keeps its provider request(s) for
-    recovery to finish: a provider error (timed out, download failed) or RQ
-    ending the job at its time limit -- paid pieces of a long clone
-    included -- or an error that says so itself (`keep_request`: a /clone
-    export that failed every try, re-run a bounded number of times).
-    Anything else failed after the result was in (asset store): recovery
-    re-running it would fail the same way every sweep."""
     return isinstance(exc, (ProviderError, JobTimeoutException)) or bool(
         getattr(exc, "keep_request", False)
     )
 
 
 def refused(exc: BaseException) -> bool:
-    """Whether a job failing with `exc` was answered, not broken: a provider
-    refusing it (no credits, wrong key, flagged content, bad input, rate
-    limited) or one of our own refusals. The card says why; it is logged
-    as a warning, so Sentry makes no issue of it (owner 2026-11-18: "real
-    errors, not bs like this"). A provider that timed out, is down or said
-    something we do not know stays an error."""
     return isinstance(
         exc,
         (
             ProviderAuthError,
-            ProviderInputError,  # ProviderNoCreditsError included
+            ProviderInputError,
             ProviderGenerationError,
             ProviderRateLimitError,
             InvalidInputError,
@@ -109,21 +83,12 @@ def refused(exc: BaseException) -> bool:
 
 
 def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
-    """Call this via queue.enqueue(run_job, job_id, fn, kwargs) (or, until an
-    endpoint is migrated, BackgroundTasks.add_task). Writes the terminal
-    status transition straight to Postgres so the API process sees it even
-    when this runs in a separate worker. One trace per run (telemetry.py):
-    the job, who started it, and every call it makes inside.
-
-    A job whose row is gone (the history cap, a heal) is not run: nobody
-    could see or review what it made, yet it would pay the provider."""
     header = store.task_of(job_id)
     if header is None:
         logger.warning("job %s no longer exists: not run", job_id)
         tasks.forget(job_id)
         return
     if _actor_deactivated(header.actor):
-        # security audit 2026-11-18: a deactivated account's queued work is not paid for.
         logger.warning(
             "job %s: actor %s was deactivated: not run", job_id, header.actor
         )
@@ -150,26 +115,21 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
                 return
             store.finish_job(job_id, result)
             _record_outcome(span, job_id, result)
-            # Saved: its provider request (if any) needs no resuming.
             _keep_cost(job_id)
             _keep_key(job_id, header.actor)
             tasks.forget(job_id)
             va_notices.after_job(job_id)
+            _notifications_changed(header.actor)
         except Exception as exc:
-            # The status pages show this directly to whoever is running the
-            # job -- a raw traceback isn't useful to them, just the
-            # exception's own message (e.g. "Wrong API Key"). Full detail
-            # goes to the logs and the trace for whoever is debugging it.
             error = str(exc) or exc.__class__.__name__
-            # security audit 2026-11-18: an error can carry an API key.
             store.record_failure(job_id, redact(error))
             if (provider := notices.money_provider(exc)) is not None:
                 notices.out_of_money(job_id, provider, error)
             if not resumable(exc):
-                # Paid for and then failed (its export, its upload): still a cost.
                 _keep_cost(job_id)
                 tasks.forget(job_id)
                 va_notices.after_job(job_id)
+                _notifications_changed(header.actor)
             span.record_exception(exc)
             span.set_level("error")
             if refused(exc):
@@ -180,9 +140,12 @@ def run_job(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
     _queue_previews(job_id)
 
 
+def _notifications_changed(actor: str | None) -> None:
+    if actor is not None and actor.isdecimal():
+        notifications.changed(int(actor))
+
+
 def _actor_deactivated(actor: str | None) -> bool:
-    """Whether the person a job is for was deactivated since it was queued.
-    No actor (the agency) or a non-numeric one: not a user row, runs."""
     if actor is None or not actor.isdecimal():
         return False
     user = users.get_user(int(actor))
@@ -200,11 +163,6 @@ def start_job(
     job_timeout: int | None = None,
     at_front: bool = False,
 ) -> str:
-    """A new job and its run on `queue` (default: the default queue), at the
-    front of its line with `at_front` (`JobQueue.put`).
-    `kwargs`: what `run` gets besides `job_id`; a key goes there, never in
-    `params`, which the job's page shows. A queue failure is raised as it
-    came and the row stays `running`: recovery settles it as cut off."""
     job_id = store.create_job(task, params, actor=actor)
     enqueue_to(
         queue or QueueName.DEFAULT,
@@ -219,9 +177,6 @@ def start_job(
 
 
 def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None:
-    """A job that ran to its end can still have failed: a download of three
-    links stores which ones did, as results, and is `done`. Only the span and
-    the log say so, or a trace of a failed download reads as a success."""
     items = result if isinstance(result, list) else []
     failed = [item for item in items if getattr(item, "success", True) is False]
     if not failed:
@@ -238,9 +193,6 @@ def _record_outcome(span: logfire.LogfireSpan, job_id: str, result: Any) -> None
 
 
 def _job_acting(job_id: str, task: str, actor: str | None) -> Acting:
-    """Who acts for the job's writes (audit_log, row stamps): the person it
-    is for; a job of nobody's (the agency's sweeps) is the system. Made
-    inside the job's span: its trace."""
     context = trace.get_current_span().get_span_context()
     return Acting(
         via=Via.JOB,
@@ -251,8 +203,6 @@ def _job_acting(job_id: str, task: str, actor: str | None) -> Acting:
 
 
 def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
-    """`run_job` of the same job at the end of the line it came from, with
-    its time limit. A queue failure is raised: the run records it as failed."""
     running = running_job()
     queue = running.queue if running else QueueName.DEFAULT
     timeout = running.timeout if running else None
@@ -261,9 +211,6 @@ def _requeue(job_id: str, fn: Callable[..., Any], kwargs: dict) -> None:
 
 
 def _queue_previews(job_id: str) -> None:
-    """A finished job's gallery previews, made now on the previews worker so
-    its first viewer waits for none (see features/previews/render.py). Redis down: the
-    preview routes make them on request instead."""
     job = store.get_job(job_id)
     if job is None:
         return
@@ -274,12 +221,6 @@ def _queue_previews(job_id: str) -> None:
 
 
 def _keep_cost(job_id: str) -> None:
-    """The job's provider requests into its row (`jobs.meta`) and what they
-    cost (`jobs.cost_usd`: reported, or the app's estimate, `cost.py`)
-    before they are forgotten: Logfire keeps their cost 30 days, the job
-    keeps it for good.
-    Never the key they ran on, only its last characters (`key_tail`). Best
-    effort: the job is already saved."""
     try:
         made = [
             GenerationRecord.model_validate(
@@ -300,9 +241,6 @@ def _keep_cost(job_id: str) -> None:
 
 
 def _keep_key(job_id: str, actor: str | None) -> None:
-    """A run that succeeded on a key its person has not saved keeps it as
-    theirs (`keys.keep_used`): the next form opens with it. Best effort: the
-    job is already saved."""
     if actor is None or not actor.isdecimal():
         return
     try:

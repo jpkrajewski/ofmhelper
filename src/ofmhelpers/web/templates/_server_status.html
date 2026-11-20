@@ -1,5 +1,4 @@
 {% import "components/ui.html" as ui %}
-{# /home's Server section body (routers/home.py server, features/server). #}
 {% set h = server.host %}
 {% macro used(u) %}{{ u.used|filesizeformat(true) }} of {{ u.total|filesizeformat(true) }}{% endmacro %}
 {% for problem in server.problems %}{{ ui.notice(problem, "warn") }}{% else %}{{ ui.notice("All normal", "ok") }}{% endfor %}

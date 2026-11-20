@@ -1,8 +1,3 @@
-"""www. of APP_BASE_URL redirects to the one public host, so a sign-in's
-state cookie and the session live where the OAuth callback lands (prod,
-2026-10-22: a Google Drive connect started on www. failed on the apex
-callback). Other hosts -- loopback, the /health probe -- are served."""
-
 import pytest
 from fastapi.testclient import TestClient
 

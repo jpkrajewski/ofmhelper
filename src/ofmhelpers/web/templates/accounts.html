@@ -48,8 +48,6 @@
     {% for c in creators %}<option value="{{ c }}"></option>{% endfor %}
 </datalist>
 
-{# A sortable column header: a link to that sort; clicking the current one
-   flips its order. #}
 {% macro sort_th(key, label, numeric=True) -%}
 <th scope="col" {% if numeric %}class="num"{% endif %} {% if query.sort == key %}aria-sort="{{ 'ascending' if query.direction == 'asc' else 'descending' }}"{% endif %}>
     <a class="accounts-sort" href="{{ query.sort_link(key) }}">{{ label }}</a>

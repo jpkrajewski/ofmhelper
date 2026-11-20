@@ -1,10 +1,3 @@
-"""audit_log and the row stamps (alembic a1b2c3d4e5f8): every change to a row
-people edit is recorded by the database itself, with who did it (and whom
-an admin was viewing as), from where (a request, a job, a sweep) and what
-changed; secrets only as "changed"; nobody can edit the log. Owner
-2026-11-15: "who changed this and from what", "can an AI agent search user
-actions"."""
-
 import asyncio
 
 import pytest
@@ -46,9 +39,6 @@ def _changes(table: str, row_id: object) -> list:
     return list(reversed(audit_log.history(table, str(row_id))))
 
 
-# --- who acts ------------------------------------------------------------------
-
-
 def test_a_request_records_the_person_and_what_they_sent(owner):
     job_id = create_job("ai", {}, actor=str(owner))
     client = TestClient(app)
@@ -63,7 +53,7 @@ def test_a_request_records_the_person_and_what_they_sent(owner):
     old, new = entry.changes["hidden_at"]
     assert old is None
     assert new is not None
-    assert list(entry.changes) == ["hidden_at"]  # nothing else changed
+    assert list(entry.changes) == ["hidden_at"]
 
 
 def test_an_admin_viewing_as_someone_is_recorded_with_whom(owner):
@@ -118,9 +108,6 @@ def test_a_client_of_its_own_is_named(owner):
     entry = _changes("devices", phone)[-1]
     assert (entry.via, entry.actor_id) == ("sql:psql", None)
     assert entry.changes == {"notes": ["", "by hand"]}
-
-
-# --- what is recorded ------------------------------------------------------------
 
 
 def test_secrets_are_recorded_only_as_set_or_changed(owner):
@@ -208,9 +195,6 @@ def test_nobody_can_change_the_log(owner, statement):
         s.execute(text(statement))
 
 
-# --- every table decided ------------------------------------------------------------
-
-
 def _triggers() -> set[str]:
     with get_engine().connect() as conn:
         return set(
@@ -244,12 +228,7 @@ def test_every_audited_table_has_both_stamps():
             assert issubclass(cls, Authored), cls.__name__
 
 
-# --- phone history from before the stamps --------------------------------------------
-
-
 def test_a_phone_revision_from_before_the_stamps_restores(owner):
-    """Stored revisions are never rewritten: one in the old shape (floats,
-    `added_at` / `linked_at`) is read in today's shape when restored."""
     phone = _phone(owner)
     added = devices.add_login(
         phone, LoginFields(service="instagram", username="ann.ig"), owner

@@ -1,6 +1,3 @@
-"""What every Drive (`client.Drive`, `fake.FakeDrive`) offers, and how it
-fails. Callers type against `DriveApi`, never a concrete class."""
-
 from typing import Protocol
 lazy from pathlib import Path
 
@@ -16,31 +13,21 @@ lazy from ofmhelpers.integrations.gdrive.models import (
 )
 
 
-class DriveError(AppError):
-    """Drive is not set up, refused, or failed; the message says which
-    (/drive shows it as is)."""
+class DriveError(AppError): ...
 
 
-class FolderGoneError(DriveError):
-    """Missing, trashed, not a folder, or not shared with the account."""
+class FolderGoneError(DriveError): ...
 
 
 RECONNECT = "Reconnect Google Drive on your Account page"
 
 
 class DriveAuthError(DriveError):
-    """Google refused the person's sign-in: the grant was revoked or
-    expired, or Drive was not ticked on Google's consent screen. Only
-    connecting Google Drive again on /account fixes it. The message is safe
-    to show; Google's own text stays on the chained cause and in the log."""
-
     def __init__(self, message: str = RECONNECT) -> None:
         super().__init__(message)
 
 
-class DriveFullError(DriveError):
-    """The person's Drive has no room left for the upload (Drive's
-    `storageQuotaExceeded`)."""
+class DriveFullError(DriveError): ...
 
 
 class DriveApi(Protocol):
@@ -62,20 +49,13 @@ class DriveApi(Protocol):
 
     def file(self, file_id: str) -> DriveFile: ...
 
-    def find_file(self, parent_id: str, name: str) -> DriveFile | None:
-        """The oldest item of that name in the folder that is not a folder."""
-        ...
+    def find_file(self, parent_id: str, name: str) -> DriveFile | None: ...
 
-    def sheet(self, file_id: str) -> DriveSheet:
-        """A Google Sheet's cells, every tab; `DriveError` when the file is
-        not a Google Sheet."""
-        ...
+    def sheet(self, file_id: str) -> DriveSheet: ...
 
     def thumbnail(self, item: DriveFile, px: int) -> DriveThumb | None: ...
 
-    def download(self, file_id: str) -> DriveDownload:
-        """A file's content and name; `FolderGoneError` when missing."""
-        ...
+    def download(self, file_id: str) -> DriveDownload: ...
 
     def upload(
         self, parent_id: str, path: Path, name: str, mime_type: str

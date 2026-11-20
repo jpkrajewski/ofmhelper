@@ -1,7 +1,3 @@
-"""/clone-links Check: the pasted text read as one link per line -- cleaned,
-each once, in the order pasted -- and every line that is not exactly one
-link named."""
-
 import pytest
 
 from ofmhelpers.features.clone_links.links import (
@@ -43,7 +39,6 @@ def test_every_spelling_of_one_instagram_reel_is_one_link(pasted):
     ],
 )
 def test_every_kind_of_instagram_post_is_written_as_its_reel(pasted):
-    """One shortcode is one post: /p/, /tv/ and /reel/ of it are one run."""
     assert SourceLink(url=pasted).url == REEL
 
 
@@ -80,8 +75,6 @@ def test_a_tiktok_video_keeps_only_its_path():
     ],
 )
 def test_every_host_of_one_tiktok_video_is_its_www_page(pasted):
-    """yt-dlp takes only www.tiktok.com: the bare and m. hosts were refused
-    as no video site."""
     assert SourceLink(url=pasted).url == "https://www.tiktok.com/@a/video/1"
 
 
@@ -125,8 +118,6 @@ def test_a_short_link_is_kept_as_it_is():
     ],
 )
 def test_a_share_link_is_refused_never_made_a_reel(pasted):
-    """A share token is no shortcode: rewritten to /reel/<token>/ it passed
-    Check and then failed as "wants a login"."""
     found = read_pasted(pasted)
 
     assert found.links == []
@@ -175,8 +166,6 @@ def test_one_post_of_a_video_site_is_taken(pasted):
     ],
 )
 def test_a_profile_playlist_or_redirector_is_refused(pasted):
-    """Only single-post extractors: a list link fanned out into every entry
-    (preview and download), and the clone was made of entry 1."""
     found = read_pasted(pasted)
 
     assert found.links == []

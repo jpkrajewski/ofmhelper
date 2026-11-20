@@ -1,8 +1,3 @@
-"""An Instagram photo post (/p/DGUaB0Rtazx, prod 2026-10-22) shows a logged-out
-visitor only its cover image: gallery-dl stops at the login redirect and
-yt-dlp finds no video. The job says what to do about it instead of quoting
-gallery-dl."""
-
 import subprocess
 
 from ofmhelpers.integrations.downloaders import images

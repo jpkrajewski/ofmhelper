@@ -2,7 +2,6 @@
 {% import "components/ui.html" as ui %}
 {% block content %}
 {{ ui.page_header("Gen AI") }}
-{# The guided tour ("How to", static/js/tour.js). #}
 {% set tour = [
     ("#model-select", "Choose the model."),
     ("#prompt-field", "Write what the picture or video should show."),
@@ -32,8 +31,6 @@
 
     <fieldset class="tool-fields" id="model-fields"></fieldset>
 
-    {# Images only: ai-form.js shows this for an image model, hides it for a
-       video one. Each count queues its own job and gallery card. #}
     <div class="field" id="batch-field" hidden>
         <label for="batch-count">Batch</label>
         <input type="number" id="batch-count" name="batch" value="1" min="1"

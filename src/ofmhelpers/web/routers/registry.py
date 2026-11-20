@@ -1,10 +1,3 @@
-"""Every background-job task the app runs, by the task name its jobs are
-stored under: its label and the router that serves it. The /generate and
-/download-assets galleries and the admin action log all read this, so a new
-tool is one entry here instead of one in each of them. What recovery does
-with a task (its run function, time limit, queue, restart) is
-`features/jobs/registry.py`."""
-
 from ofmhelpers.features.threads.tasks import TASK as THREADS_TASK
 from ofmhelpers.schemas import Job, TaskCard, Tool
 from ofmhelpers.web.routers.downloads import clean_image, images, media, videos, viral
@@ -15,8 +8,6 @@ from ofmhelpers.web.routers.inventory import handmade
 from ofmhelpers.web.routers.task_helpers import job_assets
 from ofmhelpers.web.routers.video_tools import uniqify
 
-# The /generate gallery: every /ai job, plus the jobs of the per-model tools
-# it replaced (their pages still answer, see generation/legacy.py).
 GENERATE_TOOLS = frozendict(
     {
         ai.TASK: Tool(label="AI generation", router=ai.router, describe=ai.describe),
@@ -27,11 +18,9 @@ GENERATE_TOOLS = frozendict(
     }
 )
 
-# The /download-assets gallery.
 DOWNLOAD_TOOLS = frozendict(
     {
         media.TASK: Tool(label="Download", router=media.router),
-        # Before /download-media picked the downloader itself: their past jobs.
         "download_videos": Tool(label="Download videos", router=videos.router),
         "download_images": Tool(label="Download images", router=images.router),
         "clean_images": Tool(label="Clean images", router=clean_image.router),
@@ -67,7 +56,6 @@ TOOLS = frozendict(
 
 
 def task_card(job: Job) -> TaskCard:
-    """A job as a card in a gallery that mixes several tools."""
     tool = TOOLS[job.task]
     if tool.form_params:
         job = job.model_copy(update={"params": tool.form_params(job)})

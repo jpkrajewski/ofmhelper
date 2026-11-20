@@ -1,6 +1,3 @@
-"""FilePicker.carryOver, run for real under node against a stub DOM: files
-move picker-to-picker by kind, whatever each tool calls its field."""
-
 import json
 import subprocess
 

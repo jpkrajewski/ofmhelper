@@ -1,12 +1,3 @@
-"""
-web/middleware/ratelimit.py: the failed-login brake on /login (two shared passwords, no
-per-user lockout, so this is the only thing bounding a guessing attack) and
-the blunt per-IP ceiling on mutating requests.
-
-Rate limiting is off for the rest of the suite (see conftest) because every
-test shares one client host; these tests turn it back on explicitly.
-"""
-
 import pytest
 from fastapi.testclient import TestClient
 from redis.exceptions import RedisError
@@ -19,8 +10,6 @@ def limited(monkeypatch):
     monkeypatch.setenv("OFM_RATE_LIMIT_ENABLED", "true")
     monkeypatch.setenv("OFM_LOGIN_MAX_FAILURES", "3")
     monkeypatch.setenv("OFM_LOGIN_FAILURE_WINDOW_S", "900")
-    # High enough to stay out of the login tests' way -- the write ceiling
-    # counts POST /login too. The write test lowers it itself.
     monkeypatch.setenv("OFM_WRITE_RATE_LIMIT_REQUESTS", "100")
     monkeypatch.setenv("OFM_WRITE_RATE_LIMIT_WINDOW_S", "60")
     return TestClient(app)
@@ -42,8 +31,6 @@ def test_login_locks_out_after_the_failure_allowance(limited):
 
 
 def test_lockout_applies_even_to_the_correct_password(limited):
-    """Once the allowance is gone the endpoint stops answering at all --
-    otherwise an attacker who guessed right on attempt N+1 would still get in."""
     for _ in range(3):
         _guess(limited)
 
@@ -58,7 +45,6 @@ def test_successful_login_clears_the_failure_counter(limited):
     r = _guess(limited, password="test-admin")
     assert r.status_code == 303
 
-    # Counter reset: a fresh run of failures gets the full allowance again.
     for _ in range(3):
         assert _guess(limited).status_code == 401
 
@@ -75,7 +61,6 @@ def test_write_ceiling_returns_429_and_leaves_reads_alone(limited, monkeypatch):
     monkeypatch.setenv("OFM_WRITE_RATE_LIMIT_REQUESTS", "5")
     limited.post("/login", data={"password": "test-admin", "next": "/"})
 
-    # The login POST above already counted; drive the rest of the allowance.
     statuses = [
         limited.post("/todo/nope/toggle", follow_redirects=False).status_code
         for _ in range(6)
@@ -83,13 +68,10 @@ def test_write_ceiling_returns_429_and_leaves_reads_alone(limited, monkeypatch):
     assert 429 in statuses
     assert statuses[-1] == 429
 
-    # GETs are never counted, so the app stays usable for reading.
     assert limited.get("/health").status_code == 200
 
 
 def test_a_failed_expire_cannot_lock_an_ip_out_forever(limited, monkeypatch):
-    """INCR landing while EXPIRE fails must not leave a TTL-less counter: that
-    key would never expire and the IP could never log in again."""
     from ofmhelpers.cache import get_redis
     from ofmhelpers.web.middleware import ratelimit
 
@@ -98,8 +80,6 @@ def test_a_failed_expire_cannot_lock_an_ip_out_forever(limited, monkeypatch):
     failed_once = {"done": False}
 
     def flaky_expire(name, *args, **kwargs):
-        # Only the login counter, and only its first hit -- the same request
-        # also bumps the write-ceiling counter through this same client.
         if name == key and not failed_once["done"]:
             failed_once["done"] = True
             msg = "simulated broker blip"
@@ -108,8 +88,8 @@ def test_a_failed_expire_cannot_lock_an_ip_out_forever(limited, monkeypatch):
 
     monkeypatch.setattr(get_redis(), "expire", flaky_expire)
 
-    _guess(limited)  # INCR ok, EXPIRE raises -> counter has no TTL
-    assert get_redis().ttl(key) == -1  # -1 = key exists, no expiry
+    _guess(limited)
+    assert get_redis().ttl(key) == -1
 
-    _guess(limited)  # the next hit must repair it
+    _guess(limited)
     assert get_redis().ttl(key) > 0

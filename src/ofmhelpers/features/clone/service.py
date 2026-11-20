@@ -1,16 +1,3 @@
-"""What /clone does behind its routes (web/routers/generation/clone.py): a
-submit's checks and runs, the cards, the Drive picker.
-
-Each run's duration is its source video's length, clamped to the model's
-schema range. Every video is probed, held to the target's `max_reference_s`,
-and every run checked against the model's schema before any job is queued, so
-a bad file fails the whole submit up front instead of after some runs were
-already paid for.
-
-A finished run's video can be uploaded into one or more Instagram accounts'
-Drive folders, picked in the card's Drive dialog (`/clone/drive-upload`,
-features/drive/uploads.py); each card says where its video went."""
-
 import re
 import subprocess
 from collections.abc import Callable
@@ -45,23 +32,15 @@ from ofmhelpers.telemetry import in_this_trace
 TASK = "clone"
 PREFIX = "/clone"
 FILES_PREFIX = f"{PREFIX}/files"
-# The size the confirm dialog asks `/refs/thumb` for: a running or failed
-# card shows the frame it already made.
 SOURCE_THUMB_PX = 400
 _SHA256 = re.compile(r"[0-9a-f]{64}")
-# Runs whose subjects /clone's tiles offer: /clone-links runs take the same
-# people's pictures.
 SUBJECT_TASKS = {TASK, "clone_links"}
 
 
-class CloneRefusedError(Exception):
-    """A submit nothing was queued for; the message says why (shown on the
-    page)."""
+class CloneRefusedError(Exception): ...
 
 
 class RunChoices(BaseModel):
-    """A submit's picks, checked."""
-
     provider: str
     target: CloneTarget
     api_key: str
@@ -70,8 +49,6 @@ class RunChoices(BaseModel):
 
 
 class CloneRun(BaseModel):
-    """One run's job params: what its page and Recreate read, never a key."""
-
     provider: str
     model: str
     prompt: str
@@ -85,9 +62,6 @@ class CloneRun(BaseModel):
 
 
 class DrivePicker(BaseModel):
-    """What the cards' Drive dialog needs: the folders this person may
-    upload into, and whether Google Drive is connected."""
-
     drive_targets: list[UploadTarget]
     drive_ready: bool
 
@@ -99,8 +73,6 @@ def _shown_name(path: str) -> str:
 def check_choices(
     provider: str, api_key: str, export: str, resolution: str, owner: int
 ) -> RunChoices:
-    """The form's picks with their defaults, before any upload is saved.
-    The key is `owner`'s for the target's model (`Keys.for_run`)."""
     provider = provider or settings.aigen.default_provider
     target = clone_targets().get(provider)
     if target is None:
@@ -170,14 +142,10 @@ def plan_runs(
     videos: list[str],
     probe: Callable[[str], float],
 ) -> list[CloneRun]:
-    """One run per video, every run getting all the images; refused whole if
-    any file or run is bad."""
     _require_counts(images, videos)
     require_kind(images, "image", "The subject")
     require_kind(videos, "video", "Videos")
     target = choices.target
-    # Probed side by side (each is its own ffprobe process), in picked order;
-    # the first unreadable video still fails the whole submit.
     with ThreadPoolExecutor(settings.web.clone_probe_workers) as pool:
         seconds = list(pool.map(in_this_trace(probe), videos))
     _require_max_length(videos, seconds, target.max_reference_s)
@@ -209,8 +177,6 @@ def plan_runs(
 
 
 class Submitted(Protocol):
-    """The /clone form as its route read it (`CloneForm`)."""
-
     provider: str
     api_key: str
     export: str
@@ -225,9 +191,6 @@ class Submitted(Protocol):
 
 
 class Submit(BaseModel):
-    """One /clone submit: whose it is, and the two things its router owns
-    (`run`: the function RQ stores by path; `probe`: a video's length)."""
-
     model_config = ConfigDict(frozen=True)
 
     actor: str
@@ -242,8 +205,6 @@ class Submit(BaseModel):
         )
 
     def _queue(self, run: CloneRun, api_key: str) -> str:
-        """One run's job. The key goes to the worker only, never into the
-        params its page shows."""
         params = run.model_dump()
         return start_job(
             TASK,
@@ -254,7 +215,6 @@ class Submit(BaseModel):
         )
 
     def start(self, form: Submitted) -> list[str]:
-        """One queued run per video: their job ids, in picked order."""
         choices = check_choices(
             form.provider, form.api_key, form.export, form.resolution, self.owner
         )
@@ -271,19 +231,12 @@ class Submit(BaseModel):
 
 
 def export_label(params: dict[str, Any]) -> str:
-    """What the run was exported as (Original, CapCut, a phone), by its
-    label; runs from before `export` stored only the `capcut` bool."""
     name = export_choice(params.get("export"), bool(params.get("capcut")))
     choice = exports().get(name)
     return choice.label if choice else name
 
 
 def source(params: dict[str, Any]) -> CloneSource | None:
-    """The video the run clones (a run has one), as a first frame: the
-    confirm dialog's own thumbnail, already made. None for a file the store
-    no longer holds (the sweep removed it) or never held (its names carry
-    their hash): its frame would answer 404 / 403 on every page showing the
-    card. clone.js `sourceOf` builds the same from the card's params."""
     videos = params.get("reference_videos") or []
     if not videos:
         return None
@@ -317,7 +270,6 @@ def cards(jobs: list[Job]) -> list[CloneCard]:
 
 
 def cards_of(job_ids: list[str], actor: str) -> list[CloneCard]:
-    """These jobs' cards, newest first like the gallery; only the asker's."""
     return cards(
         [job for j in reversed(job_ids) if (job := get_job(j, actor)) is not None]
     )
@@ -326,8 +278,6 @@ def cards_of(job_ids: list[str], actor: str) -> list[CloneCard]:
 def drive_picker(user_id: int) -> DrivePicker:
     found = drive_targets(user_id)
     return DrivePicker(
-        # Where content is needed first: fewest files waiting unposted
-        # (never read: last), then the most followed.
         drive_targets=sorted(
             found,
             key=lambda t: (t.waiting is None, t.waiting or 0, -(t.followers or 0)),
@@ -337,20 +287,11 @@ def drive_picker(user_id: int) -> DrivePicker:
 
 
 class SubjectPicks(BaseModel):
-    """/clone's one-click subject tiles: the last used subjects, then the
-    most used ones (a picture can be in both rows: user decision
-    2026-11-06). Paths still in the person's store."""
-
     last_used: list[str]
     most_used: list[str]
 
 
 def subject_picks(actor: str | frozenset[str], assets_root: Path) -> SubjectPicks:
-    """The subjects (first subject image of a run) of `actor`'s /clone and
-    /clone-links runs, `clone_last_subjects` last used then
-    `clone_top_subjects` most used. `actor`: one person, or a team (an
-    owner and their VAs, `Viewer.team`): then every one of them gets the
-    same tiles and the uses are counted together (owner 2026-11-14)."""
     web = settings.web
     subjects = ParamHistory(
         tasks=frozenset(SUBJECT_TASKS), actor=actor, field="reference_images"
@@ -374,8 +315,6 @@ def _stored(
     assets_root: Path,
     limit: int,
 ) -> list[str]:
-    """Up to `limit` of `query`'s subjects still in the store. Asks for
-    more than it keeps: some may be gone."""
     found: list[str] = []
     for path in query(limit * 3):
         if len(found) == limit:
@@ -386,10 +325,6 @@ def _stored(
 
 
 def _stored_copy(path: str, assets_root: Path) -> str | None:
-    """`path` if it is still an image in this store; else the same file name
-    at the top of the store (a job stored under another root); else another
-    stored name of the same picture (`<sha256>__<name>`, looked for only
-    when the name starts with a real hash); else None."""
     if kept := keep_files(
         [path, str(assets_root / Path(path).name)], assets_root, "image"
     ):
@@ -404,10 +339,6 @@ def _stored_copy(path: str, assets_root: Path) -> str | None:
 def upload_states(
     job_ids: list[str], actors: Readers, team: frozenset[int]
 ) -> list[DriveUpload]:
-    """Where these runs' videos are in Drive; only the runs `actors` made
-    (the reader's own and their VAs') and only uploads made inside the
-    reader's `team` (owner + VAs): a VA's card shows the owner's upload as
-    it goes, as the page drew it; nobody else's ever."""
     return upload_store.for_jobs(
         [j for j in job_ids if get_job(j, actors) is not None], team
     )

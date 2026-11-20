@@ -1,6 +1,3 @@
-"""Apify's REST API: run an actor, read its dataset and an account's
-credit. See CLAUDE.md."""
-
 from ofmhelpers.integrations.apify.client import (
     ApifyAuthError,
     ApifyClient,

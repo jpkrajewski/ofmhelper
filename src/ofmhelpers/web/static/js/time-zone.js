@@ -1,15 +1,3 @@
-/*
- * The header's clock (`ui.clock_now`) and the zone every page's times are in
- * (schemas/time_zones.py, cookie `ofm_timezone`).
- *
- * The zone starts as the person's own: the browser knows the zone of the
- * computer or phone they sit at, and until they pick another the cookie
- * follows it (also when they travel). The globe's menu (`ui.time_zone_menu`)
- * picks one of the team's zones, remembered in this browser; "Automatic"
- * goes back to their own. A page printing times in the zone
- * (`data-zone-times`) reloads to follow; any other stays as it is, so a
- * half-filled form is not lost.
- */
 (() => {
     const clocks = [...document.querySelectorAll(".clock-now")];
     if (clocks.length === 0) return;
@@ -18,7 +6,7 @@
     const COOKIE = "ofm_timezone=";
     const year = 60 * 60 * 24 * 365;
     const own = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-    // The zone the server drew this page in.
+
     const drawn = clocks[0].dataset.zone;
     let date;
     let time;
@@ -36,7 +24,7 @@
             if (isPicked) window.localStorage.setItem(PICKED, "1");
             else window.localStorage.removeItem(PICKED);
         } catch {
-            // private window: the cookie still holds the zone
+
         }
     }
 
@@ -69,9 +57,6 @@
         tick();
     }
 
-    // A page printing times reloads only when it was drawn in another zone
-    // than the one now in use, and only once the cookie really holds it
-    // (cookies off: no reload, or it would never end).
     function use(zone) {
         save(zone);
         show(zone);

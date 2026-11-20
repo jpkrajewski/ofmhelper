@@ -1,12 +1,3 @@
-"""RunningHub's Standard Model API: upload a reference file, submit a model
-by its path, query a task. Single calls only; waiting, resuming and
-downloading are `runner.py`'s.
-
-RunningHub has no idempotency key: a submit is sent once and never retried
-here (a lost answer would start, and charge, a second task). Through
-`integrations.outbound`, so OFM_FAKE_EXTERNALS answers it from `fake.py`.
-"""
-
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -35,8 +26,6 @@ def _refused(response: requests.Response) -> NoReturn:
 
 
 class RunningHubClient:
-    """One RunningHub account (its API key)."""
-
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
         self._base = settings.runninghub.base_url.rstrip("/") + API
@@ -59,10 +48,6 @@ class RunningHubClient:
         task.raise_for_error()
         return task
 
-    # --- upload -----------------------------------------------------------
-    # The URL is signed for 24 h, so it is kept (per account, per file) for
-    # less than that: the same subject image across a batch uploads once.
-
     def upload(self, path: Path, max_bytes: int | None = None) -> str:
         return memoized(
             upload_cache_key("runninghub", self.api_key, path, max_bytes),
@@ -84,11 +69,7 @@ class RunningHubClient:
         logger.info("runninghub upload %s -> %s", path.name, url.split("?")[0])
         return url
 
-    # --- tasks ------------------------------------------------------------
-
     def submit(self, endpoint: str, body: dict[str, Any], job: str) -> str:
-        """Starts the model at `endpoint` ("alibaba/wan-3.0/reference-to-video")
-        for our `job`; its task id."""
         task = self._task(self._post(endpoint, json=body))
         if not task.task_id:
             msg = f"RunningHub: {endpoint} answered without a task id"

@@ -1,24 +1,3 @@
-"""What the owner is told about a VA while the VA works (owner 2026-11-14:
-"when va logs in we get notification which va logged in ... milestones when
-va generated 10 reels ... when va spend more than 10$ ... and then 20, 30
-ect so we can just check on them"). Three events on the bus
-(`features/events`, today: Telegram):
-
-- `vas.login`: a VA signed in (`features/signin/outcome.py`).
-- `vas.reels`: a VA finished another 10 reels that day (10, 20, 30, ...).
-- `vas.spend`: a VA's day passed another $10 (10, 20, 30, ...).
-
-The two milestones are looked at when a job of a VA ends
-(`features/jobs/runner.py` `run_job`, after its cost is kept): the day's
-count and dollars are read fresh (`db/stores/jobs.py` `days`, the day of
-`settings.reports.timezone`) and the step reached goes out under a key
-naming the VA, the day and the step, so the bus sends each once however many
-jobs end past it. Best effort: a notice that cannot be made is logged with
-its trace and never fails the job.
-
-A run with no known price (a /generate model whose provider reports none)
-adds nothing to the dollars, as on /vas."""
-
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -42,7 +21,6 @@ def _whose(va: User) -> str:
 
 
 def logged_in(user: User) -> None:
-    """`user` just signed in: told when they are a VA."""
     if user.role != Role.VA:
         return
     emit(
@@ -95,8 +73,6 @@ def _spend(va: User, day: UserDay) -> Event | None:
 
 
 def _milestones(job: Job, va: User) -> list[Event]:
-    """The steps `va`'s day stands on after `job`: reels when it is a reel
-    that finished, dollars when it cost something."""
     made_reel = job.task in REEL_TASKS and job.status == "done"
     if not made_reel and job.cost_usd is None:
         return []
@@ -109,7 +85,6 @@ def _milestones(job: Job, va: User) -> list[Event]:
 
 
 def after_job(job_id: str) -> None:
-    """A job ended: its VA's milestones, if it is a VA's. Never raises."""
     try:
         job = get_job(job_id)
         va = users.get_user(job.user_id) if job and job.user_id else None

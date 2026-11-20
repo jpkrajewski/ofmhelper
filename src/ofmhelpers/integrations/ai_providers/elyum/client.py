@@ -1,13 +1,3 @@
-"""Elyum's public API (elyum.ai/open/docs): upload a reference file, start a
-generation, read it back. Single calls only; waiting, resuming and
-downloading are `runner.py`'s.
-
-Every submit carries our idempotency key as `Idempotency-Key`: a retry of
-the same body returns the generation already made (`Idempotent-Replayed`),
-never a second paid one. Through `integrations.outbound`, so OFM_FAKE_EXTERNALS
-answers it from `fake.py`.
-"""
-
 import mimetypes
 import re
 from pathlib import Path
@@ -35,11 +25,9 @@ from ofmhelpers.log import get_logger
 logger = get_logger(__name__)
 
 API = "/v1"
-# What POST /v1/files takes (PNG, JPG, WebP, MP4, MOV, WebM, MP3, WAV).
 ACCEPTED_SUFFIXES = frozenset(
     {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mp3", ".wav"}
 )
-# Idempotency-Key: up to 255 printable characters, no spaces.
 _KEY_UNSAFE = re.compile(r"[^\x21-\x7e]")
 _KEY_MAX = 255
 
@@ -57,8 +45,6 @@ def _takes(path: Path) -> bool:
 
 
 class ElyumClient:
-    """One Elyum account (its API key)."""
-
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
         self._base = settings.elyum.base_url.rstrip("/") + API
@@ -75,11 +61,7 @@ class ElyumClient:
             **kwargs,
         )
 
-    # --- upload -----------------------------------------------------------
-
     def upload(self, path: Path, max_bytes: int | None = None) -> str:
-        """The `file_...` id of `path` on this account; one upload per file
-        across workers, reused while cached."""
         return memoized(
             upload_cache_key("elyum", self.api_key, path, max_bytes),
             settings.elyum.upload_cache_ttl_s,
@@ -88,9 +70,6 @@ class ElyumClient:
 
     @staticmethod
     def _sendable(path: Path, max_bytes: int | None) -> Path:
-        """`path`, or the copy of it Elyum takes: an .mkv/.m4v as MP4, a
-        BMP/TIFF or an image over the limits as JPEG. Refused here, before
-        any call, when no copy fits."""
         s = settings.elyum
         try:
             sent = reference_copy(
@@ -126,8 +105,6 @@ class ElyumClient:
         file_id = parsed(response, ElyumFile, PROVIDER, "upload answer").id
         logger.info("elyum upload %s -> %s", path.name, file_id)
         return file_id
-
-    # --- generations ------------------------------------------------------
 
     def create(self, body: dict[str, Any], idempotency_key: str) -> ElyumGeneration:
         response = self._call(

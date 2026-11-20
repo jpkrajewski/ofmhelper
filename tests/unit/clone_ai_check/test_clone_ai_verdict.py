@@ -1,6 +1,3 @@
-"""GOOD or GLITCHY read off a model's answer, the prompt a mirrored reel
-gets, and the check's deadline against the review's RQ limit."""
-
 from pathlib import Path
 
 import pytest
@@ -27,10 +24,10 @@ def _answer(severities: list[str], percent: int) -> CloneAiVerdict:
     [
         ([], 0, Verdict.GOOD),
         (["minor"], 49, Verdict.GOOD),
-        (["minor"], 50, Verdict.GLITCHY),  # minor ones add up: unsure = TRIAL
+        (["minor"], 50, Verdict.GLITCHY),
         (["minor"], 90, Verdict.GLITCHY),
         ([], 90, Verdict.GLITCHY),
-        (["blocking"], 0, Verdict.GLITCHY),  # one blocking glitch is enough
+        (["blocking"], 0, Verdict.GLITCHY),
         (["minor", "blocking"], 10, Verdict.GLITCHY),
     ],
 )
@@ -56,8 +53,6 @@ def test_a_mirrored_reel_is_told_its_backwards_text_is_no_glitch():
 
 
 def test_the_check_ends_well_inside_the_reviews_time_limit():
-    """The deadline, one request still in flight past it, and the upload
-    all fit in RQ's limit for one review."""
     check = settings.clone_ai_check
     assert check.deadline_s == 600
     assert check.glitchy_percent == 50

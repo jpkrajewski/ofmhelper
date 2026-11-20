@@ -1,12 +1,3 @@
-"""/clone-links Generate's preview over HTTP (`POST /clone-links/previews`,
-as the page posts it): one NDJSON line per link with its length, cover and
-price, or a fixed reason it cannot be cloned; good reads cached per user,
-failed ones not; a cover kept on disk and served by `/thumb/{key}`; every
-link answered within the request's deadline; reads limited process-wide.
-
-yt-dlp is faked (`fake_externals`); a test that needs another answer
-swaps `video_info` where the preview calls it and counts the reads."""
-
 import json
 import threading
 import time
@@ -16,7 +7,7 @@ from clone_links_helpers import (
     OTHER,
     REEL,
     client,
-    clone_links_env,  # noqa: F401 -- the fixture, used by `pytestmark`
+    clone_links_env,  # noqa: F401
 )
 
 from ofmhelpers.db.stores import users
@@ -50,9 +41,6 @@ RESET = (
 
 
 class Reads:
-    """`video_info` as the preview calls it: answers `answer(url, logged_in)`
-    and records every read (url, logged in, socket timeout)."""
-
     def __init__(self, answer=None):
         self.answer = answer or (
             lambda url, _logged_in: VideoInfo(url=url, seconds=2.0)
@@ -90,7 +78,6 @@ def _with_cookies(email: str) -> None:
 
 
 def test_one_line_per_link_each_ready_and_priced():
-    """The real fake read (yt-dlp faked: a 2 s reel, no cover)."""
     lines = _previews(client(), [REEL, OTHER])
 
     assert sorted(line["url"] for line in lines) == sorted([REEL, OTHER])
@@ -106,8 +93,6 @@ def test_one_line_per_link_each_ready_and_priced():
 
 
 def test_the_fake_markers_reach_the_tiles():
-    """The fake yt-dlp's own answers: a 20 s reel, a login-only one (no
-    cookies uploaded), one with a cover on the fake CDN."""
     long_reel = "https://www.instagram.com/reel/fake-long1/"
     login_reel = "https://www.instagram.com/reel/fake-login1/"
     cover_reel = "https://www.instagram.com/reel/fake-thumb1/"
@@ -151,9 +136,6 @@ def test_a_video_over_the_limit_is_too_long_and_cannot_be_ticked(reads):
 def test_a_length_at_the_limit_is_judged_and_shown_rounded_up(
     reads, seconds, too_long, shown
 ):
-    """A whole-second length (TikTok rounds down) at the limit may be 15.4 s,
-    which the worker refuses after the download: too long. The tile never
-    reads "15.0 s" next to Too long."""
     reads.answer = lambda url, _li: VideoInfo(url=url, seconds=seconds)
 
     line = _one(client(), REEL)
@@ -164,7 +146,6 @@ def test_a_length_at_the_limit_is_judged_and_shown_rounded_up(
 
 
 def test_a_failed_read_is_not_cached():
-    """The fake yt-dlp fails "fake-fail" links: each look reads again."""
     c = client()
     calls: list[str] = []
     real = preview_module.video_info
@@ -195,8 +176,6 @@ def test_a_good_read_is_cached_and_not_read_again(reads):
 
 
 def test_the_cache_is_per_user_so_a_login_only_read_stays_its_readers(reads):
-    """Ann's cookies read a login-only reel; Bob, without cookies, is told to
-    upload his -- not shown Ann's read as ready."""
     reads.answer = lambda url, logged_in: (
         VideoInfo(url=url, seconds=3.0)
         if logged_in
@@ -257,8 +236,6 @@ def test_the_cache_is_per_user_so_a_login_only_read_stays_its_readers(reads):
 def test_a_failed_read_says_what_the_va_can_do(
     reads, cookies, url, error, logged_out, said
 ):
-    """From every try and the clicker's cookies: the first proxy's login wall
-    is no reason when the login itself answered 404; the site is named."""
     reads.answer = lambda u, _li: VideoInfo(
         url=u, error=error, logged_out_error=logged_out
     )
@@ -290,8 +267,6 @@ def test_a_cover_is_kept_small_and_served_from_disk(reads):
 
 
 def test_a_cached_read_whose_cover_cannot_be_fetched_is_forgotten(reads):
-    """An expired signed cover URL would be retried for the cache's 30 days:
-    the next look reads the link again for a fresh one."""
     reads.answer = lambda url, _li: VideoInfo(
         url=url, seconds=2.0, thumbnail=f"{CDN}/gone.png"
     )
@@ -317,8 +292,6 @@ def test_a_cover_never_made_is_404():
 
 
 def test_every_link_is_answered_by_the_deadline(reads, monkeypatch):
-    """A stalled read never keeps Generate grey: by the deadline it is
-    "took too long" and the rest are answered."""
     monkeypatch.setenv("OFM_CLONE_LINKS_PREVIEW_DEADLINE_S", "5")
     release = threading.Event()
 
@@ -345,8 +318,6 @@ def test_the_read_slots_are_one_for_the_whole_process():
 
 
 def test_a_read_waits_for_a_free_slot_and_gives_up_at_its_deadline(reads, monkeypatch):
-    """Every read slot taken (other requests reading): a link waits, and at
-    its deadline gives up without reading; a freed slot lets it read."""
     slots = threading.BoundedSemaphore(1)
     monkeypatch.setattr(preview_module, "_read_slots", lambda: slots)
     client(ANN)

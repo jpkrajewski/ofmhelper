@@ -1,6 +1,3 @@
-// /handmade (templates/handmade.html): Upload to Drive on a card opens /drive
-// with that reel to pick its account folder (drive.js comes back here); x on
-// "In Drive" takes it back out (the same route /clone's x uses).
 document.addEventListener("click", async (e) => {
     const upload = e.target.closest(".drive-upload-btn");
     if (upload) {

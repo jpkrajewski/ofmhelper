@@ -1,23 +1,3 @@
-"""owners: phones, logins, tracked accounts, creators and the reels watch list
-belong to a user
-
-A user sees and manages only their own; an admin sees everything. Every
-existing row becomes the password admin's (alembic c2d3e4f5a6b7), so admins
-keep seeing all of it and nobody else sees any of it. What was unique for
-the whole agency is now unique per owner: two users may each have a
-"Phone 01", or track the same handle, without seeing the other's. A user
-who still owns rows cannot be deleted (RESTRICT): deactivate them instead,
-nothing they made is lost.
-
-Watched profiles: one row per owner and username (the scan of a username
-is written to every owner's row, so it is still scanned once).
-
-Revision ID: d3e4f5a6b7c8
-Revises: c2d3e4f5a6b7
-Create Date: 2026-10-22 06:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -41,11 +21,10 @@ OWNED = (
 
 
 def _owner_column(table: str) -> None:
-    """user_id, every existing row the password admin's, then NOT NULL."""
     op.add_column(table, sa.Column("user_id", sa.Integer(), nullable=True))
     op.execute(
         sa.text(
-            f"UPDATE {table} SET user_id = (SELECT id FROM users WHERE email = :email)"  # noqa: S608 -- table names are the constants above
+            f"UPDATE {table} SET user_id = (SELECT id FROM users WHERE email = :email)"  # noqa: S608
         ).bindparams(email=AGENCY_EMAIL)
     )
     op.alter_column(table, "user_id", nullable=False)
@@ -107,8 +86,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Back to agency-wide rows. Fails, as it must, when two owners hold the
-    same label / login / handle / profile: merge those by hand first."""
     op.drop_constraint("profile_groups_pkey", "profile_groups", type_="primary")
     op.create_primary_key("profile_groups_pkey", "profile_groups", ["name"])
 

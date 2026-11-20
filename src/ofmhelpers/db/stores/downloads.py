@@ -1,7 +1,3 @@
-"""Downloaded files (`downloads`, one row per file of a download job): what
-a finished download writes, what the same link pasted again finds, what the
-retention sweep reads and marks (`features/downloads/`)."""
-
 from functools import lru_cache
 lazy from datetime import datetime
 
@@ -17,13 +13,10 @@ def _repository() -> DownloadRepository:
 def record(
     user_id: int, job_id: str, files: list[DownloadedFile], now: datetime
 ) -> None:
-    """The files `job_id` holds on disk now, each at its position (a replay
-    updates the rows it finds), and nothing after the last of them."""
     _repository().record(user_id, job_id, files, now)
 
 
 def drop_from(job_id: str, position: int) -> None:
-    """The job's rows at `position` and after."""
     _repository().drop_from(job_id, position)
 
 
@@ -36,14 +29,10 @@ def get(job_id: str, position: int) -> Download | None:
 
 
 def newest_of(user_id: int, urls: list[str]) -> list[Download]:
-    """For each of `urls` `user_id` downloaded before: the files of the
-    newest job that fetched it. Their own only, never a set of people."""
     return _repository().newest_of(user_id, urls)
 
 
 def stored_by(user_ids: frozenset[int], urls: list[str]) -> list[Download]:
-    """What the server holds of `urls` downloaded by one of `user_ids` (a
-    team): for each, the files of the newest job that still has them all."""
     return _repository().stored_by(user_ids, urls)
 
 
@@ -52,22 +41,18 @@ def file_shared(download_id: int, file_path: str) -> bool:
 
 
 def touch(job_id: str, url: str, now: datetime) -> None:
-    """The link was asked for again."""
     _repository().touch(job_id, url, now)
 
 
 def removed_in(job_ids: list[str]) -> list[RemovedFile]:
-    """The files of these jobs the sweep removed on purpose."""
     return _repository().removed_in(job_ids)
 
 
 def by_asset(user_id: int, digest: str) -> list[Download]:
-    """`user_id`'s removed files whose asset-store copy was `digest`'s."""
     return _repository().by_asset(user_id, digest)
 
 
 def idle(before: datetime, after_id: int, limit: int) -> list[Download]:
-    """Stored files not asked for or used since `before`, by id."""
     return _repository().idle(before, after_id, limit)
 
 
@@ -80,12 +65,10 @@ def note_use(download_id: int, used_at: datetime) -> None:
 
 
 def mark_removed(download_id: int, idle_since: datetime, now: datetime) -> bool:
-    """False when it was asked for or used meanwhile: nothing to delete."""
     return _repository().mark_removed(download_id, idle_since, now)
 
 
 def put_back(download_id: int) -> None:
-    """Stored after all: the sweep could not delete its file."""
     _repository().put_back(download_id)
 
 

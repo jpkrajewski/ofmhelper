@@ -1,8 +1,3 @@
-"""Reads `audit_log` (alembic a1b2c3d4e5f8): a row's history, what someone
-did, what happened to someone's data, newest first. Nothing writes here:
-the database's triggers do. Nothing cached: it is read by people looking
-into something, and it only grows."""
-
 from sqlalchemy import select
 
 from ofmhelpers.db.models import AuditLogRow
@@ -37,14 +32,11 @@ class AuditLogRepository:
             return [_entry(r) for r in rows]
 
     def history(self, table: str, row_id: str, limit: int = 100) -> list[AuditEntry]:
-        """Every change to one row (`row_id`: its key values joined by ":")."""
         log = AuditLogRow
         return self._newest(log.table_name == table, log.row_id == row_id, limit=limit)
 
     def by_actor(self, actor_id: int, limit: int = 100) -> list[AuditEntry]:
-        """What `actor_id` did (as themselves or viewing as someone)."""
         return self._newest(AuditLogRow.actor_id == actor_id, limit=limit)
 
     def of_owner(self, owner_id: int, limit: int = 100) -> list[AuditEntry]:
-        """What happened to `owner_id`'s rows, whoever did it."""
         return self._newest(AuditLogRow.owner_id == owner_id, limit=limit)

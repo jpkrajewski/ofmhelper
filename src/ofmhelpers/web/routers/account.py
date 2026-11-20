@@ -1,12 +1,3 @@
-"""
-/account: the signed-in person's own settings -- how they sign in (Google,
-Apple, a password), whether Drive uploads can go up as them (a Google
-account linked with Drive), and their own API keys per generation
-provider, which their forms pre-fill so their runs bill their account, and
-per link provider (/links runs on them; an admin with none on the .env
-one). The work: `features/account/service.py`.
-"""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -29,7 +20,6 @@ router = APIRouter(
 
 def _page(request: Request, user_id: int, notice: Notice) -> Response:
     view = service.page_view(user_id, notice)
-    # `iter`: the view has a field named `keys`, which `dict(view)` would call.
     response = render(
         request, "account.html", **dict(iter(view)), status_code=notice.status_code
     )
@@ -46,11 +36,6 @@ def account_page(
 
 @router.get("/drive-space")
 def drive_space_now(me: CurrentUser) -> DriveSpace | None:
-    """The signed-in person's Google Drive space, for every page's
-    drive-alert.js: `low` (the full pop-up) or `reconnect` (Google refused
-    their token: the Reconnect pop-up); null without Google connected or
-    when Drive did not answer. Cached (features/drive/space.py): Google is asked
-    at most once per TTL per person, whatever it answers."""
     return drive_space(me.id)
 
 
@@ -63,16 +48,12 @@ def change_password(
     current: Annotated[str, Form()] = "",
 ) -> Response:
     changed = service.change_password(me.id, current, password, confirm)
-    # Every other session of theirs is out now; this one stays in.
     if changed.user is not None:
         AuthMiddleware.remember(request, changed.user)
     return _page(request, me.id, changed.notice)
 
 
 async def _keys_form(request: Request) -> ApiKeysForm:
-    """The keys form: its fields come from data (`key_<provider>` per keyed
-    provider; a Remove button posts `remove=<provider>`), so it is read here
-    and not as a form model."""
     return service.keys_form(await request.form())
 
 
@@ -80,13 +61,11 @@ async def _keys_form(request: Request) -> ApiKeysForm:
 def save_keys(
     request: Request, me: CurrentUser, form: Annotated[ApiKeysForm, Depends(_keys_form)]
 ) -> Response:
-    """One form, one Save for every provider's key."""
     return _page(request, me.id, service.save_keys(me.id, form))
 
 
 @router.post("/telegram")
 def connect_telegram(request: Request, me: CurrentUser) -> Response:
-    """To the bot with a one-time link: Start there makes that chat theirs."""
     found = service.connect_telegram(me.id)
     if found.url is not None:
         return see_other(found.url)
@@ -101,12 +80,8 @@ def disconnect_telegram(me: CurrentUser) -> Response:
 
 @router.post("/unlink/{provider}")
 def unlink(request: Request, me: CurrentUser, provider: str) -> Response:
-    """Stops signing in with that account (and, for Google, Drive uploads
-    as it). Refused when it is the only way left to sign in."""
     unlinked = service.unlink(me.id, provider)
     if unlinked.user is None:
         return _page(request, me.id, unlinked.notice)
-    # security audit 2026-11-18: every other session is out (service); this
-    # one signs in again, as after a password change.
     AuthMiddleware.sign_in(request, unlinked.user)
     return see_other("/account")

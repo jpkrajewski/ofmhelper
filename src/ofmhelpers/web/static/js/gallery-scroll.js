@@ -1,28 +1,5 @@
-/*
- * Infinite scroll for a server-rendered card gallery.
- *
- * The gallery used to be a hard 20-item slice with no way to reach anything
- * older. Rather than paginating the whole page, an IntersectionObserver watches
- * a `.gallery-sentinel[data-next-offset]` at the end of the list and fetches the
- * next page as a ready-made HTML fragment, appending it in place.
- *
- * The server renders each page with the same partial the first page uses, and
- * only emits a new sentinel while there is another page -- so a response
- * without one is what ends the scroll. No item count is tracked client-side.
- *
- * Appended cards inherit the delegated Recreate and Download handlers, but a
- * still-running card needs its poller armed, hence Generation.resumePendingCards
- * (idempotent by design -- it skips cards already being polled).
- *
- * The endpoint is read at each fetch: hidden-cards.js switches it (with or
- * without hidden cards) and swaps the whole list, then fires
- * "gallery:replaced" so the new sentinel is watched. Offsets move under a
- * page that hides or adds cards, so a job already shown is never appended
- * twice.
- */
 (() => {
-    // Fetch a page before the sentinel is actually on screen: at a normal
-    // scroll speed the cards are already there by the time you reach them.
+
     const ROOT_MARGIN = "600px";
 
     function initGalleryScroll(container) {
@@ -45,13 +22,11 @@
         }
 
         function load(sentinel) {
-            // One request at a time: the observer fires again on every scroll
-            // tick while the sentinel is in view.
+
             if (loading) return;
             loading = true;
             observer.unobserve(sentinel);
 
-            // The endpoint may carry its own query (a filter): add to it.
             const url = new URL(container.dataset.galleryEndpoint, window.location.origin);
             url.searchParams.set("offset", sentinel.dataset.nextOffset);
             fetch(url)
@@ -60,9 +35,7 @@
                     return r.text();
                 })
                 .then((html) => {
-                    // Replace the sentinel with the fragment: the fragment
-                    // carries the next sentinel itself, or none when the
-                    // gallery is exhausted.
+
                     const holder = document.createElement("div");
                     holder.innerHTML = html;
                     holder.querySelectorAll("[data-job-id]").forEach((card) => {
@@ -76,9 +49,7 @@
                     watch();
                 })
                 .catch(() => {
-                    // Leave the sentinel in place and re-observe: scrolling
-                    // away and back retries, which is the whole recovery story
-                    // a gallery needs. session.js already handles a 401.
+
                     loading = false;
                     observer.observe(sentinel);
                 });

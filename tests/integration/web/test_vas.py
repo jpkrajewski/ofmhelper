@@ -1,12 +1,3 @@
-"""
-/vas: what each VA's runs cost today, in the last 7 days and this month,
-summed in SQL from `jobs.cost_usd` per `jobs.user_id`. A run is a job that
-made a provider request; its cost is what the provider reported, else the
-app's clone price (marked "est."), else unknown ("N runs without a price",
-never $0). A user sees their own VAs, an admin every VA under its owner, a
-VA cannot open the page. Days are the reader's chosen time zone's.
-"""
-
 import re
 from datetime import datetime
 from decimal import Decimal
@@ -34,8 +25,6 @@ pytestmark = pytest.mark.filterwarnings("ignore")
 
 OWNER = "owner@example.com"
 WARSAW = ZoneInfo("Europe/Warsaw")
-# A Sunday noon in Warsaw: today is Nov 15, the 7 days start Nov 9, the
-# month Nov 1.
 NOW = datetime(2026, 11, 15, 12, 0, tzinfo=WARSAW)
 APIYI_CLONE = "apiyi:wan3.0-video"
 
@@ -68,7 +57,6 @@ def _run(
     estimated: bool = False,
     task: str = "clone",
 ) -> str:
-    """A run of `user`'s started at `at` that cost `usd` (None: no price)."""
     job_id = create_job(task, {}, actor=str(user.id))
     cost = JobCost(usd=None if usd is None else Decimal(usd), estimated=estimated)
     keep_cost(job_id, JobMeta(generations=[_generation()]), cost)
@@ -94,18 +82,15 @@ def _at(day: int, hour: int, minute: int = 0, second: int = 0, month: int = 11):
     return datetime(2026, month, day, hour, minute, second, tzinfo=WARSAW)
 
 
-# --- periods ----------------------------------------------------------------------
-
-
 def test_each_period_starts_at_its_midnight_and_sums_what_is_inside():
     owner = make_user(OWNER)
     va = _va("va@example.com", owner)
-    _run(va, _at(15, 0), "1")  # today's first second
-    _run(va, _at(14, 23, 59, 59), "2")  # yesterday's last
-    _run(va, _at(9, 0), "4")  # the 7 days' first second
-    _run(va, _at(8, 23, 59, 59), "8")  # a second before them
-    _run(va, _at(1, 0), "16")  # the month's first second
-    _run(va, _at(31, 23, 59, 59, month=10), "32")  # last month's last
+    _run(va, _at(15, 0), "1")
+    _run(va, _at(14, 23, 59, 59), "2")
+    _run(va, _at(9, 0), "4")
+    _run(va, _at(8, 23, 59, 59), "8")
+    _run(va, _at(1, 0), "16")
+    _run(va, _at(31, 23, 59, 59, month=10), "32")
 
     amounts = _amounts(_view(owner, va), va)
 
@@ -126,7 +111,6 @@ def test_a_run_later_today_counts_and_tomorrows_does_not():
 
 
 def test_days_are_the_readers_time_zones():
-    """21:00 on the 14th in Warsaw is 01:30 on the 15th in Ambala."""
     owner = make_user(OWNER)
     va = _va("va@example.com", owner)
     _run(va, _at(14, 21), "3")
@@ -137,9 +121,6 @@ def test_days_are_the_readers_time_zones():
     assert (warsaw.runs, ambala.runs, ambala.usd) == (0, 1, Decimal(3))
     assert _view(owner, va, zone="Asia/Kolkata").zone == "Ambala"
     assert _view(owner, va, zone="no/such-zone").zone == "Warsaw"
-
-
-# --- reported, estimated, no price ----------------------------------------------
 
 
 def test_reported_estimated_and_unpriced_runs_are_told_apart():
@@ -188,15 +169,12 @@ def test_a_provider_that_reports_a_cost_is_believed():
 
 
 def test_a_clone_run_without_a_reported_cost_gets_the_clone_price(monkeypatch):
-    """APIYI reports nothing: 10 s of source at 720P at the price /clone's
-    panel shows ($0.1176 a source second)."""
     monkeypatch.setenv("OFM_CLONE_APIYI_USD_PER_VIDEO_S", '{"720P": 0.1176}')
     params = {"provider": "apiyi", "model": APIYI_CLONE, "resolution": "720P"}
 
     assert cost_of({**params, "duration": 10}, [_generation()]) == JobCost(
         usd=Decimal("1.1760"), estimated=True
     )
-    # /clone-long and /clone-links name the source's length differently.
     assert cost_of({**params, "seconds": 20.0}, [_generation()]).usd == Decimal("2.352")
     assert cost_of({**params, "source_seconds": 5}, [_generation()]).usd == Decimal(
         "0.588"
@@ -231,8 +209,6 @@ def test_a_request_that_was_never_made_is_not_estimated():
 
 
 def test_a_finished_job_keeps_its_estimate_in_its_row(monkeypatch):
-    """Through `run_job`: the remembered request, settled without a cost,
-    becomes the job's estimated `cost_usd`."""
     monkeypatch.setenv("OFM_CLONE_APIYI_USD_PER_VIDEO_S", '{"720P": 0.1176}')
     va = make_user()
     params = {
@@ -258,9 +234,6 @@ def test_a_finished_job_keeps_its_estimate_in_its_row(monkeypatch):
     job = get_job(job_id)
     assert (job.cost_usd, job.cost_estimated) == (Decimal("1.1760"), True)
     assert [g.cost_usd for g in job.meta.generations] == [None]
-
-
-# --- who sees whom -----------------------------------------------------------------
 
 
 def _rows(html: str) -> list[str]:
@@ -297,7 +270,6 @@ def test_a_user_sees_only_their_own_vas_with_money_and_marks():
     assert "Vera" in r.text
     assert "Theo" not in r.text
     assert "$99" not in r.text
-    # Two facts a cell, nothing else: what it cost, how many runs.
     assert _cell(r.text, mine, Period.TODAY) == "$3.50 3 runs"
     assert "est." not in r.text
     assert "without a price" not in r.text
@@ -370,9 +342,6 @@ def test_spending_is_in_the_more_menu_of_users_not_of_vas():
     assert 'href="/vas"' not in _client("va@example.com", Role.VA).get("/home").text
 
 
-# --- a VA's days (owner 2026-11-14) --------------------------------------------------
-
-
 def _reel(va: User, at: datetime, usd: str | None = None, *, status: str = "done"):
     job_id = _run(va, at, usd)
     with session_scope() as s:
@@ -396,14 +365,14 @@ def test_a_day_says_when_the_va_logged_in_and_out_the_reels_and_the_money():
     _event(va, "logout", _at(14, 17, 40))
     _reel(va, _at(14, 10), "1.25")
     _reel(va, _at(14, 11), "2")
-    _reel(va, _at(14, 15), None, status="failed")  # not a reel
-    _run(va, _at(14, 16), "0.5", task="ai")  # money, not a reel
+    _reel(va, _at(14, 15), None, status="failed")
+    _run(va, _at(14, 16), "0.5", task="ai")
 
     (day,) = _days(_view(owner, va), va)
 
     assert (day.day_label, day.name) == ("Sat 14 Nov", "Vera")
     assert (day.logged_in, day.logged_out) == ("09:02", "17:40")
-    assert day.hours == "7 h 38 m"  # 2 h 58 m + 4 h 40 m: the break is not worked
+    assert day.hours == "7 h 38 m"
     assert (day.reels, day.spent) == (2, "$3.75")
 
 
@@ -419,13 +388,11 @@ def test_an_idle_logout_is_marked_and_a_va_still_in_today_is_active():
 
     assert (yesterday.logged_in, yesterday.logged_out) == ("09:00", "11:30 · idle")
     assert (today.logged_in, today.logged_out) == ("08:00", "Active 11:45")
-    # The idle logout is dated at the last action: the 2 idle hours are not worked.
     assert (yesterday.hours, today.hours) == ("2 h 30 m", "3 h 45 m")
     assert (today.reels, today.spent) == (0, "—")
 
 
 def test_days_are_the_readers_zone_newest_first_and_only_this_month():
-    """21:00 on the 14th in Warsaw is 04:00 on the 15th in Manila."""
     owner = make_user(OWNER)
     va = _va("va@example.com", owner)
     _event(va, "login", _at(14, 21, 0))
@@ -459,8 +426,6 @@ def test_the_page_lists_the_days_of_the_readers_vas_only():
 
 
 def test_a_sign_in_with_no_logout_counts_until_the_last_job_before_the_next():
-    """Two devices, or a day before idle logouts were recorded (2026-11-14):
-    a sign-in followed by another sign-in worked until its last job."""
     owner = make_user(OWNER)
     va = _va("va@example.com", owner)
     _event(va, "login", _at(14, 9, 0))
@@ -485,8 +450,6 @@ def test_a_session_over_midnight_is_split_between_its_days():
 
 
 def test_a_session_signed_in_before_the_month_keeps_its_part_inside_it():
-    """Review 2026-11-15: the events were paired only inside the month, so
-    a sign-in on the 31st with its logout on the 1st gave the 1st nothing."""
     owner = make_user(OWNER)
     va = _va("va@example.com", owner)
     _event(va, "login", _at(31, 22, 0, month=10))

@@ -1,24 +1,3 @@
-"""The raw-file sweep (features/jobs/sweeps.py, daily). A provider's download
-(`{provider}_{task}.mp4` in `settings.aigen.out_dir`) is exported, and the
-export becomes the job's result. Nothing reads the raw file again once the
-job's request can no longer be resumed (`resume_max_age_s`, 48 h). Kept
-forever, the raw files took 7 GB of prod's 72 GB disk, 3.5 GB of it older than
-14 days (2026-11-08, disk at 93%).
-
-Each round deletes a picture, video or sound file at the top of `out_dir` when
-it is older than `raw_keep_s` (14 days) and nothing names it:
-- no job's result or params, of any status (a /generate image is its own
-  result, an export is its job's);
-- no remembered provider task (`tasks.remembered()`: recovery may still
-  resume it).
-
-Folders (`fitted/` 14 MB, `higgsfield/` 2 MB on prod) and other files (the
-`.jsonl` logs) are never touched. Nor is the copy the asset store keeps of each
-download (`uploads/assets`, the Reuse picker's): a hard link since 2026-11-11
-(`out_dir` is inside the uploads mount, docker-compose.yml), so deleting the
-raw file frees space only once the store's copy is gone too.
-"""
-
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -47,8 +26,6 @@ def _strings(value: Any) -> Iterator[str]:
 
 
 def _named(out: Path) -> set[str]:
-    """The file names every job's result or params names under `out`'s folder
-    name (wherever that folder is mounted)."""
     return {
         Path(text).name
         for value in files_naming(out.name)
@@ -58,8 +35,6 @@ def _named(out: Path) -> set[str]:
 
 
 def _task_ids() -> list[str]:
-    """Remembered provider tasks, as `runner._result_path` writes them in a
-    file name."""
     return [
         "".join(c if c.isalnum() or c in "-_" else "_" for c in t.task_id)
         for t in tasks.remembered()
@@ -67,13 +42,11 @@ def _task_ids() -> list[str]:
 
 
 def stale(now: float) -> list[Path]:
-    """The raw files a round deletes at `now`."""
     out = Path(settings.aigen.out_dir)
     keep_s = settings.aigen.raw_keep_s
     try:
         files = [p for p in out.iterdir() if classify_kind(p.name) in _MEDIA]
     except FileNotFoundError:
-        # No download yet. Any other OSError (unreadable) fails the sweep.
         logger.debug("raw-file sweep: %s not made yet", out, exc_info=True)
         return []
     old = []

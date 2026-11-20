@@ -1,12 +1,3 @@
-"""Every shell script and workflow `run:` block parses, and the deploy paths'
-remote scripts stay one single-quoted string.
-
-Both deploy paths ship the server's script as `remote_script='...'`. One
-apostrophe in a comment in there ("this build's own", 2026-11-08, caught
-before it shipped) ends the string: the rest runs on the runner, or the step
-dies on a quote it cannot close.
-"""
-
 import re
 import subprocess
 from pathlib import Path
@@ -19,9 +10,7 @@ SCRIPTS = sorted((REPO / "scripts").glob("*.sh"))
 WORKFLOWS = sorted((REPO / ".github/workflows").glob("*.yml"))
 DEPLOYS = [REPO / "scripts/deploy.sh", REPO / ".github/workflows/deploy.yml"]
 
-# `${{ ... }}` is GitHub's, filled in before bash ever sees the text.
 _EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
-# The body of `remote_script='` up to the line that is only the closing quote.
 _REMOTE = re.compile(
     r"remote_script='\n(.*?)\n[ \t]*'[ \t]*$", re.DOTALL | re.MULTILINE
 )

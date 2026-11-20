@@ -1,6 +1,3 @@
-"""A check kept in `clone_ai_checks` comes back whole: why it has no verdict
-(kind + raw detail) and the tokens an answer used."""
-
 from ofmhelpers.db.stores import clone_ai_checks
 from ofmhelpers.features.clone_links.ai_check import CloneAiCheck, Verdict, unanswered
 

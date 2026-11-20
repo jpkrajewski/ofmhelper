@@ -1,7 +1,3 @@
-"""Instagram, logged out: what the scans read, on the fake and through the
-real Instagram (direct, then each configured proxy -- like the app, a rate
-limit or a "not found" for an account that exists means a flagged IP)."""
-
 import itertools
 import time
 import uuid
@@ -18,9 +14,8 @@ from ofmhelpers.integrations.instagram import (
 )
 from ofmhelpers.integrations.instagram.models import GLOBAL_CDN_HOST, Profile
 
-# A public profile with reels that will not disappear, per backend.
 PROFILE = {"fake": "sheep_love33", "real": "instagram"}
-_INSTAGRAM_LAUNCH = 1286323200  # 2010-10-06
+_INSTAGRAM_LAUNCH = 1286323200
 
 
 def _open(username: str) -> tuple[InstagramClient, Profile]:
@@ -53,10 +48,6 @@ def test_its_reels_tab_lists_codes_views_and_post_times(backend):
 
 
 def test_a_scan_gets_mp4s_with_a_length_on_the_global_cdn(backend):
-    """What /reels and /accounts need of a profile: its recent reels' mp4s
-    and lengths -- from the posts timeline when Instagram answers it, else
-    reel by reel (it throttles the logged-out posts query on its own,
-    answering 200 with "Rate limit exceeded": 2026-10-23)."""
     client, profile = _open(PROFILE[backend])
     found = scan_profile(
         client,
@@ -80,10 +71,6 @@ def test_a_missing_profile_is_not_found(backend):
 
 @pytest.mark.live
 def test_canary_a_public_account_through_a_real_proxy(real_env):
-    """The scans' route: Instagram through one of the configured proxies
-    (OFM_IG_PROXIES), never direct. A proxy the scan would drop (refused,
-    or dead: 2026-11-01 one exit node failed every TLS handshake with
-    Instagram) is skipped here too."""
     proxies = settings.instagram.proxy_urls
     assert proxies, "no OFM_IG_PROXIES in .env"
     refused = []

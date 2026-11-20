@@ -1,8 +1,3 @@
-"""Shared by the /clone-links integration tests (one file per part: the
-run, the previews, the reviews): every outside service faked, a signed-in
-client with Google Drive connected, and a Generate posted the way the page
-posts it. Jobs run inline (the test suite's queue)."""
-
 import json
 
 import pytest
@@ -32,9 +27,6 @@ GOOD = {"reasoning": "Nothing looks off.", "glitches": [], "glitch_percent": 3}
 
 @pytest.fixture
 def clone_links_env(fake_externals, monkeypatch, tmp_path):
-    """Every outside service faked: downloads, Wan 3.0 (kie.ai), Gemini,
-    Drive. Retries off and one model in the AI check's chain: a failure is
-    the answer. Returns the fake Drive."""
     monkeypatch.setenv("OFM_UPLOADS_ROOT", str(tmp_path / "uploads"))
     monkeypatch.setenv("GEMINI_API_KEY", GEMINI_KEY)
     monkeypatch.setenv("OFM_LLM_RETRIES", "0")
@@ -45,7 +37,6 @@ def clone_links_env(fake_externals, monkeypatch, tmp_path):
 
 
 def client(email: str = "ann@example.com", *, google: bool = True) -> TestClient:
-    """A signed-in session; `google`: with Google Drive connected."""
     c = TestClient(app)
     user = sign_in(c, email)
     if google:
@@ -54,8 +45,6 @@ def client(email: str = "ann@example.com", *, google: bool = True) -> TestClient
 
 
 def post_run(c: TestClient, links: list[str], **data):
-    """POST /clone-links/run as the page sends it (kie.ai, one new subject
-    image, Original export); the raw response."""
     form = {
         "api_key": KIE_KEY,
         "provider": "kie",

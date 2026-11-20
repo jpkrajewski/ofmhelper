@@ -1,6 +1,3 @@
-"""iPhone HEIC/HEIF uploads are converted to a max-quality JPEG on the way in,
-so every tool downstream only ever sees a format it can read."""
-
 import io
 
 import pillow_heif

@@ -1,18 +1,3 @@
-"""The distribution sweep (`features/jobs/sweeps.py`, every
-`OFM_DISTRIBUTION_CHECK_INTERVAL_S`):
-1. a post left `publishing` past a job's time (its worker was killed) is
-   failed, so it is tried again;
-2. every account that posts (cookies, not paused, not stopped) gets every
-   model's new files of its owner queued (`sources.py`, each owner's
-   /drive board read once per round): accounts belong to no model;
-3. on production only (`OFM_DISTRIBUTION_SCHEDULED`), each account whose
-   `next_at` passed and that is not rate limited (`resume_at`) starts its
-   next pin; its next one is due a slot later (24 h / pins_per_day) times
-   a random factor in 1 +- jitter. A new account's first pin is at a random
-   point of its first slot: accounts never post in step.
-One account's failure (Drive, Pinterest) is logged and the others go on.
-Each round logs one line: accounts, started, waiting, rate limited."""
-
 import random
 import time
 from itertools import groupby
@@ -48,8 +33,6 @@ def run_round() -> None:
         if cut:
             logger.warning("distribution: %s pin(s) cut off by a restart, retried", cut)
     channels = sorted(store.repository().running(), key=lambda c: c.user_id)
-    # Reading each owner's Drive is the Drive sweep's rule (OFM_DRIVE_SWEEP):
-    # on a dev copy of prod it would open every customer's Drive.
     if settings.gdrive.sweeping(settings.infra.production):
         for user_id, mine in groupby(channels, key=lambda c: c.user_id):
             _fill(Sources(user_id=user_id), list(mine))
@@ -73,8 +56,6 @@ def run_round() -> None:
 
 
 def _schedule(channel: Channel) -> str:
-    """One account's turn this round: "started", "limited", or "" (not
-    due, stopped meanwhile, or nothing left: its next turn is a slot on)."""
     now = time.time()
     fresh = store.repository().channel(channel.id)
     if fresh is None or fresh.error or fresh.paused:
@@ -88,15 +69,10 @@ def _schedule(channel: Channel) -> str:
 
 
 def fill_many(user_id: int, channels: list[Channel]) -> int:
-    """These accounts' queues filled now (they just connected); how many
-    new in all."""
     return _fill(Sources(user_id=user_id), channels)
 
 
 def _fill(sources: Sources, channels: list[Channel]) -> int:
-    """Every model's new files of the owner queued for each of their
-    accounts; how many in all. A Drive or preset failure is logged and the
-    next round tries again; it never stops another owner's round."""
     try:
         cards = sources.cards()
         files = [
@@ -121,11 +97,9 @@ def _fill(sources: Sources, channels: list[Channel]) -> int:
 
 
 def _due(channel: Channel, now: float) -> bool:
-    """Its slot came and nothing of it is being pinned; a new account gets
-    its first slot at a random point of the next one instead."""
     repo = store.repository()
     if channel.next_at is None:
-        first = now + random.uniform(0, slot_s())  # noqa: S311 -- spacing, not a secret
+        first = now + random.uniform(0, slot_s())  # noqa: S311
         repo.set_next(channel.id, first)
         logger.info(
             "distribution: @%s first pin in %.0f min",
@@ -138,24 +112,18 @@ def _due(channel: Channel, now: float) -> bool:
 
 def _after(now: float) -> float:
     j = settings.distribution.jitter
-    return now + slot_s() * random.uniform(1 - j, 1 + j)  # noqa: S311 -- spacing, not a secret
+    return now + slot_s() * random.uniform(1 - j, 1 + j)  # noqa: S311
 
 
 def _what(model: ModelPreset, link: str) -> tuple[str, str, str]:
-    """A pin's title, caption and link: `handle_share` of the time (owner
-    2026-11-18: "50/50") only "ig: <handle>" / "insta: <handle>" with no
-    caption and no link (people look the account up), else the model's
-    title, a caption drawn from its preset and the account's self link."""
     pick = random.random
     if model.instagram and pick() < settings.distribution.handle_share:
-        prefix = random.choice(_HANDLE_PREFIXES)  # noqa: S311 -- variety, not a secret
-        return f"{prefix} {random.choice(model.instagram)}", "", ""  # noqa: S311 -- variety, not a secret
-    return model.title, random.choice(model.descriptions), link  # noqa: S311 -- variety, not a secret
+        prefix = random.choice(_HANDLE_PREFIXES)  # noqa: S311
+        return f"{prefix} {random.choice(model.instagram)}", "", ""  # noqa: S311
+    return model.title, random.choice(model.descriptions), link  # noqa: S311
 
 
 def start_next(channel: Channel) -> str | None:
-    """Its next post claimed with a caption drawn from its model, and its
-    publish job started; the job's id, or None when nothing is left."""
     repo = store.repository()
     post = repo.next_post(channel, settings.distribution.max_attempts)
     if post is None:

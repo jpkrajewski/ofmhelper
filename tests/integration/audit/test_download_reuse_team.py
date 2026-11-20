@@ -1,10 +1,3 @@
-"""A stored download is reused only inside a team (security audit,
-`downloads-service:cross-user-reuse-of-login-fetched-file`): a link fetched
-with A's cookies.txt is not handed to an unrelated B, who pastes it and gets
-a fetch with B's own cookies; an owner and their VAs still share one fetch.
-
-No network and no ffmpeg (`download_files.py`)."""
-
 from pathlib import Path
 
 import pytest
@@ -24,8 +17,6 @@ LINK = "https://gated.example/p/team-reuse"
 
 
 class CookieRecordingDownloads(FakeDownloads):
-    """`FakeDownloads` that also keeps the cookies each fetch was made with."""
-
     def __init__(self, root: Path) -> None:
         super().__init__(root)
         self.cookies_used: list[str | None] = []
@@ -51,7 +42,6 @@ def downloads(tmp_path, monkeypatch) -> CookieRecordingDownloads:
 
 
 def _client(email: str, role: Role = Role.USER, owner_id: int | None = None):
-    """A client signed in as `email`, with cookies of its own stored."""
     c = TestClient(app)
     user = sign_in(c, email, role)
     if owner_id is not None:

@@ -1,7 +1,3 @@
-"""Fanvue as a chat source (`integrations/chat_source.py`): accounts connected through
-OAuth, with tokens kept outside this package (integrations do not touch the database,
-so the keeper is handed in)."""
-
 from functools import partial
 from typing import NamedTuple, Protocol
 lazy from collections.abc import Iterator, Mapping
@@ -28,31 +24,24 @@ lazy from ofmhelpers.integrations.fanvue.models import FanvueChat, FanvueMessage
 
 logger = get_logger(__name__)
 
-# `creator.message.mass_sent` fires for both (docs: creator/messages).
 _MASS_TYPES = frozenset({"BROADCAST", "GHOST_PROMOTION"})
 _SENT = "SENT"
-# Fanvue's own, not the model's words or the fan's.
 _NOT_A_CHAT_MESSAGE = frozenset({"MARKETING_KYC"})
 
 
 class TokenKeeper(Protocol):
     def accounts(self) -> list[ChatAccount]: ...
 
-    def access_token(self, account_id: str) -> str:
-        """A live token. Raises `FanvueAuthError` when someone must connect again."""
-        ...
+    def access_token(self, account_id: str) -> str: ...
 
 
 class _Handle(NamedTuple):
     client: FanvueClient
-    # Set for an agency acting for a creator: its calls go through /creators/<uuid>.
     creator_uuid: str | None
 
 
 class FanvueSource:
     platform = ChatPlatform.FANVUE
-    # `creator.message.mass_sent` fires once and names no recipients, so what it
-    # answered is only found by reading those chats.
     mass_reaches_chats = False
     bulk_sends_unflagged = False
     events = webhooks.EVENTS
@@ -73,7 +62,6 @@ class FanvueSource:
                 partial(self._tokens.access_token, account.account_id)
             )
             if not account.is_agency:
-                # Their own connection wins over an agency's: only it can have a webhook.
                 found[account.account_id] = ChatModel(
                     model_id=account.account_id,
                     username=account.username,
@@ -93,7 +81,6 @@ class FanvueSource:
                         ),
                     )
             except FanvueRefusedError:
-                # Lost its seat, say: a full round every minute would not bring it back.
                 logger.warning(
                     "fanvue agency %s refused", account.username, exc_info=True
                 )
@@ -117,9 +104,6 @@ class FanvueSource:
         ]
 
     def subscribe(self, model: ChatModel, url: str) -> CreatedSubscription:
-        """On the token's own account. Fanvue answers 403 to an agency's token (seen
-        2026-11-05), which is logged; those models stay on the sync until the creator
-        connects with their own login."""
         made = model.client.client.subscribe(url, webhooks.EVENTS)
         return CreatedSubscription(id=made.id, url=url, secret=made.signing_secret)
 
@@ -139,8 +123,6 @@ class FanvueSource:
 def _new_messages(
     model: ChatModel, fan_uuid: str, seen: str | None, oldest: datetime
 ) -> list[FanvueMessage]:
-    """The chat's messages after `seen`, newest first. History stops at `oldest`, but
-    a fan's messages nobody has answered yet are read however old."""
     handle: _Handle = model.client
     found: list[FanvueMessage] = []
     before = None
@@ -155,7 +137,6 @@ def _new_messages(
             if answered and message.sent_at < oldest:
                 return found
             found.append(message)
-            # An unsent mass message sits in the thread too, and answers nobody.
             answered = answered or (
                 message.sender.uuid != fan_uuid and message.status == _SENT
             )
@@ -167,7 +148,6 @@ def _new_messages(
 
 
 def _event(message: FanvueMessage, fan_uuid: str) -> ChatEvent | None:
-    """None for what does not count: unsent or moderated, or Fanvue's own."""
     if message.sent_at is None or message.type in _NOT_A_CHAT_MESSAGE:
         return None
     if message.status and message.status != _SENT:
@@ -185,11 +165,6 @@ def _fan_name(chat: FanvueChat) -> str:
 
 
 def _new_reads(model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
-    """Latest activity first, so a quick round stops at the first chat with nothing
-    new or past `oldest`. A thorough one goes through them all: a fan still waiting
-    counts however long ago they wrote. A mass message changes every chat it reached
-    and Fanvue allows 200 calls a minute, so a chat it was last in is opened only if a
-    fan there is waiting: that is the only one it can have answered."""
     handle: _Handle = model.client
     failed = 0
     for chat in handle.client.chats(handle.creator_uuid):
@@ -214,7 +189,6 @@ def _new_reads(model: ChatModel, scope: ReadScope) -> Iterator[ChatRead]:
                     model, chat.user.uuid, scope.seen.get(channel), scope.oldest
                 )
             except FanvueRefusedError:
-                # Seen: 400 "Invalid user UUID". Not asked again until the chat changes.
                 logger.warning("fanvue chat %s cannot be read", channel, exc_info=True)
                 messages = []
             except FanvueError:

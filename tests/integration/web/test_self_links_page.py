@@ -1,6 +1,3 @@
-"""/self-links: the Self links page -- its domains (add / disable / remove) and
-its click statistics over any time frame, read from the click log."""
-
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -66,7 +63,6 @@ def test_add_then_remove_a_domain(client):
     assert added.status_code == 303
     assert "mybridge.test" in client.get("/self-links").text
 
-    # Duplicate is refused.
     again = client.post("/self-links/domains", data={"host": "mybridge.test"})
     assert again.status_code == 400
 
@@ -114,8 +110,7 @@ def test_stats_read_the_click_log_over_a_range(client):
 
     page = client.get("/self-links?days=7").text
     assert "bridge.example.com/dany" in page
-    assert "US" in page  # a country breakdown row
-    # Totals: 2 views + 2 clicks over 7 days.
+    assert "US" in page
     page30 = client.get("/self-links?days=30")
     assert page30.status_code == 200
 
@@ -125,5 +120,4 @@ def test_custom_from_to_range_is_accepted(client):
     today = datetime.now(UTC).date().isoformat()
     page = client.get(f"/self-links?from={today}&to={today}")
     assert page.status_code == 200
-    # A single day is shown by the hour.
     assert "by hour" in page.text

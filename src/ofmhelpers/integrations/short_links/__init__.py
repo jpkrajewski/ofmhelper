@@ -1,11 +1,3 @@
-"""Short links on link providers (Oopsie, Bouncy): what /links makes, lists
-and counts. The static data (`providers.json`, `targets.json`) and the
-shapes every provider client returns are `ofmhelpers.schemas.link_catalog`
-(the stored links and the forms read them too), re-exported here.
-
-A new provider is a `providers/<name>.py` client plus its JSON entry; a new
-target is one JSON entry."""
-
 from ofmhelpers.integrations.short_links.errors import (
     AuthError,
     LinkError,

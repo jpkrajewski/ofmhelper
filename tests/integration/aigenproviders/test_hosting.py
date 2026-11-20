@@ -1,8 +1,3 @@
-"""This server as the file host of a provider without uploads
-(`ai_providers/hosting.py` + `GET /files/ai/<token>/<name>`): a link serves
-exactly its file to anyone holding it, no session needed; an unknown,
-malformed or expired token is a 404; no public https address = no link."""
-
 from pathlib import Path
 
 import pytest
@@ -39,7 +34,6 @@ def test_a_link_serves_its_file_to_anyone_without_signing_in(clip):
     response = TestClient(app).get(_path(url))
 
     assert url.startswith(f"{BASE}/files/ai/")
-    # Never the file's own name in a public link, only its type.
     assert url.endswith("/ref.mp4")
     assert response.status_code == 200
     assert response.content == clip.read_bytes()
@@ -115,8 +109,6 @@ def test_without_a_public_https_address_there_is_no_link(monkeypatch, clip):
 
 
 def test_a_new_public_address_never_gets_the_old_addresss_link(monkeypatch, clip):
-    """Dev tunnels change address on every start: a link remembered for the
-    old one would send the provider to a host that is gone."""
     monkeypatch.setenv("OFM_AIGEN_PUBLIC_BASE_URL", "https://one.example/")
     old = hosting.link(clip, "APIYI", 3600)
     monkeypatch.setenv("OFM_AIGEN_PUBLIC_BASE_URL", "https://two.example/")

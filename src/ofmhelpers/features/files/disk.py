@@ -1,7 +1,3 @@
-"""The file manager's raw disk browser (`/file-manager/disk`): the named
-roots an admin may browse, and listing, uploading into and deleting from
-them. A path never leaves its root (`safe_path`)."""
-
 import shutil
 from pathlib import Path
 lazy from collections.abc import Sequence
@@ -24,27 +20,16 @@ _BYTES_PER_UNIT = 1024
 
 
 class Folder(BaseModel):
-    """A folder on screen; each field is a name `file_manager_disk.html`
-    reads. `dirs` and `files` newest first: what just went wrong is at the
-    top."""
-
     roots: list[str]
     current_root: str
     current_path: str
-    # "Delete all" is refused at the root (`safe_path`), so not offered.
     at_root: bool
     parent: str | None
     dirs: list[DirEntry]
     files: list[FileEntry]
 
 
-# Named roots the manager is allowed to browse -- everything else stays
-# off-limits since safe_path only resolves within whichever root is picked.
-# "kieai_out" is where AI-generation output actually lands (see
-# KieAIClient's out_dir); without it, finding/removing those files meant
-# shelling into the server instead of using this page.
 def _roots() -> dict[str, Path]:
-    """Read from the settings at each request, never kept."""
     return {
         "uploads": Path(settings.infra.uploads_root).resolve(),
         "downloads": Path("downloads").resolve(),
@@ -61,12 +46,7 @@ def _get_root(root_name: str) -> Path:
 
 
 def safe_path(root_name: str, rel_path: str, *, allow_root: bool = True) -> Path:
-    """Resolves a user-supplied relative path against the chosen root and
-    refuses to leave it (blocks ../ traversal, absolute paths, symlink escape).
-    `allow_root=False` (the deletes) refuses the root itself too: deleting it,
-    or everything in it, would take every user's store and every running
-    job's files with it."""
-    if "\0" in rel_path:  # security audit 2026-11-18: refusal, not a 500
+    if "\0" in rel_path:
         msg = "Invalid path"
         raise RefusedError(msg)
     root = _get_root(root_name)
@@ -98,7 +78,6 @@ def _directory(root_name: str, rel_dir: str, *, allow_root: bool = True) -> Path
 
 
 def _parent(path: str) -> str:
-    """The folder `path` is in, as the page's `path=` ("" = the root)."""
     parent = Path(path).parent
     return str(parent).replace("\\", "/") if str(parent) != "." else ""
 
@@ -149,13 +128,9 @@ def file(root_name: str, rel_path: str) -> Path:
 
 
 def upload(root_name: str, rel_dir: str, uploads: Sequence[UploadFile]) -> None:
-    """Into the folder on screen, under the file's own (safe) name; a name
-    already there is refused, never overwritten."""
     directory = _directory(root_name, rel_dir)
     for item in uploads:
         dest = directory / safe_filename(item.filename)
-        # security audit 2026-11-18: "xb" creates exclusively, so a file or a
-        # dangling symlink already there is refused with no check-then-open gap.
         try:
             out = dest.open("xb")
         except FileExistsError:
@@ -169,7 +144,6 @@ def upload(root_name: str, rel_dir: str, uploads: Sequence[UploadFile]) -> None:
 
 
 def delete_one(root_name: str, rel_path: str) -> str:
-    """A file or a whole folder gone: the folder it was in (`path=`)."""
     target = safe_path(root_name, rel_path, allow_root=False)
     if target.is_file():
         target.unlink()
@@ -182,7 +156,6 @@ def delete_one(root_name: str, rel_path: str) -> str:
 
 
 def delete_all(root_name: str, rel_dir: str) -> None:
-    """Everything in the folder, never the root's own content."""
     directory = _directory(root_name, rel_dir, allow_root=False)
     for entry in directory.iterdir():
         if entry.info.is_dir():

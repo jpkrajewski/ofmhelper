@@ -1,11 +1,3 @@
-"""A download asked for again (features/downloads/again.py; owner
-2026-11-11): the same link is never downloaded twice -- its card goes to the
-first place -- and a video the retention sweep removed is fetched again into
-its own job, by the card's Download, by the link pasted again, or by a
-clone's Recreate (`/refs/missing` says which gone files can come back).
-
-No network and no ffmpeg (`download_files.py`)."""
-
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -66,14 +58,11 @@ def _paste(client: TestClient, *links: str) -> dict:
 
 
 def _shown(client: TestClient, url: str = "/download-assets") -> list[str]:
-    """The jobs of the page's cards, in order, each once."""
     found = re.findall(r'data-job-id="([^"]+)"', client.get(url).text)
     return list(dict.fromkeys(found))
 
 
 def _card(client: TestClient, job_id: str) -> str:
-    """The job's first card, from the gallery's own fragment (the page adds
-    the live cards' templates after the last one)."""
     html = client.get("/download-assets/gallery").text
     after = html.split(f'data-job-id="{job_id}"', 1)[1]
     return after.split('class="result-item"', 1)[0]
@@ -85,12 +74,8 @@ def _jobs(client: TestClient) -> int:
 
 
 def _remove_videos() -> None:
-    """Two days on, the sweep takes every video and leaves its poster."""
     done = cleanup.sweep(datetime.now(UTC) + timedelta(seconds=2 * DAY))
     assert done.failed == 0
-
-
-# --- the same link is not downloaded twice ---------------------------------------
 
 
 def test_a_link_downloads_once_and_its_card_goes_first_when_asked_again(
@@ -106,7 +91,6 @@ def test_a_link_downloads_once_and_its_card_goes_first_when_asked_again(
     assert downloads.fetched == [A, B]
     assert _jobs(client) == 2
     assert _shown(client) == [first, second]
-    # The page asks again and again: the order stays.
     assert _shown(client) == [first, second]
     assert _shown(client, "/download-assets/gallery") == [first, second]
 
@@ -131,7 +115,6 @@ def test_only_the_new_links_of_a_paste_make_a_job(client, downloads):
 
 
 def _my_va(client: TestClient) -> TestClient:
-    """A client signed in as a VA of `client`'s person."""
     va = make_user("va@example.com", Role.VA)
     users.set_owner(va.id, client.user.id)
     other = TestClient(app)
@@ -142,18 +125,12 @@ def _my_va(client: TestClient) -> TestClient:
 def test_a_link_my_va_downloaded_is_not_fetched_again_and_the_card_is_mine(
     client, downloads
 ):
-    """Dev 2026-11-11: a VA pasted a reel their owner had downloaded five
-    hours before and it was downloaded again. Inside a team the same link is
-    the same video whoever asked: the server's file is used and the asker
-    gets a card and a job of their own. Across teams it is fetched again
-    with the asker's own login (audit 2026-11-18,
-    tests/integration/audit/test_download_reuse_team.py)."""
     other = _my_va(client)
     theirs = _paste(other, A)["job_id"]
 
     mine = _paste(client, A)
 
-    assert downloads.fetched == [A]  # asked of the site once
+    assert downloads.fetched == [A]
     assert mine["again"] == []
     assert mine["job_id"] not in (None, theirs)
     job = get_job(mine["job_id"])
@@ -164,8 +141,6 @@ def test_a_link_my_va_downloaded_is_not_fetched_again_and_the_card_is_mine(
 
 
 def test_a_shared_file_stays_while_anyone_still_has_it(client, downloads):
-    """Two people's cards of one file: the sweep takes the older card's
-    video only on paper, the file stays for the one still in its keep time."""
     other = _my_va(client)
     theirs = _paste(other, A)["job_id"]
     backdate(theirs, 2 * DAY)
@@ -179,7 +154,6 @@ def test_a_shared_file_stays_while_anyone_still_has_it(client, downloads):
     assert row(mine).stored
     assert video.is_file()
     assert client.get(f"/download-media/files/{mine}/0").status_code == 200
-    # Theirs comes back from the same file: nothing is asked of the site.
     r = other.post(f"/download-media/{theirs}/replays")
     assert r.status_code == 202
     assert row(theirs).stored
@@ -232,9 +206,6 @@ def test_a_removed_video_pasted_again_is_fetched_into_its_own_job(client, downlo
     assert Path(row(job).file_path).is_file()
 
 
-# --- the card of a removed video, and its Download -------------------------------
-
-
 def test_the_card_of_a_removed_video_shows_its_poster_and_one_download(client):
     job = _paste(client, A)["job_id"]
     assert "<video" in _card(client, job)
@@ -247,7 +218,7 @@ def test_the_card_of_a_removed_video_shows_its_poster_and_one_download(client):
     assert f'<img src="{files}/poster"' in card
     assert "<video" not in card
     assert "download-again" in card
-    assert "send-to-clone" not in card  # back once the video is
+    assert "send-to-clone" not in card
     assert "download-btn" not in card
     assert "recreate-btn" in card
     assert client.get(f"{files}/poster").content == b"RIFF"
@@ -258,11 +229,8 @@ def test_the_card_of_a_removed_video_shows_its_poster_and_one_download(client):
 
 
 def test_a_removed_file_keeps_its_place_among_the_jobs_files(client):
-    """Two files, the first removed: the second is still file 1 on its card
-    and at `/files/{job}/1`."""
     job = _paste(client, A, B)["job_id"]
     first, second = rows(job)
-    # Only the first is due: the second was asked for after the round's time.
     store.touch(job, B, datetime.now(UTC) + timedelta(seconds=3 * DAY))
     _remove_videos()
     assert [f.stored for f in rows(job)] == [False, True]
@@ -386,14 +354,11 @@ def test_a_video_gone_from_its_site_keeps_its_card_and_stays_removed(
         (0, True)
     ]
     assert status["failed_sources"] == []
-    # The card and the live card say why it is not back (prod 2026-11-12,
-    # job 65a6bb46: five clicks on Download, each ending in the bare poster).
     assert "data-removed-reason" in card
     assert "Post deleted or profile banned" in card
     (item,) = status["result"]
     assert item["removed_reason"] == "Post deleted or profile banned"
     assert item["removed_error"] == GONE
-    # A clone's Recreate asking for the file is told the same.
     stored = client.get(f"/download-media/{job}/files/0/stored")
     assert stored.status_code == 404
     assert stored.json() == {"detail": "Post deleted or profile banned"}
@@ -423,9 +388,6 @@ def test_a_video_that_comes_back_loses_its_reason(client, downloads, monkeypatch
     assert [r.again_error for r in get_job(job).download_results()] == [None]
 
 
-# --- a clone's Recreate ----------------------------------------------------------
-
-
 def test_a_removed_download_is_restorable_and_comes_back_under_its_new_path(
     client, assets
 ):
@@ -445,7 +407,6 @@ def test_a_removed_download_is_restorable_and_comes_back_under_its_new_path(
     assert client.post(f"/download-media/{job}/replays").status_code == 202
     stored = client.get(f"/download-media/{job}/files/0/stored").json()["path"]
 
-    # Fetched again it is other bytes, so the store names it differently.
     assert stored != old
     assert Path(stored).is_file()
     assert client.get("/refs/missing", params={"path": [stored]}).json() == {

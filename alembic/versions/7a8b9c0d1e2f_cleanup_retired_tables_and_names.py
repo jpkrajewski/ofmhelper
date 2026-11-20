@@ -1,26 +1,3 @@
-"""Database cleanup (2026-11-03, checked against prod):
-
-- the empty tables of removed features go: todos, approval_tokens, models,
-  instagram_accounts, instagram_stats, model_contacts, competitor_profiles.
-  drive_day_folders stays for now: it holds 16 rows, and a downgrade must give
-  back every row (tests/integration/migrations/test_prod_snapshot.py);
-- tables named for what they hold, next to their owner: profile_groups ->
-  watched_profile_groups, profile_scan_stats -> watched_profile_scans,
-  account_snapshots -> tracked_account_snapshots, short_link_days ->
-  short_link_daily_stats, link_syncs -> short_link_syncs;
-- a Higgsfield key pasted into the download box (prod, 2026-11-02) masked in the
-  job that stored it;
-- `jobs.preview` cleared on finished jobs: it is only read while a job runs.
-
-Downgrade restores the names and recreates the retired tables empty. The masked
-key and the cleared previews do not come back.
-
-Revision ID: 7a8b9c0d1e2f
-Revises: 4e5f6a7b8c9d
-Create Date: 2026-11-03 03:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -40,7 +17,6 @@ _RENAMED = (
     ("short_link_days", "short_link_daily_stats"),
     ("link_syncs", "short_link_syncs"),
 )
-# Dependents first.
 _RETIRED = (
     "instagram_stats",
     "instagram_accounts",

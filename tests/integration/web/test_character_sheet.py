@@ -1,5 +1,3 @@
-"""/character-sheet: several images in, one side-by-side PNG out."""
-
 import io
 
 import pytest
@@ -54,8 +52,6 @@ def test_smaller_panels_scale_up_to_the_tallest(tmp_path):
 
 
 def test_run_keeps_upload_order_and_same_named_files(client, tmp_path, monkeypatch):
-    """iOS names every shared photo image.jpg -- two of them must not
-    overwrite each other."""
     monkeypatch.setattr(character_sheet, "upload_root", lambda: tmp_path)
     monkeypatch.setattr(character_sheet, "enqueue", lambda *a, **k: None)
 

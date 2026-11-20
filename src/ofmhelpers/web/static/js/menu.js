@@ -1,8 +1,3 @@
-/*
- * ⋯ menus (components/ui.html `menu`): one open at a time; an outside
- * click, Escape, or picking an item closes it. Delegated on the document,
- * so menus added after load (gallery cards) work too.
- */
 (() => {
     const openMenus = () => [...document.querySelectorAll("details.menu[open]")];
 

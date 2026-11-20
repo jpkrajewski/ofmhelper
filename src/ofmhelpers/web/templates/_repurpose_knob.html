@@ -1,6 +1,3 @@
-{# One /repurpose knob (`k`: schemas.Knob). Inputs carry `data-knob` (its
-   place in the preset), never a `name`: repurpose.js collects them into the
-   preset JSON. #}
 {% import "components/ui.html" as ui %}
 {% if k.kind == "range" %}
 {% call ui.field(k.label, k.dom_id ~ "-lo") %}

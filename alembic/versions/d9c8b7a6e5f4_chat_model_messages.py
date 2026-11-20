@@ -1,15 +1,3 @@
-"""chat_model_messages: when each model message was sent, no text
-
-Deliveries come in any order, so a fan message can arrive after the reply that
-answers it. Keeping the replies' times lets it find its answer whenever it
-arrives. New table only; nothing moves.
-
-Revision ID: d9c8b7a6e5f4
-Revises: e2d3c4b5a6f7
-Create Date: 2026-11-05 02:40:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa

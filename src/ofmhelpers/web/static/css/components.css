@@ -1,23 +1,6 @@
-/* =====================================================================
-   Ascend Global LLC — Content Ops design system, file 3 of 4:
-   tokens.css -> base.css -> components.css -> pages.css, loaded in that
-   order by templates/_styles.html. The shared components (templates/components/ui.html) and widgets.
-
-   Mobile-first: unprefixed rules are the phone layout, `min-width` media
-   queries add the wider ones. Class names used by static/js/*.js are
-   contract -- rename nothing without updating the JS.
-   ===================================================================== */
-
-/* ---------------------------------------------------------------------
-   6. Buttons
-   --------------------------------------------------------------------- */
-/* One button object. `.btn` is the base; the legacy per-page class names
-   (.root-btn, .download-btn,
-   .recreate-btn, .ref-toggle) are aliased onto it further down instead of
-   each re-declaring padding/border/hover from scratch. */
 .btn,
 .root-btn,
-/* `.btn`: a link that acts as a button looks like one. */
+
 button,
 .btn {
     display: inline-flex;
@@ -60,7 +43,6 @@ button:disabled,
     transform: none;
 }
 
-/* Primary: the one action a page exists for. */
 .btn-primary,
 .generate-form-col button[type="submit"] {
     border: 1px solid var(--btn-primary-border);
@@ -84,7 +66,6 @@ button:disabled,
     filter: none;
 }
 
-/* Outlined accent: secondary actions that still need to read as actions. */
 .recreate-btn {
     background: var(--btn-recreate-bg);
     border: 1px solid var(--btn-recreate-border);
@@ -95,7 +76,7 @@ button:disabled,
     border-color: var(--btn-recreate-hover-border);
     color: var(--btn-recreate-text);
 }
-/* Download: a plain button in light, the original green in dark. */
+
 .download-btn {
     background: var(--btn-download-bg);
     border-color: var(--btn-download-border);
@@ -108,7 +89,6 @@ button:disabled,
     color: var(--btn-download-text);
 }
 
-/* Destructive */
 .btn-danger {
     background: transparent;
     border-color: var(--border);
@@ -120,7 +100,6 @@ button:disabled,
     color: var(--fail);
 }
 
-/* Quiet: nav-adjacent / low-emphasis */
 .btn-ghost,
 .logout-form button {
     background: transparent;
@@ -137,14 +116,9 @@ button:disabled,
 
 .btn-block { width: 100%; }
 
-/* A gallery card's one row of actions (Download, Recreate, Drive): plain
-   buttons sharing the row equally. Download and Recreate take their
-   looks from the --btn-download-* / --btn-recreate-* roles (plain in
-   light, green / violet outline in dark). */
 .result-actions { display: flex; gap: var(--gap-inline); margin-top: auto; }
 .result-actions > * { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); }
-/* Download + ⋯ (a failed card: Recreate + ⋯) as one split button: one
-   border, one height, the ⋯ joined to the right. */
+
 .result-actions > .menu { flex: none; padding-inline: 0; }
 .result-actions:has(> :is(.download-btn, .recreate-btn) + .menu) { gap: 0; }
 .result-actions > :is(.download-btn, .recreate-btn):has(+ .menu) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -165,10 +139,6 @@ button:disabled,
 }
 .result-actions > :is(.download-btn, .recreate-btn) + .menu { display: flex; }
 
-/* Two or more buttons joined edge to edge into one control (ui.segmented) --
-   one shared border, square inner corners, filling the row like .result-actions
-   so it lines up with the card's other buttons. Unlike `.segmented` below (a
-   padded set of links), this is a single run of touching buttons. */
 .btn-segmented { display: flex; }
 .btn-segmented > .btn { flex: 1 1 0; border-radius: 0; }
 .btn-segmented > .btn:first-child {
@@ -182,8 +152,7 @@ button:disabled,
 .btn-segmented > .btn + .btn { margin-inline-start: -1px; }
 .btn-segmented > .btn:hover,
 .btn-segmented > .btn:focus-visible { position: relative; z-index: 1; }
-/* Pick one: the buttons carry aria-pressed (page JS flips it), the picked
-   one looks like a pressed chip. */
+
 .btn-segmented > .btn[aria-pressed="true"],
 .btn-segmented > .btn[aria-pressed="true"]:hover {
     position: relative;
@@ -192,23 +161,16 @@ button:disabled,
     background: var(--accent-wash);
     color: var(--text);
 }
-/* Float the clone control AND the actions row together to the card's foot.
-   Only `.send-to` gets margin-top:auto -- two auto margins in a flex column
-   split the free space instead of stacking, which left the clone row
-   floating mid-card. So `.send-to` takes all the space, and the actions row
-   right after it drops its own auto and just sits under it. */
+
 .send-to { margin-top: auto; }
 .send-to + .result-actions { margin-top: var(--gap-inline); }
-/* Clone | Clone long | Edit in a card's narrow foot (~190 px): tighter sides,
-   and a button may shrink, so the row never runs past the card. */
+
 .send-to > .btn-segmented > .btn {
     min-width: 0;
     overflow: hidden;
     padding-inline: var(--s-2);
 }
 
-/* Segmented control (file-manager roots, and anything else that is a set
-   of mutually exclusive links). */
 .segmented {
     display: inline-flex;
     flex-wrap: wrap;
@@ -227,9 +189,6 @@ button:disabled,
     color: var(--text);
 }
 
-/* ---------------------------------------------------------------------
-   7. Forms
-   --------------------------------------------------------------------- */
 .field { margin-bottom: var(--s-5); }
 .field > label,
 .field-label {
@@ -271,7 +230,7 @@ textarea:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-wash);
-    /* background-color, not the shorthand: that would wipe select's caret. */
+
     background-color: var(--surface);
 }
 input::placeholder, textarea::placeholder { color: var(--text-faint); }
@@ -320,9 +279,7 @@ input[type="file"] {
     border-radius: var(--radius-sm);
 }
 input[type="file"]:hover { border-color: var(--accent-ring); }
-/* The native "choose file" control is OS chrome that ordinary CSS on the
-   input can't reach -- only ::file-selector-button (and its old -webkit-
-   alias) restyles it. Applied globally so no page has to repeat it. */
+
 input[type="file"]::file-selector-button,
 input[type="file"]::-webkit-file-upload-button {
     height: var(--control-h-sm);
@@ -340,11 +297,8 @@ input[type="file"]::-webkit-file-upload-button {
 input[type="file"]::file-selector-button:hover,
 input[type="file"]::-webkit-file-upload-button:hover { background: var(--surface-2); }
 
-/* A group of fields is part of the form, not a box inside it: no border,
-   no fill, so every tool form looks the same whether or not its fields
-   are grouped. The legend reads as the group's label. */
 fieldset {
-    min-inline-size: 0;   /* else a long filename widens the whole column */
+    min-inline-size: 0;
     min-width: 0;
     margin: 0;
     padding: 0;
@@ -358,9 +312,6 @@ legend {
     color: var(--text-muted);
 }
 
-/* ---------------------------------------------------------------------
-   8. Cards, panels, badges
-   --------------------------------------------------------------------- */
 .card {
     padding: var(--pad-card);
     border: 1px solid var(--border);
@@ -372,7 +323,6 @@ legend {
 
 .card-title { margin: 0 0 var(--gap-stack); font-size: var(--step-1); }
 
-/* stat (components/ui.html): one KPI, a card of its own. */
 .stat-grid { display: grid; gap: var(--gap-grid); grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin-bottom: var(--gap-section); }
 .stat {
     display: grid;
@@ -388,8 +338,6 @@ legend {
 .stat-value small { color: var(--text-muted); font-size: var(--step--1); font-weight: 400; }
 .stat-note { color: var(--text-muted); font-size: var(--step--1); }
 
-/* Auto-fitting card grid, used by the home page links, the models edit
-   page and anything else that is "a row of independent panels". */
 .card-grid {
     display: grid;
     gap: var(--gap-grid);
@@ -397,7 +345,6 @@ legend {
     align-items: start;
 }
 
-/* Link cards (home page tool launcher). */
 .link-card {
     display: flex;
     flex-direction: column;
@@ -435,7 +382,6 @@ legend {
 .badge-fail { background: var(--fail-wash); color: var(--fail); }
 .badge-warn { background: var(--warn-wash); color: var(--warn); }
 
-/* Inline notices (cookies page, approve result, form errors). */
 .notice {
     display: flex;
     gap: var(--gap-stack);
@@ -451,7 +397,6 @@ legend {
 .notice-fail { border-left-color: var(--fail); background: var(--fail-wash); }
 .notice-warn { border-left-color: var(--warn); background: var(--warn-wash); }
 
-/* Empty states */
 .empty-state {
     padding: var(--s-7) var(--pad-card);
     border: 1px solid var(--border);
@@ -461,13 +406,6 @@ legend {
     background: var(--surface);
 }
 
-/* ---------------------------------------------------------------------
-   9. Tables
-   --------------------------------------------------------------------- */
-/* Tables are the app's densest surface (action log, applications, file
-   manager). On a phone they scroll horizontally inside .table-wrap
-   instead of squashing -- the alternative, reflowing every table to
-   cards, would break the column alignment these pages are read for. */
 .table-wrap {
     width: 100%;
     overflow-x: auto;
@@ -506,9 +444,6 @@ th {
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover td, table tr:hover td { background: var(--bg); }
 
-/* ---------------------------------------------------------------------
-   10. Results grid (generation output, galleries, job pages)
-   --------------------------------------------------------------------- */
 .results {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
@@ -536,8 +471,7 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     background: var(--surface-2);
 }
 .result-image { transition: transform var(--dur-slow) var(--ease), box-shadow var(--dur-slow) var(--ease); }
-/* Hover-zoom the thumbnail rather than opening a lightbox -- it is the
-   fastest way to check a generation without leaving the grid. */
+
 .result-image:hover {
     position: relative;
     z-index: 20;
@@ -564,26 +498,20 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .filename { margin: 0; font-size: var(--step--1); word-break: break-word; }
 .fail-list { list-style: none; padding: 0; margin: 0 0 var(--s-4); }
 .fail-list li { margin-bottom: var(--s-2); }
-/* A failure: who refused, the reason and what they said (schemas/errors.py
-   `error_line`), in red, on the card itself. */
+
 .result-failed { flex-direction: column; color: var(--fail); background: var(--fail-wash); font-weight: 500; }
-/* Who refused and why, bold; what they said under it, quiet; the fix when
-   it is the reader's own keys (schemas/errors.py `error_text`). */
+
 .result-failed-head { font-weight: 700; }
 .result-failed-said { color: var(--text-muted); font-weight: 400; }
 .result-failed-fix { font-weight: 600; }
-/* A run of the same failure folds into its first card (static/js/failed-runs.js). */
+
 .result-item[data-folded] { display: none; }
-/* One line per thing that failed (a download's links: "<link> · <reason>"). */
+
 .fail-note { min-height: 0; flex-direction: column; word-break: break-word; }
 .drive-states:empty { display: none; }
-/* ui.date_range: the toolbar's date filter -- a "From" and a "To" button,
-   the day picked on each. The date box itself is never seen: it only holds
-   the value and anchors the browser's calendar under its button. */
+
 .date-range { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-inline); margin: 0; }
-/* A page's guided tour (ui.tour, static/js/tour.js): `.tour-shade` sits
-   over the control being explained and dims everything else with its
-   shadow; the tip floats next to it. */
+
 .tour-shade {
     position: fixed;
     z-index: 200;
@@ -609,16 +537,13 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .date-pick { position: relative; display: inline-flex; }
 .date-pick .btn { min-width: var(--control-w-action); }
 .date-pick input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; pointer-events: none; }
-/* A /clone card that runs or failed: the video it clones on top, its
-   "generating…" or failure line under it at its own height. */
+
 [data-clone-source] ~ .result-file { min-height: 0; }
-/* What is still being made of a result already shown (generation.js
-   `showStage`): one line under it. */
+
 .result-file[data-stage] { min-height: 0; }
-/* A hidden card (Show hidden's view): faded, its actions not. */
+
 .result-item[data-hidden] > :not(.result-actions) { opacity: 0.5; }
-/* What static/js/gallery-scroll.js watches for: spans the grid so it is only
-   reached once the whole current page has been scrolled past. */
+
 .gallery-sentinel {
     grid-column: 1 / -1;
     display: flex;
@@ -627,9 +552,6 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     padding: var(--s-4);
 }
 
-/* ---------------------------------------------------------------------
-   11. Ordered file-picker widget (static/js/file-picker.js)
-   --------------------------------------------------------------------- */
 .file-order-list { list-style: none; padding: 0; margin: var(--s-3) 0 0; }
 .file-order-list li {
     display: flex;
@@ -667,14 +589,7 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     border: 1px solid var(--border);
     background: var(--surface-2);
 }
-/* An <audio> player needs ~220px to show its controls at all: Chrome drops
-   them progressively as the element narrows and renders an empty bar well
-   before 150px. As a fixed-width flex item it was sharing a wrapped line with
-   the badge and the three order/remove buttons, got shrunk (flex-shrink
-   defaults to 1) and came out with no usable controls -- while the same file
-   played fine in the reuse grid, which gives it a whole row.
-   So on an audio row every part gets its own full-width line: name, then the
-   player, then the buttons. Nothing competes, nothing shrinks. */
+
 .file-order-list li[data-kind="audio"] { flex-wrap: wrap; }
 .file-order-list li[data-kind="audio"] .item-name {
     flex: 1 0 100%;
@@ -747,10 +662,7 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     overflow: hidden;
     text-overflow: ellipsis;
 }
-/* An audio tile is a player + an add button, not one clickable thumb: a
-   native <audio> is ~220px wide and won't shrink into an 88px cell, so it
-   takes the whole row. The name is the button here (the tile can't be one --
-   see file-picker.js), so it gets button affordances back. */
+
 .ref-tile--audio {
     display: flex;
     align-items: center;
@@ -770,10 +682,9 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 }
 .ref-tile--audio .ref-tile-name:hover { background: var(--accent-wash); }
 .ref-empty { grid-column: 1 / -1; }
-/* The browser's own "Show older" button: a full row, not one 88px tile cell. */
+
 .ref-browser > .ref-toggle { grid-column: 1 / -1; margin-top: 0; }
-/* "Recently used" / "Recently uploaded" -- same full-row treatment, so the
-   two groups the picker opens with read as two rows and not one long grid. */
+
 .ref-group-label {
     grid-column: 1 / -1;
     font-size: var(--step--1);
@@ -781,9 +692,6 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     color: var(--text-muted);
 }
 
-/* ---------------------------------------------------------------------
-   11b. One-click picks: chips (ui.chip) and picture tiles (ui.photo_tile)
-   --------------------------------------------------------------------- */
 .chip-row { display: flex; flex-wrap: wrap; gap: var(--gap-inline); margin-top: var(--s-2); }
 .chip {
     gap: var(--s-1);
@@ -829,12 +737,6 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
-/* ---------------------------------------------------------------------
-   12. Prompt reference highlighting (static/js/prompt-highlight.js)
-   --------------------------------------------------------------------- */
-/* The backdrop mirrors the textarea's text behind it -- its font/padding/
-   border metrics MUST stay identical to the textarea rule above, or the
-   highlights drift out of alignment with the typed text. */
 .prompt-wrap { position: relative; }
 .prompt-wrap textarea {
     position: relative;
@@ -859,21 +761,14 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     white-space: pre-wrap;
     overflow-wrap: break-word;
 }
-/* A reference marked in a prompt shown as text (PromptHighlight.html): the
-   backdrop's mark colour, the text itself visible. */
+
 .ref-mark { border-radius: 3px; background: var(--accent-ring); color: inherit; }
 .prompt-backdrop mark { color: transparent; border-radius: 3px; }
-/* One highlight for every kind: the reference name says which it is. */
+
 .prompt-backdrop .ref-mark-image,
 .prompt-backdrop .ref-mark-video,
 .prompt-backdrop .ref-mark-audio { background: var(--accent-ring); }
-/* JSON editor (static/js/json-editor.js). Same backdrop trick, but the
-   backdrop carries the colour and the textarea's own text is transparent --
-   class names here are contract with that file. */
 
-/* ---------------------------------------------------------------------
-   13. Inline job results panel + spinner (static/js/generation.js)
-   --------------------------------------------------------------------- */
 #results-panel { margin-top: 0; }
 
 #results-panel .generation-error,
@@ -901,12 +796,9 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---- ⋯ menu (ui.menu / ui.menu_item; static/js/menu.js) -----------------
-   Not the card the base `details` rule draws: an icon button and a
-   floating list of items under it, right-aligned. */
 .menu { position: relative; flex: none; margin: 0; padding: 0; border: 0; background: none; }
 .menu > summary { list-style: none; }
-/* The ⋯ itself big enough to hit. */
+
 .menu > summary .icon { width: 22px; height: 22px; }
 .menu > summary::-webkit-details-marker { display: none; }
 .menu-list {
@@ -941,22 +833,17 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface-3); }
 .menu-item .icon { width: 20px; height: 20px; }
 .menu-item-danger { color: var(--fail); }
-/* A menu opened by a plain button (ui.menu_button: a toolbar filter): its
-   list hangs from the button's left edge, the picked choice is checked. */
+
 .menu-button > summary { min-width: var(--control-w-action); cursor: pointer; }
 .menu-button > summary .icon { width: 1em; height: 1em; }
 .menu-button > .menu-list { left: 0; right: auto; }
 .menu-choice { text-decoration: none; }
 .menu-choice .icon { visibility: hidden; }
 .menu-choice[aria-current="true"] .icon { visibility: visible; }
-/* A toolbar button that is a switch (aria-pressed): on looks like the
-   picked one of a segmented row. */
+
 .toolbar-actions > .btn[aria-pressed="true"],
 .toolbar-actions > .btn[aria-pressed="true"]:hover { border-color: var(--accent); background: var(--accent-wash); }
 
-/* The header's clock, on the far side of the divider from the account, and
-   the globe's zone menu next to light / dark. On a phone the clock is in the
-   menu. Under 1600 px one line does not fit beside the links, so it stacks. */
 .clock-now {
     display: inline-flex;
     flex: none;
@@ -977,13 +864,12 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     .clock-bar .clock-dot { display: none; }
 }
 .time-zone-menu > summary .icon { width: 16px; height: 16px; }
-/* Above the pop-ups under the header (.page-alerts), like the More menu. */
+
 .time-zone-menu .menu-list { z-index: 110; }
-/* The header's chats (ui.chats_menu): the number of new ones on the icon,
-   one line per model or event in the list, the new ones marked. */
-.chats-menu > summary { position: relative; }
-.chats-menu > summary .icon { width: 18px; height: 18px; }
-.chats-count {
+
+.notifications-menu > summary { position: relative; }
+.notifications-menu > summary .icon { width: 18px; height: 18px; }
+.notifications-count {
     position: absolute;
     top: calc(-1 * var(--s-1));
     right: calc(-1 * var(--s-1));
@@ -998,11 +884,11 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     line-height: 18px;
     text-align: center;
 }
-.chats-list { z-index: 110; min-width: 300px; max-height: 70vh; overflow-y: auto; }
-.chats-item { gap: var(--s-2); text-decoration: none; }
-.chats-item-text { color: var(--text-muted); }
-.chats-item[data-new] .chats-item-text { color: var(--text); font-weight: 600; }
-.chats-item[data-new]::after {
+.notifications-list { z-index: 110; min-width: 300px; max-height: 70vh; overflow-y: auto; }
+.notifications-item { gap: var(--s-2); text-decoration: none; }
+.notifications-item-text { color: var(--text-muted); }
+.notifications-item[data-new] .notifications-item-text { color: var(--text); font-weight: 600; }
+.notifications-item[data-new]::after {
     content: "";
     flex: none;
     width: var(--s-2);
@@ -1011,10 +897,10 @@ tbody tr:hover td, table tr:hover td { background: var(--bg); }
     border-radius: var(--radius-pill);
     background: var(--accent);
 }
-/* A phone: the list spans the screen under the header. */
+
 @media (max-width: 600px) {
-    .chats-list { position: fixed; top: var(--header-h); right: var(--s-4); left: var(--s-4); min-width: 0; }
-    .chats-item { white-space: normal; }
+    .notifications-list { position: fixed; top: var(--header-h); right: var(--s-4); left: var(--s-4); min-width: 0; }
+    .notifications-item { white-space: normal; }
 }
 .time-zone-choice .icon { visibility: hidden; }
 .time-zone-choice[aria-current="true"] .icon { visibility: visible; }

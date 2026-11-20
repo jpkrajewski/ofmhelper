@@ -1,7 +1,3 @@
-"""The services events go out through (features/events): one package each behind
-`base.Sender`. A new sender is one package and one entry in `senders()`. See
-CLAUDE.md."""
-
 from functools import lru_cache
 
 from ofmhelpers.integrations.senders.base import Sender, SendError
@@ -11,7 +7,6 @@ from ofmhelpers.utils.registry import Registry
 
 @lru_cache(maxsize=1)
 def senders() -> Registry[Sender]:
-    """Every sender by name."""
     found: list[Sender] = [TelegramSender()]
     return Registry[Sender](entries={s.name: s for s in found})
 

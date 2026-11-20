@@ -1,11 +1,3 @@
-"""/distribution: Pinterest accounts posting their model's Drive content
-(POSTED reels, THREADS pictures) by themselves, a few pins a day each. The
-page answers "is it working" (one verdict, what is wrong), pins today and
-link clicks, and takes new accounts in bulk (their cookies.txt files: no
-model to pick, every account posts every model's content); what each
-upload became is shown on the page. Nothing else to
-click. The work: `features.distribution`."""
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, UploadFile
@@ -34,7 +26,6 @@ def _uploads(files: list[UploadFile]) -> list[service.Upload]:
     ]
 
 
-# The signed-in person's /distribution.
 Distribution = Annotated[service.Distribution, Depends(_distribution)]
 Uploads = Annotated[list[service.Upload], Depends(_uploads)]
 

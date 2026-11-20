@@ -1,18 +1,3 @@
-"""tracked posts: a row per post, kept across scans within retention
-
-A tracked account's posts move from the `tracked_accounts.posts` JSONB
-(overwritten by every scan) to `tracked_posts`, upserted by the platform's
-post id and pruned by age only. `covered_since` replaces the view windows
-stored in `metrics` (now derived on read): an account whose stored windows
-were all covered had every post read (0), else it is complete from its
-oldest stored post. The `posts` column is dropped once copied.
-
-Revision ID: f7a8b9c0d1e2
-Revises: e1f2a3b4c5d6
-Create Date: 2026-10-20 18:00:00.000000
-
-"""
-
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -20,7 +5,6 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-# revision identifiers, used by Alembic.
 revision: str = "f7a8b9c0d1e2"
 down_revision: str | None = "e1f2a3b4c5d6"
 branch_labels: str | Sequence[str] | None = None
@@ -86,8 +70,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # The old code reads every post back from the JSONB; its view windows
-    # (stripped above) fill again on each account's next scan.
     op.add_column(
         "tracked_accounts",
         sa.Column("posts", postgresql.JSONB(astext_type=sa.Text()), nullable=True),

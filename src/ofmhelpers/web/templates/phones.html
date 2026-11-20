@@ -3,10 +3,7 @@
 {% import "_icons.html" as ic %}
 {% block title %}Phones — Ascend Global LLC{% endblock %}
 {% block content %}
-{# Every phone listed is the viewer's to change: a user sees only theirs, an admin all. #}
 {% set can_edit = true %}
-{# Rows shown before "N more" (iCloud + Instagram, services.json order):
-   keeps a card short however many logins. #}
 {% set visible_logins = 2 %}
 
 {{ ui.page_header("Phones (" ~ total ~ ")") }}
@@ -37,8 +34,6 @@
 <div class="generation-status" id="ph-status" role="status" aria-live="polite"></div>
 
 {% if assigning %}
-{# Pick mode (?assign=<account>, from /accounts "Assign phone"): a click on a
-   phone connects the account to it, after a confirm (phones.js). #}
 {% call ui.card(hook="ph-pick", attrs={"id": "ph-pick", "data-account": assigning.account.id, "data-handle": assigning.account.handle}) %}
     <div class="dr-pick-text">
         <h2>Click a phone to connect @{{ assigning.account.handle }}. Its Google Drive folder is made automatically.</h2>
@@ -69,7 +64,6 @@
         {% if x.link %}<a class="ph-login-user" href="{{ x.link }}" target="_blank" rel="noopener" title="{{ x.username }}">{{ x.username }}</a>
         {% else %}<span class="ph-login-user" title="{{ x.username }}">{{ x.username }}</span>{% endif %}
     </div>
-    {# Fixed in the row's right column: revealing opens below, nothing moves. #}
     <div class="ph-login-tools">
         {% if x.tracked_account_id %}{{ ui.icon_button("chart", "Analytics of " ~ x.username, href="/accounts/" ~ x.tracked_account_id) }}{% endif %}
         {% set copy_hint = "Copy login:password:codes" if x.has_codes else ("Copy login:password" if x.has_password else "Copy login") %}
@@ -281,8 +275,6 @@
 {% endif %}
 
 <script src="{{ static_url('js/layout.js') }}"></script>
-{# History: the phones after each change (the database records every
-   one); Restore goes back, after a confirm (phones-history.js). #}
 <dialog class="accounts-dialog ph-history" id="ph-history">
     <h2>History</h2>
     <p class="generation-error" id="ph-history-error" hidden></p>

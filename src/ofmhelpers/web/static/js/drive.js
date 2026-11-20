@@ -1,14 +1,3 @@
-/*
- * /drive page controller.
- *
- *   load       -> the page opened from each folder's last read; fetch
- *                 /drive/live (Drive now, ~2 s) and swap it in
- *   search box -> filters the cards instantly (their data-search text)
- *   Sync       -> POST /drive/sync (makes missing account and POSTED
- *                 folders, records what was posted), then reload; a
- *                 failure stays on screen
- *   a preview Drive has no image for (yet) -> its icon instead
- */
 (() => {
 
     const $ = (id) => document.getElementById(id);
@@ -35,8 +24,6 @@
 
     if (search) search.addEventListener("input", applySearch);
 
-    // The page shows the last read at once and swaps in Drive's live read
-    // silently; only a failed live read says anything.
     const board = $("dr-board");
     if (board?.dataset.live) {
         const asOf = board.querySelector(".dr-asof");
@@ -97,8 +84,6 @@
         });
     }
 
-    // Upload mode (/drive?upload=<job>): every account card is a target;
-    // a click asks to confirm, then the video goes there and /clone shows it.
     const pick = $("dr-pick");
     if (pick) {
         const ids = (value) => new Set((value || "").split(",").filter(Boolean));
@@ -109,7 +94,6 @@
         const error = $("dr-pick-error");
         let target = null;
 
-        // An account card, or a VA's own folder (the VAs list): both targets.
         const isIn = (el) =>
             el.dataset.vaFolder ? alreadyVas.has(el.dataset.vaFolder) : already.has(el.dataset.login);
         const markCards = () => {
@@ -159,7 +143,6 @@
         });
     }
 
-    // Images load after this script runs: listen in the capture phase.
     document.addEventListener("error", (event) => {
         const img = event.target;
         if (img instanceof HTMLImageElement && img.closest(".dr-file")) img.remove();

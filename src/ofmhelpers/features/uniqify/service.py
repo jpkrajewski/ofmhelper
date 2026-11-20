@@ -1,8 +1,3 @@
-"""What /uniqify does behind its routes (web/routers/video_tools/uniqify.py):
-the page with the person's newest runs, and a run started from an upload. The
-encode itself is `media.uniqify`; the worker function stays in the router (RQ
-stores its path) and is handed in."""
-
 import shutil
 import zipfile
 from collections.abc import Callable
@@ -31,8 +26,6 @@ TASK = "uniqify"
 
 
 class Submitted(Protocol):
-    """The route's form (`UniqifyForm`)."""
-
     @property
     def file(self) -> UploadFile: ...
 
@@ -45,8 +38,6 @@ class Submitted(Protocol):
 
 
 class FormView(BaseModel):
-    """/uniqify: each field is a name `uniqify.html` reads."""
-
     gallery: list[JobCard]
     max_copies: int
     max_trim: float
@@ -76,8 +67,6 @@ def start(
     upload_root: Path,
     run: Callable[..., list[ResultFile]],
 ) -> JobQueued:
-    """The upload saved in a fresh folder of `upload_root`, and its run
-    (`run`: the router's worker function) queued."""
     source = require_upload_kind(form.file.filename, VIDEO_KINDS)
     stem = Path(safe_filename(form.output_name or source)).stem
     if not stem:
@@ -85,7 +74,6 @@ def start(
         raise RefusedError(msg)
 
     job_dir = make_job_dir(upload_root)
-    # Prefixed so an output named like the upload can never overwrite it.
     saved = f"source_{source}"
     with (job_dir / saved).open("wb") as out:
         shutil.copyfileobj(form.file.file, out)
@@ -131,9 +119,6 @@ def run_uniqify(
 
 
 def _zip_and_remove(files: list[Path], dest: Path) -> Path:
-    """Bundle the copies into one download, then drop the loose files -- the
-    zip is the only thing a run hands back. Stored, not deflated: H.264 is
-    already compressed, so deflating would only cost time."""
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_STORED) as zf:
         for f in files:
             zf.write(f, f.name)

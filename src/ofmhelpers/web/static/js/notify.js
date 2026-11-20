@@ -1,12 +1,3 @@
-/*
- * Page-wide announcements (posting.js, drive-alert.js): a chime and a
- * desktop notification, as `window.Notifier`.
- *
- * Browsers allow sound and the notification permission prompt only after
- * the person clicks or types on the page: the first such gesture unlocks the
- * chime and asks for permission once, then runs every `onUnlock` callback
- * (an alert already showing then chimes). Loaded before its users.
- */
 (() => {
     let audio = null;
     const unlocked = [];
@@ -19,7 +10,6 @@
         return audio;
     }
 
-    // Two rising tones (Web Audio: no sound file); false while sound is locked.
     function chime() {
         if (!audio || audio.state !== "running") return false;
         const now = audio.currentTime;
@@ -42,7 +32,6 @@
         return "Notification" in window && Notification.permission === "granted";
     }
 
-    // A desktop notification; false when not allowed (yet).
     function desktop(message, tag) {
         if (!canNotify()) return false;
         try {
@@ -53,7 +42,7 @@
             };
             return true;
         } catch {
-            // some mobile browsers only notify through a service worker
+
             return false;
         }
     }

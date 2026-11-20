@@ -8,8 +8,6 @@
 {% if error %}{{ ui.notice(error, "warn") }}{% endif %}
 
 <div class="account-grid">
-    {# A VA signs in with "Login as Virtual Assistant" (employer's email +
-       the password an admin set on /users): nothing here to link or change. #}
     {% if viewer_of(request).user.role != "va" %}
     {% call ui.card("Sign-in") %}
         <ul class="account-list">

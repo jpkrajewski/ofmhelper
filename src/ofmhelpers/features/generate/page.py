@@ -1,6 +1,3 @@
-"""What /generate's form shows besides its gallery: the providers and the
-one it starts on, every model with its fields, and the page's limits."""
-
 from typing import Any
 
 from pydantic import BaseModel
@@ -16,10 +13,8 @@ TASKS = frozenset({"ai"})
 class FormView(BaseModel):
     providers: list[ProviderChoice]
     selected_provider: str
-    # Each model as the page's JSON catalog holds it (ai-form.js).
     models: list[dict[str, Any]]
     live_poll_s: int
-    # The most images one submit may queue (each its own job and card).
     max_batch: int
 
 

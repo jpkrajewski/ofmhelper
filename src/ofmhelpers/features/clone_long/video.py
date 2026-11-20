@@ -1,18 +1,3 @@
-"""ffmpeg for a long clone: measure, cut one piece, join pieces.
-
-The output keeps the source's shape exactly: `join` fits every generated
-piece into a frame of the source's aspect ratio at the pieces' own height
-(scaled, never cropped; bars only when Wan's nearest ratio differs, e.g. a
-4:5 source made at 3:4). Cut and join re-encode (H.264, faststart): a
-stream copy cuts only at keyframes. The join reads the pieces through the
-concat demuxer, one at a time: the concat filter opens every piece at once
-(40 x 15 s at 720p peaked at 2.5 GB, 2026-10-23). `-xerror`: a piece that
-cannot be read fails the join instead of ending the video early (ffmpeg
-exits 0 on it otherwise). Every output is written to a temp name and
-renamed, so a killed ffmpeg never leaves a short file a re-run would take
-as done.
-"""
-
 lazy from pathlib import Path
 
 from ofmhelpers.features.clone_long.models import Shape
@@ -20,20 +5,14 @@ from ofmhelpers.media.ffmpeg import binary, run, run_bytes
 from ofmhelpers.media.video_probe import duration_s
 lazy from ofmhelpers.features.clone_long.models import Piece
 
-# A display rotation that turns the picture on its side (90 or 270).
 _SIDEWAYS = 90
 
 _VIDEO = ("-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p")
 
-# How far colour match may pull one channel of a piece (x0.75 .. x1.33): a
-# piece that is mostly dark (a fade, a night shot) would otherwise be pushed
-# to white by a 10x gain.
 _GAIN = (0.75, 1.33)
 
 
 class VideoTools:
-    """ffmpeg with one time limit per call."""
-
     def __init__(self, timeout_s: int) -> None:
         self.timeout_s = timeout_s
 
@@ -41,8 +20,6 @@ class VideoTools:
         return duration_s(src, self.timeout_s)
 
     def shape(self, src: Path) -> Shape:
-        """The picture as it plays: a phone video stored sideways (rotation
-        90/270) is its turned shape."""
         out = run(
             [
                 binary("ffprobe"),
@@ -71,7 +48,6 @@ class VideoTools:
         dest: Path,
         size: Shape | None = None,
     ) -> Path:
-        """`piece` of `src`, scaled to `size` when given."""
         scale = ["-vf", f"scale={size.width}:{size.height},setsar=1"] if size else []
         return self._write(
             [
@@ -90,9 +66,6 @@ class VideoTools:
         )
 
     def last_frame(self, src: Path, dst: Path) -> Path:
-        """The source's last frame as an image (the next piece's start, when
-        chaining; `params.chain`). Every frame of the last 0.2 s is written
-        over the one before (`-update 1`), so the very last one stays."""
         dst.parent.mkdir(parents=True, exist_ok=True)
         run(
             [
@@ -134,8 +107,6 @@ class VideoTools:
     def _colour_matched(
         self, parts: list[Path], dests: list[Path], *, audio: bool
     ) -> list[Path]:
-        """Each part after the first, its average colour pulled to the first
-        part's (each channel by at most `_GAIN`), written to `dests`."""
         ref = self._mean_rgb(parts[0])
         keep = ["-c:a", "copy"] if audio else ["-an"]
         for part, dst in zip(parts[1:], dests, strict=True):
@@ -167,12 +138,6 @@ class VideoTools:
         colour_match: bool = False,
         audio: bool = False,
     ) -> Path:
-        """`parts` one after another, as one video of `shape`'s aspect ratio
-        at the first part's height. `audio`: keep the pieces' sound (else
-        silent). `colour_match`: pull each piece's colour to the first's.
-        `work`: the run's own folder for the listing and the colour-matched
-        copies, removed again whatever happens -- `dest`'s folder (shared by
-        every job) only ever gets `dest`."""
         size = shape.size_at(self.shape(parts[0]).height)
         width, height = size.width, size.height
         fit = (
@@ -235,11 +200,8 @@ class VideoTools:
 
 
 def _gain(ref: float, mean: float) -> float:
-    """`ref / mean` within `_GAIN`; 1 for a channel with nothing in it."""
     return min(max(ref / mean, _GAIN[0]), _GAIN[1]) if mean else 1.0
 
 
 def _quoted(path: Path) -> str:
-    """`path` for a concat listing's `file '...'` line: absolute (a relative
-    one is read from the listing's folder), its quotes escaped."""
     return str(path.resolve()).replace("'", "'\\''")

@@ -1,6 +1,3 @@
-"""socials/: the platform registry, the Instagram platform's mapping of its
-client (and its errors) onto the generic shapes, and the scan numbers."""
-
 import pytest
 import requests
 
@@ -31,14 +28,10 @@ DAY = 86400
 
 
 def _pk(posted_at: float) -> str:
-    """A media id whose embedded time is `posted_at`."""
     return str(int((posted_at - 1314220021.721) * 1000) << 23)
 
 
 class _FakeClient:
-    """`logged_in`: what the uploaded login lists (None: no working login;
-    an exception: it fails)."""
-
     def __init__(
         self, proxy=None, *, private=False, reels=(), error=None, logged_in=None
     ):
@@ -127,7 +120,6 @@ def test_instagram_fetch_reads_profile_and_reels(fake_client, monkeypatch):
     assert stats.profile.following == 50
     assert stats.profile.is_verified
     assert stats.profile.avatar_url.startswith("https://scontent.cdninstagram.com/")
-    # Capped at track_max_reels (so not complete); missing play counts are 0.
     assert [(p.id, p.views) for p in stats.posts] == [("A", 100), ("B", 0)]
     assert not stats.complete
     assert stats.posts[0].url == "https://www.instagram.com/reel/A/"
@@ -135,8 +127,6 @@ def test_instagram_fetch_reads_profile_and_reels(fake_client, monkeypatch):
 
 
 def test_working_login_lists_every_reel(fake_client):
-    """Instagram hides sensitive reels from logged-out visitors (danywalking:
-    8 of 15 visible logged out, 2026-10-20); the login sees them all."""
     hidden = [ReelSummary(pk=_pk(NOW - i * 3600), code=f"R{i}") for i in range(15)]
     made = fake_client(reels=hidden[:8], logged_in=hidden)
     stats = get_platform("instagram").fetch("yuki", None, "owner-jar")
@@ -146,7 +136,6 @@ def test_working_login_lists_every_reel(fake_client):
 
 
 def test_the_scan_logs_in_with_the_cookies_it_is_given(fake_client):
-    """The owner's cookies.txt reaches the client; none means logged out."""
     made = fake_client()
     get_platform("instagram").fetch("yuki", None, "owner-jar")
     get_platform("instagram").fetch("yuki", None)
@@ -165,7 +154,6 @@ def test_without_a_working_login_the_logged_out_view_is_marked_limited(
 
 
 def test_without_cookies_the_logged_out_tab_is_read(fake_client):
-    """The proxy source reads logged out: the login is never tried."""
     made = fake_client(reels=[], logged_in=[ReelSummary(pk=_pk(NOW), code="A")])
     stats = get_platform("instagram").fetch("yuki", None)
     assert stats.posts == []
@@ -179,7 +167,7 @@ def test_instagram_private_account_keeps_its_numbers_without_reels(fake_client):
     assert stats.profile.is_private
     assert stats.profile.followers == 1234
     assert stats.posts == []
-    assert not stats.complete  # nothing was read
+    assert not stats.complete
     assert not made[0].reels_read
 
 
@@ -210,8 +198,6 @@ def test_instagram_lasting_error_is_a_social_error(fake_client):
 
 
 def test_a_read_of_the_last_days_covers_only_those_days():
-    """An older post it brought along (a pinned one) says nothing about the
-    posts between: coverage stops at what was asked for."""
     stats = AccountStats(
         profile=AccountProfile(handle="y", followers=1),
         posts=[PostStat(id="pinned", url="u", views=5, posted_at=NOW - 60 * DAY)],
@@ -237,7 +223,7 @@ def test_metrics_are_the_scan_totals():
     assert (metrics.followers, metrics.following) == (10, 3)
     assert (metrics.posts_scanned, metrics.views_scanned) == (2, 147)
     assert metrics.limited
-    assert stats.reach == NOW - 100 * DAY  # capped: back to its oldest post
+    assert stats.reach == NOW - 100 * DAY
 
 
 POSTS = [
@@ -258,15 +244,13 @@ def test_view_window_counts_posts_published_in_it(days, views, posts):
 
 
 def test_capped_scan_does_not_cover_windows_it_did_not_reach():
-    reach = NOW - 10 * DAY  # a capped read back to its oldest post
+    reach = NOW - 10 * DAY
     assert ViewWindow.of(POSTS, 7, NOW, covered_since=reach).covered
     assert not ViewWindow.of(POSTS, 14, NOW, covered_since=reach).covered
     assert not ViewWindow.of(POSTS, 1, NOW, covered_since=None).covered
 
 
 def test_every_platform_has_its_names_under_the_same_key():
-    """`schemas/socials.py` names a platform for the code below integrations
-    (stores, forms); the scanning class here extends those names."""
     assert platform_names().names() == platforms().names()
     for key, platform in platforms().entries.items():
         assert isinstance(platform, type(platform_names()[key]))

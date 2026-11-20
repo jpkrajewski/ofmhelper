@@ -1,21 +1,3 @@
-{# The one gallery card every tool page extends (/generate, /download-assets,
-   /clone): media (or the failure reason, or a spinner while it runs), one
-   meta line, one row of actions: a finished one Download and a ⋯ menu
-   (Recreate, then the page's own items, `menu_items`, then Hide), a
-   failed one Recreate and a ⋯ menu (Hide). A hidden card (`data-hidden`,
-   Unhide instead of Hide) is only drawn in "Show hidden"'s view of only the
-   hidden cards (_gallery_hidden.html). A card of someone else's job
-   (`job.made_by`: a VA's, read by the owner) names its maker on a line of
-   its own under the meta line ("Done by VA: <name>"). Hide / Unhide only for
-   who may hide (`can(request, "hide")`: not a VA, whose cards are never
-   marked hidden either); a card rendered outside a page is handed `request`
-   (/clone/run).
-   A page's card is `{% extends "_gallery_card.html" %}` overriding only
-   its blocks (`lead`: above the media, /clone's picture of the video being
-   cloned; `actions`: the whole row; /repurpose keeps only Recreate);
-   it expects `job` (a schemas.TaskCard or a subclass).
-   generation.js's buildResultCard builds the same card for a run that
-   finishes while the page is open -- keep the two in step. #}
 {% import "components/ui.html" as ui %}
 {% import "_asset_media.html" as am %}
 {% import "_card_hide.html" as hide %}

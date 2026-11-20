@@ -1,15 +1,3 @@
-"""What a request answers when something is raised past its route.
-
-A refusal a feature words for the person (`REFUSALS`) is `{"detail": <its
-message>}` with its status, so a route just calls the feature: no try/except
-per route, and features never know HTTP. A new refusal is one row. Only errors
-whose message is written for the person belong here; anything else stays the
-crash below.
-
-A crash answers one plain sentence. Nothing raw reaches the page: the exception
-and its traceback are in the logs and the request's trace.
-"""
-
 from collections.abc import Callable, Coroutine
 from http import HTTPStatus
 from typing import Any
@@ -77,8 +65,6 @@ async def unhandled(request: Request, exc: Exception) -> Response:
 
 
 async def invalid_request(_request: Request, exc: RequestValidationError) -> Response:
-    """FastAPI's own 422 without `input`: a form model's missing field would
-    echo the whole form back, API key included."""
     errors = [
         {key: value for key, value in error.items() if key != "input"}
         for error in exc.errors()
@@ -87,11 +73,6 @@ async def invalid_request(_request: Request, exc: RequestValidationError) -> Res
 
 
 async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
-    """FastAPI's own answer to an `HTTPException`, but for one case: an
-    address that is no page of this app, typed or clicked by someone signed
-    in, goes to their home instead of `{"detail":"Not Found"}` (owner
-    2026-11-14). Only a page load nothing matched: a route's own 404 (a job,
-    a file) and every script's call keep theirs."""
     lost = exc.status_code == HTTPStatus.NOT_FOUND and "route" not in request.scope
     if lost and request.method == "GET" and AuthMiddleware.is_page_load(request):
         return RedirectResponse(AuthMiddleware.HOME, status_code=303)
@@ -117,7 +98,6 @@ def _refusal(status_code: int) -> Handler:
 
 
 def exception_handlers() -> dict[int | type[Exception], Handler]:
-    """`FastAPI(exception_handlers=...)`."""
     return {
         Exception: unhandled,
         StarletteHTTPException: http_error,

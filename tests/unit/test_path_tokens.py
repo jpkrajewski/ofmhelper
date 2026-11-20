@@ -1,6 +1,3 @@
-"""Security audit 2026-11-18: tokens carried in a URL path (`/password/<token>`,
-`/files/ai/<token>/<name>`) never reach a span, a log line or a stored error."""
-
 import logging
 
 import pytest
